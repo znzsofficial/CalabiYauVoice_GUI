@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,7 +62,9 @@ import com.konyaco.fluent.component.RadioButton
 import com.konyaco.fluent.component.Text
 import com.konyaco.fluent.component.TextField
 import com.konyaco.fluent.darkColors
+import com.konyaco.fluent.icons.fluentIcon
 import com.konyaco.fluent.lightColors
+import home
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.awt.Button
@@ -91,7 +94,8 @@ fun main() = application {
 
     Window(
         onCloseRequest = { exitApplication() },
-        title = "卡拉彼丘Wiki语音下载器",
+        title = "卡拉彼丘WiKi语音下载器",
+        icon = painterResource("icon.png"),
         content = {
             MenuBar {
                 Menu(text = "关于") {
@@ -157,7 +161,7 @@ fun MyAppContent() {
     Column(
         modifier = Modifier.padding(16.dp)
     ) {
-        Row() {
+        Row(Modifier.fillMaxWidth()) {
             ComboBox(
                 header = "预设",
                 placeholder = "选择角色",
@@ -224,14 +228,14 @@ fun MyAppContent() {
         val coroutineScope = rememberCoroutineScope() // 获取与 Composable 绑定的 CoroutineScope
         val terminalOutputLines = remember { mutableStateListOf("--- Terminal Initialized ---") }
         var clearDir by remember { mutableStateOf(false) }
-        var savePath by remember { mutableStateOf("") }
+        var savePath by remember { mutableStateOf("$home\\output") }
         var progress by remember { mutableStateOf(0f) }
         var currentDownloadFile by remember { mutableStateOf("") }
         Row(
             modifier = Modifier
                 .fillMaxWidth() // 让 Row 占据整个可用宽度
                 .height(IntrinsicSize.Min), // 让 Row 的高度适应内容，并让 CenterVertically 生效
-            verticalAlignment = Alignment.CenterVertically // 关键：垂直居中对齐所有子项
+            verticalAlignment = Alignment.CenterVertically // 垂直居中对齐所有子项
         ) {
             Text("语音文件保存路径: $savePath")
             Spacer(Modifier.weight(1f))
@@ -362,7 +366,7 @@ fun MenuScope.AboutItem() {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text("这是一个使用 Compose Desktop 和 Fluent-UI 组件构建的软件。")
-                            TextWithLinks("GitHub：https://github.com/znzsofficial/CalabiyauWikiVoice")
+                            TextWithLinks("下载器脚本：https://github.com/znzsofficial/CalabiyauWikiVoice\nGitHub 仓库：https://github.com/znzsofficial/CalabiYauVoice_GUI")
                         }
                     }
                 }

@@ -34,7 +34,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okio:okio:3.11.0")
     implementation("org.jsoup:jsoup:1.17.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }
 
 compose.desktop {
@@ -45,10 +45,13 @@ compose.desktop {
             packageName = "CalabiYauVoice_GUI"
             packageVersion = "1.0.0"
             description = "CalabiYau Wiki Voice Downloader GUI"
-            copyright = "© 2025 NekoLaska"
+            copyright = "Apache License, Version 2.0"
             vendor = "NekoLaska"
+            licenseFile.set(project.file("LICENSE.txt"))
 
             windows {
+                iconFile.set(project.file("icon.ico"))
+                dirChooser = true
                 //安装好后自动创建快捷方式
                 shortcut = true
                 menuGroup = "CalabiYauVoice_GUI"

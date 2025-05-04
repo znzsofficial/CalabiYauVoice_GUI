@@ -1,11 +1,10 @@
 import java.io.File
 import javax.swing.JFileChooser
-import javax.swing.filechooser.FileSystemView
 
-val home: File? = FileSystemView.getFileSystemView().homeDirectory
+val home: String = System.getProperty("user.home") ?: "C:\\"
 fun jChoose(callback: (File) -> Unit) {
     JFileChooser(home).apply {
-        dialogTitle = "Select a directory"
+        dialogTitle = "选择文件夹"
         fileSelectionMode = JFileChooser.FILES_AND_DIRECTORIES
         if (showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
             callback(selectedFile)
