@@ -6,7 +6,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
-import com.konyaco.fluent.component.Text
+import io.github.composefluent.component.Text
 
 @Composable
 fun TextWithLinks(text: String, modifier: Modifier = Modifier) {

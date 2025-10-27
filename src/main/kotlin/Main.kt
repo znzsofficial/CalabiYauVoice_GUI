@@ -16,14 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.onClick
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,9 +36,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindow
-import androidx.compose.ui.window.DialogWindowScope
 import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.MenuScope
 import androidx.compose.ui.window.Window
@@ -50,23 +44,22 @@ import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberDialogState
 import com.formdev.flatlaf.FlatIntelliJLaf
-import com.konyaco.fluent.FluentTheme
-import com.konyaco.fluent.background.BackgroundSizing
-import com.konyaco.fluent.background.Layer
-import com.konyaco.fluent.background.Mica
-import com.konyaco.fluent.component.Button
-import com.konyaco.fluent.component.CheckBox
-import com.konyaco.fluent.component.ComboBox
-import com.konyaco.fluent.component.ProgressBar
-import com.konyaco.fluent.component.RadioButton
-import com.konyaco.fluent.component.Text
-import com.konyaco.fluent.component.TextField
-import com.konyaco.fluent.darkColors
-import com.konyaco.fluent.icons.fluentIcon
-import com.konyaco.fluent.lightColors
-import home
+import io.github.composefluent.FluentTheme
+import io.github.composefluent.background.BackgroundSizing
+import io.github.composefluent.background.Layer
+import io.github.composefluent.background.Mica
+import io.github.composefluent.component.Button
+import io.github.composefluent.component.CheckBox
+import io.github.composefluent.component.ComboBox
+import io.github.composefluent.component.ProgressBar
+import io.github.composefluent.component.RadioButton
+import io.github.composefluent.component.Text
+import io.github.composefluent.component.TextField
+import io.github.composefluent.darkColors
+import io.github.composefluent.lightColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.desktop.ui.tooling.preview.Preview
 import java.awt.Button
 import java.awt.FlowLayout
 import java.awt.Frame
@@ -121,29 +114,31 @@ fun main() = application {
 }
 
 val characterWikiMap = mapOf(
-    "米雪儿·李" to "https://wiki.biligame.com/klbq/%E7%B1%B3%E9%9B%AA%E5%84%BF%C2%B7%E6%9D%8E",
-    "信" to "https://wiki.biligame.com/klbq/%E4%BF%A1",
-    "心夏" to "https://wiki.biligame.com/klbq/%E5%BF%83%E5%A4%8F",
-    "伊薇特" to "https://wiki.biligame.com/klbq/%E4%BC%8A%E8%96%87%E7%89%B9",
-    "芙拉薇娅" to "https://wiki.biligame.com/klbq/%E8%8A%99%E6%8B%89%E8%96%87%E5%A8%85",
-    "忧雾" to "https://wiki.biligame.com/klbq/%E5%BF%A7%E9%9B%BE",
-    "蕾欧娜" to "https://wiki.biligame.com/klbq/%E8%95%BE%E6%AC%A7%E5%A8%9C",
-    "明" to "https://wiki.biligame.com/klbq/%E6%98%8E",
-    "拉薇" to "https://wiki.biligame.com/klbq/%E6%8B%89%E8%96%87",
-    "梅瑞狄斯" to "https://wiki.biligame.com/klbq/%E6%A2%85%E7%91%9E%E7%8B%84%E6%96%AF",
-    "香奈美" to "https://wiki.biligame.com/klbq/%E9%A6%99%E5%A5%88%E7%BE%8E",
-    "令" to "https://wiki.biligame.com/klbq/%E4%BB%A4",
-    "艾卡" to "https://wiki.biligame.com/klbq/%E8%89%BE%E5%8D%A1",
-    "珐格兰丝" to "https://wiki.biligame.com/klbq/%E7%8F%90%E6%A0%BC%E5%85%B0%E4%B8%9D",
-    "玛拉" to "https://wiki.biligame.com/klbq/%E7%8E%9B%E6%8B%89",
-    "星绘" to "https://wiki.biligame.com/klbq/%E6%98%9F%E7%BB%98",
-    "奥黛丽" to "https://wiki.biligame.com/klbq/%E5%A5%A5%E9%BB%9B%E4%B8%BD%C2%B7%E6%A0%BC%E7%BD%97%E5%A4%AB",
-    "白墨" to "https://wiki.biligame.com/klbq/%E7%99%BD%E5%A2%A8",
-    "玛德蕾娜" to "https://wiki.biligame.com/klbq/%E7%8E%9B%E5%BE%B7%E8%95%BE%E5%A8%9C%C2%B7%E5%88%A9%E9%87%8C",
-    "绯莎" to "https://wiki.biligame.com/klbq/%E7%BB%AF%E8%8E%8E",
-    "加拉蒂亚" to "https://wiki.biligame.com/klbq/%E5%8A%A0%E6%8B%89%E8%92%82%E4%BA%9A%C2%B7%E5%88%A9%E9%87%8C",
+    "米雪儿·李" to "https://wiki.biligame.com/klbq/%E7%B1%B3%E9%9B%AA%E5%84%BF%C2%B7%E6%9D%8E/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "信" to "https://wiki.biligame.com/klbq/%E4%BF%A1/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "心夏" to "https://wiki.biligame.com/klbq/%E5%BF%83%E5%A4%8F/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "伊薇特" to "https://wiki.biligame.com/klbq/%E4%BC%8A%E8%96%87%E7%89%B9/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "芙拉薇娅" to "https://wiki.biligame.com/klbq/%E8%8A%99%E6%8B%89%E8%96%87%E5%A8%85/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "忧雾" to "https://wiki.biligame.com/klbq/%E5%BF%A7%E9%9B%BE/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "蕾欧娜" to "https://wiki.biligame.com/klbq/%E8%95%BE%E6%AC%A7%E5%A8%9C/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "千代" to "https://wiki.biligame.com/klbq/%E5%8D%83%E4%BB%A3/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "明" to "https://wiki.biligame.com/klbq/%E6%98%8E/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "拉薇" to "https://wiki.biligame.com/klbq/%E6%8B%89%E8%96%87/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "梅瑞狄斯" to "https://wiki.biligame.com/klbq/%E6%A2%85%E7%91%9E%E7%8B%84%E6%96%AF/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "香奈美" to "https://wiki.biligame.com/klbq/%E9%A6%99%E5%A5%88%E7%BE%8E/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "令" to "https://wiki.biligame.com/klbq/%E4%BB%A4/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "艾卡" to "https://wiki.biligame.com/klbq/%E8%89%BE%E5%8D%A1/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "珐格兰丝" to "https://wiki.biligame.com/klbq/%E7%8F%90%E6%A0%BC%E5%85%B0%E4%B8%9D/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "玛拉" to "https://wiki.biligame.com/klbq/%E7%8E%9B%E6%8B%89/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "星绘" to "https://wiki.biligame.com/klbq/%E6%98%9F%E7%BB%98/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "奥黛丽" to "https://wiki.biligame.com/klbq/%E5%A5%A5%E9%BB%9B%E4%B8%BD%C2%B7%E6%A0%BC%E7%BD%97%E5%A4%AB/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "白墨" to "https://wiki.biligame.com/klbq/%E7%99%BD%E5%A2%A8/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "玛德蕾娜" to "https://wiki.biligame.com/klbq/%E7%8E%9B%E5%BE%B7%E8%95%BE%E5%A8%9C%C2%B7%E5%88%A9%E9%87%8C/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "绯莎" to "https://wiki.biligame.com/klbq/%E7%BB%AF%E8%8E%8E/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
+    "加拉蒂亚" to "https://wiki.biligame.com/klbq/%E5%8A%A0%E6%8B%89%E8%92%82%E4%BA%9A%C2%B7%E5%88%A9%E9%87%8C/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
 )
 
+@Preview
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MyAppContent() {
@@ -310,7 +305,7 @@ fun TerminalOutputView(
             state = listState,
             modifier = Modifier.fillMaxSize() // 填满 Box
         ) {
-            itemsIndexed(outputLines) { index, line ->
+            itemsIndexed(outputLines) { _, line ->
                 Text(
                     text = line,
                     style = TextStyle(

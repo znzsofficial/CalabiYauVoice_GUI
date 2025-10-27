@@ -1,5 +1,4 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-
 plugins {
     kotlin("jvm")
     id("org.jetbrains.compose")
@@ -23,17 +22,18 @@ dependencies {
     implementation(compose.desktop.currentOs) {
         exclude(group = "org.jetbrains.compose.material")
     }
-    implementation("com.konyaco:fluent:0.0.1-dev.8")
+    implementation(compose.components.uiToolingPreview)
+    implementation("io.github.compose-fluent:fluent:v0.1.0")
     //implementation("com.konyaco:fluent-icons-extended:0.0.1-dev.8") // If you want to use full fluent icons.
 
     //implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
     //implementation("io.coil-kt.coil3:coil-compose:3.1.0")
     //implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
-    implementation("com.formdev:flatlaf:3.6")
+    implementation("com.formdev:flatlaf:3.6.2")
 
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okio:okio:3.11.0")
-    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("com.squareup.okhttp3:okhttp:5.2.1")
+    implementation("com.squareup.okio:okio:3.16.2")
+    implementation("org.jsoup:jsoup:1.21.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }
 

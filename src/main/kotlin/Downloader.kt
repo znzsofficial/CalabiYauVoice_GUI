@@ -8,6 +8,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.Headers.Companion.headersOf
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -221,12 +223,12 @@ object Downloader {
                     return // 下载失败
                 }
 
-                response.body?.use { body ->
+                response.body.use { body ->
                     targetFile.outputStream().buffered().use { output ->
                         body.byteStream().copyTo(output)
                         // Log("  下载成功 (挂起完成): ${targetFile.absolutePath}")
                     }
-                } ?: Log("\n[错误] 下载 ${targetFile.name} 失败，响应体为空。")
+                }
 
             }
         } catch (e: IOException) {
@@ -250,13 +252,13 @@ object Downloader {
      */
     suspend fun fetchHtml(url: String): String? = withContext(Dispatchers.IO) {
         // 将网络请求放在 IO 线程池执行
-        val request = Request.Builder()
-            .url(url)
-            .header(
+        val request = Request(
+            url = url.toHttpUrl(),
+            headers = headersOf(
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
             )
-            .build()
+        )
 
         try {
             client.newCall(request).execute().use { response ->
@@ -264,7 +266,7 @@ object Downloader {
                     Log("[错误] 获取 HTML 失败。URL: $url, 状态码: ${response.code}")
                     null
                 } else {
-                    response.body?.string() // 读取响应体
+                    response.body.string() // 读取响应体
                 }
             }
         } catch (e: IOException) {
