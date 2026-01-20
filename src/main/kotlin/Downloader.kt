@@ -25,7 +25,7 @@ object Downloader {
     lateinit var SAVE_DIR: String   // Windows 保存路径
     var CLEAR_DIR = false  // 是否清除输出文件夹
     lateinit var DOWNLOAD_LANGUAGE: String  // 修改这里来选择语言 CN EN JP
-    var MAX_CONCURRENT_DOWNLOADS = 10  // 同时进行的最大下载数
+    var MAX_CONCURRENT_DOWNLOADS = 16  // 同时进行的最大下载数
     lateinit var Log: (String) -> Unit
     lateinit var Update: (Int, Int, String) -> Unit
     val client = OkHttpClient()
