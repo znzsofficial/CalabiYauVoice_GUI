@@ -2,7 +2,9 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +31,7 @@ import io.github.composefluent.icons.regular.*
 import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
@@ -58,8 +61,17 @@ fun NewDownloaderContent() {
     var progress by remember { mutableStateOf(0f) }
     var progressText by remember { mutableStateOf("") }
 
+    // 记录每个分类下用户【手动选择】的文件列表
+    // Key: 分类名 (categoryName), Value: 选中的文件列表 List<Pair<Name, Url>>
+    // 如果 Map 中不存在该 key，但 checkedCategories 包含它，则视为【默认全选】
+    val manualSelectionMap = remember { mutableStateMapOf<String, List<Pair<String, String>>>() }
+
+    // 缓存分类下的总文件数 (用于 UI 显示 "已选 5/10")
+    // Key: 分类名, Value: 总数
+    val categoryTotalCountMap = remember { mutableStateMapOf<String, Int>() }
+
     // 日志
-    val logLines = remember { mutableStateListOf("欢迎使用新版 Wiki 语音下载器。") }
+    val logLines = remember { mutableStateListOf("欢迎使用卡拉彼丘 Wiki 语音下载器。") }
     fun addLog(msg: String) {
         logLines.add(msg)
         if (logLines.size > 100) logLines.removeAt(0)
@@ -70,6 +82,9 @@ fun NewDownloaderContent() {
     var dialogCategoryName by remember { mutableStateOf("") }
     val dialogFileList = remember { mutableStateListOf<Pair<String, String>>() }
     var dialogIsLoading by remember { mutableStateOf(false) }
+    // 弹窗初始化时已选中的文件 (用于回显)
+    val dialogInitialSelection = remember { mutableStateListOf<String>() }
+
     var scanJob by remember { mutableStateOf<Job?>(null) } // 用于管理分类扫描任务
 
     // --- 旧版窗口是否打开 ---
@@ -100,37 +115,24 @@ fun NewDownloaderContent() {
         FileSelectionDialog(
             title = dialogCategoryName,
             files = dialogFileList,
+            // 传入初始选中的 URL 列表
+            initialSelection = dialogInitialSelection,
             isLoading = dialogIsLoading,
             onClose = { showFileDialog = false },
-            onDownload = { selectedFiles ->
+            onConfirm = { selectedFiles ->
+                // 点击确认不再下载，而是保存选择状态
                 showFileDialog = false
-                isDownloading = true
-                val charName = selectedGroup?.characterName ?: "Unknown"
-                val targetDir = File(savePath, WikiEngine.sanitizeFileName(charName))
-                val concurrency = maxConcurrencyStr.toIntOrNull() ?: 16
 
-                coroutineScope.launch {
-                    try {
-                        addLog("开始下载选中的 ${selectedFiles.size} 个文件...")
-                        WikiEngine.downloadSpecificFiles(
-                            files = selectedFiles,
-                            saveDir = targetDir,
-                            maxConcurrency = concurrency,
-                            onLog = { addLog(it) },
-                            onProgress = { current, total, name ->
-                                progress = current.toFloat() / total
-                                progressText = "$current / $total : $name"
-                            }
-                        )
-                        addLog("特定文件下载完成！")
-                    } catch (e: Exception) {
-                        addLog("下载出错: ${e.message}")
-                    } finally {
-                        isDownloading = false
-                        progress = 0f
-                        progressText = ""
-                    }
+                // 更新手动选择记录
+                manualSelectionMap[dialogCategoryName] = selectedFiles
+                // 更新总数缓存 (虽然 fetch 时已经更新过，这里保险起见)
+                categoryTotalCountMap[dialogCategoryName] = dialogFileList.size
+
+                // 如果用户选了文件，自动勾选该分类
+                if (selectedFiles.isNotEmpty() && !checkedCategories.contains(dialogCategoryName)) {
+                    checkedCategories.add(dialogCategoryName)
                 }
+                // 如果用户清空了选择，是否取消勾选分类？(可选，这里暂不自动取消)
             }
         )
     }
@@ -227,35 +229,45 @@ fun NewDownloaderContent() {
                                     false
                                 }
                             },
+                            trailing = {
+                                TextBoxButton(onClick = {
+                                    performSearch()
+                                }) {
+                                    TooltipBox(
+                                        tooltip = { Text("开始搜索") }) {
+                                        TextBoxButtonDefaults.SearchIcon()
+                                    }
+                                }
+                            },
                             singleLine = true,
                             placeholder = { Text("搜索...") },
-                            leadingIcon = {
-                                Image(
-                                    painter = rememberVectorPainter(Icons.Regular.Search),
-                                    contentDescription = null,
-                                    colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+//                        leadingIcon = {
+//                            Image(
+//                                painter = rememberVectorPainter(Icons.Regular.Search),
+//                                contentDescription = null,
+//                                colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
+//                                modifier = Modifier.size(16.dp)
+//                            )
+//                        }
                         )
-                        Spacer(Modifier.width(8.dp))
-                        TooltipBox(
-                            tooltip = { Text("开始搜索") }
-                        ) {
-                            Button(
-                                onClick = {
-                                    performSearch()
-                                },
-                                disabled = isSearching || isDownloading,
-                                iconOnly = true,
-                            ) {
-                                Image(
-                                    painter = rememberVectorPainter(Icons.Regular.ArrowForward),
-                                    contentDescription = "Go",
-                                    colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.primary),
-                                )
-                            }
-                        }
+//                        Spacer(Modifier.width(8.dp))
+//                        TooltipBox(
+//                            tooltip = { Text("开始搜索") }
+//                        ) {
+//                            Button(
+//                                onClick = {
+//                                    performSearch()
+//                                },
+//                                disabled = isSearching || isDownloading,
+//                                iconOnly = true,
+//                            ) {
+//                                Image(
+//                                    painter = rememberVectorPainter(Icons.Regular.ArrowForward),
+//                                    contentDescription = "Go",
+//                                    colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.primary),
+//                                )
+//                            }
+//                        }
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -398,8 +410,6 @@ fun NewDownloaderContent() {
                                 Modifier
                                     .weight(1f)
                                     .fillMaxWidth()
-                                    .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(4.dp))
-                                    .background(FluentTheme.colors.background.layer.default)
                             ) {
                                 if (isScanningTree) {
                                     ProgressRing(
@@ -413,17 +423,41 @@ fun NewDownloaderContent() {
                                             val isChecked = checkedCategories.contains(cat)
                                             val isRoot = cat == group.rootCategory
 
+                                            // [新增] 计算该分类的状态显示文本
+                                            val statusText = if (manualSelectionMap.containsKey(cat)) {
+                                                val count = manualSelectionMap[cat]?.size ?: 0
+                                                val total = categoryTotalCountMap[cat]
+                                                if (total != null) "已选 $count / $total" else "已选 $count 项"
+                                            } else {
+                                                // 没有手动选择过，且被勾选 -> 默认全选
+                                                if (isChecked) "默认全选" else ""
+                                            }
+
                                             ContextMenuArea(items = {
-                                                listOf(ContextMenuItem("查看文件列表...") {
-                                                    dialogCategoryName = name
+                                                listOf(ContextMenuItem("选择文件...") {
+                                                    dialogCategoryName = cat // 保存完整的 key
                                                     dialogFileList.clear()
+                                                    dialogInitialSelection.clear()
                                                     showFileDialog = true
                                                     dialogIsLoading = true
 
                                                     coroutineScope.launch {
                                                         try {
+                                                            // 1. 获取文件列表
                                                             val files = WikiEngine.fetchFilesInCategory(cat)
                                                             dialogFileList.addAll(files)
+                                                            categoryTotalCountMap[cat] = files.size // 更新总数缓存
+
+                                                            // 2. 准备回显状态
+                                                            if (manualSelectionMap.containsKey(cat)) {
+                                                                // 如果有手动记录，就用手动记录的
+                                                                val selectedUrls =
+                                                                    manualSelectionMap[cat]!!.map { it.second }
+                                                                dialogInitialSelection.addAll(selectedUrls)
+                                                            } else {
+                                                                // 如果没有手动记录，默认全选
+                                                                dialogInitialSelection.addAll(files.map { it.second })
+                                                            }
                                                         } catch (e: Exception) {
                                                             addLog("加载失败: ${e.message}")
                                                         } finally {
@@ -435,6 +469,7 @@ fun NewDownloaderContent() {
                                                 Row(
                                                     Modifier
                                                         .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(4.dp))
                                                         .clickable {
                                                             if (isChecked) checkedCategories.remove(cat) else checkedCategories.add(
                                                                 cat
@@ -453,6 +488,10 @@ fun NewDownloaderContent() {
                                                     )
                                                     Spacer(Modifier.width(8.dp))
                                                     Text(name + if (isRoot) " (主分类)" else "")
+
+                                                    // [新增] 显示选择状态
+                                                    Spacer(Modifier.weight(1f))
+                                                    Text(statusText, fontSize = 12.sp, color = Color.Gray)
                                                 }
                                             }
                                         }
@@ -515,27 +554,64 @@ fun NewDownloaderContent() {
                             onClick = {
                                 if (checkedCategories.isEmpty()) return@Button
                                 isDownloading = true
-                                val targetDir =
-                                    File(
-                                        savePath,
-                                        WikiEngine.sanitizeFileName(selectedGroup?.characterName ?: "Unknown")
-                                    )
+                                val targetDir = File(
+                                    savePath,
+                                    WikiEngine.sanitizeFileName(selectedGroup?.characterName ?: "Unknown")
+                                )
                                 val concurrency = maxConcurrencyStr.toIntOrNull() ?: 16
 
                                 coroutineScope.launch {
                                     try {
-                                        addLog("开始批量下载...")
-                                        WikiEngine.downloadFiles(
-                                            categories = checkedCategories.toList(),
-                                            saveDir = targetDir,
-                                            maxConcurrency = concurrency,
-                                            onLog = { addLog(it) },
-                                            onProgress = { current, total, name ->
-                                                progress = current.toFloat() / total
-                                                progressText = "$current / $total : $name"
+                                        addLog("开始处理下载任务...")
+
+                                        // 遍历所有勾选的分类
+                                        // 1. 如果 manualSelectionMap 有记录 -> 直接下载这些文件
+                                        // 2. 如果没有记录 -> 说明是默认全选 -> 需要先 fetch 再下载
+
+                                        // 收集所有需要下载的文件 (去重)
+                                        val finalDownloadList = mutableListOf<Pair<String, String>>()
+
+                                        for (cat in checkedCategories) {
+                                            if (manualSelectionMap.containsKey(cat)) {
+                                                // 也就是用户手动选过的
+                                                val files = manualSelectionMap[cat] ?: emptyList()
+                                                finalDownloadList.addAll(files)
+                                                addLog(
+                                                    "[${
+                                                        cat.replace(
+                                                            "Category:",
+                                                            ""
+                                                        )
+                                                    }] 使用手动选择 (${files.size}项)"
+                                                )
+                                            } else {
+                                                // 用户没动过，默认全选，需要现场获取
+                                                addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
+                                                val files = WikiEngine.fetchFilesInCategory(cat)
+                                                finalDownloadList.addAll(files)
                                             }
-                                        )
-                                        addLog("批量下载完成！")
+                                        }
+
+                                        // 去重
+                                        val uniqueList = finalDownloadList.distinctBy { it.second }
+
+                                        if (uniqueList.isEmpty()) {
+                                            addLog("没有文件需要下载。")
+                                        } else {
+                                            addLog("共 ${uniqueList.size} 个文件，开始下载...")
+                                            WikiEngine.downloadSpecificFiles(
+                                                files = uniqueList,
+                                                saveDir = targetDir,
+                                                maxConcurrency = concurrency,
+                                                onLog = { addLog(it) },
+                                                onProgress = { current, total, name ->
+                                                    progress = current.toFloat() / total
+                                                    progressText = "$current / $total : $name"
+                                                }
+                                            )
+                                            addLog("全部下载完成！")
+                                        }
+
                                     } catch (e: Exception) {
                                         addLog("中断: ${e.message}")
                                     } finally {
@@ -601,6 +677,11 @@ fun NewDownloaderContent() {
             TerminalOutputView(logLines, Modifier.fillMaxSize().background(Color.Transparent))
         }
     }
+
+    LaunchedEffect(Unit) {
+        delay(300)
+        performSearch()
+    }
 }
 
 /**
@@ -611,115 +692,180 @@ fun NewDownloaderContent() {
 fun FileSelectionDialog(
     title: String,
     files: List<Pair<String, String>>,
+    initialSelection: List<String>, // [新增] 初始选中的 URL
     isLoading: Boolean,
     onClose: () -> Unit,
-    onDownload: (List<Pair<String, String>>) -> Unit
+    onConfirm: (List<Pair<String, String>>) -> Unit // [修改] 改为确认回调
 ) {
     val selectedUrls = remember { mutableStateListOf<String>() }
+    // 搜索关键词
+    var searchKeyword by remember { mutableStateOf("") }
+    val darkMode = LocalThemeState.current.value
 
-    LaunchedEffect(files) {
-        if (files.isNotEmpty() && selectedUrls.isEmpty()) {
-            selectedUrls.addAll(files.map { it.second })
+    // 初始化选中状态
+    LaunchedEffect(files, initialSelection) {
+        if (files.isNotEmpty()) {
+            selectedUrls.clear()
+            // 如果 initialSelection 为空且还没加载过，可能是第一次打开默认全选
+            // 但因为我们在外部已经控制了 initialSelection 的逻辑（有记录传记录，无记录传全选），
+            // 所以这里直接 addAll 即可
+            selectedUrls.addAll(initialSelection)
+        }
+    }
+
+    val filteredFiles = remember(files, searchKeyword) {
+        if (searchKeyword.isBlank()) {
+            files
+        } else {
+            files.filter { (name, _) ->
+                name.contains(searchKeyword, ignoreCase = true)
+            }
         }
     }
 
     DialogWindow(
         onCloseRequest = onClose,
         title = "文件列表: $title",
-        state = rememberDialogState(width = 700.dp, height = 600.dp)
+        state = rememberDialogState(width = 700.dp, height = 650.dp)
     ) {
-        FluentTheme(colors = if (isSystemInDarkTheme()) darkColors() else lightColors()) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .background(FluentTheme.colors.background.layer.default)
-                    .padding(16.dp)
-            ) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(Modifier.height(12.dp))
-
-                // 工具栏
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = {
-                        selectedUrls.clear()
-                        selectedUrls.addAll(files.map { it.second })
-                    }) { Text("全选") }
-
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = { selectedUrls.clear() }) { Text("清空") }
-
-                    Spacer(Modifier.width(16.dp))
-                    Text("快速筛选:", fontSize = 12.sp, color = Color.Gray)
-                    Spacer(Modifier.width(4.dp))
-
-                    listOf("CN", "JP", "EN").forEach { lang ->
-                        Button(onClick = {
-                            selectedUrls.clear()
-                            val targets = files.filter { (name, _) ->
-                                val n = name.uppercase()
-                                n.endsWith(lang) || n.contains("$lang.")
-                            }.map { it.second }
-                            selectedUrls.addAll(targets)
-                        }) { Text(lang) }
-                        Spacer(Modifier.width(4.dp))
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Box(
-                    Modifier.weight(1f)
-                        .fillMaxWidth()
-                        .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(4.dp))
-                        .background(FluentTheme.colors.control.secondary)
+        FluentTheme(colors = if (darkMode) darkColors() else lightColors()) {
+            Mica(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
                 ) {
-                    if (isLoading) {
-                        Column(
-                            Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            ProgressRing(size = 48.dp)
-                            Spacer(Modifier.height(8.dp))
-                            Text("正在加载列表...")
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(Modifier.height(12.dp))
+
+                    // === 工具栏 ===
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = {
+                            val newUrls = filteredFiles.map { it.second }
+                            newUrls.forEach { if (!selectedUrls.contains(it)) selectedUrls.add(it) }
+                        }) { Text("全选可见") }
+
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = { selectedUrls.clear() }) { Text("清空") }
+
+                        Spacer(Modifier.width(16.dp))
+                        Text("后缀筛选:", fontSize = 12.sp, color = Color.Gray)
+                        Spacer(Modifier.width(4.dp))
+
+                        listOf("CN", "JP", "EN").forEach { lang ->
+                            Button(onClick = {
+                                selectedUrls.clear()
+                                val targets = files.filter { (name, _) ->
+                                    val n = name.uppercase()
+                                    n.endsWith(lang) || n.contains("$lang.")
+                                }.map { it.second }
+                                selectedUrls.addAll(targets)
+                                searchKeyword = ""
+                            }) { Text(lang) }
+                            Spacer(Modifier.width(4.dp))
                         }
-                    } else if (files.isEmpty()) {
-                        Text("无文件", modifier = Modifier.align(Alignment.Center), color = Color.Gray)
-                    } else {
-                        LazyColumn(Modifier.fillMaxSize().padding(4.dp)) {
-                            items(files) { (name, url) ->
-                                val isSelected = selectedUrls.contains(url)
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            if (isSelected) selectedUrls.remove(url) else selectedUrls.add(url)
-                                        }
-                                        .padding(vertical = 2.dp, horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // 搜索框
+                    TextField(
+                        value = searchKeyword,
+                        onValueChange = { searchKeyword = it },
+                        placeholder = { Text("搜索文件名...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        leadingIcon = {
+                            Image(
+                                painter = rememberVectorPainter(Icons.Regular.Search),
+                                contentDescription = "Search",
+                                colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // === 列表区域 ===
+                    Box(
+                        Modifier.weight(1f)
+                            .fillMaxWidth()
+                            .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(4.dp))
+                            .background(FluentTheme.colors.control.secondary)
+                    ) {
+                        if (isLoading) {
+                            Column(
+                                Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                ProgressRing(size = 48.dp)
+                                Spacer(Modifier.height(8.dp))
+                                Text("正在加载列表...")
+                            }
+                        } else if (filteredFiles.isEmpty()) {
+                            val emptyText = if (files.isEmpty()) "无文件" else "无搜索结果"
+                            Text(emptyText, modifier = Modifier.align(Alignment.Center), color = Color.Gray)
+                        } else {
+                            // 使用 ScrollbarContainer
+                            val listState = rememberLazyListState()
+                            val adapter = rememberScrollbarAdapter(listState)
+
+                            ScrollbarContainer(
+                                adapter = adapter,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    // 稍微加一点 padding，避免内容贴边
+                                    contentPadding = PaddingValues(4.dp)
                                 ) {
-                                    CheckBox(checked = isSelected, onCheckStateChange = {
-                                        if (it) selectedUrls.add(url) else selectedUrls.remove(url)
-                                    })
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(name, fontSize = 13.sp)
+                                    items(filteredFiles) { (name, url) ->
+                                        val isSelected = selectedUrls.contains(url)
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .clickable {
+                                                    if (isSelected) selectedUrls.remove(url) else selectedUrls.add(url)
+                                                }
+                                                .padding(vertical = 2.dp, horizontal = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            CheckBox(checked = isSelected, onCheckStateChange = {
+                                                if (it) selectedUrls.add(url) else selectedUrls.remove(url)
+                                            })
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(name, fontSize = 13.sp)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Button(onClick = onClose) { Text("取消") }
-                    Spacer(Modifier.width(12.dp))
-                    Button(
-                        onClick = {
-                            val finalSelection = files.filter { selectedUrls.contains(it.second) }
-                            onDownload(finalSelection)
-                        },
-                        disabled = selectedUrls.isEmpty() || isLoading
-                    ) {
-                        Text("下载选中 (${selectedUrls.size})", fontWeight = FontWeight.Bold)
+                    // === 底部按钮 ===
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Text(
+                            "已选 ${selectedUrls.size} / ${files.size}",
+                            modifier = Modifier.align(Alignment.CenterVertically).padding(end = 16.dp),
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+
+                        Button(onClick = onClose) { Text("取消") }
+                        Spacer(Modifier.width(12.dp))
+                        Button(
+                            onClick = {
+                                val finalSelection = files.filter { selectedUrls.contains(it.second) }
+                                onConfirm(finalSelection) // [修改] 调用确认回调
+                            },
+                            disabled = isLoading // 即使选空也可以确认（代表不下载该分类下的任何文件）
+                        ) {
+                            Text("确认选择", fontWeight = FontWeight.Bold) // [修改] 文案
+                        }
                     }
                 }
             }
@@ -750,7 +896,7 @@ fun AboutContent() {
                     )
                 )
                 Text(
-                    text = "Version 1.1.0",
+                    text = "Version 1.2.0",
                     style = TextStyle(
                         fontSize = 12.sp,
                         color = FluentTheme.colors.text.text.secondary
@@ -789,12 +935,18 @@ fun AboutContent() {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     HyperlinkButton(navigateUri = "https://github.com/znzsofficial/CalabiyauWikiVoice") {
-                        Text("核心脚本源码")
+                        Text("核心脚本")
                     }
                     Text("|", color = FluentTheme.colors.text.text.disabled)
                     HyperlinkButton(navigateUri = "https://github.com/znzsofficial/CalabiYauVoice_GUI") {
-                        Text("GUI 开源仓库")
+                        Text("开源仓库")
                     }
+                    // --- 新增部分 ---
+                    Text("|", color = FluentTheme.colors.text.text.disabled)
+                    HyperlinkButton(navigateUri = "https://space.bilibili.com/15544900") {
+                        Text("作者B站")
+                    }
+                    // ----------------
                 }
 
                 // 4. 版权/落款
