@@ -145,56 +145,56 @@ object WikiEngine {
     /**
      * 3. 下载逻辑
      */
-    suspend fun downloadFiles(
-        categories: List<String>,
-        saveDir: File,
-        maxConcurrency: Int,
-        onLog: (String) -> Unit,
-        onProgress: (Int, Int, String) -> Unit
-    ) = withContext(Dispatchers.IO) {
-        onLog("正在扫描音频文件链接...")
-        val allFiles = Collections.synchronizedList(mutableListOf<Pair<String, String>>())
-
-        // 并发获取文件列表
-        categories.map { cat ->
-            async { allFiles.addAll(getCategoryFilesDetail(cat)) }
-        }.awaitAll()
-
-        val uniqueFiles = allFiles.distinctBy { it.second } // URL去重
-        val total = uniqueFiles.size
-        onLog("共找到 $total 个唯一音频文件。")
-
-        if (total == 0) return@withContext
-
-        if (!saveDir.exists()) saveDir.mkdirs()
-
-        val semaphore = Semaphore(maxConcurrency)
-        val counter = AtomicInteger(0)
-
-        uniqueFiles.map { (name, url) ->
-            launch(Dispatchers.IO) {
-                semaphore.acquire()
-                try {
-                    var safeName = sanitizeFileName(name)
-                    if (!safeName.contains(".")) {
-                        if (url.endsWith(".ogg")) safeName += ".ogg"
-                        else if (url.endsWith(".mp3")) safeName += ".mp3"
-                    }
-                    val targetFile = File(saveDir, safeName)
-
-                    downloadFile(url, targetFile)
-
-                    val current = counter.incrementAndGet()
-                    onProgress(current, total, safeName)
-                } catch (e: Exception) {
-                    onLog("[错误] ${e.message}")
-                } finally {
-                    semaphore.release()
-                }
-            }
-        }.joinAll()
-        onLog("下载任务完成。")
-    }
+//    suspend fun downloadFiles(
+//        categories: List<String>,
+//        saveDir: File,
+//        maxConcurrency: Int,
+//        onLog: (String) -> Unit,
+//        onProgress: (Int, Int, String) -> Unit
+//    ) = withContext(Dispatchers.IO) {
+//        onLog("正在扫描音频文件链接...")
+//        val allFiles = Collections.synchronizedList(mutableListOf<Pair<String, String>>())
+//
+//        // 并发获取文件列表
+//        categories.map { cat ->
+//            async { allFiles.addAll(getCategoryFilesDetail(cat)) }
+//        }.awaitAll()
+//
+//        val uniqueFiles = allFiles.distinctBy { it.second } // URL去重
+//        val total = uniqueFiles.size
+//        onLog("共找到 $total 个唯一音频文件。")
+//
+//        if (total == 0) return@withContext
+//
+//        if (!saveDir.exists()) saveDir.mkdirs()
+//
+//        val semaphore = Semaphore(maxConcurrency)
+//        val counter = AtomicInteger(0)
+//
+//        uniqueFiles.map { (name, url) ->
+//            launch(Dispatchers.IO) {
+//                semaphore.acquire()
+//                try {
+//                    var safeName = sanitizeFileName(name)
+//                    if (!safeName.contains(".")) {
+//                        if (url.endsWith(".ogg")) safeName += ".ogg"
+//                        else if (url.endsWith(".mp3")) safeName += ".mp3"
+//                    }
+//                    val targetFile = File(saveDir, safeName)
+//
+//                    downloadFile(url, targetFile)
+//
+//                    val current = counter.incrementAndGet()
+//                    onProgress(current, total, safeName)
+//                } catch (e: Exception) {
+//                    onLog("[错误] ${e.message}")
+//                } finally {
+//                    semaphore.release()
+//                }
+//            }
+//        }.joinAll()
+//        onLog("下载任务完成。")
+//    }
 
     // === 内部工具函数 ===
 

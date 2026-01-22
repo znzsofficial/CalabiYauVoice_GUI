@@ -42,7 +42,7 @@ fun NewDownloaderContent() {
     val coroutineScope = rememberCoroutineScope()
 
     // --- 状态管理 ---
-    var searchKeyword by remember { mutableStateOf("语音") }
+    var searchKeyword by remember { mutableStateOf("角色") }
     var isSearching by remember { mutableStateOf(false) }
 
     // 角色列表
@@ -101,7 +101,6 @@ fun NewDownloaderContent() {
         ) {
             FluentTheme(
                 colors = if (darkMode.value) darkColors() else lightColors(),
-                useAcrylicPopup = true,
             ) {
                 Mica(Modifier.fillMaxSize()) {
                     LegacyContent()
