@@ -14,7 +14,6 @@ repositories {
     mavenCentral()
     maven("https://packages.jetbrains.team/maven/p/kpm/public/")
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
-    maven("https://s01.oss.sonatype.org/content/repositories/snapshots/")
     google()
 }
 
@@ -29,7 +28,10 @@ dependencies {
     //implementation("org.jetbrains.compose.ui:ui-tooling-preview:1.10.0")
     implementation("io.github.compose-fluent:fluent:v0.1.0")
     implementation("io.github.compose-fluent:fluent-icons-extended:v0.1.0")
-    implementation("com.mayakapps.compose:window-styler:0.3.3-SNAPSHOT")
+    //implementation("com.mayakapps.compose:window-styler:0.3.3-SNAPSHOT")
+    implementation(fileTree("libs") {
+        include("*.jar")
+    })
     implementation("net.java.dev.jna:jna-jpms:5.18.1")
     implementation("net.java.dev.jna:jna-platform-jpms:5.18.1")
 
