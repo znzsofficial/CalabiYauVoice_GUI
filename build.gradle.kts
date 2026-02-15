@@ -8,12 +8,13 @@ plugins {
 }
 
 group = "com.nekolaska"
-version = "1.2.0"
+version = "1.2.1"
 
 repositories {
     mavenCentral()
     maven("https://packages.jetbrains.team/maven/p/kpm/public/")
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    //maven("https://central.sonatype.com/repository/maven-snapshots/")
     google()
 }
 
@@ -23,9 +24,11 @@ dependencies {
 //    implementation("org.jetbrains.jewel:jewel-int-ui-decorated-window-243:0.27.0")
     implementation(compose.desktop.currentOs) {
         exclude(group = "org.jetbrains.compose.material")
+        exclude(group = "org.jetbrains.compose.material3")
+        exclude(group = "org.jetbrains.compose.material3.adaptive")
     }
-    implementation("org.jetbrains.compose.ui:ui-graphics:1.11.0-alpha01")
-    //implementation("org.jetbrains.compose.ui:ui-tooling-preview:1.10.0")
+//    implementation("io.github.compose-fluent:fluent:0.2.0-SNAPSHOT")
+//    implementation("io.github.compose-fluent:fluent-icons-extended:0.2.0-SNAPSHOT")
     implementation("io.github.compose-fluent:fluent:v0.1.0")
     implementation("io.github.compose-fluent:fluent-icons-extended:v0.1.0")
     //implementation("com.mayakapps.compose:window-styler:0.3.3-SNAPSHOT")
@@ -43,12 +46,13 @@ dependencies {
     //implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     //implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 
-    implementation("com.squareup.okhttp3:okhttp:5.3.0")
-    implementation("com.squareup.okio:okio:3.16.2")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
+    implementation("com.squareup.okio:okio:3.16.4")
     implementation("org.jsoup:jsoup:1.22.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0-RC")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 }
 
 compose.desktop {
@@ -57,7 +61,7 @@ compose.desktop {
 
         nativeDistributions {
             packageName = "CalabiYauVoice_GUI"
-            packageVersion = "1.2.0"
+            packageVersion = "1.2.1"
             description = "CalabiYau Wiki Voice Downloader GUI"
             copyright = "Apache License, Version 2.0"
             vendor = "NekoLaska"

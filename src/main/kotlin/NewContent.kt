@@ -895,7 +895,7 @@ fun AboutContent() {
                     )
                 )
                 Text(
-                    text = "Version 1.2.0",
+                    text = "Version 1.2.1",
                     style = TextStyle(
                         fontSize = 12.sp,
                         color = FluentTheme.colors.text.text.secondary
