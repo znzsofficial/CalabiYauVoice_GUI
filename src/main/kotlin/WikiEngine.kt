@@ -1,23 +1,106 @@
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.decodeToImageBitmap
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.JavaNetCookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.net.CookieManager
+import java.net.CookiePolicy
 import java.net.URLEncoder
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.collections.ArrayDeque
+import kotlin.collections.List
+import kotlin.collections.Map
+import kotlin.collections.associateWith
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.emptyList
+import kotlin.collections.filter
+import kotlin.collections.firstOrNull
+import kotlin.collections.forEach
+import kotlin.collections.isNotEmpty
+import kotlin.collections.listOf
+import kotlin.collections.map
+import kotlin.collections.mutableListOf
+import kotlin.collections.mutableSetOf
+import kotlin.collections.random
+import kotlin.collections.set
+import kotlin.collections.sort
+import kotlin.collections.sortedBy
+import kotlin.collections.toMutableList
+import kotlin.random.Random
 
 object WikiEngine {
     private const val API_BASE_URL = "https://wiki.biligame.com/klbq/api.php"
-    private val client = OkHttpClient.Builder().build()
+    // UA池
+    private val USER_AGENTS = listOf(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+    )
+    private val currentUA = USER_AGENTS.random()
+
+    // 暴露给外部的 Client
+    val client: OkHttpClient = OkHttpClient.Builder()
+        // 自动管理 Cookie
+        .cookieJar(JavaNetCookieJar(CookieManager().apply {
+            setCookiePolicy(CookiePolicy.ACCEPT_ALL)
+        }))
+        // 增加超时时间
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        // 核心拦截器：伪装头信息
+        .addInterceptor { chain ->
+            val original = chain.request()
+            val request = original.newBuilder()
+                .header("User-Agent", currentUA)
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                .header("Referer", "https://wiki.biligame.com/klbq/")
+                .header("Connection", "keep-alive")
+                .build()
+            chain.proceed(request)
+        }
+        // 重试拦截器：遇到风控歇一会儿
+        .addInterceptor { chain ->
+            var response = chain.proceed(chain.request())
+            var tryCount = 0
+            val maxLimit = 3
+
+            // 如果遇到 429 (Too Many Requests) 或 503 (Service Unavailable)，尝试重试
+            while (!response.isSuccessful && (response.code == 429 || response.code == 503 || response.code == 403) && tryCount < maxLimit) {
+                tryCount++
+                response.close() // 关闭旧响应
+
+                // 指数退避：第一次歇 2s，第二次歇 4s...
+                val sleepTime = 2000L * tryCount + Random.nextLong(500)
+                println("触发风控 (${response.code})，等待 ${sleepTime}ms 后重试 ($tryCount/$maxLimit)...")
+                Thread.sleep(sleepTime)
+
+                // 重新发起请求
+                response = chain.proceed(chain.request())
+            }
+            response
+        }
+        .build()
+
     private val jsonParser = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
     // === 数据结构 ===
@@ -28,10 +111,10 @@ object WikiEngine {
     )
 
     // === API 模型 ===
-    @Serializable
-    data class WikiResponse(
+    @Serializable data class WikiResponse(
         val query: WikiQuery? = null,
-        @SerialName("continue") val continuation: Map<String, String>? = null
+        // 使用 JsonElement 以兼容数字类型的 offset
+        @SerialName("continue") val continuation: Map<String, JsonElement>? = null
     )
 
     @Serializable
@@ -104,17 +187,39 @@ object WikiEngine {
      */
     suspend fun searchAndGroupCharacters(keyword: String): List<CharacterGroup> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(keyword, "UTF-8")
-        val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=14&format=json&srlimit=500"
+        val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=14&format=json&srlimit=200"
 
-        val jsonStr = fetchString(url) ?: return@withContext emptyList()
-        val rawList = try {
-            jsonParser.decodeFromString<WikiResponse>(jsonStr).query?.search?.map { it.title } ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
+        var retryCount = 0
+        var resultList: List<CharacterGroup> = emptyList()
+
+        while (retryCount < 3) {
+            try {
+                val request = Request.Builder().url(url).build()
+                val responseString = client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
+                    response.body.string()
+                }
+
+                // HTML 检测
+                if (responseString.trimStart().startsWith("<")) {
+                    throw java.io.IOException("Blocked by WAF")
+                }
+
+                // 这里会自动使用你刚才修复好的 WikiResponse (Map<String, JsonElement>)
+                val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title } ?: emptyList()
+                val validList = rawList.filter { it.endsWith("语音") }
+
+                resultList = groupCategories(validList)
+                if (resultList.isNotEmpty()) break
+
+            } catch (e: Exception) {
+                retryCount++
+                println("[Search Retry $retryCount] ${e.message}")
+                Thread.sleep(1000L + Random.nextLong(2000))
+            }
         }
 
-        val validList = rawList.filter { it.endsWith("语音") }
-        return@withContext groupCategories(validList)
+        return@withContext resultList
     }
 
     /**
@@ -231,7 +336,7 @@ object WikiEngine {
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
                 res.query?.categorymembers?.forEach { list.add(it.title) }
-                token = res.continuation?.get("cmcontinue")
+                token = res.continuation?.get("cmcontinue")?.jsonPrimitive?.content
             } catch (_: Exception) {
                 break
             }
@@ -259,7 +364,7 @@ object WikiEngine {
                         list.add(p.title.replace(Regex("^(File:|文件:)"), "") to i.url)
                     }
                 }
-                token = res.continuation?.get("gcmcontinue")
+                token = res.continuation?.get("gcmcontinue")?.jsonPrimitive?.content
             } catch (_: Exception) {
                 break
             }
