@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -46,7 +47,6 @@ private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush {
 @OptIn(ExperimentalFluentApi::class)
 fun main() = application {
     setupGlobalExceptionHandler()
-    val isWin11OrLater = isWindows11OrLater()
     val darkMode = mutableStateOf(isSystemInDarkTheme())
 
     Window(
@@ -55,10 +55,14 @@ fun main() = application {
         icon = painterResource("icon.png"),
         state = rememberWindowState(width = 1000.dp, height = 750.dp)
     ) {
-        if (isWin11OrLater) {
-            LaunchedEffect(window) {
+        val skiaLayerExists = remember { window.findSkiaLayer() != null }
+
+        // 只有当 Skia Layer 存在并且是 Win11 系统时，才执行透明化和设置 WindowStyle 的逻辑
+        if (skiaLayerExists && isWindows11OrLater()) {
+            LaunchedEffect(Unit) {
                 window.findSkiaLayer()?.transparency = true
             }
+
             WindowStyle(
                 isDarkTheme = darkMode.value,
                 backdropType = WindowBackdrop.Tabbed
@@ -67,9 +71,12 @@ fun main() = application {
 
         CompositionLocalProvider(LocalThemeState provides darkMode) {
             FluentTheme(colors = if (darkMode.value) darkColors() else lightColors()) {
-                if (isWin11OrLater) {
+                if (skiaLayerExists && isWindows11OrLater()) {
+                    // 对于支持透明的 Skia Layer，可以直接渲染内容
+                    // Mica/Tabbed 效果会由 WindowStyle 负责
                     NewDownloaderContent()
                 } else {
+                    // 对于不支持透明的 fallback 路径，使用渐变背景
                     Box(modifier = Modifier.background(getNonWin11BackgroundGradient(darkMode.value))) {
                         NewDownloaderContent()
                     }
