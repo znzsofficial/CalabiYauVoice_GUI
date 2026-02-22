@@ -179,7 +179,7 @@ fun NewDownloaderContent() {
     }
 
     // === 主界面布局 ===
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
         MenuBar {
             MenuBarItem(
                 content = { Text("功能") },

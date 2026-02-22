@@ -27,6 +27,8 @@ dependencies {
         exclude(group = "org.jetbrains.compose.material3")
         exclude(group = "org.jetbrains.compose.material3.adaptive")
     }
+    implementation("org.jetbrains.compose.foundation:foundation-desktop:1.10.1")
+    implementation("org.jetbrains.compose.ui:ui-desktop:1.10.1")
 //    implementation("io.github.compose-fluent:fluent:0.2.0-SNAPSHOT")
 //    implementation("io.github.compose-fluent:fluent-icons-extended:0.2.0-SNAPSHOT")
     implementation("io.github.compose-fluent:fluent:v0.1.0")
