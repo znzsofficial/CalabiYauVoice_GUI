@@ -3,8 +3,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,10 +14,8 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.*
@@ -27,13 +25,17 @@ import io.github.composefluent.background.Mica
 import io.github.composefluent.component.*
 import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
-import io.github.composefluent.icons.regular.*
+import io.github.composefluent.icons.regular.AppsList
+import io.github.composefluent.icons.regular.CursorClick
+import io.github.composefluent.icons.regular.FolderOpen
+import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.collections.addAll
 import kotlin.coroutines.cancellation.CancellationException
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
@@ -748,20 +750,31 @@ fun FileSelectionDialog(
                         Button(onClick = { selectedUrls.clear() }) { Text("清空") }
 
                         Spacer(Modifier.width(16.dp))
-                        Text("后缀筛选:", fontSize = 12.sp, color = Color.Gray)
+                        Text("选择后缀:", fontSize = 12.sp, color = Color.Gray)
                         Spacer(Modifier.width(4.dp))
 
                         listOf("CN", "JP", "EN").forEach { lang ->
-                            Button(onClick = {
-                                selectedUrls.clear()
-                                val targets = files.filter { (name, _) ->
-                                    val n = name.uppercase()
-                                    n.endsWith(lang) || n.contains("$lang.")
-                                }.map { it.second }
-                                selectedUrls.addAll(targets)
-                                searchKeyword = ""
-                            }) { Text(lang) }
-                            Spacer(Modifier.width(4.dp))
+                            // 先计算匹配的目标 URL 列表（只做一次遍历）
+                            val targets = files.map { (name, url) -> name.uppercase() to url }
+                                .filter { (n, _) -> n.endsWith(lang) || n.contains("$lang.") }
+                                .map { it.second }
+
+                            // 勾选状态：当且仅当存在匹配项并且所有匹配项都被选中时才为 true
+                            val isChecked = targets.isNotEmpty() && targets.all { it in selectedUrls }
+
+                            CheckBox(
+                                label = lang,
+                                checked = isChecked,
+                            ) { checked ->
+                                if (checked) {
+                                    // 只添加尚未存在的 URL，避免重复
+                                    val toAdd = targets.filterNot { it in selectedUrls }
+                                    selectedUrls.addAll(toAdd)
+                                } else {
+                                    // 一次性移除所有匹配项
+                                    selectedUrls.removeAll { it in targets }
+                                }
+                            }
                         }
                     }
 
@@ -867,96 +880,6 @@ fun FileSelectionDialog(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun AboutContent() {
-    val darkMode = LocalThemeState.current
-    FluentTheme(colors = if (darkMode.value) darkColors() else lightColors()) {
-        Mica(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // 1. 标题和版本
-                Text(
-                    text = "卡拉彼丘 Wiki 语音下载器",
-                    style = TextStyle(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = FluentTheme.colors.text.text.primary
-                    )
-                )
-                Text(
-                    text = "Version 1.2.1",
-                    style = TextStyle(
-                        fontSize = 12.sp,
-                        color = FluentTheme.colors.text.text.secondary
-                    )
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                // 2. 软件介绍文案
-                Text(
-                    text = "一款基于 Kotlin Compose Desktop 开发的现代化工具，采用 Fluent Design 设计风格。旨在为卡拉彼丘玩家提供便捷、流畅的 Wiki 语音资源提取与下载体验。",
-                    style = TextStyle(
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        textAlign = TextAlign.Center,
-                        color = FluentTheme.colors.text.text.primary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(Modifier.weight(1f)) // 把链接推到底部
-
-                // 3. 链接区域
-                Text(
-                    text = "相关链接",
-                    style = TextStyle(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = FluentTheme.colors.text.text.secondary
-                    )
-                )
-
-                // 链接横向排列
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    HyperlinkButton(navigateUri = "https://github.com/znzsofficial/CalabiyauWikiVoice") {
-                        Text("核心脚本")
-                    }
-                    Text("|", color = FluentTheme.colors.text.text.disabled)
-                    HyperlinkButton(navigateUri = "https://github.com/znzsofficial/CalabiYauVoice_GUI") {
-                        Text("开源仓库")
-                    }
-                    // --- 新增部分 ---
-                    Text("|", color = FluentTheme.colors.text.text.disabled)
-                    HyperlinkButton(navigateUri = "https://space.bilibili.com/15544900") {
-                        Text("作者B站")
-                    }
-                    // ----------------
-                }
-
-                // 4. 版权/落款
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "© 2025 Developed by NekoLaska",
-                    style = TextStyle(
-                        fontSize = 10.sp,
-                        color = FluentTheme.colors.text.text.disabled
-                    )
-                )
             }
         }
     }
