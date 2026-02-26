@@ -318,7 +318,7 @@ object WikiEngine {
                     val i = p.imageinfo?.firstOrNull()
                     if (i?.url != null) {
                         val isAudio = i.mime?.startsWith("audio/") == true
-                                || i.url.endsWith(".ogg")
+                                || i.url.endsWith(".wav")
                                 || i.url.endsWith(".mp3")
                         if (!audioOnly || isAudio) {
                             list.add(p.title.replace(Regex("^(File:|文件:)"), "") to i.url)

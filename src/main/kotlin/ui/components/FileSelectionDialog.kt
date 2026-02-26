@@ -29,6 +29,13 @@ import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.lightColors
+import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
+import javax.sound.sampled.AudioFormat
+import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.DataLine
+import javax.sound.sampled.SourceDataLine
+import kotlinx.coroutines.delay
 
 private fun isImageFile(name: String, url: String): Boolean {
     val lowerName = name.lowercase()
@@ -39,6 +46,78 @@ private fun isImageFile(name: String, url: String): Boolean {
             lowerUrl.endsWith(".png") || lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".gif") || lowerUrl.endsWith(
         ".webp"
     )
+}
+
+private fun isAudioFile(name: String, url: String): Boolean {
+    val lowerName = name.lowercase()
+    val lowerUrl = url.lowercase()
+    return lowerName.endsWith(".wav") || lowerName.endsWith(".mp3") ||
+        lowerUrl.endsWith(".wav") || lowerUrl.endsWith(".mp3")
+}
+
+private object AudioPlayer {
+    private var playThread: Thread? = null
+    private var line: SourceDataLine? = null
+    private val stopFlag = AtomicBoolean(false)
+    private var currentUrl: String? = null
+
+    fun play(url: String) {
+        if (currentUrl == url && isPlaying(url)) return
+        stop()
+        stopFlag.set(false)
+        currentUrl = url
+        playThread = Thread {
+            try {
+                val inputStream = AudioSystem.getAudioInputStream(URL(url))
+                val baseFormat = inputStream.format
+                val decodedFormat = AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    baseFormat.sampleRate,
+                    16,
+                    baseFormat.channels,
+                    baseFormat.channels * 2,
+                    baseFormat.sampleRate,
+                    false
+                )
+                val decodedStream = AudioSystem.getAudioInputStream(decodedFormat, inputStream)
+                val info = DataLine.Info(SourceDataLine::class.java, decodedFormat)
+                val sourceLine = AudioSystem.getLine(info) as SourceDataLine
+                sourceLine.open(decodedFormat)
+                sourceLine.start()
+                line = sourceLine
+
+                val buffer = ByteArray(4096)
+                while (!stopFlag.get()) {
+                    val bytesRead = decodedStream.read(buffer)
+                    if (bytesRead == -1) break
+                    if (bytesRead > 0) sourceLine.write(buffer, 0, bytesRead)
+                }
+
+                sourceLine.drain()
+                sourceLine.stop()
+                sourceLine.close()
+                decodedStream.close()
+                inputStream.close()
+            } catch (_: Exception) {
+                stop()
+            } finally {
+                if (currentUrl == url) currentUrl = null
+            }
+        }.apply { isDaemon = true }
+        playThread?.start()
+    }
+
+    fun stop() {
+        stopFlag.set(true)
+        line?.stop()
+        line?.close()
+        line = null
+        playThread?.interrupt()
+        playThread = null
+        currentUrl = null
+    }
+
+    fun isPlaying(url: String): Boolean = currentUrl == url && playThread?.isAlive == true && !stopFlag.get()
 }
 
 @OptIn(ExperimentalFluentApi::class)
@@ -54,6 +133,18 @@ fun FileSelectionDialog(
     val selectedUrls = remember { mutableStateListOf<String>() }
     var searchKeyword by remember { mutableStateOf("") }
     val darkMode = LocalThemeState.current.value
+    var playingUrl by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(playingUrl) {
+        while (playingUrl != null) {
+            val current = playingUrl
+            if (current != null && !AudioPlayer.isPlaying(current)) {
+                playingUrl = null
+                break
+            }
+            delay(200)
+        }
+    }
 
     LaunchedEffect(files, initialSelection) {
         if (files.isNotEmpty()) {
@@ -68,7 +159,10 @@ fun FileSelectionDialog(
     }
 
     DialogWindow(
-        onCloseRequest = onClose,
+        onCloseRequest = {
+            AudioPlayer.stop()
+            onClose()
+        },
         title = "文件列表: $title",
         state = rememberDialogState(width = 720.dp, height = 680.dp)
     ) {
@@ -165,6 +259,8 @@ fun FileSelectionDialog(
                                     items(filteredFiles) { (name, url) ->
                                         val isSelected = selectedUrls.contains(url)
                                         val canPreview = isImageFile(name, url)
+                                        val canPlay = isAudioFile(name, url)
+                                        val isPlaying = playingUrl == url && AudioPlayer.isPlaying(url)
 
                                         Row(
                                             Modifier
@@ -197,7 +293,22 @@ fun FileSelectionDialog(
                                                 Spacer(Modifier.width(8.dp))
                                             }
 
-                                            Text(name, fontSize = 13.sp)
+                                            Text(name, fontSize = 13.sp, modifier = Modifier.weight(1f))
+
+                                            if (canPlay) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Button(
+                                                    onClick = {
+                                                        if (isPlaying) {
+                                                            AudioPlayer.stop()
+                                                            playingUrl = null
+                                                        } else {
+                                                            AudioPlayer.play(url)
+                                                            playingUrl = url
+                                                        }
+                                                    }
+                                                ) { Text(if (isPlaying) "停止" else "播放") }
+                                            }
                                         }
                                     }
                                 }
@@ -215,11 +326,15 @@ fun FileSelectionDialog(
                             fontSize = 12.sp
                         )
 
-                        Button(onClick = onClose) { Text("取消") }
+                        Button(onClick = {
+                            AudioPlayer.stop()
+                            onClose()
+                        }) { Text("取消") }
                         Spacer(Modifier.width(12.dp))
                         Button(
                             onClick = {
                                 val finalSelection = files.filter { selectedUrls.contains(it.second) }
+                                AudioPlayer.stop()
                                 onConfirm(finalSelection)
                             },
                             disabled = isLoading

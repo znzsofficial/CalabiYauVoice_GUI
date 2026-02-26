@@ -48,6 +48,8 @@ dependencies {
     implementation("com.squareup.okio:okio:3.16.4")
     //implementation("org.jsoup:jsoup:1.22.1")
 
+    implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 }
