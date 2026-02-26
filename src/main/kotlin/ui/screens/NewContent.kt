@@ -1,6 +1,5 @@
 package ui.screens
 
-import ui.components.FileSelectionDialog
 import LocalThemeState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -15,25 +14,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.*
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.*
+import androidx.compose.ui.window.DialogWindow
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.rememberDialogState
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
-import io.github.composefluent.background.Mica
 import io.github.composefluent.component.*
-import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.AppsList
 import io.github.composefluent.icons.regular.CursorClick
 import io.github.composefluent.icons.regular.FolderOpen
-import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
-import legacy.LegacyContent
 import ui.components.CharacterAvatar
+import ui.components.FileSelectionDialog
 import ui.components.TerminalOutputView
 import util.jChoose
 import viewmodel.MainViewModel
@@ -73,27 +70,7 @@ fun NewDownloaderContent() {
 
     val logLines by viewModel.logLines.collectAsState()
 
-    // --- 旧版窗口是否打开 ---
-    var isLegacyWindowOpen by remember { mutableStateOf(false) }
     val darkMode = LocalThemeState.current
-
-    // === 旧版窗口 (作为附带功能存在) ===
-    if (isLegacyWindowOpen) {
-        Window(
-            onCloseRequest = { isLegacyWindowOpen = false },
-            title = "旧版下载器 (HTML解析)",
-            icon = painterResource("icon.png"),
-            state = rememberWindowState(width = 800.dp, height = 700.dp)
-        ) {
-            FluentTheme(
-                colors = if (darkMode.value) darkColors() else lightColors(),
-            ) {
-                Mica(Modifier.fillMaxSize()) {
-                    LegacyContent()
-                }
-            }
-        }
-    }
 
     // === 文件选择弹窗 ===
     if (showFileDialog) {
@@ -132,10 +109,6 @@ fun NewDownloaderContent() {
             MenuBarItem(
                 content = { Text("功能") },
                 items = {
-                    MenuFlyoutItem(
-                        onClick = { isLegacyWindowOpen = true },
-                        text = { Text("打开旧版网页爬虫界面") }
-                    )
                     MenuFlyoutItem(
                         onClick = { darkMode.value = !darkMode.value },
                         text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") }

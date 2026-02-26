@@ -28,7 +28,6 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 - **🔍 Smart Search:** Search character categories (voice-only or all types).
 - **⚡ Concurrent Downloads:** Scan category trees and download files with built-in concurrency control.
 - **🖼️ Rich Preview:** File picker dialog with live image previews for `PNG`, `JPG`, `GIF`, and `WebP`.
-- **🕰️ Legacy Support:** Includes an optional legacy HTML downloader.
 
 ### 🛠️ Tech Stack
 
@@ -65,7 +64,6 @@ src/main/kotlin/
 │   ├── screens/   # 🖥️ Screen composables (页面组件)
 │   └── components/# 🧩 Reusable UI components (可复用 UI 组件)
 ├── util/          # 🛠️ Utilities (工具类)
-└── legacy/        # 🕰️ Legacy HTML downloader (旧版 HTML 下载器)
 ```
 
 ## 🚀 Build and Run / 构建与运行

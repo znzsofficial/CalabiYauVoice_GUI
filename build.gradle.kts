@@ -19,9 +19,6 @@ repositories {
 }
 
 dependencies {
-    // See https://github.com/JetBrains/Jewel/releases for the release notes
-//    implementation("org.jetbrains.jewel:jewel-int-ui-standalone-243:0.27.0")
-//    implementation("org.jetbrains.jewel:jewel-int-ui-decorated-window-243:0.27.0")
     implementation(compose.desktop.currentOs) {
         exclude(group = "org.jetbrains.compose.material")
         exclude(group = "org.jetbrains.compose.material3")
@@ -41,8 +38,6 @@ dependencies {
     implementation("net.java.dev.jna:jna-platform-jpms:5.18.1")
 
     //implementation("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
-    //implementation("io.coil-kt.coil3:coil-compose:3.1.0")
-    //implementation("io.coil-kt.coil3:coil-network-okhttp:3.1.0")
     implementation("com.formdev:flatlaf:3.7")
 
     //implementation("io.coil-kt.coil3:coil-compose:3.3.0")
@@ -51,7 +46,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
     implementation("com.squareup.okio:okio:3.16.4")
-    implementation("org.jsoup:jsoup:1.22.1")
+    //implementation("org.jsoup:jsoup:1.22.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
@@ -84,8 +79,10 @@ compose.desktop {
         buildTypes {
             release { // 配置 release 构建类型
                 proguard {
+                    //obfuscate = true
+                    optimize = true
+                    isEnabled = true
                     configurationFiles.from(project.file("proguard-rules.pro"))
-                    isEnabled.set(true)
                 }
             }
         }
