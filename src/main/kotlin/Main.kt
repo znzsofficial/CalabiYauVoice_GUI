@@ -26,6 +26,7 @@ import io.github.composefluent.component.Text
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
 import jna.windows.ComposeWindowProcedure
+import jna.windows.rememberLayoutHitTestOwner
 import jna.windows.structure.WinUserConst.HTCAPTION
 import jna.windows.structure.WinUserConst.HTCLIENT
 import jna.windows.structure.WinUserConst.HTCLOSE
@@ -88,7 +89,7 @@ fun main() = application {
         val closeButtonRect = remember { mutableStateOf(Rect.Zero) }
         val captionBarRect = remember { mutableStateOf(Rect.Zero) }
         val paddingInset = remember { MutableWindowInsets() }
-        //val layoutHitTestOwner = rememberLayoutHitTestOwner()
+        val layoutHitTestOwner = rememberLayoutHitTestOwner()
 
         // 构建 Window 命中测试逻辑
         val hitTest = remember(darkMode) {
@@ -97,9 +98,7 @@ fun main() = application {
                     maxButtonRect.value.contains(x, y) -> HTMAXBUTTON
                     minButtonRect.value.contains(x, y) -> HTMINBUTTON
                     closeButtonRect.value.contains(x, y) -> HTCLOSE
-                    captionBarRect.value.contains(x, y)
-                        //&& !layoutHitTestOwner.hitTest(x, y)
-                        -> HTCAPTION
+                    captionBarRect.value.contains(x, y) && !layoutHitTestOwner.hitTest(x, y) -> HTCAPTION
                     else -> HTCLIENT
                 }
             }
@@ -125,7 +124,6 @@ fun main() = application {
                     onCloseButtonRectUpdate = { closeButtonRect.value = it },
                     onCaptionBarRectUpdate = { captionBarRect.value = it },
                     windowProcedure = windowProcedure,
-                    //layoutHitTestOwner = layoutHitTestOwner
                 ) { windowInset, captionBarInset ->
                     val contentModifier = Modifier
                         .windowInsetsPadding(paddingInset) // 应用系统边框inset（windowInset）
@@ -159,7 +157,6 @@ fun FrameWindowScope.WindowsWindowFrame(
     onCloseButtonRectUpdate: (Rect) -> Unit,
     onCaptionBarRectUpdate: (Rect) -> Unit,
     windowProcedure: ComposeWindowProcedure,
-    //layoutHitTestOwner: LayoutHitTestOwner,
     content: @Composable (windowInset: WindowInsets, captionBarInset: WindowInsets) -> Unit
 ) {
     val paddingInset = remember { MutableWindowInsets() }
