@@ -35,7 +35,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import kotlin.collections.addAll
 import kotlin.coroutines.cancellation.CancellationException
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
@@ -242,33 +241,7 @@ fun NewDownloaderContent() {
                             },
                             singleLine = true,
                             placeholder = { Text("搜索...") },
-//                        leadingIcon = {
-//                            Image(
-//                                painter = rememberVectorPainter(Icons.Regular.Search),
-//                                contentDescription = null,
-//                                colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
-//                                modifier = Modifier.size(16.dp)
-//                            )
-//                        }
                         )
-//                        Spacer(Modifier.width(8.dp))
-//                        TooltipBox(
-//                            tooltip = { Text("开始搜索") }
-//                        ) {
-//                            Button(
-//                                onClick = {
-//                                    performSearch()
-//                                },
-//                                disabled = isSearching || isDownloading,
-//                                iconOnly = true,
-//                            ) {
-//                                Image(
-//                                    painter = rememberVectorPainter(Icons.Regular.ArrowForward),
-//                                    contentDescription = "Go",
-//                                    colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.primary),
-//                                )
-//                            }
-//                        }
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -680,6 +653,7 @@ fun NewDownloaderContent() {
     }
 
     LaunchedEffect(Unit) {
+        WikiEngine.preloadCharacterNames()
         delay(300)
         performSearch()
     }

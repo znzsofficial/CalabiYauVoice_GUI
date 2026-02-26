@@ -64,6 +64,8 @@ fun CharacterAvatar(
     var avatarUrl by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(characterName) {
+        // 缓存表中不存在该角色名时，不发请求，直接用默认图标
+        if (!WikiEngine.isCharacterNameValid(characterName)) return@LaunchedEffect
         val url = WikiEngine.getCharacterAvatarUrl(characterName)
         if (url != null) {
             avatarUrl = url

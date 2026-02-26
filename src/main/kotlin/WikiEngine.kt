@@ -24,29 +24,11 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.collections.ArrayDeque
-import kotlin.collections.List
-import kotlin.collections.Map
-import kotlin.collections.associateWith
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.emptyList
-import kotlin.collections.filter
-import kotlin.collections.firstOrNull
-import kotlin.collections.forEach
-import kotlin.collections.isNotEmpty
-import kotlin.collections.listOf
-import kotlin.collections.map
-import kotlin.collections.mutableListOf
-import kotlin.collections.mutableSetOf
-import kotlin.collections.random
-import kotlin.collections.set
-import kotlin.collections.sort
-import kotlin.collections.sortedBy
-import kotlin.collections.toMutableList
 import kotlin.random.Random
 
 object WikiEngine {
     private const val API_BASE_URL = "https://wiki.biligame.com/klbq/api.php"
+
     // UA池
     private val USER_AGENTS = listOf(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -71,7 +53,10 @@ object WikiEngine {
             val original = chain.request()
             val request = original.newBuilder()
                 .header("User-Agent", currentUA)
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                .header(
+                    "Accept",
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+                )
                 .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
                 .header("Referer", "https://wiki.biligame.com/klbq/")
                 .header("Connection", "keep-alive")
@@ -91,7 +76,7 @@ object WikiEngine {
 
                 // 指数退避：第一次歇 2s，第二次歇 4s...
                 val sleepTime = 2000L * tryCount + Random.nextLong(500)
-                println("触发风控 (${response.code})，等待 ${sleepTime}ms 后重试 ($tryCount/$maxLimit)...")
+                //println("触发风控 (${response.code})，等待 ${sleepTime}ms 后重试 ($tryCount/$maxLimit)...")
                 Thread.sleep(sleepTime)
 
                 // 重新发起请求
@@ -111,7 +96,8 @@ object WikiEngine {
     )
 
     // === API 模型 ===
-    @Serializable data class WikiResponse(
+    @Serializable
+    data class WikiResponse(
         val query: WikiQuery? = null,
         // 使用 JsonElement 以兼容数字类型的 offset
         @SerialName("continue") val continuation: Map<String, JsonElement>? = null
@@ -126,10 +112,13 @@ object WikiEngine {
 
     @Serializable
     data class SearchItem(val title: String)
+
     @Serializable
     data class CategoryMember(val ns: Int, val title: String)
+
     @Serializable
     data class WikiPage(val title: String, val imageinfo: List<ImageInfo>? = null)
+
     @Serializable
     data class ImageInfo(val url: String? = null, val mime: String? = null)
 
@@ -206,7 +195,8 @@ object WikiEngine {
                 }
 
                 // 这里会自动使用你刚才修复好的 WikiResponse (Map<String, JsonElement>)
-                val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title } ?: emptyList()
+                val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title }
+                    ?: emptyList()
                 val validList = rawList.filter { it.endsWith("语音") }
 
                 resultList = groupCategories(validList)
@@ -214,7 +204,7 @@ object WikiEngine {
 
             } catch (e: Exception) {
                 retryCount++
-                println("[Search Retry $retryCount] ${e.message}")
+                //println("[Search Retry $retryCount] ${e.message}")
                 Thread.sleep(1000L + Random.nextLong(2000))
             }
         }
@@ -317,7 +307,18 @@ object WikiEngine {
                 val cl = cleanMap[raw]!!
                 cl.startsWith(coreName) && cl.endsWith("语音")
             }
-            groups.add(CharacterGroup(coreName, originalName, familyMembers))
+
+            // 优先从角色名缓存表中找到与 coreName 完全匹配或最接近前缀匹配的真实名称
+            val resolvedName = if (characterNameCache.isNotEmpty()) {
+                characterNameCache.firstOrNull { it == coreName }          // 精确匹配
+                    ?: characterNameCache.firstOrNull { coreName.startsWith(it) } // coreName 以真名开头（如带后缀变体）
+                    ?: characterNameCache.firstOrNull { it.startsWith(coreName) } // 真名以 coreName 开头
+                    ?: coreName                                             // 找不到则降级
+            } else {
+                coreName
+            }
+
+            groups.add(CharacterGroup(resolvedName, originalName, familyMembers))
             assigned.addAll(familyMembers)
         }
         return groups.sortedBy { it.characterName }
@@ -371,6 +372,49 @@ object WikiEngine {
         } while (token != null)
         return list
     }
+
+    // 获取指定分类下的所有页面标题（namespace=0，即主命名空间的角色页）
+    private suspend fun getCharacterNames(categoryName: String): List<String> {
+        val list = mutableListOf<String>()
+        val encoded = URLEncoder.encode(categoryName, "UTF-8")
+        var token: String? = null
+        do {
+            val cArg = if (token != null) "&cmcontinue=$token" else ""
+            val url =
+                "$API_BASE_URL?action=query&list=categorymembers&cmtitle=$encoded&cmnamespace=0&cmtype=page&format=json&cmlimit=500$cArg"
+            val json = fetchString(url) ?: break
+            try {
+                val res = jsonParser.decodeFromString<WikiResponse>(json)
+                res.query?.categorymembers?.forEach { list.add(it.title) }
+                token = res.continuation?.get("cmcontinue")?.jsonPrimitive?.content
+            } catch (_: Exception) {
+                break
+            }
+        } while (token != null)
+        return list
+    }
+
+    // 获取所有角色名（合并两个分类，去重）
+    suspend fun getAllCharacterNames(): List<String> = withContext(Dispatchers.IO) {
+        val result = mutableSetOf<String>()
+        result.addAll(getCharacterNames("Category:晶源体"))
+        result.addAll(getCharacterNames("Category:超弦体"))
+        result.sorted()
+    }
+
+    // 角色名缓存表（从晶源体/超弦体分类获取）
+    private val characterNameCache = ConcurrentHashMap.newKeySet<String>()
+
+    /** 预加载角色名缓存表，后续 groupCategories 和头像加载都依赖它 */
+    suspend fun preloadCharacterNames() = withContext(Dispatchers.IO) {
+        if (characterNameCache.isNotEmpty()) return@withContext
+        val names = getAllCharacterNames()
+        characterNameCache.addAll(names)
+    }
+
+    /** 判断某个名字是否在缓存表中；缓存表为空时返回 true（降级：未初始化时不拦截） */
+    fun isCharacterNameValid(name: String): Boolean =
+        characterNameCache.isEmpty() || characterNameCache.contains(name)
 
     // 头像缓存
     // Key: 角色名, Value: 真实URL
