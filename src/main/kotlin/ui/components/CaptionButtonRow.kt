@@ -191,7 +191,7 @@ fun CaptionButton(
 
 @OptIn(ExperimentalTextApi::class)
 @Composable
-private fun rememberFontIconFamily(): MutableState<FontFamily?> { // 改为MutableState
+private fun rememberFontIconFamily(): MutableState<FontFamily?> {
     val fontIconFamily = remember { mutableStateOf<FontFamily?>(null) }
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
@@ -207,7 +207,7 @@ private fun rememberFontIconFamily(): MutableState<FontFamily?> { // 改为Mutab
             .firstOrNull()
     }
 
-    return fontIconFamily // 返回MutableState（而非父类State）
+    return fontIconFamily
 }
 
 

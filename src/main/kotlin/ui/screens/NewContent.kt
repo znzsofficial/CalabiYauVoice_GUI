@@ -18,9 +18,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindow
-import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.rememberDialogState
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
@@ -85,22 +82,10 @@ fun NewDownloaderContent() {
         )
     }
 
-    val performSearch = { viewModel.performSearch() }
+    val performSearch = viewModel::performSearch
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
-        DialogWindow(
-            onCloseRequest = { showDialog = false },
-            state = rememberDialogState(
-                position = WindowPosition(Alignment.Center),
-                width = 450.dp,
-                height = 320.dp
-            ),
-            title = "关于",
-            resizable = false,
-            content = {
-                AboutContent()
-            }
-        )
+        AboutWindow(onCloseRequest = { showDialog = false })
     }
 
     // === 主界面布局 ===
