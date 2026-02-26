@@ -1,3 +1,5 @@
+package legacy
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,6 +13,9 @@ import androidx.compose.ui.unit.dp
 import io.github.composefluent.component.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import ui.components.TerminalOutputView
+import util.home
+import util.jChoose
 
 val characterWikiMap = mapOf(
     "米雪儿·李" to "https://wiki.biligame.com/klbq/%E7%B1%B3%E9%9B%AA%E5%84%BF%C2%B7%E6%9D%8E/%E8%AF%AD%E9%9F%B3%E5%8F%B0%E8%AF%8D",
@@ -123,7 +128,7 @@ fun LegacyContent() {
         val coroutineScope = rememberCoroutineScope() // 获取与 Composable 绑定的 CoroutineScope
         val terminalOutputLines = remember { mutableStateListOf("--- Terminal Initialized ---") }
         var clearDir by remember { mutableStateOf(false) }
-        var savePath by remember { mutableStateOf("$home\\output") }
+        var savePath by remember { mutableStateOf("${home}\\output") }
         var progress by remember { mutableStateOf(0f) }
         var currentDownloadFile by remember { mutableStateOf("") }
         Row(

@@ -1,3 +1,5 @@
+package data
+
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.decodeToImageBitmap
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +16,7 @@ import okhttp3.JavaNetCookieJar
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.io.IOException
 import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.URLEncoder
@@ -186,13 +189,13 @@ object WikiEngine {
             try {
                 val request = Request.Builder().url(url).build()
                 val responseString = client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw java.io.IOException("HTTP ${response.code}")
+                    if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
                     response.body.string()
                 }
 
                 // HTML 检测
                 if (responseString.trimStart().startsWith("<")) {
-                    throw java.io.IOException("Blocked by WAF")
+                    throw IOException("Blocked by WAF")
                 }
 
                 val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title }

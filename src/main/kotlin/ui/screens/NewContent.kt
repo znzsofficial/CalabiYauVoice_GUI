@@ -1,3 +1,7 @@
+package ui.screens
+
+import ui.components.FileSelectionDialog
+import LocalThemeState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +32,11 @@ import io.github.composefluent.icons.regular.CursorClick
 import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
+import legacy.LegacyContent
+import ui.components.CharacterAvatar
+import ui.components.TerminalOutputView
+import util.jChoose
+import viewmodel.MainViewModel
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
 @Composable

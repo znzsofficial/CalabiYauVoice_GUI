@@ -1,3 +1,5 @@
+package legacy
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -14,6 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import util.clearAll
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap

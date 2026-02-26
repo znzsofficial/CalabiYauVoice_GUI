@@ -1,3 +1,6 @@
+package viewmodel
+
+import data.WikiEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.File
@@ -214,14 +217,10 @@ class MainViewModel(
             try {
                 val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _voiceOnly.value)
                 _dialogFileList.value = files
-                _categoryTotalCountMap.value = _categoryTotalCountMap.value + (cat to files.size)
+                _categoryTotalCountMap.value += (cat to files.size)
 
                 val manual = _manualSelectionMap.value[cat]
-                _dialogInitialSelection.value = if (manual != null) {
-                    manual.map { it.second }
-                } else {
-                    files.map { it.second }
-                }
+                _dialogInitialSelection.value = manual?.map { it.second } ?: files.map { it.second }
             } catch (e: Exception) {
                 addLog("加载失败: ${e.message}")
             } finally {

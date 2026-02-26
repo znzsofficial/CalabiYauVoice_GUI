@@ -53,9 +53,9 @@ import com.sun.jna.platform.win32.WinUser.WM_SIZE
 import com.sun.jna.platform.win32.WinUser.WS_CAPTION
 import com.sun.jna.platform.win32.WinUser.WS_SYSMENU
 import com.sun.jna.ptr.IntByReference
-import findSkiaLayer
 import jna.windows.structure.isWindows11OrLater
 import org.jetbrains.skiko.currentSystemTheme
+import util.findSkiaLayer
 import java.awt.Window
 
 class ComposeWindowProcedure(

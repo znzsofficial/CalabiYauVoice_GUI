@@ -2,6 +2,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -15,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.zIndex
@@ -33,6 +35,10 @@ import jna.windows.structure.WinUserConst.HTCLOSE
 import jna.windows.structure.WinUserConst.HTMAXBUTTON
 import jna.windows.structure.WinUserConst.HTMINBUTTON
 import jna.windows.structure.isWindows11OrLater
+import ui.components.CaptionButtonRow
+import ui.components.contains
+import ui.screens.NewDownloaderContent
+import util.findSkiaLayer
 import java.awt.Button
 import java.awt.FlowLayout
 import java.awt.Frame
@@ -192,7 +198,7 @@ fun FrameWindowScope.WindowsWindowFrame(
             // 标题栏右侧：最小化/最大化/关闭按钮
             CaptionButtonRow(
                 windowHandle = windowProcedure.windowHandle,
-                isMaximize = state.placement == androidx.compose.ui.window.WindowPlacement.Maximized,
+                isMaximize = state.placement == WindowPlacement.Maximized,
                 onCloseRequest = onCloseRequest,
                 onMaximizeButtonRectUpdate = onMaxButtonRectUpdate,
                 onMinimizeButtonRectUpdate = onMinButtonRectUpdate,
@@ -200,7 +206,7 @@ fun FrameWindowScope.WindowsWindowFrame(
                 accentColor = windowProcedure.windowFrameColor,
                 frameColorEnabled = windowProcedure.isWindowFrameAccentColorEnabled,
                 isActive = windowProcedure.isWindowActive,
-                modifier = Modifier.align(androidx.compose.ui.Alignment.Top)
+                modifier = Modifier.align(Alignment.Top)
                     .onSizeChanged {
                         // 更新标题栏按钮区域的inset
                         contentPaddingInset.insets = WindowInsets(
