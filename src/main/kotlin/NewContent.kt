@@ -45,6 +45,7 @@ fun NewDownloaderContent() {
     // --- 状态管理 ---
     var searchKeyword by remember { mutableStateOf("角色") }
     var isSearching by remember { mutableStateOf(false) }
+    var voiceOnly by remember { mutableStateOf(true) }
 
     // 角色列表
     val characterGroups = remember { mutableStateListOf<WikiEngine.CharacterGroup>() }
@@ -150,8 +151,8 @@ fun NewDownloaderContent() {
 
             coroutineScope.launch {
                 try {
-                    addLog("正在搜索: $searchKeyword ...")
-                    val res = WikiEngine.searchAndGroupCharacters(searchKeyword)
+                    addLog("正在搜索: $searchKeyword ${if (voiceOnly) "(仅语音)" else "(全部类型)"}...")
+                    val res = WikiEngine.searchAndGroupCharacters(searchKeyword, voiceOnly)
                     characterGroups.addAll(res)
                     addLog("搜索完成，找到 ${res.size} 个角色。")
                 } catch (e: Exception) {
@@ -244,9 +245,20 @@ fun NewDownloaderContent() {
                         )
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
+                    // 语音模式开关
+                    ToggleButton(
+                        checked = voiceOnly,
+                        onCheckedChanged = { voiceOnly = it },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (voiceOnly) "仅搜索语音" else "搜索全部类型",
+                            fontSize = 12.sp
+                        )
+                    }
 
-                    // 角色列表
+                    Spacer(Modifier.height(8.dp))
                     if (characterGroups.isEmpty() && !isSearching) {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text("无数据", color = Color.Gray, fontSize = 12.sp)
@@ -418,7 +430,7 @@ fun NewDownloaderContent() {
                                                     coroutineScope.launch {
                                                         try {
                                                             // 1. 获取文件列表
-                                                            val files = WikiEngine.fetchFilesInCategory(cat)
+                                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly)
                                                             dialogFileList.addAll(files)
                                                             categoryTotalCountMap[cat] = files.size // 更新总数缓存
 
@@ -561,7 +573,7 @@ fun NewDownloaderContent() {
                                             } else {
                                                 // 用户没动过，默认全选，需要现场获取
                                                 addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
-                                                val files = WikiEngine.fetchFilesInCategory(cat)
+                                                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly)
                                                 finalDownloadList.addAll(files)
                                             }
                                         }

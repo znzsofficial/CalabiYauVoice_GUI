@@ -124,10 +124,10 @@ object WikiEngine {
 
     /**
      * 仅获取指定分类下的文件列表，不下载
+     * @param audioOnly true = 只保留音频文件（原有行为）；false = 返回分类下所有文件
      */
-    suspend fun fetchFilesInCategory(category: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        // 直接调用内部已有的逻辑
-        getCategoryFilesDetail(category)
+    suspend fun fetchFilesInCategory(category: String, audioOnly: Boolean = true): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        getCategoryFilesDetail(category, audioOnly)
     }
 
     /**
@@ -173,8 +173,9 @@ object WikiEngine {
 
     /**
      * 1. 搜索并分组角色
+     * @param voiceOnly true = 仅保留以"语音"结尾的分类（原有行为）；false = 返回所有匹配分类
      */
-    suspend fun searchAndGroupCharacters(keyword: String): List<CharacterGroup> = withContext(Dispatchers.IO) {
+    suspend fun searchAndGroupCharacters(keyword: String, voiceOnly: Boolean = true): List<CharacterGroup> = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(keyword, "UTF-8")
         val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=14&format=json&srlimit=200"
 
@@ -194,17 +195,16 @@ object WikiEngine {
                     throw java.io.IOException("Blocked by WAF")
                 }
 
-                // 这里会自动使用你刚才修复好的 WikiResponse (Map<String, JsonElement>)
                 val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title }
                     ?: emptyList()
-                val validList = rawList.filter { it.endsWith("语音") }
+                // voiceOnly 模式下只保留"语音"分类，否则全量传入
+                val filteredList = if (voiceOnly) rawList.filter { it.endsWith("语音") } else rawList
 
-                resultList = groupCategories(validList)
+                resultList = groupCategories(filteredList, voiceOnly)
                 if (resultList.isNotEmpty()) break
 
             } catch (e: Exception) {
                 retryCount++
-                //println("[Search Retry $retryCount] ${e.message}")
                 Thread.sleep(1000L + Random.nextLong(2000))
             }
         }
@@ -237,63 +237,9 @@ object WikiEngine {
         return@withContext list
     }
 
-    /**
-     * 3. 下载逻辑
-     */
-//    suspend fun downloadFiles(
-//        categories: List<String>,
-//        saveDir: File,
-//        maxConcurrency: Int,
-//        onLog: (String) -> Unit,
-//        onProgress: (Int, Int, String) -> Unit
-//    ) = withContext(Dispatchers.IO) {
-//        onLog("正在扫描音频文件链接...")
-//        val allFiles = Collections.synchronizedList(mutableListOf<Pair<String, String>>())
-//
-//        // 并发获取文件列表
-//        categories.map { cat ->
-//            async { allFiles.addAll(getCategoryFilesDetail(cat)) }
-//        }.awaitAll()
-//
-//        val uniqueFiles = allFiles.distinctBy { it.second } // URL去重
-//        val total = uniqueFiles.size
-//        onLog("共找到 $total 个唯一音频文件。")
-//
-//        if (total == 0) return@withContext
-//
-//        if (!saveDir.exists()) saveDir.mkdirs()
-//
-//        val semaphore = Semaphore(maxConcurrency)
-//        val counter = AtomicInteger(0)
-//
-//        uniqueFiles.map { (name, url) ->
-//            launch(Dispatchers.IO) {
-//                semaphore.acquire()
-//                try {
-//                    var safeName = sanitizeFileName(name)
-//                    if (!safeName.contains(".")) {
-//                        if (url.endsWith(".ogg")) safeName += ".ogg"
-//                        else if (url.endsWith(".mp3")) safeName += ".mp3"
-//                    }
-//                    val targetFile = File(saveDir, safeName)
-//
-//                    downloadFile(url, targetFile)
-//
-//                    val current = counter.incrementAndGet()
-//                    onProgress(current, total, safeName)
-//                } catch (e: Exception) {
-//                    onLog("[错误] ${e.message}")
-//                } finally {
-//                    semaphore.release()
-//                }
-//            }
-//        }.joinAll()
-//        onLog("下载任务完成。")
-//    }
-
     // === 内部工具函数 ===
 
-    private fun groupCategories(rawList: List<String>): List<CharacterGroup> {
+    private fun groupCategories(rawList: List<String>, voiceOnly: Boolean = true): List<CharacterGroup> {
         val cleanMap = rawList.associateWith { it.replace(Regex("^(Category:|分类:)"), "") }
         val sortedItems = cleanMap.entries.sortedBy { it.value.length }
         val groups = mutableListOf<CharacterGroup>()
@@ -301,19 +247,28 @@ object WikiEngine {
 
         for ((originalName, cleanName) in sortedItems) {
             if (assigned.contains(originalName)) continue
-            val coreName = cleanName.removeSuffix("语音")
+
+            // voiceOnly 模式：coreName = 去掉"语音"后缀；通用模式：coreName = 整个 cleanName
+            val coreName = if (voiceOnly) cleanName.removeSuffix("语音") else cleanName
             if (coreName.isBlank()) continue
-            val familyMembers = rawList.filter { raw ->
-                val cl = cleanMap[raw]!!
-                cl.startsWith(coreName) && cl.endsWith("语音")
+
+            val familyMembers = if (voiceOnly) {
+                // 原有逻辑：只归并以 coreName 开头且以"语音"结尾的分类
+                rawList.filter { raw ->
+                    val cl = cleanMap[raw]!!
+                    cl.startsWith(coreName) && cl.endsWith("语音")
+                }
+            } else {
+                // 通用模式：归并所有以 coreName 开头的分类（不限制后缀）
+                rawList.filter { raw -> cleanMap[raw]!!.startsWith(coreName) }
             }
 
             // 优先从角色名缓存表中找到与 coreName 完全匹配或最接近前缀匹配的真实名称
             val resolvedName = if (characterNameCache.isNotEmpty()) {
-                characterNameCache.firstOrNull { it == coreName }          // 精确匹配
-                    ?: characterNameCache.firstOrNull { coreName.startsWith(it) } // coreName 以真名开头（如带后缀变体）
-                    ?: characterNameCache.firstOrNull { it.startsWith(coreName) } // 真名以 coreName 开头
-                    ?: coreName                                             // 找不到则降级
+                characterNameCache.firstOrNull { it == coreName }
+                    ?: characterNameCache.firstOrNull { coreName.startsWith(it) }
+                    ?: characterNameCache.firstOrNull { it.startsWith(coreName) }
+                    ?: coreName
             } else {
                 coreName
             }
@@ -345,7 +300,7 @@ object WikiEngine {
         return list
     }
 
-    private suspend fun getCategoryFilesDetail(category: String): List<Pair<String, String>> {
+    private suspend fun getCategoryFilesDetail(category: String, audioOnly: Boolean = true): List<Pair<String, String>> {
         val list = mutableListOf<Pair<String, String>>()
         val encoded = URLEncoder.encode(category, "UTF-8")
         var token: String? = null
@@ -358,11 +313,13 @@ object WikiEngine {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
                 res.query?.pages?.values?.forEach { p ->
                     val i = p.imageinfo?.firstOrNull()
-                    if (i?.url != null && (i.mime?.startsWith("audio/") == true || i.url.endsWith(".ogg") || i.url.endsWith(
-                            ".mp3"
-                        ))
-                    ) {
-                        list.add(p.title.replace(Regex("^(File:|文件:)"), "") to i.url)
+                    if (i?.url != null) {
+                        val isAudio = i.mime?.startsWith("audio/") == true
+                                || i.url.endsWith(".ogg")
+                                || i.url.endsWith(".mp3")
+                        if (!audioOnly || isAudio) {
+                            list.add(p.title.replace(Regex("^(File:|文件:)"), "") to i.url)
+                        }
                     }
                 }
                 token = res.continuation?.get("gcmcontinue")?.jsonPrimitive?.content

@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.FrameWindowScope
@@ -64,7 +65,7 @@ fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
         title = "卡拉彼丘 WiKi 语音下载器",
-        //icon = painterResource("icon.png"),
+        icon = painterResource("icon.png"),
         state = windowState
     ) {
         val skiaLayerExists = remember { window.findSkiaLayer() != null }
