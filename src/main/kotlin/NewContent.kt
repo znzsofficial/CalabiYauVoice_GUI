@@ -87,7 +87,8 @@ fun NewDownloaderContent() {
     // 弹窗初始化时已选中的文件 (用于回显)
     val dialogInitialSelection = remember { mutableStateListOf<String>() }
 
-    var scanJob by remember { mutableStateOf<Job?>(null) } // 用于管理分类扫描任务
+    var scanJob by remember { mutableStateOf<Job?>(null) }
+    var searchJob by remember { mutableStateOf<Job?>(null) }
 
     // --- 旧版窗口是否打开 ---
     var isLegacyWindowOpen by remember { mutableStateOf(false) }
@@ -142,19 +143,22 @@ fun NewDownloaderContent() {
     val categoryCache = remember { mutableStateMapOf<String, List<String>>() }
     // 抽取的搜索函数
     val performSearch = {
-        if (searchKeyword.isNotBlank() && !isSearching) {
+        if (searchKeyword.isNotBlank()) {
             isSearching = true
             selectedGroup = null
             characterGroups.clear()
-            // 搜索前取消之前的扫描任务，防止回调冲突
+            // 取消上一次搜索和扫描任务
+            searchJob?.cancel()
             scanJob?.cancel()
 
-            coroutineScope.launch {
+            searchJob = coroutineScope.launch {
                 try {
                     addLog("正在搜索: $searchKeyword ${if (voiceOnly) "(仅语音)" else "(全部类型)"}...")
                     val res = WikiEngine.searchAndGroupCharacters(searchKeyword, voiceOnly)
                     characterGroups.addAll(res)
                     addLog("搜索完成，找到 ${res.size} 个角色。")
+                } catch (_: CancellationException) {
+                    // 忽略取消
                 } catch (e: Exception) {
                     addLog("搜索失败: ${e.message}")
                 } finally {
@@ -214,7 +218,7 @@ fun NewDownloaderContent() {
                 Column(
                     Modifier.padding(12.dp)
                 ) {
-                    Text("角色列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("搜索列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(Modifier.height(12.dp))
                     // 搜索栏
                     Row(verticalAlignment = Alignment.CenterVertically) {
