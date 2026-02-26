@@ -31,64 +31,41 @@ import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.io.File
-import kotlin.coroutines.cancellation.CancellationException
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun NewDownloaderContent() {
     val coroutineScope = rememberCoroutineScope()
+    val viewModel = remember { MainViewModel(coroutineScope) }
 
-    // --- 状态管理 ---
-    var searchKeyword by remember { mutableStateOf("角色") }
-    var isSearching by remember { mutableStateOf(false) }
-    var voiceOnly by remember { mutableStateOf(true) }
+    // --- 状态管理 (来自 ViewModel) ---
+    val searchKeyword by viewModel.searchKeyword.collectAsState()
+    val isSearching by viewModel.isSearching.collectAsState()
+    val voiceOnly by viewModel.voiceOnly.collectAsState()
 
-    // 角色列表
-    val characterGroups = remember { mutableStateListOf<WikiEngine.CharacterGroup>() }
-    var selectedGroup by remember { mutableStateOf<WikiEngine.CharacterGroup?>(null) }
+    val characterGroups by viewModel.characterGroups.collectAsState()
+    val selectedGroup by viewModel.selectedGroup.collectAsState()
 
-    // 右侧：选中的角色加载出来的所有子分类
-    val subCategories = remember { mutableStateListOf<String>() }
-    val checkedCategories = remember { mutableStateListOf<String>() }
-    var isScanningTree by remember { mutableStateOf(false) }
+    val subCategories by viewModel.subCategories.collectAsState()
+    val checkedCategories by viewModel.checkedCategories.collectAsState()
+    val isScanningTree by viewModel.isScanningTree.collectAsState()
 
-    // 下载配置
-    var savePath by remember { mutableStateOf("$home\\角色语音") }
-    var maxConcurrencyStr by remember { mutableStateOf("16") }
-    var isDownloading by remember { mutableStateOf(false) }
-    var progress by remember { mutableStateOf(0f) }
-    var progressText by remember { mutableStateOf("") }
+    val savePath by viewModel.savePath.collectAsState()
+    val maxConcurrencyStr by viewModel.maxConcurrencyStr.collectAsState()
+    val isDownloading by viewModel.isDownloading.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+    val progressText by viewModel.progressText.collectAsState()
 
-    // 记录每个分类下用户【手动选择】的文件列表
-    // Key: 分类名 (categoryName), Value: 选中的文件列表 List<Pair<Name, Url>>
-    // 如果 Map 中不存在该 key，但 checkedCategories 包含它，则视为【默认全选】
-    val manualSelectionMap = remember { mutableStateMapOf<String, List<Pair<String, String>>>() }
+    val manualSelectionMap by viewModel.manualSelectionMap.collectAsState()
+    val categoryTotalCountMap by viewModel.categoryTotalCountMap.collectAsState()
 
-    // 缓存分类下的总文件数 (用于 UI 显示 "已选 5/10")
-    // Key: 分类名, Value: 总数
-    val categoryTotalCountMap = remember { mutableStateMapOf<String, Int>() }
+    val showFileDialog by viewModel.showFileDialog.collectAsState()
+    val dialogCategoryName by viewModel.dialogCategoryName.collectAsState()
+    val dialogFileList by viewModel.dialogFileList.collectAsState()
+    val dialogIsLoading by viewModel.dialogIsLoading.collectAsState()
+    val dialogInitialSelection by viewModel.dialogInitialSelection.collectAsState()
 
-    // 日志
-    val logLines = remember { mutableStateListOf("欢迎使用卡拉彼丘 Wiki 语音下载器。") }
-    fun addLog(msg: String) {
-        logLines.add(msg)
-        if (logLines.size > 100) logLines.removeAt(0)
-    }
-
-    // --- 弹窗状态 ---
-    var showFileDialog by remember { mutableStateOf(false) }
-    var dialogCategoryName by remember { mutableStateOf("") }
-    val dialogFileList = remember { mutableStateListOf<Pair<String, String>>() }
-    var dialogIsLoading by remember { mutableStateOf(false) }
-    // 弹窗初始化时已选中的文件 (用于回显)
-    val dialogInitialSelection = remember { mutableStateListOf<String>() }
-
-    var scanJob by remember { mutableStateOf<Job?>(null) }
-    var searchJob by remember { mutableStateOf<Job?>(null) }
+    val logLines by viewModel.logLines.collectAsState()
 
     // --- 旧版窗口是否打开 ---
     var isLegacyWindowOpen by remember { mutableStateOf(false) }
@@ -120,53 +97,12 @@ fun NewDownloaderContent() {
             // 传入初始选中的 URL 列表
             initialSelection = dialogInitialSelection,
             isLoading = dialogIsLoading,
-            onClose = { showFileDialog = false },
-            onConfirm = { selectedFiles ->
-                // 点击确认不再下载，而是保存选择状态
-                showFileDialog = false
-
-                // 更新手动选择记录
-                manualSelectionMap[dialogCategoryName] = selectedFiles
-                // 更新总数缓存 (虽然 fetch 时已经更新过，这里保险起见)
-                categoryTotalCountMap[dialogCategoryName] = dialogFileList.size
-
-                // 如果用户选了文件，自动勾选该分类
-                if (selectedFiles.isNotEmpty() && !checkedCategories.contains(dialogCategoryName)) {
-                    checkedCategories.add(dialogCategoryName)
-                }
-                // 如果用户清空了选择，是否取消勾选分类？(可选，这里暂不自动取消)
-            }
+            onClose = { viewModel.closeFileDialog() },
+            onConfirm = { selectedFiles -> viewModel.confirmFileDialog(selectedFiles) }
         )
     }
 
-    // 缓存
-    val categoryCache = remember { mutableStateMapOf<String, List<String>>() }
-    // 抽取的搜索函数
-    val performSearch = {
-        if (searchKeyword.isNotBlank()) {
-            isSearching = true
-            selectedGroup = null
-            characterGroups.clear()
-            // 取消上一次搜索和扫描任务
-            searchJob?.cancel()
-            scanJob?.cancel()
-
-            searchJob = coroutineScope.launch {
-                try {
-                    addLog("正在搜索: $searchKeyword ${if (voiceOnly) "(仅语音)" else "(全部类型)"}...")
-                    val res = WikiEngine.searchAndGroupCharacters(searchKeyword, voiceOnly)
-                    characterGroups.addAll(res)
-                    addLog("搜索完成，找到 ${res.size} 个角色。")
-                } catch (_: CancellationException) {
-                    // 忽略取消
-                } catch (e: Exception) {
-                    addLog("搜索失败: ${e.message}")
-                } finally {
-                    isSearching = false
-                }
-            }
-        }
-    }
+    val performSearch = { viewModel.performSearch() }
     var showDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         DialogWindow(
@@ -224,7 +160,7 @@ fun NewDownloaderContent() {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextField(
                             value = searchKeyword,
-                            onValueChange = { searchKeyword = it },
+                            onValueChange = { viewModel.onSearchKeywordChange(it) },
                             modifier = Modifier.weight(1f).onKeyEvent { keyEvent ->
                                 // 监听回车键按下
                                 if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyUp) {
@@ -253,7 +189,7 @@ fun NewDownloaderContent() {
                     // 语音模式开关
                     ToggleButton(
                         checked = voiceOnly,
-                        onCheckedChanged = { voiceOnly = it },
+                        onCheckedChanged = { viewModel.onVoiceOnlyChange(it) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
@@ -284,47 +220,7 @@ fun NewDownloaderContent() {
                                         .background(bgColor)
                                         .clickable {
                                             if (isDownloading) return@clickable
-                                            // 1. 取消上一次的扫描任务
-                                            scanJob?.cancel()
-                                            selectedGroup = group
-                                            subCategories.clear()
-                                            checkedCategories.clear()
-                                            // 2. 检查缓存
-                                            val cached = categoryCache[group.rootCategory]
-                                            if (cached != null) {
-                                                subCategories.addAll(cached)
-                                                checkedCategories.addAll(cached)
-                                                // 别忘了更新左侧列表的显示数量逻辑(如果有的话)
-                                            } else {
-                                                isScanningTree = true
-                                                // 3. 启动新任务
-                                                scanJob = coroutineScope.launch {
-                                                    try {
-                                                        addLog("正在获取 [${group.characterName}] 的所有分类...")
-                                                        val tree = WikiEngine.scanCategoryTree(group.rootCategory)
-
-                                                        // 存入缓存
-                                                        categoryCache[group.rootCategory] = tree
-
-                                                        subCategories.addAll(tree)
-                                                        checkedCategories.addAll(tree)
-
-                                                        // 更新列表显示状态
-                                                        val index = characterGroups.indexOf(group)
-                                                        if (index != -1) {
-                                                            characterGroups[index] = group.copy(subCategories = tree)
-                                                            selectedGroup = characterGroups[index]
-                                                        }
-                                                        addLog("获取完成，共 ${tree.size} 个分类。")
-                                                    } catch (_: CancellationException) {
-                                                        // 忽略取消异常
-                                                    } catch (e: Exception) {
-                                                        addLog("获取分类失败: ${e.message}")
-                                                    } finally {
-                                                        isScanningTree = false
-                                                    }
-                                                }
-                                            }
+                                            viewModel.onSelectGroup(group)
                                         }
                                         .padding(horizontal = 8.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -378,17 +274,14 @@ fun NewDownloaderContent() {
                                 Spacer(Modifier.weight(1f))
 
                                 Button(
-                                    onClick = {
-                                        checkedCategories.clear()
-                                        checkedCategories.addAll(subCategories)
-                                    },
+                                    onClick = { viewModel.checkAllCategories() },
                                     modifier = Modifier.height(28.dp)
                                 ) { Text("全选", fontSize = 12.sp) }
 
                                 Spacer(Modifier.width(8.dp))
 
                                 Button(
-                                    onClick = { checkedCategories.clear() },
+                                    onClick = { viewModel.uncheckAllCategories() },
                                     modifier = Modifier.height(28.dp)
                                 ) { Text("全不选", fontSize = 12.sp) }
                             }
@@ -425,35 +318,7 @@ fun NewDownloaderContent() {
 
                                             ContextMenuArea(items = {
                                                 listOf(ContextMenuItem("选择文件...") {
-                                                    dialogCategoryName = cat // 保存完整的 key
-                                                    dialogFileList.clear()
-                                                    dialogInitialSelection.clear()
-                                                    showFileDialog = true
-                                                    dialogIsLoading = true
-
-                                                    coroutineScope.launch {
-                                                        try {
-                                                            // 1. 获取文件列表
-                                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly)
-                                                            dialogFileList.addAll(files)
-                                                            categoryTotalCountMap[cat] = files.size // 更新总数缓存
-
-                                                            // 2. 准备回显状态
-                                                            if (manualSelectionMap.containsKey(cat)) {
-                                                                // 如果有手动记录，就用手动记录的
-                                                                val selectedUrls =
-                                                                    manualSelectionMap[cat]!!.map { it.second }
-                                                                dialogInitialSelection.addAll(selectedUrls)
-                                                            } else {
-                                                                // 如果没有手动记录，默认全选
-                                                                dialogInitialSelection.addAll(files.map { it.second })
-                                                            }
-                                                        } catch (e: Exception) {
-                                                            addLog("加载失败: ${e.message}")
-                                                        } finally {
-                                                            dialogIsLoading = false
-                                                        }
-                                                    }
+                                                    viewModel.openFileDialog(cat)
                                                 })
                                             }) {
                                                 Row(
@@ -461,20 +326,14 @@ fun NewDownloaderContent() {
                                                         .fillMaxWidth()
                                                         .clip(RoundedCornerShape(4.dp))
                                                         .clickable {
-                                                            if (isChecked) checkedCategories.remove(cat) else checkedCategories.add(
-                                                                cat
-                                                            )
+                                                            viewModel.setCategoryChecked(cat, !isChecked)
                                                         }
                                                         .padding(vertical = 6.dp, horizontal = 8.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     CheckBox(
                                                         checked = isChecked,
-                                                        onCheckStateChange = {
-                                                            if (it) checkedCategories.add(cat) else checkedCategories.remove(
-                                                                cat
-                                                            )
-                                                        }
+                                                        onCheckStateChange = { viewModel.setCategoryChecked(cat, it) }
                                                     )
                                                     Spacer(Modifier.width(8.dp))
                                                     Text(name + if (isRoot) " (主分类)" else "")
@@ -505,7 +364,7 @@ fun NewDownloaderContent() {
                         Row(verticalAlignment = Alignment.Bottom) {
                             TextField(
                                 value = savePath,
-                                onValueChange = { savePath = it },
+                                onValueChange = { viewModel.onSavePathChange(it) },
                                 header = { Text("保存路径", fontSize = 12.sp) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
@@ -516,7 +375,7 @@ fun NewDownloaderContent() {
                             ) {
                                 Button(
                                     iconOnly = true,
-                                    onClick = { jChoose { savePath = it.absolutePath } },
+                                    onClick = { jChoose { viewModel.onSavePathChange(it.absolutePath) } },
                                 ) {
                                     Image(
                                         painter = rememberVectorPainter(Icons.Regular.FolderOpen),
@@ -530,7 +389,7 @@ fun NewDownloaderContent() {
 
                             TextField(
                                 value = maxConcurrencyStr,
-                                onValueChange = { if (it.all { c -> c.isDigit() }) maxConcurrencyStr = it },
+                                onValueChange = { viewModel.onMaxConcurrencyChange(it) },
                                 header = { Text("并发数", fontSize = 12.sp) },
                                 modifier = Modifier.width(80.dp),
                                 singleLine = true
@@ -541,76 +400,7 @@ fun NewDownloaderContent() {
 
                         // 大下载按钮
                         Button(
-                            onClick = {
-                                if (checkedCategories.isEmpty()) return@Button
-                                isDownloading = true
-                                val targetDir = File(
-                                    savePath,
-                                    WikiEngine.sanitizeFileName(selectedGroup?.characterName ?: "Unknown")
-                                )
-                                val concurrency = maxConcurrencyStr.toIntOrNull() ?: 16
-
-                                coroutineScope.launch {
-                                    try {
-                                        addLog("开始处理下载任务...")
-
-                                        // 遍历所有勾选的分类
-                                        // 1. 如果 manualSelectionMap 有记录 -> 直接下载这些文件
-                                        // 2. 如果没有记录 -> 说明是默认全选 -> 需要先 fetch 再下载
-
-                                        // 收集所有需要下载的文件 (去重)
-                                        val finalDownloadList = mutableListOf<Pair<String, String>>()
-
-                                        for (cat in checkedCategories) {
-                                            if (manualSelectionMap.containsKey(cat)) {
-                                                // 也就是用户手动选过的
-                                                val files = manualSelectionMap[cat] ?: emptyList()
-                                                finalDownloadList.addAll(files)
-                                                addLog(
-                                                    "[${
-                                                        cat.replace(
-                                                            "Category:",
-                                                            ""
-                                                        )
-                                                    }] 使用手动选择 (${files.size}项)"
-                                                )
-                                            } else {
-                                                // 用户没动过，默认全选，需要现场获取
-                                                addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
-                                                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly)
-                                                finalDownloadList.addAll(files)
-                                            }
-                                        }
-
-                                        // 去重
-                                        val uniqueList = finalDownloadList.distinctBy { it.second }
-
-                                        if (uniqueList.isEmpty()) {
-                                            addLog("没有文件需要下载。")
-                                        } else {
-                                            addLog("共 ${uniqueList.size} 个文件，开始下载...")
-                                            WikiEngine.downloadSpecificFiles(
-                                                files = uniqueList,
-                                                saveDir = targetDir,
-                                                maxConcurrency = concurrency,
-                                                onLog = { addLog(it) },
-                                                onProgress = { current, total, name ->
-                                                    progress = current.toFloat() / total
-                                                    progressText = "$current / $total : $name"
-                                                }
-                                            )
-                                            addLog("全部下载完成！")
-                                        }
-
-                                    } catch (e: Exception) {
-                                        addLog("中断: ${e.message}")
-                                    } finally {
-                                        isDownloading = false
-                                        progress = 0f
-                                        progressText = ""
-                                    }
-                                }
-                            },
+                            onClick = { viewModel.startDownload() },
                             modifier = Modifier.fillMaxWidth().height(40.dp),
                             disabled = isDownloading || isScanningTree || checkedCategories.isEmpty()
                         ) {
@@ -666,12 +456,6 @@ fun NewDownloaderContent() {
             // 日志内容
             TerminalOutputView(logLines, Modifier.fillMaxSize().background(Color.Transparent))
         }
-    }
-
-    LaunchedEffect(Unit) {
-        WikiEngine.preloadCharacterNames()
-        delay(300)
-        performSearch()
     }
 }
 
