@@ -1,7 +1,6 @@
 package data
 
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.decodeToImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -31,6 +30,8 @@ import kotlin.random.Random
 
 object WikiEngine {
     private const val API_BASE_URL = "https://wiki.biligame.com/klbq/api.php"
+    private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
+    private const val MAX_IMAGE_CACHE_ENTRIES = 256
 
     // UA池
     private val USER_AGENTS = listOf(
@@ -206,7 +207,7 @@ object WikiEngine {
                 resultList = groupCategories(filteredList, voiceOnly)
                 if (resultList.isNotEmpty()) break
 
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 retryCount++
                 Thread.sleep(1000L + Random.nextLong(2000))
             }
@@ -376,81 +377,12 @@ object WikiEngine {
     fun isCharacterNameValid(name: String): Boolean =
         characterNameCache.isEmpty() || characterNameCache.contains(name)
 
-    // 头像缓存
-    // Key: 角色名, Value: 真实URL
-    private val avatarCache = ConcurrentHashMap<String, String>()
+    // 头像与图片加载委托给 ImageLoader
+    fun getCharacterAvatarUrl(characterName: String): String? =
+        ImageLoader.getCharacterAvatarUrl(client, API_BASE_URL, jsonParser, characterName)
 
-    /**
-     * 获取角色头像的真实 URL
-     * 输入: "香奈美" -> 内部查询 "File:香奈美头像.png" -> 返回 "https://.../a/a1/xxxx.png"
-     */
-    suspend fun getCharacterAvatarUrl(characterName: String): String? {
-        // 1. 查缓存
-        if (avatarCache.containsKey(characterName)) {
-            return avatarCache[characterName]
-        }
-
-        // 2. 构造文件名 (根据你的描述，规则是 名字+头像.png)
-        // 注意：MediaWiki 查询文件必须带 "File:" 前缀
-        val fileName = "File:${characterName}头像.png"
-        val encodedTitle = URLEncoder.encode(fileName, "UTF-8")
-
-        // 3. API 请求: prop=imageinfo & iiprop=url
-        val url = "$API_BASE_URL?action=query&titles=$encodedTitle&prop=imageinfo&iiprop=url&format=json"
-
-        val jsonStr = fetchString(url) ?: return null
-
-        try {
-            val response = jsonParser.decodeFromString<WikiResponse>(jsonStr)
-            val pages = response.query?.pages?.values
-            val page = pages?.firstOrNull()
-
-            // page.imageinfo 可能为空（如果文件不存在）
-            val realUrl = page?.imageinfo?.firstOrNull()?.url
-
-            if (realUrl != null) {
-                avatarCache[characterName] = realUrl
-                return realUrl
-            }
-        } catch (_: Exception) {
-            // 解析失败忽略
-        }
-        return null
-    }
-
-    // === 图片缓存
-    // Key: 图片URL, Value: Compose ImageBitmap
-    private val imageCache = ConcurrentHashMap<String, ImageBitmap>()
-
-    /**
-     * 下载图片并转换为 Bitmap
-     * 会自动使用 client 中的 User-Agent，防止 403
-     */
-    suspend fun loadNetworkImage(url: String): ImageBitmap? = withContext(Dispatchers.IO) {
-        // 1. 查缓存
-        if (imageCache.containsKey(url)) {
-            return@withContext imageCache[url]
-        }
-
-        // 2. 下载
-        try {
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
-
-                val bytes = response.body.bytes()
-
-                val bitmap = bytes.decodeToImageBitmap()
-
-                // 4. 存缓存
-                imageCache[url] = bitmap
-                return@withContext bitmap
-            }
-        } catch (_: Exception) {
-            // e.printStackTrace()
-            return@withContext null
-        }
-    }
+    suspend fun loadNetworkImage(url: String): ImageBitmap? =
+        ImageLoader.loadNetworkImage(client, url)
 
     private suspend fun fetchString(url: String): String? = withContext(Dispatchers.IO) {
         try {
