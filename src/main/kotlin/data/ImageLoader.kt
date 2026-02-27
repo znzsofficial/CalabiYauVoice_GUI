@@ -90,13 +90,13 @@ object ImageLoader {
      * 获取角色头像的真实 URL。
      * 规则：角色名 + "头像.png" -> 查询 MediaWiki File 页 -> 返回 CDN URL
      */
-    fun getCharacterAvatarUrl(
+    suspend fun getCharacterAvatarUrl(
         client: OkHttpClient,
         apiBaseUrl: String,
         jsonParser: kotlinx.serialization.json.Json,
         characterName: String
-    ): String? {
-        avatarCache[characterName]?.let { return it }
+    ): String? = withContext(Dispatchers.IO) {
+        avatarCache[characterName]?.let { return@withContext it }
 
         val fileName = "File:${characterName}头像.png"
         val encodedTitle = URLEncoder.encode(fileName, "UTF-8")
@@ -107,9 +107,9 @@ object ImageLoader {
                 .use { if (it.isSuccessful) it.body.string() else null }
         } catch (_: Exception) {
             null
-        } ?: return null
+        } ?: return@withContext null
 
-        return try {
+        try {
             val response = jsonParser.decodeFromString<WikiEngine.WikiResponse>(jsonStr)
             val realUrl = response.query?.pages?.values?.firstOrNull()
                 ?.imageinfo?.firstOrNull()?.url

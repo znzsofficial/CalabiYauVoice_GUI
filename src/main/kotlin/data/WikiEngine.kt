@@ -378,7 +378,7 @@ object WikiEngine {
         characterNameCache.isEmpty() || characterNameCache.contains(name)
 
     // 头像与图片加载委托给 ImageLoader
-    fun getCharacterAvatarUrl(characterName: String): String? =
+    suspend fun getCharacterAvatarUrl(characterName: String): String? =
         ImageLoader.getCharacterAvatarUrl(client, API_BASE_URL, jsonParser, characterName)
 
     suspend fun loadNetworkImage(url: String): ImageBitmap? =
