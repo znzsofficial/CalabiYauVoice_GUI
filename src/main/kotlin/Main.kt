@@ -28,10 +28,13 @@ import java.awt.Frame
 import java.awt.Label
 
 val LocalThemeState = compositionLocalOf { mutableStateOf(false) }
+val LocalBackdropType = compositionLocalOf<MutableState<WindowBackdrop>> {
+    mutableStateOf(WindowBackdrop.Tabbed)
+}
 
-// 创建非Win11系统的背景渐变
-private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush {
-    return if (isDarkMode) {
+// 创建非Win11系统的背景渐变，由调用方用 remember 缓存
+private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush =
+    if (isDarkMode) {
         Brush.linearGradient(
             colors = listOf(Color(0xff1A212C), Color(0xff2C343C)),
             start = Offset.Zero,
@@ -44,13 +47,11 @@ private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush {
             end = Offset.Infinite
         )
     }
-}
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
 fun main() = application {
     setupGlobalExceptionHandler()
-    val darkMode = mutableStateOf(isSystemInDarkTheme())
-    val windowState = rememberWindowState(width = 1000.dp, height = 800.dp)
+    val windowState = rememberWindowState(width = 1200.dp, height = 850.dp)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -58,23 +59,34 @@ fun main() = application {
         icon = painterResource("icon.png"),
         state = windowState
     ) {
+        val systemDark = isSystemInDarkTheme()
+        val darkMode = remember { mutableStateOf(systemDark) }
+        val backdropType = remember { mutableStateOf<WindowBackdrop>(WindowBackdrop.Tabbed) }
         val windowFrameState = rememberWindowsWindowFrameState(window)
         val skiaLayerExists = remember { window.findSkiaLayer() != null }
         val isWin11 = remember { isWindows11OrLater() }
+        val useAcrylic = skiaLayerExists && isWin11
 
-        // Win11 + SkiaLayer 透明化逻辑
-        if (skiaLayerExists && isWin11) {
+        if (useAcrylic) {
             LaunchedEffect(Unit) {
                 window.findSkiaLayer()?.transparency = true
             }
             WindowStyle(
                 isDarkTheme = darkMode.value,
-                backdropType = WindowBackdrop.Tabbed
+                backdropType = backdropType.value
             )
         }
 
-        CompositionLocalProvider(LocalThemeState provides darkMode) {
-            FluentTheme(colors = if (darkMode.value) darkColors() else lightColors()) {
+        // 背景 Brush 随主题变化，但同一主题下复用同一对象
+        val backgroundBrush = remember(darkMode.value) {
+            getNonWin11BackgroundGradient(darkMode.value)
+        }
+
+        CompositionLocalProvider(
+            LocalThemeState provides darkMode,
+            LocalBackdropType provides backdropType
+        ) {
+            FluentTheme(colors = if (darkMode.value) darkColors() else lightColors(), useAcrylicPopup = true) {
                 WindowsWindowFrame(
                     title = "卡拉彼丘 WiKi 语音下载器",
                     onCloseRequest = ::exitApplication,
@@ -83,15 +95,17 @@ fun main() = application {
                     isDarkTheme = darkMode.value,
                     captionBarHeight = 48.dp,
                 ) { windowInset, _ ->
-                    val contentModifier = Modifier
-                        .windowInsetsPadding(windowFrameState.paddingInset)
-                        .windowInsetsPadding(windowInset)
-                    Box(
-                        modifier = contentModifier.then(
-                            if (skiaLayerExists && isWin11) Modifier
-                            else Modifier.background(getNonWin11BackgroundGradient(darkMode.value))
-                        )
-                    ) {
+                    // Modifier 组合只在 inset 变化时重算
+                    val contentModifier = remember(windowFrameState.paddingInset, windowInset) {
+                        Modifier
+                            .windowInsetsPadding(windowFrameState.paddingInset)
+                            .windowInsetsPadding(windowInset)
+                    }
+                    // 背景 Modifier 在 useAcrylic 和主题确定后就不再变化
+                    val bgModifier = remember(useAcrylic, darkMode.value) {
+                        if (useAcrylic) Modifier else Modifier.background(backgroundBrush)
+                    }
+                    Box(modifier = contentModifier.then(bgModifier)) {
                         // 你的业务内容：NewDownloaderContent 现在会自动避开标题栏/边框/按钮
                         NewDownloaderContent()
                     }

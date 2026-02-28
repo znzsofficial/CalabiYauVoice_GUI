@@ -156,7 +156,7 @@ fun FileSelectionDialog(
         title = "文件列表: $title",
         state = rememberDialogState(width = 720.dp, height = 680.dp)
     ) {
-        FluentTheme(colors = if (darkMode) darkColors() else lightColors()) {
+        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
             Mica(modifier = Modifier.fillMaxSize()) {
                 Column(
                     Modifier

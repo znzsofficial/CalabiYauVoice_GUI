@@ -26,7 +26,8 @@ import util.findSkiaLayer
 @OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun AboutWindow(onCloseRequest: () -> Unit) {
-    val darkMode = LocalThemeState.current.value
+    // 读 State 对象，不在此处读 .value，让 Window 内部订阅
+    val darkModeState = LocalThemeState.current
     val windowState = rememberWindowState(
         width = 450.dp,
         height = 320.dp,
@@ -39,11 +40,12 @@ fun AboutWindow(onCloseRequest: () -> Unit) {
         state = windowState,
         resizable = false
     ) {
+        // 在 Window Composable 作用域内读 .value，Compose 能正确追踪主题变化
+        val darkMode = darkModeState.value
         val windowFrameState = rememberWindowsWindowFrameState(window)
         val skiaLayerExists = remember { window.findSkiaLayer() != null }
         val isWin11 = remember { isWindows11OrLater() }
 
-        // Win11 + SkiaLayer 透明化逻辑
         if (skiaLayerExists && isWin11) {
             LaunchedEffect(Unit) {
                 window.findSkiaLayer()?.transparency = true
@@ -54,7 +56,7 @@ fun AboutWindow(onCloseRequest: () -> Unit) {
             )
         }
 
-        FluentTheme(colors = if (darkMode) darkColors() else lightColors()) {
+        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
             WindowsWindowFrame(
                 title = "关于",
                 onCloseRequest = onCloseRequest,

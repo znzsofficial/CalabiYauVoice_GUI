@@ -1,5 +1,6 @@
 package ui.screens
 
+import LocalBackdropType
 import LocalThemeState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
+import com.mayakapps.compose.windowstyler.WindowBackdrop
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
@@ -85,6 +87,19 @@ fun NewDownloaderContent() {
     val logLines by viewModel.logLines.collectAsState()
 
     val darkMode = LocalThemeState.current
+    val backdropType = LocalBackdropType.current
+
+    // backdrop 选项列表：名称 → 值
+    val backdropOptions = remember {
+        listOf(
+            "Tabbed"      to WindowBackdrop.Tabbed,
+            "Mica"        to WindowBackdrop.Mica,
+            "Acrylic"     to WindowBackdrop.Acrylic(Color.Transparent),
+            "Aero"        to WindowBackdrop.Aero,
+            "Transparent" to WindowBackdrop.Transparent,
+            "Default"     to WindowBackdrop.Default,
+        )
+    }
 
     // === 文件选择弹窗 ===
     if (showFileDialog) {
@@ -115,6 +130,21 @@ fun NewDownloaderContent() {
                         onClick = { darkMode.value = !darkMode.value },
                         text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") }
                     )
+                    MenuFlyoutSeparator()
+                    backdropOptions.forEach { (label, backdrop) ->
+                        MenuFlyoutItem(
+                            onClick = { backdropType.value = backdrop },
+                            text = {
+                                val current = backdropType.value
+                                val isCurrent = current::class == backdrop::class
+                                Text(
+                                    text = "窗口效果：$label",
+                                    fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isCurrent) FluentTheme.colors.text.text.primary else FluentTheme.colors.text.text.secondary
+                                )
+                            }
+                        )
+                    }
                 },
             )
             MenuBarItem(
