@@ -31,6 +31,7 @@ import io.github.composefluent.icons.regular.Play
 import io.github.composefluent.icons.regular.Stop
 import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.lightColors
+import androidx.compose.ui.input.key.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -102,7 +103,26 @@ fun FileSelectionDialog(
             onClose()
         },
         title = "文件列表: $title",
-        state = rememberDialogState(width = 720.dp, height = 680.dp)
+        state = rememberDialogState(width = 720.dp, height = 680.dp),
+        onKeyEvent = { keyEvent ->
+            if (keyEvent.type != KeyEventType.KeyDown) return@DialogWindow false
+            when {
+                // Escape → 关闭
+                keyEvent.key == Key.Escape -> {
+                    AudioPlayerManager.stop()
+                    onClose()
+                    true
+                }
+                // Enter → 确认选择
+                keyEvent.key == Key.Enter && !isLoading -> {
+                    val finalSelection = files.filter { selectedUrls.contains(it.second) }
+                    AudioPlayerManager.stop()
+                    onConfirm(finalSelection)
+                    true
+                }
+                else -> false
+            }
+        }
     ) {
         FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
             Mica(modifier = Modifier.fillMaxSize()) {
@@ -110,6 +130,23 @@ fun FileSelectionDialog(
                     Modifier
                         .fillMaxSize()
                         .padding(16.dp)
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            when {
+                                // Ctrl+A → 全选当前可见文件
+                                keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.A -> {
+                                    val newUrls = filteredFiles.map { it.second }
+                                    newUrls.forEach { if (!selectedUrls.contains(it)) selectedUrls.add(it) }
+                                    true
+                                }
+                                // Ctrl+Shift+A → 清空选择
+                                keyEvent.isCtrlPressed && keyEvent.isShiftPressed && keyEvent.key == Key.A -> {
+                                    selectedUrls.clear()
+                                    true
+                                }
+                                else -> false
+                            }
+                        }
                 ) {
                     Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Spacer(Modifier.height(12.dp))

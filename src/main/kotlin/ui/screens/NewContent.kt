@@ -6,11 +6,14 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -20,10 +23,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.DialogWindow
+import androidx.compose.ui.window.rememberDialogState
+import kotlinx.coroutines.launch
 import com.mayakapps.compose.windowstyler.WindowBackdrop
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
+import io.github.composefluent.background.Mica
 import io.github.composefluent.component.*
+import io.github.composefluent.darkColors
+import io.github.composefluent.lightColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.AppsList
 import io.github.composefluent.icons.regular.Stop
@@ -34,7 +43,6 @@ import ui.components.isAudioFile
 import io.github.composefluent.icons.regular.CursorClick
 import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.surface.Card
-import kotlinx.coroutines.launch
 import ui.components.CharacterAvatar
 import ui.components.FileSelectionDialog
 import ui.components.NetworkImage
@@ -160,12 +168,101 @@ fun NewDownloaderContent() {
 
     val performSearch = viewModel::performSearch
     var showDialog by remember { mutableStateOf(false) }
+    var showShortcutsDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         AboutWindow(onCloseRequest = { showDialog = false })
     }
+    if (showShortcutsDialog) {
+        KeyboardShortcutsDialog(onClose = { showShortcutsDialog = false })
+    }
+
+    // 搜索框焦点控制
+    val searchFocusRequester = remember { FocusRequester() }
+    // 角色列表滚动状态（用于键盘导航）
+    val characterListState = rememberLazyListState()
+    val keyboardScope = rememberCoroutineScope()
 
     // === 主界面布局 ===
-    Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val ctrl = keyEvent.isCtrlPressed
+                val shift = keyEvent.isShiftPressed
+                when {
+                    // Ctrl+F → 聚焦搜索框
+                    ctrl && keyEvent.key == Key.F -> {
+                        searchFocusRequester.requestFocus()
+                        true
+                    }
+                    // F5 → 执行搜索
+                    keyEvent.key == Key.F5 -> {
+                        performSearch()
+                        true
+                    }
+                    // Ctrl+D → 开始下载
+                    ctrl && keyEvent.key == Key.D -> {
+                        if (!isDownloading && !isScanningTree) viewModel.startDownload()
+                        true
+                    }
+                    // Ctrl+A → 全选
+                    ctrl && !shift && keyEvent.key == Key.A -> {
+                        when (searchMode) {
+                            SearchMode.FILE_SEARCH -> viewModel.selectAllFileSearchResults()
+                            else -> viewModel.checkAllCategories()
+                        }
+                        true
+                    }
+                    // Ctrl+Shift+A → 取消全选
+                    ctrl && shift && keyEvent.key == Key.A -> {
+                        when (searchMode) {
+                            SearchMode.FILE_SEARCH -> viewModel.clearFileSearchSelection()
+                            else -> viewModel.uncheckAllCategories()
+                        }
+                        true
+                    }
+                    // Ctrl+T → 切换主题
+                    ctrl && keyEvent.key == Key.T -> {
+                        darkMode.value = !darkMode.value
+                        true
+                    }
+                    // Ctrl+1/2/3 → 切换搜索模式
+                    ctrl && keyEvent.key == Key.One -> {
+                        viewModel.onSearchModeChange(SearchMode.VOICE_ONLY); true
+                    }
+                    ctrl && keyEvent.key == Key.Two -> {
+                        viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES); true
+                    }
+                    ctrl && keyEvent.key == Key.Three -> {
+                        viewModel.onSearchModeChange(SearchMode.FILE_SEARCH); true
+                    }
+                    // ↑/↓ → 在角色列表中导航
+                    keyEvent.key == Key.DirectionUp && searchMode != SearchMode.FILE_SEARCH -> {
+                        val groups = characterGroups
+                        val current = selectedGroup
+                        val idx = groups.indexOf(current)
+                        if (idx > 0) {
+                            viewModel.onSelectGroup(groups[idx - 1])
+                            keyboardScope.launch { characterListState.animateScrollToItem(idx - 1) }
+                        }
+                        true
+                    }
+                    keyEvent.key == Key.DirectionDown && searchMode != SearchMode.FILE_SEARCH -> {
+                        val groups = characterGroups
+                        val current = selectedGroup
+                        val idx = groups.indexOf(current)
+                        if (idx < groups.size - 1) {
+                            viewModel.onSelectGroup(groups[idx + 1])
+                            keyboardScope.launch { characterListState.animateScrollToItem(idx + 1) }
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
+    ) {
         MenuBar {
             MenuBarItem(
                 content = { Text("功能") },
@@ -198,6 +295,11 @@ fun NewDownloaderContent() {
                         onClick = { showDialog = true },
                         text = { Text("关于") }
                     )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
+                        onClick = { showShortcutsDialog = true },
+                        text = { Text("键盘快捷键") }
+                    )
                 },
             )
         }
@@ -216,7 +318,9 @@ fun NewDownloaderContent() {
                         TextField(
                             value = searchKeyword,
                             onValueChange = { viewModel.onSearchKeywordChange(it) },
-                            modifier = Modifier.weight(1f).onKeyEvent { keyEvent ->
+                            modifier = Modifier.weight(1f)
+                                .focusRequester(searchFocusRequester)
+                                .onKeyEvent { keyEvent ->
                                 // 监听回车键按下
                                 if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyUp) {
                                     performSearch()
@@ -398,7 +502,8 @@ fun NewDownloaderContent() {
                             }
                         } else {
                             LazyColumn(
-                                Modifier.fillMaxSize(),
+                                modifier = Modifier.fillMaxSize(),
+                                state = characterListState,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 items(characterGroups) { group ->
@@ -797,3 +902,107 @@ fun NewDownloaderContent() {
         }
     }
 }
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
+    val darkMode = LocalThemeState.current.value
+    DialogWindow(
+        onCloseRequest = onClose,
+        title = "键盘快捷键",
+        state = rememberDialogState(width = 480.dp, height = 440.dp),
+        onKeyEvent = { keyEvent ->
+            if (keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown) {
+                onClose(); true
+            } else false
+        }
+    ) {
+        FluentTheme(
+            colors = if (darkMode) darkColors() else lightColors(),
+            useAcrylicPopup = true
+        ) {
+            Mica(modifier = Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().padding(24.dp)) {
+                    Text("键盘快捷键", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(Modifier.height(16.dp))
+
+                    val shortcuts = listOf(
+                        "Ctrl + F" to "聚焦搜索框",
+                        "Enter" to "执行搜索（搜索框聚焦时）",
+                        "F5" to "重新搜索",
+                        "Ctrl + D" to "开始下载",
+                        "Ctrl + A" to "全选分类 / 全选文件",
+                        "Ctrl + Shift + A" to "取消全选",
+                        "Ctrl + T" to "切换深色 / 浅色主题",
+                        "Ctrl + 1" to "切换至「仅语音」模式",
+                        "Ctrl + 2" to "切换至「全部分类」模式",
+                        "Ctrl + 3" to "切换至「文件搜索」模式",
+                        "↑ / ↓" to "在角色列表中上下导航",
+                        "" to "",
+                        "文件列表弹窗：" to "",
+                        "Ctrl + A" to "全选可见文件",
+                        "Ctrl + Shift + A" to "清空选择",
+                        "Enter" to "确认选择",
+                        "Esc" to "关闭弹窗",
+                    )
+
+                    val listState = rememberLazyListState()
+                    LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                        items(shortcuts) { (key, desc) ->
+                            if (key.isEmpty()) {
+                                Spacer(Modifier.height(8.dp))
+                            } else if (desc.isEmpty()) {
+                                // Section header
+                                Text(
+                                    key,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    color = FluentTheme.colors.text.text.secondary,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                                )
+                            } else {
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .background(
+                                                FluentTheme.colors.control.secondary,
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                FluentTheme.colors.stroke.card.default,
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                            .widthIn(min = 160.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            key,
+                                            fontSize = 12.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(desc, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button(onClick = onClose) { Text("关闭") }
+                    }
+                }
+            }
+        }
+    }
+}
+
