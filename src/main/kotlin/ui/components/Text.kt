@@ -9,15 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.composefluent.component.Text
@@ -29,34 +27,35 @@ fun TerminalOutputView(
 ) {
     val listState = rememberLazyListState()
 
-    // 自动滚动逻辑
+    // 预计算每行颜色，只在列表内容变化时重算
+    val lineColors = remember(outputLines) {
+        outputLines.map { getLogColor(it) }
+    }
+
     LaunchedEffect(outputLines.size) {
         if (outputLines.isNotEmpty()) {
             listState.animateScrollToItem(outputLines.size - 1)
         }
     }
 
-    // 容器样式
     Box(
         modifier = modifier
-            .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp)) // 更深邃的背景 + 圆角
-            .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp)) // 增加微弱边框
-            .clip(RoundedCornerShape(8.dp)) // 裁剪内容以匹配圆角
+            .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp))
+            .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp))
     ) {
-        // 允许文本选择复制
         SelectionContainer {
             LazyColumn(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 12.dp),
-                modifier = Modifier.fillMaxSize().padding(end = 12.dp) // 给滚动条留出空间
+                modifier = Modifier.fillMaxSize().padding(end = 12.dp)
             ) {
                 itemsIndexed(outputLines) { index, line ->
-                    TerminalLineItem(index + 1, line)
+                    TerminalLineItem(index + 1, line, lineColors[index])
                 }
             }
         }
 
-        // 自定义垂直滚动条
         VerticalScrollbar(
             modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             adapter = rememberScrollbarAdapter(listState),
@@ -73,9 +72,8 @@ fun TerminalOutputView(
 }
 
 @Composable
-private fun TerminalLineItem(lineNumber: Int, line: String) {
+private fun TerminalLineItem(lineNumber: Int, line: String, color: Color) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        // 1. 行号区域
         Text(
             text = "$lineNumber",
             style = TextStyle(
@@ -85,45 +83,48 @@ private fun TerminalLineItem(lineNumber: Int, line: String) {
             ),
             modifier = Modifier.width(36.dp).padding(end = 8.dp),
         )
-
-        // 2. 日志内容区域
         Text(
-            text = buildAnnotatedString {
-                // 根据内容解析颜色
-                val color = getLogColor(line)
-                withStyle(SpanStyle(color = color)) {
-                    append(line)
-                }
-            },
+            text = line,
             style = TextStyle(
+                color = color,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
-                lineHeight = 20.sp // 增加行高，提升可读性
+                lineHeight = 20.sp
             ),
             modifier = Modifier.weight(1f)
         )
     }
 }
 
-/**
- * 根据日志关键词返回对应的颜色
- */
+private val LOG_COLOR_RULES: List<Pair<(String) -> Boolean, Color>> = listOf(
+    // 错误/失败/中断 → 红
+    { s: String -> s.contains("error") || s.contains("错误") || s.contains("失败")
+            || s.contains("exception") || s.contains("中断") } to Color(0xFFF48771),
+    // 全部完成 → 亮绿（优先于"完成"的其他情况）
+    { s: String -> s.contains("全部下载完成") || s.contains("转换完成")
+            || s.contains("合并完成") || s.contains("success") } to Color(0xFF89D185),
+    // 单步完成 → 淡绿
+    { s: String -> s.contains("加载完成") || s.contains("获取完成")
+            || s.contains("搜索完成") || s.contains("角色数据加载") } to Color(0xFF73C991),
+    // 已合并/箭头 → 青
+    { s: String -> s.contains("已合并") || s.contains("→") } to Color(0xFF56B6C2),
+    // 统计/总量 → 天蓝
+    { s: String -> (s.contains("找到") && (s.contains("mp3") || s.contains("wav")))
+            || s.contains("将合并为") } to Color(0xFF4FC1E9),
+    // 正在进行 → 蓝
+    { s: String -> s.contains("开始") || s.contains("正在")
+            || (s.contains("共") && s.contains("个文件")) } to Color(0xFF61AFEF),
+    // 手动选择 → 紫
+    { s: String -> s.contains("手动选择") || s.contains("使用手动") } to Color(0xFFC678DD),
+    // 警告/跳过/未找到 → 橙
+    { s: String -> s.contains("warning") || s.contains("警告") || s.contains("跳过")
+            || s.contains("格式不一致") || s.contains("未找到") } to Color(0xFFCCA700),
+    // 欢迎 → 灰白
+    { s: String -> s.contains("欢迎") } to Color(0xFFDCDCDC),
+)
+
 private fun getLogColor(line: String): Color {
     val lower = line.lowercase()
-    return when {
-        // 错误/失败 -> 柔和的红色
-        lower.contains("error") || lower.contains("错误") || lower.contains("失败") || lower.contains("exception") -> Color(
-            0xFFF48771
-        )
-        // 警告 -> 橙色
-        lower.contains("warning") || lower.contains("警告") || lower.contains("跳过") -> Color(0xFFCCA700)
-        // 成功/完成 -> 绿色
-        lower.contains("success") || lower.contains("完成") || lower.contains("ok") -> Color(0xFF89D185)
-        // 进度/下载 -> 青色
-        lower.contains("下载进度") || lower.contains("downloading") -> Color(0xFF61AFEF)
-        // 关键信息 -> 蓝色/紫色
-        lower.contains(">>>") || lower.contains("---") -> Color(0xFFC678DD)
-        // 默认文本 -> 浅灰
-        else -> Color(0xFFA9B7C6)
-    }
+    return LOG_COLOR_RULES.firstOrNull { (predicate, _) -> predicate(lower) }?.second
+        ?: Color(0xFFA9B7C6)
 }

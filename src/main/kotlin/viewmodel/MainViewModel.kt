@@ -10,6 +10,8 @@ import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
+enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH }
+
 class MainViewModel(
     private val scope: CoroutineScope
 ) {
@@ -19,14 +21,25 @@ class MainViewModel(
     private val _searchKeyword = MutableStateFlow("角色")
     val searchKeyword: StateFlow<String> = _searchKeyword.asStateFlow()
 
-    private val _voiceOnly = MutableStateFlow(true)
-    val voiceOnly: StateFlow<Boolean> = _voiceOnly.asStateFlow()
+    private val _searchMode = MutableStateFlow(SearchMode.VOICE_ONLY)
+    val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
+
+    // 兼容旧逻辑：voiceOnly = searchMode != ALL_CATEGORIES（文件搜索模式下此值无意义）
+    val voiceOnly: StateFlow<Boolean> = _searchMode.map { it == SearchMode.VOICE_ONLY }
+        .stateIn(scope, SharingStarted.Eagerly, true)
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
     private val _characterGroups = MutableStateFlow<List<WikiEngine.CharacterGroup>>(emptyList())
     val characterGroups: StateFlow<List<WikiEngine.CharacterGroup>> = _characterGroups.asStateFlow()
+
+    // 文件搜索模式结果
+    private val _fileSearchResults = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val fileSearchResults: StateFlow<List<Pair<String, String>>> = _fileSearchResults.asStateFlow()
+
+    private val _fileSearchSelectedUrls = MutableStateFlow<Set<String>>(emptySet())
+    val fileSearchSelectedUrls: StateFlow<Set<String>> = _fileSearchSelectedUrls.asStateFlow()
 
     // =========================================================
     // 角色选择 & 分类树状态
@@ -142,7 +155,9 @@ class MainViewModel(
     // =========================================================
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
 
-    fun onVoiceOnlyChange(value: Boolean) { _voiceOnly.value = value }
+    fun onSearchModeChange(mode: SearchMode) {
+        _searchMode.value = mode
+    }
 
     fun performSearch() {
         if (_searchKeyword.value.isBlank()) return
@@ -153,23 +168,52 @@ class MainViewModel(
         _isSearching.value = true
         _selectedGroup.value = null
         _characterGroups.value = emptyList()
+        _fileSearchResults.value = emptyList()
+        _fileSearchSelectedUrls.value = emptySet()
 
         searchJob = scope.launch {
             try {
                 val keyword = _searchKeyword.value
-                val voiceOnly = _voiceOnly.value
-                addLog("正在搜索: $keyword ${if (voiceOnly) "(仅语音)" else "(全部类型)"}...")
-                val res = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly)
-                _characterGroups.value = res
-                addLog("搜索完成，找到 ${res.size} 个角色。")
+                val mode = _searchMode.value
+
+                when (mode) {
+                    SearchMode.FILE_SEARCH -> {
+                        addLog("正在搜索文件: $keyword …")
+                        val results = WikiEngine.searchFiles(keyword, audioOnly = false)
+                        _fileSearchResults.value = results
+                        // 默认全选
+                        _fileSearchSelectedUrls.value = results.map { it.second }.toSet()
+                        addLog("搜索完成，找到 ${results.size} 个文件。")
+                    }
+                    else -> {
+                        val voiceOnly = mode == SearchMode.VOICE_ONLY
+                        addLog("正在搜索: $keyword ${if (voiceOnly) "(仅语音)" else "(全部类型)"}...")
+                        val res = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly)
+                        _characterGroups.value = res
+                        addLog("搜索完成，找到 ${res.size} 个角色。")
+                    }
+                }
             } catch (_: CancellationException) {
-                // 忽略取消
             } catch (e: Exception) {
                 addLog("搜索失败: ${e.message}")
             } finally {
                 _isSearching.value = false
             }
         }
+    }
+
+    fun toggleFileSearchSelection(url: String) {
+        val current = _fileSearchSelectedUrls.value.toMutableSet()
+        if (!current.add(url)) current.remove(url)
+        _fileSearchSelectedUrls.value = current
+    }
+
+    fun selectAllFileSearchResults() {
+        _fileSearchSelectedUrls.value = _fileSearchResults.value.map { it.second }.toSet()
+    }
+
+    fun clearFileSearchSelection() {
+        _fileSearchSelectedUrls.value = emptySet()
     }
 
     // =========================================================
@@ -243,7 +287,7 @@ class MainViewModel(
 
         scope.launch {
             try {
-                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _voiceOnly.value)
+                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly.value)
                 _dialogFileList.value = files
                 _categoryTotalCountMap.value += (cat to files.size)
 
@@ -305,31 +349,44 @@ class MainViewModel(
     // 下载
     // =========================================================
     fun startDownload() {
-        val checked = _checkedCategories.value
-        if (checked.isEmpty()) return
+        val isFileSearch = _searchMode.value == SearchMode.FILE_SEARCH
+
+        if (isFileSearch) {
+            if (_fileSearchSelectedUrls.value.isEmpty()) return
+        } else {
+            if (_checkedCategories.value.isEmpty()) return
+        }
 
         _isDownloading.value = true
-        val targetDir = File(
-            _savePath.value,
-            WikiEngine.sanitizeFileName(_selectedGroup.value?.characterName ?: "Unknown")
-        )
+        val folderName = if (isFileSearch) _searchKeyword.value
+            else WikiEngine.sanitizeFileName(_selectedGroup.value?.characterName ?: "Unknown")
+        val targetDir = File(_savePath.value, WikiEngine.sanitizeFileName(folderName))
         val concurrency = _maxConcurrencyStr.value.toIntOrNull() ?: 16
 
         scope.launch {
             try {
                 addLog("开始处理下载任务...")
-                val finalDownloadList = mutableListOf<Pair<String, String>>()
+                val finalDownloadList: List<Pair<String, String>>
 
-                for (cat in checked) {
-                    val manual = _manualSelectionMap.value[cat]
-                    if (manual != null) {
-                        finalDownloadList.addAll(manual)
-                        addLog("[${cat.replace("Category:", "")}] 使用手动选择 (${manual.size}项)")
-                    } else {
-                        addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
-                        val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _voiceOnly.value)
-                        finalDownloadList.addAll(files)
+                if (isFileSearch) {
+                    val selected = _fileSearchSelectedUrls.value
+                    finalDownloadList = _fileSearchResults.value.filter { it.second in selected }
+                    addLog("文件搜索模式：共 ${finalDownloadList.size} 个文件")
+                } else {
+                    val checked = _checkedCategories.value
+                    val list = mutableListOf<Pair<String, String>>()
+                    for (cat in checked) {
+                        val manual = _manualSelectionMap.value[cat]
+                        if (manual != null) {
+                            list.addAll(manual)
+                            addLog("[${cat.replace("Category:", "")}] 使用手动选择 (${manual.size}项)")
+                        } else {
+                            addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
+                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly.value)
+                            list.addAll(files)
+                        }
                     }
+                    finalDownloadList = list.distinctBy { it.second }
                 }
 
                 val uniqueList = finalDownloadList.distinctBy { it.second }

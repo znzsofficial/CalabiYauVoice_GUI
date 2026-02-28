@@ -110,3 +110,10 @@ fun PlaceholderIcon() {
         modifier = Modifier.size(20.dp)
     )
 }
+
+/** 根据文件名或 URL 后缀判断是否为可预览的图片 */
+fun isImageFile(name: String, url: String): Boolean {
+    val IMAGE_EXTS = setOf("png", "jpg", "jpeg", "gif", "webp")
+    fun String.ext() = substringAfterLast('.', "").lowercase().substringBefore('?')
+    return name.ext() in IMAGE_EXTS || url.ext() in IMAGE_EXTS
+}

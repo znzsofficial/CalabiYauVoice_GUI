@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
@@ -28,13 +29,16 @@ import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.surface.Card
 import ui.components.CharacterAvatar
 import ui.components.FileSelectionDialog
+import ui.components.NetworkImage
 import ui.components.TerminalOutputView
+import ui.components.isImageFile
 import util.BIT_DEPTH_OPTIONS
 import util.SAMPLE_RATE_OPTIONS
 import util.bitDepthLabel
 import util.jChoose
 import util.sampleRateLabel
 import viewmodel.MainViewModel
+import viewmodel.SearchMode
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -45,10 +49,13 @@ fun NewDownloaderContent() {
     // --- 状态管理 (来自 ViewModel) ---
     val searchKeyword by viewModel.searchKeyword.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
-    val voiceOnly by viewModel.voiceOnly.collectAsState()
+    val searchMode by viewModel.searchMode.collectAsState()
 
     val characterGroups by viewModel.characterGroups.collectAsState()
     val selectedGroup by viewModel.selectedGroup.collectAsState()
+
+    val fileSearchResults by viewModel.fileSearchResults.collectAsState()
+    val fileSearchSelectedUrls by viewModel.fileSearchSelectedUrls.collectAsState()
 
     val subCategories by viewModel.subCategories.collectAsState()
     val checkedCategories by viewModel.checkedCategories.collectAsState()
@@ -160,54 +167,148 @@ fun NewDownloaderContent() {
                     }
 
                     Spacer(Modifier.height(8.dp))
-                    // 语音模式开关
-                    ToggleButton(
-                        checked = voiceOnly,
-                        onCheckedChanged = { viewModel.onVoiceOnlyChange(it) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (voiceOnly) "仅搜索语音" else "搜索全部类型",
-                            fontSize = 12.sp
+                    // 搜索模式切换
+                    SegmentedControl(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            checked = searchMode == SearchMode.VOICE_ONLY,
+                            onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.VOICE_ONLY) },
+                            position = SegmentedItemPosition.Start,
+                            text = { Text("仅语音", fontSize = 12.sp) }
+                        )
+                        SegmentedButton(
+                            checked = searchMode == SearchMode.ALL_CATEGORIES,
+                            onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES) },
+                            position = SegmentedItemPosition.Center,
+                            text = { Text("全部分类", fontSize = 12.sp) }
+                        )
+                        SegmentedButton(
+                            checked = searchMode == SearchMode.FILE_SEARCH,
+                            onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.FILE_SEARCH) },
+                            position = SegmentedItemPosition.End,
+                            text = { Text("文件搜索", fontSize = 12.sp) }
                         )
                     }
 
                     Spacer(Modifier.height(8.dp))
-                    if (characterGroups.isEmpty() && !isSearching) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("无数据", color = Color.Gray, fontSize = 12.sp)
+
+                    if (searchMode == SearchMode.FILE_SEARCH) {
+                        // 文件搜索结果列表
+                        if (fileSearchResults.isEmpty() && !isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("输入关键词后搜索", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else {
+                            Column(Modifier.fillMaxSize()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        "共 ${fileSearchResults.size} 个文件",
+                                        fontSize = 12.sp, color = Color.Gray,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Button(
+                                        onClick = { viewModel.selectAllFileSearchResults() },
+                                        modifier = Modifier.height(24.dp)
+                                    ) { Text("全选", fontSize = 11.sp) }
+                                    Spacer(Modifier.width(4.dp))
+                                    Button(
+                                        onClick = { viewModel.clearFileSearchSelection() },
+                                        modifier = Modifier.height(24.dp)
+                                    ) { Text("清空", fontSize = 11.sp) }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Box(Modifier.fillMaxSize()) {
+                                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                    val adapter = androidx.compose.foundation.rememberScrollbarAdapter(listState)
+                                    ScrollbarContainer(
+                                        adapter = adapter,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        LazyColumn(
+                                            state = listState,
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            items(fileSearchResults) { (name, url) ->
+                                                val isSelected = url in fileSearchSelectedUrls
+                                                val canPreview = isImageFile(name, url)
+                                                Row(
+                                                    Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .clickable { viewModel.toggleFileSearchSelection(url) }
+                                                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    CheckBox(
+                                                        checked = isSelected,
+                                                        onCheckStateChange = { viewModel.toggleFileSearchSelection(url) }
+                                                    )
+                                                    Spacer(Modifier.width(6.dp))
+                                                    if (canPreview) {
+                                                        NetworkImage(
+                                                            url = url,
+                                                            modifier = Modifier
+                                                                .size(36.dp)
+                                                                .clip(RoundedCornerShape(4.dp)),
+                                                            contentScale = ContentScale.Crop,
+                                                            placeholder = {
+                                                                Box(
+                                                                    Modifier
+                                                                        .size(36.dp)
+                                                                        .background(FluentTheme.colors.control.secondary)
+                                                                )
+                                                            }
+                                                        )
+                                                        Spacer(Modifier.width(6.dp))
+                                                    }
+                                                    Text(name, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     } else {
-                        LazyColumn(
-                            Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            items(characterGroups) { group ->
-                                val isSelected = group == selectedGroup
-                                val bgColor =
-                                    if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
+                        if (characterGroups.isEmpty() && !isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("无数据", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else {
+                            LazyColumn(
+                                Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(characterGroups) { group ->
+                                    val isSelected = group == selectedGroup
+                                    val bgColor =
+                                        if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
 
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(bgColor)
-                                        .clickable {
-                                            if (isDownloading) return@clickable
-                                            viewModel.onSelectGroup(group)
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    CharacterAvatar(
-                                        characterName = group.characterName,
-                                        modifier = Modifier.size(28.dp) // 头像大小
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(
-                                        group.characterName,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                    )
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(bgColor)
+                                            .clickable {
+                                                if (isDownloading) return@clickable
+                                                viewModel.onSelectGroup(group)
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CharacterAvatar(
+                                            characterName = group.characterName,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            group.characterName,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -225,7 +326,42 @@ fun NewDownloaderContent() {
                     Column(
                         Modifier.padding(16.dp)
                     ) {
-                        if (selectedGroup == null) {
+                        if (searchMode == SearchMode.FILE_SEARCH) {
+                            // 文件搜索模式：显示已选文件汇总
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("文件搜索结果", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    "已选 ${fileSearchSelectedUrls.size} / ${fileSearchResults.size} 个文件",
+                                    color = Color.Gray, fontSize = 12.sp
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            if (fileSearchResults.isEmpty()) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Image(
+                                            painter = rememberVectorPainter(Icons.Regular.CursorClick),
+                                            contentDescription = null,
+                                            colorFilter = ColorFilter.tint(Color.Gray),
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        Text("在左侧搜索文件", color = Color.Gray)
+                                    }
+                                }
+                            } else {
+                                LazyColumn(Modifier.fillMaxSize().padding(4.dp)) {
+                                    items(fileSearchResults.filter { it.second in fileSearchSelectedUrls }) { (name, _) ->
+                                        Text(
+                                            name,
+                                            fontSize = 13.sp,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp, horizontal = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        } else if (selectedGroup == null) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Image(
@@ -372,7 +508,8 @@ fun NewDownloaderContent() {
 
                         Spacer(Modifier.height(16.dp))
 
-                        // MP3 → WAV 转换配置
+                        // 音频转换配置
+                        val isVoiceOnly = searchMode == SearchMode.VOICE_ONLY
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -380,7 +517,8 @@ fun NewDownloaderContent() {
                             Switcher(
                                 checked = convertAfterDownload,
                                 onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
-                                text = "下载完成后转换为 WAV 格式"
+                                text = if (isVoiceOnly) "下载完成后转换为 WAV 格式"
+                                       else "下载完成后将 MP3 转换为 WAV"
                             )
                         }
 
@@ -397,6 +535,15 @@ fun NewDownloaderContent() {
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
+                                // 非语音模式下的说明
+                                if (!isVoiceOnly) {
+                                    Text(
+                                        "仅对 MP3 文件执行转换，其他格式（OGG、WAV 等）将跳过",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+
                                 // 1. 格式设置
                                 Row(
                                     verticalAlignment = Alignment.Bottom,
@@ -436,7 +583,7 @@ fun NewDownloaderContent() {
                                             value = mergeWavMaxCountStr,
                                             onValueChange = { viewModel.onMergeWavMaxCountStrChange(it) },
                                             placeholder = { Text("0") },
-                                            header = { Text("每组文件上限 (0=全部)", fontSize = 11.sp) }, // Header 移到上方更清晰
+                                            header = { Text("每组文件上限 (0=全部)", fontSize = 11.sp) },
                                             modifier = Modifier.weight(1f),
                                             singleLine = true
                                         )
@@ -447,8 +594,9 @@ fun NewDownloaderContent() {
 
                                 // 3. 删除原始文件
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                     CheckBox(
-                                        label = "转换完成后删除原始 MP3 文件",
+                                    CheckBox(
+                                        label = if (isVoiceOnly) "转换完成后删除原始 MP3"
+                                                else "转换完成后删除原始 MP3（其他格式不受影响）",
                                         checked = deleteOriginalMp3,
                                         onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) }
                                     )
@@ -459,13 +607,20 @@ fun NewDownloaderContent() {
                         Spacer(Modifier.height(16.dp))
 
                         // 大下载按钮
+                        val isFileSearch = searchMode == SearchMode.FILE_SEARCH
+                        val canDownload = if (isFileSearch) fileSearchSelectedUrls.isNotEmpty()
+                                         else checkedCategories.isNotEmpty()
                         Button(
                             onClick = { viewModel.startDownload() },
                             modifier = Modifier.fillMaxWidth().height(40.dp),
-                            disabled = isDownloading || isScanningTree || checkedCategories.isEmpty()
+                            disabled = isDownloading || isScanningTree || !canDownload
                         ) {
                             Text(
-                                if (isDownloading) "正在下载中..." else "开始下载 (${checkedCategories.size} 个分类)",
+                                when {
+                                    isDownloading -> "正在下载中..."
+                                    isFileSearch -> "开始下载 (${fileSearchSelectedUrls.size} 个文件)"
+                                    else -> "开始下载 (${checkedCategories.size} 个分类)"
+                                },
                                 fontWeight = FontWeight.Bold
                             )
                         }

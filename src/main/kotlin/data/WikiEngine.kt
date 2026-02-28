@@ -127,9 +127,94 @@ object WikiEngine {
     data class ImageInfo(val url: String? = null, val mime: String? = null)
 
     /**
-     * 仅获取指定分类下的文件列表，不下载
-     * @param audioOnly true = 只保留音频文件（原有行为）；false = 返回分类下所有文件
+     * 在 File 命名空间（ns=6）中搜索文件，返回 List<文件名 to CDN URL>。
+     *
+     * 策略：
+     * 1. 先用 list=allimages&aiprefix 做前缀匹配（精确、完整翻页）
+     * 2. 同时用 list=search&srnamespace=6 做全文匹配（补充前缀未命中的结果）
+     * 两路结果去重后返回。
      */
+    suspend fun searchFiles(keyword: String, audioOnly: Boolean): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val result = LinkedHashMap<String, String>() // name -> url，保持顺序、自动去重
+
+        // --- 路径 1：allimages 前缀搜索（完整翻页）---
+        run {
+            val encoded = URLEncoder.encode(keyword, "UTF-8")
+            var aicontinue: String? = null
+            do {
+                val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue!!, "UTF-8")}" else ""
+                val url = "$API_BASE_URL?action=query&list=allimages&aiprefix=$encoded" +
+                        "&aiprop=url|mime&ailimit=500&format=json$cArg"
+                val json = fetchString(url) ?: break
+                if (json.trimStart().startsWith("<")) break
+                try {
+                    @Serializable data class AiItem(val name: String, val url: String? = null, val mime: String? = null)
+                    @Serializable data class AiQuery(val allimages: List<AiItem>? = null)
+                    @Serializable data class AiResponse(
+                        val query: AiQuery? = null,
+                        @SerialName("continue") val continuation: Map<String, JsonElement>? = null
+                    )
+                    val res = jsonParser.decodeFromString<AiResponse>(json)
+                    res.query?.allimages?.forEach { item ->
+                        if (item.url != null) {
+                            val isAudio = item.mime?.startsWith("audio/") == true
+                                    || item.url.endsWith(".wav") || item.url.endsWith(".mp3")
+                            if (!audioOnly || isAudio) {
+                                result[item.name] = item.url
+                            }
+                        }
+                    }
+                    aicontinue = res.continuation?.get("aicontinue")?.jsonPrimitive?.content
+                } catch (_: Exception) { break }
+            } while (aicontinue != null)
+        }
+
+        // --- 路径 2：search 全文搜索（补充未被前缀命中的结果）---
+        run {
+            val encoded = URLEncoder.encode(keyword, "UTF-8")
+            var sroffset = 0
+            do {
+                val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=6" +
+                        "&format=json&srlimit=100&sroffset=$sroffset"
+                val json = fetchString(url) ?: break
+                if (json.trimStart().startsWith("<")) break
+                try {
+                    val res = jsonParser.decodeFromString<WikiResponse>(json)
+                    val titles = res.query?.search?.map { it.title } ?: emptyList()
+                    if (titles.isEmpty()) break
+
+                    // 批量查询 imageinfo（每次最多 50 个标题）
+                    titles.chunked(50).forEach { chunk ->
+                        val titlesParam = chunk.joinToString("|") { URLEncoder.encode(it, "UTF-8") }
+                        val infoUrl = "$API_BASE_URL?action=query&titles=$titlesParam" +
+                                "&prop=imageinfo&iiprop=url|mime&format=json"
+                        val infoJson = fetchString(infoUrl) ?: return@forEach
+                        try {
+                            val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
+                            infoRes.query?.pages?.values?.forEach { page ->
+                                val info = page.imageinfo?.firstOrNull()
+                                if (info?.url != null) {
+                                    val isAudio = info.mime?.startsWith("audio/") == true
+                                            || info.url.endsWith(".wav") || info.url.endsWith(".mp3")
+                                    if (!audioOnly || isAudio) {
+                                        val name = page.title.replace(Regex("^(File:|文件:)"), "")
+                                        result.putIfAbsent(name, info.url)
+                                    }
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
+                    // sroffset 翻页
+                    val nextOffset = res.continuation?.get("sroffset")?.jsonPrimitive?.content?.toIntOrNull()
+                    if (nextOffset == null || nextOffset <= sroffset) break
+                    sroffset = nextOffset
+                } catch (_: Exception) { break }
+            } while (result.size < 1000)
+        }
+
+        result.map { (name, url) -> name to url }
+    }
     suspend fun fetchFilesInCategory(category: String, audioOnly: Boolean = true): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         getCategoryFilesDetail(category, audioOnly)
     }

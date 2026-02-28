@@ -13,8 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 object ImageLoader {
 
-    private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
-    private const val MAX_IMAGE_CACHE_ENTRIES = 256
+    private const val MAX_IMAGE_BYTES = 16 * 1024 * 1024
+    private const val MAX_IMAGE_CACHE_ENTRIES = 512
 
     // LRU 图片缓存，Key: URL，Value: ImageBitmap
     private val imageCache = Collections.synchronizedMap(

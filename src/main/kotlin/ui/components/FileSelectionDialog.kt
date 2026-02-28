@@ -37,16 +37,6 @@ import javax.sound.sampled.DataLine
 import javax.sound.sampled.SourceDataLine
 import kotlinx.coroutines.delay
 
-private fun isImageFile(name: String, url: String): Boolean {
-    val lowerName = name.lowercase()
-    val lowerUrl = url.lowercase()
-    return lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(
-        ".gif"
-    ) || lowerName.endsWith(".webp") ||
-            lowerUrl.endsWith(".png") || lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".gif") || lowerUrl.endsWith(
-        ".webp"
-    )
-}
 
 private fun isAudioFile(name: String, url: String): Boolean {
     val lowerName = name.lowercase()
