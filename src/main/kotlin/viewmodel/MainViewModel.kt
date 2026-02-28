@@ -4,6 +4,7 @@ import data.WikiEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import util.batchConvertMp3ToWav
+import util.mergeWavFiles
 import util.BIT_DEPTH_OPTIONS
 import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
@@ -102,6 +103,14 @@ class MainViewModel(
     /** 目标位深索引（对应 BIT_DEPTH_OPTIONS；默认 16-bit） */
     private val _targetBitDepthIndex = MutableStateFlow(DEFAULT_BIT_DEPTH_INDEX)
     val targetBitDepthIndex: StateFlow<Int> = _targetBitDepthIndex.asStateFlow()
+
+    /** 转换后是否将所有 WAV 合并 */
+    private val _mergeWav = MutableStateFlow(false)
+    val mergeWav: StateFlow<Boolean> = _mergeWav.asStateFlow()
+
+    /** 每个合并文件最多包含的源文件数（"0" = 全部合并为一个） */
+    private val _mergeWavMaxCountStr = MutableStateFlow("0")
+    val mergeWavMaxCountStr: StateFlow<String> = _mergeWavMaxCountStr.asStateFlow()
 
     // =========================================================
     // 日志
@@ -286,6 +295,12 @@ class MainViewModel(
 
     fun onTargetBitDepthIndexChange(index: Int) { _targetBitDepthIndex.value = index }
 
+    fun onMergeWavChange(value: Boolean) { _mergeWav.value = value }
+
+    fun onMergeWavMaxCountStrChange(value: String) {
+        if (value.all { it.isDigit() }) _mergeWavMaxCountStr.value = value
+    }
+
     // =========================================================
     // 下载
     // =========================================================
@@ -351,6 +366,23 @@ class MainViewModel(
                                 _progressText.value = if (name.isNotEmpty()) "$current / $total : $name" else ""
                             }
                         )
+
+                        // 合并 WAV（可选）
+                        if (_mergeWav.value) {
+                            addLog("开始合并 WAV 文件…")
+                            _progressText.value = "正在合并…"
+                            val maxCount = _mergeWavMaxCountStr.value.toIntOrNull() ?: 0
+                            mergeWavFiles(
+                                dir = targetDir,
+                                maxPerFile = maxCount,
+                                deleteOriginal = false,
+                                onLog = { addLog(it) },
+                                onProgress = { current, total, name ->
+                                    _progress.value = if (total > 0) current.toFloat() / total else 0f
+                                    _progressText.value = if (name.isNotEmpty()) "$current / $total : $name" else ""
+                                }
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {

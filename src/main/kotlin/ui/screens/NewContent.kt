@@ -63,6 +63,8 @@ fun NewDownloaderContent() {
     val deleteOriginalMp3 by viewModel.deleteOriginalMp3.collectAsState()
     val targetSampleRateIndex by viewModel.targetSampleRateIndex.collectAsState()
     val targetBitDepthIndex by viewModel.targetBitDepthIndex.collectAsState()
+    val mergeWav by viewModel.mergeWav.collectAsState()
+    val mergeWavMaxCountStr by viewModel.mergeWavMaxCountStr.collectAsState()
 
     val manualSelectionMap by viewModel.manualSelectionMap.collectAsState()
     val categoryTotalCountMap by viewModel.categoryTotalCountMap.collectAsState()
@@ -371,40 +373,86 @@ fun NewDownloaderContent() {
                         Spacer(Modifier.height(16.dp))
 
                         // MP3 → WAV 转换配置
-                        Switcher(
-                            checked = convertAfterDownload,
-                            onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
-                            text = if (convertAfterDownload) "下载完成后转换 MP3 → WAV" else "不转换 MP3"
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Switcher(
+                                checked = convertAfterDownload,
+                                onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
+                                text = "下载完成后转换为 WAV 格式"
+                            )
+                        }
 
                         if (convertAfterDownload) {
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.Bottom,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.fillMaxWidth()
+                            Spacer(Modifier.height(12.dp))
+
+                            // 转换详情设置区域
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(FluentTheme.colors.control.secondary)
+                                    .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(4.dp))
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                ComboBox(
-                                    header = "采样率",
-                                    placeholder = "选择采样率",
-                                    selected = targetSampleRateIndex,
-                                    items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
-                                    onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                ComboBox(
-                                    header = "位深",
-                                    placeholder = "选择位深",
-                                    selected = targetBitDepthIndex,
-                                    items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
-                                    onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Switcher(
-                                    checked = deleteOriginalMp3,
-                                    onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) },
-                                    text = if (deleteOriginalMp3) "转换后删除 MP3" else "保留原始 MP3"
-                                )
+                                // 1. 格式设置
+                                Row(
+                                    verticalAlignment = Alignment.Bottom,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    ComboBox(
+                                        header = "采样率",
+                                        placeholder = "原采样率",
+                                        selected = targetSampleRateIndex,
+                                        items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
+                                        onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    ComboBox(
+                                        header = "位深",
+                                        placeholder = "16 bit",
+                                        selected = targetBitDepthIndex,
+                                        items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
+                                        onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+
+                                // 2. 合并设置
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    CheckBox(
+                                        label = "合并导出的 WAV 文件",
+                                        checked = mergeWav,
+                                        onCheckStateChange = { viewModel.onMergeWavChange(it) }
+                                    )
+
+                                    if (mergeWav) {
+                                        TextField(
+                                            value = mergeWavMaxCountStr,
+                                            onValueChange = { viewModel.onMergeWavMaxCountStrChange(it) },
+                                            placeholder = { Text("0") },
+                                            header = { Text("每组文件上限 (0=全部)", fontSize = 11.sp) }, // Header 移到上方更清晰
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                    } else {
+                                        Spacer(Modifier.weight(1f))
+                                    }
+                                }
+
+                                // 3. 删除原始文件
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                     CheckBox(
+                                        label = "转换完成后删除原始 MP3 文件",
+                                        checked = deleteOriginalMp3,
+                                        onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) }
+                                    )
+                                }
                             }
                         }
 

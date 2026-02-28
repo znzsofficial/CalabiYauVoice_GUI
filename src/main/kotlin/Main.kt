@@ -50,7 +50,7 @@ private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush {
 fun main() = application {
     setupGlobalExceptionHandler()
     val darkMode = mutableStateOf(isSystemInDarkTheme())
-    val windowState = rememberWindowState(width = 1000.dp, height = 750.dp)
+    val windowState = rememberWindowState(width = 1000.dp, height = 800.dp)
 
     Window(
         onCloseRequest = ::exitApplication,
