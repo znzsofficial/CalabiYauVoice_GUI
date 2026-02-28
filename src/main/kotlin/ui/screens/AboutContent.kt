@@ -34,7 +34,7 @@ fun AboutContent(modifier: Modifier = Modifier) {
                 )
             )
             Text(
-                text = "Version 1.2.1",
+                text = "Version 1.3.0",
                 style = TextStyle(
                     fontSize = 12.sp,
                     color = FluentTheme.colors.text.text.secondary

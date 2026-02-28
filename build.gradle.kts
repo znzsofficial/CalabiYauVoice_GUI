@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.nekolaska"
-version = "1.2.1"
+version = "1.3.0"
 
 repositories {
     mavenCentral()
@@ -60,7 +60,7 @@ compose.desktop {
 
         nativeDistributions {
             packageName = "CalabiYauVoice_GUI"
-            packageVersion = "1.2.1"
+            packageVersion = "1.3.0"
             description = "CalabiYau Wiki Voice Downloader GUI"
             copyright = "Apache License, Version 2.0"
             vendor = "NekoLaska"
