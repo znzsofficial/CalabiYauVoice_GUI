@@ -88,7 +88,8 @@ private object AudioPlayer {
                 sourceLine.close()
                 decodedStream.close()
                 inputStream.close()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                System.err.println("[AudioPlayer] 播放失败: ${e::class.simpleName}: ${e.message}")
                 stop()
             } finally {
                 if (currentUrl == url) currentUrl = null
