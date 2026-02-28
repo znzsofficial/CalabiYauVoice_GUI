@@ -26,9 +26,15 @@ import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.AppsList
+import io.github.composefluent.icons.regular.Stop
+import io.github.composefluent.icons.regular.Play
+import ui.components.AudioPlayerManager
+import ui.components.ImagePreviewDialog
+import ui.components.isAudioFile
 import io.github.composefluent.icons.regular.CursorClick
 import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.surface.Card
+import kotlinx.coroutines.launch
 import ui.components.CharacterAvatar
 import ui.components.FileSelectionDialog
 import ui.components.NetworkImage
@@ -58,6 +64,44 @@ fun NewDownloaderContent() {
 
     val fileSearchResults by viewModel.fileSearchResults.collectAsState()
     val fileSearchSelectedUrls by viewModel.fileSearchSelectedUrls.collectAsState()
+
+    // 文件搜索列表 - 音频播放状态
+    var fileSearchPlayingUrl by remember { mutableStateOf<String?>(null) }
+    var fileSearchLoadingUrl by remember { mutableStateOf<String?>(null) }
+    // 文件搜索列表 - 图片预览状态
+    var fileSearchPreviewUrl by remember { mutableStateOf<String?>(null) }
+    var fileSearchPreviewName by remember { mutableStateOf("") }
+    // 注册 AudioPlayerManager 播放结束 & 加载状态回调（文件搜索列表用）
+    val fileSearchScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        val stoppedListener: (String) -> Unit = { url ->
+            fileSearchScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                if (fileSearchPlayingUrl == url) fileSearchPlayingUrl = null
+            }
+        }
+        val loadingListener: (String, Boolean) -> Unit = { url, loading ->
+            fileSearchScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                fileSearchLoadingUrl = if (loading) url
+                    else if (fileSearchLoadingUrl == url) null
+                    else fileSearchLoadingUrl
+            }
+        }
+        AudioPlayerManager.addOnPlaybackStopped(stoppedListener)
+        AudioPlayerManager.addOnLoadingChanged(loadingListener)
+        onDispose {
+            AudioPlayerManager.removeOnPlaybackStopped(stoppedListener)
+            AudioPlayerManager.removeOnLoadingChanged(loadingListener)
+        }
+    }
+
+    // 图片预览弹窗
+    if (fileSearchPreviewUrl != null) {
+        ImagePreviewDialog(
+            url = fileSearchPreviewUrl!!,
+            name = fileSearchPreviewName,
+            onClose = { fileSearchPreviewUrl = null }
+        )
+    }
 
     val subCategories by viewModel.subCategories.collectAsState()
     val checkedCategories by viewModel.checkedCategories.collectAsState()
@@ -264,6 +308,13 @@ fun NewDownloaderContent() {
                                             items(fileSearchResults) { (name, url) ->
                                                 val isSelected = url in fileSearchSelectedUrls
                                                 val canPreview = isImageFile(name, url)
+                                                val canPlay = isAudioFile(name, url)
+                                                val isPlaying = fileSearchPlayingUrl == url &&
+                                                    AudioPlayerManager.isPlaying(url)
+                                                val isThisLoading = fileSearchLoadingUrl == url
+                                                val isActive = isPlaying || isThisLoading
+
+
                                                 Row(
                                                     Modifier
                                                         .fillMaxWidth()
@@ -282,7 +333,11 @@ fun NewDownloaderContent() {
                                                             url = url,
                                                             modifier = Modifier
                                                                 .size(36.dp)
-                                                                .clip(RoundedCornerShape(4.dp)),
+                                                                .clip(RoundedCornerShape(4.dp))
+                                                                .clickable {
+                                                                    fileSearchPreviewUrl = url
+                                                                    fileSearchPreviewName = name
+                                                                },
                                                             contentScale = ContentScale.Crop,
                                                             placeholder = {
                                                                 Box(
@@ -294,7 +349,41 @@ fun NewDownloaderContent() {
                                                         )
                                                         Spacer(Modifier.width(6.dp))
                                                     }
-                                                    Text(name, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                                    // 文件名
+                                                    Column(Modifier.weight(1f)) {
+                                                        Text(name, fontSize = 12.sp)
+                                                    }
+                                                    // 播放按钮
+                                                    if (canPlay) {
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Button(
+                                                            iconOnly = true,
+                                                            onClick = {
+                                                                if (isActive) {
+                                                                    AudioPlayerManager.stop()
+                                                                    fileSearchPlayingUrl = null
+                                                                } else {
+                                                                    AudioPlayerManager.play(url)
+                                                                    fileSearchPlayingUrl = url
+                                                                }
+                                                            }
+                                                        ) {
+                                                            if (isThisLoading) {
+                                                                ProgressRing(size = 16.dp)
+                                                            } else {
+                                                                val icon = if (isActive) Icons.Regular.Stop else Icons.Regular.Play
+                                                                Image(
+                                                                    painter = rememberVectorPainter(icon),
+                                                                    contentDescription = if (isActive) "停止" else "播放",
+                                                                    colorFilter = ColorFilter.tint(
+                                                                        if (isActive) FluentTheme.colors.fillAccent.default
+                                                                        else FluentTheme.colors.text.text.primary
+                                                                    ),
+                                                                    modifier = Modifier.size(16.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -465,9 +554,14 @@ fun NewDownloaderContent() {
                                                     Modifier
                                                         .fillMaxWidth()
                                                         .clip(RoundedCornerShape(4.dp))
-                                                        .clickable {
-                                                            viewModel.setCategoryChecked(cat, !isChecked)
-                                                        }
+                                                        .combinedClickable(
+                                                            onClick = {
+                                                                viewModel.setCategoryChecked(cat, !isChecked)
+                                                            },
+                                                            onDoubleClick = {
+                                                                if (!isDownloading) viewModel.openFileDialog(cat)
+                                                            }
+                                                        )
                                                         .padding(vertical = 6.dp, horizontal = 8.dp),
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {

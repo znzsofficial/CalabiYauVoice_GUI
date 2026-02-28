@@ -117,3 +117,11 @@ fun isImageFile(name: String, url: String): Boolean {
     fun String.ext() = substringAfterLast('.', "").lowercase().substringBefore('?')
     return name.ext() in IMAGE_EXTS || url.ext() in IMAGE_EXTS
 }
+
+/** 根据文件名或 URL 后缀判断是否为音频文件 */
+fun isAudioFile(name: String, url: String): Boolean {
+    val AUDIO_EXTS = setOf("mp3", "wav", "ogg", "flac", "aac", "m4a")
+    fun String.ext() = substringAfterLast('.', "").lowercase().substringBefore('?')
+    return name.ext() in AUDIO_EXTS || url.ext() in AUDIO_EXTS
+}
+
