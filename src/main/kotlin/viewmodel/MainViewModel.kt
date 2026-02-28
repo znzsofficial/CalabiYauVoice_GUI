@@ -3,6 +3,9 @@ package viewmodel
 import data.WikiEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import util.batchConvertMp3ToWav
+import util.BIT_DEPTH_OPTIONS
+import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -83,6 +86,22 @@ class MainViewModel(
 
     private val _progressText = MutableStateFlow("")
     val progressText: StateFlow<String> = _progressText.asStateFlow()
+
+    /** 下载完成后是否将 MP3 批量转为 WAV */
+    private val _convertAfterDownload = MutableStateFlow(false)
+    val convertAfterDownload: StateFlow<Boolean> = _convertAfterDownload.asStateFlow()
+
+    /** 转换成功后是否删除原始 MP3 */
+    private val _deleteOriginalMp3 = MutableStateFlow(true)
+    val deleteOriginalMp3: StateFlow<Boolean> = _deleteOriginalMp3.asStateFlow()
+
+    /** 目标采样率索引（对应 SAMPLE_RATE_OPTIONS；0 = 原采样率） */
+    private val _targetSampleRateIndex = MutableStateFlow(0)
+    val targetSampleRateIndex: StateFlow<Int> = _targetSampleRateIndex.asStateFlow()
+
+    /** 目标位深索引（对应 BIT_DEPTH_OPTIONS；默认 16-bit） */
+    private val _targetBitDepthIndex = MutableStateFlow(DEFAULT_BIT_DEPTH_INDEX)
+    val targetBitDepthIndex: StateFlow<Int> = _targetBitDepthIndex.asStateFlow()
 
     // =========================================================
     // 日志
@@ -259,6 +278,14 @@ class MainViewModel(
         if (value.all { it.isDigit() }) _maxConcurrencyStr.value = value
     }
 
+    fun onConvertAfterDownloadChange(value: Boolean) { _convertAfterDownload.value = value }
+
+    fun onDeleteOriginalMp3Change(value: Boolean) { _deleteOriginalMp3.value = value }
+
+    fun onTargetSampleRateIndexChange(index: Int) { _targetSampleRateIndex.value = index }
+
+    fun onTargetBitDepthIndexChange(index: Int) { _targetBitDepthIndex.value = index }
+
     // =========================================================
     // 下载
     // =========================================================
@@ -306,6 +333,25 @@ class MainViewModel(
                         }
                     )
                     addLog("全部下载完成！")
+
+                    // 批量 MP3 → WAV 转换（可选）
+                    if (_convertAfterDownload.value) {
+                        addLog("开始批量转换 MP3 → WAV…")
+                        _progressText.value = "正在转换…"
+                        val sampleRate = util.SAMPLE_RATE_OPTIONS[_targetSampleRateIndex.value]
+                        val bitDepth = BIT_DEPTH_OPTIONS[_targetBitDepthIndex.value]
+                        batchConvertMp3ToWav(
+                            dir = targetDir,
+                            deleteOriginal = _deleteOriginalMp3.value,
+                            targetSampleRate = sampleRate,
+                            targetBitDepth = bitDepth,
+                            onLog = { addLog(it) },
+                            onProgress = { current, total, name ->
+                                _progress.value = if (total > 0) current.toFloat() / total else 0f
+                                _progressText.value = if (name.isNotEmpty()) "$current / $total : $name" else ""
+                            }
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 addLog("中断: ${e.message}")

@@ -29,7 +29,11 @@ import io.github.composefluent.surface.Card
 import ui.components.CharacterAvatar
 import ui.components.FileSelectionDialog
 import ui.components.TerminalOutputView
+import util.BIT_DEPTH_OPTIONS
+import util.SAMPLE_RATE_OPTIONS
+import util.bitDepthLabel
 import util.jChoose
+import util.sampleRateLabel
 import viewmodel.MainViewModel
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
@@ -55,6 +59,10 @@ fun NewDownloaderContent() {
     val isDownloading by viewModel.isDownloading.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val progressText by viewModel.progressText.collectAsState()
+    val convertAfterDownload by viewModel.convertAfterDownload.collectAsState()
+    val deleteOriginalMp3 by viewModel.deleteOriginalMp3.collectAsState()
+    val targetSampleRateIndex by viewModel.targetSampleRateIndex.collectAsState()
+    val targetBitDepthIndex by viewModel.targetBitDepthIndex.collectAsState()
 
     val manualSelectionMap by viewModel.manualSelectionMap.collectAsState()
     val categoryTotalCountMap by viewModel.categoryTotalCountMap.collectAsState()
@@ -358,6 +366,46 @@ fun NewDownloaderContent() {
                                 modifier = Modifier.width(80.dp),
                                 singleLine = true
                             )
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // MP3 → WAV 转换配置
+                        Switcher(
+                            checked = convertAfterDownload,
+                            onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
+                            text = if (convertAfterDownload) "下载完成后转换 MP3 → WAV" else "不转换 MP3"
+                        )
+
+                        if (convertAfterDownload) {
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                ComboBox(
+                                    header = "采样率",
+                                    placeholder = "选择采样率",
+                                    selected = targetSampleRateIndex,
+                                    items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
+                                    onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                ComboBox(
+                                    header = "位深",
+                                    placeholder = "选择位深",
+                                    selected = targetBitDepthIndex,
+                                    items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
+                                    onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Switcher(
+                                    checked = deleteOriginalMp3,
+                                    onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) },
+                                    text = if (deleteOriginalMp3) "转换后删除 MP3" else "保留原始 MP3"
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(16.dp))
