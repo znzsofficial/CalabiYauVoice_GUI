@@ -35,12 +35,12 @@ import io.github.composefluent.lightColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.icons.regular.CursorClick
+import io.github.composefluent.icons.regular.MusicNote2
 import io.github.composefluent.icons.regular.TextBulletListLtr
 import ui.components.AudioPlayerManager
 import ui.components.EmptyPlaceholder
 import ui.components.FileListItem
 import ui.components.ImagePreviewDialog
-import ui.components.SubtleBox
 import io.github.composefluent.surface.Card
 import ui.components.CharacterAvatar
 import ui.components.FileSelectionDialog
@@ -87,8 +87,8 @@ fun NewDownloaderContent() {
         val loadingListener: (String, Boolean) -> Unit = { url, loading ->
             fileSearchScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                 fileSearchLoadingUrl = if (loading) url
-                    else if (fileSearchLoadingUrl == url) null
-                    else fileSearchLoadingUrl
+                else if (fileSearchLoadingUrl == url) null
+                else fileSearchLoadingUrl
             }
         }
         AudioPlayerManager.addOnPlaybackStopped(stoppedListener)
@@ -141,12 +141,12 @@ fun NewDownloaderContent() {
     // backdrop 选项列表：名称 → 值
     val backdropOptions = remember {
         listOf(
-            "Tabbed"      to WindowBackdrop.Tabbed,
-            "Mica"        to WindowBackdrop.Mica,
-            "Acrylic"     to WindowBackdrop.Acrylic(Color.Transparent),
-            "Aero"        to WindowBackdrop.Aero,
+            "Tabbed" to WindowBackdrop.Tabbed,
+            "Mica" to WindowBackdrop.Mica,
+            "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
+            "Aero" to WindowBackdrop.Aero,
             "Transparent" to WindowBackdrop.Transparent,
-            "Default"     to WindowBackdrop.Default,
+            "Default" to WindowBackdrop.Default,
         )
     }
 
@@ -229,9 +229,11 @@ fun NewDownloaderContent() {
                     ctrl && keyEvent.key == Key.One -> {
                         viewModel.onSearchModeChange(SearchMode.VOICE_ONLY); true
                     }
+
                     ctrl && keyEvent.key == Key.Two -> {
                         viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES); true
                     }
+
                     ctrl && keyEvent.key == Key.Three -> {
                         viewModel.onSearchModeChange(SearchMode.FILE_SEARCH); true
                     }
@@ -246,6 +248,7 @@ fun NewDownloaderContent() {
                         }
                         true
                     }
+
                     keyEvent.key == Key.DirectionDown && searchMode != SearchMode.FILE_SEARCH -> {
                         val groups = characterGroups
                         val current = selectedGroup
@@ -256,6 +259,7 @@ fun NewDownloaderContent() {
                         }
                         true
                     }
+
                     else -> false
                 }
             }
@@ -330,14 +334,14 @@ fun NewDownloaderContent() {
                             modifier = Modifier.weight(1f)
                                 .focusRequester(searchFocusRequester)
                                 .onKeyEvent { keyEvent ->
-                                // 监听回车键按下
-                                if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyUp) {
-                                    performSearch()
-                                    true
-                                } else {
-                                    false
-                                }
-                            },
+                                    // 监听回车键按下
+                                    if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyUp) {
+                                        performSearch()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                },
                             trailing = {
                                 TextBoxButton(onClick = {
                                     performSearch()
@@ -528,7 +532,8 @@ fun NewDownloaderContent() {
                                         Text(
                                             name,
                                             fontSize = 13.sp,
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp, horizontal = 4.dp)
+                                            modifier = Modifier.fillMaxWidth()
+                                                .padding(vertical = 3.dp, horizontal = 4.dp)
                                         )
                                     }
                                 }
@@ -679,95 +684,110 @@ fun NewDownloaderContent() {
 
                         // 音频转换配置
                         val isVoiceOnly = searchMode == SearchMode.VOICE_ONLY
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Expander(
+                            icon = {
+                                Icon(
+                                    Icons.Regular.MusicNote2,
+                                    "音频转换"
+                                )
+                            },
+                            expanded = convertAfterDownload,
+                            onExpandedChanged = { viewModel.onConvertAfterDownloadChange(it) },
+                            heading = {
+                                Text(
+                                    if (isVoiceOnly) "WAV 转换" else "MP3 → WAV 转换",
+                                    fontWeight = FontWeight.Medium
+                                )
+                            },
+                            caption = {
+                                Text(
+                                    if (isVoiceOnly) "下载完成后批量转换为 WAV 格式"
+                                    else "下载完成后将 MP3 批量转换为 WAV（其他格式跳过）",
+                                    color = FluentTheme.colors.text.text.secondary
+                                )
+                            },
+                            trailing = {
+                                Switcher(
+                                    checked = convertAfterDownload,
+                                    onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
+                                    textBefore = true,
+                                    text = if (convertAfterDownload) "开启" else "关闭"
+                                )
+                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Switcher(
-                                checked = convertAfterDownload,
-                                onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
-                                text = if (isVoiceOnly) "下载完成后转换为 WAV 格式"
-                                       else "下载完成后将 MP3 转换为 WAV"
-                            )
-                        }
-
-                        if (convertAfterDownload) {
-                            Spacer(Modifier.height(12.dp))
-
-                            // 转换详情设置区域
-                            SubtleBox(
-                                modifier = Modifier.fillMaxWidth(),
-                                padding = 12.dp
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                // 非语音模式下的说明
-                                if (!isVoiceOnly) {
-                                    Text(
-                                        "仅对 MP3 文件执行转换，其他格式（OGG、WAV 等）将跳过",
-                                        fontSize = 11.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-
-                                // 1. 格式设置
-                                Row(
-                                    verticalAlignment = Alignment.Bottom,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    ComboBox(
-                                        header = "采样率",
-                                        placeholder = "原采样率",
-                                        selected = targetSampleRateIndex,
-                                        items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
-                                        onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    ComboBox(
-                                        header = "位深",
-                                        placeholder = "16 bit",
-                                        selected = targetBitDepthIndex,
-                                        items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
-                                        onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-                                // 2. 合并设置
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    CheckBox(
-                                        label = "合并导出的 WAV 文件",
-                                        checked = mergeWav,
-                                        onCheckStateChange = { viewModel.onMergeWavChange(it) }
-                                    )
-
-                                    if (mergeWav) {
-                                        TextField(
-                                            value = mergeWavMaxCountStr,
-                                            onValueChange = { viewModel.onMergeWavMaxCountStrChange(it) },
-                                            placeholder = { Text("0") },
-                                            header = { Text("每组文件上限 (0=全部)", fontSize = 11.sp) },
-                                            modifier = Modifier.weight(1f),
-                                            singleLine = true
+                            // 1. 采样率 + 位深
+                            ExpanderItem(
+                                heading = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.Bottom,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        ComboBox(
+                                            header = "采样率",
+                                            placeholder = "原采样率",
+                                            selected = targetSampleRateIndex,
+                                            items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
+                                            onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
+                                            modifier = Modifier.weight(1f)
                                         )
-                                    } else {
-                                        Spacer(Modifier.weight(1f))
+                                        ComboBox(
+                                            header = "位深",
+                                            placeholder = "16 bit",
+                                            selected = targetBitDepthIndex,
+                                            items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
+                                            onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     }
                                 }
-
-                                // 3. 删除原始文件
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CheckBox(
-                                        label = if (isVoiceOnly) "转换完成后删除原始 MP3"
-                                                else "转换完成后删除原始 MP3（其他格式不受影响）",
+                            )
+                            ExpanderItemSeparator()
+                            // 2. 删除原 MP3
+                            ExpanderItem(
+                                heading = {
+                                    Text(
+                                        if (isVoiceOnly) "删除原始 MP3"
+                                        else "删除原始 MP3（其他格式不受影响）"
+                                    )
+                                },
+                                trailing = {
+                                    Switcher(
                                         checked = deleteOriginalMp3,
-                                        onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) }
+                                        onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) },
+                                        textBefore = true,
+                                        text = if (deleteOriginalMp3) "是" else "否"
                                     )
                                 }
-                                } // Column
-                            } // SubtleBox
+                            )
+                            ExpanderItemSeparator()
+                            // 3. 合并 WAV
+                            ExpanderItem(
+                                heading = { Text("合并导出的 WAV 文件") },
+                                trailing = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (mergeWav) {
+                                            TextField(
+                                                value = mergeWavMaxCountStr,
+                                                onValueChange = { viewModel.onMergeWavMaxCountStrChange(it) },
+                                                placeholder = { Text("每组上限（0为不限）") },
+                                                modifier = Modifier.width(240.dp),
+                                                singleLine = true
+                                            )
+                                        }
+                                        Switcher(
+                                            checked = mergeWav,
+                                            onCheckStateChange = { viewModel.onMergeWavChange(it) },
+                                            textBefore = true,
+                                            text = if (mergeWav) "是" else "否"
+                                        )
+                                    }
+                                }
+                            )
                         }
 
                         Spacer(Modifier.height(16.dp))
@@ -775,7 +795,7 @@ fun NewDownloaderContent() {
                         // 大下载按钮
                         val isFileSearch = searchMode == SearchMode.FILE_SEARCH
                         val canDownload = if (isFileSearch) fileSearchSelectedUrls.isNotEmpty()
-                                         else checkedCategories.isNotEmpty()
+                        else checkedCategories.isNotEmpty()
                         Button(
                             onClick = { viewModel.startDownload() },
                             modifier = Modifier.fillMaxWidth().height(40.dp),
