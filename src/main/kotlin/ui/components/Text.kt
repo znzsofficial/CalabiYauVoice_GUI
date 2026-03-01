@@ -40,8 +40,6 @@ fun TerminalOutputView(
 
     Box(
         modifier = modifier
-            .background(Color(0xFF1E1E1E), RoundedCornerShape(8.dp))
-            .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
             .clip(RoundedCornerShape(8.dp))
     ) {
         SelectionContainer {
@@ -120,7 +118,7 @@ private val LOG_COLOR_RULES: List<Pair<(String) -> Boolean, Color>> = listOf(
     { s: String -> s.contains("warning") || s.contains("警告") || s.contains("跳过")
             || s.contains("格式不一致") || s.contains("未找到") } to Color(0xFFCCA700),
     // 欢迎 → 灰白
-    { s: String -> s.contains("欢迎") } to Color(0xFFDCDCDC),
+    { s: String -> s.contains("欢迎") } to Color(0xFFBABABA),
 )
 
 private fun getLogColor(line: String): Color {

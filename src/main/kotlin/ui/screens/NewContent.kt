@@ -466,33 +466,17 @@ fun NewDownloaderContent() {
                                 state = characterListState,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                items(characterGroups) { group ->
+                                items(
+                                    characterGroups,
+                                    key = { it.characterName }
+                                ) { group ->
                                     val isSelected = group == selectedGroup
-                                    val bgColor =
-                                        if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
-
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(bgColor)
-                                            .clickable {
-                                                if (isDownloading) return@clickable
-                                                viewModel.onSelectGroup(group)
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        CharacterAvatar(
-                                            characterName = group.characterName,
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(
-                                            group.characterName,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                        )
-                                    }
+                                    CharacterGroupRow(
+                                        group = group,
+                                        isSelected = isSelected,
+                                        isDownloading = isDownloading,
+                                        onSelect = { viewModel.onSelectGroup(group) }
+                                    )
                                 }
                             }
                         }
@@ -528,7 +512,7 @@ fun NewDownloaderContent() {
                                 )
                             } else {
                                 LazyColumn(Modifier.fillMaxSize().padding(4.dp)) {
-                                    items(fileSearchResults.filter { it.second in fileSearchSelectedUrls }) { (name, _) ->
+                                    items(fileSearchResults.filter { it.second in fileSearchSelectedUrls }, key = { it.second }) { (name, _) ->
                                         Text(
                                             name,
                                             fontSize = 13.sp,
@@ -579,52 +563,36 @@ fun NewDownloaderContent() {
                                         size = 48.dp
                                     )
                                 } else {
-                                    LazyColumn(Modifier.fillMaxSize().padding(4.dp)) {
-                                        items(subCategories) { cat ->
-                                            val name = cat.replace("Category:", "").replace("分类:", "")
-                                            val isChecked = checkedCategories.contains(cat)
-                                            val isRoot = cat == group.rootCategory
-
-                                            // [新增] 计算该分类的状态显示文本
-                                            val statusText = if (manualSelectionMap.containsKey(cat)) {
-                                                val count = manualSelectionMap[cat]?.size ?: 0
-                                                val total = categoryTotalCountMap[cat]
-                                                if (total != null) "已选 $count / $total" else "已选 $count 项"
-                                            } else {
-                                                // 没有手动选择过，且被勾选 -> 默认全选
-                                                if (isChecked) "默认全选" else ""
-                                            }
-
-                                            ContextMenuArea(items = {
-                                                listOf(ContextMenuItem("选择文件...") {
-                                                    viewModel.openFileDialog(cat)
-                                                })
-                                            }) {
-                                                Row(
-                                                    Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .combinedClickable(
-                                                            onClick = {
-                                                                viewModel.setCategoryChecked(cat, !isChecked)
-                                                            },
-                                                            onDoubleClick = {
-                                                                if (!isDownloading) viewModel.openFileDialog(cat)
-                                                            }
-                                                        )
-                                                        .padding(vertical = 6.dp, horizontal = 8.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    CheckBox(
-                                                        checked = isChecked,
-                                                        onCheckStateChange = { viewModel.setCategoryChecked(cat, it) }
+                                    Box(Modifier.fillMaxSize()) {
+                                        val catListState = rememberLazyListState()
+                                        val catAdapter = androidx.compose.foundation.rememberScrollbarAdapter(catListState)
+                                        ScrollbarContainer(
+                                            adapter = catAdapter,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            LazyColumn(
+                                                state = catListState,
+                                                modifier = Modifier.fillMaxSize().padding(4.dp)
+                                            ) {
+                                                items(subCategories, key = { it }) { cat ->
+                                                    val isChecked = checkedCategories.contains(cat)
+                                                    val isRoot = cat == group.rootCategory
+                                                    val statusText = if (manualSelectionMap.containsKey(cat)) {
+                                                        val count = manualSelectionMap[cat]?.size ?: 0
+                                                        val total = categoryTotalCountMap[cat]
+                                                        if (total != null) "已选 $count / $total" else "已选 $count 项"
+                                                    } else {
+                                                        if (isChecked) "默认全选" else ""
+                                                    }
+                                                    CategoryRow(
+                                                        cat = cat,
+                                                        isChecked = isChecked,
+                                                        isRoot = isRoot,
+                                                        statusText = statusText,
+                                                        isDownloading = isDownloading,
+                                                        onToggle = { viewModel.setCategoryChecked(cat, !isChecked) },
+                                                        onOpenFiles = { viewModel.openFileDialog(cat) }
                                                     )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text(name + if (isRoot) " (主分类)" else "")
-
-                                                    // [新增] 显示选择状态
-                                                    Spacer(Modifier.weight(1f))
-                                                    Text(statusText, fontSize = 12.sp, color = Color.Gray)
                                                 }
                                             }
                                         }
@@ -684,15 +652,17 @@ fun NewDownloaderContent() {
 
                         // 音频转换配置
                         val isVoiceOnly = searchMode == SearchMode.VOICE_ONLY
+                        var converterExpanded by remember { mutableStateOf(convertAfterDownload) }
+                        LaunchedEffect(convertAfterDownload) {
+                            if (convertAfterDownload) converterExpanded = true
+                        }
                         Expander(
-                            icon = {
-                                Icon(
-                                    Icons.Regular.MusicNote2,
-                                    "音频转换"
-                                )
+                            icon = { Icon(Icons.Regular.MusicNote2, "音频转换") },
+                            expanded = converterExpanded,
+                            onExpandedChanged = { expanded ->
+                                converterExpanded = expanded
+                                if (expanded) viewModel.onConvertAfterDownloadChange(true)
                             },
-                            expanded = convertAfterDownload,
-                            onExpandedChanged = { viewModel.onConvertAfterDownloadChange(it) },
                             heading = {
                                 Text(
                                     if (isVoiceOnly) "WAV 转换" else "MP3 → WAV 转换",
@@ -756,8 +726,6 @@ fun NewDownloaderContent() {
                                     Switcher(
                                         checked = deleteOriginalMp3,
                                         onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) },
-                                        textBefore = true,
-                                        text = if (deleteOriginalMp3) "是" else "否"
                                     )
                                 }
                             )
@@ -783,7 +751,9 @@ fun NewDownloaderContent() {
                                             checked = mergeWav,
                                             onCheckStateChange = { viewModel.onMergeWavChange(it) },
                                             textBefore = true,
-                                            text = if (mergeWav) "是" else "否"
+                                            text = if (!mergeWav) ""
+                                                   else if (mergeWavMaxCountStr == "0" || mergeWavMaxCountStr.isEmpty()) "全部合并"
+                                                   else "每 $mergeWavMaxCountStr 个/组"
                                         )
                                     }
                                 }
@@ -818,44 +788,45 @@ fun NewDownloaderContent() {
         Spacer(Modifier.height(12.dp))
 
         // === 底部：日志面板 ===
-        Column(
-            Modifier
-                .height(150.dp) // 给多一点高度
-                .clip(RoundedCornerShape(8.dp))
-                .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
-                .background(Color(0xFF1E1E1E))
+        Card(
+            modifier = Modifier.height(150.dp)
         ) {
-            // 标题栏
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF2D2D2D))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Image(
-                    painter = rememberVectorPainter(Icons.Regular.TextBulletListLtr),
-                    contentDescription = null,
-                    colorFilter = ColorFilter.tint(Color.Gray),
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("运行日志", color = Color.Gray, fontSize = 12.sp)
-                Spacer(Modifier.weight(1f))
-                if (progressText.isNotEmpty()) {
-                    Text(progressText, color = Color(0xFF61AFEF), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            Column(Modifier.fillMaxSize()) {
+                // 标题栏
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(FluentTheme.colors.control.secondary)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = rememberVectorPainter(Icons.Regular.TextBulletListLtr),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("运行日志", color = FluentTheme.colors.text.text.secondary, fontSize = 12.sp)
+                    Spacer(Modifier.weight(1f))
+                    if (progressText.isNotEmpty()) {
+                        Text(progressText, color = Color(0xFF61AFEF), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    }
                 }
-            }
 
-            // 进度条整合
-            if (isDownloading || isScanningTree) {
-                ProgressBar(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp))
-            } else {
-                Spacer(Modifier.height(1.dp).fillMaxWidth().background(Color(0xFF333333)))
-            }
+                // 进度条
+                if (isDownloading || isScanningTree) {
+                    ProgressBar(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp))
+                } else {
+                    Spacer(
+                        Modifier.fillMaxWidth().height(1.dp)
+                            .background(FluentTheme.colors.stroke.card.default)
+                    )
+                }
 
-            // 日志内容
-            TerminalOutputView(logLines, Modifier.fillMaxSize().background(Color.Transparent))
+                // 日志内容
+                TerminalOutputView(logLines, Modifier.fillMaxSize())
+            }
         }
     }
 }
@@ -963,3 +934,65 @@ private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CategoryRow(
+    cat: String,
+    isChecked: Boolean,
+    isRoot: Boolean,
+    statusText: String,
+    isDownloading: Boolean,
+    onToggle: () -> Unit,
+    onOpenFiles: () -> Unit
+) {
+    val name = cat.replace("Category:", "").replace("分类:", "")
+    ContextMenuArea(items = {
+        listOf(ContextMenuItem("选择文件...") { onOpenFiles() })
+    }) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(4.dp))
+                .combinedClickable(
+                    onClick = onToggle,
+                    onDoubleClick = { if (!isDownloading) onOpenFiles() }
+                )
+                .padding(vertical = 6.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CheckBox(checked = isChecked, onCheckStateChange = { onToggle() })
+            Spacer(Modifier.width(8.dp))
+            Text(name + if (isRoot) " (主分类)" else "", modifier = Modifier.weight(1f))
+            Text(statusText, fontSize = 12.sp, color = Color.Gray)
+        }
+    }
+}
+
+@Composable
+private fun CharacterGroupRow(
+    group: data.WikiEngine.CharacterGroup,
+    isSelected: Boolean,
+    isDownloading: Boolean,
+    onSelect: () -> Unit
+) {
+    val bgColor = if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(bgColor)
+            .clickable(enabled = !isDownloading, onClick = onSelect)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CharacterAvatar(
+            characterName = group.characterName,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            group.characterName,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+        )
+    }
+}
