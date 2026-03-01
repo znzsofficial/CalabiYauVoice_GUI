@@ -1,6 +1,6 @@
 package ui.components
 
-import LocalThemeState
+import LocalAppStore
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,7 +42,7 @@ fun FileSelectionDialog(
 ) {
     val selectedUrls = remember { mutableStateListOf<String>() }
     var searchKeyword by remember { mutableStateOf("") }
-    val darkMode = LocalThemeState.current.value
+    val darkMode = LocalAppStore.current.darkMode.value
     var playingUrl by remember { mutableStateOf<String?>(null) }
     var loadingUrl by remember { mutableStateOf<String?>(null) }
     var previewImageUrl by remember { mutableStateOf<String?>(null) }

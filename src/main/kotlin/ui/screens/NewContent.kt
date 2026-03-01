@@ -1,7 +1,6 @@
 package ui.screens
 
-import LocalBackdropType
-import LocalThemeState
+import LocalAppStore
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -135,19 +134,31 @@ fun NewDownloaderContent() {
 
     val logLines by viewModel.logLines.collectAsState()
 
-    val darkMode = LocalThemeState.current
-    val backdropType = LocalBackdropType.current
+    val appStore = LocalAppStore.current
+    val darkMode = appStore.darkMode
+    val backdropType = appStore.backdropType
+    val isWin11 = appStore.isWin11
+    val canUseNonWin11Backdrop = appStore.canUseNonWin11Backdrop
 
-    // backdrop 选项列表：名称 → 值
-    val backdropOptions = remember {
-        listOf(
-            "Tabbed" to WindowBackdrop.Tabbed,
-            "Mica" to WindowBackdrop.Mica,
-            "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
-            "Aero" to WindowBackdrop.Aero,
-            "Transparent" to WindowBackdrop.Transparent,
-            "Default" to WindowBackdrop.Default,
-        )
+    // backdrop 选项列表：名称 → 值（null 表示恢复默认渐变背景）
+    val backdropOptions: List<Pair<String, WindowBackdrop?>> = remember(isWin11, canUseNonWin11Backdrop) {
+        when {
+            isWin11 -> listOf(
+                "Tabbed" to WindowBackdrop.Tabbed,
+                "Mica" to WindowBackdrop.Mica,
+                "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
+                "Aero" to WindowBackdrop.Aero,
+                "Transparent" to WindowBackdrop.Transparent,
+                "默认" to null,
+            )
+            canUseNonWin11Backdrop -> listOf(
+                "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
+                "Aero" to WindowBackdrop.Aero,
+                "Transparent" to WindowBackdrop.Transparent,
+                "默认" to null,
+            )
+            else -> emptyList()
+        }
     }
 
     // === 文件选择弹窗 ===
@@ -290,7 +301,8 @@ fun NewDownloaderContent() {
                             onClick = { backdropType.value = backdrop },
                             text = {
                                 val current = backdropType.value
-                                val isCurrent = current::class == backdrop::class
+                                val isCurrent = if (backdrop == null) current == null
+                                                else current != null && current::class == backdrop::class
                                 Text(
                                     text = "窗口效果：$label",
                                     fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
@@ -834,7 +846,7 @@ fun NewDownloaderContent() {
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
-    val darkMode = LocalThemeState.current.value
+    val darkMode = LocalAppStore.current.darkMode.value
     DialogWindow(
         onCloseRequest = onClose,
         title = "键盘快捷键",

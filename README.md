@@ -62,7 +62,7 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 ### 🛠️ 技术栈
 
 - **核心：** Kotlin、协程 (Coroutines)
-- **UI 框架：** Compose Desktop、[Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler)
+- **UI 框架：** Compose Desktop、[Compose Fluent UI](https://github.com/compose-fluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/MayakaApps/ComposeWindowStyler)
 - **网络与数据：** OkHttp、kotlinx.serialization
 - **音频：** `javax.sound.sampled`（WAV/OGG/FLAC）、`mp3spi`(MP3）
 - **图像：** `javax.imageio.ImageIO`（GIF 多帧解码动画）

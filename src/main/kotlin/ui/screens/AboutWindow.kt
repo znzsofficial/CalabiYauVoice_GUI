@@ -1,6 +1,6 @@
 package ui.screens
 
-import LocalThemeState
+import LocalAppStore
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
@@ -27,7 +27,7 @@ import util.findSkiaLayer
 @Composable
 fun AboutWindow(onCloseRequest: () -> Unit) {
     // 读 State 对象，不在此处读 .value，让 Window 内部订阅
-    val darkModeState = LocalThemeState.current
+    val darkModeState = LocalAppStore.current.darkMode
     val windowState = rememberWindowState(
         width = 450.dp,
         height = 320.dp,

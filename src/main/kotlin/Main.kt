@@ -6,7 +6,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -28,10 +27,7 @@ import java.awt.FlowLayout
 import java.awt.Frame
 import java.awt.Label
 
-val LocalThemeState = compositionLocalOf { mutableStateOf(false) }
-val LocalBackdropType = compositionLocalOf<MutableState<WindowBackdrop>> {
-    mutableStateOf(WindowBackdrop.Tabbed)
-}
+// All app-wide UI state is stored in AppStore.kt — access via LocalAppStore
 
 // 创建非Win11系统的背景渐变，由调用方用 remember 缓存
 private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush =
@@ -62,13 +58,16 @@ fun main() = application {
     ) {
         val systemDark = isSystemInDarkTheme()
         val darkMode = remember { mutableStateOf(systemDark) }
-        val backdropType = remember { mutableStateOf<WindowBackdrop>(WindowBackdrop.Tabbed) }
         val windowFrameState = rememberWindowsWindowFrameState(window)
         val skiaLayerExists = remember { window.findSkiaLayer() != null }
         val isWin11 = remember { isWindows11OrLater() }
-        val useAcrylic = skiaLayerExists && isWin11
+        // 非Win11但支持 skia：可以应用 Acrylic/Aero/Transparent，null 表示使用渐变背景
+        val canUseNonWin11Backdrop = skiaLayerExists && !isWin11
+        // Win11 默认 Tabbed；非Win11 默认 null（渐变背景）
+        val backdropType = remember { mutableStateOf<WindowBackdrop?>(if (isWin11) WindowBackdrop.Tabbed else null) }
 
-        if (useAcrylic) {
+        // Win11 始终需要透明图层；非Win11有Skia时也可能应用backdrop，统一在此设置一次
+        if (skiaLayerExists) {
             LaunchedEffect(Unit) {
                 window.findSkiaLayer()?.transparency = true
             }
@@ -78,19 +77,26 @@ fun main() = application {
             getNonWin11BackgroundGradient(darkMode.value)
         }
 
-        CompositionLocalProvider(
-            LocalThemeState provides darkMode,
-            LocalBackdropType provides backdropType
-        ) {
+        val appState = remember {
+            AppState(
+                darkMode = darkMode,
+                backdropType = backdropType,
+                isWin11 = isWin11,
+                canUseNonWin11Backdrop = canUseNonWin11Backdrop,
+            )
+        }
+        CompositionLocalProvider(LocalAppStore provides appState) {
             FluentTheme(colors = if (darkMode.value) darkColors() else lightColors(), useAcrylicPopup = true) {
-                // WindowStyle 放在 FluentTheme 内部，跟随 darkMode 和 backdropType 重组
-                // 官方 Gallery 的做法：确保每次主题/backdrop 变化都重新 apply DWM 效果
-                if (useAcrylic) {
+                val currentBackdrop = backdropType.value
+                // skiaLayerExists 已是前提，只要选了非 null backdrop 就应用 WindowStyle
+                if (skiaLayerExists && currentBackdrop != null) {
                     WindowStyle(
                         isDarkTheme = darkMode.value,
-                        backdropType = backdropType.value
+                        backdropType = currentBackdrop
                     )
                 }
+                // 是否使用任何 Backdrop 效果（非默认渐变）
+                val useBackdropEffect = skiaLayerExists && currentBackdrop != null
                 WindowsWindowFrame(
                     title = "卡拉彼丘 WiKi 语音下载器",
                     onCloseRequest = ::exitApplication,
@@ -98,24 +104,16 @@ fun main() = application {
                     frameState = windowFrameState,
                     isDarkTheme = darkMode.value,
                     captionBarHeight = 48.dp,
-                    captionBarBackground = if (useAcrylic) null else remember(darkMode.value) {
-                        SolidColor(
-                            if (darkMode.value) Color(0xff1A212C) else Color(0xffCCD7E8)
-                        )
-                    },
+                    captionBarBackground = if (useBackdropEffect) null else backgroundBrush,
                 ) { windowInset, _ ->
-                    // Modifier 组合只在 inset 变化时重算
                     val contentModifier = remember(windowFrameState.paddingInset, windowInset) {
                         Modifier
                             .windowInsetsPadding(windowFrameState.paddingInset)
                             .windowInsetsPadding(windowInset)
                     }
-                    // 背景 Modifier：useAcrylic 时透明，否则用渐变
-                    val bgModifier = remember(useAcrylic, backdropType.value, darkMode.value) {
-                        if (useAcrylic) Modifier else Modifier.background(backgroundBrush)
-                    }
+                    // useBackdropEffect 变化时重算；backgroundBrush 已在外层按 darkMode 缓存
+                    val bgModifier = if (useBackdropEffect) Modifier else Modifier.background(backgroundBrush)
                     Box(modifier = contentModifier.then(bgModifier)) {
-                        // 你的业务内容：NewDownloaderContent 现在会自动避开标题栏/边框/按钮
                         NewDownloaderContent()
                     }
                 }
