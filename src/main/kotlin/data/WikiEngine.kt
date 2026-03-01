@@ -469,6 +469,9 @@ object WikiEngine {
     suspend fun loadNetworkImage(url: String): ImageBitmap? =
         ImageLoader.loadNetworkImage(client, url)
 
+    suspend fun loadRawBytes(url: String): ByteArray? =
+        ImageLoader.loadRawBytes(client, url)
+
     private suspend fun fetchString(url: String): String? = withContext(Dispatchers.IO) {
         try {
             client.newCall(Request.Builder().url(url).build()).execute()

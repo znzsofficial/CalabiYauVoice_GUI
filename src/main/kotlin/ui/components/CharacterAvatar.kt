@@ -30,31 +30,54 @@ fun NetworkImage(
     contentScale: ContentScale = ContentScale.Fit,
     placeholder: @Composable (() -> Unit)? = null
 ) {
-    var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-
-    // 当 URL 变化时，启动加载
-    LaunchedEffect(url) {
-        // 如果 URL 为空，直接重置
-        if (url.isBlank()) {
-            imageBitmap = null
-            return@LaunchedEffect
-        }
-
-        // 尝试从 WikiEngine 加载 (带缓存)
-        val bitmap = WikiEngine.loadNetworkImage(url)
-        imageBitmap = bitmap
+    val isGif = remember(url) {
+        url.substringAfterLast('.', "").lowercase().substringBefore('?') == "gif"
     }
 
-    if (imageBitmap != null) {
-        Image(
-            bitmap = imageBitmap!!,
-            contentDescription = contentDescription,
-            modifier = modifier,
-            contentScale = contentScale
-        )
+    if (isGif) {
+        // GIF 路径：加载原始字节用于动画解码
+        var bytes by remember { mutableStateOf<ByteArray?>(null) }
+        var loaded by remember { mutableStateOf(false) }
+
+        LaunchedEffect(url) {
+            if (url.isBlank()) { loaded = true; return@LaunchedEffect }
+            bytes = WikiEngine.loadRawBytes(url)
+            loaded = true
+        }
+
+        if (!loaded) {
+            placeholder?.invoke()
+        } else {
+            AnimatedGifImage(
+                bytes = bytes,
+                contentDescription = contentDescription,
+                modifier = modifier,
+                contentScale = contentScale,
+                placeholder = placeholder
+            )
+        }
     } else {
-        // 如果有占位符且当前没图，显示占位符
-        placeholder?.invoke()
+        // 静态图路径（原有逻辑）
+        var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+        LaunchedEffect(url) {
+            if (url.isBlank()) {
+                imageBitmap = null
+                return@LaunchedEffect
+            }
+            imageBitmap = WikiEngine.loadNetworkImage(url)
+        }
+
+        if (imageBitmap != null) {
+            Image(
+                bitmap = imageBitmap!!,
+                contentDescription = contentDescription,
+                modifier = modifier,
+                contentScale = contentScale
+            )
+        } else {
+            placeholder?.invoke()
+        }
     }
 }
 

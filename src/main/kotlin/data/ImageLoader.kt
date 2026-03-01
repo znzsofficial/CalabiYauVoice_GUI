@@ -16,7 +16,7 @@ object ImageLoader {
     private const val MAX_IMAGE_BYTES = 16 * 1024 * 1024
     private const val MAX_IMAGE_CACHE_ENTRIES = 512
 
-    // LRU 图片缓存，Key: URL，Value: ImageBitmap
+    // LRU 图片缓存，Key: URL，Value: ImageBitmap（静态图）
     private val imageCache = Collections.synchronizedMap(
         object : LinkedHashMap<String, ImageBitmap>(16, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap>?): Boolean =
@@ -24,8 +24,19 @@ object ImageLoader {
         }
     )
 
+    // LRU 原始字节缓存，Key: URL，Value: ByteArray（用于 GIF 动画）
+    private val rawBytesCache = Collections.synchronizedMap(
+        object : LinkedHashMap<String, ByteArray>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean =
+                size > MAX_IMAGE_CACHE_ENTRIES
+        }
+    )
+
     // 进行中的请求去重表
     private val imageInflight = ConcurrentHashMap<String, CompletableDeferred<ImageBitmap?>>()
+
+    // 进行中的原始字节请求去重表
+    private val rawBytesInflight = ConcurrentHashMap<String, CompletableDeferred<ByteArray?>>()
 
     // 头像 URL 缓存，Key: 角色名，Value: 真实 URL
     private val avatarCache = ConcurrentHashMap<String, String>()
@@ -83,6 +94,55 @@ object ImageLoader {
             return@withContext null
         } finally {
             imageInflight.remove(url)
+        }
+    }
+
+    /**
+     * 下载图片的原始字节（用于 GIF 动画解码等）。
+     * - LRU 缓存，最多 512 条
+     * - 同 URL 并发请求只发起一次
+     */
+    suspend fun loadRawBytes(client: OkHttpClient, url: String): ByteArray? = withContext(Dispatchers.IO) {
+        rawBytesCache[url]?.let { return@withContext it }
+
+        val existing = rawBytesInflight[url]
+        if (existing != null) return@withContext existing.await()
+
+        val deferred = CompletableDeferred<ByteArray?>()
+        val raced = rawBytesInflight.putIfAbsent(url, deferred)
+        if (raced != null) return@withContext raced.await()
+
+        try {
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    deferred.complete(null)
+                    return@withContext null
+                }
+                val body = response.body
+                val contentType = body.contentType()?.toString()?.lowercase()
+                if (contentType != null && !contentType.startsWith("image/")) {
+                    deferred.complete(null)
+                    return@withContext null
+                }
+                if (body.contentLength() > MAX_IMAGE_BYTES) {
+                    deferred.complete(null)
+                    return@withContext null
+                }
+                val bytes = body.byteStream().use { readBytesWithLimit(it, MAX_IMAGE_BYTES) }
+                if (bytes.isEmpty()) {
+                    deferred.complete(null)
+                    return@withContext null
+                }
+                rawBytesCache[url] = bytes
+                deferred.complete(bytes)
+                return@withContext bytes
+            }
+        } catch (_: Exception) {
+            deferred.complete(null)
+            return@withContext null
+        } finally {
+            rawBytesInflight.remove(url)
         }
     }
 
