@@ -30,17 +30,65 @@ import kotlin.random.Random
 
 object WikiEngine {
     private const val API_BASE_URL = "https://wiki.biligame.com/klbq/api.php"
-    private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
-    private const val MAX_IMAGE_CACHE_ENTRIES = 256
 
-    // UA池
-    private val USER_AGENTS = listOf(
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+    // UA 池：按浏览器类型分组，各自匹配对应的请求头特征
+    private data class BrowserProfile(
+        val userAgent: String,
+        val accept: String,
+        val acceptLanguage: String,
+        val secFetchDest: String = "document",
+        val secFetchMode: String = "navigate",
+        val secFetchSite: String = "same-origin",
+        val secChUa: String? = null,          // Chrome/Edge 专有
+        val secChUaMobile: String = "?0",
+        val secChUaPlatform: String? = null
     )
-    private val currentUA = USER_AGENTS.random()
+
+    private val BROWSER_PROFILES = listOf(
+        // Chrome 131 / Windows
+        BrowserProfile(
+            userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8",
+            secChUa = "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"Windows\""
+        ),
+        // Chrome 131 / macOS
+        BrowserProfile(
+            userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            secChUa = "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"macOS\""
+        ),
+        // Edge 131 / Windows
+        BrowserProfile(
+            userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            secChUa = "\"Microsoft Edge\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"Windows\""
+        ),
+        // Firefox 133 / Windows
+        BrowserProfile(
+            userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            acceptLanguage = "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
+            secFetchDest = "document",
+            secFetchMode = "navigate",
+            secFetchSite = "none"
+            // Firefox 不发送 sec-ch-ua
+        ),
+        // Firefox 133 / Linux
+        BrowserProfile(
+            userAgent = "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            acceptLanguage = "zh-CN,zh;q=0.9,en-US;q=0.7,en;q=0.5",
+            secFetchDest = "document",
+            secFetchMode = "navigate",
+            secFetchSite = "none"
+        )
+    )
 
     // 暴露给外部的 Client
     val client: OkHttpClient = OkHttpClient.Builder()
@@ -48,42 +96,47 @@ object WikiEngine {
         .cookieJar(JavaNetCookieJar(CookieManager().apply {
             setCookiePolicy(CookiePolicy.ACCEPT_ALL)
         }))
-        // 增加超时时间
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
-        // 核心拦截器：伪装头信息
+        // 核心拦截器：每次请求随机选一个 Profile，动态匹配完整请求头
         .addInterceptor { chain ->
-            val original = chain.request()
-            val request = original.newBuilder()
-                .header("User-Agent", currentUA)
-                .header(
-                    "Accept",
-                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-                )
-                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            val profile = BROWSER_PROFILES.random()
+            val req = chain.request().newBuilder()
+                .header("User-Agent", profile.userAgent)
+                .header("Accept", profile.accept)
+                .header("Accept-Language", profile.acceptLanguage)
+                // Accept-Encoding 由 OkHttp 自动管理（只声明它能解压的格式），不手动设置
                 .header("Referer", "https://wiki.biligame.com/klbq/")
-                .header("Connection", "keep-alive")
+                .header("Sec-Fetch-Dest", profile.secFetchDest)
+                .header("Sec-Fetch-Mode", profile.secFetchMode)
+                .header("Sec-Fetch-Site", profile.secFetchSite)
+                // Sec-Fetch-User: ?1 仅用于用户主动触发的导航，API 请求不应携带
+                .apply {
+                    // Chrome/Edge 专有头，Firefox 不发送
+                    if (profile.secChUa != null) {
+                        header("Sec-CH-UA", profile.secChUa)
+                        header("Sec-CH-UA-Mobile", profile.secChUaMobile)
+                        header("Sec-CH-UA-Platform", profile.secChUaPlatform ?: "\"Windows\"")
+                    }
+                }
                 .build()
-            chain.proceed(request)
+            chain.proceed(req)
         }
-        // 重试拦截器：遇到风控歇一会儿
+        // 重试拦截器：遇到风控时指数退避重试
         .addInterceptor { chain ->
             var response = chain.proceed(chain.request())
             var tryCount = 0
-            val maxLimit = 3
-
-            // 如果遇到 429 (Too Many Requests) 或 503 (Service Unavailable)，尝试重试
-            while (!response.isSuccessful && (response.code == 429 || response.code == 503 || response.code == 403) && tryCount < maxLimit) {
+            val maxRetries = 3
+            while (!response.isSuccessful
+                && tryCount < maxRetries
+                && response.code in setOf(429, 403, 503)
+            ) {
                 tryCount++
-                response.close() // 关闭旧响应
-
-                // 指数退避：第一次歇 2s，第二次歇 4s...
-                val sleepTime = 2000L * tryCount + Random.nextLong(500)
-                //println("触发风控 (${response.code})，等待 ${sleepTime}ms 后重试 ($tryCount/$maxLimit)...")
-                Thread.sleep(sleepTime)
-
-                // 重新发起请求
+                response.close()
+                // 指数退避 + 随机抖动，避免多线程同时重试
+                val backoff = (1000L shl tryCount) + Random.nextLong(0, 500)
+                Thread.sleep(backoff)
                 response = chain.proceed(chain.request())
             }
             response
@@ -142,7 +195,7 @@ object WikiEngine {
             val encoded = URLEncoder.encode(keyword, "UTF-8")
             var aicontinue: String? = null
             do {
-                val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue!!, "UTF-8")}" else ""
+                val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue, "UTF-8")}" else ""
                 val url = "$API_BASE_URL?action=query&list=allimages&aiprefix=$encoded" +
                         "&aiprop=url|mime&ailimit=500&format=json$cArg"
                 val json = fetchString(url) ?: break
