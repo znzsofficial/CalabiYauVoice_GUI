@@ -43,9 +43,9 @@ object ImageLoader {
 
     /**
      * 下载图片并转换为 ImageBitmap。
-     * - LRU 缓存最多 256 张
+     * - LRU 缓存最多 512 张
      * - 进行中的同 URL 请求只发起一次
-     * - 校验 content-type 与大小上限（8 MB）
+     * - 校验 content-type 与大小上限（16 MB）
      */
     suspend fun loadNetworkImage(client: OkHttpClient, url: String): ImageBitmap? = withContext(Dispatchers.IO) {
         imageCache[url]?.let { return@withContext it }
@@ -78,7 +78,7 @@ object ImageLoader {
                     return@withContext null
                 }
 
-                val bytes = body.byteStream().use { readBytesWithLimit(it, MAX_IMAGE_BYTES) }
+                val bytes = body.byteStream().use { readBytesWithLimit(it) }
                 if (bytes.isEmpty()) {
                     deferred.complete(null)
                     return@withContext null
@@ -93,6 +93,7 @@ object ImageLoader {
             deferred.complete(null)
             return@withContext null
         } finally {
+            deferred.complete(null) // 幂等：若已 complete 则无效；保护其他等待方不永久挂起
             imageInflight.remove(url)
         }
     }
@@ -129,7 +130,7 @@ object ImageLoader {
                     deferred.complete(null)
                     return@withContext null
                 }
-                val bytes = body.byteStream().use { readBytesWithLimit(it, MAX_IMAGE_BYTES) }
+                val bytes = body.byteStream().use { readBytesWithLimit(it) }
                 if (bytes.isEmpty()) {
                     deferred.complete(null)
                     return@withContext null
@@ -142,6 +143,7 @@ object ImageLoader {
             deferred.complete(null)
             return@withContext null
         } finally {
+            deferred.complete(null) // 幂等保护
             rawBytesInflight.remove(url)
         }
     }
@@ -180,8 +182,8 @@ object ImageLoader {
         }
     }
 
-    /** 读取字节流，超过 limitBytes 则返回空数组（保护内存）*/
-    private fun readBytesWithLimit(input: java.io.InputStream, limitBytes: Int): ByteArray {
+    /** 读取字节流，超过 MAX_IMAGE_BYTES 则返回空数组（保护内存）*/
+    private fun readBytesWithLimit(input: java.io.InputStream): ByteArray {
         val buffer = ByteArray(8192)
         var total = 0
         val out = java.io.ByteArrayOutputStream()
@@ -189,7 +191,7 @@ object ImageLoader {
             val read = input.read(buffer)
             if (read <= 0) break
             total += read
-            if (total > limitBytes) return ByteArray(0)
+            if (total > MAX_IMAGE_BYTES) return ByteArray(0)
             out.write(buffer, 0, read)
         }
         return out.toByteArray()

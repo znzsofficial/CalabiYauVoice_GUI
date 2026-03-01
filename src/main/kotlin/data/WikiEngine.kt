@@ -2,6 +2,8 @@ package data
 
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -21,11 +23,10 @@ import java.net.CookiePolicy
 import java.net.URLEncoder
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.collections.ArrayDeque
 import kotlin.random.Random
 
 object WikiEngine {
@@ -179,94 +180,108 @@ object WikiEngine {
     @Serializable
     data class ImageInfo(val url: String? = null, val mime: String? = null)
 
+    // allimages API 专用模型（避免在循环体内重复定义局部类）
+    @Serializable
+    private data class AiItem(val name: String, val url: String? = null, val mime: String? = null)
+
+    @Serializable
+    private data class AiQuery(val allimages: List<AiItem>? = null)
+
+    @Serializable
+    private data class AiResponse(
+        val query: AiQuery? = null,
+        @SerialName("continue") val continuation: Map<String, JsonElement>? = null
+    )
+
     /**
      * 在 File 命名空间（ns=6）中搜索文件，返回 List<文件名 to CDN URL>。
      *
      * 策略：
-     * 1. 先用 list=allimages&aiprefix 做前缀匹配（精确、完整翻页）
-     * 2. 同时用 list=search&srnamespace=6 做全文匹配（补充前缀未命中的结果）
-     * 两路结果去重后返回。
+     * 1. 用 list=allimages&aiprefix 做前缀匹配（精确、完整翻页）
+     * 2. 用 list=search&srnamespace=6 做全文匹配（补充前缀未命中的结果）
+     * 两路并行执行，结果去重后返回。
      */
     suspend fun searchFiles(keyword: String, audioOnly: Boolean): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        val result = LinkedHashMap<String, String>() // name -> url，保持顺序、自动去重
+        fun matchesFilter(url: String, mime: String?): Boolean {
+            if (!audioOnly) return true
+            val cleanUrl = url.substringBefore('?')
+            return mime?.startsWith("audio/") == true || cleanUrl.endsWith(".wav") || cleanUrl.endsWith(".mp3")
+        }
 
-        // --- 路径 1：allimages 前缀搜索（完整翻页）---
-        run {
-            val encoded = URLEncoder.encode(keyword, "UTF-8")
-            var aicontinue: String? = null
-            do {
-                val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue, "UTF-8")}" else ""
-                val url = "$API_BASE_URL?action=query&list=allimages&aiprefix=$encoded" +
-                        "&aiprop=url|mime&ailimit=500&format=json$cArg"
-                val json = fetchString(url) ?: break
-                if (json.trimStart().startsWith("<")) break
-                try {
-                    @Serializable data class AiItem(val name: String, val url: String? = null, val mime: String? = null)
-                    @Serializable data class AiQuery(val allimages: List<AiItem>? = null)
-                    @Serializable data class AiResponse(
-                        val query: AiQuery? = null,
-                        @SerialName("continue") val continuation: Map<String, JsonElement>? = null
-                    )
-                    val res = jsonParser.decodeFromString<AiResponse>(json)
-                    res.query?.allimages?.forEach { item ->
-                        if (item.url != null) {
-                            val isAudio = item.mime?.startsWith("audio/") == true
-                                    || item.url.endsWith(".wav") || item.url.endsWith(".mp3")
-                            if (!audioOnly || isAudio) {
-                                result[item.name] = item.url
+        // 两条路径并行
+        val (path1, path2) = awaitAll(
+            // --- 路径 1：allimages 前缀搜索（完整翻页）---
+            async {
+                val partial = LinkedHashMap<String, String>()
+                val encoded = URLEncoder.encode(keyword, "UTF-8")
+                var aicontinue: String? = null
+                do {
+                    val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue, "UTF-8")}" else ""
+                    val url = "$API_BASE_URL?action=query&list=allimages&aiprefix=$encoded" +
+                            "&aiprop=url|mime&ailimit=500&format=json$cArg"
+                    val json = fetchString(url) ?: break
+                    if (json.trimStart().startsWith("<")) break
+                    try {
+                        val res = jsonParser.decodeFromString<AiResponse>(json)
+                        res.query?.allimages?.forEach { item ->
+                            if (item.url != null && matchesFilter(item.url, item.mime)) {
+                                partial[item.name] = item.url
                             }
                         }
-                    }
-                    aicontinue = res.continuation?.get("aicontinue")?.jsonPrimitive?.content
-                } catch (_: Exception) { break }
-            } while (aicontinue != null)
-        }
+                        aicontinue = res.continuation?.get("aicontinue")?.jsonPrimitive?.content
+                    } catch (_: Exception) { break }
+                } while (aicontinue != null)
+                partial
+            },
+            // --- 路径 2：search 全文搜索（补充未被前缀命中的结果）---
+            async {
+                val partial = LinkedHashMap<String, String>()
+                val encoded = URLEncoder.encode(keyword, "UTF-8")
+                var sroffset = 0
+                do {
+                    val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=6" +
+                            "&format=json&srlimit=100&sroffset=$sroffset"
+                    val json = fetchString(url) ?: break
+                    if (json.trimStart().startsWith("<")) break
+                    try {
+                        val res = jsonParser.decodeFromString<WikiResponse>(json)
+                        val titles = res.query?.search?.map { it.title } ?: emptyList()
+                        if (titles.isEmpty()) break
 
-        // --- 路径 2：search 全文搜索（补充未被前缀命中的结果）---
-        run {
-            val encoded = URLEncoder.encode(keyword, "UTF-8")
-            var sroffset = 0
-            do {
-                val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=6" +
-                        "&format=json&srlimit=100&sroffset=$sroffset"
-                val json = fetchString(url) ?: break
-                if (json.trimStart().startsWith("<")) break
-                try {
-                    val res = jsonParser.decodeFromString<WikiResponse>(json)
-                    val titles = res.query?.search?.map { it.title } ?: emptyList()
-                    if (titles.isEmpty()) break
-
-                    // 批量查询 imageinfo（每次最多 50 个标题）
-                    titles.chunked(50).forEach { chunk ->
-                        val titlesParam = chunk.joinToString("|") { URLEncoder.encode(it, "UTF-8") }
-                        val infoUrl = "$API_BASE_URL?action=query&titles=$titlesParam" +
-                                "&prop=imageinfo&iiprop=url|mime&format=json"
-                        val infoJson = fetchString(infoUrl) ?: return@forEach
-                        try {
-                            val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
-                            infoRes.query?.pages?.values?.forEach { page ->
-                                val info = page.imageinfo?.firstOrNull()
-                                if (info?.url != null) {
-                                    val isAudio = info.mime?.startsWith("audio/") == true
-                                            || info.url.endsWith(".wav") || info.url.endsWith(".mp3")
-                                    if (!audioOnly || isAudio) {
-                                        val name = page.title.replace(Regex("^(File:|文件:)"), "")
-                                        result.putIfAbsent(name, info.url)
-                                    }
-                                }
+                        // 批量查询 imageinfo，各 chunk 并发发出
+                        val chunkResults = titles.chunked(50).map { chunk ->
+                            async {
+                                val titlesParam = chunk.joinToString("|") { URLEncoder.encode(it, "UTF-8") }
+                                val infoUrl = "$API_BASE_URL?action=query&titles=$titlesParam" +
+                                        "&prop=imageinfo&iiprop=url|mime&format=json"
+                                val infoJson = fetchString(infoUrl) ?: return@async emptyList<Pair<String, String>>()
+                                try {
+                                    val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
+                                    infoRes.query?.pages?.values?.mapNotNull { page ->
+                                        val info = page.imageinfo?.firstOrNull()
+                                        if (info?.url != null && matchesFilter(info.url, info.mime)) {
+                                            page.title.replace(filePrefixRegex, "") to info.url
+                                        } else null
+                                    } ?: emptyList()
+                                } catch (_: Exception) { emptyList() }
                             }
-                        } catch (_: Exception) {}
-                    }
+                        }.awaitAll()
 
-                    // sroffset 翻页
-                    val nextOffset = res.continuation?.get("sroffset")?.jsonPrimitive?.content?.toIntOrNull()
-                    if (nextOffset == null || nextOffset <= sroffset) break
-                    sroffset = nextOffset
-                } catch (_: Exception) { break }
-            } while (result.size < 1000)
-        }
+                        chunkResults.flatten().forEach { (name, url) -> partial.putIfAbsent(name, url) }
 
-        result.map { (name, url) -> name to url }
+                        val nextOffset = res.continuation?.get("sroffset")?.jsonPrimitive?.content?.toIntOrNull()
+                        if (nextOffset == null || nextOffset <= sroffset) break
+                        sroffset = nextOffset
+                    } catch (_: Exception) { break }
+                } while (partial.size < 1000)
+                partial
+            }
+        )
+
+        // 路径1优先，路径2补充未命中的条目
+        val merged = LinkedHashMap<String, String>(path1)
+        path2.forEach { (name, url) -> merged.putIfAbsent(name, url) }
+        merged.map { (name, url) -> name to url }
     }
     suspend fun fetchFilesInCategory(category: String, audioOnly: Boolean = true): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         getCategoryFilesDetail(category, audioOnly)
@@ -296,7 +311,7 @@ object WikiEngine {
                     var safeName = sanitizeFileName(name)
                     // MediaWiki 文件名通常自带扩展名；若缺失则从 URL 中提取
                     if (!safeName.contains('.')) {
-                        val ext = url.substringAfterLast('.', "").substringBefore('?')
+                        val ext = url.substringBefore('?').substringAfterLast('.', "")
                             .lowercase().takeIf { it.isNotEmpty() }
                         if (ext != null) safeName += ".$ext"
                     }
@@ -323,68 +338,58 @@ object WikiEngine {
         val encoded = URLEncoder.encode(keyword, "UTF-8")
         val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=14&format=json&srlimit=200"
 
-        var retryCount = 0
-        var resultList: List<CharacterGroup> = emptyList()
-
-        while (retryCount < 3) {
+        repeat(3) { attempt ->
             try {
-                val request = Request.Builder().url(url).build()
-                val responseString = client.newCall(request).execute().use { response ->
+                val responseString = client.newCall(Request.Builder().url(url).build()).execute().use { response ->
                     if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
                     response.body.string()
                 }
 
-                // HTML 检测
-                if (responseString.trimStart().startsWith("<")) {
-                    throw IOException("Blocked by WAF")
-                }
+                if (responseString.trimStart().startsWith("<")) throw IOException("Blocked by WAF")
 
                 val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title }
                     ?: emptyList()
-                // voiceOnly 模式下只保留"语音"分类，否则全量传入
                 val filteredList = if (voiceOnly) rawList.filter { it.endsWith("语音") } else rawList
-
-                resultList = groupCategories(filteredList, voiceOnly)
-                if (resultList.isNotEmpty()) break
+                val result = groupCategories(filteredList, voiceOnly)
+                if (result.isNotEmpty()) return@withContext result
 
             } catch (_: Exception) {
-                retryCount++
-                Thread.sleep(1000L + Random.nextLong(2000))
+                if (attempt < 2) Thread.sleep(1000L + Random.nextLong(2000))
             }
         }
 
-        return@withContext resultList
+        return@withContext emptyList()
     }
 
     /**
-     * 2. 扫描指定分类的所有子分类 (展开树)
+     * 2. 扫描指定分类的所有子分类 (展开树)，按层并发发出请求
      */
     suspend fun scanCategoryTree(rootCategory: String): List<String> = withContext(Dispatchers.IO) {
-        val foundCategories = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
-        val queue = ArrayDeque<String>()
-        queue.add(rootCategory)
+        val found = ConcurrentHashMap.newKeySet<String>()
+        found.add(rootCategory)
+        var currentLayer = listOf(rootCategory)
 
-        while (queue.isNotEmpty()) {
-            val current = queue.removeFirst()
-            if (!foundCategories.add(current)) continue
-
-            // 获取子分类
-            getCategoryMembers(current, 14).forEach {
-                if (!foundCategories.contains(it)) queue.add(it)
-            }
+        while (currentLayer.isNotEmpty()) {
+            // 当前层所有节点并发查子分类
+            val nextLayer = currentLayer.map { cat ->
+                async { getCategoryMembers(cat, 14) }
+            }.awaitAll().flatten().filter { found.add(it) } // add() 返回 false 说明已访问，过滤掉
+            currentLayer = nextLayer
         }
-        // 主分类排在前面
-        val list = foundCategories.toMutableList()
+
+        val list = found.toMutableList()
         list.sort()
-        // 简单把主分类提出来放第一个(如果存在)
         if (list.remove(rootCategory)) list.add(0, rootCategory)
-        return@withContext list
+        list
     }
 
     // === 内部工具函数 ===
 
+    private val categoryPrefixRegex = Regex("^(Category:|分类:)")
+    private val filePrefixRegex = Regex("^(File:|文件:)")
+
     private fun groupCategories(rawList: List<String>, voiceOnly: Boolean = true): List<CharacterGroup> {
-        val cleanMap = rawList.associateWith { it.replace(Regex("^(Category:|分类:)"), "") }
+        val cleanMap = rawList.associateWith { it.replace(categoryPrefixRegex, "") }
         val sortedItems = cleanMap.entries.sortedBy { it.value.length }
         val groups = mutableListOf<CharacterGroup>()
         val assigned = mutableSetOf<String>()
@@ -392,27 +397,26 @@ object WikiEngine {
         for ((originalName, cleanName) in sortedItems) {
             if (assigned.contains(originalName)) continue
 
-            // voiceOnly 模式：coreName = 去掉"语音"后缀；通用模式：coreName = 整个 cleanName
             val coreName = if (voiceOnly) cleanName.removeSuffix("语音") else cleanName
             if (coreName.isBlank()) continue
 
             val familyMembers = if (voiceOnly) {
-                // 原有逻辑：只归并以 coreName 开头且以"语音"结尾的分类
                 rawList.filter { raw ->
                     val cl = cleanMap[raw]!!
                     cl.startsWith(coreName) && cl.endsWith("语音")
                 }
             } else {
-                // 通用模式：归并所有以 coreName 开头的分类（不限制后缀）
                 rawList.filter { raw -> cleanMap[raw]!!.startsWith(coreName) }
             }
 
-            // 优先从角色名缓存表中找到与 coreName 完全匹配或最接近前缀匹配的真实名称
+            // 优先从角色名缓存表中精确匹配，再做前缀匹配（O(1) 精确 + O(n) 前缀兜底）
             val resolvedName = if (characterNameCache.isNotEmpty()) {
-                characterNameCache.firstOrNull { it == coreName }
-                    ?: characterNameCache.firstOrNull { coreName.startsWith(it) }
-                    ?: characterNameCache.firstOrNull { it.startsWith(coreName) }
-                    ?: coreName
+                when {
+                    characterNameCache.contains(coreName) -> coreName
+                    else -> characterNameCache.firstOrNull { coreName.startsWith(it) }
+                        ?: characterNameCache.firstOrNull { it.startsWith(coreName) }
+                        ?: coreName
+                }
             } else {
                 coreName
             }
@@ -423,15 +427,21 @@ object WikiEngine {
         return groups.sortedBy { it.characterName }
     }
 
-    private suspend fun getCategoryMembers(category: String, namespace: Int): List<String> {
+    /**
+     * 通用翻页帮助：持续调用 categorymembers API 直到无更多数据，收集所有 title。
+     */
+    private suspend fun fetchPagedCategoryMembers(
+        category: String,
+        namespace: Int,
+        cmtype: String  // "subcat" | "file" | "page"
+    ): List<String> {
         val list = mutableListOf<String>()
         val encoded = URLEncoder.encode(category, "UTF-8")
         var token: String? = null
         do {
-            val typeArg = if (namespace == 14) "&cmtype=subcat" else "&cmtype=file"
             val cArg = if (token != null) "&cmcontinue=$token" else ""
-            val url =
-                "$API_BASE_URL?action=query&list=categorymembers&cmtitle=$encoded&cmnamespace=$namespace$typeArg&format=json&cmlimit=500$cArg"
+            val url = "$API_BASE_URL?action=query&list=categorymembers&cmtitle=$encoded" +
+                    "&cmnamespace=$namespace&cmtype=$cmtype&format=json&cmlimit=500$cArg"
             val json = fetchString(url) ?: break
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
@@ -443,6 +453,13 @@ object WikiEngine {
         } while (token != null)
         return list
     }
+
+    private suspend fun getCategoryMembers(category: String, namespace: Int): List<String> =
+        fetchPagedCategoryMembers(category, namespace, if (namespace == 14) "subcat" else "file")
+
+    // 获取指定分类下的所有页面标题（namespace=0，即主命名空间的角色页）
+    private suspend fun getCharacterNames(categoryName: String): List<String> =
+        fetchPagedCategoryMembers(categoryName, 0, "page")
 
     private suspend fun getCategoryFilesDetail(category: String, audioOnly: Boolean = true): List<Pair<String, String>> {
         val list = mutableListOf<Pair<String, String>>()
@@ -458,11 +475,12 @@ object WikiEngine {
                 res.query?.pages?.values?.forEach { p ->
                     val i = p.imageinfo?.firstOrNull()
                     if (i?.url != null) {
+                        val cleanUrl = i.url.substringBefore('?')
                         val isAudio = i.mime?.startsWith("audio/") == true
-                                || i.url.endsWith(".wav")
-                                || i.url.endsWith(".mp3")
+                                || cleanUrl.endsWith(".wav")
+                                || cleanUrl.endsWith(".mp3")
                         if (!audioOnly || isAudio) {
-                            list.add(p.title.replace(Regex("^(File:|文件:)"), "") to i.url)
+                            list.add(p.title.replace(filePrefixRegex, "") to i.url)
                         }
                     }
                 }
@@ -474,43 +492,30 @@ object WikiEngine {
         return list
     }
 
-    // 获取指定分类下的所有页面标题（namespace=0，即主命名空间的角色页）
-    private suspend fun getCharacterNames(categoryName: String): List<String> {
-        val list = mutableListOf<String>()
-        val encoded = URLEncoder.encode(categoryName, "UTF-8")
-        var token: String? = null
-        do {
-            val cArg = if (token != null) "&cmcontinue=$token" else ""
-            val url =
-                "$API_BASE_URL?action=query&list=categorymembers&cmtitle=$encoded&cmnamespace=0&cmtype=page&format=json&cmlimit=500$cArg"
-            val json = fetchString(url) ?: break
-            try {
-                val res = jsonParser.decodeFromString<WikiResponse>(json)
-                res.query?.categorymembers?.forEach { list.add(it.title) }
-                token = res.continuation?.get("cmcontinue")?.jsonPrimitive?.content
-            } catch (_: Exception) {
-                break
-            }
-        } while (token != null)
-        return list
-    }
-
-    // 获取所有角色名（合并两个分类，去重）
+    // 获取所有角色名（合并两个分类，去重，并行请求）
     suspend fun getAllCharacterNames(): List<String> = withContext(Dispatchers.IO) {
-        val result = mutableSetOf<String>()
-        result.addAll(getCharacterNames("Category:晶源体"))
-        result.addAll(getCharacterNames("Category:超弦体"))
-        result.sorted()
+        val (a, b) = awaitAll(
+            async { getCharacterNames("Category:晶源体") },
+            async { getCharacterNames("Category:超弦体") }
+        )
+        (a + b).toSortedSet().toList()
     }
 
     // 角色名缓存表（从晶源体/超弦体分类获取）
     private val characterNameCache = ConcurrentHashMap.newKeySet<String>()
+    private val characterNameCacheLoading = AtomicBoolean(false)
 
-    /** 预加载角色名缓存表，后续 groupCategories 和头像加载都依赖它 */
+    /** 预加载角色名缓存表，后续 groupCategories 和头像加载都依赖它。使用 AtomicBoolean 保证只发起一次请求。 */
     suspend fun preloadCharacterNames() = withContext(Dispatchers.IO) {
         if (characterNameCache.isNotEmpty()) return@withContext
-        val names = getAllCharacterNames()
-        characterNameCache.addAll(names)
+        if (!characterNameCacheLoading.compareAndSet(false, true)) return@withContext
+        try {
+            val names = getAllCharacterNames()
+            characterNameCache.addAll(names)
+        } finally {
+            // 若加载失败，重置标志位以允许下次重试
+            if (characterNameCache.isEmpty()) characterNameCacheLoading.set(false)
+        }
     }
 
     /** 判断某个名字是否在缓存表中；缓存表为空时返回 true（降级：未初始化时不拦截） */
@@ -547,5 +552,6 @@ object WikiEngine {
         }
     }
 
-    fun sanitizeFileName(name: String) = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim()
+    private val sanitizeRegex = Regex("[\\\\/:*?\"<>|]")
+    fun sanitizeFileName(name: String) = name.replace(sanitizeRegex, "_").trim()
 }
