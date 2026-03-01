@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import kotlinx.coroutines.launch
@@ -34,20 +33,18 @@ import io.github.composefluent.component.*
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
 import io.github.composefluent.icons.Icons
-import io.github.composefluent.icons.regular.AppsList
-import io.github.composefluent.icons.regular.Stop
-import io.github.composefluent.icons.regular.Play
-import ui.components.AudioPlayerManager
-import ui.components.ImagePreviewDialog
-import ui.components.isAudioFile
-import io.github.composefluent.icons.regular.CursorClick
 import io.github.composefluent.icons.regular.FolderOpen
+import io.github.composefluent.icons.regular.CursorClick
+import io.github.composefluent.icons.regular.TextBulletListLtr
+import ui.components.AudioPlayerManager
+import ui.components.EmptyPlaceholder
+import ui.components.FileListItem
+import ui.components.ImagePreviewDialog
+import ui.components.SubtleBox
 import io.github.composefluent.surface.Card
 import ui.components.CharacterAvatar
 import ui.components.FileSelectionDialog
-import ui.components.NetworkImage
 import ui.components.TerminalOutputView
-import ui.components.isImageFile
 import util.BIT_DEPTH_OPTIONS
 import util.SAMPLE_RATE_OPTIONS
 import util.bitDepthLabel
@@ -268,6 +265,18 @@ fun NewDownloaderContent() {
                 content = { Text("功能") },
                 items = {
                     MenuFlyoutItem(
+                        onClick = {
+                            val path = savePath.ifBlank { null }
+                            if (path != null) {
+                                val dir = java.io.File(path)
+                                if (dir.exists()) java.awt.Desktop.getDesktop().open(dir)
+                                else java.awt.Desktop.getDesktop().open(dir.parentFile ?: dir)
+                            }
+                        },
+                        text = { Text("打开保存路径") }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
                         onClick = { darkMode.value = !darkMode.value },
                         text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") }
                     )
@@ -351,18 +360,21 @@ fun NewDownloaderContent() {
                             checked = searchMode == SearchMode.VOICE_ONLY,
                             onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.VOICE_ONLY) },
                             position = SegmentedItemPosition.Start,
+                            modifier = Modifier.weight(1f),
                             text = { Text("仅语音", fontSize = 12.sp) }
                         )
                         SegmentedButton(
                             checked = searchMode == SearchMode.ALL_CATEGORIES,
                             onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES) },
                             position = SegmentedItemPosition.Center,
+                            modifier = Modifier.weight(1f),
                             text = { Text("全部分类", fontSize = 12.sp) }
                         )
                         SegmentedButton(
                             checked = searchMode == SearchMode.FILE_SEARCH,
                             onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.FILE_SEARCH) },
                             position = SegmentedItemPosition.End,
+                            modifier = Modifier.weight(1f),
                             text = { Text("文件搜索", fontSize = 12.sp) }
                         )
                     }
@@ -410,85 +422,29 @@ fun NewDownloaderContent() {
                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
                                             items(fileSearchResults) { (name, url) ->
-                                                val isSelected = url in fileSearchSelectedUrls
-                                                val canPreview = isImageFile(name, url)
-                                                val canPlay = isAudioFile(name, url)
-                                                val isPlaying = fileSearchPlayingUrl == url &&
-                                                    AudioPlayerManager.isPlaying(url)
-                                                val isThisLoading = fileSearchLoadingUrl == url
-                                                val isActive = isPlaying || isThisLoading
-
-
-                                                Row(
-                                                    Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .clickable { viewModel.toggleFileSearchSelection(url) }
-                                                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    CheckBox(
-                                                        checked = isSelected,
-                                                        onCheckStateChange = { viewModel.toggleFileSearchSelection(url) }
-                                                    )
-                                                    Spacer(Modifier.width(6.dp))
-                                                    if (canPreview) {
-                                                        NetworkImage(
-                                                            url = url,
-                                                            modifier = Modifier
-                                                                .size(36.dp)
-                                                                .clip(RoundedCornerShape(4.dp))
-                                                                .clickable {
-                                                                    fileSearchPreviewUrl = url
-                                                                    fileSearchPreviewName = name
-                                                                },
-                                                            contentScale = ContentScale.Crop,
-                                                            placeholder = {
-                                                                Box(
-                                                                    Modifier
-                                                                        .size(36.dp)
-                                                                        .background(FluentTheme.colors.control.secondary)
-                                                                )
-                                                            }
-                                                        )
-                                                        Spacer(Modifier.width(6.dp))
-                                                    }
-                                                    // 文件名
-                                                    Column(Modifier.weight(1f)) {
-                                                        Text(name, fontSize = 12.sp)
-                                                    }
-                                                    // 播放按钮
-                                                    if (canPlay) {
-                                                        Spacer(Modifier.width(4.dp))
-                                                        Button(
-                                                            iconOnly = true,
-                                                            onClick = {
-                                                                if (isActive) {
-                                                                    AudioPlayerManager.stop()
-                                                                    fileSearchPlayingUrl = null
-                                                                } else {
-                                                                    AudioPlayerManager.play(url)
-                                                                    fileSearchPlayingUrl = url
-                                                                }
-                                                            }
-                                                        ) {
-                                                            if (isThisLoading) {
-                                                                ProgressRing(size = 16.dp)
-                                                            } else {
-                                                                val icon = if (isActive) Icons.Regular.Stop else Icons.Regular.Play
-                                                                Image(
-                                                                    painter = rememberVectorPainter(icon),
-                                                                    contentDescription = if (isActive) "停止" else "播放",
-                                                                    colorFilter = ColorFilter.tint(
-                                                                        if (isActive) FluentTheme.colors.fillAccent.default
-                                                                        else FluentTheme.colors.text.text.primary
-                                                                    ),
-                                                                    modifier = Modifier.size(16.dp)
-                                                                )
-                                                            }
+                                                FileListItem(
+                                                    name = name,
+                                                    url = url,
+                                                    isSelected = url in fileSearchSelectedUrls,
+                                                    onToggle = { viewModel.toggleFileSearchSelection(url) },
+                                                    playingUrl = fileSearchPlayingUrl,
+                                                    loadingUrl = fileSearchLoadingUrl,
+                                                    onPlayToggle = { u, isActive ->
+                                                        if (isActive) {
+                                                            AudioPlayerManager.stop()
+                                                            fileSearchPlayingUrl = null
+                                                        } else {
+                                                            AudioPlayerManager.play(u)
+                                                            fileSearchPlayingUrl = u
                                                         }
-                                                    }
-                                                }
+                                                    },
+                                                    onImageClick = { u, n ->
+                                                        fileSearchPreviewUrl = u
+                                                        fileSearchPreviewName = n
+                                                    },
+                                                    thumbnailSize = 36.dp,
+                                                    fontSize = 12.sp
+                                                )
                                             }
                                         }
                                     }
@@ -562,18 +518,10 @@ fun NewDownloaderContent() {
                             }
                             Spacer(Modifier.height(12.dp))
                             if (fileSearchResults.isEmpty()) {
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Image(
-                                            painter = rememberVectorPainter(Icons.Regular.CursorClick),
-                                            contentDescription = null,
-                                            colorFilter = ColorFilter.tint(Color.Gray),
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Spacer(Modifier.height(8.dp))
-                                        Text("在左侧搜索文件", color = Color.Gray)
-                                    }
-                                }
+                                EmptyPlaceholder(
+                                    icon = Icons.Regular.CursorClick,
+                                    text = "在左侧搜索文件"
+                                )
                             } else {
                                 LazyColumn(Modifier.fillMaxSize().padding(4.dp)) {
                                     items(fileSearchResults.filter { it.second in fileSearchSelectedUrls }) { (name, _) ->
@@ -586,18 +534,10 @@ fun NewDownloaderContent() {
                                 }
                             }
                         } else if (selectedGroup == null) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Image(
-                                        painter = rememberVectorPainter(Icons.Regular.CursorClick),
-                                        contentDescription = null,
-                                        colorFilter = ColorFilter.tint(Color.Gray),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    Text("请从左侧选择一个角色", color = Color.Gray)
-                                }
-                            }
+                            EmptyPlaceholder(
+                                icon = Icons.Regular.CursorClick,
+                                text = "请从左侧选择一个角色"
+                            )
                         } else {
                             val group = selectedGroup!!
 
@@ -755,15 +695,11 @@ fun NewDownloaderContent() {
                             Spacer(Modifier.height(12.dp))
 
                             // 转换详情设置区域
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(FluentTheme.colors.control.secondary)
-                                    .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(4.dp))
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            SubtleBox(
+                                modifier = Modifier.fillMaxWidth(),
+                                padding = 12.dp
                             ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 // 非语音模式下的说明
                                 if (!isVoiceOnly) {
                                     Text(
@@ -830,7 +766,8 @@ fun NewDownloaderContent() {
                                         onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) }
                                     )
                                 }
-                            }
+                                } // Column
+                            } // SubtleBox
                         }
 
                         Spacer(Modifier.height(16.dp))
@@ -877,7 +814,7 @@ fun NewDownloaderContent() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
-                    painter = rememberVectorPainter(Icons.Regular.AppsList),
+                    painter = rememberVectorPainter(Icons.Regular.TextBulletListLtr),
                     contentDescription = null,
                     colorFilter = ColorFilter.tint(Color.Gray),
                     modifier = Modifier.size(14.dp)

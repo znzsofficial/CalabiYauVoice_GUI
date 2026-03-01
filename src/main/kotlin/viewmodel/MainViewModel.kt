@@ -86,7 +86,7 @@ class MainViewModel(
     // =========================================================
     // 下载状态
     // =========================================================
-    private val _savePath = MutableStateFlow("${System.getProperty("user.home")}\\角色语音")
+    private val _savePath = MutableStateFlow("${System.getProperty("user.home")}\\卡拉彼丘资源")
     val savePath: StateFlow<String> = _savePath.asStateFlow()
 
     private val _maxConcurrencyStr = MutableStateFlow("16")

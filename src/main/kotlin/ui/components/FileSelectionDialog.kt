@@ -7,15 +7,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,15 +25,10 @@ import io.github.composefluent.background.Mica
 import io.github.composefluent.component.*
 import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
-import io.github.composefluent.icons.regular.Play
-import io.github.composefluent.icons.regular.Stop
 import io.github.composefluent.icons.regular.Search
 import io.github.composefluent.lightColors
-import androidx.compose.ui.input.key.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
@@ -56,7 +49,6 @@ fun FileSelectionDialog(
     var previewImageName by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
-    // 注册播放结束 & 加载状态回调
     DisposableEffect(Unit) {
         val stoppedListener: (String) -> Unit = { url ->
             coroutineScope.launch(Dispatchers.Main) {
@@ -88,7 +80,6 @@ fun FileSelectionDialog(
         else files.filter { (name, _) -> name.contains(searchKeyword, ignoreCase = true) }
     }
 
-    // 图片预览弹窗
     if (previewImageUrl != null) {
         ImagePreviewDialog(
             url = previewImageUrl!!,
@@ -107,17 +98,12 @@ fun FileSelectionDialog(
         onKeyEvent = { keyEvent ->
             if (keyEvent.type != KeyEventType.KeyDown) return@DialogWindow false
             when {
-                // Escape → 关闭
                 keyEvent.key == Key.Escape -> {
-                    AudioPlayerManager.stop()
-                    onClose()
-                    true
+                    AudioPlayerManager.stop(); onClose(); true
                 }
-                // Enter → 确认选择
                 keyEvent.key == Key.Enter && !isLoading -> {
-                    val finalSelection = files.filter { selectedUrls.contains(it.second) }
                     AudioPlayerManager.stop()
-                    onConfirm(finalSelection)
+                    onConfirm(files.filter { selectedUrls.contains(it.second) })
                     true
                 }
                 else -> false
@@ -133,16 +119,13 @@ fun FileSelectionDialog(
                         .onPreviewKeyEvent { keyEvent ->
                             if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when {
-                                // Ctrl+A → 全选当前可见文件
                                 keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.A -> {
-                                    val newUrls = filteredFiles.map { it.second }
-                                    newUrls.forEach { if (!selectedUrls.contains(it)) selectedUrls.add(it) }
+                                    filteredFiles.map { it.second }
+                                        .forEach { if (!selectedUrls.contains(it)) selectedUrls.add(it) }
                                     true
                                 }
-                                // Ctrl+Shift+A → 清空选择
                                 keyEvent.isCtrlPressed && keyEvent.isShiftPressed && keyEvent.key == Key.A -> {
-                                    selectedUrls.clear()
-                                    true
+                                    selectedUrls.clear(); true
                                 }
                                 else -> false
                             }
@@ -151,38 +134,32 @@ fun FileSelectionDialog(
                     Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     Spacer(Modifier.height(12.dp))
 
+                    // 工具栏
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = {
-                            val newUrls = filteredFiles.map { it.second }
-                            newUrls.forEach { if (!selectedUrls.contains(it)) selectedUrls.add(it) }
+                            filteredFiles.map { it.second }
+                                .forEach { if (!selectedUrls.contains(it)) selectedUrls.add(it) }
                         }) { Text("全选可见") }
-
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = { selectedUrls.clear() }) { Text("清空") }
-
                         Spacer(Modifier.width(16.dp))
                         Text("选择后缀:", fontSize = 12.sp, color = Color.Gray)
                         Spacer(Modifier.width(4.dp))
-
                         listOf("CN", "JP", "EN").forEach { lang ->
-                            val targets = files.map { (name, url) -> name.uppercase() to url }
-                                .filter { (n, _) -> n.endsWith(lang) || n.contains("$lang.") }
+                            val targets = files
+                                .filter { (n, _) -> n.uppercase().let { it.endsWith(lang) || it.contains("$lang.") } }
                                 .map { it.second }
                             val isChecked = targets.isNotEmpty() && targets.all { it in selectedUrls }
-
                             CheckBox(label = lang, checked = isChecked) { checked ->
-                                if (checked) {
-                                    val toAdd = targets.filterNot { it in selectedUrls }
-                                    selectedUrls.addAll(toAdd)
-                                } else {
-                                    selectedUrls.removeAll { it in targets }
-                                }
+                                if (checked) selectedUrls.addAll(targets.filterNot { it in selectedUrls })
+                                else selectedUrls.removeAll { it in targets }
                             }
                         }
                     }
 
                     Spacer(Modifier.height(8.dp))
 
+                    // 搜索框
                     TextField(
                         value = searchKeyword,
                         onValueChange = { searchKeyword = it },
@@ -196,124 +173,63 @@ fun FileSelectionDialog(
                                 colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
                                 modifier = Modifier.size(16.dp)
                             )
-                        },
+                        }
                     )
 
                     Spacer(Modifier.height(12.dp))
 
-                    Box(
-                        Modifier.weight(1f)
-                            .fillMaxWidth()
-                            .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(4.dp))
-                            .background(FluentTheme.colors.control.secondary)
-                    ) {
-                        if (isLoading) {
-                            Column(
-                                Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally
+                    // 文件列表
+                    SubtleBox(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        when {
+                            isLoading -> Column(
+                                Modifier.align(Alignment.Center),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 ProgressRing(size = 48.dp)
                                 Spacer(Modifier.height(8.dp))
                                 Text("正在加载列表...")
                             }
-                        } else if (filteredFiles.isEmpty()) {
-                            val emptyText = if (files.isEmpty()) "无文件" else "无搜索结果"
-                            Text(emptyText, modifier = Modifier.align(Alignment.Center), color = Color.Gray)
-                        } else {
-                            val listState = rememberLazyListState()
-                            val adapter = rememberScrollbarAdapter(listState)
-
-                            ScrollbarContainer(
-                                adapter = adapter,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(4.dp)
+                            filteredFiles.isEmpty() -> Text(
+                                if (files.isEmpty()) "无文件" else "无搜索结果",
+                                modifier = Modifier.align(Alignment.Center),
+                                color = Color.Gray
+                            )
+                            else -> {
+                                val listState = rememberLazyListState()
+                                ScrollbarContainer(
+                                    adapter = rememberScrollbarAdapter(listState),
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
-                                    items(filteredFiles) { (name, url) ->
-                                        val isSelected = selectedUrls.contains(url)
-                                        val canPreview = isImageFile(name, url)
-                                        val canPlay = isAudioFile(name, url)
-                                        val isPlaying = playingUrl == url && AudioPlayerManager.isPlaying(url)
-                                        val isThisLoading = loadingUrl == url
-                                        // 正在加载或正在播放时都显示 Stop 图标
-                                        val isActive = isPlaying || isThisLoading
-
-
-                                        Row(
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .clickable {
-                                                    if (isSelected) selectedUrls.remove(url) else selectedUrls.add(url)
-                                                }
-                                                .padding(vertical = 4.dp, horizontal = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            CheckBox(checked = isSelected, onCheckStateChange = {
-                                                if (it) selectedUrls.add(url) else selectedUrls.remove(url)
-                                            })
-                                            Spacer(Modifier.width(8.dp))
-
-                                            if (canPreview) {
-                                                NetworkImage(
-                                                    url = url,
-                                                    modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .clickable {
-                                                            previewImageUrl = url
-                                                            previewImageName = name
-                                                        },
-                                                    contentScale = ContentScale.Crop,
-                                                    placeholder = {
-                                                        Box(
-                                                            Modifier
-                                                                .size(36.dp)
-                                                                .background(FluentTheme.colors.control.secondary)
-                                                        )
-                                                    }
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-                                            }
-
-                                            // 文件名
-                                            Column(Modifier.weight(1f)) {
-                                                Text(name, fontSize = 13.sp)
-                                            }
-
-                                            // 播放按钮（图标）
-                                            if (canPlay) {
-                                                Spacer(Modifier.width(8.dp))
-                                                Button(
-                                                    iconOnly = true,
-                                                    onClick = {
-                                                        if (isActive) {
-                                                            AudioPlayerManager.stop()
-                                                            playingUrl = null
-                                                        } else {
-                                                            AudioPlayerManager.play(url)
-                                                            playingUrl = url
-                                                        }
-                                                    }
-                                                ) {
-                                                    if (isThisLoading) {
-                                                        ProgressRing(size = 16.dp)
+                                    LazyColumn(
+                                        state = listState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(4.dp)
+                                    ) {
+                                        items(filteredFiles) { (name, url) ->
+                                            FileListItem(
+                                                name = name,
+                                                url = url,
+                                                isSelected = selectedUrls.contains(url),
+                                                onToggle = {
+                                                    if (selectedUrls.contains(url)) selectedUrls.remove(url)
+                                                    else selectedUrls.add(url)
+                                                },
+                                                playingUrl = playingUrl,
+                                                loadingUrl = loadingUrl,
+                                                onPlayToggle = { u, isActive ->
+                                                    if (isActive) {
+                                                        AudioPlayerManager.stop()
+                                                        playingUrl = null
                                                     } else {
-                                                        val icon = if (isActive) Icons.Regular.Stop else Icons.Regular.Play
-                                                        Image(
-                                                            painter = rememberVectorPainter(icon),
-                                                            contentDescription = if (isActive) "停止" else "播放",
-                                                            colorFilter = ColorFilter.tint(
-                                                                if (isActive) FluentTheme.colors.fillAccent.default
-                                                                else FluentTheme.colors.text.text.primary
-                                                            ),
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
+                                                        AudioPlayerManager.play(u)
+                                                        playingUrl = u
                                                     }
+                                                },
+                                                onImageClick = { u, n ->
+                                                    previewImageUrl = u
+                                                    previewImageName = n
                                                 }
-                                            }
+                                            )
                                         }
                                     }
                                 }
@@ -323,6 +239,7 @@ fun FileSelectionDialog(
 
                     Spacer(Modifier.height(16.dp))
 
+                    // 底部操作栏
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Text(
                             "已选 ${selectedUrls.size} / ${files.size}",
@@ -330,22 +247,15 @@ fun FileSelectionDialog(
                             color = Color.Gray,
                             fontSize = 12.sp
                         )
-
-                        Button(onClick = {
-                            AudioPlayerManager.stop()
-                            onClose()
-                        }) { Text("取消") }
+                        Button(onClick = { AudioPlayerManager.stop(); onClose() }) { Text("取消") }
                         Spacer(Modifier.width(12.dp))
                         Button(
                             onClick = {
-                                val finalSelection = files.filter { selectedUrls.contains(it.second) }
                                 AudioPlayerManager.stop()
-                                onConfirm(finalSelection)
+                                onConfirm(files.filter { selectedUrls.contains(it.second) })
                             },
                             disabled = isLoading
-                        ) {
-                            Text("确认选择", fontWeight = FontWeight.Bold)
-                        }
+                        ) { Text("确认选择", fontWeight = FontWeight.Bold) }
                     }
                 }
             }

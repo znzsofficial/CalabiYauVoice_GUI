@@ -294,9 +294,11 @@ object WikiEngine {
                 semaphore.acquire()
                 try {
                     var safeName = sanitizeFileName(name)
-                    if (!safeName.contains(".")) {
-                        if (url.endsWith(".ogg")) safeName += ".ogg"
-                        else if (url.endsWith(".mp3")) safeName += ".mp3"
+                    // MediaWiki 文件名通常自带扩展名；若缺失则从 URL 中提取
+                    if (!safeName.contains('.')) {
+                        val ext = url.substringAfterLast('.', "").substringBefore('?')
+                            .lowercase().takeIf { it.isNotEmpty() }
+                        if (ext != null) safeName += ".$ext"
                     }
                     val targetFile = File(saveDir, safeName)
 
