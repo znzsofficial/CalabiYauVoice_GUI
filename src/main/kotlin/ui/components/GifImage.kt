@@ -6,99 +6,139 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import kotlinx.coroutines.delay
-import javax.imageio.ImageIO
-import javax.imageio.metadata.IIOMetadataNode
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
+import java.util.concurrent.ConcurrentHashMap
+import javax.imageio.ImageIO
+import javax.imageio.metadata.IIOMetadataNode
+
+// ---------------------------------------------------------------------------
+// 数据模型
+// ---------------------------------------------------------------------------
 
 /** GIF 的单帧数据 */
 private data class GifFrame(
     val bitmap: ImageBitmap,
-    val delayMs: Long   // 帧延迟，毫秒
+    val delayMs: Long       // 帧延迟，毫秒（最低 20ms）
 )
 
+// ---------------------------------------------------------------------------
+// 全局 GIF 帧解码缓存（IO 线程异步解码，按 ByteArray 标识去重）
+// ---------------------------------------------------------------------------
+
+private val gifFrameCache = ConcurrentHashMap<ByteArray, List<GifFrame>?>()
+
 /**
- * 解码 GIF 字节为帧列表。
- * 若只有一帧（或解码失败），返回 null（由调用方回退到普通 Image）。
+ * 在 IO 线程解码 GIF 所有帧并合成完整画面。
+ * - 单帧 GIF 返回 null，由调用方回退到静态图
+ * - 结果按 ByteArray 对象引用缓存（上层 ImageLoader 已保证同 URL 复用同一 ByteArray）
  */
-private fun decodeGifFrames(bytes: ByteArray): List<GifFrame>? {
-    val frames = mutableListOf<GifFrame>()
-    try {
-        val stream = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
-        val reader = ImageIO.getImageReadersByFormatName("gif").next() ?: return null
-        reader.input = stream
+private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
+    withContext(Dispatchers.IO) {
+        gifFrameCache[bytes]?.let { return@withContext it }
 
-        val frameCount = reader.getNumImages(true)
-        if (frameCount <= 1) return null   // 静态图，不需要动画路径
+        val result = runCatching {
+            val stream = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
+            val reader = ImageIO.getImageReadersByFormatName("gif").next()
+                ?: return@runCatching null
+            reader.input = stream
 
-        // 合成画布（GIF 帧可能比画布小，需要叠加前一帧）
-        var canvas: BufferedImage? = null
+            val frameCount = reader.getNumImages(true)
+            if (frameCount <= 1) return@runCatching null
 
-        for (i in 0 until frameCount) {
-            val frame = reader.read(i)
-            val meta = reader.getImageMetadata(i)
+            val frames = mutableListOf<GifFrame>()
+            var canvas: BufferedImage? = null
 
-            // 读取帧延迟和偏移
-            var delayCs = 10   // centiseconds (default 100ms)
-            var offsetX = 0
-            var offsetY = 0
-            var disposalMethod = "none"
+            for (i in 0 until frameCount) {
+                val frame = reader.read(i)
+                val meta = reader.getImageMetadata(i)
 
-            val formatName = meta.nativeMetadataFormatName
-            val root = meta.getAsTree(formatName) as? IIOMetadataNode
-            if (root != null) {
-                val gce = root.getElementsByTagName("GraphicControlExtension")
-                if (gce.length > 0) {
-                    val node = gce.item(0) as IIOMetadataNode
-                    delayCs = node.getAttribute("delayTime").toIntOrNull() ?: 10
-                    disposalMethod = node.getAttribute("disposalMethod") ?: "none"
+                var delayCs = 10
+                var offsetX = 0
+                var offsetY = 0
+                var disposalMethod = "none"
+
+                val root = meta.getAsTree(meta.nativeMetadataFormatName) as? IIOMetadataNode
+                if (root != null) {
+                    val gce = root.getElementsByTagName("GraphicControlExtension")
+                    if (gce.length > 0) {
+                        val node = gce.item(0) as IIOMetadataNode
+                        delayCs = node.getAttribute("delayTime").toIntOrNull() ?: 10
+                        disposalMethod = node.getAttribute("disposalMethod") ?: "none"
+                    }
+                    val iDesc = root.getElementsByTagName("ImageDescriptor")
+                    if (iDesc.length > 0) {
+                        val node = iDesc.item(0) as IIOMetadataNode
+                        offsetX = node.getAttribute("imageLeftPosition").toIntOrNull() ?: 0
+                        offsetY = node.getAttribute("imageTopPosition").toIntOrNull() ?: 0
+                    }
                 }
-                val iDesc = root.getElementsByTagName("ImageDescriptor")
-                if (iDesc.length > 0) {
-                    val node = iDesc.item(0) as IIOMetadataNode
-                    offsetX = node.getAttribute("imageLeftPosition").toIntOrNull() ?: 0
-                    offsetY = node.getAttribute("imageTopPosition").toIntOrNull() ?: 0
+
+                val delayMs = maxOf(delayCs * 10L, 20L)
+
+                if (canvas == null) {
+                    canvas = BufferedImage(reader.getWidth(0), reader.getHeight(0), BufferedImage.TYPE_INT_ARGB)
+                }
+
+                val g = canvas.createGraphics()
+                g.drawImage(frame, offsetX, offsetY, null)
+                g.dispose()
+
+                frames.add(GifFrame(canvas.toComposeImageBitmap(), delayMs))
+
+                if (disposalMethod == "restoreToBackgroundColor") {
+                    val g2 = canvas.createGraphics()
+                    g2.clearRect(offsetX, offsetY, frame.width, frame.height)
+                    g2.dispose()
                 }
             }
 
-            val delayMs = maxOf(delayCs * 10L, 20L)  // 最低 20ms
+            reader.dispose()
+            stream.close()
+            frames.takeIf { it.isNotEmpty() }
+        }.getOrNull()
 
-            // 初始化画布大小
-            if (canvas == null) {
-                val width = reader.getWidth(0)
-                val height = reader.getHeight(0)
-                canvas = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
-            }
+        gifFrameCache[bytes] = result
+        result
+    }
 
-            // 将当前帧绘制到合成画布
-            val g = canvas.createGraphics()
-            g.drawImage(frame, offsetX, offsetY, null)
-            g.dispose()
+// ---------------------------------------------------------------------------
+// 全局 GIF 动画调度器
+// 所有 AnimatedGifImage 实例共用一个协程 tick，避免 N 个独立 delay 协程堆积。
+// ---------------------------------------------------------------------------
 
-            // 转换为 Compose ImageBitmap
-            val bitmap = canvas.toComposeImageBitmap()
-            frames.add(GifFrame(bitmap, delayMs))
+private object GifAnimationClock {
+    // 当前全局时间戳（毫秒），每 ~16ms 更新一次（≈60fps 上限）
+    private val _tickMs = MutableStateFlow(System.currentTimeMillis())
+    val tickMs: StateFlow<Long> = _tickMs.asStateFlow()
 
-            // 处置方法：restoreToBackgroundColor → 清除当前帧区域
-            if (disposalMethod == "restoreToBackgroundColor") {
-                val g2 = canvas.createGraphics()
-                g2.clearRect(offsetX, offsetY, frame.width, frame.height)
-                g2.dispose()
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    init {
+        scope.launch {
+            while (true) {
+                delay(16L)
+                _tickMs.value = System.currentTimeMillis()
             }
         }
-        reader.dispose()
-        stream.close()
-    } catch (_: Exception) {
-        return null
     }
-    return frames.takeIf { it.isNotEmpty() }
 }
+
+// ---------------------------------------------------------------------------
+// Composable
+// ---------------------------------------------------------------------------
 
 /**
  * 带动画的 GIF 显示组件。
- * - 自动解码帧并按帧延迟循环播放
- * - 若 [bytes] 为 null 或解码失败，显示 [placeholder]
+ * - 在 IO 线程异步解码帧，不阻塞主线程
+ * - 所有实例共用全局时钟驱动帧切换，无额外协程开销
+ * - 若解码失败或为单帧 GIF，显示 [placeholder]
  */
 @Composable
 fun AnimatedGifImage(
@@ -108,51 +148,61 @@ fun AnimatedGifImage(
     contentScale: ContentScale = ContentScale.Fit,
     placeholder: @Composable (() -> Unit)? = null
 ) {
-    val frames = remember(bytes) {
-        if (bytes != null) decodeGifFrames(bytes) else null
+    // 异步解码：loading=true 时先显示占位符
+    val frames by produceState<List<GifFrame>?>(initialValue = null, bytes) {
+        value = if (bytes != null) decodeGifFramesAsync(bytes) else null
     }
 
-    if (frames == null || frames.isEmpty()) {
+    if (frames == null || frames!!.isEmpty()) {
         placeholder?.invoke()
         return
     }
 
-    var currentFrameIndex by remember { mutableStateOf(0) }
+    val frameList = frames!!
 
-    LaunchedEffect(frames) {
-        while (true) {
-            delay(frames[currentFrameIndex].delayMs)
-            currentFrameIndex = (currentFrameIndex + 1) % frames.size
+    // 用全局 tick 驱动帧索引（不再需要每个 GIF 独立 delay）
+    val tickMs by GifAnimationClock.tickMs.collectAsState()
+    val frameIndex by remember(frameList) {
+        // 计算累计帧时间边界，用于从全局时间戳定位当前帧
+        val totalMs = frameList.sumOf { it.delayMs }
+        val boundaries = buildList {
+            var acc = 0L
+            for (f in frameList) { acc += f.delayMs; add(acc) }
+        }
+        // 返回一个派生 State，根据 tickMs 计算帧索引
+        derivedStateOf {
+            if (totalMs == 0L) return@derivedStateOf 0
+            val pos = tickMs % totalMs
+            boundaries.indexOfFirst { pos < it }.takeIf { it >= 0 } ?: 0
         }
     }
 
-    val currentBitmap = frames[currentFrameIndex].bitmap
+    val currentBitmap = frameList[frameIndex].bitmap
 
     Canvas(modifier = modifier) {
-        val bitmapWidth = currentBitmap.width.toFloat()
-        val bitmapHeight = currentBitmap.height.toFloat()
-        val canvasWidth = size.width
-        val canvasHeight = size.height
+        val bw = currentBitmap.width.toFloat()
+        val bh = currentBitmap.height.toFloat()
+        val cw = size.width
+        val ch = size.height
 
         val scale = when (contentScale) {
-            ContentScale.Crop -> maxOf(canvasWidth / bitmapWidth, canvasHeight / bitmapHeight)
-            ContentScale.FillBounds -> 1f // handled below with explicit dst
-            ContentScale.FillWidth -> canvasWidth / bitmapWidth
-            ContentScale.FillHeight -> canvasHeight / bitmapHeight
-            ContentScale.Inside -> minOf(1f, minOf(canvasWidth / bitmapWidth, canvasHeight / bitmapHeight))
-            else -> minOf(canvasWidth / bitmapWidth, canvasHeight / bitmapHeight) // ContentScale.Fit
+            ContentScale.Crop    -> maxOf(cw / bw, ch / bh)
+            ContentScale.FillBounds -> 1f
+            ContentScale.FillWidth  -> cw / bw
+            ContentScale.FillHeight -> ch / bh
+            ContentScale.Inside  -> minOf(1f, minOf(cw / bw, ch / bh))
+            else                 -> minOf(cw / bw, ch / bh) // Fit
         }
 
-        val scaledW = if (contentScale == ContentScale.FillBounds) canvasWidth else bitmapWidth * scale
-        val scaledH = if (contentScale == ContentScale.FillBounds) canvasHeight else bitmapHeight * scale
-        val dx = (canvasWidth - scaledW) / 2f
-        val dy = (canvasHeight - scaledH) / 2f
+        val scaledW = if (contentScale == ContentScale.FillBounds) cw else bw * scale
+        val scaledH = if (contentScale == ContentScale.FillBounds) ch else bh * scale
+        val dx = (cw - scaledW) / 2f
+        val dy = (ch - scaledH) / 2f
 
         drawImage(
             image = currentBitmap,
-            dstOffset = androidx.compose.ui.unit.IntOffset(dx.toInt(), dy.toInt()),
-            dstSize = androidx.compose.ui.unit.IntSize(scaledW.toInt(), scaledH.toInt())
+            dstOffset = IntOffset(dx.toInt(), dy.toInt()),
+            dstSize = IntSize(scaledW.toInt(), scaledH.toInt())
         )
     }
 }
-
