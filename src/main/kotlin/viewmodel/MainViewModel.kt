@@ -143,9 +143,6 @@ class MainViewModel(
     // =========================================================
     init {
         scope.launch {
-            addLog("正在加载角色数据...")
-            WikiEngine.preloadCharacterNames()
-            addLog("角色数据加载完成。")
             performSearch()
         }
     }
@@ -181,7 +178,6 @@ class MainViewModel(
                         addLog("正在搜索文件: $keyword …")
                         val results = WikiEngine.searchFiles(keyword, audioOnly = false)
                         _fileSearchResults.value = results
-                        // 默认全选
                         _fileSearchSelectedUrls.value = results.map { it.second }.toSet()
                         addLog("搜索完成，找到 ${results.size} 个文件。")
                     }
