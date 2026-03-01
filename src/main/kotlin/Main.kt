@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -97,6 +98,11 @@ fun main() = application {
                     frameState = windowFrameState,
                     isDarkTheme = darkMode.value,
                     captionBarHeight = 48.dp,
+                    captionBarBackground = if (useAcrylic) null else remember(darkMode.value) {
+                        SolidColor(
+                            if (darkMode.value) Color(0xff1A212C) else Color(0xffCCD7E8)
+                        )
+                    },
                 ) { windowInset, _ ->
                     // Modifier 组合只在 inset 变化时重算
                     val contentModifier = remember(windowFrameState.paddingInset, windowInset) {

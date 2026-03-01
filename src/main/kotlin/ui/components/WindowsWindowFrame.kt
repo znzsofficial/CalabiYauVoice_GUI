@@ -1,5 +1,6 @@
 package ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.MutableWindowInsets
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -116,6 +118,7 @@ fun FrameWindowScope.WindowsWindowFrame(
     frameState: WindowsWindowFrameState,
     isDarkTheme: Boolean,
     captionBarHeight: Dp = 48.dp,
+    captionBarBackground: Brush? = null,
     content: @Composable (windowInset: WindowInsets, captionBarInset: WindowInsets) -> Unit
 ) {
     val contentPaddingInset = remember { MutableWindowInsets() }
@@ -133,6 +136,7 @@ fun FrameWindowScope.WindowsWindowFrame(
             modifier = Modifier
                 .height(captionBarHeight)
                 .zIndex(10f)
+                .then(if (captionBarBackground != null) Modifier.background(captionBarBackground) else Modifier)
                 .onGloballyPositioned { frameState.updateCaptionBarRect(it.boundsInWindow()) }
         ) {
             Spacer(modifier = Modifier.width(16.dp))
@@ -163,4 +167,3 @@ fun FrameWindowScope.WindowsWindowFrame(
         }
     }
 }
-

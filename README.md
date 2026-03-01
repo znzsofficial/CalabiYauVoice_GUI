@@ -27,19 +27,21 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 
 - **🔍 Smart Search:** Search character categories (voice-only or all resource types), or switch to file search mode (namespace 6).
 - **⚡ Concurrent Downloads:** Scan category trees and download files with built-in concurrency control.
-- **🖼️ Rich Preview:** Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF` (frame-by-frame animation, no extra library required).
+- **🖼️ Rich Preview:** Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`. Click to enlarge, scroll to zoom.
 - **🎵 Audio Playback:** In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files directly from search results.
 - **🔄 MP3 → WAV Conversion:** Batch-convert downloaded MP3 files to WAV with configurable sample rate and bit depth.
-- **🎛️ Windows Backdrop:** Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles.
-- **🕰️ Legacy Support:** Traditional HTML-based downloader retained as an optional fallback.
+- **⌨️ Keyboard Shortcuts:** `Ctrl+F` focus search, `F5` re-search, `Ctrl+D` download, `Ctrl+A` / `Ctrl+Shift+A` select all / deselect, `↑↓` navigate list, and more.
+- **🎛️ Windows Backdrop:** Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles at runtime.
+- **🪟 Custom Title Bar:** Borderless native window with custom caption buttons and drag-to-move support.
+- **🖥️ Compatibility:** Gracefully falls back on non-Windows-11 devices.
 
 ### 🛠️ Tech Stack
 
 - **Core:** Kotlin, Coroutines
 - **UI:** Compose Desktop, [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler)
 - **Network & Data:** OkHttp, kotlinx.serialization
-- **Audio:** `javax.sound.sampled` (WAV/OGG/FLAC), [mp3spi](https://github.com/robingarbo/mp3spi) (MP3)
-- **Image:** `javax.imageio.ImageIO` (GIF frame decoding, no Coil needed)
+- **Audio:** `javax.sound.sampled` (WAV/OGG/FLAC), `mp3spi` (MP3)
+- **Image:** `javax.imageio.ImageIO` (GIF frame decoding)
 
 ---
 
@@ -49,19 +51,21 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 
 - **🔍 智能搜索：** 支持分类搜索（仅语音 / 所有类型），也可切换为文件搜索模式（命名空间 6）。
 - **⚡ 并发下载：** 扫描分类树并并发下载文件，内置完善的并发控制。
-- **🖼️ 丰富预览：** 支持 `PNG`、`JPG`、`WebP` 静态图实时预览，以及 `GIF` 逐帧动画播放（无需额外依赖）。
+- **🖼️ 丰富预览：** 支持 `PNG`、`JPG`、`WebP` 静态图与 `GIF` 逐帧动画预览。点击放大，滚轮缩放。
 - **🎵 音频播放：** 可直接在搜索结果中播放 `WAV`、`OGG`、`FLAC` 及 `MP3` 格式音频。
 - **🔄 MP3 转 WAV：** 下载后批量将 MP3 转换为 WAV，支持自定义采样率与位深。
-- **🎛️ 窗口特效：** 支持在 Mica、Tabbed、Acrylic、Aero 等 Windows 11 背景特效之间切换。
-- **🕰️ 旧版支持：** 保留传统 HTML 下载器作为可选备用方案。
+- **⌨️ 键盘快捷键：** `Ctrl+F` 聚焦搜索，`F5` 重新搜索，`Ctrl+D` 开始下载，`Ctrl+A` / `Ctrl+Shift+A` 全选 / 取消全选，`↑↓` 导航列表，以及更多。
+- **🎛️ 窗口特效：** 运行时动态切换 Mica、Tabbed、Acrylic、Aero 等 Windows 11 背景特效。
+- **🪟 自定义标题栏：** 无边框原生窗口，自定义标题栏按钮，支持拖拽移动。
+- **🖥️ 兼容性：** 非 Windows 11 设备自动降级，标题栏背景跟随主题色保证可读性。
 
 ### 🛠️ 技术栈
 
 - **核心：** Kotlin、协程 (Coroutines)
 - **UI 框架：** Compose Desktop、[Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler)
 - **网络与数据：** OkHttp、kotlinx.serialization
-- **音频：** `javax.sound.sampled`（WAV/OGG/FLAC）、[mp3spi](https://github.com/robingarbo/mp3spi)（MP3）
-- **图像：** `javax.imageio.ImageIO`（GIF 多帧解码动画，无需 Coil）
+- **音频：** `javax.sound.sampled`（WAV/OGG/FLAC）、`mp3spi`(MP3）
+- **图像：** `javax.imageio.ImageIO`（GIF 多帧解码动画）
 
 ---
 
@@ -94,7 +98,6 @@ You can build and run the application via Gradle.
 ## ⚠️ Notes / 注意事项
 
 - 📡 **API Dependency:** The app depends on Bilibili wiki endpoints; availability may vary depending on network conditions. / 本应用依赖于 Bilibili Wiki 的 API 接口，可用性可能受网络环境影响。
-- 👁️ **GIF Animation:** Animated GIFs are decoded frame-by-frame using the JVM built-in `javax.imageio`, no additional library needed. / 动态 GIF 使用 JVM 内置的 `javax.imageio` 逐帧解码，无需额外依赖。
 
 ## 📄 License
 
