@@ -6,8 +6,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
-import java.net.URLEncoder
 
 /**
  * MediaWiki API 用户信息查询。
@@ -41,12 +41,93 @@ object WikiUserApi {
         @SerialName("registrationdate") val registrationDate: String = "",
         val email: String = "",
         @SerialName("realname") val realName: String = "",
-        @SerialName("anon") val isAnon: Boolean = false
+        @SerialName("anon") val anon: JsonElement? = null
     ) {
+        val isAnon: Boolean get() = anon != null
         val isLoggedIn: Boolean get() = id != 0 && !isAnon
-        /** 显示名：优先真实姓名，否则用户名 */
-        val displayName: String get() = realName.takeIf { it.isNotBlank() } ?: name
     }
+
+    // ───── 公开用户信息（任意用户）────────────────────────────────
+
+    @Serializable
+    data class PublicUsersResponse(
+        val query: PublicUsersQuery? = null
+    )
+
+    @Serializable
+    data class PublicUsersQuery(
+        val users: List<PublicUserInfo>? = null
+    )
+
+    /**
+     * MediaWiki 对不存在的用户返回 `"missing":""` 或 `"invalid":""`（值为空字符串，不是 boolean）。
+     * 用 [JsonElement] 存储，再由 [exists] 推断。
+     */
+    @Serializable
+    data class PublicUserInfo(
+        val userid: Int = 0,
+        val name: String = "",
+        val groups: List<String> = emptyList(),
+        @SerialName("editcount") val editCount: Int = 0,
+        @SerialName("registration") val registrationDate: String = "",
+        // MediaWiki 给缺失/无效用户发送空字符串值的这两个 key
+        val missing: JsonElement? = null,
+        val invalid: JsonElement? = null
+    ) {
+        val exists: Boolean get() = missing == null && invalid == null && userid != 0
+    }
+
+    // ───── 文件列表（任意用户上传的文件）────────────────────────────
+
+    @Serializable
+    data class UserFilesResponse(
+        val query: UserFilesQuery? = null,
+        @SerialName("continue") val continuation: Map<String, JsonElement>? = null
+    )
+
+    @Serializable
+    data class UserFilesQuery(
+        val allimages: List<UserFile>? = null
+    )
+
+    @Serializable
+    data class UserFile(
+        val name: String = "",
+        val title: String = "",
+        val timestamp: String = "",
+        val url: String = "",
+        val size: Long = 0,
+        val mime: String = ""
+    )
+
+
+    // ───── 封禁状态 ──────────────────────────────────────────────────
+
+    @Serializable
+    data class BlocksResponse(
+        val query: BlocksQuery? = null
+    )
+
+    @Serializable
+    data class BlocksQuery(
+        val blocks: List<BlockInfo>? = null
+    )
+
+    @Serializable
+    data class BlockInfo(
+        val id: Long = 0,
+        val user: String = "",
+        val by: String = "",
+        val timestamp: String = "",
+        val expiry: String = "",
+        val reason: String = "",
+        // MediaWiki 将这些标志位发送为 "" 而非 true
+        @SerialName("anononly") val anonOnly: JsonElement? = null,
+        @SerialName("nocreate") val noCreate: JsonElement? = null,
+        @SerialName("autoblock") val autoBlock: JsonElement? = null,
+        @SerialName("noemail") val noEmail: JsonElement? = null,
+        @SerialName("nousertalk") val noUserTalk: JsonElement? = null
+    )
 
     // ───── 用户贡献 ──────────────────────────────────────────────────
 
@@ -70,9 +151,13 @@ object WikiUserApi {
         val comment: String = "",
         val size: Int = 0,
         @SerialName("sizediff") val sizeDiff: Int = 0,
-        val minor: Boolean = false,
-        val top: Boolean = false
-    )
+        // MediaWiki 将这些标志位发送为 "" 而非 true，使用 JsonElement? 避免反序列化失败
+        val minor: JsonElement? = null,
+        val top: JsonElement? = null
+    ) {
+        val isMinor: Boolean get() = minor != null
+        val isTop: Boolean get() = top != null
+    }
 
     // ───── 监视列表 ──────────────────────────────────────────────────
 
@@ -91,14 +176,17 @@ object WikiUserApi {
     data class WatchlistItem(
         val title: String = "",
         val timestamp: String = "",
-        val type: String = "",          // "edit" | "new" | "log" | "categorize"
+        val type: String = "",
         val comment: String = "",
         val user: String = "",
         @SerialName("revid") val revId: Long = 0,
         @SerialName("pageid") val pageId: Long = 0,
-        val minor: Boolean = false,
-        @SerialName("anon") val isAnon: Boolean = false
-    )
+        val minor: JsonElement? = null,
+        val anon: JsonElement? = null
+    ) {
+        val isMinor: Boolean get() = minor != null
+        val isAnon: Boolean get() = anon != null
+    }
 
     // ───── 操作日志 ──────────────────────────────────────────────────
 
@@ -132,71 +220,142 @@ object WikiUserApi {
 
     /**
      * 获取当前已登录用户的详细信息（需要有效 Cookie）。
-     * 返回 null 表示请求失败；[UserInfo.isLoggedIn] == false 表示未登录。
      */
     suspend fun fetchCurrentUserInfo(): UserInfo? = withContext(Dispatchers.IO) {
-        val url = "$API?action=query&meta=userinfo" +
-                "&uiprop=groups|rights|editcount|registrationdate|email|realname&format=json"
+        val url = buildUrl(
+            "action" to "query", "meta" to "userinfo",
+            "uiprop" to "groups|rights|editcount|registrationdate|email|realname",
+            "format" to "json"
+        )
         val resp = fetchString(url) ?: return@withContext null
-        if (resp.trimStart().startsWith("<")) return@withContext null
+        runCatching { json.decodeFromString<UserInfoResponse>(resp).query?.userinfo }.getOrNull()
+    }
+
+    /**
+     * 获取指定用户的最近编辑贡献（最多 [limit] 条）。
+     */
+    suspend fun fetchContributions(userName: String, limit: Int = 50): List<UserContrib> = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            "action" to "query", "list" to "usercontribs", "ucuser" to userName,
+            "ucprop" to "ids|title|timestamp|comment|size|sizediff|flags",
+            "uclimit" to "$limit", "format" to "json"
+        )
+        val resp = fetchString(url) ?: return@withContext emptyList()
+        runCatching { json.decodeFromString<ContributionsResponse>(resp).query?.usercontribs ?: emptyList() }
+            .getOrElse { emptyList() }
+    }
+
+    /**
+     * 获取当前用户的监视列表最近变更（需要已登录 Cookie）。
+     */
+    suspend fun fetchWatchlist(limit: Int = 50): List<WatchlistItem> = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            "action" to "query", "list" to "watchlist",
+            "wlprop" to "ids|title|type|user|comment|timestamp|flags",
+            "wllimit" to "$limit", "format" to "json"
+        )
+        val resp = fetchString(url) ?: return@withContext emptyList()
+        runCatching { json.decodeFromString<WatchlistResponse>(resp).query?.watchlist ?: emptyList() }
+            .getOrElse { emptyList() }
+    }
+
+    /**
+     * 获取指定用户的操作日志（上传/删除/保护/封禁等）。
+     */
+    suspend fun fetchUserLogEvents(userName: String, limit: Int = 50): List<LogEvent> = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            "action" to "query", "list" to "logevents", "leuser" to userName,
+            "leprop" to "ids|title|type|user|comment|timestamp",
+            "lelimit" to "$limit", "format" to "json"
+        )
+        val resp = fetchString(url) ?: return@withContext emptyList()
+        runCatching { json.decodeFromString<LogEventsResponse>(resp).query?.logevents ?: emptyList() }
+            .getOrElse { emptyList() }
+    }
+
+    /**
+     * 通过用户 ID（即该 Wiki 上以数字为用户名的账号）查询用户的公开信息。
+     * 该 Wiki 的用户名本身就是数字字符串，直接用 ususers= 查询。
+     */
+    suspend fun fetchPublicUserInfo(userId: String): PublicUserInfo? = withContext(Dispatchers.IO) {
+        val id = userId.trim().trimStart('#')
+        if (id.isBlank()) return@withContext null
+        val url = buildUrl(
+            "action" to "query",
+            "list" to "users",
+            "ususers" to id,
+            "usprop" to "groups|editcount|registration",
+            "format" to "json"
+        )
+        val resp = fetchString(url) ?: return@withContext null
         runCatching {
-            json.decodeFromString<UserInfoResponse>(resp).query?.userinfo
+            json.decodeFromString<PublicUsersResponse>(resp).query?.users?.firstOrNull()
         }.getOrNull()
     }
 
     /**
-     * 获取当前用户的最近编辑贡献（最多 [limit] 条，默认 50）。
+     * 获取指定用户上传的文件列表（通过 list=allimages 按上传者筛选）。
      */
-    suspend fun fetchContributions(
-        userName: String,
-        limit: Int = 50
-    ): List<UserContrib> = withContext(Dispatchers.IO) {
-        val encoded = URLEncoder.encode(userName, "UTF-8")
-        val url = "$API?action=query&list=usercontribs&ucuser=$encoded" +
-                "&ucprop=ids|title|timestamp|comment|size|sizediff|flags" +
-                "&uclimit=$limit&format=json"
+    suspend fun fetchUserFiles(userName: String, limit: Int = 50): List<UserFile> = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            "action" to "query", "list" to "allimages", "aiuser" to userName,
+            "aiprop" to "timestamp|url|size|mime",
+            "ailimit" to "$limit", "aisort" to "timestamp", "aidir" to "descending",
+            "format" to "json"
+        )
         val resp = fetchString(url) ?: return@withContext emptyList()
-        if (resp.trimStart().startsWith("<")) return@withContext emptyList()
-        runCatching {
-            json.decodeFromString<ContributionsResponse>(resp).query?.usercontribs ?: emptyList()
-        }.getOrElse { emptyList() }
+        runCatching { json.decodeFromString<UserFilesResponse>(resp).query?.allimages ?: emptyList() }
+            .getOrElse { emptyList() }
+    }
+
+
+
+    /**
+     * 查询指定用户名的封禁状态，未被封禁时返回 null。
+     */
+    suspend fun fetchBlockStatus(userName: String): BlockInfo? = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            "action" to "query", "list" to "blocks", "bkusers" to userName,
+            "bkprop" to "id|user|by|timestamp|expiry|reason|flags",
+            "format" to "json"
+        )
+        val resp = fetchString(url) ?: return@withContext null
+        runCatching { json.decodeFromString<BlocksResponse>(resp).query?.blocks?.firstOrNull() }.getOrNull()
     }
 
     /**
-     * 获取当前用户的监视列表最近变更（需要已登录 Cookie，最多 [limit] 条）。
+     * 获取指定用户最近一次编辑的时间戳，无编辑记录时返回 null。
      */
-    suspend fun fetchWatchlist(limit: Int = 50): List<WatchlistItem> = withContext(Dispatchers.IO) {
-        val url = "$API?action=query&list=watchlist" +
-                "&wlprop=ids|title|type|user|comment|timestamp|flags" +
-                "&wllimit=$limit&format=json"
-        val resp = fetchString(url) ?: return@withContext emptyList()
-        if (resp.trimStart().startsWith("<")) return@withContext emptyList()
+    suspend fun fetchLastEditTimestamp(userName: String): String? = withContext(Dispatchers.IO) {
+        val url = buildUrl(
+            "action" to "query", "list" to "usercontribs", "ucuser" to userName,
+            "ucprop" to "timestamp", "uclimit" to "1", "format" to "json"
+        )
+        val resp = fetchString(url) ?: return@withContext null
         runCatching {
-            json.decodeFromString<WatchlistResponse>(resp).query?.watchlist ?: emptyList()
-        }.getOrElse { emptyList() }
-    }
-
-    /**
-     * 获取当前用户的操作日志（上传/删除/保护/封禁等，最多 [limit] 条）。
-     */
-    suspend fun fetchUserLogEvents(userName: String, limit: Int = 50): List<LogEvent> = withContext(Dispatchers.IO) {
-        val encoded = URLEncoder.encode(userName, "UTF-8")
-        val url = "$API?action=query&list=logevents&leuser=$encoded" +
-                "&leprop=ids|title|type|user|comment|timestamp" +
-                "&lelimit=$limit&format=json"
-        val resp = fetchString(url) ?: return@withContext emptyList()
-        if (resp.trimStart().startsWith("<")) return@withContext emptyList()
-        runCatching {
-            json.decodeFromString<LogEventsResponse>(resp).query?.logevents ?: emptyList()
-        }.getOrElse { emptyList() }
+            json.decodeFromString<ContributionsResponse>(resp).query?.usercontribs?.firstOrNull()?.timestamp
+        }.getOrNull()
     }
 
     // ───── 内部工具 ──────────────────────────────────────────────────
 
+    /**
+     * 使用 [okhttp3.HttpUrl.Builder] 构造 API 请求，确保所有参数正确编码（包括 `|` 分隔符）。
+     * params 中的 vararg 格式为 "key" to "value"。
+     */
+    private fun buildUrl(vararg params: Pair<String, String>): String {
+        val builder = API.toHttpUrlOrNull()?.newBuilder() ?: return ""
+        params.forEach { (k, v) -> builder.addQueryParameter(k, v) }
+        return builder.build().toString()
+    }
+
     private fun fetchString(url: String): String? {
         return runCatching {
             WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
-                .use { if (it.isSuccessful) it.body.string() else null }
+                .use { resp ->
+                    val body = resp.body.string()
+                    if (body.trimStart().startsWith("<") || !resp.isSuccessful) null else body
+                }
         }.getOrNull()
     }
 
