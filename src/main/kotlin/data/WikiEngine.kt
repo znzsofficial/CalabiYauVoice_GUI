@@ -13,14 +13,15 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.JavaNetCookieJar
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
-import java.net.CookieManager
-import java.net.CookiePolicy
 import java.net.URLEncoder
+import java.util.concurrent.CopyOnWriteArrayList
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
@@ -91,12 +92,41 @@ object WikiEngine {
         )
     )
 
+    // 可注入 Cookie 的 CookieJar 实现
+    private val cookieStore = ConcurrentHashMap<String, CopyOnWriteArrayList<Cookie>>()
+    private val cookieJar = object : CookieJar {
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            val key = url.host
+            val list = cookieStore.getOrPut(key) { CopyOnWriteArrayList() }
+            // 更新或追加
+            cookies.forEach { newCookie ->
+                list.removeIf { it.name == newCookie.name && it.path == newCookie.path }
+                list.add(newCookie)
+            }
+        }
+
+        override fun loadForRequest(url: HttpUrl): List<Cookie> {
+            return cookieStore[url.host]?.filter { it.matches(url) } ?: emptyList()
+        }
+    }
+
+    /**
+     * 向指定域的 CookieJar 注入 Cookie 列表。
+     * 由 WikiCookieManager 调用，外部请勿直接调用。
+     */
+    fun injectCookies(url: HttpUrl, cookies: List<Cookie>) {
+        val key = url.host
+        val list = cookieStore.getOrPut(key) { CopyOnWriteArrayList() }
+        // 先移除同名 Cookie，再追加
+        cookies.forEach { newCookie ->
+            list.removeIf { it.name == newCookie.name }
+        }
+        list.addAll(cookies)
+    }
+
     // 暴露给外部的 Client
     val client: OkHttpClient = OkHttpClient.Builder()
-        // 自动管理 Cookie
-        .cookieJar(JavaNetCookieJar(CookieManager().apply {
-            setCookiePolicy(CookiePolicy.ACCEPT_ALL)
-        }))
+        .cookieJar(cookieJar)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)

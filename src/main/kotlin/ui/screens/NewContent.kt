@@ -177,11 +177,15 @@ fun NewDownloaderContent() {
     val performSearch = viewModel::performSearch
     var showDialog by remember { mutableStateOf(false) }
     var showShortcutsDialog by remember { mutableStateOf(false) }
+    var showUserInfoDialog by remember { mutableStateOf(false) }
     if (showDialog) {
         AboutWindow(onCloseRequest = { showDialog = false })
     }
     if (showShortcutsDialog) {
         KeyboardShortcutsDialog(onClose = { showShortcutsDialog = false })
+    }
+    if (showUserInfoDialog) {
+        UserInfoWindow(onCloseRequest = { showUserInfoDialog = false })
     }
 
     // 搜索框焦点控制
@@ -316,6 +320,11 @@ fun NewDownloaderContent() {
             MenuBarItem(
                 content = { Text("关于") },
                 items = {
+                    MenuFlyoutItem(
+                        onClick = { showUserInfoDialog = true },
+                        text = { Text("用户信息") }
+                    )
+                    MenuFlyoutSeparator()
                     MenuFlyoutItem(
                         onClick = { showDialog = true },
                         text = { Text("关于") }
