@@ -21,14 +21,20 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindow
-import androidx.compose.ui.window.rememberDialogState
+import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.launch
 import com.mayakapps.compose.windowstyler.WindowBackdrop
+import com.mayakapps.compose.windowstyler.WindowStyle
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
-import io.github.composefluent.background.Mica
+import io.github.composefluent.background.Layer
 import io.github.composefluent.component.*
+import jna.windows.structure.isWindows11OrLater
+import ui.components.WindowsWindowFrame
+import ui.components.rememberWindowsWindowFrameState
+import util.findSkiaLayer
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
 import io.github.composefluent.icons.Icons
@@ -151,12 +157,14 @@ fun NewDownloaderContent() {
                 "Transparent" to WindowBackdrop.Transparent,
                 "默认" to null,
             )
+
             canUseNonWin11Backdrop -> listOf(
                 "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
                 "Aero" to WindowBackdrop.Aero,
                 "Transparent" to WindowBackdrop.Transparent,
                 "默认" to null,
             )
+
             else -> emptyList()
         }
     }
@@ -306,7 +314,7 @@ fun NewDownloaderContent() {
                             text = {
                                 val current = backdropType.value
                                 val isCurrent = if (backdrop == null) current == null
-                                                else current != null && current::class == backdrop::class
+                                else current != null && current::class == backdrop::class
                                 Text(
                                     text = "窗口效果：$label",
                                     fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
@@ -533,7 +541,9 @@ fun NewDownloaderContent() {
                                 )
                             } else {
                                 LazyColumn(Modifier.fillMaxSize().padding(4.dp)) {
-                                    items(fileSearchResults.filter { it.second in fileSearchSelectedUrls }, key = { it.second }) { (name, _) ->
+                                    items(
+                                        fileSearchResults.filter { it.second in fileSearchSelectedUrls },
+                                        key = { it.second }) { (name, _) ->
                                         Text(
                                             name,
                                             fontSize = 13.sp,
@@ -586,7 +596,8 @@ fun NewDownloaderContent() {
                                 } else {
                                     Box(Modifier.fillMaxSize()) {
                                         val catListState = rememberLazyListState()
-                                        val catAdapter = androidx.compose.foundation.rememberScrollbarAdapter(catListState)
+                                        val catAdapter =
+                                            androidx.compose.foundation.rememberScrollbarAdapter(catListState)
                                         ScrollbarContainer(
                                             adapter = catAdapter,
                                             modifier = Modifier.fillMaxSize()
@@ -773,8 +784,8 @@ fun NewDownloaderContent() {
                                             onCheckStateChange = { viewModel.onMergeWavChange(it) },
                                             textBefore = true,
                                             text = if (!mergeWav) ""
-                                                   else if (mergeWavMaxCountStr == "0" || mergeWavMaxCountStr.isEmpty()) "全部合并"
-                                                   else "每 $mergeWavMaxCountStr 个/组"
+                                            else if (mergeWavMaxCountStr == "0" || mergeWavMaxCountStr.isEmpty()) "全部合并"
+                                            else "每 $mergeWavMaxCountStr 个/组"
                                         )
                                     }
                                 }
@@ -831,7 +842,12 @@ fun NewDownloaderContent() {
                     Text("运行日志", color = FluentTheme.colors.text.text.secondary, fontSize = 12.sp)
                     Spacer(Modifier.weight(1f))
                     if (progressText.isNotEmpty()) {
-                        Text(progressText, color = Color(0xFF61AFEF), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        Text(
+                            progressText,
+                            color = Color(0xFF61AFEF),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
                     }
                 }
 
@@ -852,102 +868,133 @@ fun NewDownloaderContent() {
     }
 }
 
-@OptIn(ExperimentalFluentApi::class)
+@OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
-    val darkMode = LocalAppStore.current.darkMode.value
-    DialogWindow(
+    val darkModeState = LocalAppStore.current.darkMode
+    val windowState = rememberWindowState(width = 480.dp, height = 440.dp, position = WindowPosition(Alignment.Center))
+
+    Window(
         onCloseRequest = onClose,
         title = "键盘快捷键",
-        state = rememberDialogState(width = 480.dp, height = 440.dp),
+        state = windowState,
+        resizable = false,
         onKeyEvent = { keyEvent ->
             if (keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown) {
                 onClose(); true
             } else false
         }
     ) {
-        FluentTheme(
-            colors = if (darkMode) darkColors() else lightColors(),
-            useAcrylicPopup = true
-        ) {
-            Mica(modifier = Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().padding(24.dp)) {
-                    Text("键盘快捷键", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Spacer(Modifier.height(16.dp))
+        val darkMode = darkModeState.value
+        val windowFrameState = rememberWindowsWindowFrameState(window)
+        val skiaLayerExists = remember { window.findSkiaLayer() != null }
+        val isWin11 = remember { isWindows11OrLater() }
 
-                    val shortcuts = listOf(
-                        "Ctrl + F" to "聚焦搜索框",
-                        "Enter" to "执行搜索（搜索框聚焦时）",
-                        "F5" to "重新搜索",
-                        "Ctrl + D" to "开始下载",
-                        "Ctrl + A" to "全选分类 / 全选文件",
-                        "Ctrl + Shift + A" to "取消全选",
-                        "Ctrl + T" to "切换深色 / 浅色主题",
-                        "Ctrl + 1" to "切换至「仅语音」模式",
-                        "Ctrl + 2" to "切换至「全部分类」模式",
-                        "Ctrl + 3" to "切换至「文件搜索」模式",
-                        "↑ / ↓" to "在角色列表中上下导航",
-                        "" to "",
-                        "文件列表弹窗：" to "",
-                        "Ctrl + A" to "全选可见文件",
-                        "Ctrl + Shift + A" to "清空选择",
-                        "Enter" to "确认选择",
-                        "Esc" to "关闭弹窗",
-                    )
+        if (skiaLayerExists && isWin11) {
+            LaunchedEffect(Unit) { window.findSkiaLayer()?.transparency = true }
+            WindowStyle(isDarkTheme = darkMode, backdropType = WindowBackdrop.Tabbed)
+        }
 
-                    val listState = rememberLazyListState()
-                    LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                        items(shortcuts) { (key, desc) ->
-                            if (key.isEmpty()) {
-                                Spacer(Modifier.height(8.dp))
-                            } else if (desc.isEmpty()) {
-                                // Section header
-                                Text(
-                                    key,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp,
-                                    color = FluentTheme.colors.text.text.secondary,
-                                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
-                                )
-                            } else {
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
+        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
+            WindowsWindowFrame(
+                title = "键盘快捷键",
+                onCloseRequest = onClose,
+                state = windowState,
+                frameState = windowFrameState,
+                isDarkTheme = darkMode,
+                captionBarHeight = 36.dp
+            ) { windowInset, _ ->
+                Layer(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(windowFrameState.paddingInset)
+                        .windowInsetsPadding(windowInset),
+                    color = Color.Transparent,
+                    contentColor = FluentTheme.colors.text.text.primary,
+                    border = null,
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(24.dp)
+                    ) {
+                        Text("键盘快捷键", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Spacer(Modifier.height(16.dp))
+
+                        val shortcuts = listOf(
+                            "Ctrl + F" to "聚焦搜索框",
+                            "Enter" to "执行搜索（搜索框聚焦时）",
+                            "F5" to "重新搜索",
+                            "Ctrl + D" to "开始下载",
+                            "Ctrl + A" to "全选分类 / 全选文件",
+                            "Ctrl + Shift + A" to "取消全选",
+                            "Ctrl + T" to "切换深色 / 浅色主题",
+                            "Ctrl + 1" to "切换至「仅语音」模式",
+                            "Ctrl + 2" to "切换至「全部分类」模式",
+                            "Ctrl + 3" to "切换至「文件搜索」模式",
+                            "↑ / ↓" to "在角色列表中上下导航",
+                            "" to "",
+                            "文件列表弹窗：" to "",
+                            "Ctrl + A" to "全选可见文件",
+                            "Ctrl + Shift + A" to "清空选择",
+                            "Enter" to "确认选择",
+                            "Esc" to "关闭弹窗",
+                        )
+
+                        val listState = rememberLazyListState()
+                        LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                            items(shortcuts) { (key, desc) ->
+                                if (key.isEmpty()) {
+                                    Spacer(Modifier.height(8.dp))
+                                } else if (desc.isEmpty()) {
+                                    // Section header
+                                    Text(
+                                        key,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = FluentTheme.colors.text.text.secondary,
+                                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                                    )
+                                } else {
+                                    Row(
                                         Modifier
-                                            .background(
-                                                FluentTheme.colors.control.secondary,
-                                                RoundedCornerShape(4.dp)
-                                            )
-                                            .border(
-                                                1.dp,
-                                                FluentTheme.colors.stroke.card.default,
-                                                RoundedCornerShape(4.dp)
-                                            )
-                                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                                            .widthIn(min = 160.dp),
-                                        contentAlignment = Alignment.CenterStart
+                                            .fillMaxWidth()
+                                            .padding(vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            key,
-                                            fontSize = 12.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                        Box(
+                                            Modifier
+                                                .background(
+                                                    FluentTheme.colors.control.secondary,
+                                                    RoundedCornerShape(4.dp)
+                                                )
+                                                .border(
+                                                    1.dp,
+                                                    FluentTheme.colors.stroke.card.default,
+                                                    RoundedCornerShape(4.dp)
+                                                )
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                                .widthIn(min = 160.dp),
+                                            contentAlignment = Alignment.CenterStart
+                                        ) {
+                                            Text(
+                                                key,
+                                                fontSize = 12.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(desc, fontSize = 13.sp)
                                     }
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(desc, fontSize = 13.sp)
                                 }
                             }
                         }
-                    }
 
-                    Spacer(Modifier.height(16.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button(onClick = onClose) { Text("关闭") }
+                        Spacer(Modifier.height(16.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            Button(onClick = onClose) { Text("关闭") }
+                        }
                     }
                 }
             }

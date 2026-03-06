@@ -1,6 +1,5 @@
 package ui.screens
 
-import LocalAppStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -19,87 +18,24 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowPosition
-import androidx.compose.ui.window.rememberWindowState
-import com.mayakapps.compose.windowstyler.WindowBackdrop
-import com.mayakapps.compose.windowstyler.WindowStyle
 import data.WikiUserApi
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
-import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.PeopleError
 import io.github.composefluent.icons.regular.Person
 import io.github.composefluent.icons.regular.Search
-import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
-import jna.windows.structure.isWindows11OrLater
-import ui.components.WindowsWindowFrame
-import ui.components.rememberWindowsWindowFrameState
-import util.findSkiaLayer
 import viewmodel.LogSortOrder
 import viewmodel.LookupDetailTab
 import viewmodel.UserInfoTab
 import viewmodel.UserInfoViewModel
 
-@OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
-@Composable
-fun UserInfoWindow(onCloseRequest: () -> Unit) {
-    val darkModeState = LocalAppStore.current.darkMode
-    val windowState = rememberWindowState(
-        width = 800.dp,
-        height = 700.dp,
-        position = WindowPosition(Alignment.Center)
-    )
-
-    Window(
-        onCloseRequest = onCloseRequest,
-        title = "用户信息",
-        state = windowState,
-        onKeyEvent = { keyEvent ->
-            if (keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown) {
-                onCloseRequest(); true
-            } else false
-        }
-    ) {
-        val darkMode = darkModeState.value
-        val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerExists = remember { window.findSkiaLayer() != null }
-        val isWin11 = remember { isWindows11OrLater() }
-
-        if (skiaLayerExists && isWin11) {
-            LaunchedEffect(Unit) { window.findSkiaLayer()?.transparency = true }
-            WindowStyle(isDarkTheme = darkMode, backdropType = WindowBackdrop.Tabbed)
-        }
-
-        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
-            WindowsWindowFrame(
-                title = "用户信息",
-                onCloseRequest = onCloseRequest,
-                state = windowState,
-                frameState = windowFrameState,
-                isDarkTheme = darkMode,
-                captionBarHeight = 36.dp
-            ) { windowInset, _ ->
-                val coroutineScope = rememberCoroutineScope()
-                val viewModel = remember { UserInfoViewModel(coroutineScope) }
-
-                UserInfoContent(
-                    viewModel = viewModel,
-                    modifier = Modifier
-                        .windowInsetsPadding(windowFrameState.paddingInset)
-                        .windowInsetsPadding(windowInset)
-                )
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-private fun UserInfoContent(
+fun UserInfoContent(
     viewModel: UserInfoViewModel,
     modifier: Modifier = Modifier
 ) {
@@ -340,6 +276,7 @@ private fun UserInfoContent(
                             ContribItem(contrib)
                         }
                     }
+
                     UserInfoTab.WATCHLIST -> ListTabContent(
                         isLoading = isLoadingWatch,
                         isEmpty = watchlist.isEmpty(),
@@ -350,6 +287,7 @@ private fun UserInfoContent(
                             WatchlistItem(item)
                         }
                     }
+
                     UserInfoTab.LOG -> LogTabContent(
                         isLoading = isLoadingLog,
                         logEvents = logEvents,
@@ -406,12 +344,16 @@ private fun BlockBanner(blockStatus: WikiUserApi.BlockInfo, iconSize: Int = 18, 
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.PeopleError, contentDescription = null,
-            modifier = Modifier.size(iconSize.dp), tint = Color(0xFFE57373))
+        Icon(
+            Icons.Default.PeopleError, contentDescription = null,
+            modifier = Modifier.size(iconSize.dp), tint = Color(0xFFE57373)
+        )
         Spacer(Modifier.width(8.dp))
         Column {
-            Text("该账号已被封禁", fontWeight = FontWeight.SemiBold,
-                fontSize = titleSize.sp, color = Color(0xFFE57373))
+            Text(
+                "该账号已被封禁", fontWeight = FontWeight.SemiBold,
+                fontSize = titleSize.sp, color = Color(0xFFE57373)
+            )
             Text(
                 buildString {
                     append("封禁者：${blockStatus.by}")
@@ -439,7 +381,11 @@ private fun InfoTabContent(
     val listState = rememberLazyListState()
     val adapter = rememberScrollbarAdapter(listState)
     ScrollbarContainer(adapter = adapter, modifier = Modifier.fillMaxSize()) {
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             // 封禁状态警告（如被封禁）
             if (blockStatus != null) {
                 item { BlockBanner(blockStatus) }
@@ -451,7 +397,9 @@ private fun InfoTabContent(
                     InfoRow("用户 ID", info.id.toString())
                     if (info.email.isNotBlank()) InfoRow("邮箱", info.email)
                     if (info.realName.isNotBlank()) InfoRow("真实姓名", info.realName)
-                    InfoRow("注册时间", WikiUserApi.formatTimestamp(info.registrationDate).takeIf { it != "-" } ?: "未知")
+                    InfoRow(
+                        "注册时间",
+                        WikiUserApi.formatTimestamp(info.registrationDate).takeIf { it != "-" } ?: "未知")
                     InfoRow("编辑次数", info.editCount.toString())
                     InfoRow(
                         "最后编辑",
@@ -480,9 +428,11 @@ private fun InfoTabContent(
             }
             // 特殊权限
             val notableRights = info.rights.filter {
-                it in setOf("upload", "delete", "undelete", "protect", "block",
+                it in setOf(
+                    "upload", "delete", "undelete", "protect", "block",
                     "rollback", "patrol", "siteadmin", "editinterface", "oversight",
-                    "import", "move", "apihighlimits")
+                    "import", "move", "apihighlimits"
+                )
             }
             if (notableRights.isNotEmpty()) {
                 item {
@@ -502,8 +452,10 @@ private fun InfoTabContent(
 private fun InfoSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                color = FluentTheme.colors.text.text.secondary)
+            Text(
+                title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                color = FluentTheme.colors.text.text.secondary
+            )
             Spacer(Modifier.height(8.dp))
             content()
         }
@@ -542,6 +494,7 @@ private fun ListTabContent(
         isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             ProgressRing(size = 36.dp)
         }
+
         isEmpty -> {
             Column(
                 Modifier.fillMaxSize(),
@@ -553,6 +506,7 @@ private fun ListTabContent(
                 Button(onClick = onRefresh) { Text("刷新") }
             }
         }
+
         else -> {
             val listState = rememberLazyListState()
             val adapter = rememberScrollbarAdapter(listState)
@@ -814,6 +768,7 @@ private fun LogTabContent(
             isLoading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 ProgressRing(size = 36.dp)
             }
+
             logEvents.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("暂无操作日志", color = FluentTheme.colors.text.text.secondary, fontSize = 14.sp)
@@ -821,6 +776,7 @@ private fun LogTabContent(
                     Button(onClick = onRefresh) { Text("刷新") }
                 }
             }
+
             else -> {
                 val listState = rememberLazyListState()
                 val adapter = rememberScrollbarAdapter(listState)
@@ -875,8 +831,10 @@ private fun PublicUserInfoCard(
                     .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.7f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Person, contentDescription = null,
-                    modifier = Modifier.size(20.dp), tint = Color.White)
+                Icon(
+                    Icons.Default.Person, contentDescription = null,
+                    modifier = Modifier.size(20.dp), tint = Color.White
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -887,8 +845,10 @@ private fun PublicUserInfoCard(
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("编辑次数", fontSize = 10.sp, color = FluentTheme.colors.text.text.secondary)
-                Text(user.editCount.toString(), fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
-                    color = FluentTheme.colors.fillAccent.default)
+                Text(
+                    user.editCount.toString(), fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+                    color = FluentTheme.colors.fillAccent.default
+                )
             }
         }
         // 详情芯片行
@@ -904,8 +864,10 @@ private fun PublicUserInfoCard(
                     else -> WikiUserApi.formatTimestamp(lastEdit)
                 }
             )
-            InfoChip(label = "封禁状态", value = if (blockStatus == null) "正常" else "已封禁",
-                valueColor = if (blockStatus == null) null else Color(0xFFE57373))
+            InfoChip(
+                label = "封禁状态", value = if (blockStatus == null) "正常" else "已封禁",
+                valueColor = if (blockStatus == null) null else Color(0xFFE57373)
+            )
         }
         // 详情子 Tab
         val detailTabs = listOf(
@@ -948,9 +910,11 @@ private fun PublicUserInfoCard(
                                         Modifier.fillMaxWidth().padding(vertical = 3.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(groupLabel(group), fontSize = 12.sp,
+                                        Text(
+                                            groupLabel(group), fontSize = 12.sp,
                                             modifier = Modifier.width(100.dp),
-                                            color = FluentTheme.colors.text.text.secondary)
+                                            color = FluentTheme.colors.text.text.secondary
+                                        )
                                         Text(group, fontSize = 12.sp)
                                     }
                                 }
@@ -962,6 +926,7 @@ private fun PublicUserInfoCard(
                         }
                     }
                 }
+
                 LookupDetailTab.FILES -> LookupListTab(
                     isLoading = isLoadingFiles,
                     isEmpty = files.isEmpty(),
@@ -970,6 +935,7 @@ private fun PublicUserInfoCard(
                 ) {
                     items(files) { UserFileItem(it) }
                 }
+
                 LookupDetailTab.LOG -> LookupListTab(
                     isLoading = isLoadingLog,
                     isEmpty = logEvents.isEmpty(),
@@ -996,6 +962,7 @@ private fun LookupListTab(
         isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             ProgressRing(size = 28.dp)
         }
+
         isEmpty -> Column(
             Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1005,6 +972,7 @@ private fun LookupListTab(
             Spacer(Modifier.height(6.dp))
             Button(onClick = onRefresh, modifier = Modifier.height(26.dp)) { Text("加载", fontSize = 11.sp) }
         }
+
         else -> {
             val listState = rememberLazyListState()
             val adapter = rememberScrollbarAdapter(listState)
@@ -1097,8 +1065,10 @@ private fun InfoChip(label: String, value: String, valueColor: Color? = null) {
             .padding(horizontal = 10.dp, vertical = 6.dp)
     ) {
         Text(label, fontSize = 10.sp, color = FluentTheme.colors.text.text.secondary)
-        Text(value, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-            color = valueColor ?: FluentTheme.colors.text.text.primary)
+        Text(
+            value, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            color = valueColor ?: FluentTheme.colors.text.text.primary
+        )
     }
 }
 
