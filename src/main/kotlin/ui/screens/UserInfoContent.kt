@@ -26,6 +26,13 @@ import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.PeopleError
 import io.github.composefluent.icons.regular.Person
 import io.github.composefluent.icons.regular.Search
+import io.github.composefluent.icons.regular.Info
+import io.github.composefluent.icons.regular.Edit
+import io.github.composefluent.icons.regular.History
+import io.github.composefluent.icons.regular.DataUsage
+import io.github.composefluent.icons.regular.DocumentBulletList
+import io.github.composefluent.icons.regular.EyeTracking
+import io.github.composefluent.icons.regular.Image
 import io.github.composefluent.surface.Card
 import viewmodel.LogSortOrder
 import viewmodel.LookupDetailTab
@@ -237,28 +244,31 @@ fun UserInfoContent(
 
         // ── Tab 切换 ───────────────────────────────────────────────
         if (info != null && info.isLoggedIn) {
-            val tabs = listOf(
-                UserInfoTab.INFO to "基本信息",
-                UserInfoTab.CONTRIBUTIONS to "编辑贡献",
-                UserInfoTab.WATCHLIST to "监视列表",
-                UserInfoTab.LOG to "操作日志"
-            )
-            val tabCount = tabs.size
-            SegmentedControl(modifier = Modifier.fillMaxWidth()) {
-                tabs.forEachIndexed { index, (tab, label) ->
-                    val pos = when (index) {
-                        0 -> SegmentedItemPosition.Start
-                        tabCount - 1 -> SegmentedItemPosition.End
-                        else -> SegmentedItemPosition.Center
-                    }
-                    SegmentedButton(
-                        checked = currentTab == tab,
-                        onCheckedChanged = { viewModel.onTabSelected(tab) },
-                        position = pos,
-                        modifier = Modifier.weight(1f),
-                        text = { Text(label, fontSize = 13.sp) }
-                    )
-                }
+            SelectorBar {
+                SelectorBarItem(
+                    selected = currentTab == UserInfoTab.INFO,
+                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.INFO) },
+                    text = { Text("基本信息") },
+                    icon = { Icon(Icons.Regular.Info, contentDescription = null) }
+                )
+                SelectorBarItem(
+                    selected = currentTab == UserInfoTab.CONTRIBUTIONS,
+                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.CONTRIBUTIONS) },
+                    text = { Text("编辑贡献") },
+                    icon = { Icon(Icons.Regular.Edit, contentDescription = null) }
+                )
+                SelectorBarItem(
+                    selected = currentTab == UserInfoTab.WATCHLIST,
+                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.WATCHLIST) },
+                    text = { Text("监视列表") },
+                    icon = { Icon(Icons.Regular.EyeTracking, contentDescription = null) }
+                )
+                SelectorBarItem(
+                    selected = currentTab == UserInfoTab.LOG,
+                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.LOG) },
+                    text = { Text("操作日志") },
+                    icon = { Icon(Icons.Regular.History, contentDescription = null) }
+                )
             }
             Spacer(Modifier.height(10.dp))
 
@@ -700,13 +710,11 @@ private fun LogEventItem(event: WikiUserApi.LogEvent) {
     }
 }
 
-// ── 操作日志 Tab（含筛选和排序）────────────────────────────────
+// ── 操作日志 筛选+排序工具栏（可复用）────────────────────────
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-private fun LogTabContent(
-    isLoading: Boolean,
-    logEvents: List<WikiUserApi.LogEvent>,
+private fun LogFilterBar(
     logTypeFilter: String?,
     logSortOrder: LogSortOrder,
     availableLogTypes: List<String>,
@@ -714,37 +722,40 @@ private fun LogTabContent(
     onSortOrderChange: (LogSortOrder) -> Unit,
     onRefresh: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize()) {
-        // 工具栏：筛选 + 排序 + 刷新
+    Column(Modifier.fillMaxWidth()) {
+        // 类型筛选 SegmentedControl
+        val allTypes = listOf(null) + availableLogTypes
+        if (allTypes.size > 1) {
+            val count = allTypes.size
+            SegmentedControl(modifier = Modifier.fillMaxWidth()) {
+                allTypes.forEachIndexed { index, type ->
+                    val pos = when (index) {
+                        0 -> SegmentedItemPosition.Start
+                        count - 1 -> SegmentedItemPosition.End
+                        else -> SegmentedItemPosition.Center
+                    }
+                    SegmentedButton(
+                        checked = logTypeFilter == type,
+                        onCheckedChanged = { onFilterChange(type) },
+                        position = pos,
+                        modifier = Modifier.weight(1f),
+                        text = {
+                            Text(
+                                type?.let { WikiUserApi.logTypeLabel(it, "") } ?: "全部",
+                                fontSize = 12.sp
+                            )
+                        }
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+        // 排序 + 刷新
         Row(
-            Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 筛选下拉
-            var filterExpanded by remember { mutableStateOf(false) }
-            val allTypes = listOf(null) + availableLogTypes
-            val filterLabel = logTypeFilter?.let { WikiUserApi.logTypeLabel(it, "") } ?: "全部类型"
-            Box {
-                Button(
-                    onClick = { filterExpanded = true },
-                    modifier = Modifier.height(28.dp)
-                ) { Text(filterLabel, fontSize = 12.sp) }
-                DropdownMenu(
-                    expanded = filterExpanded,
-                    onDismissRequest = { filterExpanded = false }
-                ) {
-                    allTypes.forEach { type ->
-                        DropdownMenuItem(onClick = {
-                            onFilterChange(type)
-                            filterExpanded = false
-                        }) {
-                            Text(type?.let { WikiUserApi.logTypeLabel(it, "") } ?: "全部类型", fontSize = 12.sp)
-                        }
-                    }
-                }
-            }
-            // 排序切换
             Button(
                 onClick = {
                     onSortOrderChange(
@@ -764,6 +775,33 @@ private fun LogTabContent(
                 Text("刷新", fontSize = 12.sp)
             }
         }
+    }
+}
+
+// ── 操作日志 Tab（含筛选和排序）────────────────────────────────
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun LogTabContent(
+    isLoading: Boolean,
+    logEvents: List<WikiUserApi.LogEvent>,
+    logTypeFilter: String?,
+    logSortOrder: LogSortOrder,
+    availableLogTypes: List<String>,
+    onFilterChange: (String?) -> Unit,
+    onSortOrderChange: (LogSortOrder) -> Unit,
+    onRefresh: () -> Unit
+) {
+    Column(Modifier.fillMaxSize()) {
+        LogFilterBar(
+            logTypeFilter = logTypeFilter,
+            logSortOrder = logSortOrder,
+            availableLogTypes = availableLogTypes,
+            onFilterChange = onFilterChange,
+            onSortOrderChange = onSortOrderChange,
+            onRefresh = onRefresh
+        )
+        Spacer(Modifier.height(6.dp))
         when {
             isLoading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 ProgressRing(size = 36.dp)
@@ -811,6 +849,16 @@ private fun PublicUserInfoCard(
     isLoadingLog: Boolean,
     onRefreshLog: () -> Unit
 ) {
+    // 本地日志筛选/排序状态（公开卡片不需要持久化到 ViewModel）
+    var lookupLogFilter by remember { mutableStateOf<String?>(null) }
+    var lookupLogSortOrder by remember { mutableStateOf(LogSortOrder.NEWEST_FIRST) }
+    val lookupAvailableLogTypes = remember(logEvents) {
+        logEvents.map { it.type }.distinct().sorted()
+    }
+    val filteredLookupLog = remember(logEvents, lookupLogFilter, lookupLogSortOrder) {
+        val filtered = if (lookupLogFilter == null) logEvents else logEvents.filter { it.type == lookupLogFilter }
+        if (lookupLogSortOrder == LogSortOrder.OLDEST_FIRST) filtered.reversed() else filtered
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // 封禁警告
         if (blockStatus != null) {
@@ -870,26 +918,25 @@ private fun PublicUserInfoCard(
             )
         }
         // 详情子 Tab
-        val detailTabs = listOf(
-            LookupDetailTab.SUMMARY to "概览",
-            LookupDetailTab.FILES to "上传文件",
-            LookupDetailTab.LOG to "操作日志"
-        )
-        SegmentedControl(modifier = Modifier.fillMaxWidth()) {
-            detailTabs.forEachIndexed { index, (tab, label) ->
-                val pos = when (index) {
-                    0 -> SegmentedItemPosition.Start
-                    detailTabs.size - 1 -> SegmentedItemPosition.End
-                    else -> SegmentedItemPosition.Center
-                }
-                SegmentedButton(
-                    checked = detailTab == tab,
-                    onCheckedChanged = { onDetailTabChange(tab) },
-                    position = pos,
-                    modifier = Modifier.weight(1f),
-                    text = { Text(label, fontSize = 12.sp) }
-                )
-            }
+        SelectorBar {
+            SelectorBarItem(
+                selected = detailTab == LookupDetailTab.SUMMARY,
+                onSelectedChange = { onDetailTabChange(LookupDetailTab.SUMMARY) },
+                text = { Text("概览") },
+                icon = { Icon(Icons.Regular.DataUsage, contentDescription = null) }
+            )
+            SelectorBarItem(
+                selected = detailTab == LookupDetailTab.FILES,
+                onSelectedChange = { onDetailTabChange(LookupDetailTab.FILES) },
+                text = { Text("上传文件") },
+                icon = { Icon(Icons.Regular.Image, contentDescription = null) }
+            )
+            SelectorBarItem(
+                selected = detailTab == LookupDetailTab.LOG,
+                onSelectedChange = { onDetailTabChange(LookupDetailTab.LOG) },
+                text = { Text("操作日志") },
+                icon = { Icon(Icons.Regular.DocumentBulletList, contentDescription = null) }
+            )
         }
         // 子 Tab 内容（固定高度避免 Card 撑开太高）
         Box(Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 240.dp)) {
@@ -936,13 +983,59 @@ private fun PublicUserInfoCard(
                     items(files) { UserFileItem(it) }
                 }
 
-                LookupDetailTab.LOG -> LookupListTab(
-                    isLoading = isLoadingLog,
-                    isEmpty = logEvents.isEmpty(),
-                    emptyText = "暂无操作日志",
-                    onRefresh = onRefreshLog
-                ) {
-                    items(logEvents) { LogEventItem(it) }
+                LookupDetailTab.LOG -> {
+                    if (isLoadingLog) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            ProgressRing(size = 28.dp)
+                        }
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            LogFilterBar(
+                                logTypeFilter = lookupLogFilter,
+                                logSortOrder = lookupLogSortOrder,
+                                availableLogTypes = lookupAvailableLogTypes,
+                                onFilterChange = { lookupLogFilter = it },
+                                onSortOrderChange = { lookupLogSortOrder = it },
+                                onRefresh = onRefreshLog
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            if (filteredLookupLog.isEmpty()) {
+                                Box(
+                                    Modifier.weight(1f).fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            if (logEvents.isEmpty()) "暂无操作日志" else "无匹配记录",
+                                            fontSize = 12.sp,
+                                            color = FluentTheme.colors.text.text.secondary
+                                        )
+                                        if (logEvents.isEmpty()) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Button(onClick = onRefreshLog, modifier = Modifier.height(26.dp)) {
+                                                Text("加载", fontSize = 11.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                val listState = rememberLazyListState()
+                                val adapter = rememberScrollbarAdapter(listState)
+                                ScrollbarContainer(
+                                    adapter = adapter,
+                                    modifier = Modifier.weight(1f).fillMaxWidth()
+                                ) {
+                                    LazyColumn(
+                                        state = listState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        items(filteredLookupLog) { LogEventItem(it) }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

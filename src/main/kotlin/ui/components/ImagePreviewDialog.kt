@@ -26,8 +26,19 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import data.WikiEngine
+import io.github.composefluent.component.CommandBarButton
+import io.github.composefluent.component.Icon
+import io.github.composefluent.component.LargeCommandBarFlyout
+import io.github.composefluent.component.ListItem
 import io.github.composefluent.component.ProgressRing
 import io.github.composefluent.component.Text
+import io.github.composefluent.component.rememberFlyoutPositionProvider
+import io.github.composefluent.component.FlyoutPlacement
+import io.github.composefluent.icons.Icons
+import io.github.composefluent.icons.regular.ArrowReset
+import io.github.composefluent.icons.regular.Copy
+import io.github.composefluent.icons.regular.Dismiss
+import io.github.composefluent.icons.regular.Open
 import kotlin.math.roundToInt
 
 private const val SCALE_MIN = 0.5f
@@ -47,7 +58,6 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
     val isGif = remember(url) {
         url.substringAfterLast('.', "").lowercase().substringBefore('?') == "gif"
     }
-
     var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var gifBytes by remember { mutableStateOf<ByteArray?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -73,6 +83,9 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
     var offset by remember { mutableStateOf(Offset.Zero) }
 
     fun resetTransform() { scale = 1f; offset = Offset.Zero }
+
+    var flyoutVisible by remember { mutableStateOf(false) }
+    var flyoutExpanded by remember { mutableStateOf(false) }
 
     DialogWindow(
         onCloseRequest = onClose,
@@ -225,6 +238,71 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
                                 append("  |  点击背景或按 ESC 关闭")
                             }
                             Text(hint, color = Color.Gray, fontSize = 11.sp)
+                        }
+                    }
+
+                    // 浮动工具栏锚点：居中靠上
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 16.dp)
+                    ) {
+                        LargeCommandBarFlyout(
+                            visible = flyoutVisible,
+                            onDismissRequest = { flyoutVisible = false },
+                            expanded = flyoutExpanded,
+                            onExpandedChanged = { flyoutExpanded = it },
+                            positionProvider = rememberFlyoutPositionProvider(FlyoutPlacement.Bottom)
+                        ) {
+                            val actions = listOf(
+                                Triple(Icons.Regular.Copy, "复制链接", {
+                                    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                                    clipboard.setContents(java.awt.datatransfer.StringSelection(url), null)
+                                    flyoutVisible = false
+                                }),
+                                Triple(Icons.Regular.Open, "浏览器打开", {
+                                    runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
+                                    flyoutVisible = false
+                                }),
+                                Triple(Icons.Regular.ArrowReset, "重置缩放", {
+                                    resetTransform()
+                                    flyoutVisible = false
+                                }),
+                                Triple(Icons.Regular.Dismiss, "关闭", { onClose() })
+                            )
+                            items(actions.size) {
+                                val (icon, label, action) = actions[it]
+                                if (isOverflow) {
+                                    ListItem(
+                                        onClick = action,
+                                        text = { Text(label) },
+                                        icon = { Icon(imageVector = icon, contentDescription = null) }
+                                    )
+                                } else {
+                                    CommandBarButton(
+                                        onClick = action,
+                                        content = {
+                                            Icon(imageVector = icon, contentDescription = null)
+                                            Text(label)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // 触发按钮（右键或长按图片区域触发；此处用点击小圆点触发）
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { flyoutVisible = !flyoutVisible },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⋯", color = Color.White, fontSize = 18.sp)
                         }
                     }
                 }

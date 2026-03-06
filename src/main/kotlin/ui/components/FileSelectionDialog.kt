@@ -191,11 +191,16 @@ fun FileSelectionDialog(
                             val targets = files
                                 .filter { (n, _) -> n.uppercase().let { it.endsWith(lang) || it.contains("$lang.") } }
                                 .map { it.second }
-                            val isChecked = targets.isNotEmpty() && targets.all { it in selectedUrls }
-                            CheckBox(label = lang, checked = isChecked) { checked ->
-                                if (checked) selectedUrls.addAll(targets.filterNot { it in selectedUrls })
-                                else selectedUrls.removeAll { it in targets }
-                            }
+                            val isSelected = targets.isNotEmpty() && targets.all { it in selectedUrls }
+                            PillButton(
+                                selected = isSelected,
+                                onSelectedChanged = {
+                                    if (!isSelected) selectedUrls.addAll(targets.filterNot { it in selectedUrls })
+                                    else selectedUrls.removeAll { it in targets }
+                                },
+                                content = { Text(lang) }
+                            )
+                            Spacer(Modifier.width(4.dp))
                         }
                     }
 
