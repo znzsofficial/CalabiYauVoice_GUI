@@ -42,6 +42,12 @@ import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.icons.regular.CursorClick
 import io.github.composefluent.icons.regular.MusicNote2
 import io.github.composefluent.icons.regular.TextBulletListLtr
+import io.github.composefluent.icons.regular.WeatherMoon
+import io.github.composefluent.icons.regular.WeatherSunny
+import io.github.composefluent.icons.regular.Window
+import io.github.composefluent.icons.regular.Person
+import io.github.composefluent.icons.regular.Info
+import io.github.composefluent.icons.regular.Keyboard
 import ui.components.AudioPlayerManager
 import ui.components.EmptyPlaceholder
 import ui.components.FileListItem
@@ -289,7 +295,43 @@ fun NewDownloaderContent() {
     ) {
         MenuBar {
             MenuBarItem(
-                content = { Text("功能") },
+                content = { Text("视图") },
+                items = {
+                    MenuFlyoutItem(
+                        onClick = { darkMode.value = !darkMode.value },
+                        icon = {
+                            Icon(
+                                if (darkMode.value) Icons.Regular.WeatherSunny else Icons.Regular.WeatherMoon,
+                                contentDescription = null
+                            )
+                        },
+                        text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") }
+                    )
+                    if (backdropOptions.isNotEmpty()) {
+                        MenuFlyoutSeparator()
+                        MenuFlyoutItem(
+                            icon = { Icon(Icons.Regular.Window, contentDescription = null) },
+                            text = { Text("窗口效果") },
+                            items = {
+                                backdropOptions.forEach { (label, backdrop) ->
+                                    val current = backdropType.value
+                                    val isCurrent = if (backdrop == null) current == null
+                                    else current != null && current::class == backdrop::class
+                                    MenuFlyoutItem(
+                                        text = { Text(label) },
+                                        selected = isCurrent,
+                                        onSelectedChanged = { backdropType.value = backdrop },
+                                        selectionType = ListItemSelectionType.Radio,
+                                        colors = ListItemDefaults.defaultListItemColors()
+                                    )
+                                }
+                            }
+                        )
+                    }
+                },
+            )
+            MenuBarItem(
+                content = { Text("工具") },
                 items = {
                     MenuFlyoutItem(
                         onClick = {
@@ -300,47 +342,29 @@ fun NewDownloaderContent() {
                                 else java.awt.Desktop.getDesktop().open(dir.parentFile ?: dir)
                             }
                         },
+                        icon = { Icon(Icons.Regular.FolderOpen, contentDescription = null) },
                         text = { Text("打开保存路径") }
                     )
-                    MenuFlyoutSeparator()
-                    MenuFlyoutItem(
-                        onClick = { darkMode.value = !darkMode.value },
-                        text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") }
-                    )
-                    MenuFlyoutSeparator()
-                    backdropOptions.forEach { (label, backdrop) ->
-                        MenuFlyoutItem(
-                            onClick = { backdropType.value = backdrop },
-                            text = {
-                                val current = backdropType.value
-                                val isCurrent = if (backdrop == null) current == null
-                                else current != null && current::class == backdrop::class
-                                Text(
-                                    text = "窗口效果：$label",
-                                    fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isCurrent) FluentTheme.colors.text.text.primary else FluentTheme.colors.text.text.secondary
-                                )
-                            }
-                        )
-                    }
                 },
             )
             MenuBarItem(
-                content = { Text("关于") },
+                content = { Text("帮助") },
                 items = {
                     MenuFlyoutItem(
+                        onClick = { showShortcutsDialog = true },
+                        icon = { Icon(Icons.Regular.Keyboard, contentDescription = null) },
+                        text = { Text("键盘快捷键") }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
                         onClick = { showUserInfoDialog = true },
+                        icon = { Icon(Icons.Regular.Person, contentDescription = null) },
                         text = { Text("用户信息") }
                     )
-                    MenuFlyoutSeparator()
                     MenuFlyoutItem(
                         onClick = { showDialog = true },
+                        icon = { Icon(Icons.Regular.Info, contentDescription = null) },
                         text = { Text("关于") }
-                    )
-                    MenuFlyoutSeparator()
-                    MenuFlyoutItem(
-                        onClick = { showShortcutsDialog = true },
-                        text = { Text("键盘快捷键") }
                     )
                 },
             )
