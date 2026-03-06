@@ -48,6 +48,14 @@ import io.github.composefluent.icons.regular.Window
 import io.github.composefluent.icons.regular.Person
 import io.github.composefluent.icons.regular.Info
 import io.github.composefluent.icons.regular.Keyboard
+import io.github.composefluent.icons.regular.ArrowDownload
+import io.github.composefluent.icons.regular.ArrowSync
+import io.github.composefluent.icons.regular.Search
+import io.github.composefluent.icons.regular.CheckboxChecked
+import io.github.composefluent.icons.regular.CheckboxUnchecked
+import io.github.composefluent.icons.regular.MicSparkle
+import io.github.composefluent.icons.regular.Apps
+import io.github.composefluent.icons.regular.DocumentSearch
 import ui.components.AudioPlayerManager
 import ui.components.EmptyPlaceholder
 import ui.components.FileListItem
@@ -192,6 +200,14 @@ fun NewDownloaderContent() {
     var showDialog by remember { mutableStateOf(false) }
     var showShortcutsDialog by remember { mutableStateOf(false) }
     var showUserInfoDialog by remember { mutableStateOf(false) }
+    var showConverterWindow by remember { mutableStateOf(false) }
+
+    if (showConverterWindow) {
+        Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
+    }
+
+    // 首次使用提示：用 MMKV 持久化已关闭状态
+    var showCategoryHint by remember { mutableStateOf(!util.AppPrefs.categoryHintDismissed) }
     if (showDialog) {
         AboutWindow(onCloseRequest = { showDialog = false })
     }
@@ -305,7 +321,8 @@ fun NewDownloaderContent() {
                                 contentDescription = null
                             )
                         },
-                        text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") }
+                        text = { Text(if (darkMode.value) "切换亮色主题" else "切换暗色主题") },
+                        trailing = { Text("Ctrl+T", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
                     )
                     if (backdropOptions.isNotEmpty()) {
                         MenuFlyoutSeparator()
@@ -334,6 +351,12 @@ fun NewDownloaderContent() {
                 content = { Text("工具") },
                 items = {
                     MenuFlyoutItem(
+                        onClick = { showConverterWindow = true },
+                        icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },
+                        text = { Text("MP3 转换工具") }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
                         onClick = {
                             val path = savePath.ifBlank { null }
                             if (path != null) {
@@ -344,6 +367,39 @@ fun NewDownloaderContent() {
                         },
                         icon = { Icon(Icons.Regular.FolderOpen, contentDescription = null) },
                         text = { Text("打开保存路径") }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
+                        onClick = { if (!isDownloading && !isScanningTree) viewModel.startDownload() },
+                        icon = { Icon(Icons.Regular.ArrowDownload, contentDescription = null) },
+                        text = { Text("开始下载") },
+                        trailing = { Text("Ctrl+D", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
+                        onClick = { viewModel.checkAllCategories() },
+                        icon = { Icon(Icons.Regular.CheckboxChecked, contentDescription = null) },
+                        text = { Text("全选") },
+                        trailing = { Text("Ctrl+A", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                    )
+                    MenuFlyoutItem(
+                        onClick = { viewModel.uncheckAllCategories() },
+                        icon = { Icon(Icons.Regular.CheckboxUnchecked, contentDescription = null) },
+                        text = { Text("全不选") },
+                        trailing = { Text("Ctrl+Shift+A", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
+                        onClick = { searchFocusRequester.requestFocus() },
+                        icon = { Icon(Icons.Regular.Search, contentDescription = null) },
+                        text = { Text("聚焦搜索框") },
+                        trailing = { Text("Ctrl+F", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                    )
+                    MenuFlyoutItem(
+                        onClick = { performSearch() },
+                        icon = { Icon(Icons.Regular.ArrowSync, contentDescription = null) },
+                        text = { Text("重新搜索") },
+                        trailing = { Text("F5", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
                     )
                 },
             )
@@ -412,27 +468,24 @@ fun NewDownloaderContent() {
 
                     Spacer(Modifier.height(8.dp))
                     // 搜索模式切换
-                    SegmentedControl(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            checked = searchMode == SearchMode.VOICE_ONLY,
-                            onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.VOICE_ONLY) },
-                            position = SegmentedItemPosition.Start,
-                            modifier = Modifier.weight(1f),
-                            text = { Text("仅语音", fontSize = 12.sp) }
+                    SelectorBar {
+                        SelectorBarItem(
+                            selected = searchMode == SearchMode.VOICE_ONLY,
+                            onSelectedChange = { viewModel.onSearchModeChange(SearchMode.VOICE_ONLY) },
+                            text = { Text("仅语音") },
+                            icon = { Icon(Icons.Regular.MicSparkle, contentDescription = null) }
                         )
-                        SegmentedButton(
-                            checked = searchMode == SearchMode.ALL_CATEGORIES,
-                            onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES) },
-                            position = SegmentedItemPosition.Center,
-                            modifier = Modifier.weight(1f),
-                            text = { Text("全部分类", fontSize = 12.sp) }
+                        SelectorBarItem(
+                            selected = searchMode == SearchMode.ALL_CATEGORIES,
+                            onSelectedChange = { viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES) },
+                            text = { Text("全部分类") },
+                            icon = { Icon(Icons.Regular.Apps, contentDescription = null) }
                         )
-                        SegmentedButton(
-                            checked = searchMode == SearchMode.FILE_SEARCH,
-                            onCheckedChanged = { viewModel.onSearchModeChange(SearchMode.FILE_SEARCH) },
-                            position = SegmentedItemPosition.End,
-                            modifier = Modifier.weight(1f),
-                            text = { Text("文件搜索", fontSize = 12.sp) }
+                        SelectorBarItem(
+                            selected = searchMode == SearchMode.FILE_SEARCH,
+                            onSelectedChange = { viewModel.onSearchModeChange(SearchMode.FILE_SEARCH) },
+                            text = { Text("文件搜索") },
+                            icon = { Icon(Icons.Regular.DocumentSearch, contentDescription = null) }
                         )
                     }
 
@@ -541,6 +594,23 @@ fun NewDownloaderContent() {
 
             // --- 右侧：详情与配置 (Weight 0.7) ---
             Column(Modifier.weight(0.7f)) {
+
+                // 首次使用提示
+                if (showCategoryHint) {
+                    InfoBar(
+                        modifier = Modifier.fillMaxWidth(),
+                        title = { Text("提示") },
+                        message = { Text("双击分类条目或右键选择「选择文件...」可打开该分类的文件列表") },
+                        closeAction = {
+                            InfoBarDefaults.CloseActionButton(onClick = {
+                                showCategoryHint = false
+                                util.AppPrefs.categoryHintDismissed = true
+                            })
+                        },
+                        severity = InfoBarSeverity.Informational
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
 
                 // 1. 资源选择卡片
                 Card(Modifier.weight(1f)) {

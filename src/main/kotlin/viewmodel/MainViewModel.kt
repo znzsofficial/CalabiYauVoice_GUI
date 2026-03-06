@@ -86,7 +86,7 @@ class MainViewModel(
     // =========================================================
     // 下载状态
     // =========================================================
-    private val _savePath = MutableStateFlow("${System.getProperty("user.home")}\\卡拉彼丘资源")
+    private val _savePath = MutableStateFlow(util.AppPrefs.savePath)
     val savePath: StateFlow<String> = _savePath.asStateFlow()
 
     private val _maxConcurrencyStr = MutableStateFlow("16")
@@ -321,7 +321,7 @@ class MainViewModel(
     // =========================================================
     // 下载配置
     // =========================================================
-    fun onSavePathChange(value: String) { _savePath.value = value }
+    fun onSavePathChange(value: String) { _savePath.value = value; util.AppPrefs.savePath = value }
 
     fun onMaxConcurrencyChange(value: String) {
         if (value.all { it.isDigit() }) _maxConcurrencyStr.value = value
@@ -428,7 +428,7 @@ class MainViewModel(
                             mergeWavFiles(
                                 dir = targetDir,
                                 maxPerFile = maxCount,
-                                deleteOriginal = false,
+                                deleteOriginal = true,
                                 onLog = { addLog(it) },
                                 onProgress = { current, total, name ->
                                     _progress.value = if (total > 0) current.toFloat() / total else 0f
