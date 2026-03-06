@@ -3,9 +3,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -22,6 +19,7 @@ import ui.components.WindowsWindowFrame
 import ui.components.rememberWindowsWindowFrameState
 import ui.screens.NewDownloaderContent
 import util.findSkiaLayer
+import util.getNonWin11BackgroundGradient
 import java.awt.Button
 import java.awt.FlowLayout
 import java.awt.Frame
@@ -29,21 +27,6 @@ import java.awt.Label
 
 // All app-wide UI state is stored in AppStore.kt — access via LocalAppStore
 
-// 创建非Win11系统的背景渐变，由调用方用 remember 缓存
-private fun getNonWin11BackgroundGradient(isDarkMode: Boolean): Brush =
-    if (isDarkMode) {
-        Brush.linearGradient(
-            colors = listOf(Color(0xff1A212C), Color(0xff2C343C)),
-            start = Offset.Zero,
-            end = Offset.Infinite
-        )
-    } else {
-        Brush.linearGradient(
-            colors = listOf(Color(0xffCCD7E8), Color(0xffDAE9F7)),
-            start = Offset.Zero,
-            end = Offset.Infinite
-        )
-    }
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
 fun main() = application {

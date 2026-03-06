@@ -4,7 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
@@ -214,7 +213,7 @@ object WikiUserApi {
 
     // ───── JSON 解析器 ───────────────────────────────────────────────
 
-    private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+    private val json = SharedJson
 
     // ───── API 方法 ──────────────────────────────────────────────────
 

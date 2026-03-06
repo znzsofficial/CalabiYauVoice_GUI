@@ -11,8 +11,8 @@ import java.io.File
 @Serializable
 private data class PrefsData(
     val categoryHintDismissed: Boolean = false,
-    val savePath: String = "${System.getProperty("user.home")}\\卡拉彼丘资源",
-    val converterSavePath: String = "${System.getProperty("user.home")}\\卡拉彼丘资源\\converted"
+    val savePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源",
+    val converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted"
 )
 
 object AppPrefs {

@@ -1,6 +1,5 @@
 package ui.components
 
-import LocalAppStore
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,25 +16,17 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
-import com.mayakapps.compose.windowstyler.WindowBackdrop
-import com.mayakapps.compose.windowstyler.WindowStyle
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
-import io.github.composefluent.background.Layer
 import io.github.composefluent.component.*
-import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.Search
-import io.github.composefluent.lightColors
-import jna.windows.structure.isWindows11OrLater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import util.findSkiaLayer
 
-@OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFluentApi::class)
 @Composable
 fun FileSelectionDialog(
     title: String,
@@ -47,7 +38,6 @@ fun FileSelectionDialog(
 ) {
     val selectedUrls = remember { mutableStateListOf<String>() }
     var searchKeyword by remember { mutableStateOf("") }
-    val darkModeState = LocalAppStore.current.darkMode
     var playingUrl by remember { mutableStateOf<String?>(null) }
     var loadingUrl by remember { mutableStateOf<String?>(null) }
     var previewImageUrl by remember { mutableStateOf<String?>(null) }
@@ -99,15 +89,15 @@ fun FileSelectionDialog(
         position = WindowPosition(Alignment.Center)
     )
 
-    Window(
+    StyledWindow(
+        title = "文件列表: $title",
         onCloseRequest = {
             AudioPlayerManager.stop()
             onClose()
         },
-        title = "文件列表: $title",
         state = windowState,
         onKeyEvent = { keyEvent ->
-            if (keyEvent.type != KeyEventType.KeyDown) return@Window false
+            if (keyEvent.type != KeyEventType.KeyDown) return@StyledWindow false
             when {
                 keyEvent.key == Key.Escape -> {
                     AudioPlayerManager.stop(); onClose(); true
@@ -120,40 +110,7 @@ fun FileSelectionDialog(
                 else -> false
             }
         }
-    ) {
-        val darkMode = darkModeState.value
-        val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerExists = remember { window.findSkiaLayer() != null }
-        val isWin11 = remember { isWindows11OrLater() }
-
-        if (skiaLayerExists && isWin11) {
-            LaunchedEffect(Unit) { window.findSkiaLayer()?.transparency = true }
-            WindowStyle(isDarkTheme = darkMode, backdropType = WindowBackdrop.Tabbed)
-        }
-
-        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
-            WindowsWindowFrame(
-                title = "文件列表: $title",
-                onCloseRequest = {
-                    AudioPlayerManager.stop()
-                    onClose()
-                },
-                state = windowState,
-                frameState = windowFrameState,
-                isDarkTheme = darkMode,
-                captionBarHeight = 36.dp
-            ) { windowInset, _ ->
-                // Layer 用于设置 contentColor，使子组件 Text 在深色模式下文字自动变白
-                // （其他页面如 AboutWindow/UserInfoWindow 靠 Card 充当此角色）
-                Layer(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(windowFrameState.paddingInset)
-                        .windowInsetsPadding(windowInset),
-                    color = Color.Transparent,
-                    contentColor = FluentTheme.colors.text.text.primary,
-                    border = null,
-                ) {
+    ) { _ ->
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -305,8 +262,5 @@ fun FileSelectionDialog(
                         ) { Text("确认选择", fontWeight = FontWeight.Bold) }
                     }
                 }
-                }
-            }
-        }
     }
 }

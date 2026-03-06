@@ -21,22 +21,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import kotlinx.coroutines.launch
 import com.mayakapps.compose.windowstyler.WindowBackdrop
-import com.mayakapps.compose.windowstyler.WindowStyle
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
-import io.github.composefluent.background.Layer
 import io.github.composefluent.component.*
-import jna.windows.structure.isWindows11OrLater
-import ui.components.WindowsWindowFrame
-import ui.components.rememberWindowsWindowFrameState
-import util.findSkiaLayer
-import io.github.composefluent.darkColors
-import io.github.composefluent.lightColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.FolderOpen
 import io.github.composefluent.icons.regular.CursorClick
@@ -962,15 +953,14 @@ fun NewDownloaderContent() {
     }
 }
 
-@OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
-    val darkModeState = LocalAppStore.current.darkMode
     val windowState = rememberWindowState(width = 480.dp, height = 440.dp, position = WindowPosition(Alignment.Center))
 
-    Window(
-        onCloseRequest = onClose,
+    ui.components.StyledWindow(
         title = "键盘快捷键",
+        onCloseRequest = onClose,
         state = windowState,
         resizable = false,
         onKeyEvent = { keyEvent ->
@@ -978,35 +968,7 @@ private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
                 onClose(); true
             } else false
         }
-    ) {
-        val darkMode = darkModeState.value
-        val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerExists = remember { window.findSkiaLayer() != null }
-        val isWin11 = remember { isWindows11OrLater() }
-
-        if (skiaLayerExists && isWin11) {
-            LaunchedEffect(Unit) { window.findSkiaLayer()?.transparency = true }
-            WindowStyle(isDarkTheme = darkMode, backdropType = WindowBackdrop.Tabbed)
-        }
-
-        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
-            WindowsWindowFrame(
-                title = "键盘快捷键",
-                onCloseRequest = onClose,
-                state = windowState,
-                frameState = windowFrameState,
-                isDarkTheme = darkMode,
-                captionBarHeight = 36.dp
-            ) { windowInset, _ ->
-                Layer(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(windowFrameState.paddingInset)
-                        .windowInsetsPadding(windowInset),
-                    color = Color.Transparent,
-                    contentColor = FluentTheme.colors.text.text.primary,
-                    border = null,
-                ) {
+    ) { _ ->
                     Column(
                         Modifier
                             .fillMaxSize()
@@ -1090,9 +1052,6 @@ private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
                             Button(onClick = onClose) { Text("关闭") }
                         }
                     }
-                }
-            }
-        }
     }
 }
 

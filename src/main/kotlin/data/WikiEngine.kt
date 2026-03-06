@@ -10,7 +10,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Cookie
@@ -174,7 +173,7 @@ object WikiEngine {
         }
         .build()
 
-    private val jsonParser = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+    private val jsonParser = SharedJson
 
     // === 数据结构 ===
     data class CharacterGroup(

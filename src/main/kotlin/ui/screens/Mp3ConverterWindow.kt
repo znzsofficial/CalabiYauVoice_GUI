@@ -1,6 +1,5 @@
 package ui.screens
 
-import LocalAppStore
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,38 +22,29 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
-import com.mayakapps.compose.windowstyler.WindowBackdrop
-import com.mayakapps.compose.windowstyler.WindowStyle
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
-import io.github.composefluent.background.Layer
 import io.github.composefluent.component.*
-import io.github.composefluent.darkColors
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.*
-import io.github.composefluent.lightColors
 import io.github.composefluent.surface.Card
-import jna.windows.structure.isWindows11OrLater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import ui.components.WindowsWindowFrame
-import ui.components.rememberWindowsWindowFrameState
+import ui.components.StyledWindow
 import util.*
 import util.AppPrefs
 import java.awt.datatransfer.DataFlavor
 import java.io.File
 
-@OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class,
+@OptIn(ExperimentalFluentApi::class, ExperimentalComposeUiApi::class,
     ExperimentalFoundationApi::class
 )
 @Composable
 fun Mp3ConverterWindow(
     onCloseRequest: () -> Unit
 ) {
-    val darkModeState = LocalAppStore.current.darkMode
     var savePath by remember { mutableStateOf(AppPrefs.converterSavePath) }
 
     // 独立的转换配置状态（不与主页共用）
@@ -81,44 +71,16 @@ fun Mp3ConverterWindow(
         position = WindowPosition(Alignment.Center)
     )
 
-    Window(
-        onCloseRequest = onCloseRequest,
+    StyledWindow(
         title = "MP3 → WAV 转换工具",
+        onCloseRequest = onCloseRequest,
         state = windowState,
         onKeyEvent = { keyEvent ->
             if (keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown) {
                 onCloseRequest(); true
             } else false
         }
-    ) {
-        val darkMode = darkModeState.value
-        val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerExists = remember { window.findSkiaLayer() != null }
-        val isWin11 = remember { isWindows11OrLater() }
-
-        if (skiaLayerExists && isWin11) {
-            LaunchedEffect(Unit) { window.findSkiaLayer()?.transparency = true }
-            WindowStyle(isDarkTheme = darkMode, backdropType = WindowBackdrop.Tabbed)
-        }
-
-        FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
-            WindowsWindowFrame(
-                title = "MP3 → WAV 转换工具",
-                onCloseRequest = onCloseRequest,
-                state = windowState,
-                frameState = windowFrameState,
-                isDarkTheme = darkMode,
-                captionBarHeight = 36.dp
-            ) { windowInset, _ ->
-                Layer(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .windowInsetsPadding(windowFrameState.paddingInset)
-                        .windowInsetsPadding(windowInset),
-                    color = Color.Transparent,
-                    contentColor = FluentTheme.colors.text.text.primary,
-                    border = null,
-                ) {
+    ) { _ ->
                     Column(
                         Modifier
                             .fillMaxSize()
@@ -503,9 +465,6 @@ fun Mp3ConverterWindow(
                             }
                         }
                     }
-                }
-            }
-        }
     }
 }
 
