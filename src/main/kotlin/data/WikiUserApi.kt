@@ -2,6 +2,8 @@ package data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -13,6 +15,18 @@ import okhttp3.Request
  * 所有请求都使用 [WikiEngine.client]，因此自动携带通过 [WikiCookieManager] 注入的 Cookie。
  */
 object WikiUserApi {
+
+    private val _currentUser = MutableStateFlow<UserInfo?>(null)
+    /** 当前已登录的用户信息 (全局) */
+    val currentUser = _currentUser.asStateFlow()
+
+    fun updateCurrentUser(info: UserInfo?) {
+        _currentUser.value = info
+    }
+
+    fun clearCurrentUser() {
+        _currentUser.value = null
+    }
 
     sealed interface ApiResult<out T> {
         data class Success<T>(val value: T) : ApiResult<T>

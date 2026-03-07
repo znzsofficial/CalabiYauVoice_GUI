@@ -56,8 +56,8 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         .stateIn(scope, SharingStarted.Eagerly, WikiCookieManager.previewCookieImport(_cookieInput.value))
 
     // ─── 用户信息 ──────────────────────────────────────────────────
-    private val _userInfo = MutableStateFlow<WikiUserApi.UserInfo?>(null)
-    val userInfo: StateFlow<WikiUserApi.UserInfo?> = _userInfo.asStateFlow()
+    // 使用 WikiUserApi.currentUser 作为数据源
+    val userInfo: StateFlow<WikiUserApi.UserInfo?> = WikiUserApi.currentUser
 
     private val _isLoadingInfo = MutableStateFlow(false)
     val isLoadingInfo: StateFlow<Boolean> = _isLoadingInfo.asStateFlow()
@@ -172,6 +172,13 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     private var currentUserRequestToken = 0L
     private var lookupRequestToken = 0L
 
+    init {
+        // 如果已有 Cookie 且未登录，尝试自动登录
+        if (WikiCookieManager.hasCookies && WikiUserApi.currentUser.value == null) {
+            importAndFetch()
+        }
+    }
+
     fun onCookieInputChange(value: String) { _cookieInput.value = value }
 
     fun onLogTypeFilterChange(type: String?) { _logTypeFilter.value = type }
@@ -238,27 +245,52 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
      * 导入 Cookie 并立即查询用户信息。
      */
     fun importAndFetch() {
-        val count = WikiCookieManager.importCookies(_cookieInput.value)
-        _cookieInput.value = WikiCookieManager.currentCookieString
-        if (count == 0) {
+        if (_cookieInput.value.isBlank() && !WikiCookieManager.hasCookies) return
+
+        fetchUserInfoJob?.cancel()
+        fetchUserInfoJob = scope.launch {
+            _isLoadingInfo.value = true
+            _statusMessage.value = ""
+            // 重置本地可能缓存的状态，不直接操作 WikiUserApi，因为那是全局的
+            // 不过如果是重新导入，通常意味着之前的无效化，可以在这里清理一下
+            WikiUserApi.clearCurrentUser()
+
+            // 只有当输入框有内容时才重新导入，否则只使用内存中已有的
+            if (_cookieInput.value.isNotBlank()) {
+                val count = WikiCookieManager.importCookies(_cookieInput.value)
+                if (count == 0) {
+                    _statusMessage.value = "⚠️ 未能识别到有效的 Cookie"
+                    _isLoadingInfo.value = false
+                    return@launch
+                }
+            } else if (!WikiCookieManager.hasCookies) {
+                 _statusMessage.value = "⚠️ 此时无 Cookie"
+                 _isLoadingInfo.value = false
+                 return@launch
+            }
+
             currentUserRequestToken++
-            cancelAuthenticatedJobs()
-            resetAuthenticatedState(resetCookieInput = false, clearStatus = false)
-            _statusMessage.value = "⚠️ 未能解析到有效的 Cookie，请检查格式"
-            return
+            val token = currentUserRequestToken
+            when (val userResult = WikiUserApi.fetchCurrentUserInfoResult()) {
+                is WikiUserApi.ApiResult.Success -> {
+                    if (token == currentUserRequestToken) {
+                        WikiUserApi.updateCurrentUser(userResult.value)
+                        val info = userResult.value
+                        if (info != null && info.isLoggedIn) {
+                            _statusMessage.value = "✅ 已登录：${info.name}"
+                        } else {
+                            _statusMessage.value = "⚠️ Cookie 无效，未登录"
+                        }
+                    }
+                }
+                is WikiUserApi.ApiResult.Error -> {
+                    if (token == currentUserRequestToken) {
+                        _statusMessage.value = "❌ ${userResult.message}"
+                    }
+                }
+            }
+            _isLoadingInfo.value = false
         }
-        val detectedName = WikiCookieManager.extractUserNameFromCookies()
-        val detectedId = WikiCookieManager.extractUserIdFromCookies()
-        val detectedLabel = listOfNotNull(
-            detectedName?.takeIf { it.isNotBlank() }?.let { "用户：$it" },
-            detectedId?.takeIf { it.isNotBlank() }?.let { "ID：$it" }
-        ).joinToString(" · ")
-        _statusMessage.value = buildString {
-            append("✅ 已导入 $count 个 Cookie")
-            if (detectedLabel.isNotBlank()) append("（$detectedLabel）")
-            append("，正在查询用户信息…")
-        }
-        fetchUserInfo()
     }
 
     /**
@@ -291,7 +323,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                     is ApiResult.Success -> {
                         if (requestToken != currentUserRequestToken) return@launch
                         val info = result.value
-                        _userInfo.value = info
+                        WikiUserApi.updateCurrentUser(info)
                         _statusMessage.value = when {
                             info == null -> "❌ 无法读取当前用户信息"
                             info.isLoggedIn -> "✅ 已登录：${info.name}"
@@ -396,6 +428,14 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                 }
             }
         }
+    }
+
+    fun clearCurrentLookup() {
+        lookupRequestToken++
+        lookupJob?.cancel()
+        lookupFilesJob?.cancel()
+        lookupLogJob?.cancel()
+        resetLookupState(clearQuery = true)
     }
 
     fun lookupUser() {
@@ -525,7 +565,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
      */
     fun onTabSelected(tab: UserInfoTab) {
         _currentTab.value = tab
-        val info = _userInfo.value ?: return
+        val info = userInfo.value ?: return
         if (!info.isLoggedIn) return
         when (tab) {
             UserInfoTab.CONTRIBUTIONS -> if (_contributionsRequestState.value == RequestState.Idle) fetchContributions()
@@ -536,7 +576,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     }
 
     private fun currentAuthenticatedUserName(): String? =
-        _userInfo.value?.takeIf { it.isLoggedIn }?.name ?: WikiCookieManager.extractUserNameFromCookies()
+        userInfo.value?.takeIf { it.isLoggedIn }?.name ?: WikiCookieManager.extractUserNameFromCookies()
 
     private fun rememberRecentLookup(id: String) {
         when (_lookupMode.value) {
@@ -580,7 +620,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
 
     private fun resetAuthenticatedState(resetCookieInput: Boolean = false, clearStatus: Boolean = false) {
         if (resetCookieInput) _cookieInput.value = ""
-        _userInfo.value = null
+        WikiUserApi.clearCurrentUser()
         _blockStatus.value = null
         _lastEditTimestamp.value = null
         _userSummaryState.value = RequestState.Idle
