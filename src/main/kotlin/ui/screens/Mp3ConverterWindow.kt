@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,6 +36,13 @@ import util.*
 import util.AppPrefs
 import java.awt.datatransfer.DataFlavor
 import java.io.File
+
+internal data class StagedMp3File(
+    val originalFile: File,
+    val stagedDirectory: File,
+    val stagedMp3File: File,
+    val stagedWavFile: File
+)
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalComposeUiApi::class,
     ExperimentalFoundationApi::class
@@ -394,59 +400,76 @@ fun Mp3ConverterWindow(
                                     logLines = emptyList()
                                     progressText = ""
                                     coroutineScope.launch(Dispatchers.IO) {
-                                        // 把文件复制到临时目录逐一处理（或直接就地处理）
-                                        // 统一放进一个临时子目录再调用 batchConvertMp3ToWav
-                                        val tempDir = File(outDir, "_mp3conv_tmp_${System.currentTimeMillis()}")
-                                        tempDir.mkdirs()
-                                        files.forEach { it.copyTo(File(tempDir, it.name), overwrite = true) }
-
                                         val sampleRate = SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex)
                                         val bitDepth = BIT_DEPTH_OPTIONS.getOrElse(targetBitDepthIndex) { 16 }
                                         val mergeCount = mergeWavMaxCountStr.toIntOrNull() ?: 0
                                         val doMerge = mergeWav
-                                        val doDelete = deleteOriginalMp3
+                                        val doDeleteOriginalMp3 = deleteOriginalMp3
                                         val doDeleteWavAfterMerge = deleteWavAfterMerge
+                                        val tempDir = File(outDir, "_mp3conv_tmp_${System.currentTimeMillis()}")
 
-                                        batchConvertMp3ToWav(
-                                            dir = tempDir,
-                                            deleteOriginal = doDelete,
-                                            targetSampleRate = sampleRate,
-                                            targetBitDepth = bitDepth,
-                                            onLog = { msg ->
-                                                coroutineScope.launch(Dispatchers.Main) {
-                                                    logLines = logLines + msg
-                                                }
-                                            },
-                                            onProgress = { done, total, name ->
-                                                coroutineScope.launch(Dispatchers.Main) {
-                                                    progressText = "$done / $total  $name"
-                                                }
-                                            }
-                                        )
+                                        try {
+                                            tempDir.mkdirs()
+                                            val stagedFiles = stageDraggedMp3Files(files, tempDir)
 
-                                        if (doMerge) {
-                                            mergeWavFiles(
+                                            batchConvertMp3ToWav(
                                                 dir = tempDir,
-                                                maxPerFile = mergeCount,
-                                                deleteOriginal = doDeleteWavAfterMerge,
+                                                deleteOriginal = false,
+                                                targetSampleRate = sampleRate,
+                                                targetBitDepth = bitDepth,
                                                 onLog = { msg ->
                                                     coroutineScope.launch(Dispatchers.Main) {
                                                         logLines = logLines + msg
                                                     }
+                                                },
+                                                onProgress = { done, total, name ->
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        progressText = "$done / $total  $name"
+                                                    }
                                                 }
                                             )
-                                        }
 
-                                        // 将结果移到 outDir
-                                        tempDir.walkTopDown().filter { it.isFile }.forEach { f ->
-                                            f.copyTo(File(outDir, f.name), overwrite = true)
-                                            f.delete()
-                                        }
-                                        tempDir.delete()
+                                            val convertedOriginalFiles = stagedFiles
+                                                .filter { it.stagedWavFile.isFile }
+                                                .map { it.originalFile }
 
-                                        coroutineScope.launch(Dispatchers.Main) {
-                                            isConverting = false
-                                            progressText = "完成"
+                                            if (doMerge) {
+                                                mergeWavFiles(
+                                                    dir = tempDir,
+                                                    maxPerFile = mergeCount,
+                                                    deleteOriginal = doDeleteWavAfterMerge,
+                                                    onLog = { msg ->
+                                                        coroutineScope.launch(Dispatchers.Main) {
+                                                            logLines = logLines + msg
+                                                        }
+                                                    }
+                                                )
+                                            }
+
+                                            exportConvertedFiles(tempDir, outDir)
+
+                                            if (doDeleteOriginalMp3) {
+                                                convertedOriginalFiles.forEach { original ->
+                                                    if (!original.delete()) {
+                                                        coroutineScope.launch(Dispatchers.Main) {
+                                                            logLines = logLines + "[删除失败] ${original.absolutePath}"
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            coroutineScope.launch(Dispatchers.Main) {
+                                                isConverting = false
+                                                progressText = "完成"
+                                            }
+                                        } catch (e: Exception) {
+                                            coroutineScope.launch(Dispatchers.Main) {
+                                                isConverting = false
+                                                progressText = "失败"
+                                                logLines = logLines + "[转换中断] ${e.message ?: e::class.simpleName.orEmpty()}"
+                                            }
+                                        } finally {
+                                            tempDir.deleteRecursively()
                                         }
                                     }
                                 },
@@ -468,3 +491,54 @@ fun Mp3ConverterWindow(
     }
 }
 
+
+internal fun stageDraggedMp3Files(files: List<File>, tempDir: File): List<StagedMp3File> =
+    files.mapIndexed { index, source ->
+        val folderName = "%03d_%s".format(index + 1, safePathSegment(source.nameWithoutExtension))
+        val stagedDirectory = File(tempDir, folderName).also { it.mkdirs() }
+        val stagedMp3 = File(stagedDirectory, source.name)
+        source.copyTo(stagedMp3, overwrite = true)
+        StagedMp3File(
+            originalFile = source,
+            stagedDirectory = stagedDirectory,
+            stagedMp3File = stagedMp3,
+            stagedWavFile = File(stagedDirectory, source.nameWithoutExtension + ".wav")
+        )
+    }
+
+internal fun exportConvertedFiles(tempDir: File, outDir: File): List<File> {
+    outDir.mkdirs()
+    val exportedFiles = mutableListOf<File>()
+
+    tempDir.walkTopDown()
+        .filter { it.isFile && shouldExportConvertedFile(it) }
+        .forEach { source ->
+            val target = uniqueOutputFile(outDir, source.name)
+            source.copyTo(target, overwrite = false)
+            exportedFiles += target
+        }
+
+    return exportedFiles
+}
+
+private fun shouldExportConvertedFile(file: File): Boolean {
+    val lowerName = file.name.lowercase()
+    return !lowerName.endsWith(".mp3") && !lowerName.endsWith(".tmp")
+}
+
+private fun uniqueOutputFile(outDir: File, fileName: String): File {
+    val dotIndex = fileName.lastIndexOf('.')
+    val baseName = if (dotIndex > 0) fileName.substring(0, dotIndex) else fileName
+    val extension = if (dotIndex > 0) fileName.substring(dotIndex) else ""
+
+    var candidate = File(outDir, fileName)
+    var index = 2
+    while (candidate.exists()) {
+        candidate = File(outDir, "$baseName ($index)$extension")
+        index++
+    }
+    return candidate
+}
+
+private fun safePathSegment(name: String): String =
+    name.ifBlank { "file" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
