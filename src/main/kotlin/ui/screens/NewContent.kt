@@ -48,6 +48,7 @@ import io.github.composefluent.icons.regular.CheckboxUnchecked
 import io.github.composefluent.icons.regular.MicSparkle
 import io.github.composefluent.icons.regular.Apps
 import io.github.composefluent.icons.regular.DocumentSearch
+import ui.components.ComboBox
 import ui.components.AudioPlayerManager
 import ui.components.EmptyPlaceholder
 import ui.components.FileListItem
@@ -64,6 +65,8 @@ import util.sampleRateLabel
 import viewmodel.MainViewModel
 import viewmodel.SearchMode
 import data.WikiUserApi
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -198,12 +201,39 @@ fun NewDownloaderContent() {
     var showShortcutsDialog by remember { mutableStateOf(false) }
     var showUserInfoDialog by remember { mutableStateOf(false) }
     var showConverterWindow by remember { mutableStateOf(false) }
+    var isRefreshingUser by remember { mutableStateOf(false) }
+    var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
-    if (showConverterWindow) {
-        Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
+    fun refreshCurrentUser() {
+        coroutineScope.launch {
+            isRefreshingUser = true
+            try {
+                when (val result = WikiUserApi.fetchCurrentUserInfoResult()) {
+                    is WikiUserApi.ApiResult.Success -> {
+                        WikiUserApi.updateCurrentUser(result.value)
+                        userQuickActionMessage = when {
+                            result.value == null -> "未读取到账号信息"
+                            result.value.isLoggedIn -> "已刷新账号信息：${result.value.name}"
+                            else -> "当前 Cookie 已失效或未登录"
+                        }
+                    }
+                    is WikiUserApi.ApiResult.Error -> {
+                        userQuickActionMessage = "刷新失败：${result.message}"
+                    }
+                }
+            } finally {
+                isRefreshingUser = false
+            }
+        }
     }
 
-    // 首次使用提示：用 MMKV 持久化已关闭状态
+    LaunchedEffect(currentUser?.id, currentUser?.name) {
+        if (currentUser?.isLoggedIn != true) {
+            userQuickActionMessage = null
+        }
+    }
+
+    // 首次使用提示
     var showCategoryHint by remember { mutableStateOf(!util.AppPrefs.categoryHintDismissed) }
     if (showDialog) {
         AboutWindow(onCloseRequest = { showDialog = false })
@@ -213,6 +243,9 @@ fun NewDownloaderContent() {
     }
     if (showUserInfoDialog) {
         UserInfoWindow(onCloseRequest = { showUserInfoDialog = false })
+    }
+    if (showConverterWindow) {
+        Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
     }
 
     // 搜索框焦点控制
@@ -434,6 +467,43 @@ fun NewDownloaderContent() {
                         text = { Text("个人信息 & 账号管理") },
                         icon = { Icon(Icons.Regular.Person, contentDescription = null) }
                     )
+                    if (isUserLoggedIn) {
+                        val user = currentUser!!
+                        MenuFlyoutSeparator()
+                        MenuFlyoutItem(
+                            onClick = ::refreshCurrentUser,
+                            text = { Text(if (isRefreshingUser) "正在刷新账号信息..." else "刷新账号信息") },
+                            icon = { Icon(Icons.Regular.ArrowSync, contentDescription = null) }
+                        )
+                        MenuFlyoutSeparator()
+                        MenuFlyoutItem(
+                            onClick = { copyTextToClipboard(user.name) },
+                            text = { Text("复制用户名") }
+                        )
+                        MenuFlyoutItem(
+                            onClick = { copyTextToClipboard(user.id.toString()) },
+                            text = { Text("复制用户 ID") }
+                        )
+                        user.email.takeIf { it.isNotBlank() }?.let { email ->
+                            MenuFlyoutItem(
+                                onClick = { copyTextToClipboard(email) },
+                                text = { Text("复制邮箱") }
+                            )
+                        }
+                        MenuFlyoutSeparator()
+                        MenuFlyoutItem(
+                            onClick = { openExternalUrl(userPageUrl(user.name)) },
+                            text = { Text("打开用户页") }
+                        )
+                        MenuFlyoutItem(
+                            onClick = { openExternalUrl(userContributionsUrl(user.name)) },
+                            text = { Text("打开贡献页") }
+                        )
+                        MenuFlyoutItem(
+                            onClick = { openExternalUrl(userUploadsUrl(user.name)) },
+                            text = { Text("打开上传列表") }
+                        )
+                    }
                 }
             )
         }
@@ -606,6 +676,17 @@ fun NewDownloaderContent() {
 
             // --- 右侧：详情与配置 (Weight 0.7) ---
             Column(Modifier.weight(0.7f)) {
+
+                if (isUserLoggedIn && currentUser != null) {
+                    LoggedInUserQuickPanel(
+                        user = currentUser!!,
+                        isRefreshing = isRefreshingUser,
+                        message = userQuickActionMessage,
+                        onOpenManager = { showUserInfoDialog = true },
+                        onRefresh = ::refreshCurrentUser
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
 
                 // 首次使用提示
                 if (showCategoryHint) {
@@ -1138,3 +1219,148 @@ private fun CharacterGroupRow(
         )
     }
 }
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun LoggedInUserQuickPanel(
+    user: WikiUserApi.UserInfo,
+    isRefreshing: Boolean,
+    message: String?,
+    onOpenManager: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    val roleText = remember(user.groups) {
+        user.groups.filter { it != "*" && it != "user" }.joinToString(" · ").ifBlank { "普通用户" }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(38.dp).clip(CircleShape)
+                        .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.85f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        user.name.take(1).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(user.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier.clip(RoundedCornerShape(999.dp))
+                                .background(Color(0xFF4CAF50).copy(alpha = 0.16f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("已登录", fontSize = 11.sp, color = Color(0xFF2E7D32))
+                        }
+                    }
+                    Text(roleText, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+                    user.realName.takeIf { it.isNotBlank() }?.let {
+                        Text("实名：$it", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                    }
+                }
+                Button(onClick = onOpenManager, modifier = Modifier.height(28.dp)) {
+                    Text("账号管理", fontSize = 12.sp)
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                UserStatChip(label = "用户 ID", value = user.id.toString(), modifier = Modifier.weight(1f))
+                UserStatChip(label = "编辑次数", value = user.editCount.toString(), modifier = Modifier.weight(1f))
+                UserStatChip(
+                    label = "注册时间",
+                    value = WikiUserApi.formatTimestamp(user.registrationDate),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            user.email.takeIf { it.isNotBlank() }?.let {
+                Text("邮箱：$it", fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(onClick = onRefresh, modifier = Modifier.height(28.dp)) {
+                    if (isRefreshing) {
+                        ProgressRing(size = 14.dp)
+                    } else {
+                        Text("刷新资料", fontSize = 12.sp)
+                    }
+                }
+                Button(onClick = { copyTextToClipboard(user.name) }, modifier = Modifier.height(28.dp)) {
+                    Text("复制用户名", fontSize = 12.sp)
+                }
+                Button(onClick = { copyTextToClipboard(user.id.toString()) }, modifier = Modifier.height(28.dp)) {
+                    Text("复制 ID", fontSize = 12.sp)
+                }
+                if (user.email.isNotBlank()) {
+                    Button(onClick = { copyTextToClipboard(user.email) }, modifier = Modifier.height(28.dp)) {
+                        Text("复制邮箱", fontSize = 12.sp)
+                    }
+                }
+                Button(onClick = { openExternalUrl(userPageUrl(user.name)) }, modifier = Modifier.height(28.dp)) {
+                    Text("用户页", fontSize = 12.sp)
+                }
+                Button(onClick = { openExternalUrl(userContributionsUrl(user.name)) }, modifier = Modifier.height(28.dp)) {
+                    Text("贡献页", fontSize = 12.sp)
+                }
+                Button(onClick = { openExternalUrl(userUploadsUrl(user.name)) }, modifier = Modifier.height(28.dp)) {
+                    Text("上传列表", fontSize = 12.sp)
+                }
+            }
+
+            if (!message.isNullOrBlank()) {
+                Text(
+                    message,
+                    fontSize = 12.sp,
+                    color = if (message.startsWith("刷新失败")) Color(0xFFE57373) else FluentTheme.colors.text.text.secondary
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun UserStatChip(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text(label, fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+            Spacer(Modifier.height(2.dp))
+            Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+private const val WIKI_BASE_URL = "https://wiki.biligame.com/klbq"
+
+private fun userPageUrl(userName: String): String = wikiTitleUrl("User:$userName")
+
+private fun userContributionsUrl(userName: String): String = wikiTitleUrl("Special:Contributions/$userName")
+
+private fun userUploadsUrl(userName: String): String = wikiTitleUrl("Special:ListFiles/$userName")
+
+private fun wikiTitleUrl(title: String): String =
+    "$WIKI_BASE_URL/index.php?title=${URLEncoder.encode(title, StandardCharsets.UTF_8.toString())}"
+
+private fun copyTextToClipboard(text: String): Boolean = runCatching {
+    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+    clipboard.setContents(java.awt.datatransfer.StringSelection(text), null)
+}.isSuccess
+
+private fun openExternalUrl(url: String): Boolean = runCatching {
+    java.awt.Desktop.getDesktop().browse(java.net.URI(url))
+}.isSuccess

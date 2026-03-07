@@ -25,17 +25,15 @@ import java.awt.FlowLayout
 import java.awt.Frame
 import java.awt.Label
 
-// All app-wide UI state is stored in AppStore.kt — access via LocalAppStore
-
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
 fun main() = application {
     setupGlobalExceptionHandler()
-    val windowState = rememberWindowState(width = 1200.dp, height = 850.dp)
+    val windowState = rememberWindowState(width = 1280.dp, height = 900.dp)
 
     Window(
         onCloseRequest = ::exitApplication,
-        title = "卡拉彼丘 WiKi 语音下载器",
+        title = "卡拉彼丘 WiKi 资源下载器",
         icon = painterResource("icon.png"),
         state = windowState
     ) {
@@ -81,7 +79,7 @@ fun main() = application {
                 // 是否使用任何 Backdrop 效果（非默认渐变）
                 val useBackdropEffect = skiaLayerExists && currentBackdrop != null
                 WindowsWindowFrame(
-                    title = "卡拉彼丘 WiKi 语音下载器",
+                    title = "卡拉彼丘 WiKi 资源下载器",
                     onCloseRequest = ::exitApplication,
                     state = windowState,
                     frameState = windowFrameState,

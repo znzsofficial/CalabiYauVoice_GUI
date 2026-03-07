@@ -26,7 +26,7 @@ fun AboutContent(modifier: Modifier = Modifier) {
         ) {
             // 1. 标题和版本
             Text(
-                text = "卡拉彼丘 Wiki 语音下载器",
+                text = "卡拉彼丘 Wiki 资源下载器",
                 style = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,

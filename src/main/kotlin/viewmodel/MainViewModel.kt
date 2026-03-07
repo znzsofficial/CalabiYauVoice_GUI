@@ -128,7 +128,7 @@ class MainViewModel(
     // =========================================================
     // 日志
     // =========================================================
-    private val _logLines = MutableStateFlow(listOf("欢迎使用卡拉彼丘 Wiki 语音下载器。"))
+    private val _logLines = MutableStateFlow(listOf("欢迎使用卡拉彼丘 Wiki 资源下载器。"))
     val logLines: StateFlow<List<String>> = _logLines.asStateFlow()
 
     // =========================================================
