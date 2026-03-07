@@ -5,6 +5,18 @@ import data.WikiUserApi
 import data.WikiUserApi.ApiResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import util.AppPrefs
+
+private const val MAX_RECENT_LOOKUPS = 10
+
+internal fun appendRecentLookupId(existing: List<String>, newId: String, maxSize: Int = MAX_RECENT_LOOKUPS): List<String> {
+    val normalized = newId.trim().trimStart('#')
+    if (normalized.isBlank()) return existing
+    return buildList {
+        add(normalized)
+        addAll(existing.filterNot { it == normalized }.take(maxSize - 1))
+    }
+}
 
 enum class UserInfoTab { INFO, CONTRIBUTIONS, WATCHLIST, LOG }
 
@@ -88,6 +100,8 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     // ─── 公开用户查询 ──────────────────────────────────────────────
     private val _lookupQuery = MutableStateFlow("")
     val lookupQuery: StateFlow<String> = _lookupQuery.asStateFlow()
+    private val _recentLookupIds = MutableStateFlow(AppPrefs.recentUserLookupIds)
+    val recentLookupIds: StateFlow<List<String>> = _recentLookupIds.asStateFlow()
 
     private val _lookupResult = MutableStateFlow<WikiUserApi.PublicUserInfo?>(null)
     val lookupResult: StateFlow<WikiUserApi.PublicUserInfo?> = _lookupResult.asStateFlow()
@@ -139,6 +153,22 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     fun onLogSortOrderChange(order: LogSortOrder) { _logSortOrder.value = order }
 
     fun onLookupQueryChange(q: String) { _lookupQuery.value = q }
+
+    fun useRecentLookup(id: String) {
+        _lookupQuery.value = id
+        lookupUser()
+    }
+
+    fun removeRecentLookup(id: String) {
+        val next = _recentLookupIds.value.filterNot { it == id }
+        _recentLookupIds.value = next
+        AppPrefs.recentUserLookupIds = next
+    }
+
+    fun clearRecentLookups() {
+        _recentLookupIds.value = emptyList()
+        AppPrefs.recentUserLookupIds = emptyList()
+    }
 
     fun onLookupDetailTabChange(tab: LookupDetailTab) {
         _lookupDetailTab.value = tab
@@ -341,6 +371,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                         } else if (!publicUser.exists) {
                             _lookupError.value = "⚠️ 用户 ID「$q」不存在"
                         } else {
+                            rememberRecentLookup(q)
                             _lookupSummaryState.value = RequestState.Loading
                             val blockDeferred = async { WikiUserApi.fetchBlockStatusResult(publicUser.name) }
                             val lastEditDeferred = async { WikiUserApi.fetchLastEditTimestampResult(publicUser.name) }
@@ -433,6 +464,12 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
 
     private fun currentAuthenticatedUserName(): String? =
         _userInfo.value?.takeIf { it.isLoggedIn }?.name ?: WikiCookieManager.extractUserNameFromCookies()
+
+    private fun rememberRecentLookup(id: String) {
+        val next = appendRecentLookupId(_recentLookupIds.value, id)
+        _recentLookupIds.value = next
+        AppPrefs.recentUserLookupIds = next
+    }
 
     private fun cancelAuthenticatedJobs() {
         listOfNotNull(fetchUserInfoJob, contributionsJob, watchlistJob, logEventsJob).forEach { it.cancel() }

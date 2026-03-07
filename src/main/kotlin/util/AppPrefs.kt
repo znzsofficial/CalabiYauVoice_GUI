@@ -12,7 +12,8 @@ import java.io.File
 private data class PrefsData(
     val categoryHintDismissed: Boolean = false,
     val savePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源",
-    val converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted"
+    val converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted",
+    val recentUserLookupIds: List<String> = emptyList()
 )
 
 object AppPrefs {
@@ -45,4 +46,8 @@ object AppPrefs {
     var converterSavePath: String
         get() = data.converterSavePath
         set(value) { data = data.copy(converterSavePath = value); save() }
+
+    var recentUserLookupIds: List<String>
+        get() = data.recentUserLookupIds
+        set(value) { data = data.copy(recentUserLookupIds = value); save() }
 }

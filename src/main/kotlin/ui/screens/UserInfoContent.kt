@@ -2,11 +2,13 @@ package ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +60,7 @@ fun UserInfoContent(
     val currentTab by viewModel.currentTab.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val lookupQuery by viewModel.lookupQuery.collectAsState()
+    val recentLookupIds by viewModel.recentLookupIds.collectAsState()
     val lookupResult by viewModel.lookupResult.collectAsState()
     val lookupBlockStatus by viewModel.lookupBlockStatus.collectAsState()
     val lookupLastEdit by viewModel.lookupLastEdit.collectAsState()
@@ -84,6 +87,7 @@ fun UserInfoContent(
 
         PublicUserLookupSection(
             lookupQuery = lookupQuery,
+            recentLookupIds = recentLookupIds,
             lookupResult = lookupResult,
             lookupBlockStatus = lookupBlockStatus,
             lookupLastEdit = lookupLastEdit,
@@ -97,6 +101,9 @@ fun UserInfoContent(
             lookupLogRequestState = lookupLogRequestState,
             onLookupQueryChange = viewModel::onLookupQueryChange,
             onLookup = viewModel::lookupUser,
+            onUseRecentLookup = viewModel::useRecentLookup,
+            onRemoveRecentLookup = viewModel::removeRecentLookup,
+            onClearRecentLookups = viewModel::clearRecentLookups,
             onDetailTabChange = viewModel::onLookupDetailTabChange,
             onRefreshFiles = viewModel::fetchLookupFiles,
             onRefreshLog = viewModel::fetchLookupLog
@@ -197,6 +204,7 @@ private fun CookieImportSection(
 @Composable
 private fun PublicUserLookupSection(
     lookupQuery: String,
+    recentLookupIds: List<String>,
     lookupResult: WikiUserApi.PublicUserInfo?,
     lookupBlockStatus: WikiUserApi.BlockInfo?,
     lookupLastEdit: String?,
@@ -210,10 +218,14 @@ private fun PublicUserLookupSection(
     lookupLogRequestState: RequestState,
     onLookupQueryChange: (String) -> Unit,
     onLookup: () -> Unit,
+    onUseRecentLookup: (String) -> Unit,
+    onRemoveRecentLookup: (String) -> Unit,
+    onClearRecentLookups: () -> Unit,
     onDetailTabChange: (LookupDetailTab) -> Unit,
     onRefreshFiles: (String) -> Unit,
     onRefreshLog: (String) -> Unit
 ) {
+    var actionMessage by remember { mutableStateOf<String?>(null) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("查询用户", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -227,7 +239,10 @@ private fun PublicUserLookupSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextField(
                     value = lookupQuery,
-                    onValueChange = onLookupQueryChange,
+                    onValueChange = {
+                        actionMessage = null
+                        onLookupQueryChange(it)
+                    },
                     modifier = Modifier.weight(1f).onKeyEvent { keyEvent ->
                         if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyDown) {
                             onLookup(); true
@@ -236,6 +251,19 @@ private fun PublicUserLookupSection(
                     singleLine = true,
                     placeholder = { Text("用户 ID（如 5205017）") }
                 )
+                Spacer(Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        val pasted = readClipboardText().orEmpty()
+                        if (pasted.isBlank()) {
+                            actionMessage = "剪贴板中没有可用文本"
+                        } else {
+                            onLookupQueryChange(pasted)
+                            actionMessage = "已粘贴剪贴板内容"
+                        }
+                    },
+                    modifier = Modifier.height(32.dp)
+                ) { Text("粘贴") }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = onLookup, disabled = isLoadingLookup || lookupQuery.isBlank()) {
                     if (isLoadingLookup) ProgressRing(size = 16.dp)
@@ -249,6 +277,45 @@ private fun PublicUserLookupSection(
             if (lookupError.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(lookupError, fontSize = 12.sp, color = Color(0xFFE57373))
+            } else if (!actionMessage.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(actionMessage!!, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+            }
+            if (recentLookupIds.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "最近查询",
+                        fontSize = 12.sp,
+                        color = FluentTheme.colors.text.text.secondary,
+                        modifier = Modifier.width(64.dp)
+                    )
+                    Row(
+                        modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        recentLookupIds.forEach { id ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Button(
+                                    onClick = {
+                                        actionMessage = null
+                                        onUseRecentLookup(id)
+                                    },
+                                    modifier = Modifier.height(26.dp)
+                                ) { Text(id, fontSize = 11.sp) }
+                                Spacer(Modifier.width(4.dp))
+                                Button(
+                                    onClick = { onRemoveRecentLookup(id) },
+                                    modifier = Modifier.height(26.dp)
+                                ) { Text("×", fontSize = 11.sp) }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = onClearRecentLookups, modifier = Modifier.height(26.dp)) {
+                        Text("清空", fontSize = 11.sp)
+                    }
+                }
             }
             if (lookupResult != null && lookupResult.exists) {
                 Spacer(Modifier.height(12.dp))
@@ -400,6 +467,15 @@ private fun UserHeaderCard(info: WikiUserApi.UserInfo) {
                     fontSize = 18.sp,
                     color = FluentTheme.colors.fillAccent.default
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(onClick = { copyTextToClipboard(info.name) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制用户名", fontSize = 10.sp)
+                    }
+                    Button(onClick = { copyTextToClipboard(info.id.toString()) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制 ID", fontSize = 10.sp)
+                    }
+                }
             }
             if (info.registrationDate.isNotBlank()) {
                 Spacer(Modifier.width(24.dp))
@@ -533,6 +609,10 @@ private fun InfoRow(label: String, value: String) {
             modifier = Modifier.width(110.dp)
         )
         Text(value, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        Button(onClick = { copyTextToClipboard(value) }, modifier = Modifier.height(24.dp)) {
+            Text("复制", fontSize = 10.sp)
+        }
     }
 }
 
@@ -633,6 +713,17 @@ private fun ContribItem(contrib: WikiUserApi.UserContrib) {
                     maxLines = 1
                 )
             }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = { copyTextToClipboard(contrib.title) }, modifier = Modifier.height(24.dp)) {
+                    Text("复制标题", fontSize = 10.sp)
+                }
+                if (contrib.comment.isNotBlank()) {
+                    Button(onClick = { copyTextToClipboard(contrib.comment) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制摘要", fontSize = 10.sp)
+                    }
+                }
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
@@ -689,6 +780,15 @@ private fun WatchlistItem(item: WikiUserApi.WatchlistItem) {
                     color = FluentTheme.colors.text.text.secondary,
                     maxLines = 1
                 )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = { copyTextToClipboard(item.title) }, modifier = Modifier.height(24.dp)) {
+                    Text("复制标题", fontSize = 10.sp)
+                }
+                Button(onClick = { copyTextToClipboard(item.user) }, modifier = Modifier.height(24.dp)) {
+                    Text("复制用户", fontSize = 10.sp)
+                }
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -749,6 +849,17 @@ private fun LogEventItem(event: WikiUserApi.LogEvent) {
                     color = FluentTheme.colors.text.text.secondary,
                     maxLines = 1
                 )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = { copyTextToClipboard(event.title) }, modifier = Modifier.height(24.dp)) {
+                    Text("复制标题", fontSize = 10.sp)
+                }
+                if (event.comment.isNotBlank()) {
+                    Button(onClick = { copyTextToClipboard(event.comment) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制摘要", fontSize = 10.sp)
+                    }
+                }
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -955,6 +1066,30 @@ private fun PublicUserInfoCard(
                     user.editCount.toString(), fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
                     color = FluentTheme.colors.fillAccent.default
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Button(onClick = { copyTextToClipboard(user.userid.toString()) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制 ID", fontSize = 10.sp)
+                    }
+                    Button(onClick = { copyTextToClipboard(user.name) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制用户名", fontSize = 10.sp)
+                    }
+                    Button(
+                        onClick = {
+                            copyTextToClipboard(
+                                buildString {
+                                    appendLine("用户：${user.name}")
+                                    appendLine("ID：${user.userid}")
+                                    appendLine("编辑次数：${user.editCount}")
+                                    append("注册时间：${WikiUserApi.formatTimestamp(user.registrationDate)}")
+                                }
+                            )
+                        },
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text("复制摘要", fontSize = 10.sp)
+                    }
+                }
             }
         }
         // 详情芯片行
@@ -1319,6 +1454,20 @@ private fun UserFileItem(file: WikiUserApi.UserFile) {
                 color = FluentTheme.colors.text.text.secondary,
                 maxLines = 1
             )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = { copyTextToClipboard(file.name) }, modifier = Modifier.height(24.dp)) {
+                    Text("复制文件名", fontSize = 10.sp)
+                }
+                if (file.url.isNotBlank()) {
+                    Button(onClick = { copyTextToClipboard(file.url) }, modifier = Modifier.height(24.dp)) {
+                        Text("复制链接", fontSize = 10.sp)
+                    }
+                    Button(onClick = { openExternalUrl(file.url) }, modifier = Modifier.height(24.dp)) {
+                        Text("打开链接", fontSize = 10.sp)
+                    }
+                }
+            }
         }
         Spacer(Modifier.width(12.dp))
         Text(
@@ -1334,3 +1483,19 @@ private fun formatFileSize(size: Long): String = when {
     size < 1024 * 1024 -> "%.1f KB".format(size / 1024.0)
     else -> "%.1f MB".format(size / 1024.0 / 1024.0)
 }
+
+private fun copyTextToClipboard(text: String): Boolean = runCatching {
+    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+    clipboard.setContents(java.awt.datatransfer.StringSelection(text), null)
+}.isSuccess
+
+private fun readClipboardText(): String? = runCatching {
+    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+    val data = clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+    data?.trim()
+}.getOrNull()
+
+private fun openExternalUrl(url: String): Boolean = runCatching {
+    java.awt.Desktop.getDesktop().browse(java.net.URI(url))
+}.isSuccess
+
