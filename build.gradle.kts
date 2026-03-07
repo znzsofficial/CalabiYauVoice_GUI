@@ -49,6 +49,7 @@ dependencies {
     //implementation("org.jsoup:jsoup:1.22.1")
 
     implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
+    implementation("org.jflac:jflac-codec:1.5.2")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")

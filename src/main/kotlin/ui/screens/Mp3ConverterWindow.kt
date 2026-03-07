@@ -37,10 +37,10 @@ import util.AppPrefs
 import java.awt.datatransfer.DataFlavor
 import java.io.File
 
-internal data class StagedMp3File(
+internal data class StagedAudioFile(
     val originalFile: File,
     val stagedDirectory: File,
-    val stagedMp3File: File,
+    val stagedSourceFile: File,
     val stagedWavFile: File
 )
 
@@ -61,7 +61,7 @@ fun Mp3ConverterWindow(
     var mergeWavMaxCountStr by remember { mutableStateOf("0") }
     var deleteWavAfterMerge by remember { mutableStateOf(true) }
 
-    // 拖入的 MP3 文件列表
+    // 拖入的音频文件列表
     var mp3Files by remember { mutableStateOf<List<File>>(emptyList()) }
     var isDraggingOver by remember { mutableStateOf(false) }
 
@@ -78,7 +78,7 @@ fun Mp3ConverterWindow(
     )
 
     StyledWindow(
-        title = "MP3 → WAV 转换工具",
+        title = "MP3/FLAC → WAV 转换工具",
         onCloseRequest = onCloseRequest,
         state = windowState,
         onKeyEvent = { keyEvent ->
@@ -181,7 +181,7 @@ fun Mp3ConverterWindow(
                                         checked = deleteOriginalMp3,
                                         onCheckStateChange = { deleteOriginalMp3 = it },
                                         textBefore = true,
-                                        text = "删除原始 MP3"
+                                        text = "删除原始源文件"
                                     )
                                     Switcher(
                                         checked = mergeWav,
@@ -268,11 +268,11 @@ fun Mp3ConverterWindow(
                                                     val newMp3s = dropped
                                                         .flatMap { f ->
                                                             if (f.isDirectory) f.walkTopDown()
-                                                                .filter { it.isFile && it.extension.lowercase() == "mp3" }
+                                                                .filter(::isSupportedAudioSource)
                                                                 .toList()
                                                             else listOf(f)
                                                         }
-                                                        .filter { it.extension.lowercase() == "mp3" }
+                                                        .filter(::isSupportedAudioSource)
                                                     mp3Files = (mp3Files + newMp3s).distinctBy { it.absolutePath }
                                                     return true
                                                 }
@@ -293,7 +293,7 @@ fun Mp3ConverterWindow(
                                             tint = FluentTheme.colors.text.text.secondary
                                         )
                                         Text(
-                                            "将 MP3 文件或文件夹拖放到此处",
+                                            "将 MP3/FLAC 文件或文件夹拖放到此处",
                                             color = FluentTheme.colors.text.text.secondary,
                                             fontSize = 13.sp
                                         )
@@ -410,9 +410,9 @@ fun Mp3ConverterWindow(
 
                                         try {
                                             tempDir.mkdirs()
-                                            val stagedFiles = stageDraggedMp3Files(files, tempDir)
+                                            val stagedFiles = stageDraggedAudioFiles(files, tempDir)
 
-                                            batchConvertMp3ToWav(
+                                            batchConvertAudioToWav(
                                                 dir = tempDir,
                                                 deleteOriginal = false,
                                                 targetSampleRate = sampleRate,
@@ -492,16 +492,16 @@ fun Mp3ConverterWindow(
 }
 
 
-internal fun stageDraggedMp3Files(files: List<File>, tempDir: File): List<StagedMp3File> =
+internal fun stageDraggedAudioFiles(files: List<File>, tempDir: File): List<StagedAudioFile> =
     files.mapIndexed { index, source ->
         val folderName = "%03d_%s".format(index + 1, safePathSegment(source.nameWithoutExtension))
         val stagedDirectory = File(tempDir, folderName).also { it.mkdirs() }
-        val stagedMp3 = File(stagedDirectory, source.name)
-        source.copyTo(stagedMp3, overwrite = true)
-        StagedMp3File(
+        val stagedSourceFile = File(stagedDirectory, source.name)
+        source.copyTo(stagedSourceFile, overwrite = true)
+        StagedAudioFile(
             originalFile = source,
             stagedDirectory = stagedDirectory,
-            stagedMp3File = stagedMp3,
+            stagedSourceFile = stagedSourceFile,
             stagedWavFile = File(stagedDirectory, source.nameWithoutExtension + ".wav")
         )
     }
@@ -523,7 +523,7 @@ internal fun exportConvertedFiles(tempDir: File, outDir: File): List<File> {
 
 private fun shouldExportConvertedFile(file: File): Boolean {
     val lowerName = file.name.lowercase()
-    return !lowerName.endsWith(".mp3") && !lowerName.endsWith(".tmp")
+    return SUPPORTED_AUDIO_SOURCE_EXTENSIONS.none { lowerName.endsWith(".$it") } && !lowerName.endsWith(".tmp")
 }
 
 private fun uniqueOutputFile(outDir: File, fileName: String): File {

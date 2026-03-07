@@ -3,7 +3,7 @@ package viewmodel
 import data.WikiEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import util.batchConvertMp3ToWav
+import util.batchConvertAudioToWav
 import util.mergeWavFiles
 import util.BIT_DEPTH_OPTIONS
 import util.DEFAULT_BIT_DEPTH_INDEX
@@ -101,11 +101,11 @@ class MainViewModel(
     private val _progressText = MutableStateFlow("")
     val progressText: StateFlow<String> = _progressText.asStateFlow()
 
-    /** 下载完成后是否将 MP3 批量转为 WAV */
+    /** 下载完成后是否将 MP3/FLAC 批量转为 WAV */
     private val _convertAfterDownload = MutableStateFlow(false)
     val convertAfterDownload: StateFlow<Boolean> = _convertAfterDownload.asStateFlow()
 
-    /** 转换成功后是否删除原始 MP3 */
+    /** 转换成功后是否删除原始 MP3/FLAC */
     private val _deleteOriginalMp3 = MutableStateFlow(true)
     val deleteOriginalMp3: StateFlow<Boolean> = _deleteOriginalMp3.asStateFlow()
 
@@ -402,13 +402,13 @@ class MainViewModel(
                     )
                     addLog("全部下载完成！")
 
-                    // 批量 MP3 → WAV 转换（可选）
+                    // 批量 MP3/FLAC → WAV 转换（可选）
                     if (_convertAfterDownload.value) {
-                        addLog("开始批量转换 MP3 → WAV…")
+                        addLog("开始批量转换 MP3/FLAC → WAV…")
                         _progressText.value = "正在转换…"
                         val sampleRate = util.SAMPLE_RATE_OPTIONS[_targetSampleRateIndex.value]
                         val bitDepth = BIT_DEPTH_OPTIONS[_targetBitDepthIndex.value]
-                        batchConvertMp3ToWav(
+                        batchConvertAudioToWav(
                             dir = targetDir,
                             deleteOriginal = _deleteOriginalMp3.value,
                             targetSampleRate = sampleRate,
@@ -458,4 +458,3 @@ class MainViewModel(
         _logLines.value = current
     }
 }
-

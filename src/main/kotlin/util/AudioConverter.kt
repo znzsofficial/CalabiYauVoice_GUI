@@ -24,23 +24,26 @@ val BIT_DEPTH_OPTIONS: List<Int> = listOf(16, 24, 32)
 /** 默认位深索引（16-bit） */
 const val DEFAULT_BIT_DEPTH_INDEX = 0
 
+val SUPPORTED_AUDIO_SOURCE_EXTENSIONS: Set<String> = setOf("mp3", "flac")
+private const val SUPPORTED_AUDIO_SOURCE_LABEL = "MP3/FLAC"
 private const val GENERATED_MERGED_TAG = "_merged"
 private const val AUDIO_RATE_TOLERANCE = 0.5f
 
 fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" else "${rate.toInt()} Hz"
 fun bitDepthLabel(bits: Int): String = if (bits == 32) "浮点 32 bit" else "$bits bit"
+fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.lowercase() in SUPPORTED_AUDIO_SOURCE_EXTENSIONS
 
 /**
- * 使用 soundlibs (mp3spi + tritonus-share) 将目录下所有 MP3 文件批量转换为 WAV。
+ * 使用 Java Sound SPI 将目录下所有 MP3/FLAC 文件批量转换为 WAV。
  *
  * @param dir              需要扫描的根目录（递归子目录）
- * @param deleteOriginal   转换成功后是否删除原 MP3，默认 true
+ * @param deleteOriginal   转换成功后是否删除原始音频，默认 true
  * @param targetSampleRate 目标采样率（Hz）；null = 保留原始采样率
  * @param targetBitDepth   目标位深（16 / 24 / 32），默认 16
  * @param onLog            日志回调
  * @param onProgress       进度回调 (已完成数, 总数, 当前文件名)
  */
-suspend fun batchConvertMp3ToWav(
+suspend fun batchConvertAudioToWav(
     dir: File,
     deleteOriginal: Boolean = true,
     targetSampleRate: Float? = null,
@@ -50,65 +53,80 @@ suspend fun batchConvertMp3ToWav(
 ) = withContext(Dispatchers.IO) {
     validateTargetFormat(targetSampleRate, targetBitDepth)
 
-    val mp3Files = dir.walkTopDown()
-        .filter { it.isFile && it.extension.lowercase() == "mp3" }
+    val sourceFiles = dir.walkTopDown()
+        .filter(::isSupportedAudioSource)
         .toList()
 
-    if (mp3Files.isEmpty()) {
-        onLog("未找到需要转换的 MP3 文件。")
+    if (sourceFiles.isEmpty()) {
+        onLog("未找到需要转换的 $SUPPORTED_AUDIO_SOURCE_LABEL 文件。")
         return@withContext
     }
 
     val rateDesc = sampleRateLabel(targetSampleRate)
     val depthDesc = bitDepthLabel(targetBitDepth)
-    onLog("找到 ${mp3Files.size} 个 MP3 文件，开始批量转换为 WAV ($rateDesc / $depthDesc)…")
+    onLog("找到 ${sourceFiles.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc)…")
     var successCount = 0
     var failCount = 0
 
-    mp3Files.forEachIndexed { index, mp3File ->
+    sourceFiles.forEachIndexed { index, sourceFile ->
         if (!isActive) return@withContext
 
-        val wavFile = File(mp3File.parentFile ?: dir, mp3File.nameWithoutExtension + ".wav")
-        onProgress(index, mp3Files.size, mp3File.name)
+        val wavFile = File(sourceFile.parentFile ?: dir, sourceFile.nameWithoutExtension + ".wav")
+        onProgress(index, sourceFiles.size, sourceFile.name)
 
         try {
-            convertMp3ToWav(mp3File, wavFile, targetSampleRate, targetBitDepth)
+            convertAudioToWav(sourceFile, wavFile, targetSampleRate, targetBitDepth)
             successCount++
-            if (deleteOriginal && !mp3File.delete()) {
-                onLog("[删除失败] ${mp3File.name}")
+            if (deleteOriginal && !sourceFile.delete()) {
+                onLog("[删除失败] ${sourceFile.name}")
             }
         } catch (e: Exception) {
             failCount++
-            onLog("[转换失败] ${mp3File.name}: ${e.message}")
+            onLog("[转换失败] ${sourceFile.name}: ${e.message}")
             cleanupFileQuietly(wavFile)
             cleanupFileQuietly(tempSiblingOf(wavFile))
         }
     }
 
-    onProgress(mp3Files.size, mp3Files.size, "")
+    onProgress(sourceFiles.size, sourceFiles.size, "")
     onLog("转换完成：成功 $successCount 个，失败 $failCount 个。")
 }
 
 /**
- * 将单个 MP3 文件转换为 WAV 文件。
- * 使用 mp3spi 提供的 MpegAudioFileReader（通过 Java SPI 自动注册）。
+ * 兼容旧调用：将目录下所有 MP3 文件批量转换为 WAV。
+ */
+@Suppress("unused")
+suspend fun batchConvertMp3ToWav(
+    dir: File,
+    deleteOriginal: Boolean = true,
+    targetSampleRate: Float? = null,
+    targetBitDepth: Int = 16,
+    onLog: (String) -> Unit = {},
+    onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
+) = batchConvertAudioToWav(dir, deleteOriginal, targetSampleRate, targetBitDepth, onLog, onProgress)
+
+/**
+ * 将单个 MP3/FLAC 文件转换为 WAV 文件。
+ * 使用 Java Sound SPI 提供的解码器（通过 SPI 自动注册）。
  *
  * @param targetSampleRate 目标采样率；null = 保留原始
  * @param targetBitDepth   目标位深（16 / 24 / 32），默认 16
  */
-fun convertMp3ToWav(
-    mp3File: File,
+fun convertAudioToWav(
+    sourceFile: File,
     wavFile: File,
     targetSampleRate: Float? = null,
     targetBitDepth: Int = 16
 ) {
-    require(mp3File.isFile) { "MP3 文件不存在：${mp3File.absolutePath}" }
+    require(sourceFile.isFile) { "音频文件不存在：${sourceFile.absolutePath}" }
+    require(isSupportedAudioSource(sourceFile)) {
+        "不支持的音频格式：${sourceFile.extension.ifBlank { "<none>" }}，仅支持 ${SUPPORTED_AUDIO_SOURCE_EXTENSIONS.joinToString("/")}" }
     validateTargetFormat(targetSampleRate, targetBitDepth)
     wavFile.parentFile?.mkdirs()
 
-    // 1. 打开 MP3 输入流（mp3spi SPI 自动接管）
-    AudioSystem.getAudioInputStream(mp3File).use { mp3Stream ->
-        val baseFormat: AudioFormat = mp3Stream.format
+    // 1. 打开音频输入流（mp3spi/jflac SPI 自动接管）
+    AudioSystem.getAudioInputStream(sourceFile).use { sourceStream ->
+        val baseFormat: AudioFormat = sourceStream.format
         val sampleRate = targetSampleRate ?: baseFormat.sampleRate
         val channels = baseFormat.channels
 
@@ -121,12 +139,11 @@ fun convertMp3ToWav(
             channels,
             channels * (targetBitDepth / 8),
             sampleRate,
-            false   // little-endian
+            false
         )
 
         // 3. 解码为 PCM 流
-        AudioSystem.getAudioInputStream(pcmFormat, mp3Stream).use { pcmStream ->
-            // 4. 先写入临时文件，成功后再替换目标文件
+        AudioSystem.getAudioInputStream(pcmFormat, sourceStream).use { pcmStream ->
             val tempFile = tempSiblingOf(wavFile)
             cleanupFileQuietly(tempFile)
             try {
@@ -139,6 +156,17 @@ fun convertMp3ToWav(
         }
     }
 }
+
+/**
+ * 兼容旧调用：将单个 MP3 文件转换为 WAV 文件。
+ */
+@Suppress("unused")
+fun convertMp3ToWav(
+    mp3File: File,
+    wavFile: File,
+    targetSampleRate: Float? = null,
+    targetBitDepth: Int = 16
+) = convertAudioToWav(mp3File, wavFile, targetSampleRate, targetBitDepth)
 
 /**
  * 将目录下所有 WAV 文件按顺序合并为一个（或多个）WAV 文件。

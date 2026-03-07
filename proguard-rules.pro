@@ -58,11 +58,13 @@
 -keep class com.mayakapps.compose.windowstyler.** { *; }
 
 # 5. Java Sound SPI 保护
-# mp3spi 和 tritonus 通过 META-INF/services 动态加载，ProGuard 无法静态分析到引用，
-# 必须显式保留，否则打包后 AudioSystem 找不到 MP3/PCM 解码器导致播放失败。
+# mp3spi、tritonus 和 jflac 通过 META-INF/services 动态加载，ProGuard 无法静态分析到引用，
+# 必须显式保留，否则打包后 AudioSystem 找不到 MP3/FLAC/PCM 解码器导致播放或转换失败。
 -keep class javazoom.spi.** { *; }
 -keep class javazoom.jl.** { *; }
 -keep class org.tritonus.** { *; }
+-keep class org.kc7bfi.jflac.** { *; }
+-keep class org.jflac.** { *; }
 -keep class javax.sound.sampled.spi.** { *; }
 -keep class javax.sound.sampled.AudioSystem { *; }
 
@@ -75,3 +77,5 @@
 # 同时防止 SPI 服务文件里的类名被混淆（obfuscate 关闭时无影响，但作为保障）
 -keepnames class javazoom.** { *; }
 -keepnames class org.tritonus.** { *; }
+-keepnames class org.kc7bfi.jflac.** { *; }
+-keepnames class org.jflac.** { *; }

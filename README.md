@@ -29,7 +29,7 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 - **⚡ Concurrent Downloads:** Scan category trees and download files with built-in concurrency control.
 - **🖼️ Rich Preview:** Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`. Click to enlarge, scroll to zoom.
 - **🎵 Audio Playback:** In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files directly from search results.
-- **🔄 MP3 → WAV Conversion:** Batch-convert downloaded MP3 files to WAV with configurable sample rate and bit depth.
+- **🔄 MP3/FLAC → WAV Conversion:** Batch-convert downloaded `MP3` or `FLAC` files to WAV with configurable sample rate and bit depth.
 - **⌨️ Keyboard Shortcuts:** `Ctrl+F` focus search, `F5` re-search, `Ctrl+D` download, `Ctrl+A` / `Ctrl+Shift+A` select all / deselect, `↑↓` navigate list, and more.
 - **🎛️ Windows Backdrop:** Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles at runtime.
 - **🪟 Custom Title Bar:** Borderless native window with custom caption buttons and drag-to-move support.
@@ -40,7 +40,7 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 - **Core:** Kotlin, Coroutines
 - **UI:** Compose Desktop, [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler)
 - **Network & Data:** OkHttp, kotlinx.serialization
-- **Audio:** `javax.sound.sampled` (WAV/OGG/FLAC), `mp3spi` (MP3)
+- **Audio:** `javax.sound.sampled` (WAV/OGG/FLAC), `mp3spi` (MP3), `jflac-codec` (FLAC decode)
 - **Image:** `javax.imageio.ImageIO` (GIF frame decoding)
 
 ---
@@ -53,7 +53,7 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 - **⚡ 并发下载：** 扫描分类树并并发下载文件，内置完善的并发控制。
 - **🖼️ 丰富预览：** 支持 `PNG`、`JPG`、`WebP` 静态图与 `GIF` 逐帧动画预览。点击放大，滚轮缩放。
 - **🎵 音频播放：** 可直接在搜索结果中播放 `WAV`、`OGG`、`FLAC` 及 `MP3` 格式音频。
-- **🔄 MP3 转 WAV：** 下载后批量将 MP3 转换为 WAV，支持自定义采样率与位深。
+- **🔄 MP3/FLAC 转 WAV：** 下载后批量将 `MP3` 或 `FLAC` 转换为 `WAV`，支持自定义采样率与位深。
 - **⌨️ 键盘快捷键：** `Ctrl+F` 聚焦搜索，`F5` 重新搜索，`Ctrl+D` 开始下载，`Ctrl+A` / `Ctrl+Shift+A` 全选 / 取消全选，`↑↓` 导航列表，以及更多。
 - **🎛️ 窗口特效：** 运行时动态切换 Mica、Tabbed、Acrylic、Aero 等 Windows 11 背景特效。
 - **🪟 自定义标题栏：** 无边框原生窗口，自定义标题栏按钮，支持拖拽移动。
@@ -64,7 +64,7 @@ A Compose Desktop application for browsing and downloading Strinova wiki resourc
 - **核心：** Kotlin、协程 (Coroutines)
 - **UI 框架：** Compose Desktop、[Compose Fluent UI](https://github.com/compose-fluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/MayakaApps/ComposeWindowStyler)
 - **网络与数据：** OkHttp、kotlinx.serialization
-- **音频：** `javax.sound.sampled`（WAV/OGG/FLAC）、`mp3spi`(MP3）
+- **音频：** `javax.sound.sampled`（WAV/OGG/FLAC）、`mp3spi`（MP3）、`jflac-codec`（FLAC 解码）
 - **图像：** `javax.imageio.ImageIO`（GIF 多帧解码动画）
 
 ---

@@ -344,7 +344,7 @@ fun NewDownloaderContent() {
                     MenuFlyoutItem(
                         onClick = { showConverterWindow = true },
                         icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },
-                        text = { Text("MP3 转换工具") }
+                        text = { Text("音频转换工具") }
                     )
                     MenuFlyoutSeparator()
                     MenuFlyoutItem(
@@ -782,14 +782,14 @@ fun NewDownloaderContent() {
                             },
                             heading = {
                                 Text(
-                                    if (isVoiceOnly) "WAV 转换" else "MP3 → WAV 转换",
+                                    if (isVoiceOnly) "WAV 转换" else "MP3/FLAC → WAV 转换",
                                     fontWeight = FontWeight.Medium
                                 )
                             },
                             caption = {
                                 Text(
                                     if (isVoiceOnly) "下载完成后批量转换为 WAV 格式"
-                                    else "下载完成后将 MP3 批量转换为 WAV（其他格式跳过）",
+                                    else "下载完成后将 MP3/FLAC 批量转换为 WAV（其他格式跳过）",
                                     color = FluentTheme.colors.text.text.secondary
                                 )
                             },
@@ -835,8 +835,8 @@ fun NewDownloaderContent() {
                             ExpanderItem(
                                 heading = {
                                     Text(
-                                        if (isVoiceOnly) "删除原始 MP3"
-                                        else "删除原始 MP3（其他格式不受影响）"
+                                        if (isVoiceOnly) "删除原始源文件"
+                                        else "删除原始 MP3/FLAC（其他格式不受影响）"
                                     )
                                 },
                                 trailing = {

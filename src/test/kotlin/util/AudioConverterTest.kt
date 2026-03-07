@@ -9,11 +9,31 @@ import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
 class AudioConverterTest {
+    @Test
+    fun `supported audio sources include mp3 and flac only`() {
+        val dir = Files.createTempDirectory("audio-source-ext").toFile()
+
+        try {
+            val mp3 = File(dir, "voice.mp3").also { it.writeText("mp3") }
+            val flac = File(dir, "voice.flac").also { it.writeText("flac") }
+            val wav = File(dir, "voice.wav").also { it.writeText("wav") }
+            val folder = File(dir, "folder").also { it.mkdirs() }
+
+            assertTrue(isSupportedAudioSource(mp3))
+            assertTrue(isSupportedAudioSource(flac))
+            assertFalse(isSupportedAudioSource(wav))
+            assertFalse(isSupportedAudioSource(folder))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
     @Test
     fun `mergeWavFiles skips previously generated merged wav inputs`() {
         runBlocking<Unit> {
@@ -42,20 +62,34 @@ class AudioConverterTest {
     }
 
     @Test
-    fun `batchConvertMp3ToWav rejects unsupported target format before scanning`() {
+    fun `batchConvertAudioToWav rejects unsupported target format before scanning`() {
         runBlocking<Unit> {
             val dir = Files.createTempDirectory("audio-converter-validate").toFile()
 
             try {
                 expectIllegalArgument {
-                    batchConvertMp3ToWav(dir, targetBitDepth = 12)
+                    batchConvertAudioToWav(dir, targetBitDepth = 12)
                 }
                 expectIllegalArgument {
-                    batchConvertMp3ToWav(dir, targetSampleRate = -1f)
+                    batchConvertAudioToWav(dir, targetSampleRate = -1f)
                 }
             } finally {
                 dir.deleteRecursively()
             }
+        }
+    }
+
+    @Test
+    fun `convertAudioToWav rejects unsupported file extension early`() {
+        val dir = Files.createTempDirectory("audio-converter-unsupported").toFile()
+
+        try {
+            val txt = File(dir, "voice.txt").also { it.writeText("not audio") }
+            expectIllegalArgument {
+                convertAudioToWav(txt, File(dir, "voice.wav"))
+            }
+        } finally {
+            dir.deleteRecursively()
         }
     }
 
