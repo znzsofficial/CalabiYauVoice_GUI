@@ -13,7 +13,9 @@ private data class PrefsData(
     val categoryHintDismissed: Boolean = false,
     val savePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源",
     val converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted",
-    val recentUserLookupIds: List<String> = emptyList()
+    val recentUserLookupIds: List<String> = emptyList(),
+    val recentBidLookupValues: List<String> = emptyList(),
+    val recentWikiIdLookupValues: List<String> = emptyList()
 )
 
 object AppPrefs {
@@ -50,4 +52,12 @@ object AppPrefs {
     var recentUserLookupIds: List<String>
         get() = data.recentUserLookupIds
         set(value) { data = data.copy(recentUserLookupIds = value); save() }
+
+    var recentBidLookupValues: List<String>
+        get() = data.recentBidLookupValues
+        set(value) { data = data.copy(recentBidLookupValues = value); save() }
+
+    var recentWikiIdLookupValues: List<String>
+        get() = if (data.recentWikiIdLookupValues.isNotEmpty()) data.recentWikiIdLookupValues else data.recentUserLookupIds
+        set(value) { data = data.copy(recentWikiIdLookupValues = value, recentUserLookupIds = value); save() }
 }

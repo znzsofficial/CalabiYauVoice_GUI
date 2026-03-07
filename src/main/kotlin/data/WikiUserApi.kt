@@ -306,16 +306,32 @@ object WikiUserApi {
     }
 
     /**
-     * 通过用户 ID（即该 Wiki 上以数字为用户名的账号）查询用户的公开信息。
-     * 该 Wiki 的用户名本身就是数字字符串，直接用 ususers= 查询。
+     * 通过 BID 或 WikiID 查询用户的公开信息。
      */
-    suspend fun fetchPublicUserInfoResult(userId: String): ApiResult<PublicUserInfo?> = withContext(Dispatchers.IO) {
-        val id = userId.trim().trimStart('#')
-        if (id.isBlank()) return@withContext ApiResult.Error("用户 ID 不能为空")
+    suspend fun fetchPublicUserInfoResult(query: String, mode: UserLookupMode): ApiResult<PublicUserInfo?> = withContext(Dispatchers.IO) {
+        val normalized = when (mode) {
+            UserLookupMode.BID -> query.trim()
+            UserLookupMode.WIKI_ID -> query.trim().trimStart('#')
+        }
+        if (normalized.isBlank()) {
+            return@withContext ApiResult.Error(
+                when (mode) {
+                    UserLookupMode.BID -> "BID 不能为空"
+                    UserLookupMode.WIKI_ID -> "WikiID 不能为空"
+                }
+            )
+        }
+        if (mode == UserLookupMode.WIKI_ID && !normalized.all { it.isDigit() }) {
+            return@withContext ApiResult.Error("WikiID 必须为纯数字")
+        }
+        val userParam = when (mode) {
+            UserLookupMode.BID -> "ususers" to normalized
+            UserLookupMode.WIKI_ID -> "ususerids" to normalized
+        }
         val url = buildUrl(
             "action" to "query",
             "list" to "users",
-            "ususers" to id,
+            userParam,
             "usprop" to "groups|editcount|registration",
             "format" to "json"
         )
@@ -325,7 +341,7 @@ object WikiUserApi {
     }
 
     @Suppress("unused")
-    suspend fun fetchPublicUserInfo(userId: String): PublicUserInfo? = when (val result = fetchPublicUserInfoResult(userId)) {
+    suspend fun fetchPublicUserInfo(query: String, mode: UserLookupMode): PublicUserInfo? = when (val result = fetchPublicUserInfoResult(query, mode)) {
         is ApiResult.Success -> result.value
         is ApiResult.Error -> null
     }

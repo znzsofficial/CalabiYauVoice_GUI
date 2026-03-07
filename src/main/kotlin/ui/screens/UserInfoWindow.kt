@@ -17,8 +17,8 @@ import viewmodel.UserInfoViewModel
 @Composable
 fun UserInfoWindow(onCloseRequest: () -> Unit) {
     val windowState = rememberWindowState(
-        width = 800.dp,
-        height = 700.dp,
+        width = 900.dp,
+        height = 800.dp,
         position = WindowPosition(Alignment.Center)
     )
 

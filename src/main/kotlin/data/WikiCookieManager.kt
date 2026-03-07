@@ -11,6 +11,15 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
  */
 object WikiCookieManager {
 
+    data class CookieImportPreview(
+        val normalizedCookieString: String,
+        val cookieCount: Int,
+        val detectedUserName: String?,
+        val detectedUserId: String?
+    ) {
+        val hasCookies: Boolean get() = cookieCount > 0
+    }
+
     private const val WIKI_HOST = "wiki.biligame.com"
     private const val WIKI_URL = "https://wiki.biligame.com"
 
@@ -33,34 +42,33 @@ object WikiCookieManager {
      * @return 成功解析的 Cookie 数量
      */
     fun importCookies(cookieStr: String): Int {
-        rawCookieString = cookieStr.trim()
+        val preview = previewCookieImport(cookieStr)
+        rawCookieString = preview.normalizedCookieString
         importedCookies.clear()
 
-        if (rawCookieString.isBlank()) return 0
+        if (!preview.hasCookies) return 0
 
         val url = WIKI_URL.toHttpUrl()
-        val parsed = rawCookieString.split(";")
-            .mapNotNull { part ->
-                val trimmed = part.trim()
-                if (trimmed.isEmpty()) return@mapNotNull null
-                val eqIdx = trimmed.indexOf('=')
-                if (eqIdx <= 0) return@mapNotNull null
-                val name = trimmed.substring(0, eqIdx).trim()
-                val value = trimmed.substring(eqIdx + 1).trim()
-                Cookie.Builder()
-                    .domain(WIKI_HOST)
-                    .path("/")
-                    .name(name)
-                    .value(value)
-                    .build()
-            }
-
-        importedCookies.addAll(parsed)
-
-        // 注入到 OkHttpClient 的 CookieJar
+        importedCookies.addAll(parseCookies(preview.normalizedCookieString))
         WikiEngine.injectCookies(url, importedCookies)
-
         return importedCookies.size
+    }
+
+    /**
+     * 预览 Cookie 导入效果，返回规范化后的 Cookie 字符串和提取的用户信息。
+     *
+     * @param cookieStr 原始 Cookie 字符串
+     * @return Cookie 导入预览信息
+     */
+    fun previewCookieImport(cookieStr: String): CookieImportPreview {
+        val normalized = normalizeCookieInput(cookieStr)
+        val cookies = parseCookies(normalized)
+        return CookieImportPreview(
+            normalizedCookieString = cookies.joinToString("; ") { "${it.name}=${it.value}" },
+            cookieCount = cookies.size,
+            detectedUserName = extractUserName(cookies),
+            detectedUserId = extractUserId(cookies)
+        )
     }
 
     /** 清除所有导入的 Cookie */
@@ -78,12 +86,56 @@ object WikiCookieManager {
         importedCookies.joinToString("; ") { "${it.name}=${it.value}" }
 
     /** 尝试从 Cookie 中提取用户名（klbqwiki_UserName） */
-    fun extractUserNameFromCookies(): String? =
-        importedCookies.firstOrNull { it.name.endsWith("UserName") || it.name == "UserName" }?.value
-            ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+    fun extractUserNameFromCookies(): String? = extractUserName(importedCookies)
 
     /** 尝试从 Cookie 中提取用户 ID（klbqwiki_UserID） */
-    fun extractUserIdFromCookies(): String? =
-        importedCookies.firstOrNull { it.name.endsWith("UserID") || it.name == "UserID" }?.value
-}
+    fun extractUserIdFromCookies(): String? = extractUserId(importedCookies)
 
+    private fun normalizeCookieInput(cookieStr: String): String {
+        val trimmed = cookieStr.trim()
+        if (trimmed.isBlank()) return ""
+
+        val headerMatch = Regex("""(?is)cookie\s*:\s*([^\r\n\"']+)""").find(trimmed)
+        val candidate = when {
+            headerMatch != null -> headerMatch.groupValues[1]
+            trimmed.startsWith("Cookie:", ignoreCase = true) -> trimmed.substringAfter(':')
+            else -> trimmed
+        }
+
+        return candidate
+            .replace("\r", "\n")
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
+            .trim('"', '\'', ' ')
+            .trimEnd(';')
+    }
+
+    private fun parseCookies(cookieStr: String): List<Cookie> {
+        if (cookieStr.isBlank()) return emptyList()
+        return cookieStr.split(Regex("[;\n]+"))
+            .mapNotNull { part ->
+                val trimmed = part.trim()
+                if (trimmed.isEmpty()) return@mapNotNull null
+                val eqIdx = trimmed.indexOf('=')
+                if (eqIdx <= 0) return@mapNotNull null
+                val name = trimmed.substring(0, eqIdx).trim()
+                val value = trimmed.substring(eqIdx + 1).trim().trim('"', '\'')
+                if (name.isBlank() || value.isBlank()) return@mapNotNull null
+                Cookie.Builder()
+                    .domain(WIKI_HOST)
+                    .path("/")
+                    .name(name)
+                    .value(value)
+                    .build()
+            }
+    }
+
+    private fun extractUserName(cookies: List<Cookie>): String? =
+        cookies.firstOrNull { it.name.endsWith("UserName") || it.name == "UserName" }?.value
+            ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+
+    private fun extractUserId(cookies: List<Cookie>): String? =
+        cookies.firstOrNull { it.name.endsWith("UserID") || it.name == "UserID" }?.value
+}

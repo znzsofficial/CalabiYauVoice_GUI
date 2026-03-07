@@ -1,5 +1,6 @@
 package viewmodel
 
+import data.UserLookupMode
 import data.WikiCookieManager
 import data.WikiUserApi
 import data.WikiUserApi.ApiResult
@@ -9,9 +10,23 @@ import util.AppPrefs
 
 private const val MAX_RECENT_LOOKUPS = 10
 
-internal fun appendRecentLookupId(existing: List<String>, newId: String, maxSize: Int = MAX_RECENT_LOOKUPS): List<String> {
-    val normalized = newId.trim().trimStart('#')
-    if (normalized.isBlank()) return existing
+internal fun normalizeLookupQuery(mode: UserLookupMode, input: String): String = when (mode) {
+    UserLookupMode.BID -> input.trim()
+    UserLookupMode.WIKI_ID -> input.trim().trimStart('#').trim()
+}
+
+internal fun appendRecentLookup(
+    mode: UserLookupMode,
+    existing: List<String>,
+    newValue: String,
+    maxSize: Int = MAX_RECENT_LOOKUPS
+): List<String> {
+    val normalized = normalizeLookupQuery(mode, newValue)
+    val isValid = when (mode) {
+        UserLookupMode.BID -> normalized.isNotBlank()
+        UserLookupMode.WIKI_ID -> normalized.isNotBlank() && normalized.all { it.isDigit() }
+    }
+    if (!isValid) return existing
     return buildList {
         add(normalized)
         addAll(existing.filterNot { it == normalized }.take(maxSize - 1))
@@ -36,6 +51,9 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     // ─── Cookie 输入 ───────────────────────────────────────────────
     private val _cookieInput = MutableStateFlow(WikiCookieManager.currentCookieString)
     val cookieInput: StateFlow<String> = _cookieInput.asStateFlow()
+    val cookiePreview: StateFlow<WikiCookieManager.CookieImportPreview> = _cookieInput
+        .map { WikiCookieManager.previewCookieImport(it) }
+        .stateIn(scope, SharingStarted.Eagerly, WikiCookieManager.previewCookieImport(_cookieInput.value))
 
     // ─── 用户信息 ──────────────────────────────────────────────────
     private val _userInfo = MutableStateFlow<WikiUserApi.UserInfo?>(null)
@@ -100,8 +118,16 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     // ─── 公开用户查询 ──────────────────────────────────────────────
     private val _lookupQuery = MutableStateFlow("")
     val lookupQuery: StateFlow<String> = _lookupQuery.asStateFlow()
-    private val _recentLookupIds = MutableStateFlow(AppPrefs.recentUserLookupIds)
-    val recentLookupIds: StateFlow<List<String>> = _recentLookupIds.asStateFlow()
+    private val _lookupMode = MutableStateFlow(UserLookupMode.BID)
+    val lookupMode: StateFlow<UserLookupMode> = _lookupMode.asStateFlow()
+    private val _recentBidLookups = MutableStateFlow(AppPrefs.recentBidLookupValues)
+    private val _recentWikiIdLookups = MutableStateFlow(AppPrefs.recentWikiIdLookupValues)
+    val recentLookupIds: StateFlow<List<String>> = combine(_lookupMode, _recentBidLookups, _recentWikiIdLookups) { mode, bid, wikiId ->
+        when (mode) {
+            UserLookupMode.BID -> bid
+            UserLookupMode.WIKI_ID -> wikiId
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, _recentWikiIdLookups.value)
 
     private val _lookupResult = MutableStateFlow<WikiUserApi.PublicUserInfo?>(null)
     val lookupResult: StateFlow<WikiUserApi.PublicUserInfo?> = _lookupResult.asStateFlow()
@@ -154,20 +180,48 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
 
     fun onLookupQueryChange(q: String) { _lookupQuery.value = q }
 
+    fun onLookupModeChange(mode: UserLookupMode) {
+        if (_lookupMode.value == mode) return
+        lookupRequestToken++
+        lookupJob?.cancel()
+        lookupFilesJob?.cancel()
+        lookupLogJob?.cancel()
+        _lookupMode.value = mode
+        _lookupQuery.value = ""
+        resetLookupState(clearQuery = false)
+    }
+
     fun useRecentLookup(id: String) {
         _lookupQuery.value = id
         lookupUser()
     }
 
     fun removeRecentLookup(id: String) {
-        val next = _recentLookupIds.value.filterNot { it == id }
-        _recentLookupIds.value = next
-        AppPrefs.recentUserLookupIds = next
+        when (_lookupMode.value) {
+            UserLookupMode.BID -> {
+                val next = _recentBidLookups.value.filterNot { it == id }
+                _recentBidLookups.value = next
+                AppPrefs.recentBidLookupValues = next
+            }
+            UserLookupMode.WIKI_ID -> {
+                val next = _recentWikiIdLookups.value.filterNot { it == id }
+                _recentWikiIdLookups.value = next
+                AppPrefs.recentWikiIdLookupValues = next
+            }
+        }
     }
 
     fun clearRecentLookups() {
-        _recentLookupIds.value = emptyList()
-        AppPrefs.recentUserLookupIds = emptyList()
+        when (_lookupMode.value) {
+            UserLookupMode.BID -> {
+                _recentBidLookups.value = emptyList()
+                AppPrefs.recentBidLookupValues = emptyList()
+            }
+            UserLookupMode.WIKI_ID -> {
+                _recentWikiIdLookups.value = emptyList()
+                AppPrefs.recentWikiIdLookupValues = emptyList()
+            }
+        }
     }
 
     fun onLookupDetailTabChange(tab: LookupDetailTab) {
@@ -185,6 +239,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
      */
     fun importAndFetch() {
         val count = WikiCookieManager.importCookies(_cookieInput.value)
+        _cookieInput.value = WikiCookieManager.currentCookieString
         if (count == 0) {
             currentUserRequestToken++
             cancelAuthenticatedJobs()
@@ -192,7 +247,17 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
             _statusMessage.value = "⚠️ 未能解析到有效的 Cookie，请检查格式"
             return
         }
-        _statusMessage.value = "✅ 已导入 $count 个 Cookie，正在查询用户信息…"
+        val detectedName = WikiCookieManager.extractUserNameFromCookies()
+        val detectedId = WikiCookieManager.extractUserIdFromCookies()
+        val detectedLabel = listOfNotNull(
+            detectedName?.takeIf { it.isNotBlank() }?.let { "用户：$it" },
+            detectedId?.takeIf { it.isNotBlank() }?.let { "ID：$it" }
+        ).joinToString(" · ")
+        _statusMessage.value = buildString {
+            append("✅ 已导入 $count 个 Cookie")
+            if (detectedLabel.isNotBlank()) append("（$detectedLabel）")
+            append("，正在查询用户信息…")
+        }
         fetchUserInfo()
     }
 
@@ -334,21 +399,25 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     }
 
     fun lookupUser() {
-        val q = _lookupQuery.value.trim().trimStart('#')
+        val mode = _lookupMode.value
+        val q = normalizeLookupQuery(mode, _lookupQuery.value)
         if (q.isBlank()) {
             lookupRequestToken++
             lookupFilesJob?.cancel()
             lookupLogJob?.cancel()
             resetLookupState(clearQuery = false)
-            _lookupError.value = "⚠️ 请输入用户 ID"
+            _lookupError.value = when (mode) {
+                UserLookupMode.BID -> "⚠️ 请输入 BID"
+                UserLookupMode.WIKI_ID -> "⚠️ 请输入 WikiID"
+            }
             return
         }
-        if (!q.all { it.isDigit() }) {
+        if (mode == UserLookupMode.WIKI_ID && !q.all { it.isDigit() }) {
             lookupRequestToken++
             lookupFilesJob?.cancel()
             lookupLogJob?.cancel()
             resetLookupState(clearQuery = false)
-            _lookupError.value = "⚠️ 请输入数字用户 ID"
+            _lookupError.value = "⚠️ WikiID 必须为纯数字"
             return
         }
 
@@ -357,11 +426,12 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         lookupLogJob?.cancel()
         val requestToken = ++lookupRequestToken
         resetLookupState(clearQuery = false)
+        _lookupQuery.value = q
 
         lookupJob = scope.launch {
             _isLoadingLookup.value = true
             try {
-                when (val result = WikiUserApi.fetchPublicUserInfoResult(q)) {
+                when (val result = WikiUserApi.fetchPublicUserInfoResult(q, mode)) {
                     is ApiResult.Success -> {
                         if (requestToken != lookupRequestToken) return@launch
                         val publicUser = result.value
@@ -369,7 +439,10 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                         if (publicUser == null) {
                             _lookupError.value = "❌ 未返回用户信息"
                         } else if (!publicUser.exists) {
-                            _lookupError.value = "⚠️ 用户 ID「$q」不存在"
+                            _lookupError.value = when (mode) {
+                                UserLookupMode.BID -> "⚠️ BID「$q」不存在"
+                                UserLookupMode.WIKI_ID -> "⚠️ WikiID「$q」不存在"
+                            }
                         } else {
                             rememberRecentLookup(q)
                             _lookupSummaryState.value = RequestState.Loading
@@ -466,9 +539,18 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         _userInfo.value?.takeIf { it.isLoggedIn }?.name ?: WikiCookieManager.extractUserNameFromCookies()
 
     private fun rememberRecentLookup(id: String) {
-        val next = appendRecentLookupId(_recentLookupIds.value, id)
-        _recentLookupIds.value = next
-        AppPrefs.recentUserLookupIds = next
+        when (_lookupMode.value) {
+            UserLookupMode.BID -> {
+                val next = appendRecentLookup(UserLookupMode.BID, _recentBidLookups.value, id)
+                _recentBidLookups.value = next
+                AppPrefs.recentBidLookupValues = next
+            }
+            UserLookupMode.WIKI_ID -> {
+                val next = appendRecentLookup(UserLookupMode.WIKI_ID, _recentWikiIdLookups.value, id)
+                _recentWikiIdLookups.value = next
+                AppPrefs.recentWikiIdLookupValues = next
+            }
+        }
     }
 
     private fun cancelAuthenticatedJobs() {

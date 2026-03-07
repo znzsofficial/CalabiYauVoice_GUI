@@ -2,7 +2,9 @@ package ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -22,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import data.UserLookupMode
 import data.WikiUserApi
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
@@ -43,6 +46,7 @@ fun UserInfoContent(
     modifier: Modifier = Modifier
 ) {
     val cookieInput by viewModel.cookieInput.collectAsState()
+    val cookiePreview by viewModel.cookiePreview.collectAsState()
     val userInfo by viewModel.userInfo.collectAsState()
     val isLoadingInfo by viewModel.isLoadingInfo.collectAsState()
     val blockStatus by viewModel.blockStatus.collectAsState()
@@ -60,6 +64,7 @@ fun UserInfoContent(
     val currentTab by viewModel.currentTab.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val lookupQuery by viewModel.lookupQuery.collectAsState()
+    val lookupMode by viewModel.lookupMode.collectAsState()
     val recentLookupIds by viewModel.recentLookupIds.collectAsState()
     val lookupResult by viewModel.lookupResult.collectAsState()
     val lookupBlockStatus by viewModel.lookupBlockStatus.collectAsState()
@@ -76,6 +81,7 @@ fun UserInfoContent(
     Column(modifier.fillMaxSize().padding(16.dp)) {
         CookieImportSection(
             cookieInput = cookieInput,
+            cookiePreview = cookiePreview,
             isLoadingInfo = isLoadingInfo,
             statusMessage = statusMessage,
             onCookieInputChange = viewModel::onCookieInputChange,
@@ -87,6 +93,7 @@ fun UserInfoContent(
 
         PublicUserLookupSection(
             lookupQuery = lookupQuery,
+            lookupMode = lookupMode,
             recentLookupIds = recentLookupIds,
             lookupResult = lookupResult,
             lookupBlockStatus = lookupBlockStatus,
@@ -101,6 +108,7 @@ fun UserInfoContent(
             lookupLogRequestState = lookupLogRequestState,
             onLookupQueryChange = viewModel::onLookupQueryChange,
             onLookup = viewModel::lookupUser,
+            onLookupModeChange = viewModel::onLookupModeChange,
             onUseRecentLookup = viewModel::useRecentLookup,
             onRemoveRecentLookup = viewModel::removeRecentLookup,
             onClearRecentLookups = viewModel::clearRecentLookups,
@@ -152,18 +160,20 @@ fun UserInfoContent(
 @Composable
 private fun CookieImportSection(
     cookieInput: String,
+    cookiePreview: data.WikiCookieManager.CookieImportPreview,
     isLoadingInfo: Boolean,
     statusMessage: String,
     onCookieInputChange: (String) -> Unit,
     onImportAndFetch: () -> Unit,
     onClear: () -> Unit
 ) {
+    var actionMessage by remember { mutableStateOf<String?>(null) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("导入 Cookie", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             Spacer(Modifier.height(4.dp))
             Text(
-                "从浏览器开发者工具 Network 面板中复制请求的 Cookie 字段，粘贴到下方输入框",
+                "支持直接粘贴 Cookie 字段、`Cookie: ...` 头，或整段请求头内容",
                 fontSize = 12.sp,
                 color = FluentTheme.colors.text.text.secondary
             )
@@ -171,18 +181,60 @@ private fun CookieImportSection(
             Row(verticalAlignment = Alignment.Bottom) {
                 TextField(
                     value = cookieInput,
-                    onValueChange = onCookieInputChange,
+                    onValueChange = {
+                        actionMessage = null
+                        onCookieInputChange(it)
+                    },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                     placeholder = { Text("gamecenter_wiki_UserID=…; gamecenter_wiki__session=…; SESSDATA=…") },
                     header = { Text("Cookie", fontSize = 12.sp) }
                 )
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = onImportAndFetch, disabled = isLoadingInfo) {
+                Button(
+                    onClick = {
+                        val pasted = readClipboardText().orEmpty()
+                        if (pasted.isBlank()) {
+                            actionMessage = "剪贴板中没有可用文本"
+                        } else {
+                            onCookieInputChange(pasted)
+                            actionMessage = "已粘贴剪贴板内容"
+                        }
+                    },
+                    modifier = Modifier.height(32.dp)
+                ) { Text("粘贴") }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onImportAndFetch, disabled = isLoadingInfo || !cookiePreview.hasCookies) {
                     if (isLoadingInfo) ProgressRing(size = 16.dp) else Text("导入并查询")
                 }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = onClear) { Text("清除") }
+            }
+            when {
+                cookieInput.isNotBlank() && cookiePreview.hasCookies -> {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        buildString {
+                            append("已识别 ${cookiePreview.cookieCount} 个 Cookie")
+                            cookiePreview.detectedUserName?.takeIf { it.isNotBlank() }?.let { append(" · 用户：$it") }
+                            cookiePreview.detectedUserId?.takeIf { it.isNotBlank() }?.let { append(" · ID：$it") }
+                        },
+                        fontSize = 12.sp,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+                cookieInput.isNotBlank() -> {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "尚未识别到有效 Cookie，可直接粘贴 Cookie 请求头后再导入",
+                        fontSize = 12.sp,
+                        color = Color(0xFFE57373)
+                    )
+                }
+            }
+            if (!actionMessage.isNullOrBlank() && statusMessage.isBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(actionMessage!!, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
             }
             if (statusMessage.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -204,6 +256,7 @@ private fun CookieImportSection(
 @Composable
 private fun PublicUserLookupSection(
     lookupQuery: String,
+    lookupMode: UserLookupMode,
     recentLookupIds: List<String>,
     lookupResult: WikiUserApi.PublicUserInfo?,
     lookupBlockStatus: WikiUserApi.BlockInfo?,
@@ -218,6 +271,7 @@ private fun PublicUserLookupSection(
     lookupLogRequestState: RequestState,
     onLookupQueryChange: (String) -> Unit,
     onLookup: () -> Unit,
+    onLookupModeChange: (UserLookupMode) -> Unit,
     onUseRecentLookup: (String) -> Unit,
     onRemoveRecentLookup: (String) -> Unit,
     onClearRecentLookups: () -> Unit,
@@ -230,8 +284,26 @@ private fun PublicUserLookupSection(
         Column(Modifier.padding(16.dp)) {
             Text("查询用户", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             Spacer(Modifier.height(4.dp))
+            SelectorBar {
+                SelectorBarItem(
+                    selected = lookupMode == UserLookupMode.BID,
+                    onSelectedChange = { onLookupModeChange(UserLookupMode.BID) },
+                    text = { Text("BID") },
+                    icon = { Icon(Icons.Regular.PersonAccounts, contentDescription = null) }
+                )
+                SelectorBarItem(
+                    selected = lookupMode == UserLookupMode.WIKI_ID,
+                    onSelectedChange = { onLookupModeChange(UserLookupMode.WIKI_ID) },
+                    text = { Text("WikiID") },
+                    icon = { Icon(Icons.Regular.NumberSymbol, contentDescription = null) }
+                )
+            }
+            Spacer(Modifier.height(8.dp))
             Text(
-                "输入用户数字 ID 查询用户的公开信息",
+                when (lookupMode) {
+                    UserLookupMode.BID -> "按 BID（哔哩哔哩id）查询用户公开信息"
+                    UserLookupMode.WIKI_ID -> "按 WikiID 查询用户公开信息"
+                },
                 fontSize = 12.sp,
                 color = FluentTheme.colors.text.text.secondary
             )
@@ -249,7 +321,14 @@ private fun PublicUserLookupSection(
                         } else false
                     },
                     singleLine = true,
-                    placeholder = { Text("用户 ID（如 5205017）") }
+                    placeholder = {
+                        Text(
+                            when (lookupMode) {
+                                UserLookupMode.BID -> "BID（用户名）"
+                                UserLookupMode.WIKI_ID -> "WikiID（如 5205017）"
+                            }
+                        )
+                    }
                 )
                 Spacer(Modifier.width(8.dp))
                 Button(
@@ -285,7 +364,7 @@ private fun PublicUserLookupSection(
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "最近查询",
+                        if (lookupMode == UserLookupMode.BID) "最近 BID" else "最近 WikiID",
                         fontSize = 12.sp,
                         color = FluentTheme.colors.text.text.secondary,
                         modifier = Modifier.width(64.dp)
@@ -295,20 +374,14 @@ private fun PublicUserLookupSection(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         recentLookupIds.forEach { id ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Button(
-                                    onClick = {
-                                        actionMessage = null
-                                        onUseRecentLookup(id)
-                                    },
-                                    modifier = Modifier.height(26.dp)
-                                ) { Text(id, fontSize = 11.sp) }
-                                Spacer(Modifier.width(4.dp))
-                                Button(
-                                    onClick = { onRemoveRecentLookup(id) },
-                                    modifier = Modifier.height(26.dp)
-                                ) { Text("×", fontSize = 11.sp) }
-                            }
+                            RecentLookupPill(
+                                label = id,
+                                onLookup = {
+                                    actionMessage = null
+                                    onUseRecentLookup(id)
+                                },
+                                onRemove = { onRemoveRecentLookup(id) }
+                            )
                         }
                     }
                     Spacer(Modifier.width(8.dp))
@@ -1478,6 +1551,43 @@ private fun UserFileItem(file: WikiUserApi.UserFile) {
     }
 }
 
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun RecentLookupPill(
+    label: String,
+    onLookup: () -> Unit,
+    onRemove: () -> Unit
+) {
+    PillButton(
+        selected = false,
+        onSelectedChanged = { onLookup() },
+        content = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(label, fontSize = 11.sp)
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onRemove
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Dismiss,
+                        contentDescription = "删除当前项",
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+    )
+}
+
 private fun formatFileSize(size: Long): String = when {
     size < 1024 -> "$size B"
     size < 1024 * 1024 -> "%.1f KB".format(size / 1024.0)
@@ -1498,4 +1608,3 @@ private fun readClipboardText(): String? = runCatching {
 private fun openExternalUrl(url: String): Boolean = runCatching {
     java.awt.Desktop.getDesktop().browse(java.net.URI(url))
 }.isSuccess
-
