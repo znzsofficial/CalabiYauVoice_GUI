@@ -14,6 +14,11 @@ import okhttp3.Request
  */
 object WikiUserApi {
 
+    sealed interface ApiResult<out T> {
+        data class Success<T>(val value: T) : ApiResult<T>
+        data class Error(val message: String) : ApiResult<Nothing>
+    }
+
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
     // ───── 序列化模型 ─────────────────────────────────────────────────
@@ -155,6 +160,7 @@ object WikiUserApi {
         val top: JsonElement? = null
     ) {
         val isMinor: Boolean get() = minor != null
+        @Suppress("unused")
         val isTop: Boolean get() = top != null
     }
 
@@ -183,7 +189,9 @@ object WikiUserApi {
         val minor: JsonElement? = null,
         val anon: JsonElement? = null
     ) {
+        @Suppress("unused")
         val isMinor: Boolean get() = minor != null
+        @Suppress("unused")
         val isAnon: Boolean get() = anon != null
     }
 
@@ -220,65 +228,90 @@ object WikiUserApi {
     /**
      * 获取当前已登录用户的详细信息（需要有效 Cookie）。
      */
-    suspend fun fetchCurrentUserInfo(): UserInfo? = withContext(Dispatchers.IO) {
+    suspend fun fetchCurrentUserInfoResult(): ApiResult<UserInfo?> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "meta" to "userinfo",
             "uiprop" to "groups|rights|editcount|registrationdate|email|realname",
             "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext null
-        runCatching { json.decodeFromString<UserInfoResponse>(resp).query?.userinfo }.getOrNull()
+        mapJsonResult(fetchStringResult(url), "解析当前用户信息失败") {
+            json.decodeFromString<UserInfoResponse>(it).query?.userinfo
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchCurrentUserInfo(): UserInfo? = when (val result = fetchCurrentUserInfoResult()) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> null
     }
 
     /**
      * 获取指定用户的最近编辑贡献（最多 [limit] 条）。
      */
-    suspend fun fetchContributions(userName: String, limit: Int = 50): List<UserContrib> = withContext(Dispatchers.IO) {
+    suspend fun fetchContributionsResult(userName: String, limit: Int = 50): ApiResult<List<UserContrib>> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "list" to "usercontribs", "ucuser" to userName,
             "ucprop" to "ids|title|timestamp|comment|size|sizediff|flags",
             "uclimit" to "$limit", "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext emptyList()
-        runCatching { json.decodeFromString<ContributionsResponse>(resp).query?.usercontribs ?: emptyList() }
-            .getOrElse { emptyList() }
+        mapJsonResult(fetchStringResult(url), "解析编辑贡献失败") {
+            json.decodeFromString<ContributionsResponse>(it).query?.usercontribs ?: emptyList()
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchContributions(userName: String, limit: Int = 50): List<UserContrib> = when (val result = fetchContributionsResult(userName, limit)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> emptyList()
     }
 
     /**
      * 获取当前用户的监视列表最近变更（需要已登录 Cookie）。
      */
-    suspend fun fetchWatchlist(limit: Int = 50): List<WatchlistItem> = withContext(Dispatchers.IO) {
+    suspend fun fetchWatchlistResult(limit: Int = 50): ApiResult<List<WatchlistItem>> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "list" to "watchlist",
             "wlprop" to "ids|title|type|user|comment|timestamp|flags",
             "wllimit" to "$limit", "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext emptyList()
-        runCatching { json.decodeFromString<WatchlistResponse>(resp).query?.watchlist ?: emptyList() }
-            .getOrElse { emptyList() }
+        mapJsonResult(fetchStringResult(url), "解析监视列表失败") {
+            json.decodeFromString<WatchlistResponse>(it).query?.watchlist ?: emptyList()
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchWatchlist(limit: Int = 50): List<WatchlistItem> = when (val result = fetchWatchlistResult(limit)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> emptyList()
     }
 
     /**
      * 获取指定用户的操作日志（上传/删除/保护/封禁等）。
      */
-    suspend fun fetchUserLogEvents(userName: String, limit: Int = 50): List<LogEvent> = withContext(Dispatchers.IO) {
+    suspend fun fetchUserLogEventsResult(userName: String, limit: Int = 50): ApiResult<List<LogEvent>> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "list" to "logevents", "leuser" to userName,
             "leprop" to "ids|title|type|user|comment|timestamp",
             "lelimit" to "$limit", "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext emptyList()
-        runCatching { json.decodeFromString<LogEventsResponse>(resp).query?.logevents ?: emptyList() }
-            .getOrElse { emptyList() }
+        mapJsonResult(fetchStringResult(url), "解析操作日志失败") {
+            json.decodeFromString<LogEventsResponse>(it).query?.logevents ?: emptyList()
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchUserLogEvents(userName: String, limit: Int = 50): List<LogEvent> = when (val result = fetchUserLogEventsResult(userName, limit)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> emptyList()
     }
 
     /**
      * 通过用户 ID（即该 Wiki 上以数字为用户名的账号）查询用户的公开信息。
      * 该 Wiki 的用户名本身就是数字字符串，直接用 ususers= 查询。
      */
-    suspend fun fetchPublicUserInfo(userId: String): PublicUserInfo? = withContext(Dispatchers.IO) {
+    suspend fun fetchPublicUserInfoResult(userId: String): ApiResult<PublicUserInfo?> = withContext(Dispatchers.IO) {
         val id = userId.trim().trimStart('#')
-        if (id.isBlank()) return@withContext null
+        if (id.isBlank()) return@withContext ApiResult.Error("用户 ID 不能为空")
         val url = buildUrl(
             "action" to "query",
             "list" to "users",
@@ -286,54 +319,75 @@ object WikiUserApi {
             "usprop" to "groups|editcount|registration",
             "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext null
-        runCatching {
-            json.decodeFromString<PublicUsersResponse>(resp).query?.users?.firstOrNull()
-        }.getOrNull()
+        mapJsonResult(fetchStringResult(url), "解析公开用户信息失败") {
+            json.decodeFromString<PublicUsersResponse>(it).query?.users?.firstOrNull()
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchPublicUserInfo(userId: String): PublicUserInfo? = when (val result = fetchPublicUserInfoResult(userId)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> null
     }
 
     /**
      * 获取指定用户上传的文件列表（通过 list=allimages 按上传者筛选）。
      */
-    suspend fun fetchUserFiles(userName: String, limit: Int = 50): List<UserFile> = withContext(Dispatchers.IO) {
+    suspend fun fetchUserFilesResult(userName: String, limit: Int = 50): ApiResult<List<UserFile>> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "list" to "allimages", "aiuser" to userName,
             "aiprop" to "timestamp|url|size|mime",
             "ailimit" to "$limit", "aisort" to "timestamp", "aidir" to "descending",
             "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext emptyList()
-        runCatching { json.decodeFromString<UserFilesResponse>(resp).query?.allimages ?: emptyList() }
-            .getOrElse { emptyList() }
+        mapJsonResult(fetchStringResult(url), "解析上传文件列表失败") {
+            json.decodeFromString<UserFilesResponse>(it).query?.allimages ?: emptyList()
+        }
     }
 
-
+    @Suppress("unused")
+    suspend fun fetchUserFiles(userName: String, limit: Int = 50): List<UserFile> = when (val result = fetchUserFilesResult(userName, limit)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> emptyList()
+    }
 
     /**
      * 查询指定用户名的封禁状态，未被封禁时返回 null。
      */
-    suspend fun fetchBlockStatus(userName: String): BlockInfo? = withContext(Dispatchers.IO) {
+    suspend fun fetchBlockStatusResult(userName: String): ApiResult<BlockInfo?> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "list" to "blocks", "bkusers" to userName,
             "bkprop" to "id|user|by|timestamp|expiry|reason|flags",
             "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext null
-        runCatching { json.decodeFromString<BlocksResponse>(resp).query?.blocks?.firstOrNull() }.getOrNull()
+        mapJsonResult(fetchStringResult(url), "解析封禁状态失败") {
+            json.decodeFromString<BlocksResponse>(it).query?.blocks?.firstOrNull()
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchBlockStatus(userName: String): BlockInfo? = when (val result = fetchBlockStatusResult(userName)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> null
     }
 
     /**
      * 获取指定用户最近一次编辑的时间戳，无编辑记录时返回 null。
      */
-    suspend fun fetchLastEditTimestamp(userName: String): String? = withContext(Dispatchers.IO) {
+    suspend fun fetchLastEditTimestampResult(userName: String): ApiResult<String?> = withContext(Dispatchers.IO) {
         val url = buildUrl(
             "action" to "query", "list" to "usercontribs", "ucuser" to userName,
             "ucprop" to "timestamp", "uclimit" to "1", "format" to "json"
         )
-        val resp = fetchString(url) ?: return@withContext null
-        runCatching {
-            json.decodeFromString<ContributionsResponse>(resp).query?.usercontribs?.firstOrNull()?.timestamp
-        }.getOrNull()
+        mapJsonResult(fetchStringResult(url), "解析最后编辑时间失败") {
+            json.decodeFromString<ContributionsResponse>(it).query?.usercontribs?.firstOrNull()?.timestamp
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun fetchLastEditTimestamp(userName: String): String? = when (val result = fetchLastEditTimestampResult(userName)) {
+        is ApiResult.Success -> result.value
+        is ApiResult.Error -> null
     }
 
     // ───── 内部工具 ──────────────────────────────────────────────────
@@ -348,14 +402,31 @@ object WikiUserApi {
         return builder.build().toString()
     }
 
-    private fun fetchString(url: String): String? {
+    private fun fetchStringResult(url: String): ApiResult<String> {
+        if (url.isBlank()) return ApiResult.Error("API 地址无效")
         return runCatching {
-            WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
-                .use { resp ->
-                    val body = resp.body.string()
-                    if (body.trimStart().startsWith("<") || !resp.isSuccessful) null else body
+            WikiEngine.client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                val body = resp.body.string()
+                when {
+                    !resp.isSuccessful -> ApiResult.Error("请求失败：HTTP ${resp.code}")
+                    body.isBlank() -> ApiResult.Error("响应为空")
+                    body.trimStart().startsWith("<") -> ApiResult.Error("返回了非 JSON 页面，可能未登录或被网关拦截")
+                    else -> ApiResult.Success(body)
                 }
-        }.getOrNull()
+            }
+        }.getOrElse { e ->
+            ApiResult.Error(e.message ?: "网络请求失败")
+        }
+    }
+
+    private inline fun <T> mapJsonResult(
+        source: ApiResult<String>,
+        parseErrorMessage: String,
+        transform: (String) -> T
+    ): ApiResult<T> = when (source) {
+        is ApiResult.Success -> runCatching { ApiResult.Success(transform(source.value)) }
+            .getOrElse { ApiResult.Error(parseErrorMessage) }
+        is ApiResult.Error -> source
     }
 
     /** ISO 8601 时间戳转本地可读格式 */
@@ -394,4 +465,3 @@ object WikiUserApi {
         else -> type
     }
 }
-

@@ -2,16 +2,22 @@ package viewmodel
 
 import data.WikiCookieManager
 import data.WikiUserApi
+import data.WikiUserApi.ApiResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 enum class UserInfoTab { INFO, CONTRIBUTIONS, WATCHLIST, LOG }
 
-/** 操作日志排序方式 */
 enum class LogSortOrder { NEWEST_FIRST, OLDEST_FIRST }
 
-/** 查询用户详情子 Tab */
 enum class LookupDetailTab { SUMMARY, FILES, LOG }
+
+sealed interface RequestState {
+    data object Idle : RequestState
+    data object Loading : RequestState
+    data object Success : RequestState
+    data class Error(val message: String) : RequestState
+}
 
 class UserInfoViewModel(private val scope: CoroutineScope) {
 
@@ -33,29 +39,28 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     // ─── 最后编辑时间 ─────────────────────────────────────────────
     private val _lastEditTimestamp = MutableStateFlow<String?>(null)
     val lastEditTimestamp: StateFlow<String?> = _lastEditTimestamp.asStateFlow()
+    private val _userSummaryState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val userSummaryState: StateFlow<RequestState> = _userSummaryState.asStateFlow()
 
     // ─── 贡献 ──────────────────────────────────────────────────────
     private val _contributions = MutableStateFlow<List<WikiUserApi.UserContrib>>(emptyList())
     val contributions: StateFlow<List<WikiUserApi.UserContrib>> = _contributions.asStateFlow()
-
-    private val _isLoadingContrib = MutableStateFlow(false)
-    val isLoadingContrib: StateFlow<Boolean> = _isLoadingContrib.asStateFlow()
+    private val _contributionsRequestState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val contributionsRequestState: StateFlow<RequestState> = _contributionsRequestState.asStateFlow()
 
     // ─── 监视列表 ──────────────────────────────────────────────────
     private val _watchlist = MutableStateFlow<List<WikiUserApi.WatchlistItem>>(emptyList())
     val watchlist: StateFlow<List<WikiUserApi.WatchlistItem>> = _watchlist.asStateFlow()
-
-    private val _isLoadingWatch = MutableStateFlow(false)
-    val isLoadingWatch: StateFlow<Boolean> = _isLoadingWatch.asStateFlow()
+    private val _watchlistRequestState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val watchlistRequestState: StateFlow<RequestState> = _watchlistRequestState.asStateFlow()
 
     // ─── 操作日志 ──────────────────────────────────────────────────
     private val _logEvents = MutableStateFlow<List<WikiUserApi.LogEvent>>(emptyList())
-
-    private val _isLoadingLog = MutableStateFlow(false)
-    val isLoadingLog: StateFlow<Boolean> = _isLoadingLog.asStateFlow()
+    private val _logRequestState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val logRequestState: StateFlow<RequestState> = _logRequestState.asStateFlow()
 
     // 日志筛选 & 排序
-    private val _logTypeFilter = MutableStateFlow<String?>(null)   // null = 全部
+    private val _logTypeFilter = MutableStateFlow<String?>(null)
     val logTypeFilter: StateFlow<String?> = _logTypeFilter.asStateFlow()
 
     private val _logSortOrder = MutableStateFlow(LogSortOrder.NEWEST_FIRST)
@@ -80,11 +85,6 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     private val _statusMessage = MutableStateFlow("")
     val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
 
-    // ─── Cookie 已导入标记 ─────────────────────────────────────────
-    val hasCookies: StateFlow<Boolean> = _userInfo
-        .map { WikiCookieManager.hasCookies }
-        .stateIn(scope, SharingStarted.Eagerly, WikiCookieManager.hasCookies)
-
     // ─── 公开用户查询 ──────────────────────────────────────────────
     private val _lookupQuery = MutableStateFlow("")
     val lookupQuery: StateFlow<String> = _lookupQuery.asStateFlow()
@@ -97,6 +97,8 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
 
     private val _lookupLastEdit = MutableStateFlow<String?>(null)
     val lookupLastEdit: StateFlow<String?> = _lookupLastEdit.asStateFlow()
+    private val _lookupSummaryState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val lookupSummaryState: StateFlow<RequestState> = _lookupSummaryState.asStateFlow()
 
     private val _isLoadingLookup = MutableStateFlow(false)
     val isLoadingLookup: StateFlow<Boolean> = _isLoadingLookup.asStateFlow()
@@ -108,23 +110,29 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     private val _lookupDetailTab = MutableStateFlow(LookupDetailTab.SUMMARY)
     val lookupDetailTab: StateFlow<LookupDetailTab> = _lookupDetailTab.asStateFlow()
 
-
     // 查询用户 - 文件
     private val _lookupFiles = MutableStateFlow<List<WikiUserApi.UserFile>>(emptyList())
     val lookupFiles: StateFlow<List<WikiUserApi.UserFile>> = _lookupFiles.asStateFlow()
-    private val _isLoadingLookupFiles = MutableStateFlow(false)
-    val isLoadingLookupFiles: StateFlow<Boolean> = _isLoadingLookupFiles.asStateFlow()
+    private val _lookupFilesRequestState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val lookupFilesRequestState: StateFlow<RequestState> = _lookupFilesRequestState.asStateFlow()
 
     // 查询用户 - 操作日志
     private val _lookupLogEvents = MutableStateFlow<List<WikiUserApi.LogEvent>>(emptyList())
     val lookupLogEvents: StateFlow<List<WikiUserApi.LogEvent>> = _lookupLogEvents.asStateFlow()
-    private val _isLoadingLookupLog = MutableStateFlow(false)
-    val isLoadingLookupLog: StateFlow<Boolean> = _isLoadingLookupLog.asStateFlow()
+    private val _lookupLogRequestState = MutableStateFlow<RequestState>(RequestState.Idle)
+    val lookupLogRequestState: StateFlow<RequestState> = _lookupLogRequestState.asStateFlow()
 
-    // ──────────────────────────────────────────────────────────────
+    private var fetchUserInfoJob: Job? = null
+    private var contributionsJob: Job? = null
+    private var watchlistJob: Job? = null
+    private var logEventsJob: Job? = null
+    private var lookupJob: Job? = null
+    private var lookupFilesJob: Job? = null
+    private var lookupLogJob: Job? = null
+    private var currentUserRequestToken = 0L
+    private var lookupRequestToken = 0L
 
     fun onCookieInputChange(value: String) { _cookieInput.value = value }
-
 
     fun onLogTypeFilterChange(type: String?) { _logTypeFilter.value = type }
 
@@ -136,8 +144,8 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         _lookupDetailTab.value = tab
         val name = _lookupResult.value?.name ?: return
         when (tab) {
-            LookupDetailTab.FILES -> if (_lookupFiles.value.isEmpty()) fetchLookupFiles(name)
-            LookupDetailTab.LOG -> if (_lookupLogEvents.value.isEmpty()) fetchLookupLog(name)
+            LookupDetailTab.FILES -> if (_lookupFilesRequestState.value == RequestState.Idle) fetchLookupFiles(name)
+            LookupDetailTab.LOG -> if (_lookupLogRequestState.value == RequestState.Idle) fetchLookupLog(name)
             else -> Unit
         }
     }
@@ -148,6 +156,9 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     fun importAndFetch() {
         val count = WikiCookieManager.importCookies(_cookieInput.value)
         if (count == 0) {
+            currentUserRequestToken++
+            cancelAuthenticatedJobs()
+            resetAuthenticatedState(resetCookieInput = false, clearStatus = false)
             _statusMessage.value = "⚠️ 未能解析到有效的 Cookie，请检查格式"
             return
         }
@@ -159,124 +170,249 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
      * 清除 Cookie 并重置所有状态。
      */
     fun clearCookies() {
+        currentUserRequestToken++
+        lookupRequestToken++
+        cancelAllJobs()
         WikiCookieManager.clearCookies()
         _cookieInput.value = ""
-        _userInfo.value = null
-        _blockStatus.value = null
-        _lastEditTimestamp.value = null
-        _contributions.value = emptyList()
-        _watchlist.value = emptyList()
-        _logEvents.value = emptyList()
+        resetAuthenticatedState()
+        resetLookupState()
+        _currentTab.value = UserInfoTab.INFO
+        _logTypeFilter.value = null
+        _logSortOrder.value = LogSortOrder.NEWEST_FIRST
         _statusMessage.value = "Cookie 已清除"
     }
 
     fun fetchUserInfo() {
-        scope.launch {
+        fetchUserInfoJob?.cancel()
+        val requestToken = ++currentUserRequestToken
+        fetchUserInfoJob = scope.launch {
             _isLoadingInfo.value = true
+            _blockStatus.value = null
+            _lastEditTimestamp.value = null
+            _userSummaryState.value = RequestState.Idle
             try {
-                val info = WikiUserApi.fetchCurrentUserInfo()
-                _userInfo.value = info
-                _statusMessage.value = when {
-                    info == null -> "❌ 请求失败，请检查网络连接"
-                    info.isLoggedIn -> "✅ 已登录：${info.name}"
-                    else -> "⚠️ Cookie 无效或已过期，当前为未登录状态"
-                }
-                if (info != null && info.isLoggedIn) {
-                    // 并行加载封禁状态和最后编辑时间
-                    launch {
-                        _blockStatus.value = WikiUserApi.fetchBlockStatus(info.name)
+                when (val result = WikiUserApi.fetchCurrentUserInfoResult()) {
+                    is ApiResult.Success -> {
+                        if (requestToken != currentUserRequestToken) return@launch
+                        val info = result.value
+                        _userInfo.value = info
+                        _statusMessage.value = when {
+                            info == null -> "❌ 无法读取当前用户信息"
+                            info.isLoggedIn -> "✅ 已登录：${info.name}"
+                            else -> "⚠️ Cookie 无效或已过期，当前为未登录状态"
+                        }
+                        if (info != null && info.isLoggedIn) {
+                            _userSummaryState.value = RequestState.Loading
+                            val blockDeferred = async { WikiUserApi.fetchBlockStatusResult(info.name) }
+                            val lastEditDeferred = async { WikiUserApi.fetchLastEditTimestampResult(info.name) }
+                            val blockResult = blockDeferred.await()
+                            val lastEditResult = lastEditDeferred.await()
+                            if (requestToken != currentUserRequestToken) return@launch
+                            val errors = mutableListOf<String>()
+                            when (blockResult) {
+                                is ApiResult.Success -> _blockStatus.value = blockResult.value
+                                is ApiResult.Error -> errors += blockResult.message
+                            }
+                            when (lastEditResult) {
+                                is ApiResult.Success -> _lastEditTimestamp.value = lastEditResult.value.orEmpty()
+                                is ApiResult.Error -> errors += lastEditResult.message
+                            }
+                            _userSummaryState.value = if (errors.isEmpty()) {
+                                RequestState.Success
+                            } else {
+                                RequestState.Error(errors.joinToString("；"))
+                            }
+                        } else {
+                            resetAuthenticatedCollections()
+                        }
                     }
-                    launch {
-                        _lastEditTimestamp.value = WikiUserApi.fetchLastEditTimestamp(info.name)
+                    is ApiResult.Error -> {
+                        if (requestToken != currentUserRequestToken) return@launch
+                        resetAuthenticatedState(resetCookieInput = false, clearStatus = false)
+                        _statusMessage.value = "❌ ${result.message}"
                     }
                 }
             } finally {
-                _isLoadingInfo.value = false
+                if (requestToken == currentUserRequestToken) {
+                    _isLoadingInfo.value = false
+                }
             }
         }
     }
 
     fun fetchContributions() {
-        val name = _userInfo.value?.name ?: WikiCookieManager.extractUserNameFromCookies() ?: return
-        scope.launch {
-            _isLoadingContrib.value = true
-            try {
-                _contributions.value = WikiUserApi.fetchContributions(name)
-            } finally {
-                _isLoadingContrib.value = false
+        val name = currentAuthenticatedUserName() ?: return
+        val requestToken = currentUserRequestToken
+        contributionsJob?.cancel()
+        contributionsJob = scope.launch {
+            _contributionsRequestState.value = RequestState.Loading
+            when (val result = WikiUserApi.fetchContributionsResult(name)) {
+                is ApiResult.Success -> {
+                    if (requestToken != currentUserRequestToken || name != currentAuthenticatedUserName()) return@launch
+                    _contributions.value = result.value
+                    _contributionsRequestState.value = RequestState.Success
+                }
+                is ApiResult.Error -> {
+                    if (requestToken != currentUserRequestToken || name != currentAuthenticatedUserName()) return@launch
+                    _contributions.value = emptyList()
+                    _contributionsRequestState.value = RequestState.Error(result.message)
+                }
             }
         }
     }
 
     fun fetchWatchlist() {
-        scope.launch {
-            _isLoadingWatch.value = true
-            try {
-                _watchlist.value = WikiUserApi.fetchWatchlist()
-            } finally {
-                _isLoadingWatch.value = false
+        val requestToken = currentUserRequestToken
+        watchlistJob?.cancel()
+        watchlistJob = scope.launch {
+            _watchlistRequestState.value = RequestState.Loading
+            when (val result = WikiUserApi.fetchWatchlistResult()) {
+                is ApiResult.Success -> {
+                    if (requestToken != currentUserRequestToken) return@launch
+                    _watchlist.value = result.value
+                    _watchlistRequestState.value = RequestState.Success
+                }
+                is ApiResult.Error -> {
+                    if (requestToken != currentUserRequestToken) return@launch
+                    _watchlist.value = emptyList()
+                    _watchlistRequestState.value = RequestState.Error(result.message)
+                }
             }
         }
     }
 
     fun fetchLogEvents() {
-        val name = _userInfo.value?.name ?: WikiCookieManager.extractUserNameFromCookies() ?: return
-        scope.launch {
-            _isLoadingLog.value = true
-            try {
-                _logEvents.value = WikiUserApi.fetchUserLogEvents(name)
-            } finally {
-                _isLoadingLog.value = false
+        val name = currentAuthenticatedUserName() ?: return
+        val requestToken = currentUserRequestToken
+        logEventsJob?.cancel()
+        logEventsJob = scope.launch {
+            _logRequestState.value = RequestState.Loading
+            when (val result = WikiUserApi.fetchUserLogEventsResult(name)) {
+                is ApiResult.Success -> {
+                    if (requestToken != currentUserRequestToken || name != currentAuthenticatedUserName()) return@launch
+                    _logEvents.value = result.value
+                    _logRequestState.value = RequestState.Success
+                }
+                is ApiResult.Error -> {
+                    if (requestToken != currentUserRequestToken || name != currentAuthenticatedUserName()) return@launch
+                    _logEvents.value = emptyList()
+                    _logRequestState.value = RequestState.Error(result.message)
+                }
             }
         }
     }
 
     fun lookupUser() {
         val q = _lookupQuery.value.trim().trimStart('#')
-        if (q.isBlank()) return
+        if (q.isBlank()) {
+            lookupRequestToken++
+            lookupFilesJob?.cancel()
+            lookupLogJob?.cancel()
+            resetLookupState(clearQuery = false)
+            _lookupError.value = "⚠️ 请输入用户 ID"
+            return
+        }
         if (!q.all { it.isDigit() }) {
+            lookupRequestToken++
+            lookupFilesJob?.cancel()
+            lookupLogJob?.cancel()
+            resetLookupState(clearQuery = false)
             _lookupError.value = "⚠️ 请输入数字用户 ID"
             return
         }
-        _lookupResult.value = null
-        _lookupBlockStatus.value = null
-        _lookupLastEdit.value = null
-        _lookupError.value = ""
-        _lookupDetailTab.value = LookupDetailTab.SUMMARY
-        _lookupFiles.value = emptyList()
-        _lookupLogEvents.value = emptyList()
-        scope.launch {
+
+        lookupJob?.cancel()
+        lookupFilesJob?.cancel()
+        lookupLogJob?.cancel()
+        val requestToken = ++lookupRequestToken
+        resetLookupState(clearQuery = false)
+
+        lookupJob = scope.launch {
             _isLoadingLookup.value = true
             try {
-                val result = WikiUserApi.fetchPublicUserInfo(q)
-                _lookupResult.value = result
-                if (result == null) {
-                    _lookupError.value = "❌ 请求失败，请检查网络连接"
-                } else if (!result.exists) {
-                    _lookupError.value = "⚠️ 用户 ID「$q」不存在"
-                } else {
-                    launch { _lookupBlockStatus.value = WikiUserApi.fetchBlockStatus(result.name) }
-                    launch { _lookupLastEdit.value = WikiUserApi.fetchLastEditTimestamp(result.name) }
+                when (val result = WikiUserApi.fetchPublicUserInfoResult(q)) {
+                    is ApiResult.Success -> {
+                        if (requestToken != lookupRequestToken) return@launch
+                        val publicUser = result.value
+                        _lookupResult.value = publicUser
+                        if (publicUser == null) {
+                            _lookupError.value = "❌ 未返回用户信息"
+                        } else if (!publicUser.exists) {
+                            _lookupError.value = "⚠️ 用户 ID「$q」不存在"
+                        } else {
+                            _lookupSummaryState.value = RequestState.Loading
+                            val blockDeferred = async { WikiUserApi.fetchBlockStatusResult(publicUser.name) }
+                            val lastEditDeferred = async { WikiUserApi.fetchLastEditTimestampResult(publicUser.name) }
+                            val blockResult = blockDeferred.await()
+                            val lastEditResult = lastEditDeferred.await()
+                            if (requestToken != lookupRequestToken) return@launch
+                            val errors = mutableListOf<String>()
+                            when (blockResult) {
+                                is ApiResult.Success -> _lookupBlockStatus.value = blockResult.value
+                                is ApiResult.Error -> errors += blockResult.message
+                            }
+                            when (lastEditResult) {
+                                is ApiResult.Success -> _lookupLastEdit.value = lastEditResult.value.orEmpty()
+                                is ApiResult.Error -> errors += lastEditResult.message
+                            }
+                            _lookupSummaryState.value = if (errors.isEmpty()) {
+                                RequestState.Success
+                            } else {
+                                RequestState.Error(errors.joinToString("；"))
+                            }
+                        }
+                    }
+                    is ApiResult.Error -> {
+                        if (requestToken != lookupRequestToken) return@launch
+                        _lookupError.value = "❌ ${result.message}"
+                    }
                 }
             } finally {
-                _isLoadingLookup.value = false
+                if (requestToken == lookupRequestToken) {
+                    _isLoadingLookup.value = false
+                }
             }
         }
     }
 
     fun fetchLookupFiles(name: String) {
-        scope.launch {
-            _isLoadingLookupFiles.value = true
-            try { _lookupFiles.value = WikiUserApi.fetchUserFiles(name) }
-            finally { _isLoadingLookupFiles.value = false }
+        val requestToken = lookupRequestToken
+        lookupFilesJob?.cancel()
+        lookupFilesJob = scope.launch {
+            _lookupFilesRequestState.value = RequestState.Loading
+            when (val result = WikiUserApi.fetchUserFilesResult(name)) {
+                is ApiResult.Success -> {
+                    if (requestToken != lookupRequestToken || _lookupResult.value?.name != name) return@launch
+                    _lookupFiles.value = result.value
+                    _lookupFilesRequestState.value = RequestState.Success
+                }
+                is ApiResult.Error -> {
+                    if (requestToken != lookupRequestToken || _lookupResult.value?.name != name) return@launch
+                    _lookupFiles.value = emptyList()
+                    _lookupFilesRequestState.value = RequestState.Error(result.message)
+                }
+            }
         }
     }
 
     fun fetchLookupLog(name: String) {
-        scope.launch {
-            _isLoadingLookupLog.value = true
-            try { _lookupLogEvents.value = WikiUserApi.fetchUserLogEvents(name) }
-            finally { _isLoadingLookupLog.value = false }
+        val requestToken = lookupRequestToken
+        lookupLogJob?.cancel()
+        lookupLogJob = scope.launch {
+            _lookupLogRequestState.value = RequestState.Loading
+            when (val result = WikiUserApi.fetchUserLogEventsResult(name)) {
+                is ApiResult.Success -> {
+                    if (requestToken != lookupRequestToken || _lookupResult.value?.name != name) return@launch
+                    _lookupLogEvents.value = result.value
+                    _lookupLogRequestState.value = RequestState.Success
+                }
+                is ApiResult.Error -> {
+                    if (requestToken != lookupRequestToken || _lookupResult.value?.name != name) return@launch
+                    _lookupLogEvents.value = emptyList()
+                    _lookupLogRequestState.value = RequestState.Error(result.message)
+                }
+            }
         }
     }
 
@@ -288,11 +424,63 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         val info = _userInfo.value ?: return
         if (!info.isLoggedIn) return
         when (tab) {
-            UserInfoTab.CONTRIBUTIONS -> if (_contributions.value.isEmpty()) fetchContributions()
-            UserInfoTab.WATCHLIST -> if (_watchlist.value.isEmpty()) fetchWatchlist()
-            UserInfoTab.LOG -> if (_logEvents.value.isEmpty()) fetchLogEvents()
+            UserInfoTab.CONTRIBUTIONS -> if (_contributionsRequestState.value == RequestState.Idle) fetchContributions()
+            UserInfoTab.WATCHLIST -> if (_watchlistRequestState.value == RequestState.Idle) fetchWatchlist()
+            UserInfoTab.LOG -> if (_logRequestState.value == RequestState.Idle) fetchLogEvents()
             else -> Unit
         }
     }
-}
 
+    private fun currentAuthenticatedUserName(): String? =
+        _userInfo.value?.takeIf { it.isLoggedIn }?.name ?: WikiCookieManager.extractUserNameFromCookies()
+
+    private fun cancelAuthenticatedJobs() {
+        listOfNotNull(fetchUserInfoJob, contributionsJob, watchlistJob, logEventsJob).forEach { it.cancel() }
+    }
+
+    private fun cancelAllJobs() {
+        listOfNotNull(
+            fetchUserInfoJob,
+            contributionsJob,
+            watchlistJob,
+            logEventsJob,
+            lookupJob,
+            lookupFilesJob,
+            lookupLogJob
+        ).forEach { it.cancel() }
+    }
+
+    private fun resetAuthenticatedCollections() {
+        _contributions.value = emptyList()
+        _watchlist.value = emptyList()
+        _logEvents.value = emptyList()
+        _contributionsRequestState.value = RequestState.Idle
+        _watchlistRequestState.value = RequestState.Idle
+        _logRequestState.value = RequestState.Idle
+    }
+
+    private fun resetAuthenticatedState(resetCookieInput: Boolean = false, clearStatus: Boolean = false) {
+        if (resetCookieInput) _cookieInput.value = ""
+        _userInfo.value = null
+        _blockStatus.value = null
+        _lastEditTimestamp.value = null
+        _userSummaryState.value = RequestState.Idle
+        resetAuthenticatedCollections()
+        if (clearStatus) _statusMessage.value = ""
+    }
+
+    private fun resetLookupState(clearQuery: Boolean = false) {
+        if (clearQuery) _lookupQuery.value = ""
+        _lookupResult.value = null
+        _lookupBlockStatus.value = null
+        _lookupLastEdit.value = null
+        _lookupSummaryState.value = RequestState.Idle
+        _lookupError.value = ""
+        _lookupDetailTab.value = LookupDetailTab.SUMMARY
+        _lookupFiles.value = emptyList()
+        _lookupLogEvents.value = emptyList()
+        _lookupFilesRequestState.value = RequestState.Idle
+        _lookupLogRequestState.value = RequestState.Idle
+        _isLoadingLookup.value = false
+    }
+}

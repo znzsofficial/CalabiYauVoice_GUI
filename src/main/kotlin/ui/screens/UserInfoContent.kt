@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
@@ -16,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import data.WikiUserApi
@@ -23,19 +25,11 @@ import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
-import io.github.composefluent.icons.regular.PeopleError
-import io.github.composefluent.icons.regular.Person
-import io.github.composefluent.icons.regular.Search
-import io.github.composefluent.icons.regular.Info
-import io.github.composefluent.icons.regular.Edit
-import io.github.composefluent.icons.regular.History
-import io.github.composefluent.icons.regular.DataUsage
-import io.github.composefluent.icons.regular.DocumentBulletList
-import io.github.composefluent.icons.regular.EyeTracking
-import io.github.composefluent.icons.regular.Image
+import io.github.composefluent.icons.regular.*
 import io.github.composefluent.surface.Card
 import viewmodel.LogSortOrder
 import viewmodel.LookupDetailTab
+import viewmodel.RequestState
 import viewmodel.UserInfoTab
 import viewmodel.UserInfoViewModel
 
@@ -51,342 +45,398 @@ fun UserInfoContent(
     val isLoadingInfo by viewModel.isLoadingInfo.collectAsState()
     val blockStatus by viewModel.blockStatus.collectAsState()
     val lastEditTimestamp by viewModel.lastEditTimestamp.collectAsState()
+    val userSummaryState by viewModel.userSummaryState.collectAsState()
     val contributions by viewModel.contributions.collectAsState()
-    val isLoadingContrib by viewModel.isLoadingContrib.collectAsState()
+    val contributionsRequestState by viewModel.contributionsRequestState.collectAsState()
     val watchlist by viewModel.watchlist.collectAsState()
-    val isLoadingWatch by viewModel.isLoadingWatch.collectAsState()
+    val watchlistRequestState by viewModel.watchlistRequestState.collectAsState()
     val logEvents by viewModel.logEvents.collectAsState()
-    val isLoadingLog by viewModel.isLoadingLog.collectAsState()
+    val logRequestState by viewModel.logRequestState.collectAsState()
     val logTypeFilter by viewModel.logTypeFilter.collectAsState()
     val logSortOrder by viewModel.logSortOrder.collectAsState()
     val availableLogTypes by viewModel.availableLogTypes.collectAsState()
     val currentTab by viewModel.currentTab.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
-    // 公开用户查询
     val lookupQuery by viewModel.lookupQuery.collectAsState()
     val lookupResult by viewModel.lookupResult.collectAsState()
     val lookupBlockStatus by viewModel.lookupBlockStatus.collectAsState()
     val lookupLastEdit by viewModel.lookupLastEdit.collectAsState()
+    val lookupSummaryState by viewModel.lookupSummaryState.collectAsState()
     val isLoadingLookup by viewModel.isLoadingLookup.collectAsState()
     val lookupError by viewModel.lookupError.collectAsState()
     val lookupDetailTab by viewModel.lookupDetailTab.collectAsState()
     val lookupFiles by viewModel.lookupFiles.collectAsState()
-    val isLoadingLookupFiles by viewModel.isLoadingLookupFiles.collectAsState()
+    val lookupFilesRequestState by viewModel.lookupFilesRequestState.collectAsState()
     val lookupLogEvents by viewModel.lookupLogEvents.collectAsState()
-    val isLoadingLookupLog by viewModel.isLoadingLookupLog.collectAsState()
+    val lookupLogRequestState by viewModel.lookupLogRequestState.collectAsState()
 
     Column(modifier.fillMaxSize().padding(16.dp)) {
-
-        // ── Cookie 输入区 ──────────────────────────────────────────
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text("导入 Cookie", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "从浏览器开发者工具 Network 面板中复制请求的 Cookie 字段，粘贴到下方输入框",
-                    fontSize = 12.sp,
-                    color = FluentTheme.colors.text.text.secondary
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                    TextField(
-                        value = cookieInput,
-                        onValueChange = { viewModel.onCookieInputChange(it) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = { Text("gamecenter_wiki_UserID=…; gamecenter_wiki__session=…; SESSDATA=…") },
-                        header = { Text("Cookie", fontSize = 12.sp) }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { viewModel.importAndFetch() },
-                        disabled = isLoadingInfo
-                    ) {
-                        if (isLoadingInfo) ProgressRing(size = 16.dp)
-                        else Text("导入并查询")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { viewModel.clearCookies() }
-                    ) { Text("清除") }
-                }
-                if (statusMessage.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        statusMessage,
-                        fontSize = 12.sp,
-                        color = when {
-                            statusMessage.startsWith("✅") -> Color(0xFF4CAF50)
-                            statusMessage.startsWith("❌") || statusMessage.startsWith("⚠️") -> Color(0xFFE57373)
-                            else -> FluentTheme.colors.text.text.secondary
-                        }
-                    )
-                }
-            }
-        }
+        CookieImportSection(
+            cookieInput = cookieInput,
+            isLoadingInfo = isLoadingInfo,
+            statusMessage = statusMessage,
+            onCookieInputChange = viewModel::onCookieInputChange,
+            onImportAndFetch = viewModel::importAndFetch,
+            onClear = viewModel::clearCookies
+        )
 
         Spacer(Modifier.height(12.dp))
 
-        // ── 查询任意用户 ───────────────────────────────────────────
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text("查询用户", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "输入用户数字 ID 查询用户的公开信息",
-                    fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextField(
-                        value = lookupQuery,
-                        onValueChange = { viewModel.onLookupQueryChange(it) },
-                        modifier = Modifier.weight(1f).onKeyEvent { keyEvent ->
-                            if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyDown) {
-                                viewModel.lookupUser(); true
-                            } else false
-                        },
-                        singleLine = true,
-                        placeholder = { Text("用户 ID（如 5205017）") }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(
-                        onClick = { viewModel.lookupUser() },
-                        disabled = isLoadingLookup || lookupQuery.isBlank()
-                    ) {
-                        if (isLoadingLookup) ProgressRing(size = 16.dp)
-                        else {
-                            Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("查询")
-                        }
-                    }
-                }
-                if (lookupError.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(lookupError, fontSize = 12.sp, color = Color(0xFFE57373))
-                }
-                val lr = lookupResult
-                if (lr != null && lr.exists) {
-                    Spacer(Modifier.height(12.dp))
-                    PublicUserInfoCard(
-                        user = lr,
-                        blockStatus = lookupBlockStatus,
-                        lastEdit = lookupLastEdit,
-                        detailTab = lookupDetailTab,
-                        onDetailTabChange = { viewModel.onLookupDetailTabChange(it) },
-                        files = lookupFiles,
-                        isLoadingFiles = isLoadingLookupFiles,
-                        onRefreshFiles = { viewModel.fetchLookupFiles(lr.name) },
-                        logEvents = lookupLogEvents,
-                        isLoadingLog = isLoadingLookupLog,
-                        onRefreshLog = { viewModel.fetchLookupLog(lr.name) }
-                    )
-                }
-            }
-        }
+        PublicUserLookupSection(
+            lookupQuery = lookupQuery,
+            lookupResult = lookupResult,
+            lookupBlockStatus = lookupBlockStatus,
+            lookupLastEdit = lookupLastEdit,
+            lookupSummaryState = lookupSummaryState,
+            isLoadingLookup = isLoadingLookup,
+            lookupError = lookupError,
+            lookupDetailTab = lookupDetailTab,
+            lookupFiles = lookupFiles,
+            lookupFilesRequestState = lookupFilesRequestState,
+            lookupLogEvents = lookupLogEvents,
+            lookupLogRequestState = lookupLogRequestState,
+            onLookupQueryChange = viewModel::onLookupQueryChange,
+            onLookup = viewModel::lookupUser,
+            onDetailTabChange = viewModel::onLookupDetailTabChange,
+            onRefreshFiles = viewModel::fetchLookupFiles,
+            onRefreshLog = viewModel::fetchLookupLog
+        )
 
         Spacer(Modifier.height(12.dp))
-        val info = userInfo
-        if (info != null && info.isLoggedIn) {
-            Card(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 头像占位圆圈
-                    Box(
-                        Modifier.size(44.dp)
-                            .clip(CircleShape)
-                            .background(FluentTheme.colors.fillAccent.default),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            info.name.take(1).uppercase(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                    }
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(info.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        val badge = buildString {
-                            val userGroups = info.groups.filter { it != "*" && it != "user" }
-                            if (userGroups.isNotEmpty()) append(userGroups.joinToString(" · "))
-                            else append("普通用户")
-                        }
-                        Text(badge, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("编辑次数", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
-                        Text(
-                            info.editCount.toString(),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 18.sp,
-                            color = FluentTheme.colors.fillAccent.default
-                        )
-                    }
-                    if (info.registrationDate.isNotBlank()) {
-                        Spacer(Modifier.width(24.dp))
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("注册时间", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
-                            Text(
-                                WikiUserApi.formatTimestamp(info.registrationDate),
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
 
-        // ── Tab 切换 ───────────────────────────────────────────────
-        if (info != null && info.isLoggedIn) {
-            SelectorBar {
-                SelectorBarItem(
-                    selected = currentTab == UserInfoTab.INFO,
-                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.INFO) },
-                    text = { Text("基本信息") },
-                    icon = { Icon(Icons.Regular.Info, contentDescription = null) }
-                )
-                SelectorBarItem(
-                    selected = currentTab == UserInfoTab.CONTRIBUTIONS,
-                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.CONTRIBUTIONS) },
-                    text = { Text("编辑贡献") },
-                    icon = { Icon(Icons.Regular.Edit, contentDescription = null) }
-                )
-                SelectorBarItem(
-                    selected = currentTab == UserInfoTab.WATCHLIST,
-                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.WATCHLIST) },
-                    text = { Text("监视列表") },
-                    icon = { Icon(Icons.Regular.EyeTracking, contentDescription = null) }
-                )
-                SelectorBarItem(
-                    selected = currentTab == UserInfoTab.LOG,
-                    onSelectedChange = { viewModel.onTabSelected(UserInfoTab.LOG) },
-                    text = { Text("操作日志") },
-                    icon = { Icon(Icons.Regular.History, contentDescription = null) }
-                )
-            }
-            Spacer(Modifier.height(10.dp))
+        when {
+            userInfo != null && userInfo!!.isLoggedIn -> AuthenticatedUserSection(
+                info = userInfo!!,
+                blockStatus = blockStatus,
+                lastEditTimestamp = lastEditTimestamp,
+                userSummaryState = userSummaryState,
+                currentTab = currentTab,
+                contributions = contributions,
+                contributionsRequestState = contributionsRequestState,
+                watchlist = watchlist,
+                watchlistRequestState = watchlistRequestState,
+                logEvents = logEvents,
+                logRequestState = logRequestState,
+                logTypeFilter = logTypeFilter,
+                logSortOrder = logSortOrder,
+                availableLogTypes = availableLogTypes,
+                onTabSelected = viewModel::onTabSelected,
+                onRefreshContributions = viewModel::fetchContributions,
+                onRefreshWatchlist = viewModel::fetchWatchlist,
+                onRefreshLog = viewModel::fetchLogEvents,
+                onLogTypeFilterChange = viewModel::onLogTypeFilterChange,
+                onLogSortOrderChange = viewModel::onLogSortOrderChange
+            )
 
-            // ── Tab 内容 ───────────────────────────────────────────
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when (currentTab) {
-                    UserInfoTab.INFO -> InfoTabContent(info, blockStatus, lastEditTimestamp)
-                    UserInfoTab.CONTRIBUTIONS -> ListTabContent(
-                        isLoading = isLoadingContrib,
-                        isEmpty = contributions.isEmpty(),
-                        emptyText = "暂无贡献记录",
-                        onRefresh = { viewModel.fetchContributions() }
-                    ) {
-                        items(contributions) { contrib ->
-                            ContribItem(contrib)
-                        }
-                    }
+            userInfo != null -> MessageCard(
+                title = "Cookie 无效或已过期",
+                message = "当前处于未登录状态，请更新 Cookie 后重试"
+            )
 
-                    UserInfoTab.WATCHLIST -> ListTabContent(
-                        isLoading = isLoadingWatch,
-                        isEmpty = watchlist.isEmpty(),
-                        emptyText = "监视列表为空",
-                        onRefresh = { viewModel.fetchWatchlist() }
-                    ) {
-                        items(watchlist) { item ->
-                            WatchlistItem(item)
-                        }
-                    }
-
-                    UserInfoTab.LOG -> LogTabContent(
-                        isLoading = isLoadingLog,
-                        logEvents = logEvents,
-                        logTypeFilter = logTypeFilter,
-                        logSortOrder = logSortOrder,
-                        availableLogTypes = availableLogTypes,
-                        onFilterChange = { viewModel.onLogTypeFilterChange(it) },
-                        onSortOrderChange = { viewModel.onLogSortOrderChange(it) },
-                        onRefresh = { viewModel.fetchLogEvents() }
-                    )
-                }
-            }
-        } else if (info != null && !info.isLoggedIn) {
-            // 未登录提示
-            Card(Modifier.fillMaxWidth()) {
-                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Cookie 无效或已过期", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "当前处于未登录状态，请更新 Cookie 后重试",
-                            fontSize = 13.sp,
-                            color = FluentTheme.colors.text.text.secondary
-                        )
-                    }
-                }
-            }
-        } else {
-            // 尚未查询
-            Card(Modifier.fillMaxWidth()) {
-                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        "请在上方输入 Cookie 后点击「导入并查询」",
-                        fontSize = 13.sp,
-                        color = FluentTheme.colors.text.text.secondary
-                    )
-                }
-            }
+            else -> MessageCard(
+                title = null,
+                message = "请在上方输入 Cookie 后点击「导入并查询」"
+            )
         }
     }
 }
-
-// ── 封禁警告横幅（共用）──────────────────────────────────────────
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-private fun BlockBanner(blockStatus: WikiUserApi.BlockInfo, iconSize: Int = 18, titleSize: Int = 13) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xFFE57373).copy(alpha = 0.15f))
-            .border(1.dp, Color(0xFFE57373).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            Icons.Default.PeopleError, contentDescription = null,
-            modifier = Modifier.size(iconSize.dp), tint = Color(0xFFE57373)
-        )
-        Spacer(Modifier.width(8.dp))
-        Column {
+private fun CookieImportSection(
+    cookieInput: String,
+    isLoadingInfo: Boolean,
+    statusMessage: String,
+    onCookieInputChange: (String) -> Unit,
+    onImportAndFetch: () -> Unit,
+    onClear: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("导入 Cookie", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Spacer(Modifier.height(4.dp))
             Text(
-                "该账号已被封禁", fontWeight = FontWeight.SemiBold,
-                fontSize = titleSize.sp, color = Color(0xFFE57373)
+                "从浏览器开发者工具 Network 面板中复制请求的 Cookie 字段，粘贴到下方输入框",
+                fontSize = 12.sp,
+                color = FluentTheme.colors.text.text.secondary
             )
-            Text(
-                buildString {
-                    append("封禁者：${blockStatus.by}")
-                    when {
-                        blockStatus.expiry == "infinity" -> append("  永久封禁")
-                        blockStatus.expiry.isNotBlank() -> append("  到期：${WikiUserApi.formatTimestamp(blockStatus.expiry)}")
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                TextField(
+                    value = cookieInput,
+                    onValueChange = onCookieInputChange,
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    placeholder = { Text("gamecenter_wiki_UserID=…; gamecenter_wiki__session=…; SESSDATA=…") },
+                    header = { Text("Cookie", fontSize = 12.sp) }
+                )
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onImportAndFetch, disabled = isLoadingInfo) {
+                    if (isLoadingInfo) ProgressRing(size = 16.dp) else Text("导入并查询")
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onClear) { Text("清除") }
+            }
+            if (statusMessage.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    statusMessage,
+                    fontSize = 12.sp,
+                    color = when {
+                        statusMessage.startsWith("✅") -> Color(0xFF4CAF50)
+                        statusMessage.startsWith("❌") || statusMessage.startsWith("⚠️") -> Color(0xFFE57373)
+                        else -> FluentTheme.colors.text.text.secondary
                     }
-                    if (blockStatus.reason.isNotBlank()) append("\n原因：${blockStatus.reason}")
-                },
-                fontSize = 11.sp, color = Color(0xFFE57373).copy(alpha = 0.8f)
-            )
+                )
+            }
         }
     }
 }
 
-// ── 基本信息 Tab ─────────────────────────────────────────────────
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun PublicUserLookupSection(
+    lookupQuery: String,
+    lookupResult: WikiUserApi.PublicUserInfo?,
+    lookupBlockStatus: WikiUserApi.BlockInfo?,
+    lookupLastEdit: String?,
+    lookupSummaryState: RequestState,
+    isLoadingLookup: Boolean,
+    lookupError: String,
+    lookupDetailTab: LookupDetailTab,
+    lookupFiles: List<WikiUserApi.UserFile>,
+    lookupFilesRequestState: RequestState,
+    lookupLogEvents: List<WikiUserApi.LogEvent>,
+    lookupLogRequestState: RequestState,
+    onLookupQueryChange: (String) -> Unit,
+    onLookup: () -> Unit,
+    onDetailTabChange: (LookupDetailTab) -> Unit,
+    onRefreshFiles: (String) -> Unit,
+    onRefreshLog: (String) -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("查询用户", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "输入用户数字 ID 查询用户的公开信息",
+                fontSize = 12.sp,
+                color = FluentTheme.colors.text.text.secondary
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextField(
+                    value = lookupQuery,
+                    onValueChange = onLookupQueryChange,
+                    modifier = Modifier.weight(1f).onKeyEvent { keyEvent ->
+                        if (keyEvent.key == Key.Enter && keyEvent.type == KeyEventType.KeyDown) {
+                            onLookup(); true
+                        } else false
+                    },
+                    singleLine = true,
+                    placeholder = { Text("用户 ID（如 5205017）") }
+                )
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onLookup, disabled = isLoadingLookup || lookupQuery.isBlank()) {
+                    if (isLoadingLookup) ProgressRing(size = 16.dp)
+                    else {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("查询")
+                    }
+                }
+            }
+            if (lookupError.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(lookupError, fontSize = 12.sp, color = Color(0xFFE57373))
+            }
+            if (lookupResult != null && lookupResult.exists) {
+                Spacer(Modifier.height(12.dp))
+                PublicUserInfoCard(
+                    user = lookupResult,
+                    blockStatus = lookupBlockStatus,
+                    lastEdit = lookupLastEdit,
+                    summaryState = lookupSummaryState,
+                    detailTab = lookupDetailTab,
+                    onDetailTabChange = onDetailTabChange,
+                    files = lookupFiles,
+                    filesRequestState = lookupFilesRequestState,
+                    onRefreshFiles = { onRefreshFiles(lookupResult.name) },
+                    logEvents = lookupLogEvents,
+                    logRequestState = lookupLogRequestState,
+                    onRefreshLog = { onRefreshLog(lookupResult.name) }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun AuthenticatedUserSection(
+    info: WikiUserApi.UserInfo,
+    blockStatus: WikiUserApi.BlockInfo?,
+    lastEditTimestamp: String?,
+    userSummaryState: RequestState,
+    currentTab: UserInfoTab,
+    contributions: List<WikiUserApi.UserContrib>,
+    contributionsRequestState: RequestState,
+    watchlist: List<WikiUserApi.WatchlistItem>,
+    watchlistRequestState: RequestState,
+    logEvents: List<WikiUserApi.LogEvent>,
+    logRequestState: RequestState,
+    logTypeFilter: String?,
+    logSortOrder: LogSortOrder,
+    availableLogTypes: List<String>,
+    onTabSelected: (UserInfoTab) -> Unit,
+    onRefreshContributions: () -> Unit,
+    onRefreshWatchlist: () -> Unit,
+    onRefreshLog: () -> Unit,
+    onLogTypeFilterChange: (String?) -> Unit,
+    onLogSortOrderChange: (LogSortOrder) -> Unit
+) {
+    Column(Modifier.fillMaxSize()) {
+        UserHeaderCard(info)
+        Spacer(Modifier.height(12.dp))
+        SelectorBar {
+            SelectorBarItem(
+                selected = currentTab == UserInfoTab.INFO,
+                onSelectedChange = { onTabSelected(UserInfoTab.INFO) },
+                text = { Text("基本信息") },
+                icon = { Icon(Icons.Regular.Info, contentDescription = null) }
+            )
+            SelectorBarItem(
+                selected = currentTab == UserInfoTab.CONTRIBUTIONS,
+                onSelectedChange = { onTabSelected(UserInfoTab.CONTRIBUTIONS) },
+                text = { Text("编辑贡献") },
+                icon = { Icon(Icons.Regular.Edit, contentDescription = null) }
+            )
+            SelectorBarItem(
+                selected = currentTab == UserInfoTab.WATCHLIST,
+                onSelectedChange = { onTabSelected(UserInfoTab.WATCHLIST) },
+                text = { Text("监视列表") },
+                icon = { Icon(Icons.Regular.EyeTracking, contentDescription = null) }
+            )
+            SelectorBarItem(
+                selected = currentTab == UserInfoTab.LOG,
+                onSelectedChange = { onTabSelected(UserInfoTab.LOG) },
+                text = { Text("操作日志") },
+                icon = { Icon(Icons.Regular.History, contentDescription = null) }
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (currentTab) {
+                UserInfoTab.INFO -> InfoTabContent(info, blockStatus, lastEditTimestamp, userSummaryState)
+                UserInfoTab.CONTRIBUTIONS -> ListTabContent(
+                    requestState = contributionsRequestState,
+                    hasItems = contributions.isNotEmpty(),
+                    emptyText = "暂无贡献记录",
+                    idleText = "切换到此页后将自动加载编辑贡献",
+                    onRefresh = onRefreshContributions
+                ) {
+                    items(contributions) { contrib -> ContribItem(contrib) }
+                }
+                UserInfoTab.WATCHLIST -> ListTabContent(
+                    requestState = watchlistRequestState,
+                    hasItems = watchlist.isNotEmpty(),
+                    emptyText = "监视列表为空",
+                    idleText = "切换到此页后将自动加载监视列表",
+                    onRefresh = onRefreshWatchlist
+                ) {
+                    items(watchlist) { item -> WatchlistItem(item) }
+                }
+                UserInfoTab.LOG -> LogTabContent(
+                    requestState = logRequestState,
+                    logEvents = logEvents,
+                    logTypeFilter = logTypeFilter,
+                    logSortOrder = logSortOrder,
+                    availableLogTypes = availableLogTypes,
+                    onFilterChange = onLogTypeFilterChange,
+                    onSortOrderChange = onLogSortOrderChange,
+                    onRefresh = onRefreshLog
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun UserHeaderCard(info: WikiUserApi.UserInfo) {
+    Card(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier.size(44.dp)
+                    .clip(CircleShape)
+                    .background(FluentTheme.colors.fillAccent.default),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    info.name.take(1).uppercase(),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(info.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                val badge = buildString {
+                    val userGroups = info.groups.filter { it != "*" && it != "user" }
+                    if (userGroups.isNotEmpty()) append(userGroups.joinToString(" · ")) else append("普通用户")
+                }
+                Text(badge, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("编辑次数", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                Text(
+                    info.editCount.toString(),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    color = FluentTheme.colors.fillAccent.default
+                )
+            }
+            if (info.registrationDate.isNotBlank()) {
+                Spacer(Modifier.width(24.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("注册时间", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                    Text(WikiUserApi.formatTimestamp(info.registrationDate), fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun MessageCard(title: String?, message: String) {
+    Card(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (!title.isNullOrBlank()) {
+                    Text(title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Spacer(Modifier.height(8.dp))
+                }
+                Text(message, fontSize = 13.sp, color = FluentTheme.colors.text.text.secondary)
+            }
+        }
+    }
+}
+
+// ── 基本信息 Tab ─────────────────────────────────────��───────────
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun InfoTabContent(
     info: WikiUserApi.UserInfo,
     blockStatus: WikiUserApi.BlockInfo?,
-    lastEditTimestamp: String?
+    lastEditTimestamp: String?,
+    userSummaryState: RequestState
 ) {
     val listState = rememberLazyListState()
     val adapter = rememberScrollbarAdapter(listState)
@@ -409,17 +459,14 @@ private fun InfoTabContent(
                     if (info.realName.isNotBlank()) InfoRow("真实姓名", info.realName)
                     InfoRow(
                         "注册时间",
-                        WikiUserApi.formatTimestamp(info.registrationDate).takeIf { it != "-" } ?: "未知")
+                        WikiUserApi.formatTimestamp(info.registrationDate).takeIf { it != "-" } ?: "未知"
+                    )
                     InfoRow("编辑次数", info.editCount.toString())
                     InfoRow(
                         "最后编辑",
-                        when {
-                            lastEditTimestamp == null -> "加载中…"
-                            lastEditTimestamp.isBlank() -> "无编辑记录"
-                            else -> WikiUserApi.formatTimestamp(lastEditTimestamp)
-                        }
+                        summaryValueText(userSummaryState, lastEditTimestamp)
                     )
-                    InfoRow("封禁状态", if (blockStatus == null) "正常" else "已封禁")
+                    InfoRow("封禁状态", blockStatusText(userSummaryState, blockStatus))
                 }
             }
             // 用户组
@@ -494,46 +541,49 @@ private fun InfoRow(label: String, value: String) {
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun ListTabContent(
-    isLoading: Boolean,
-    isEmpty: Boolean,
+    requestState: RequestState,
+    hasItems: Boolean,
     emptyText: String,
+    idleText: String,
     onRefresh: () -> Unit,
-    itemContent: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
+    itemContent: LazyListScope.() -> Unit
 ) {
-    when {
-        isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    when (requestState) {
+        RequestState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             ProgressRing(size = 36.dp)
         }
-
-        isEmpty -> {
-            Column(
-                Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(emptyText, color = FluentTheme.colors.text.text.secondary, fontSize = 14.sp)
-                Spacer(Modifier.height(12.dp))
-                Button(onClick = onRefresh) { Text("刷新") }
-            }
-        }
-
-        else -> {
-            val listState = rememberLazyListState()
-            val adapter = rememberScrollbarAdapter(listState)
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Button(onClick = onRefresh, modifier = Modifier.height(28.dp)) {
-                        Text("刷新", fontSize = 12.sp)
+        RequestState.Idle -> RequestStatePlaceholder(
+            message = idleText,
+            buttonLabel = "加载",
+            onAction = onRefresh
+        )
+        is RequestState.Error -> RequestStatePlaceholder(
+            message = requestState.message,
+            buttonLabel = "重试",
+            onAction = onRefresh,
+            messageColor = Color(0xFFE57373)
+        )
+        RequestState.Success -> {
+            if (!hasItems) {
+                RequestStatePlaceholder(message = emptyText, buttonLabel = "刷新", onAction = onRefresh)
+            } else {
+                val listState = rememberLazyListState()
+                val adapter = rememberScrollbarAdapter(listState)
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button(onClick = onRefresh, modifier = Modifier.height(28.dp)) {
+                            Text("刷新", fontSize = 12.sp)
+                        }
                     }
-                }
-                Spacer(Modifier.height(4.dp))
-                ScrollbarContainer(adapter = adapter, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        content = itemContent
-                    )
+                    Spacer(Modifier.height(4.dp))
+                    ScrollbarContainer(adapter = adapter, modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            content = itemContent
+                        )
+                    }
                 }
             }
         }
@@ -783,7 +833,7 @@ private fun LogFilterBar(
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun LogTabContent(
-    isLoading: Boolean,
+    requestState: RequestState,
     logEvents: List<WikiUserApi.LogEvent>,
     logTypeFilter: String?,
     logSortOrder: LogSortOrder,
@@ -802,29 +852,42 @@ private fun LogTabContent(
             onRefresh = onRefresh
         )
         Spacer(Modifier.height(6.dp))
-        when {
-            isLoading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        when (requestState) {
+            RequestState.Loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 ProgressRing(size = 36.dp)
             }
-
-            logEvents.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("暂无操作日志", color = FluentTheme.colors.text.text.secondary, fontSize = 14.sp)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = onRefresh) { Text("刷新") }
-                }
-            }
-
-            else -> {
-                val listState = rememberLazyListState()
-                val adapter = rememberScrollbarAdapter(listState)
-                ScrollbarContainer(adapter = adapter, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(logEvents) { event -> LogEventItem(event) }
+            RequestState.Idle -> RequestStatePlaceholder(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                message = "切换到此页后将自动加载操作日志",
+                buttonLabel = "加载",
+                onAction = onRefresh
+            )
+            is RequestState.Error -> RequestStatePlaceholder(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                message = requestState.message,
+                buttonLabel = "重试",
+                onAction = onRefresh,
+                messageColor = Color(0xFFE57373)
+            )
+            RequestState.Success -> {
+                if (logEvents.isEmpty()) {
+                    RequestStatePlaceholder(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        message = "暂无操作日志",
+                        buttonLabel = "刷新",
+                        onAction = onRefresh
+                    )
+                } else {
+                    val listState = rememberLazyListState()
+                    val adapter = rememberScrollbarAdapter(listState)
+                    ScrollbarContainer(adapter = adapter, modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(logEvents) { event -> LogEventItem(event) }
+                        }
                     }
                 }
             }
@@ -840,21 +903,19 @@ private fun PublicUserInfoCard(
     user: WikiUserApi.PublicUserInfo,
     blockStatus: WikiUserApi.BlockInfo?,
     lastEdit: String?,
+    summaryState: RequestState,
     detailTab: LookupDetailTab,
     onDetailTabChange: (LookupDetailTab) -> Unit,
     files: List<WikiUserApi.UserFile>,
-    isLoadingFiles: Boolean,
+    filesRequestState: RequestState,
     onRefreshFiles: () -> Unit,
     logEvents: List<WikiUserApi.LogEvent>,
-    isLoadingLog: Boolean,
+    logRequestState: RequestState,
     onRefreshLog: () -> Unit
 ) {
-    // 本地日志筛选/排序状态（公开卡片不需要持久化到 ViewModel）
     var lookupLogFilter by remember { mutableStateOf<String?>(null) }
     var lookupLogSortOrder by remember { mutableStateOf(LogSortOrder.NEWEST_FIRST) }
-    val lookupAvailableLogTypes = remember(logEvents) {
-        logEvents.map { it.type }.distinct().sorted()
-    }
+    val lookupAvailableLogTypes = remember(logEvents) { logEvents.map { it.type }.distinct().sorted() }
     val filteredLookupLog = remember(logEvents, lookupLogFilter, lookupLogSortOrder) {
         val filtered = if (lookupLogFilter == null) logEvents else logEvents.filter { it.type == lookupLogFilter }
         if (lookupLogSortOrder == LogSortOrder.OLDEST_FIRST) filtered.reversed() else filtered
@@ -879,10 +940,7 @@ private fun PublicUserInfoCard(
                     .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.7f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    Icons.Default.Person, contentDescription = null,
-                    modifier = Modifier.size(20.dp), tint = Color.White
-                )
+                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -902,19 +960,26 @@ private fun PublicUserInfoCard(
         // 详情芯片行
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (user.registrationDate.isNotBlank()) {
-                InfoChip(label = "注册时间", value = WikiUserApi.formatTimestamp(user.registrationDate))
+                InfoChip(
+                    label = "注册时间",
+                    value = WikiUserApi.formatTimestamp(user.registrationDate),
+                    modifier = Modifier.weight(1f)
+                )
             }
             InfoChip(
                 label = "最后编辑",
-                value = when {
-                    lastEdit == null -> "加载中…"
-                    lastEdit.isBlank() -> "无记录"
-                    else -> WikiUserApi.formatTimestamp(lastEdit)
-                }
+                value = summaryValueText(summaryState, lastEdit),
+                modifier = Modifier.weight(1f)
             )
             InfoChip(
-                label = "封禁状态", value = if (blockStatus == null) "正常" else "已封禁",
-                valueColor = if (blockStatus == null) null else Color(0xFFE57373)
+                label = "封禁状态",
+                value = blockStatusText(summaryState, blockStatus),
+                valueColor = when {
+                    summaryState is RequestState.Error -> Color(0xFFE57373)
+                    blockStatus != null -> Color(0xFFE57373)
+                    else -> null
+                },
+                modifier = Modifier.weight(1f)
             )
         }
         // 详情子 Tab
@@ -975,62 +1040,63 @@ private fun PublicUserInfoCard(
                 }
 
                 LookupDetailTab.FILES -> LookupListTab(
-                    isLoading = isLoadingFiles,
-                    isEmpty = files.isEmpty(),
-                    emptyText = "暂无上传文件",
+                    requestState = filesRequestState,
+                    hasItems = files.isNotEmpty(),
                     onRefresh = onRefreshFiles
                 ) {
                     items(files) { UserFileItem(it) }
                 }
 
                 LookupDetailTab.LOG -> {
-                    if (isLoadingLog) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            ProgressRing(size = 28.dp)
-                        }
-                    } else {
-                        Column(Modifier.fillMaxSize()) {
-                            LogFilterBar(
-                                logTypeFilter = lookupLogFilter,
-                                logSortOrder = lookupLogSortOrder,
-                                availableLogTypes = lookupAvailableLogTypes,
-                                onFilterChange = { lookupLogFilter = it },
-                                onSortOrderChange = { lookupLogSortOrder = it },
-                                onRefresh = onRefreshLog
+                    Column(Modifier.fillMaxSize()) {
+                        LogFilterBar(
+                            logTypeFilter = lookupLogFilter,
+                            logSortOrder = lookupLogSortOrder,
+                            availableLogTypes = lookupAvailableLogTypes,
+                            onFilterChange = { lookupLogFilter = it },
+                            onSortOrderChange = { lookupLogSortOrder = it },
+                            onRefresh = onRefreshLog
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        when (logRequestState) {
+                            RequestState.Loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                ProgressRing(size = 28.dp)
+                            }
+                            RequestState.Idle -> RequestStatePlaceholder(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                message = "切换到此页后将自动加载操作日志",
+                                buttonLabel = "加载",
+                                onAction = onRefreshLog
                             )
-                            Spacer(Modifier.height(4.dp))
-                            if (filteredLookupLog.isEmpty()) {
-                                Box(
-                                    Modifier.weight(1f).fillMaxWidth(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text(
-                                            if (logEvents.isEmpty()) "暂无操作日志" else "无匹配记录",
-                                            fontSize = 12.sp,
-                                            color = FluentTheme.colors.text.text.secondary
-                                        )
-                                        if (logEvents.isEmpty()) {
-                                            Spacer(Modifier.height(6.dp))
-                                            Button(onClick = onRefreshLog, modifier = Modifier.height(26.dp)) {
-                                                Text("加载", fontSize = 11.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                val listState = rememberLazyListState()
-                                val adapter = rememberScrollbarAdapter(listState)
-                                ScrollbarContainer(
-                                    adapter = adapter,
-                                    modifier = Modifier.weight(1f).fillMaxWidth()
-                                ) {
-                                    LazyColumn(
-                                        state = listState,
-                                        modifier = Modifier.fillMaxSize(),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                            is RequestState.Error -> RequestStatePlaceholder(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                message = logRequestState.message,
+                                buttonLabel = "重试",
+                                onAction = onRefreshLog,
+                                messageColor = Color(0xFFE57373)
+                            )
+                            RequestState.Success -> {
+                                if (filteredLookupLog.isEmpty()) {
+                                    RequestStatePlaceholder(
+                                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                                        message = if (logEvents.isEmpty()) "暂无操作日志" else "无匹配记录",
+                                        buttonLabel = if (logEvents.isEmpty()) "刷新" else "调整筛选",
+                                        onAction = onRefreshLog
+                                    )
+                                } else {
+                                    val listState = rememberLazyListState()
+                                    val adapter = rememberScrollbarAdapter(listState)
+                                    ScrollbarContainer(
+                                        adapter = adapter,
+                                        modifier = Modifier.weight(1f).fillMaxWidth()
                                     ) {
-                                        items(filteredLookupLog) { LogEventItem(it) }
+                                        LazyColumn(
+                                            state = listState,
+                                            modifier = Modifier.fillMaxSize(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            items(filteredLookupLog) { LogEventItem(it) }
+                                        }
                                     }
                                 }
                             }
@@ -1045,44 +1111,57 @@ private fun PublicUserInfoCard(
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun LookupListTab(
-    isLoading: Boolean,
-    isEmpty: Boolean,
-    emptyText: String,
+    requestState: RequestState,
+    hasItems: Boolean,
     onRefresh: () -> Unit,
-    itemContent: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
+    itemContent: LazyListScope.() -> Unit
 ) {
-    when {
-        isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    when (requestState) {
+        RequestState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             ProgressRing(size = 28.dp)
         }
-
-        isEmpty -> Column(
-            Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(emptyText, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
-            Spacer(Modifier.height(6.dp))
-            Button(onClick = onRefresh, modifier = Modifier.height(26.dp)) { Text("加载", fontSize = 11.sp) }
-        }
-
-        else -> {
-            val listState = rememberLazyListState()
-            val adapter = rememberScrollbarAdapter(listState)
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Button(onClick = onRefresh, modifier = Modifier.height(24.dp)) {
-                        Text("刷新", fontSize = 11.sp)
+        RequestState.Idle -> RequestStatePlaceholder(
+            message = "切换到此页后将自动加载上传文件",
+            buttonLabel = "加载",
+            onAction = onRefresh,
+            actionHeight = 26.dp,
+            actionFontSize = 11.sp
+        )
+        is RequestState.Error -> RequestStatePlaceholder(
+            message = requestState.message,
+            buttonLabel = "重试",
+            onAction = onRefresh,
+            messageColor = Color(0xFFE57373),
+            actionHeight = 26.dp,
+            actionFontSize = 11.sp
+        )
+        RequestState.Success -> {
+            if (!hasItems) {
+                RequestStatePlaceholder(
+                    message = "暂无上传文件",
+                    buttonLabel = "刷新",
+                    onAction = onRefresh,
+                    actionHeight = 26.dp,
+                    actionFontSize = 11.sp
+                )
+            } else {
+                val listState = rememberLazyListState()
+                val adapter = rememberScrollbarAdapter(listState)
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button(onClick = onRefresh, modifier = Modifier.height(24.dp)) {
+                            Text("刷新", fontSize = 11.sp)
+                        }
                     }
-                }
-                Spacer(Modifier.height(4.dp))
-                ScrollbarContainer(adapter = adapter, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        content = itemContent
-                    )
+                    Spacer(Modifier.height(4.dp))
+                    ScrollbarContainer(adapter = adapter, modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            content = itemContent
+                        )
+                    }
                 }
             }
         }
@@ -1091,77 +1170,61 @@ private fun LookupListTab(
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-private fun UserFileItem(file: WikiUserApi.UserFile) {
+private fun RequestStatePlaceholder(
+    message: String,
+    buttonLabel: String,
+    onAction: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxSize(),
+    messageColor: Color = FluentTheme.colors.text.text.secondary,
+    actionHeight: Dp = 28.dp,
+    actionFontSize: androidx.compose.ui.unit.TextUnit = 12.sp
+) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(message, color = messageColor, fontSize = 14.sp)
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onAction, modifier = Modifier.height(actionHeight)) {
+                Text(buttonLabel, fontSize = actionFontSize)
+            }
+        }
+    }
+}
+
+// ── 封禁警告横幅（共用）──────────────────────────────────────────
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun BlockBanner(blockStatus: WikiUserApi.BlockInfo, iconSize: Int = 18, titleSize: Int = 13) {
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
-            .background(FluentTheme.colors.control.secondary)
-            .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(6.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .background(Color(0xFFE57373).copy(alpha = 0.15f))
+            .border(1.dp, Color(0xFFE57373).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // MIME 类型徽章
-        val mimeColor = when {
-            file.mime.startsWith("image/") -> Color(0xFF2196F3)
-            file.mime.startsWith("audio/") -> Color(0xFF9C27B0)
-            file.mime.startsWith("video/") -> Color(0xFFFF9800)
-            else -> Color.Gray
-        }
-        Box(
-            Modifier
-                .clip(RoundedCornerShape(3.dp))
-                .background(mimeColor.copy(alpha = 0.15f))
-                .padding(horizontal = 5.dp, vertical = 2.dp)
-                .widthIn(min = 36.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            val mimeLabel = when {
-                file.mime.startsWith("image/") -> file.mime.removePrefix("image/").uppercase()
-                file.mime.startsWith("audio/") -> file.mime.removePrefix("audio/").uppercase()
-                file.mime.startsWith("video/") -> file.mime.removePrefix("video/").uppercase()
-                else -> file.mime.substringAfterLast("/").uppercase().take(6)
-            }
-            Text(mimeLabel, fontSize = 10.sp, color = mimeColor)
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                file.name.ifBlank { file.title.removePrefix("File:").removePrefix("文件:") },
-                fontWeight = FontWeight.Medium, fontSize = 12.sp, maxLines = 1
-            )
-            if (file.size > 0) {
-                val sizeStr = when {
-                    file.size >= 1_048_576 -> "%.1f MB".format(file.size / 1_048_576.0)
-                    file.size >= 1024 -> "%.1f KB".format(file.size / 1024.0)
-                    else -> "${file.size} B"
-                }
-                Text(sizeStr, fontSize = 10.sp, color = FluentTheme.colors.text.text.secondary)
-            }
-        }
+        Icon(
+            Icons.Default.PeopleError, contentDescription = null,
+            modifier = Modifier.size(iconSize.dp), tint = Color(0xFFE57373)
+        )
         Spacer(Modifier.width(8.dp))
-        Text(
-            WikiUserApi.formatTimestamp(file.timestamp),
-            fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary
-        )
-    }
-}
-
-@OptIn(ExperimentalFluentApi::class)
-@Composable
-private fun InfoChip(label: String, value: String, valueColor: Color? = null) {
-    Column(
-        Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(FluentTheme.colors.control.secondary)
-            .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(6.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Text(label, fontSize = 10.sp, color = FluentTheme.colors.text.text.secondary)
-        Text(
-            value, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-            color = valueColor ?: FluentTheme.colors.text.text.primary
-        )
+        Column {
+            Text(
+                "该账号已被封禁", fontWeight = FontWeight.SemiBold,
+                fontSize = titleSize.sp, color = Color(0xFFE57373)
+            )
+            Text(
+                buildString {
+                    append("封禁者：${blockStatus.by}")
+                    when {
+                        blockStatus.expiry == "infinity" -> append("  永久封禁")
+                        blockStatus.expiry.isNotBlank() -> append("  到期：${WikiUserApi.formatTimestamp(blockStatus.expiry)}")
+                    }
+                    if (blockStatus.reason.isNotBlank()) append("\n原因：${blockStatus.reason}")
+                },
+                fontSize = 11.sp, color = Color(0xFFE57373).copy(alpha = 0.8f)
+            )
+        }
     }
 }
 
@@ -1185,4 +1248,89 @@ private fun groupLabel(group: String) = when (group) {
     else -> group
 }
 
+private fun summaryValueText(state: RequestState, value: String?): String = when (state) {
+    RequestState.Loading -> "加载中…"
+    is RequestState.Error -> "请求失败"
+    RequestState.Idle -> "-"
+    RequestState.Success -> when {
+        value == null -> "-"
+        value.isBlank() -> "无记录"
+        else -> WikiUserApi.formatTimestamp(value)
+    }
+}
 
+private fun blockStatusText(state: RequestState, blockStatus: WikiUserApi.BlockInfo?): String = when (state) {
+    RequestState.Loading -> "加载中…"
+    is RequestState.Error -> "请求失败"
+    RequestState.Idle -> "-"
+    RequestState.Success -> if (blockStatus == null) "正常" else "已封禁"
+}
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun InfoChip(
+    label: String,
+    value: String,
+    valueColor: Color? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(label, fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+            Spacer(Modifier.height(2.dp))
+            Text(
+                value,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = valueColor ?: FluentTheme.colors.text.text.primary
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun UserFileItem(file: WikiUserApi.UserFile) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .background(FluentTheme.colors.control.secondary)
+            .border(1.dp, FluentTheme.colors.stroke.card.default, RoundedCornerShape(6.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Regular.Document,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = FluentTheme.colors.fillAccent.default
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(file.name, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            val meta = buildList {
+                file.mime.takeIf { it.isNotBlank() }?.let(::add)
+                file.size.takeIf { it > 0 }?.let(::formatFileSize)?.let(::add)
+            }.joinToString(" · ")
+            Text(
+                meta,
+                fontSize = 11.sp,
+                color = FluentTheme.colors.text.text.secondary,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            WikiUserApi.formatTimestamp(file.timestamp),
+            fontSize = 11.sp,
+            color = FluentTheme.colors.text.text.secondary
+        )
+    }
+}
+
+private fun formatFileSize(size: Long): String = when {
+    size < 1024 -> "$size B"
+    size < 1024 * 1024 -> "%.1f KB".format(size / 1024.0)
+    else -> "%.1f MB".format(size / 1024.0 / 1024.0)
+}
