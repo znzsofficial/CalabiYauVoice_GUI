@@ -1,7 +1,12 @@
 package ui.screens
 
 import LocalAppStore
+import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,55 +21,34 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
-import kotlinx.coroutines.launch
 import com.mayakapps.compose.windowstyler.WindowBackdrop
+import data.PortraitAsset
+import data.PortraitCostume
+import data.WikiEngine
+import data.WikiUserApi
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
-import io.github.composefluent.icons.regular.FolderOpen
-import io.github.composefluent.icons.regular.CursorClick
-import io.github.composefluent.icons.regular.MusicNote2
-import io.github.composefluent.icons.regular.TextBulletListLtr
-import io.github.composefluent.icons.regular.WeatherMoon
-import io.github.composefluent.icons.regular.WeatherSunny
-import io.github.composefluent.icons.regular.Window
-import io.github.composefluent.icons.regular.Person
-import io.github.composefluent.icons.regular.Info
-import io.github.composefluent.icons.regular.Keyboard
-import io.github.composefluent.icons.regular.ArrowDownload
-import io.github.composefluent.icons.regular.ArrowSync
-import io.github.composefluent.icons.regular.Search
-import io.github.composefluent.icons.regular.CheckboxChecked
-import io.github.composefluent.icons.regular.CheckboxUnchecked
-import io.github.composefluent.icons.regular.MicSparkle
-import io.github.composefluent.icons.regular.Apps
-import io.github.composefluent.icons.regular.DocumentSearch
-import ui.components.ComboBox
-import ui.components.AudioPlayerManager
-import ui.components.EmptyPlaceholder
-import ui.components.FileListItem
-import ui.components.ImagePreviewDialog
+import io.github.composefluent.icons.regular.*
 import io.github.composefluent.surface.Card
-import ui.components.CharacterAvatar
-import ui.components.FileSelectionDialog
-import ui.components.TerminalOutputView
-import util.BIT_DEPTH_OPTIONS
-import util.SAMPLE_RATE_OPTIONS
-import util.bitDepthLabel
-import util.jChoose
-import util.sampleRateLabel
+import kotlinx.coroutines.launch
+import ui.components.*
+import ui.components.ComboBox
+import util.*
 import viewmodel.MainViewModel
 import viewmodel.SearchMode
-import data.WikiUserApi
+import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -88,6 +72,12 @@ fun NewDownloaderContent() {
 
     val fileSearchResults by viewModel.fileSearchResults.collectAsState()
     val fileSearchSelectedUrls by viewModel.fileSearchSelectedUrls.collectAsState()
+
+    val portraitCharacters by viewModel.portraitCharacters.collectAsState()
+    val selectedPortraitCharacter by viewModel.selectedPortraitCharacter.collectAsState()
+    val portraitCostumes by viewModel.portraitCostumes.collectAsState()
+    val selectedPortraitCostumeKey by viewModel.selectedPortraitCostumeKey.collectAsState()
+    val isPortraitLoading by viewModel.isPortraitLoading.collectAsState()
 
     // 文件搜索列表 - 音频播放状态
     var fileSearchPlayingUrl by remember { mutableStateOf<String?>(null) }
@@ -204,6 +194,30 @@ fun NewDownloaderContent() {
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
+    fun savePortraitAsset(asset: PortraitAsset, baseDir: File = File(savePath.ifBlank { util.AppPrefs.savePath }, "立绘列表")) {
+        val targetDir = baseDir
+        coroutineScope.launch {
+            try {
+                viewModel.addLog("正在保存立绘图片: ${asset.title}")
+                WikiEngine.downloadSpecificFiles(
+                    files = listOf(asset.title to asset.url),
+                    saveDir = targetDir,
+                    maxConcurrency = 1,
+                    onLog = { viewModel.addLog(it) },
+                    onProgress = { _, _, name ->
+                        viewModel.addLog("图片已保存: $name -> ${targetDir.absolutePath}")
+                    }
+                )
+            } catch (e: Exception) {
+                viewModel.addLog("保存立绘失败: ${e.message}")
+            }
+        }
+    }
+
+    fun savePortraitAssetAs(asset: PortraitAsset) {
+        jChoose { directory -> savePortraitAsset(asset, directory) }
+    }
+
     fun refreshCurrentUser() {
         coroutineScope.launch {
             isRefreshingUser = true
@@ -233,8 +247,10 @@ fun NewDownloaderContent() {
         }
     }
 
-    // 首次使用提示
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardScope = rememberCoroutineScope()
     var showCategoryHint by remember { mutableStateOf(!util.AppPrefs.categoryHintDismissed) }
+
     if (showDialog) {
         AboutWindow(onCloseRequest = { showDialog = false })
     }
@@ -248,11 +264,9 @@ fun NewDownloaderContent() {
         Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
     }
 
-    // 搜索框焦点控制
-    val searchFocusRequester = remember { FocusRequester() }
-    // 角色列表滚动状态（用于键盘导航）
+    // --- 用户信息面板 ---
+    // 角色列表状态
     val characterListState = rememberLazyListState()
-    val keyboardScope = rememberCoroutineScope()
 
     // === 主界面布局 ===
     Column(
@@ -282,55 +296,92 @@ fun NewDownloaderContent() {
                     // Ctrl+A → 全选
                     ctrl && !shift && keyEvent.key == Key.A -> {
                         when (searchMode) {
-                            SearchMode.FILE_SEARCH -> viewModel.selectAllFileSearchResults()
-                            else -> viewModel.checkAllCategories()
+                            SearchMode.FILE_SEARCH -> {
+                                viewModel.selectAllFileSearchResults()
+                                true
+                            }
+                            SearchMode.PORTRAIT_LIST -> false
+                            else -> {
+                                viewModel.checkAllCategories()
+                                true
+                            }
                         }
-                        true
                     }
                     // Ctrl+Shift+A → 取消全选
                     ctrl && shift && keyEvent.key == Key.A -> {
                         when (searchMode) {
-                            SearchMode.FILE_SEARCH -> viewModel.clearFileSearchSelection()
-                            else -> viewModel.uncheckAllCategories()
+                            SearchMode.FILE_SEARCH -> {
+                                viewModel.clearFileSearchSelection()
+                                true
+                            }
+                            SearchMode.PORTRAIT_LIST -> false
+                            else -> {
+                                viewModel.uncheckAllCategories()
+                                true
+                            }
                         }
-                        true
                     }
                     // Ctrl+T → 切换主题
                     ctrl && keyEvent.key == Key.T -> {
                         darkMode.value = !darkMode.value
                         true
                     }
-                    // Ctrl+1/2/3 → 切换搜索模式
+                    // Ctrl+1/2/3/4 → 切换搜索模式
                     ctrl && keyEvent.key == Key.One -> {
                         viewModel.onSearchModeChange(SearchMode.VOICE_ONLY); true
                     }
 
                     ctrl && keyEvent.key == Key.Two -> {
-                        viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES); true
+                        viewModel.onSearchModeChange(SearchMode.PORTRAIT_LIST); true
                     }
 
                     ctrl && keyEvent.key == Key.Three -> {
+                        viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES); true
+                    }
+
+                    ctrl && keyEvent.key == Key.Four -> {
                         viewModel.onSearchModeChange(SearchMode.FILE_SEARCH); true
                     }
-                    // ↑/↓ → 在角色列表中导航
+                    // ↑/↓ → 在左侧列表中导航
                     keyEvent.key == Key.DirectionUp && searchMode != SearchMode.FILE_SEARCH -> {
-                        val groups = characterGroups
-                        val current = selectedGroup
-                        val idx = groups.indexOf(current)
-                        if (idx > 0) {
-                            viewModel.onSelectGroup(groups[idx - 1])
-                            keyboardScope.launch { characterListState.animateScrollToItem(idx - 1) }
+                        if (searchMode == SearchMode.PORTRAIT_LIST) {
+                            val current = selectedPortraitCharacter
+                            val idx = portraitCharacters.indexOf(current)
+                            if (idx > 0) {
+                                viewModel.onSelectPortraitCharacter(portraitCharacters[idx - 1])
+                                keyboardScope.launch { characterListState.animateScrollToItem(idx - 1) }
+                            }
+                        } else {
+                            val groups = characterGroups
+                            val current = selectedGroup
+                            val idx = groups.indexOf(current)
+                            if (idx > 0) {
+                                viewModel.onSelectGroup(groups[idx - 1])
+                                keyboardScope.launch { characterListState.animateScrollToItem(idx - 1) }
+                            }
                         }
                         true
                     }
 
                     keyEvent.key == Key.DirectionDown && searchMode != SearchMode.FILE_SEARCH -> {
-                        val groups = characterGroups
-                        val current = selectedGroup
-                        val idx = groups.indexOf(current)
-                        if (idx < groups.size - 1) {
-                            viewModel.onSelectGroup(groups[idx + 1])
-                            keyboardScope.launch { characterListState.animateScrollToItem(idx + 1) }
+                        if (searchMode == SearchMode.PORTRAIT_LIST) {
+                            val current = selectedPortraitCharacter
+                            val idx = portraitCharacters.indexOf(current)
+                            if (idx < portraitCharacters.size - 1 && idx >= 0) {
+                                viewModel.onSelectPortraitCharacter(portraitCharacters[idx + 1])
+                                keyboardScope.launch { characterListState.animateScrollToItem(idx + 1) }
+                            } else if (idx == -1 && portraitCharacters.isNotEmpty()) {
+                                viewModel.onSelectPortraitCharacter(portraitCharacters.first())
+                                keyboardScope.launch { characterListState.animateScrollToItem(0) }
+                            }
+                        } else {
+                            val groups = characterGroups
+                            val current = selectedGroup
+                            val idx = groups.indexOf(current)
+                            if (idx < groups.size - 1) {
+                                viewModel.onSelectGroup(groups[idx + 1])
+                                keyboardScope.launch { characterListState.animateScrollToItem(idx + 1) }
+                            }
                         }
                         true
                     }
@@ -390,7 +441,7 @@ fun NewDownloaderContent() {
                         onClick = {
                             val path = savePath.ifBlank { null }
                             if (path != null) {
-                                val dir = java.io.File(path)
+                                val dir = File(path)
                                 if (dir.exists()) java.awt.Desktop.getDesktop().open(dir)
                                 else java.awt.Desktop.getDesktop().open(dir.parentFile ?: dir)
                             }
@@ -515,7 +566,7 @@ fun NewDownloaderContent() {
                 Column(
                     Modifier.padding(12.dp)
                 ) {
-                    Text("搜索列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(if (searchMode == SearchMode.PORTRAIT_LIST) "立绘角色" else "搜索列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(Modifier.height(12.dp))
                     // 搜索栏
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -554,19 +605,25 @@ fun NewDownloaderContent() {
                         SelectorBarItem(
                             selected = searchMode == SearchMode.VOICE_ONLY,
                             onSelectedChange = { viewModel.onSearchModeChange(SearchMode.VOICE_ONLY) },
-                            text = { Text("仅语音") },
+                            text = { Text("语音") },
                             icon = { Icon(Icons.Regular.MicSparkle, contentDescription = null) }
+                        )
+                        SelectorBarItem(
+                            selected = searchMode == SearchMode.PORTRAIT_LIST,
+                            onSelectedChange = { viewModel.onSearchModeChange(SearchMode.PORTRAIT_LIST) },
+                            text = { Text("立绘") },
+                            icon = { Icon(Icons.Regular.Person, contentDescription = null) }
                         )
                         SelectorBarItem(
                             selected = searchMode == SearchMode.ALL_CATEGORIES,
                             onSelectedChange = { viewModel.onSearchModeChange(SearchMode.ALL_CATEGORIES) },
-                            text = { Text("全部分类") },
+                            text = { Text("分类") },
                             icon = { Icon(Icons.Regular.Apps, contentDescription = null) }
                         )
                         SelectorBarItem(
                             selected = searchMode == SearchMode.FILE_SEARCH,
                             onSelectedChange = { viewModel.onSearchModeChange(SearchMode.FILE_SEARCH) },
-                            text = { Text("文件搜索") },
+                            text = { Text("文件") },
                             icon = { Icon(Icons.Regular.DocumentSearch, contentDescription = null) }
                         )
                     }
@@ -578,6 +635,10 @@ fun NewDownloaderContent() {
                         if (fileSearchResults.isEmpty() && !isSearching) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("输入关键词后搜索", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else if (isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                ProgressRing(size = 40.dp)
                             }
                         } else {
                             Column(Modifier.fillMaxSize()) {
@@ -643,10 +704,38 @@ fun NewDownloaderContent() {
                                 }
                             }
                         }
+                    } else if (searchMode == SearchMode.PORTRAIT_LIST) {
+                        if (portraitCharacters.isEmpty() && !isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("未找到可预览角色", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else if (portraitCharacters.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                ProgressRing(size = 40.dp)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                state = characterListState,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(portraitCharacters, key = { it }) { characterName ->
+                                    PortraitCharacterRow(
+                                        characterName = characterName,
+                                        isSelected = characterName == selectedPortraitCharacter,
+                                        onSelect = { viewModel.onSelectPortraitCharacter(characterName) }
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         if (characterGroups.isEmpty() && !isSearching) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("无数据", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else if (isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                ProgressRing(size = 40.dp)
                             }
                         } else {
                             LazyColumn(
@@ -689,7 +778,7 @@ fun NewDownloaderContent() {
                 }
 
                 // 首次使用提示
-                if (showCategoryHint) {
+                if (showCategoryHint && searchMode != SearchMode.PORTRAIT_LIST) {
                     InfoBar(
                         modifier = Modifier.fillMaxWidth(),
                         title = { Text("提示") },
@@ -737,6 +826,66 @@ fun NewDownloaderContent() {
                                             modifier = Modifier.fillMaxWidth()
                                                 .padding(vertical = 3.dp, horizontal = 4.dp)
                                         )
+                                    }
+                                }
+                            }
+                        } else if (searchMode == SearchMode.PORTRAIT_LIST) {
+                            if (selectedPortraitCharacter == null) {
+                                EmptyPlaceholder(
+                                    icon = Icons.Regular.CursorClick,
+                                    text = "请从左侧选择一个角色"
+                                )
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(selectedPortraitCharacter!!, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text("共 ${portraitCostumes.size} 套时装", color = Color.Gray, fontSize = 12.sp)
+                                    Spacer(Modifier.weight(1f))
+                                    if (isPortraitLoading) {
+                                        ProgressRing(size = 18.dp)
+                                    }
+                                }
+
+                                Spacer(Modifier.height(12.dp))
+
+                                Box(
+                                    Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    when {
+                                        isPortraitLoading -> {
+                                            ProgressRing(
+                                                modifier = Modifier.align(Alignment.Center),
+                                                size = 48.dp
+                                            )
+                                        }
+                                        portraitCostumes.isEmpty() -> {
+                                            EmptyPlaceholder(
+                                                icon = Icons.Regular.Person,
+                                                text = "未找到该角色的立绘或正背面预览图"
+                                            )
+                                        }
+                                        else -> {
+                                            LazyColumn(
+                                                modifier = Modifier.fillMaxSize(),
+                                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                items(portraitCostumes, key = { it.key }) { costume ->
+                                                    PortraitCostumeCard(
+                                                        costume = costume,
+                                                        expanded = selectedPortraitCostumeKey == costume.key,
+                                                        onToggle = { viewModel.togglePortraitCostume(costume.key) },
+                                                        onOpenAsset = { asset ->
+                                                            fileSearchPreviewUrl = asset.url
+                                                            fileSearchPreviewName = asset.title
+                                                        },
+                                                        onSaveAsset = ::savePortraitAsset,
+                                                        onSaveAsAsset = ::savePortraitAssetAs
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -822,182 +971,184 @@ fun NewDownloaderContent() {
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                if (searchMode != SearchMode.PORTRAIT_LIST) {
+                    Spacer(Modifier.height(16.dp))
 
-                // 2. 配置与操作卡片
-                Card(Modifier) {
-                    Column(
-                        Modifier.padding(16.dp)
-                    ) {
-                        Text("下载配置", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Spacer(Modifier.height(12.dp))
-
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            TextField(
-                                value = savePath,
-                                onValueChange = { viewModel.onSavePathChange(it) },
-                                header = { Text("保存路径", fontSize = 12.sp) },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            TooltipBox(
-                                tooltip = { Text("选择文件夹") }
-                            ) {
-                                Button(
-                                    iconOnly = true,
-                                    onClick = { jChoose { viewModel.onSavePathChange(it.absolutePath) } },
-                                ) {
-                                    Image(
-                                        painter = rememberVectorPainter(Icons.Regular.FolderOpen),
-                                        contentDescription = "Browse",
-                                        colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.primary),
-                                    )
-                                }
-                            }
-
-                            Spacer(Modifier.width(16.dp))
-
-                            TextField(
-                                value = maxConcurrencyStr,
-                                onValueChange = { viewModel.onMaxConcurrencyChange(it) },
-                                header = { Text("并发数", fontSize = 12.sp) },
-                                modifier = Modifier.width(80.dp),
-                                singleLine = true
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        // 音频转换配置
-                        val isVoiceOnly = searchMode == SearchMode.VOICE_ONLY
-                        var converterExpanded by remember { mutableStateOf(convertAfterDownload) }
-                        LaunchedEffect(convertAfterDownload) {
-                            if (convertAfterDownload) converterExpanded = true
-                        }
-                        Expander(
-                            icon = { Icon(Icons.Regular.MusicNote2, "音频转换") },
-                            expanded = converterExpanded,
-                            onExpandedChanged = { expanded ->
-                                converterExpanded = expanded
-                                if (expanded) viewModel.onConvertAfterDownloadChange(true)
-                            },
-                            heading = {
-                                Text(
-                                    if (isVoiceOnly) "WAV 转换" else "MP3/FLAC → WAV 转换",
-                                    fontWeight = FontWeight.Medium
-                                )
-                            },
-                            caption = {
-                                Text(
-                                    if (isVoiceOnly) "下载完成后批量转换为 WAV 格式"
-                                    else "下载完成后将 MP3/FLAC 批量转换为 WAV（其他格式跳过）",
-                                    color = FluentTheme.colors.text.text.secondary
-                                )
-                            },
-                            trailing = {
-                                Switcher(
-                                    checked = convertAfterDownload,
-                                    onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
-                                    textBefore = true,
-                                    text = if (convertAfterDownload) "开启" else "关闭"
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                    // 2. 配置与操作卡片
+                    Card(Modifier) {
+                        Column(
+                            Modifier.padding(16.dp)
                         ) {
-                            // 1. 采样率 + 位深
-                            ExpanderItem(
-                                heading = {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        verticalAlignment = Alignment.Bottom,
-                                        modifier = Modifier.fillMaxWidth()
+                            Text("下载配置", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Spacer(Modifier.height(12.dp))
+
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                TextField(
+                                    value = savePath,
+                                    onValueChange = { viewModel.onSavePathChange(it) },
+                                    header = { Text("保存路径", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                TooltipBox(
+                                    tooltip = { Text("选择文件夹") }
+                                ) {
+                                    Button(
+                                        iconOnly = true,
+                                        onClick = { jChoose { viewModel.onSavePathChange(it.absolutePath) } },
                                     ) {
-                                        ComboBox(
-                                            header = "采样率",
-                                            placeholder = "原采样率",
-                                            selected = targetSampleRateIndex,
-                                            items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
-                                            onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        ComboBox(
-                                            header = "位深",
-                                            placeholder = "16 bit",
-                                            selected = targetBitDepthIndex,
-                                            items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
-                                            onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
-                                            modifier = Modifier.weight(1f)
+                                        Image(
+                                            painter = rememberVectorPainter(Icons.Regular.FolderOpen),
+                                            contentDescription = "Browse",
+                                            colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.primary),
                                         )
                                     }
                                 }
-                            )
-                            ExpanderItemSeparator()
-                            // 2. 删除原 MP3
-                            ExpanderItem(
+
+                                Spacer(Modifier.width(16.dp))
+
+                                TextField(
+                                    value = maxConcurrencyStr,
+                                    onValueChange = { viewModel.onMaxConcurrencyChange(it) },
+                                    header = { Text("并发数", fontSize = 12.sp) },
+                                    modifier = Modifier.width(80.dp),
+                                    singleLine = true
+                                )
+                            }
+
+                            Spacer(Modifier.height(16.dp))
+
+                            // 音频转换配置
+                            val isVoiceOnly = searchMode == SearchMode.VOICE_ONLY
+                            var converterExpanded by remember { mutableStateOf(convertAfterDownload) }
+                            LaunchedEffect(convertAfterDownload) {
+                                if (convertAfterDownload) converterExpanded = true
+                            }
+                            Expander(
+                                icon = { Icon(Icons.Regular.MusicNote2, "音频转换") },
+                                expanded = converterExpanded,
+                                onExpandedChanged = { expanded ->
+                                    converterExpanded = expanded
+                                    if (expanded) viewModel.onConvertAfterDownloadChange(true)
+                                },
                                 heading = {
                                     Text(
-                                        if (isVoiceOnly) "删除原始源文件"
-                                        else "删除原始 MP3/FLAC（其他格式不受影响）"
+                                        if (isVoiceOnly) "WAV 转换" else "MP3/FLAC → WAV 转换",
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                },
+                                caption = {
+                                    Text(
+                                        if (isVoiceOnly) "下载完成后批量转换为 WAV 格式"
+                                        else "下载完成后将 MP3/FLAC 批量转换为 WAV（其他格式跳过）",
+                                        color = FluentTheme.colors.text.text.secondary
                                     )
                                 },
                                 trailing = {
                                     Switcher(
-                                        checked = deleteOriginalMp3,
-                                        onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) },
+                                        checked = convertAfterDownload,
+                                        onCheckStateChange = { viewModel.onConvertAfterDownloadChange(it) },
+                                        textBefore = true,
+                                        text = if (convertAfterDownload) "开启" else "关闭"
                                     )
-                                }
-                            )
-                            ExpanderItemSeparator()
-                            // 3. 合并 WAV
-                            ExpanderItem(
-                                heading = { Text("合并导出的 WAV 文件") },
-                                trailing = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        if (mergeWav) {
-                                            TextField(
-                                                value = mergeWavMaxCountStr,
-                                                onValueChange = { viewModel.onMergeWavMaxCountStrChange(it) },
-                                                placeholder = { Text("每组上限（0为不限）") },
-                                                modifier = Modifier.width(240.dp),
-                                                singleLine = true
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                // 1. 采样率 + 位深
+                                ExpanderItem(
+                                    heading = {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            verticalAlignment = Alignment.Bottom,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            ComboBox(
+                                                header = "采样率",
+                                                placeholder = "原采样率",
+                                                selected = targetSampleRateIndex,
+                                                items = SAMPLE_RATE_OPTIONS.map { sampleRateLabel(it) },
+                                                onSelectionChange = { i, _ -> viewModel.onTargetSampleRateIndexChange(i) },
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            ComboBox(
+                                                header = "位深",
+                                                placeholder = "16 bit",
+                                                selected = targetBitDepthIndex,
+                                                items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
+                                                onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
+                                                modifier = Modifier.weight(1f)
                                             )
                                         }
+                                    }
+                                )
+                                ExpanderItemSeparator()
+                                // 2. 删除原 MP3
+                                ExpanderItem(
+                                    heading = {
+                                        Text(
+                                            if (isVoiceOnly) "删除原始源文件"
+                                            else "删除原始 MP3/FLAC（其他格式不受影响）"
+                                        )
+                                    },
+                                    trailing = {
                                         Switcher(
-                                            checked = mergeWav,
-                                            onCheckStateChange = { viewModel.onMergeWavChange(it) },
-                                            textBefore = true,
-                                            text = if (!mergeWav) ""
-                                            else if (mergeWavMaxCountStr == "0" || mergeWavMaxCountStr.isEmpty()) "全部合并"
-                                            else "每 $mergeWavMaxCountStr 个/组"
+                                            checked = deleteOriginalMp3,
+                                            onCheckStateChange = { viewModel.onDeleteOriginalMp3Change(it) },
                                         )
                                     }
-                                }
-                            )
-                        }
+                                )
+                                ExpanderItemSeparator()
+                                // 3. 合并 WAV
+                                ExpanderItem(
+                                    heading = { Text("合并导出的 WAV 文件") },
+                                    trailing = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (mergeWav) {
+                                                TextField(
+                                                    value = mergeWavMaxCountStr,
+                                                    onValueChange = { viewModel.onMergeWavMaxCountStrChange(it) },
+                                                    placeholder = { Text("每组上限（0为不限）") },
+                                                    modifier = Modifier.width(240.dp),
+                                                    singleLine = true
+                                                )
+                                            }
+                                            Switcher(
+                                                checked = mergeWav,
+                                                onCheckStateChange = { viewModel.onMergeWavChange(it) },
+                                                textBefore = true,
+                                                text = if (!mergeWav) ""
+                                                else if (mergeWavMaxCountStr == "0" || mergeWavMaxCountStr.isEmpty()) "全部合并"
+                                                else "每 $mergeWavMaxCountStr 个/组"
+                                            )
+                                        }
+                                    }
+                                )
+                            }
 
-                        Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(16.dp))
 
-                        // 大下载按钮
-                        val isFileSearch = searchMode == SearchMode.FILE_SEARCH
-                        val canDownload = if (isFileSearch) fileSearchSelectedUrls.isNotEmpty()
-                        else checkedCategories.isNotEmpty()
-                        Button(
-                            onClick = { viewModel.startDownload() },
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
-                            disabled = isDownloading || isScanningTree || !canDownload
-                        ) {
-                            Text(
-                                when {
-                                    isDownloading -> "正在下载中..."
-                                    isFileSearch -> "开始下载 (${fileSearchSelectedUrls.size} 个文件)"
-                                    else -> "开始下载 (${checkedCategories.size} 个分类)"
-                                },
-                                fontWeight = FontWeight.Bold
-                            )
+                            // 大下载按钮
+                            val isFileSearch = searchMode == SearchMode.FILE_SEARCH
+                            val canDownload = if (isFileSearch) fileSearchSelectedUrls.isNotEmpty()
+                            else checkedCategories.isNotEmpty()
+                            Button(
+                                onClick = { viewModel.startDownload() },
+                                modifier = Modifier.fillMaxWidth().height(40.dp),
+                                disabled = isDownloading || isScanningTree || !canDownload
+                            ) {
+                                Text(
+                                    when {
+                                        isDownloading -> "正在下载中..."
+                                        isFileSearch -> "开始下载 (${fileSearchSelectedUrls.size} 个文件)"
+                                        else -> "开始下载 (${checkedCategories.size} 个分类)"
+                                    },
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -1088,9 +1239,10 @@ private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
                             "Ctrl + Shift + A" to "取消全选",
                             "Ctrl + T" to "切换深色 / 浅色主题",
                             "Ctrl + 1" to "切换至「仅语音」模式",
-                            "Ctrl + 2" to "切换至「全部分类」模式",
-                            "Ctrl + 3" to "切换至「文件搜索」模式",
-                            "↑ / ↓" to "在角色列表中上下导航",
+                            "Ctrl + 2" to "切换至「立绘列表」模式",
+                            "Ctrl + 3" to "切换至「全部分类」模式",
+                            "Ctrl + 4" to "切换至「文件搜索」模式",
+                            "↑ / ↓" to "在左侧角色列表中上下导航",
                             "" to "",
                             "文件列表弹窗：" to "",
                             "Ctrl + A" to "全选可见文件",
@@ -1193,7 +1345,7 @@ private fun CategoryRow(
 
 @Composable
 private fun CharacterGroupRow(
-    group: data.WikiEngine.CharacterGroup,
+    group: WikiEngine.CharacterGroup,
     isSelected: Boolean,
     isDownloading: Boolean,
     onSelect: () -> Unit
@@ -1218,6 +1370,341 @@ private fun CharacterGroupRow(
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
         )
     }
+}
+
+@Composable
+private fun PortraitCharacterRow(
+    characterName: String,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
+    val bgColor = if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(bgColor)
+            .clickable(onClick = onSelect)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CharacterAvatar(
+            characterName = characterName,
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            characterName,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+private fun PortraitCostumeCard(
+    costume: PortraitCostume,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onOpenAsset: (PortraitAsset) -> Unit,
+    onSaveAsset: (PortraitAsset) -> Unit,
+    onSaveAsAsset: (PortraitAsset) -> Unit
+) {
+    val coreCount = listOfNotNull(costume.illustration, costume.frontPreview, costume.backPreview).size
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "chevron"
+    )
+    val headerInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val headerHovered by headerInteractionSource.collectIsHoveredAsState()
+    val secondaryColor = FluentTheme.colors.control.secondary
+    val headerBg by animateColorAsState(
+        targetValue = if (headerHovered) secondaryColor else secondaryColor.copy(alpha = 0f),
+        animationSpec = tween(150),
+        label = "headerBg"
+    )
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            // --- Header ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(headerBg)
+                    .hoverable(headerInteractionSource)
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 时装名
+                Column(Modifier.weight(1f)) {
+                    Text(costume.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // 收录数量 badge
+                        val badgeColor = when (coreCount) {
+                            3 -> Color(0xFF4CAF50)
+                            2 -> Color(0xFFFF9800)
+                            else -> Color(0xFF9E9E9E)
+                        }
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(99.dp))
+                                .background(badgeColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "$coreCount / 3",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = badgeColor
+                            )
+                        }
+                        if (costume.extraAssets.isNotEmpty()) {
+                            Box(
+                                Modifier
+                                    .clip(RoundedCornerShape(99.dp))
+                                    .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.12f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    "+${costume.extraAssets.size}",
+                                    fontSize = 11.sp,
+                                    color = FluentTheme.colors.fillAccent.default
+                                )
+                            }
+                        }
+                    }
+                }
+                // 旋转箭头
+                Icon(
+                    imageVector = Icons.Regular.ChevronDown,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = chevronRotation },
+                    tint = FluentTheme.colors.text.text.secondary
+                )
+            }
+
+            // --- 展开内容（带动画）---
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(
+                    animationSpec = tween(220, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(180)),
+                exit = shrinkVertically(
+                    animationSpec = tween(180, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(120))
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(top = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        PortraitAssetCard(label = "立绘", asset = costume.illustration, onOpenAsset = onOpenAsset, onSaveAsset = onSaveAsset, onSaveAsAsset = onSaveAsAsset)
+                        PortraitAssetCard(label = "正面预览", asset = costume.frontPreview, onOpenAsset = onOpenAsset, onSaveAsset = onSaveAsset, onSaveAsAsset = onSaveAsAsset)
+                        PortraitAssetCard(label = "背面预览", asset = costume.backPreview, onOpenAsset = onOpenAsset, onSaveAsset = onSaveAsset, onSaveAsAsset = onSaveAsAsset)
+                    }
+
+                    if (costume.extraAssets.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "其他相关图",
+                                fontSize = 12.sp,
+                                color = FluentTheme.colors.text.text.secondary
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                costume.extraAssets.forEach { asset ->
+                                    Button(onClick = { onOpenAsset(asset) }, modifier = Modifier.height(28.dp)) {
+                                        Text(asset.title.substringBeforeLast('.'), fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PortraitAssetCard(
+    label: String,
+    asset: PortraitAsset?,
+    onOpenAsset: (PortraitAsset) -> Unit,
+    onSaveAsset: (PortraitAsset) -> Unit,
+    onSaveAsAsset: (PortraitAsset) -> Unit
+) {
+    var flyoutVisible by remember(asset?.url) { mutableStateOf(false) }
+    var flyoutExpanded by remember(asset?.url) { mutableStateOf(false) }
+    val imageInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val imageHovered by imageInteractionSource.collectIsHoveredAsState()
+    val overlayAlpha by animateFloatAsState(
+        targetValue = if (imageHovered && asset != null) 1f else 0f,
+        animationSpec = tween(150),
+        label = "overlay"
+    )
+    val actions = remember(asset?.url) {
+        listOf(
+            Icons.Regular.TabDesktopImage to "预览",
+            Icons.Regular.ArrowDownload to "保存"
+        )
+    }
+
+    Card(Modifier.width(220.dp)) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(label, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+            Box {
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(FluentTheme.colors.control.secondary)
+                        .hoverable(imageInteractionSource)
+                        .let { base ->
+                            if (asset != null) {
+                                base.clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) { flyoutVisible = true }
+                            } else base
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (asset == null) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Regular.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.Gray.copy(alpha = 0.4f)
+                            )
+                            Text("暂无图片", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    } else {
+                        NetworkImage(
+                            url = asset.url,
+                            contentDescription = asset.title,
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
+                            contentScale = ContentScale.Fit,
+                            placeholder = {
+                                ProgressRing(size = 32.dp)
+                            }
+                        )
+                    }
+
+                    // hover 遮罩 + 提示
+                    if (asset != null && overlayAlpha > 0f) {
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .background(Color.Black.copy(alpha = 0.35f * overlayAlpha)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Regular.TabDesktopImage,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp),
+                                    tint = Color.White.copy(alpha = overlayAlpha)
+                                )
+                                Text(
+                                    "点击操作",
+                                    color = Color.White.copy(alpha = overlayAlpha),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (asset != null) {
+                    LargeCommandBarFlyout(
+                        visible = flyoutVisible,
+                        onDismissRequest = { flyoutVisible = false },
+                        expanded = flyoutExpanded,
+                        onExpandedChanged = { flyoutExpanded = it },
+                        positionProvider = rememberFlyoutPositionProvider(FlyoutPlacement.BottomAlignedStart),
+                        secondary = { hasOverFlowItem ->
+                            portraitSecondaryItems(hasOverFlowItem) {
+                                onSaveAsAsset(asset)
+                                flyoutVisible = false
+                                flyoutExpanded = false
+                            }
+                        }
+                    ) {
+                        items(actions.size) { index ->
+                            val (icon, text) = actions[index]
+                            val action = {
+                                when (index) {
+                                    0 -> onOpenAsset(asset)
+                                    1 -> onSaveAsset(asset)
+                                }
+                                flyoutVisible = false
+                                flyoutExpanded = false
+                            }
+                            if (isOverflow) {
+                                ListItem(
+                                    onClick = action,
+                                    text = { Text(text) },
+                                    icon = { Icon(icon, contentDescription = null) }
+                                )
+                            } else {
+                                CommandBarButton(
+                                    onClick = action,
+                                    content = {
+                                        Icon(icon, contentDescription = null)
+                                        Text(text)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Text(
+                asset?.title?.substringBeforeLast('.') ?: "等待补充",
+                fontSize = 11.sp,
+                color = FluentTheme.colors.text.text.secondary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuFlyoutScope.portraitSecondaryItems(
+    hasOverFlowItem: Boolean,
+    onClick: () -> Unit
+) {
+    if (hasOverFlowItem) {
+        MenuFlyoutSeparator()
+    }
+    MenuFlyoutItem(
+        text = { Text("另存为") },
+        icon = { Icon(Icons.Regular.FolderOpen, contentDescription = null) },
+        onClick = onClick
+    )
 }
 
 @OptIn(ExperimentalFluentApi::class)

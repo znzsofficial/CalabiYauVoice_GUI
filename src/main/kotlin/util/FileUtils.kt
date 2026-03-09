@@ -14,4 +14,3 @@ fun jChoose(callback: (File) -> Unit) {
         }
     }
 }
-

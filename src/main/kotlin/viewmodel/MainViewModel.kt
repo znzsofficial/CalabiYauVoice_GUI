@@ -1,5 +1,7 @@
 package viewmodel
 
+import data.PortraitCostume
+import data.PortraitRepository
 import data.WikiEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -10,7 +12,7 @@ import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
-enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH }
+enum class SearchMode { VOICE_ONLY, PORTRAIT_LIST, ALL_CATEGORIES, FILE_SEARCH }
 
 class MainViewModel(
     private val scope: CoroutineScope
@@ -40,6 +42,21 @@ class MainViewModel(
 
     private val _fileSearchSelectedUrls = MutableStateFlow<Set<String>>(emptySet())
     val fileSearchSelectedUrls: StateFlow<Set<String>> = _fileSearchSelectedUrls.asStateFlow()
+
+    private val _portraitCharacters = MutableStateFlow<List<String>>(emptyList())
+    val portraitCharacters: StateFlow<List<String>> = _portraitCharacters.asStateFlow()
+
+    private val _selectedPortraitCharacter = MutableStateFlow<String?>(null)
+    val selectedPortraitCharacter: StateFlow<String?> = _selectedPortraitCharacter.asStateFlow()
+
+    private val _portraitCostumes = MutableStateFlow<List<PortraitCostume>>(emptyList())
+    val portraitCostumes: StateFlow<List<PortraitCostume>> = _portraitCostumes.asStateFlow()
+
+    private val _selectedPortraitCostumeKey = MutableStateFlow<String?>(null)
+    val selectedPortraitCostumeKey: StateFlow<String?> = _selectedPortraitCostumeKey.asStateFlow()
+
+    private val _isPortraitLoading = MutableStateFlow(false)
+    val isPortraitLoading: StateFlow<Boolean> = _isPortraitLoading.asStateFlow()
 
     // =========================================================
     // 角色选择 & 分类树状态
@@ -137,6 +154,7 @@ class MainViewModel(
     private val categoryCache = mutableMapOf<String, List<String>>()
     private var searchJob: Job? = null
     private var scanJob: Job? = null
+    private var portraitJob: Job? = null
 
     // =========================================================
     // 初始化
@@ -153,25 +171,35 @@ class MainViewModel(
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
 
     fun onSearchModeChange(mode: SearchMode) {
+        val changed = _searchMode.value != mode
         _searchMode.value = mode
+        if (changed && mode == SearchMode.PORTRAIT_LIST && _portraitCharacters.value.isEmpty()) {
+            performSearch()
+        }
     }
 
     fun performSearch() {
-        if (_searchKeyword.value.isBlank()) return
+        val mode = _searchMode.value
+        if (mode != SearchMode.PORTRAIT_LIST && _searchKeyword.value.isBlank()) return
 
         searchJob?.cancel()
         scanJob?.cancel()
+        portraitJob?.cancel()
 
         _isSearching.value = true
         _selectedGroup.value = null
         _characterGroups.value = emptyList()
         _fileSearchResults.value = emptyList()
         _fileSearchSelectedUrls.value = emptySet()
+        _portraitCharacters.value = emptyList()
+        _selectedPortraitCharacter.value = null
+        _portraitCostumes.value = emptyList()
+        _selectedPortraitCostumeKey.value = null
+        _isPortraitLoading.value = false
 
         searchJob = scope.launch {
             try {
                 val keyword = _searchKeyword.value
-                val mode = _searchMode.value
 
                 when (mode) {
                     SearchMode.FILE_SEARCH -> {
@@ -180,6 +208,13 @@ class MainViewModel(
                         _fileSearchResults.value = results
                         _fileSearchSelectedUrls.value = results.map { it.second }.toSet()
                         addLog("搜索完成，找到 ${results.size} 个文件。")
+                    }
+                    SearchMode.PORTRAIT_LIST -> {
+                        addLog("正在搜索角色立绘列表…")
+                        val results = PortraitRepository.searchCharacters(keyword)
+                        _portraitCharacters.value = results
+                        addLog("搜索完成，找到 ${results.size} 个可预览角色。")
+                        results.firstOrNull()?.let { onSelectPortraitCharacter(it) }
                     }
                     else -> {
                         val voiceOnly = mode == SearchMode.VOICE_ONLY
@@ -210,6 +245,35 @@ class MainViewModel(
 
     fun clearFileSearchSelection() {
         _fileSearchSelectedUrls.value = emptySet()
+    }
+
+    fun onSelectPortraitCharacter(characterName: String) {
+        if (_selectedPortraitCharacter.value == characterName && _portraitCostumes.value.isNotEmpty()) return
+
+        portraitJob?.cancel()
+        _selectedPortraitCharacter.value = characterName
+        _portraitCostumes.value = emptyList()
+        _selectedPortraitCostumeKey.value = null
+        _isPortraitLoading.value = true
+
+        portraitJob = scope.launch {
+            try {
+                addLog("正在加载 [$characterName] 的立绘与时装预览…")
+                val catalog = PortraitRepository.loadCharacterPortraitCatalog(characterName)
+                _portraitCostumes.value = catalog.costumes
+                _selectedPortraitCostumeKey.value = catalog.costumes.firstOrNull()?.key
+                addLog("加载完成，找到 ${catalog.costumes.size} 套时装。")
+            } catch (_: CancellationException) {
+            } catch (e: Exception) {
+                addLog("加载立绘失败: ${e.message}")
+            } finally {
+                _isPortraitLoading.value = false
+            }
+        }
+    }
+
+    fun togglePortraitCostume(costumeKey: String) {
+        _selectedPortraitCostumeKey.value = if (_selectedPortraitCostumeKey.value == costumeKey) null else costumeKey
     }
 
     // =========================================================
@@ -345,6 +409,11 @@ class MainViewModel(
     // 下载
     // =========================================================
     fun startDownload() {
+        if (_searchMode.value == SearchMode.PORTRAIT_LIST) {
+            addLog("立绘列表模式仅用于浏览预览，暂不支持批量下载。")
+            return
+        }
+
         val isFileSearch = _searchMode.value == SearchMode.FILE_SEARCH
 
         if (isFileSearch) {
