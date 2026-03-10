@@ -1,5 +1,8 @@
 package data
 
+import util.IMAGE_EXTS
+import util.fileExt
+
 data class PortraitAsset(
     val title: String,
     val url: String
@@ -217,8 +220,7 @@ internal fun normalizeKey(value: String): String = value
     .lowercase()
 
 private fun isPortraitImageFile(name: String, url: String): Boolean =
-    name.substringAfterLast('.', "").lowercase().substringBefore('?') in IMAGE_EXTS ||
-        url.substringAfterLast('.', "").lowercase().substringBefore('?') in IMAGE_EXTS
+    name.fileExt() in IMAGE_EXTS || url.fileExt() in IMAGE_EXTS
 
 internal fun extractPortraitCharacterName(fileName: String): String? {
     val rawName = fileName.substringAfter(':').substringBeforeLast('.').trim()
@@ -324,7 +326,6 @@ private fun characterNameMatchScore(officialName: String, indexedName: String): 
     }
 }
 
-private val IMAGE_EXTS = setOf("png", "jpg", "jpeg", "gif", "webp")
 private val PORTRAIT_SOURCE_CATEGORIES = listOf(
     "分类:角色立绘",
     "分类:晶源体文件"

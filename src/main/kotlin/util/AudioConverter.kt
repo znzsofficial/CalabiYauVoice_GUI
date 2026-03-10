@@ -92,18 +92,6 @@ suspend fun batchConvertAudioToWav(
     onLog("转换完成：成功 $successCount 个，失败 $failCount 个。")
 }
 
-/**
- * 兼容旧调用：将目录下所有 MP3 文件批量转换为 WAV。
- */
-@Suppress("unused")
-suspend fun batchConvertMp3ToWav(
-    dir: File,
-    deleteOriginal: Boolean = true,
-    targetSampleRate: Float? = null,
-    targetBitDepth: Int = 16,
-    onLog: (String) -> Unit = {},
-    onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
-) = batchConvertAudioToWav(dir, deleteOriginal, targetSampleRate, targetBitDepth, onLog, onProgress)
 
 /**
  * 将单个 MP3/FLAC 文件转换为 WAV 文件。
@@ -157,16 +145,6 @@ fun convertAudioToWav(
     }
 }
 
-/**
- * 兼容旧调用：将单个 MP3 文件转换为 WAV 文件。
- */
-@Suppress("unused")
-fun convertMp3ToWav(
-    mp3File: File,
-    wavFile: File,
-    targetSampleRate: Float? = null,
-    targetBitDepth: Int = 16
-) = convertAudioToWav(mp3File, wavFile, targetSampleRate, targetBitDepth)
 
 /**
  * 将目录下所有 WAV 文件按顺序合并为一个（或多个）WAV 文件。

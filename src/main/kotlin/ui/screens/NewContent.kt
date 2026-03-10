@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +28,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
@@ -86,15 +88,14 @@ fun NewDownloaderContent() {
     var fileSearchPreviewUrl by remember { mutableStateOf<String?>(null) }
     var fileSearchPreviewName by remember { mutableStateOf("") }
     // 注册 AudioPlayerManager 播放结束 & 加载状态回调（文件搜索列表用）
-    val fileSearchScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
         val stoppedListener: (String) -> Unit = { url ->
-            fileSearchScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                 if (fileSearchPlayingUrl == url) fileSearchPlayingUrl = null
             }
         }
         val loadingListener: (String, Boolean) -> Unit = { url, loading ->
-            fileSearchScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                 fileSearchLoadingUrl = if (loading) url
                 else if (fileSearchLoadingUrl == url) null
                 else fileSearchLoadingUrl
@@ -194,7 +195,7 @@ fun NewDownloaderContent() {
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
-    fun savePortraitAsset(asset: PortraitAsset, baseDir: File = File(savePath.ifBlank { util.AppPrefs.savePath }, "立绘列表")) {
+    fun savePortraitAsset(asset: PortraitAsset, baseDir: File = File(savePath.ifBlank { AppPrefs.savePath }, "立绘列表")) {
         val targetDir = baseDir
         coroutineScope.launch {
             try {
@@ -249,7 +250,7 @@ fun NewDownloaderContent() {
 
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardScope = rememberCoroutineScope()
-    var showCategoryHint by remember { mutableStateOf(!util.AppPrefs.categoryHintDismissed) }
+    var showCategoryHint by remember { mutableStateOf(!AppPrefs.categoryHintDismissed) }
 
     if (showDialog) {
         AboutWindow(onCloseRequest = { showDialog = false })
@@ -663,8 +664,8 @@ fun NewDownloaderContent() {
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Box(Modifier.fillMaxSize()) {
-                                    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-                                    val adapter = androidx.compose.foundation.rememberScrollbarAdapter(listState)
+                                    val listState = rememberLazyListState()
+                                    val adapter = rememberScrollbarAdapter(scrollState = listState)
                                     ScrollbarContainer(
                                         adapter = adapter,
                                         modifier = Modifier.fillMaxSize()
@@ -720,7 +721,7 @@ fun NewDownloaderContent() {
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 items(portraitCharacters, key = { it }) { characterName ->
-                                    PortraitCharacterRow(
+                                    CharacterRow(
                                         characterName = characterName,
                                         isSelected = characterName == selectedPortraitCharacter,
                                         onSelect = { viewModel.onSelectPortraitCharacter(characterName) }
@@ -748,10 +749,10 @@ fun NewDownloaderContent() {
                                     key = { it.characterName }
                                 ) { group ->
                                     val isSelected = group == selectedGroup
-                                    CharacterGroupRow(
-                                        group = group,
+                                    CharacterRow(
+                                        characterName = group.characterName,
                                         isSelected = isSelected,
-                                        isDownloading = isDownloading,
+                                        enabled = !isDownloading,
                                         onSelect = { viewModel.onSelectGroup(group) }
                                     )
                                 }
@@ -786,7 +787,7 @@ fun NewDownloaderContent() {
                         closeAction = {
                             InfoBarDefaults.CloseActionButton(onClick = {
                                 showCategoryHint = false
-                                util.AppPrefs.categoryHintDismissed = true
+                                AppPrefs.categoryHintDismissed = true
                             })
                         },
                         severity = InfoBarSeverity.Informational
@@ -933,7 +934,7 @@ fun NewDownloaderContent() {
                                     Box(Modifier.fillMaxSize()) {
                                         val catListState = rememberLazyListState()
                                         val catAdapter =
-                                            androidx.compose.foundation.rememberScrollbarAdapter(catListState)
+                                            rememberScrollbarAdapter(scrollState = catListState)
                                         ScrollbarContainer(
                                             adapter = catAdapter,
                                             modifier = Modifier.fillMaxSize()
@@ -1211,7 +1212,7 @@ fun NewDownloaderContent() {
 private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
     val windowState = rememberWindowState(width = 480.dp, height = 440.dp, position = WindowPosition(Alignment.Center))
 
-    ui.components.StyledWindow(
+    StyledWindow(
         title = "键盘快捷键",
         onCloseRequest = onClose,
         state = windowState,
@@ -1344,38 +1345,10 @@ private fun CategoryRow(
 }
 
 @Composable
-private fun CharacterGroupRow(
-    group: WikiEngine.CharacterGroup,
-    isSelected: Boolean,
-    isDownloading: Boolean,
-    onSelect: () -> Unit
-) {
-    val bgColor = if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
-            .background(bgColor)
-            .clickable(enabled = !isDownloading, onClick = onSelect)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        CharacterAvatar(
-            characterName = group.characterName,
-            modifier = Modifier.size(28.dp)
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            group.characterName,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-        )
-    }
-}
-
-@Composable
-private fun PortraitCharacterRow(
+private fun CharacterRow(
     characterName: String,
     isSelected: Boolean,
+    enabled: Boolean = true,
     onSelect: () -> Unit
 ) {
     val bgColor = if (isSelected) FluentTheme.colors.control.secondary else Color.Transparent
@@ -1384,7 +1357,7 @@ private fun PortraitCharacterRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
             .background(bgColor)
-            .clickable(onClick = onSelect)
+            .clickable(enabled = enabled, onClick = onSelect)
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1415,7 +1388,7 @@ private fun PortraitCostumeCard(
         animationSpec = tween(durationMillis = 200),
         label = "chevron"
     )
-    val headerInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val headerInteractionSource = remember { MutableInteractionSource() }
     val headerHovered by headerInteractionSource.collectIsHoveredAsState()
     val secondaryColor = FluentTheme.colors.control.secondary
     val headerBg by animateColorAsState(
@@ -1548,7 +1521,7 @@ private fun PortraitAssetCard(
 ) {
     var flyoutVisible by remember(asset?.url) { mutableStateOf(false) }
     var flyoutExpanded by remember(asset?.url) { mutableStateOf(false) }
-    val imageInteractionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val imageInteractionSource = remember { MutableInteractionSource() }
     val imageHovered by imageInteractionSource.collectIsHoveredAsState()
     val overlayAlpha by animateFloatAsState(
         targetValue = if (imageHovered && asset != null) 1f else 0f,
@@ -1577,7 +1550,7 @@ private fun PortraitAssetCard(
                         .let { base ->
                             if (asset != null) {
                                 base.clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    interactionSource = imageInteractionSource,
                                     indication = null
                                 ) { flyoutVisible = true }
                             } else base
@@ -1686,7 +1659,7 @@ private fun PortraitAssetCard(
                 fontSize = 11.sp,
                 color = FluentTheme.colors.text.text.secondary,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

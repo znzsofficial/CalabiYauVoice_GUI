@@ -47,70 +47,37 @@ object ImageLoader {
      * - 进行中的同 URL 请求只发起一次
      * - 校验 content-type 与大小上限（16 MB）
      */
-    suspend fun loadNetworkImage(client: OkHttpClient, url: String): ImageBitmap? = withContext(Dispatchers.IO) {
-        imageCache[url]?.let { return@withContext it }
-
-        val existing = imageInflight[url]
-        if (existing != null) return@withContext existing.await()
-
-        val deferred = CompletableDeferred<ImageBitmap?>()
-        val raced = imageInflight.putIfAbsent(url, deferred)
-        if (raced != null) return@withContext raced.await()
-
-        try {
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    deferred.complete(null)
-                    return@withContext null
-                }
-
-                val body = response.body
-
-                val contentType = body.contentType()?.toString()?.lowercase()
-                if (contentType != null && !contentType.startsWith("image/")) {
-                    deferred.complete(null)
-                    return@withContext null
-                }
-
-                if (body.contentLength() > MAX_IMAGE_BYTES) {
-                    deferred.complete(null)
-                    return@withContext null
-                }
-
-                val bytes = body.byteStream().use { readBytesWithLimit(it) }
-                if (bytes.isEmpty()) {
-                    deferred.complete(null)
-                    return@withContext null
-                }
-
-                val bitmap = bytes.decodeToImageBitmap()
-                imageCache[url] = bitmap
-                deferred.complete(bitmap)
-                return@withContext bitmap
-            }
-        } catch (_: Exception) {
-            deferred.complete(null)
-            return@withContext null
-        } finally {
-            deferred.complete(null) // 幂等：若已 complete 则无效；保护其他等待方不永久挂起
-            imageInflight.remove(url)
-        }
-    }
+    suspend fun loadNetworkImage(client: OkHttpClient, url: String): ImageBitmap? =
+        fetchWithCache(client, url, imageCache, imageInflight) { it.decodeToImageBitmap() }
 
     /**
      * 下载图片的原始字节（用于 GIF 动画解码等）。
      * - LRU 缓存，最多 512 条
      * - 同 URL 并发请求只发起一次
      */
-    suspend fun loadRawBytes(client: OkHttpClient, url: String): ByteArray? = withContext(Dispatchers.IO) {
-        rawBytesCache[url]?.let { return@withContext it }
+    suspend fun loadRawBytes(client: OkHttpClient, url: String): ByteArray? =
+        fetchWithCache(client, url, rawBytesCache, rawBytesInflight) { it }
 
-        val existing = rawBytesInflight[url]
+    /**
+     * 通用的"下载 → 缓存 → 去重"辅助方法。
+     * 1. 先查 [cache]；命中直接返回
+     * 2. 通过 [inflight] CAS 保证同 URL 只发起一次网络请求
+     * 3. 下载字节后调用 [transform] 转换为目标类型，写入 [cache]
+     */
+    private suspend fun <T> fetchWithCache(
+        client: OkHttpClient,
+        url: String,
+        cache: MutableMap<String, T>,
+        inflight: ConcurrentHashMap<String, CompletableDeferred<T?>>,
+        transform: (ByteArray) -> T
+    ): T? = withContext(Dispatchers.IO) {
+        cache[url]?.let { return@withContext it }
+
+        val existing = inflight[url]
         if (existing != null) return@withContext existing.await()
 
-        val deferred = CompletableDeferred<ByteArray?>()
-        val raced = rawBytesInflight.putIfAbsent(url, deferred)
+        val deferred = CompletableDeferred<T?>()
+        val raced = inflight.putIfAbsent(url, deferred)
         if (raced != null) return@withContext raced.await()
 
         try {
@@ -120,6 +87,7 @@ object ImageLoader {
                     deferred.complete(null)
                     return@withContext null
                 }
+
                 val body = response.body
                 val contentType = body.contentType()?.toString()?.lowercase()
                 if (contentType != null && !contentType.startsWith("image/")) {
@@ -130,21 +98,24 @@ object ImageLoader {
                     deferred.complete(null)
                     return@withContext null
                 }
+
                 val bytes = body.byteStream().use { readBytesWithLimit(it) }
                 if (bytes.isEmpty()) {
                     deferred.complete(null)
                     return@withContext null
                 }
-                rawBytesCache[url] = bytes
-                deferred.complete(bytes)
-                return@withContext bytes
+
+                val result = transform(bytes)
+                cache[url] = result
+                deferred.complete(result)
+                return@withContext result
             }
         } catch (_: Exception) {
             deferred.complete(null)
             return@withContext null
         } finally {
-            deferred.complete(null) // 幂等保护
-            rawBytesInflight.remove(url)
+            deferred.complete(null) // 幂等：若已 complete 则无效；保护其他等待方不永久挂起
+            inflight.remove(url)
         }
     }
 

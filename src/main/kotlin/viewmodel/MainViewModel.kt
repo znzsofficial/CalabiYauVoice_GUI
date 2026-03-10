@@ -26,9 +26,6 @@ class MainViewModel(
     private val _searchMode = MutableStateFlow(SearchMode.VOICE_ONLY)
     val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
 
-    // 兼容旧逻辑：voiceOnly = searchMode != ALL_CATEGORIES（文件搜索模式下此值无意义）
-    val voiceOnly: StateFlow<Boolean> = _searchMode.map { it == SearchMode.VOICE_ONLY }
-        .stateIn(scope, SharingStarted.Eagerly, true)
 
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
@@ -347,7 +344,7 @@ class MainViewModel(
 
         scope.launch {
             try {
-                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly.value)
+                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
                 _dialogFileList.value = files
                 _categoryTotalCountMap.value += (cat to files.size)
 
@@ -447,20 +444,19 @@ class MainViewModel(
                             addLog("[${cat.replace("Category:", "")}] 使用手动选择 (${manual.size}项)")
                         } else {
                             addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
-                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = voiceOnly.value)
+                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
                             list.addAll(files)
                         }
                     }
                     finalDownloadList = list.distinctBy { it.second }
                 }
 
-                val uniqueList = finalDownloadList.distinctBy { it.second }
-                if (uniqueList.isEmpty()) {
+                if (finalDownloadList.isEmpty()) {
                     addLog("没有文件需要下载。")
                 } else {
-                    addLog("共 ${uniqueList.size} 个文件，开始下载...")
+                    addLog("共 ${finalDownloadList.size} 个文件，开始下载...")
                     WikiEngine.downloadSpecificFiles(
-                        files = uniqueList,
+                        files = finalDownloadList,
                         saveDir = targetDir,
                         maxConcurrency = concurrency,
                         onLog = { addLog(it) },

@@ -25,6 +25,8 @@ import io.github.composefluent.component.Text
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.Play
 import io.github.composefluent.icons.regular.Stop
+import util.isAudioFile
+import util.isImageFile
 
 /**
  * 空状态占位：大图标 + 提示文字，居中显示。
