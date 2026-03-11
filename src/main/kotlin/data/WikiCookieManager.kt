@@ -82,6 +82,7 @@ object WikiCookieManager {
      * 将已导入的 Cookie 转换为 HTTP Header 格式字符串，
      * 供直接构造请求时使用。
      */
+    @Suppress("unused")
     fun getCookieHeader(): String =
         importedCookies.joinToString("; ") { "${it.name}=${it.value}" }
 
@@ -89,13 +90,14 @@ object WikiCookieManager {
     fun extractUserNameFromCookies(): String? = extractUserName(importedCookies)
 
     /** 尝试从 Cookie 中提取用户 ID（klbqwiki_UserID） */
+    @Suppress("unused")
     fun extractUserIdFromCookies(): String? = extractUserId(importedCookies)
 
     private fun normalizeCookieInput(cookieStr: String): String {
         val trimmed = cookieStr.trim()
         if (trimmed.isBlank()) return ""
 
-        val headerMatch = Regex("""(?is)cookie\s*:\s*([^\r\n\"']+)""").find(trimmed)
+        val headerMatch = Regex("""(?is)cookie\s*:\s*([^\r\n"']+)""").find(trimmed)
         val candidate = when {
             headerMatch != null -> headerMatch.groupValues[1]
             trimmed.startsWith("Cookie:", ignoreCase = true) -> trimmed.substringAfter(':')
@@ -120,7 +122,7 @@ object WikiCookieManager {
                 if (trimmed.isEmpty()) return@mapNotNull null
                 val eqIdx = trimmed.indexOf('=')
                 if (eqIdx <= 0) return@mapNotNull null
-                val name = trimmed.substring(0, eqIdx).trim()
+                val name = trimmed.take(eqIdx).trim()
                 val value = trimmed.substring(eqIdx + 1).trim().trim('"', '\'')
                 if (name.isBlank() || value.isBlank()) return@mapNotNull null
                 Cookie.Builder()

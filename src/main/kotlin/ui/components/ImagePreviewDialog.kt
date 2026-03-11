@@ -92,11 +92,11 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
         title = name,
         state = rememberDialogState(width = 900.dp, height = 700.dp),
         onKeyEvent = { keyEvent ->
-            when {
-                keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown -> {
+            when (keyEvent.key) {
+                Key.Escape if keyEvent.type == KeyEventType.KeyDown -> {
                     onClose(); true
                 }
-                keyEvent.key == Key.Zero && keyEvent.type == KeyEventType.KeyDown -> {
+                Key.Zero if keyEvent.type == KeyEventType.KeyDown -> {
                     resetTransform(); true
                 }
                 else -> false
@@ -255,20 +255,20 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
                             positionProvider = rememberFlyoutPositionProvider(FlyoutPlacement.Bottom)
                         ) {
                             val actions = listOf(
-                                Triple(Icons.Regular.Copy, "复制链接", {
+                                Triple(Icons.Regular.Copy, "复制链接") {
                                     val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
                                     clipboard.setContents(java.awt.datatransfer.StringSelection(url), null)
                                     flyoutVisible = false
-                                }),
-                                Triple(Icons.Regular.Open, "浏览器打开", {
+                                },
+                                Triple(Icons.Regular.Open, "浏览器打开") {
                                     runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
                                     flyoutVisible = false
-                                }),
-                                Triple(Icons.Regular.ArrowReset, "重置缩放", {
+                                },
+                                Triple(Icons.Regular.ArrowReset, "重置缩放") {
                                     resetTransform()
                                     flyoutVisible = false
-                                }),
-                                Triple(Icons.Regular.Dismiss, "关闭", { onClose() })
+                                },
+                                Triple(Icons.Regular.Dismiss, "关闭") { onClose() }
                             )
                             items(actions.size) {
                                 val (icon, label, action) = actions[it]

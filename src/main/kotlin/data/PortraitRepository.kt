@@ -43,7 +43,7 @@ object PortraitRepository {
         val indexedFiles = characterIndex[characterName].orEmpty().ifEmpty {
             characterIndex.entries.firstOrNull { areCharacterNamesCompatible(characterName, it.key) }?.value.orEmpty()
         }
-        val files = if (indexedFiles.isNotEmpty()) indexedFiles else WikiEngine.searchFiles(characterName, audioOnly = false)
+        val files = indexedFiles.ifEmpty { WikiEngine.searchFiles(characterName, audioOnly = false) }
         return buildPortraitCatalog(characterName, files)
     }
 

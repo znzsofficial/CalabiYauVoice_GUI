@@ -542,7 +542,7 @@ private fun shouldExportConvertedFile(file: File): Boolean {
 
 private fun uniqueOutputFile(outDir: File, fileName: String): File {
     val dotIndex = fileName.lastIndexOf('.')
-    val baseName = if (dotIndex > 0) fileName.substring(0, dotIndex) else fileName
+    val baseName = if (dotIndex > 0) fileName.take(dotIndex) else fileName
     val extension = if (dotIndex > 0) fileName.substring(dotIndex) else ""
 
     var candidate = File(outDir, fileName)

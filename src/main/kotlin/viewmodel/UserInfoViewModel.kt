@@ -272,7 +272,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
             currentUserRequestToken++
             val token = currentUserRequestToken
             when (val userResult = WikiUserApi.fetchCurrentUserInfoResult()) {
-                is WikiUserApi.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     if (token == currentUserRequestToken) {
                         WikiUserApi.updateCurrentUser(userResult.value)
                         val info = userResult.value
@@ -283,7 +283,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                         }
                     }
                 }
-                is WikiUserApi.ApiResult.Error -> {
+                is ApiResult.Error -> {
                     if (token == currentUserRequestToken) {
                         _statusMessage.value = "❌ ${userResult.message}"
                     }

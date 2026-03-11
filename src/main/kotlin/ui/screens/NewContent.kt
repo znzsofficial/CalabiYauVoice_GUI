@@ -196,17 +196,16 @@ fun NewDownloaderContent() {
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
     fun savePortraitAsset(asset: PortraitAsset, baseDir: File = File(savePath.ifBlank { AppPrefs.savePath }, "立绘列表")) {
-        val targetDir = baseDir
         coroutineScope.launch {
             try {
                 viewModel.addLog("正在保存立绘图片: ${asset.title}")
                 WikiEngine.downloadSpecificFiles(
                     files = listOf(asset.title to asset.url),
-                    saveDir = targetDir,
+                    saveDir = baseDir,
                     maxConcurrency = 1,
                     onLog = { viewModel.addLog(it) },
                     onProgress = { _, _, name ->
-                        viewModel.addLog("图片已保存: $name -> ${targetDir.absolutePath}")
+                        viewModel.addLog("图片已保存: $name -> ${baseDir.absolutePath}")
                     }
                 )
             } catch (e: Exception) {

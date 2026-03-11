@@ -120,6 +120,7 @@ object AudioPlayerManager {
     fun isPlaying(url: String): Boolean =
         currentUrl == url && playThread?.isAlive == true && !stopFlag.get()
 
+    @Suppress("unused")
     fun isLoading(url: String): Boolean = loadingUrl == url
 }
 

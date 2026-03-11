@@ -49,15 +49,12 @@ object AppPrefs {
         get() = data.converterSavePath
         set(value) { data = data.copy(converterSavePath = value); save() }
 
-    var recentUserLookupIds: List<String>
-        get() = data.recentUserLookupIds
-        set(value) { data = data.copy(recentUserLookupIds = value); save() }
-
     var recentBidLookupValues: List<String>
         get() = data.recentBidLookupValues
         set(value) { data = data.copy(recentBidLookupValues = value); save() }
 
     var recentWikiIdLookupValues: List<String>
-        get() = if (data.recentWikiIdLookupValues.isNotEmpty()) data.recentWikiIdLookupValues else data.recentUserLookupIds
-        set(value) { data = data.copy(recentWikiIdLookupValues = value, recentUserLookupIds = value); save() }
+        // 向后兼容：如果新字段为空，则迁移旧字段 recentUserLookupIds 的数据
+        get() = data.recentWikiIdLookupValues.ifEmpty { data.recentUserLookupIds }
+        set(value) { data = data.copy(recentWikiIdLookupValues = value); save() }
 }

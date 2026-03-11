@@ -98,11 +98,11 @@ fun FileSelectionDialog(
         state = windowState,
         onKeyEvent = { keyEvent ->
             if (keyEvent.type != KeyEventType.KeyDown) return@StyledWindow false
-            when {
-                keyEvent.key == Key.Escape -> {
+            when (keyEvent.key) {
+                Key.Escape -> {
                     AudioPlayerManager.stop(); onClose(); true
                 }
-                keyEvent.key == Key.Enter && !isLoading -> {
+                Key.Enter if !isLoading -> {
                     AudioPlayerManager.stop()
                     onConfirm(files.filter { selectedUrls.contains(it.second) })
                     true
