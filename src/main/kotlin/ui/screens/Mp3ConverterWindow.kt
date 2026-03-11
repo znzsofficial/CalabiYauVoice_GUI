@@ -404,102 +404,126 @@ fun Mp3ConverterWindow(
                     Text(progressText, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
                 }
                 Spacer(Modifier.weight(1f))
-                Button(
-                    onClick = {
-                        val files = mp3Files.toList()
-                        if (files.isEmpty()) return@Button
-                        // 转换到各自所在目录（若设置了保存路径则用保存路径）
-                        val outDir = File(savePath).also { it.mkdirs() }
-                        isConverting = true
-                        logLines = emptyList()
-                        progressText = ""
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val sampleRate = SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex)
-                            val bitDepth = BIT_DEPTH_OPTIONS.getOrNull(targetBitDepthIndex)
-                            val mergeCount = mergeWavMaxCountStr.toIntOrNull() ?: 0
-                            val doMerge = mergeWav
-                            val doDeleteOriginalMp3 = deleteOriginalMp3
-                            val doDeleteWavAfterMerge = deleteWavAfterMerge
-                            val tempDir = File(outDir, "_mp3conv_tmp_${System.currentTimeMillis()}")
-
-                            try {
-                                tempDir.mkdirs()
-                                val stagedFiles = stageDraggedAudioFiles(files, tempDir)
-
-                                batchConvertAudioToWav(
-                                    dir = tempDir,
-                                    deleteOriginal = false,
-                                    targetSampleRate = sampleRate,
-                                    targetBitDepth = bitDepth,
-                                    onLog = { msg ->
-                                        coroutineScope.launch(Dispatchers.Main) {
-                                            logLines = logLines + msg
-                                        }
-                                    },
-                                    onProgress = { done, total, name ->
-                                        coroutineScope.launch(Dispatchers.Main) {
-                                            progressText = "$done / $total  $name"
-                                        }
-                                    }
-                                )
-
-                                val convertedOriginalFiles = stagedFiles
-                                    .filter { it.stagedWavFile.isFile }
-                                    .map { it.originalFile }
-
-                                if (doMerge) {
-                                    mergeWavFiles(
-                                        dir = tempDir,
-                                        maxPerFile = mergeCount,
-                                        deleteOriginal = doDeleteWavAfterMerge,
-                                        onLog = { msg ->
-                                            coroutineScope.launch(Dispatchers.Main) {
-                                                logLines = logLines + msg
-                                            }
-                                        }
-                                    )
-                                }
-
-                                exportConvertedFiles(tempDir, outDir)
-
-                                if (doDeleteOriginalMp3) {
-                                    convertedOriginalFiles.forEach { original ->
-                                        if (!original.delete()) {
-                                            coroutineScope.launch(Dispatchers.Main) {
-                                                logLines = logLines + "[删除失败] ${original.absolutePath}"
-                                            }
-                                        }
-                                    }
-                                }
-
-                                coroutineScope.launch(Dispatchers.Main) {
-                                    isConverting = false
-                                    progressText = "完成"
-                                }
-                            } catch (e: Exception) {
-                                coroutineScope.launch(Dispatchers.Main) {
-                                    isConverting = false
-                                    progressText = "失败"
-                                    logLines = logLines + "[转换中断] ${e.message ?: e::class.simpleName.orEmpty()}"
-                                }
-                            } finally {
-                                tempDir.deleteRecursively()
-                            }
+                FlyoutContainer(
+                    flyout = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.widthIn(max = 280.dp)
+                        ) {
+                            Text(
+                                text = "合并分片模式下必须明确指定位深，请先在\"位深\"下拉菜单中选择 16 bit、24 bit 或浮点 32 bit。",
+                                style = FluentTheme.typography.bodyStrong
+                            )
+                            Button(
+                                onClick = { isFlyoutVisible = false },
+                                content = { Text("知道了") }
+                            )
                         }
                     },
-                    disabled = isConverting || mp3Files.isEmpty(),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    if (isConverting) {
-                        ProgressRing(size = 16.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("转换中...")
-                    } else {
-                        Icon(Icons.Regular.ArrowSync, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("开始转换 (${mp3Files.size} 个文件)", fontWeight = FontWeight.Bold)
+                    content = {
+                        Button(
+                            onClick = {
+                                val files = mp3Files.toList()
+                                if (files.isEmpty()) return@Button
+                                // 合并分片时必须设置具体位深
+                                if (mergeWav && BIT_DEPTH_OPTIONS.getOrNull(targetBitDepthIndex) == null) {
+                                    isFlyoutVisible = true
+                                    return@Button
+                                }
+                                // 转换到各自所在目录（若设置了保存路径则用保存路径）
+                                val outDir = File(savePath).also { it.mkdirs() }
+                                isConverting = true
+                                logLines = emptyList()
+                                progressText = ""
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    val sampleRate = SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex)
+                                    val bitDepth = BIT_DEPTH_OPTIONS.getOrNull(targetBitDepthIndex)
+                                    val mergeCount = mergeWavMaxCountStr.toIntOrNull() ?: 0
+                                    val doMerge = mergeWav
+                                    val doDeleteOriginalMp3 = deleteOriginalMp3
+                                    val doDeleteWavAfterMerge = deleteWavAfterMerge
+                                    val tempDir = File(outDir, "_mp3conv_tmp_${System.currentTimeMillis()}")
+
+                                    try {
+                                        tempDir.mkdirs()
+                                        val stagedFiles = stageDraggedAudioFiles(files, tempDir)
+
+                                        batchConvertAudioToWav(
+                                            dir = tempDir,
+                                            deleteOriginal = false,
+                                            targetSampleRate = sampleRate,
+                                            targetBitDepth = bitDepth,
+                                            onLog = { msg ->
+                                                coroutineScope.launch(Dispatchers.Main) {
+                                                    logLines = logLines + msg
+                                                }
+                                            },
+                                            onProgress = { done, total, name ->
+                                                coroutineScope.launch(Dispatchers.Main) {
+                                                    progressText = "$done / $total  $name"
+                                                }
+                                            }
+                                        )
+
+                                        val convertedOriginalFiles = stagedFiles
+                                            .filter { it.stagedWavFile.isFile }
+                                            .map { it.originalFile }
+
+                                        if (doMerge) {
+                                            mergeWavFiles(
+                                                dir = tempDir,
+                                                maxPerFile = mergeCount,
+                                                deleteOriginal = doDeleteWavAfterMerge,
+                                                onLog = { msg ->
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        logLines = logLines + msg
+                                                    }
+                                                }
+                                            )
+                                        }
+
+                                        exportConvertedFiles(tempDir, outDir)
+
+                                        if (doDeleteOriginalMp3) {
+                                            convertedOriginalFiles.forEach { original ->
+                                                if (!original.delete()) {
+                                                    coroutineScope.launch(Dispatchers.Main) {
+                                                        logLines = logLines + "[删除失败] ${original.absolutePath}"
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        coroutineScope.launch(Dispatchers.Main) {
+                                            isConverting = false
+                                            progressText = "完成"
+                                        }
+                                    } catch (e: Exception) {
+                                        coroutineScope.launch(Dispatchers.Main) {
+                                            isConverting = false
+                                            progressText = "失败"
+                                            logLines = logLines + "[转换中断] ${e.message ?: e::class.simpleName.orEmpty()}"
+                                        }
+                                    } finally {
+                                        tempDir.deleteRecursively()
+                                    }
+                                }
+                            },
+                            disabled = isConverting || mp3Files.isEmpty(),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            if (isConverting) {
+                                ProgressRing(size = 16.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("转换中...")
+                            } else {
+                                Icon(Icons.Regular.ArrowSync, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text("开始转换 (${mp3Files.size} 个文件)", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
-                }
+                )
             }
         }
     }
