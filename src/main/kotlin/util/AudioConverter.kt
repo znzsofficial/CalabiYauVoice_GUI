@@ -5,6 +5,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.io.SequenceInputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -118,30 +119,50 @@ fun convertAudioToWav(
         val sampleRate = targetSampleRate ?: baseFormat.sampleRate
         val channels = baseFormat.channels
         val actualBitDepth = targetBitDepth ?: baseFormat.sampleSizeInBits
+        val sourceBitDepth = baseFormat.sampleSizeInBits
 
-        // 2. 构造目标 PCM 格式（32-bit 使用浮点编码）
-        val encoding = if (actualBitDepth == 32) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
-        val pcmFormat = AudioFormat(
-            encoding,
-            sampleRate,
-            actualBitDepth,
-            channels,
-            channels * (actualBitDepth / 8),
-            sampleRate,
-            false
-        )
+        // 当源位深已知且高于目标整型位深时，先解码到源位深的 PCM，再算术右移缩放。
+        // 这可避免 Java Sound 直接截断 MSB 造成的溢出失真。
+        // 目标 32 bit 使用 PCM_FLOAT，浮点本身已归一化，不需要此路径。
+        val needsBitDepthScaling = sourceBitDepth > 0
+                && actualBitDepth != 32
+                && sourceBitDepth > actualBitDepth
 
-        // 3. 解码为 PCM 流
-        AudioSystem.getAudioInputStream(pcmFormat, sourceStream).use { pcmStream ->
-            val tempFile = tempSiblingOf(wavFile)
-            cleanupFileQuietly(tempFile)
-            try {
-                AudioSystem.write(pcmStream, AudioFileFormat.Type.WAVE, tempFile)
-                replaceFile(tempFile, wavFile)
-            } catch (e: Exception) {
-                cleanupFileQuietly(tempFile)
-                throw e
+        val tempFile = tempSiblingOf(wavFile)
+        cleanupFileQuietly(tempFile)
+        try {
+            if (needsBitDepthScaling) {
+                // 2a. 先解码到源位深的 PCM_SIGNED LE（含可选的采样率转换）
+                val intermFormat = AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED, sampleRate, sourceBitDepth,
+                    channels, channels * (sourceBitDepth / 8), sampleRate, false
+                )
+                AudioSystem.getAudioInputStream(intermFormat, sourceStream).use { intermStream ->
+                    // 2b. 算术右移缩放至目标位深
+                    val scaledFormat = AudioFormat(
+                        AudioFormat.Encoding.PCM_SIGNED, sampleRate, actualBitDepth,
+                        channels, channels * (actualBitDepth / 8), sampleRate, false
+                    )
+                    val scalingInput = BitDepthScalingInputStream(intermStream, sourceBitDepth, actualBitDepth)
+                    AudioInputStream(scalingInput, scaledFormat, intermStream.frameLength).use { scaledStream ->
+                        AudioSystem.write(scaledStream, AudioFileFormat.Type.WAVE, tempFile)
+                    }
+                }
+            } else {
+                // 2. 构造目标 PCM 格式（32-bit 使用浮点编码）
+                val encoding = if (actualBitDepth == 32) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
+                val pcmFormat = AudioFormat(
+                    encoding, sampleRate, actualBitDepth,
+                    channels, channels * (actualBitDepth / 8), sampleRate, false
+                )
+                AudioSystem.getAudioInputStream(pcmFormat, sourceStream).use { pcmStream ->
+                    AudioSystem.write(pcmStream, AudioFileFormat.Type.WAVE, tempFile)
+                }
             }
+            replaceFile(tempFile, wavFile)
+        } catch (e: Exception) {
+            cleanupFileQuietly(tempFile)
+            throw e
         }
     }
 }
@@ -315,4 +336,79 @@ private fun replaceFile(tempFile: File, targetFile: File) {
             StandardCopyOption.REPLACE_EXISTING
         )
     }
+}
+
+/**
+ * 将已解码的 PCM_SIGNED little-endian 流从 [sourceBits] 位深算术右移缩放至 [targetBits]。
+ *
+ * 算术右移（`shr`）保留符号位，等价于将幅度乘以 2^(targetBits - sourceBits)，
+ * 相比直接截断低位字节，不会产生溢出或电平失真。
+ * 仅适用于 sourceBits > targetBits 且两者均为 8 的整数倍的场景。
+ */
+private class BitDepthScalingInputStream(
+    private val source: AudioInputStream,
+    private val sourceBits: Int,
+    private val targetBits: Int
+) : InputStream() {
+    private val shift = sourceBits - targetBits
+    private val srcBytesPerSample = sourceBits / 8
+    private val dstBytesPerSample = targetBits / 8
+    private val channels = source.format.channels
+    private val srcFrameBuf = ByteArray(channels * srcBytesPerSample)
+    private val dstFrameBuf = ByteArray(channels * dstBytesPerSample)
+    private var dstPos = dstFrameBuf.size // 初始设为末尾，触发首次填充
+
+    override fun read(): Int {
+        if (dstPos >= dstFrameBuf.size && !nextFrame()) return -1
+        return dstFrameBuf[dstPos++].toInt() and 0xFF
+    }
+
+    override fun read(buf: ByteArray, off: Int, len: Int): Int {
+        if (len == 0) return 0
+        var written = 0
+        while (written < len) {
+            if (dstPos >= dstFrameBuf.size && !nextFrame()) return if (written == 0) -1 else written
+            val toCopy = minOf(len - written, dstFrameBuf.size - dstPos)
+            System.arraycopy(dstFrameBuf, dstPos, buf, off + written, toCopy)
+            dstPos += toCopy
+            written += toCopy
+        }
+        return written
+    }
+
+    /** 从 source 读取一帧，算术右移后写入 dstFrameBuf。 */
+    private fun nextFrame(): Boolean {
+        var read = 0
+        while (read < srcFrameBuf.size) {
+            val n = source.read(srcFrameBuf, read, srcFrameBuf.size - read)
+            if (n < 0) return false
+            read += n
+        }
+        for (ch in 0 until channels) {
+            val sample = readSignedLE(srcFrameBuf, ch * srcBytesPerSample, sourceBits)
+            writeSignedLE(dstFrameBuf, ch * dstBytesPerSample, sample shr shift, targetBits)
+        }
+        dstPos = 0
+        return true
+    }
+
+    /** 以 little-endian 有符号方式读取任意 8 倍数位深的采样值。 */
+    private fun readSignedLE(b: ByteArray, off: Int, bits: Int): Int {
+        val bytes = bits / 8
+        var result = 0
+        for (i in 0 until bytes - 1) {
+            result = result or ((b[off + i].toInt() and 0xFF) shl (i * 8))
+        }
+        return result or (b[off + bytes - 1].toInt() shl ((bytes - 1) * 8)) // MSB 保留符号
+    }
+
+    /** 以 little-endian 有符号方式写入任意 8 倍数位深的采样值。 */
+    private fun writeSignedLE(b: ByteArray, off: Int, value: Int, bits: Int) {
+        val bytes = bits / 8
+        for (i in 0 until bytes) {
+            b[off + i] = ((value shr (i * 8)) and 0xFF).toByte()
+        }
+    }
+
+    override fun close() = source.close()
 }
