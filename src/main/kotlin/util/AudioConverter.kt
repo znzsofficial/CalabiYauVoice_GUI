@@ -18,10 +18,10 @@ import javax.sound.sampled.AudioSystem
 /** 可选的采样率列表；null 表示"原采样率" */
 val SAMPLE_RATE_OPTIONS: List<Float?> = listOf(null, 44100f, 48000f, 88200f, 96000f, 176400f, 192000f)
 
-/** 可选位深列表（16-bit / 24-bit / 浮点32-bit） */
-val BIT_DEPTH_OPTIONS: List<Int> = listOf(16, 24, 32)
+/** 可选位深列表；null 表示"原位深" */
+val BIT_DEPTH_OPTIONS: List<Int?> = listOf(null, 16, 24, 32)
 
-/** 默认位深索引（16-bit） */
+/** 默认位深索引（原位深） */
 const val DEFAULT_BIT_DEPTH_INDEX = 0
 
 val SUPPORTED_AUDIO_SOURCE_EXTENSIONS: Set<String> = setOf("mp3", "flac")
@@ -30,7 +30,7 @@ private const val GENERATED_MERGED_TAG = "_merged"
 private const val AUDIO_RATE_TOLERANCE = 0.5f
 
 fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" else "${rate.toInt()} Hz"
-fun bitDepthLabel(bits: Int): String = if (bits == 32) "浮点 32 bit" else "$bits bit"
+fun bitDepthLabel(bits: Int?): String = when (bits) { null -> "原位深"; 32 -> "浮点 32 bit"; else -> "$bits bit" }
 fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.lowercase() in SUPPORTED_AUDIO_SOURCE_EXTENSIONS
 
 /**
@@ -47,7 +47,7 @@ suspend fun batchConvertAudioToWav(
     dir: File,
     deleteOriginal: Boolean = true,
     targetSampleRate: Float? = null,
-    targetBitDepth: Int = 16,
+    targetBitDepth: Int? = null,
     onLog: (String) -> Unit = {},
     onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
 ) = withContext(Dispatchers.IO) {
@@ -104,7 +104,7 @@ fun convertAudioToWav(
     sourceFile: File,
     wavFile: File,
     targetSampleRate: Float? = null,
-    targetBitDepth: Int = 16
+    targetBitDepth: Int? = null
 ) {
     require(sourceFile.isFile) { "音频文件不存在：${sourceFile.absolutePath}" }
     require(isSupportedAudioSource(sourceFile)) {
@@ -117,15 +117,16 @@ fun convertAudioToWav(
         val baseFormat: AudioFormat = sourceStream.format
         val sampleRate = targetSampleRate ?: baseFormat.sampleRate
         val channels = baseFormat.channels
+        val actualBitDepth = targetBitDepth ?: baseFormat.sampleSizeInBits
 
         // 2. 构造目标 PCM 格式（32-bit 使用浮点编码）
-        val encoding = if (targetBitDepth == 32) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
+        val encoding = if (actualBitDepth == 32) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
         val pcmFormat = AudioFormat(
             encoding,
             sampleRate,
-            targetBitDepth,
+            actualBitDepth,
             channels,
-            channels * (targetBitDepth / 8),
+            channels * (actualBitDepth / 8),
             sampleRate,
             false
         )
@@ -272,9 +273,9 @@ private fun audioFormatEquals(a: AudioFormat, b: AudioFormat): Boolean =
         approximatelyEquals(a.frameRate, b.frameRate) &&
         a.isBigEndian == b.isBigEndian
 
-private fun validateTargetFormat(targetSampleRate: Float?, targetBitDepth: Int) {
-    require(targetBitDepth in BIT_DEPTH_OPTIONS) {
-        "不支持的目标位深：$targetBitDepth，仅支持 ${BIT_DEPTH_OPTIONS.joinToString("/")}"
+private fun validateTargetFormat(targetSampleRate: Float?, targetBitDepth: Int?) {
+    require(targetBitDepth == null || targetBitDepth in BIT_DEPTH_OPTIONS) {
+        "不支持的目标位深：$targetBitDepth，仅支持 ${BIT_DEPTH_OPTIONS.filterNotNull().joinToString("/")}"
     }
     require(targetSampleRate == null || (targetSampleRate.isFinite() && targetSampleRate > 0f)) {
         "目标采样率必须为正数：$targetSampleRate"

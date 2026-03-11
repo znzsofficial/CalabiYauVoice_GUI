@@ -415,7 +415,7 @@ fun Mp3ConverterWindow(
                         progressText = ""
                         coroutineScope.launch(Dispatchers.IO) {
                             val sampleRate = SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex)
-                            val bitDepth = BIT_DEPTH_OPTIONS.getOrElse(targetBitDepthIndex) { 16 }
+                            val bitDepth = BIT_DEPTH_OPTIONS.getOrNull(targetBitDepthIndex)
                             val mergeCount = mergeWavMaxCountStr.toIntOrNull() ?: 0
                             val doMerge = mergeWav
                             val doDeleteOriginalMp3 = deleteOriginalMp3
