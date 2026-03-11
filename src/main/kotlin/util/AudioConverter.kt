@@ -115,48 +115,76 @@ fun convertAudioToWav(
 
     // 1. 打开音频输入流（mp3spi/jflac SPI 自动接管）
     AudioSystem.getAudioInputStream(sourceFile).use { sourceStream ->
-        val baseFormat: AudioFormat = sourceStream.format
-        val sampleRate = targetSampleRate ?: baseFormat.sampleRate
-        val channels = baseFormat.channels
-        val actualBitDepth = targetBitDepth ?: baseFormat.sampleSizeInBits
-        val sourceBitDepth = baseFormat.sampleSizeInBits
+        val baseFormat = sourceStream.format
 
-        // 当源位深已知且高于目标整型位深时，先解码到源位深的 PCM，再算术右移缩放。
-        // 这可避免 Java Sound 直接截断 MSB 造成的溢出失真。
-        // 目标 32 bit 使用 PCM_FLOAT，浮点本身已归一化，不需要此路径。
-        val needsBitDepthScaling = sourceBitDepth > 0
-                && actualBitDepth != 32
-                && sourceBitDepth > actualBitDepth
+        // mp3spi 对压缩格式报告的 sampleSizeInBits 为 NOT_SPECIFIED (-1)，
+        // 需回退到合理默认值；mp3spi 始终将 MP3 解码为 PCM_SIGNED 16-bit。
+        val naturalBits = baseFormat.sampleSizeInBits.takeIf { it > 0 } ?: 16
+        val naturalRate = baseFormat.sampleRate.takeIf { it.isFinite() && it > 0f } ?: 44100f
+        val channels    = baseFormat.channels.takeIf { it > 0 } ?: 2
+
+        val outRate  = targetSampleRate ?: naturalRate
+        val outBits  = targetBitDepth   ?: naturalBits
+        val outFloat = targetBitDepth == 32   // 用户显式选了"浮点 32 bit"
+
+        // 第一步：将压缩流解码为 PCM_SIGNED LE（固定用源采样率）。
+        // mp3spi 只支持 PCM_SIGNED 16-bit 输出，不在此步骤指定目标格式，
+        // 避免 SPI 因不支持的格式抛出异常。
+        val naturalFmt = AudioFormat(
+            AudioFormat.Encoding.PCM_SIGNED, naturalRate, naturalBits,
+            channels, channels * (naturalBits / 8), naturalRate, false
+        )
 
         val tempFile = tempSiblingOf(wavFile)
         cleanupFileQuietly(tempFile)
         try {
-            if (needsBitDepthScaling) {
-                // 2a. 先解码到源位深的 PCM_SIGNED LE（含可选的采样率转换）
-                val intermFormat = AudioFormat(
-                    AudioFormat.Encoding.PCM_SIGNED, sampleRate, sourceBitDepth,
-                    channels, channels * (sourceBitDepth / 8), sampleRate, false
-                )
-                AudioSystem.getAudioInputStream(intermFormat, sourceStream).use { intermStream ->
-                    // 2b. 算术右移缩放至目标位深
-                    val scaledFormat = AudioFormat(
-                        AudioFormat.Encoding.PCM_SIGNED, sampleRate, actualBitDepth,
-                        channels, channels * (actualBitDepth / 8), sampleRate, false
-                    )
-                    val scalingInput = BitDepthScalingInputStream(intermStream, sourceBitDepth, actualBitDepth)
-                    AudioInputStream(scalingInput, scaledFormat, intermStream.frameLength).use { scaledStream ->
-                        AudioSystem.write(scaledStream, AudioFileFormat.Type.WAVE, tempFile)
+            AudioSystem.getAudioInputStream(naturalFmt, sourceStream).use { pcm ->
+                val sameRate  = approximatelyEquals(outRate, naturalRate)
+                val sameBits  = outBits == naturalBits
+                // 降位深：源高于目标且目标不是浮点 → 用算术右移缩放，避免溢出
+                val downscale = !outFloat && naturalBits > outBits
+
+                when {
+                    // 无需任何格式变换，直接写出
+                    sameRate && sameBits && !outFloat ->
+                        AudioSystem.write(pcm, AudioFileFormat.Type.WAVE, tempFile)
+
+                    // 降位深（含可选的采样率转换）：先重采样，再算术右移缩放
+                    downscale -> {
+                        // 若需要改变采样率，先用 Java Sound 做 PCM→PCM 重采样
+                        val src: AudioInputStream = if (!sameRate) {
+                            val rsFmt = AudioFormat(
+                                AudioFormat.Encoding.PCM_SIGNED, outRate, naturalBits,
+                                channels, channels * (naturalBits / 8), outRate, false
+                            )
+                            AudioSystem.getAudioInputStream(rsFmt, pcm)
+                        } else pcm
+
+                        val scaledFmt = AudioFormat(
+                            AudioFormat.Encoding.PCM_SIGNED, outRate, outBits,
+                            channels, channels * (outBits / 8), outRate, false
+                        )
+                        AudioInputStream(
+                            BitDepthScalingInputStream(src, naturalBits, outBits),
+                            scaledFmt,
+                            src.frameLength
+                        ).use { scaled ->
+                            AudioSystem.write(scaled, AudioFileFormat.Type.WAVE, tempFile)
+                        }
                     }
-                }
-            } else {
-                // 2. 构造目标 PCM 格式（32-bit 使用浮点编码）
-                val encoding = if (actualBitDepth == 32) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
-                val pcmFormat = AudioFormat(
-                    encoding, sampleRate, actualBitDepth,
-                    channels, channels * (actualBitDepth / 8), sampleRate, false
-                )
-                AudioSystem.getAudioInputStream(pcmFormat, sourceStream).use { pcmStream ->
-                    AudioSystem.write(pcmStream, AudioFileFormat.Type.WAVE, tempFile)
+
+                    // 升位深、采样率变换或浮点转换：
+                    // PCM→PCM 的格式变换 Java Sound 处理可靠
+                    else -> {
+                        val enc = if (outFloat) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
+                        val tgtFmt = AudioFormat(
+                            enc, outRate, outBits,
+                            channels, channels * (outBits / 8), outRate, false
+                        )
+                        AudioSystem.getAudioInputStream(tgtFmt, pcm).use { conv ->
+                            AudioSystem.write(conv, AudioFileFormat.Type.WAVE, tempFile)
+                        }
+                    }
                 }
             }
             replaceFile(tempFile, wavFile)
