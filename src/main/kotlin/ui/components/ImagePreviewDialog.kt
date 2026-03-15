@@ -26,14 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogWindow
 import androidx.compose.ui.window.rememberDialogState
 import data.WikiEngine
-import io.github.composefluent.component.CommandBarButton
-import io.github.composefluent.component.Icon
-import io.github.composefluent.component.LargeCommandBarFlyout
-import io.github.composefluent.component.ListItem
-import io.github.composefluent.component.ProgressRing
-import io.github.composefluent.component.Text
-import io.github.composefluent.component.rememberFlyoutPositionProvider
-import io.github.composefluent.component.FlyoutPlacement
+import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.ArrowReset
 import io.github.composefluent.icons.regular.Copy
@@ -82,7 +75,14 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    fun resetTransform() { scale = 1f; offset = Offset.Zero }
+    fun resetTransform() {
+        scale = 1f; offset = Offset.Zero
+    }
+
+    val clipboard = remember { java.awt.Toolkit.getDefaultToolkit().systemClipboard }
+    val copyAction = {
+        clipboard.setContents(java.awt.datatransfer.StringSelection(url), null)
+    }
 
     var flyoutVisible by remember { mutableStateOf(false) }
     var flyoutExpanded by remember { mutableStateOf(false) }
@@ -92,13 +92,20 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
         title = name,
         state = rememberDialogState(width = 900.dp, height = 700.dp),
         onKeyEvent = { keyEvent ->
+            if (keyEvent.type != KeyEventType.KeyDown) return@DialogWindow false
             when (keyEvent.key) {
-                Key.Escape if keyEvent.type == KeyEventType.KeyDown -> {
+                Key.Escape -> {
                     onClose(); true
                 }
-                Key.Zero if keyEvent.type == KeyEventType.KeyDown -> {
+
+                Key.Zero, Key.R -> {
                     resetTransform(); true
                 }
+
+                Key.C if keyEvent.isCtrlPressed -> {
+                    copyAction(); true
+                }
+
                 else -> false
             }
         }
@@ -256,8 +263,7 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
                         ) {
                             val actions = listOf(
                                 Triple(Icons.Regular.Copy, "复制链接") {
-                                    val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
-                                    clipboard.setContents(java.awt.datatransfer.StringSelection(url), null)
+                                    copyAction()
                                     flyoutVisible = false
                                 },
                                 Triple(Icons.Regular.Open, "浏览器打开") {
