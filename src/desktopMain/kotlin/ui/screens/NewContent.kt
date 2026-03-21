@@ -34,8 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import com.mayakapps.compose.windowstyler.WindowBackdrop
-import data.PortraitAsset
-import data.PortraitCostume
+import portrait.*
 import data.WikiEngine
 import data.WikiUserApi
 import io.github.composefluent.ExperimentalFluentApi
@@ -77,7 +76,7 @@ fun NewDownloaderContent() {
 
     val portraitCharacters by viewModel.portraitCharacters.collectAsState()
     val selectedPortraitCharacter by viewModel.selectedPortraitCharacter.collectAsState()
-    val portraitCostumes by viewModel.portraitCostumes.collectAsState()
+    val portraitCostumes: List<PortraitCostume> by viewModel.portraitCostumes.collectAsState()
     val selectedPortraitCostumeKey by viewModel.selectedPortraitCostumeKey.collectAsState()
     val isPortraitLoading by viewModel.isPortraitLoading.collectAsState()
 
@@ -871,7 +870,8 @@ fun NewDownloaderContent() {
                                                 modifier = Modifier.fillMaxSize(),
                                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                                             ) {
-                                                items(portraitCostumes, key = { it.key }) { costume ->
+                                                items(count = portraitCostumes.size, key = { portraitCostumes[it].key }) { index ->
+                                                    val costume: PortraitCostume = portraitCostumes[index]
                                                     PortraitCostumeCard(
                                                         costume = costume,
                                                         expanded = selectedPortraitCostumeKey == costume.key,
