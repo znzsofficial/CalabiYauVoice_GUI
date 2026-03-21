@@ -3,14 +3,17 @@ package com.nekolaska.calabiyau
 import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nekolaska.calabiyau.data.PortraitRepository
 import com.nekolaska.calabiyau.data.WikiEngine
+import portrait.CharacterPortraitCatalog
+import portrait.PortraitCostume
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
-enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH }
+enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH, PORTRAIT }
 
 class MainViewModel : ViewModel() {
 
@@ -68,8 +71,32 @@ class MainViewModel : ViewModel() {
     private val _characterAvatars = MutableStateFlow<Map<String, String>>(emptyMap())
     val characterAvatars: StateFlow<Map<String, String>> = _characterAvatars.asStateFlow()
 
+    // 立绘相关状态
+    private val _portraitCharacters = MutableStateFlow<List<String>>(emptyList())
+    val portraitCharacters: StateFlow<List<String>> = _portraitCharacters.asStateFlow()
+
+    private val _selectedPortraitCharacter = MutableStateFlow<String?>(null)
+    val selectedPortraitCharacter: StateFlow<String?> = _selectedPortraitCharacter.asStateFlow()
+
+    private val _portraitCatalog = MutableStateFlow<CharacterPortraitCatalog?>(null)
+    val portraitCatalog: StateFlow<CharacterPortraitCatalog?> = _portraitCatalog.asStateFlow()
+
+    private val _isLoadingPortrait = MutableStateFlow(false)
+    val isLoadingPortrait: StateFlow<Boolean> = _isLoadingPortrait.asStateFlow()
+
+    private val _selectedPortraitCostume = MutableStateFlow<PortraitCostume?>(null)
+    val selectedPortraitCostume: StateFlow<PortraitCostume?> = _selectedPortraitCostume.asStateFlow()
+
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
-    fun onSearchModeChange(mode: SearchMode) { _searchMode.value = mode }
+    fun onSearchModeChange(mode: SearchMode) {
+        _searchMode.value = mode
+        if (mode == SearchMode.PORTRAIT) {
+            _portraitCharacters.value = emptyList()
+            _selectedPortraitCharacter.value = null
+            _portraitCatalog.value = null
+            _selectedPortraitCostume.value = null
+        }
+    }
     fun onMaxConcurrencyChange(value: String) { _maxConcurrencyStr.value = value.filter { it.isDigit() } }
 
     fun toggleFileSearchSelection(url: String) {
@@ -112,6 +139,12 @@ class MainViewModel : ViewModel() {
                         _characterGroups.value = groups
                         _characterAvatars.value = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
                     }
+                    SearchMode.PORTRAIT -> {
+                        addLog("搜索立绘角色: $keyword")
+                        val characters = PortraitRepository.searchCharacters(keyword)
+                        _portraitCharacters.value = characters
+                        addLog("找到 ${characters.size} 个角色")
+                    }
                     SearchMode.FILE_SEARCH -> {
                         addLog("开始搜索文件: $keyword")
                         val results = WikiEngine.searchFiles(
@@ -148,6 +181,10 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    fun clearSelectedGroup() {
+        _selectedGroup.value = null
+    }
+
     fun setCategoryChecked(cat: String, checked: Boolean) {
         val current = _checkedCategories.value.toMutableList()
         if (checked) { if (cat !in current) current.add(cat) } else current.remove(cat)
@@ -156,6 +193,33 @@ class MainViewModel : ViewModel() {
 
     fun checkAllCategories() { _checkedCategories.value = _subCategories.value.toList() }
     fun uncheckAllCategories() { _checkedCategories.value = emptyList() }
+
+    fun onSelectPortraitCharacter(characterName: String) {
+        _selectedPortraitCharacter.value = characterName
+        _portraitCatalog.value = null
+        _selectedPortraitCostume.value = null
+        _isLoadingPortrait.value = true
+        viewModelScope.launch {
+            try {
+                val catalog = PortraitRepository.loadCharacterPortraitCatalog(characterName)
+                _portraitCatalog.value = catalog
+            } catch (e: Exception) {
+                _portraitCatalog.value = CharacterPortraitCatalog(characterName, emptyList())
+            } finally {
+                _isLoadingPortrait.value = false
+            }
+        }
+    }
+
+    fun clearSelectedPortraitCharacter() {
+        _selectedPortraitCharacter.value = null
+        _portraitCatalog.value = null
+        _selectedPortraitCostume.value = null
+    }
+
+    fun selectPortraitCostume(costume: PortraitCostume) {
+        _selectedPortraitCostume.value = costume
+    }
 
     fun startDownload() {
         if (_isDownloading.value) return
@@ -171,6 +235,43 @@ class MainViewModel : ViewModel() {
                 )
 
                 when (_searchMode.value) {
+                    SearchMode.PORTRAIT -> {
+                        val costume = _selectedPortraitCostume.value ?: run {
+                            addLog("请先选择一个角色和服装"); return@launch
+                        }
+                        val characterName = _selectedPortraitCharacter.value ?: run {
+                            addLog("请先选择一个角色"); return@launch
+                        }
+                        val assets = buildList {
+                            costume.illustration?.let { add(it) }
+                            costume.frontPreview?.let { add(it) }
+                            costume.backPreview?.let { add(it) }
+                            addAll(costume.extraAssets)
+                        }
+                        if (assets.isEmpty()) {
+                            addLog("当前服装没有可下载的立绘资产"); return@launch
+                        }
+                        val files = assets.map { it.title to it.url }
+                        val saveDir = File(
+                            File(
+                                File(baseDir, "立绘"),
+                                WikiEngine.sanitizeFileName(characterName)
+                            ),
+                            WikiEngine.sanitizeFileName(costume.name)
+                        )
+                        addLog("开始下载 [${characterName}/${costume.name}] ${files.size} 个立绘...")
+                        WikiEngine.downloadSpecificFiles(
+                            files = files,
+                            saveDir = saveDir,
+                            maxConcurrency = _maxConcurrencyStr.value.toIntOrNull()?.coerceIn(1, 32) ?: 4,
+                            onLog = { addLog(it) },
+                            onProgress = { current, total, name ->
+                                _downloadProgress.value = current.toFloat() / total
+                                _downloadStatusText.value = "[$current/$total] $name"
+                            }
+                        )
+                        addLog("下载完成！保存至: ${saveDir.absolutePath}")
+                    }
                     SearchMode.FILE_SEARCH -> {
                         val selected = _fileSearchSelectedUrls.value
                         val files = _fileSearchResults.value.filter { it.second in selected }

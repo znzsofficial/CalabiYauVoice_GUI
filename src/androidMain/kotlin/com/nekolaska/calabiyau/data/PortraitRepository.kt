@@ -1,4 +1,4 @@
-package data
+package com.nekolaska.calabiyau.data
 
 import portrait.*
 

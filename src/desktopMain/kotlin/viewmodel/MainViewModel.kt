@@ -1,6 +1,6 @@
 package viewmodel
 
-import data.PortraitCostume
+import portrait.PortraitCostume
 import data.PortraitRepository
 import data.WikiEngine
 import kotlinx.coroutines.*
@@ -406,8 +406,60 @@ class MainViewModel(
     // 下载
     // =========================================================
     fun startDownload() {
+        // Handle Portrait Download
         if (_searchMode.value == SearchMode.PORTRAIT_LIST) {
-            addLog("立绘列表模式仅用于浏览预览，暂不支持批量下载。")
+            val charName = _selectedPortraitCharacter.value
+            val costumeKey = _selectedPortraitCostumeKey.value
+            val costume = _portraitCostumes.value.find { it.key == costumeKey }
+
+            if (charName == null || costume == null) {
+                addLog("请先选择一个角色并展开一套时装")
+                return
+            }
+
+            _isDownloading.value = true
+            val concurrency = _maxConcurrencyStr.value.toIntOrNull() ?: 16
+
+            // Build asset list
+            val assets = buildList {
+                add(costume.illustration)
+                add(costume.frontPreview)
+                add(costume.backPreview)
+                addAll(costume.extraAssets)
+            }.filterNotNull()
+
+            if (assets.isEmpty()) {
+                addLog("该时装没有可下载的资源")
+                _isDownloading.value = false
+                return
+            }
+
+            val targetDir = File(File(_savePath.value, "立绘"), WikiEngine.sanitizeFileName(charName))
+            val saveDir = File(targetDir, WikiEngine.sanitizeFileName(costume.name))
+            val files = assets.map { it.title to it.url }
+
+            scope.launch {
+                try {
+                    addLog("开始下载 [${charName}/${costume.name}] 的 ${files.size} 个资产...")
+                    WikiEngine.downloadSpecificFiles(
+                        files = files,
+                        saveDir = saveDir,
+                        maxConcurrency = concurrency,
+                        onLog = { addLog(it) },
+                        onProgress = { current, total, name ->
+                            _progress.value = current.toFloat() / total
+                            _progressText.value = "$current / $total : $name"
+                        }
+                    )
+                    addLog("下载完成！保存至: ${saveDir.absolutePath}")
+                } catch (e: Exception) {
+                    addLog("下载失败: ${e.message}")
+                } finally {
+                    _isDownloading.value = false
+                    _progress.value = 0f
+                    _progressText.value = ""
+                }
+            }
             return
         }
 
