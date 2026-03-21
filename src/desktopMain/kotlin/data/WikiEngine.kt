@@ -234,7 +234,8 @@ object WikiEngine {
         fun matchesFilter(url: String, mime: String?): Boolean {
             if (!audioOnly) return true
             val clean = url.substringBefore('?')
-            return mime?.startsWith("audio/") == true || clean.endsWith(".wav") || clean.endsWith(".mp3")
+            return mime?.startsWith("audio/") == true ||
+                clean.endsWith(".wav") || clean.endsWith(".mp3") || clean.endsWith(".ogg")
         }
         val encoded = URLEncoder.encode(keyword, "UTF-8")
 
@@ -497,6 +498,7 @@ object WikiEngine {
                         val isAudio = i.mime?.startsWith("audio/") == true
                                 || cleanUrl.endsWith(".wav")
                                 || cleanUrl.endsWith(".mp3")
+                                || cleanUrl.endsWith(".ogg")
                         if (!audioOnly || isAudio) {
                             list.add(p.title.replace(filePrefixRegex, "") to i.url)
                         }
