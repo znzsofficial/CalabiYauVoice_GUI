@@ -142,17 +142,18 @@ fun convertAudioToWav(
                 val sameRate  = approximatelyEquals(outRate, naturalRate)
                 val sameBits  = outBits == naturalBits
                 // 降位深：源高于目标且目标不是浮点 → 用算术右移缩放，避免溢出
-                val downscale = !outFloat && naturalBits > outBits
+                // Manual bit depth conversion logic (handle both up/down scaling)
+                // Java Sound's specific PCM conversion capability varies, manual shifting is more reliable for 16<->24/32 integer PCM.
+                val needsBitDepthChange = !outFloat && naturalBits != outBits
 
                 when {
                     // 无需任何格式变换，直接写出
-                    sameRate && sameBits && !outFloat ->
+                    sameRate && !needsBitDepthChange && !outFloat ->
                         AudioSystem.write(pcm, AudioFileFormat.Type.WAVE, tempFile)
 
-                    // 降位深（含可选的采样率转换）：先重采样，再算术右移缩放
-                    downscale -> {
-                        // 若需要改变采样率，先用 Java Sound 做 PCM→PCM 重采样
-                        val src: AudioInputStream = if (!sameRate) {
+                    // 整数位深变换（含可选的采样率转换）：手动位移缩放
+                    needsBitDepthChange -> {
+                        val srcStream = if (!sameRate) {
                             val rsFmt = AudioFormat(
                                 AudioFormat.Encoding.PCM_SIGNED, outRate, naturalBits,
                                 channels, channels * (naturalBits / 8), outRate, false
@@ -160,21 +161,20 @@ fun convertAudioToWav(
                             AudioSystem.getAudioInputStream(rsFmt, pcm)
                         } else pcm
 
-                        val scaledFmt = AudioFormat(
+                        val targetFmt = AudioFormat(
                             AudioFormat.Encoding.PCM_SIGNED, outRate, outBits,
                             channels, channels * (outBits / 8), outRate, false
                         )
                         AudioInputStream(
-                            BitDepthScalingInputStream(src, naturalBits, outBits),
-                            scaledFmt,
-                            src.frameLength
+                            BitDepthConversionInputStream(srcStream, naturalBits, outBits),
+                            targetFmt,
+                            AudioSystem.NOT_SPECIFIED.toLong() // Resampling/Conversion might change length, safest to use unknown
                         ).use { scaled ->
                             AudioSystem.write(scaled, AudioFileFormat.Type.WAVE, tempFile)
                         }
                     }
 
-                    // 升位深、采样率变换或浮点转换：
-                    // PCM→PCM 的格式变换 Java Sound 处理可靠
+                    // 浮点转换或仅采样率变换（位深不变）：交给 Java Sound
                     else -> {
                         val enc = if (outFloat) AudioFormat.Encoding.PCM_FLOAT else AudioFormat.Encoding.PCM_SIGNED
                         val tgtFmt = AudioFormat(
@@ -367,24 +367,28 @@ private fun replaceFile(tempFile: File, targetFile: File) {
 }
 
 /**
- * 将已解码的 PCM_SIGNED little-endian 流从 [sourceBits] 位深算术右移缩放至 [targetBits]。
+ * 将已解码的 PCM_SIGNED little-endian 流从 [sourceBits] 位深转换至 [targetBits]。
  *
- * 算术右移（`shr`）保留符号位，等价于将幅度乘以 2^(targetBits - sourceBits)，
- * 相比直接截断低位字节，不会产生溢出或电平失真。
- * 仅适用于 sourceBits > targetBits 且两者均为 8 的整数倍的场景。
+ * - 降位深 (Downscale): 算术右移 (shr)，避免溢出。
+ * - 升位深 (Upscale): 左移 (shl)，并在低位补零 (保持有效幅度)。
+ * 仅适用于两者均为 8 的整数倍的场景。
  */
-private class BitDepthScalingInputStream(
+private class BitDepthConversionInputStream(
     private val source: AudioInputStream,
     private val sourceBits: Int,
     private val targetBits: Int
 ) : InputStream() {
-    private val shift = sourceBits - targetBits
     private val srcBytesPerSample = sourceBits / 8
     private val dstBytesPerSample = targetBits / 8
     private val channels = source.format.channels
     private val srcFrameBuf = ByteArray(channels * srcBytesPerSample)
     private val dstFrameBuf = ByteArray(channels * dstBytesPerSample)
     private var dstPos = dstFrameBuf.size // 初始设为末尾，触发首次填充
+
+    // 计算位移量
+    // 降位深: source > target, shift > 0 (右移)
+    // 升位深: source < target, shift < 0 (左移 = shift absolute value)
+    private val shift = sourceBits - targetBits
 
     override fun read(): Int {
         if (dstPos >= dstFrameBuf.size && !nextFrame()) return -1
@@ -404,7 +408,6 @@ private class BitDepthScalingInputStream(
         return written
     }
 
-    /** 从 source 读取一帧，算术右移后写入 dstFrameBuf。 */
     private fun nextFrame(): Boolean {
         var read = 0
         while (read < srcFrameBuf.size) {
@@ -414,13 +417,17 @@ private class BitDepthScalingInputStream(
         }
         for (ch in 0 until channels) {
             val sample = readSignedLE(srcFrameBuf, ch * srcBytesPerSample, sourceBits)
-            writeSignedLE(dstFrameBuf, ch * dstBytesPerSample, sample shr shift, targetBits)
+            val converted = if (shift > 0) {
+                sample shr shift // Downscale
+            } else {
+                sample shl (-shift) // Upscale
+            }
+            writeSignedLE(dstFrameBuf, ch * dstBytesPerSample, converted, targetBits)
         }
         dstPos = 0
         return true
     }
 
-    /** 以 little-endian 有符号方式读取任意 8 倍数位深的采样值。 */
     private fun readSignedLE(b: ByteArray, off: Int, bits: Int): Int {
         val bytes = bits / 8
         var result = 0
@@ -430,7 +437,6 @@ private class BitDepthScalingInputStream(
         return result or (b[off + bytes - 1].toInt() shl ((bytes - 1) * 8)) // MSB 保留符号
     }
 
-    /** 以 little-endian 有符号方式写入任意 8 倍数位深的采样值。 */
     private fun writeSignedLE(b: ByteArray, off: Int, value: Int, bits: Int) {
         val bytes = bits / 8
         for (i in 0 until bytes) {
