@@ -1,0 +1,238 @@
+package com.nekolaska.calabiyau
+
+import android.os.Environment
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.nekolaska.calabiyau.data.WikiEngine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.io.File
+
+enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH }
+
+class MainViewModel : ViewModel() {
+
+    private val _searchKeyword = MutableStateFlow("角色")
+    val searchKeyword: StateFlow<String> = _searchKeyword.asStateFlow()
+
+    private val _searchMode = MutableStateFlow(SearchMode.VOICE_ONLY)
+    val searchMode: StateFlow<SearchMode> = _searchMode.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+
+    private val _characterGroups = MutableStateFlow<List<WikiEngine.CharacterGroup>>(emptyList())
+    val characterGroups: StateFlow<List<WikiEngine.CharacterGroup>> = _characterGroups.asStateFlow()
+
+    // 文件搜索结果
+    private val _fileSearchResults = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val fileSearchResults: StateFlow<List<Pair<String, String>>> = _fileSearchResults.asStateFlow()
+
+    private val _fileSearchSelectedUrls = MutableStateFlow<Set<String>>(emptySet())
+    val fileSearchSelectedUrls: StateFlow<Set<String>> = _fileSearchSelectedUrls.asStateFlow()
+
+    // 选中的角色组
+    private val _selectedGroup = MutableStateFlow<WikiEngine.CharacterGroup?>(null)
+    val selectedGroup: StateFlow<WikiEngine.CharacterGroup?> = _selectedGroup.asStateFlow()
+
+    private val _subCategories = MutableStateFlow<List<String>>(emptyList())
+    val subCategories: StateFlow<List<String>> = _subCategories.asStateFlow()
+
+    private val _checkedCategories = MutableStateFlow<List<String>>(emptyList())
+    val checkedCategories: StateFlow<List<String>> = _checkedCategories.asStateFlow()
+
+    private val _isScanningTree = MutableStateFlow(false)
+    val isScanningTree: StateFlow<Boolean> = _isScanningTree.asStateFlow()
+
+    // 下载状态
+    private val _isDownloading = MutableStateFlow(false)
+    val isDownloading: StateFlow<Boolean> = _isDownloading.asStateFlow()
+
+    private val _downloadProgress = MutableStateFlow(0f)
+    val downloadProgress: StateFlow<Float> = _downloadProgress.asStateFlow()
+
+    private val _downloadStatusText = MutableStateFlow("")
+    val downloadStatusText: StateFlow<String> = _downloadStatusText.asStateFlow()
+
+    private val _logs = MutableStateFlow<List<String>>(emptyList())
+    val logs: StateFlow<List<String>> = _logs.asStateFlow()
+
+    private val _maxConcurrencyStr = MutableStateFlow("8")
+    val maxConcurrencyStr: StateFlow<String> = _maxConcurrencyStr.asStateFlow()
+
+    private val _hasSearched = MutableStateFlow(false)
+    val hasSearched: StateFlow<Boolean> = _hasSearched.asStateFlow()
+
+    private val _characterAvatars = MutableStateFlow<Map<String, String>>(emptyMap())
+    val characterAvatars: StateFlow<Map<String, String>> = _characterAvatars.asStateFlow()
+
+    fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
+    fun onSearchModeChange(mode: SearchMode) { _searchMode.value = mode }
+    fun onMaxConcurrencyChange(value: String) { _maxConcurrencyStr.value = value.filter { it.isDigit() } }
+
+    fun toggleFileSearchSelection(url: String) {
+        val current = _fileSearchSelectedUrls.value.toMutableSet()
+        if (url in current) current.remove(url) else current.add(url)
+        _fileSearchSelectedUrls.value = current
+    }
+
+    fun selectAllFileSearchResults() {
+        _fileSearchSelectedUrls.value = _fileSearchResults.value.map { it.second }.toSet()
+    }
+
+    fun clearFileSearchSelection() {
+        _fileSearchSelectedUrls.value = emptySet()
+    }
+
+    fun performSearch() {
+        if (_isSearching.value) return
+        val keyword = _searchKeyword.value.trim()
+        if (keyword.isBlank()) return
+
+        viewModelScope.launch {
+            _isSearching.value = true
+            _hasSearched.value = false
+            _selectedGroup.value = null
+            _subCategories.value = emptyList()
+            _checkedCategories.value = emptyList()
+            _fileSearchResults.value = emptyList()
+            _fileSearchSelectedUrls.value = emptySet()
+
+            try {
+                when (_searchMode.value) {
+                    SearchMode.VOICE_ONLY -> {
+                        val groups = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly = true)
+                        _characterGroups.value = groups
+                        _characterAvatars.value = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
+                    }
+                    SearchMode.ALL_CATEGORIES -> {
+                        val groups = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly = false)
+                        _characterGroups.value = groups
+                        _characterAvatars.value = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
+                    }
+                    SearchMode.FILE_SEARCH -> {
+                        addLog("开始搜索文件: $keyword")
+                        val results = WikiEngine.searchFiles(
+                            keyword = keyword,
+                            audioOnly = false,
+                            onLog = { addLog(it) }
+                        )
+                        _fileSearchResults.value = results
+                        addLog("搜索完成，共找到 ${results.size} 个文件")
+                    }
+                }
+            } catch (e: Exception) {
+                addLog("[错误] 搜索失败: ${e.message}")
+            } finally {
+                _isSearching.value = false
+                _hasSearched.value = true
+            }
+        }
+    }
+
+    fun onSelectGroup(group: WikiEngine.CharacterGroup) {
+        _selectedGroup.value = group
+        _isScanningTree.value = true
+        viewModelScope.launch {
+            try {
+                val cats = WikiEngine.scanCategoryTree(group.rootCategory)
+                _subCategories.value = cats
+                _checkedCategories.value = cats.toList()
+            } catch (e: Exception) {
+                addLog("[错误] 扫描分类树失败: ${e.message}")
+            } finally {
+                _isScanningTree.value = false
+            }
+        }
+    }
+
+    fun setCategoryChecked(cat: String, checked: Boolean) {
+        val current = _checkedCategories.value.toMutableList()
+        if (checked) { if (cat !in current) current.add(cat) } else current.remove(cat)
+        _checkedCategories.value = current
+    }
+
+    fun checkAllCategories() { _checkedCategories.value = _subCategories.value.toList() }
+    fun uncheckAllCategories() { _checkedCategories.value = emptyList() }
+
+    fun startDownload() {
+        if (_isDownloading.value) return
+        viewModelScope.launch {
+            _isDownloading.value = true
+            _downloadProgress.value = 0f
+            _downloadStatusText.value = "准备下载..."
+
+            try {
+                val baseDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "CalabiYauVoice"
+                )
+
+                when (_searchMode.value) {
+                    SearchMode.FILE_SEARCH -> {
+                        val selected = _fileSearchSelectedUrls.value
+                        val files = _fileSearchResults.value.filter { it.second in selected }
+                        if (files.isEmpty()) {
+                            addLog("未选择任何文件")
+                            return@launch
+                        }
+                        val saveDir = File(baseDir, "文件搜索")
+                        addLog("开始下载 ${files.size} 个文件...")
+                        WikiEngine.downloadSpecificFiles(
+                            files = files,
+                            saveDir = saveDir,
+                            maxConcurrency = _maxConcurrencyStr.value.toIntOrNull()?.coerceIn(1, 32) ?: 8,
+                            onLog = { addLog(it) },
+                            onProgress = { current, total, name ->
+                                _downloadProgress.value = current.toFloat() / total
+                                _downloadStatusText.value = "[$current/$total] $name"
+                            }
+                        )
+                        addLog("下载完成！保存至: ${saveDir.absolutePath}")
+                    }
+                    else -> {
+                        val group = _selectedGroup.value ?: run {
+                            addLog("请先选择一个角色"); return@launch
+                        }
+                        val cats = _checkedCategories.value
+                        if (cats.isEmpty()) {
+                            addLog("请至少勾选一个分类"); return@launch
+                        }
+                        val charDir = File(baseDir, WikiEngine.sanitizeFileName(group.characterName))
+                        var totalDownloaded = 0
+                        for (cat in cats) {
+                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                            if (files.isEmpty()) continue
+                            val catName = WikiEngine.sanitizeFileName(cat.removePrefix("Category:").removePrefix("分类:"))
+                            val saveDir = File(charDir, catName)
+                            addLog("下载分类 [$catName]: ${files.size} 个文件")
+                            WikiEngine.downloadSpecificFiles(
+                                files = files,
+                                saveDir = saveDir,
+                                maxConcurrency = _maxConcurrencyStr.value.toIntOrNull()?.coerceIn(1, 32) ?: 8,
+                                onLog = { addLog(it) },
+                                onProgress = { current, total, name ->
+                                    _downloadProgress.value = current.toFloat() / total
+                                    _downloadStatusText.value = "[$catName] $current/$total: $name"
+                                }
+                            )
+                            totalDownloaded += files.size
+                        }
+                        addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")
+                    }
+                }
+            } catch (e: Exception) {
+                addLog("[错误] 下载失败: ${e.message}")
+            } finally {
+                _isDownloading.value = false
+                _downloadStatusText.value = ""
+            }
+        }
+    }
+
+    private fun addLog(msg: String) {
+        _logs.value = _logs.value + msg
+    }
+}
