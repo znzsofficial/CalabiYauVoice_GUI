@@ -3,8 +3,8 @@
 # 🌌 CalabiYauVoice GUI
 
 ![Kotlin](https://img.shields.io/badge/Kotlin-blue.svg?logo=kotlin&logoColor=white)
-![Compose Desktop](https://img.shields.io/badge/Compose_Desktop-4285F4?logo=jetpackcompose&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows-red)
+[![Compose-Multiplatform](https://img.shields.io/badge/Compose%20Multiplatform-3a7af2?logo=jetpackcompose&logoColor=white)](https://github.com/JetBrains/compose-multiplatform)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-red)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE.txt)
 
 A Compose Desktop application for browsing and downloading Strinova wiki resources.<br>
