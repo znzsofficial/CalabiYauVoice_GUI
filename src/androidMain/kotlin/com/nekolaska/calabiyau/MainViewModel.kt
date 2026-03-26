@@ -147,6 +147,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         addLog("搜索立绘角色: $keyword")
                         val characters = PortraitRepository.searchCharacters(keyword)
                         _portraitCharacters.value = characters
+                        _characterAvatars.value = WikiEngine.fetchCharacterAvatars(characters)
                         addLog("找到 ${characters.size} 个角色")
                     }
                     SearchMode.FILE_SEARCH -> {
