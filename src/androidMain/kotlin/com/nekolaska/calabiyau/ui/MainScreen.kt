@@ -78,6 +78,18 @@ fun MainScreen(viewModel: MainViewModel) {
 
     val focusManager = LocalFocusManager.current
     var showLogs by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+
+    // 设置页面返回键拦截
+    BackHandler(enabled = showSettings) {
+        showSettings = false
+    }
+
+    // 设置页面
+    if (showSettings) {
+        SettingsScreen(onBack = { showSettings = false })
+        return
+    }
 
     // 处理返回键
     BackHandler(enabled = selectedPortraitCharacter != null) {
@@ -106,6 +118,9 @@ fun MainScreen(viewModel: MainViewModel) {
                             ) {
                                 Icon(Icons.Default.Article, "日志")
                             }
+                        }
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(Icons.Default.Settings, "设置")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -499,7 +514,7 @@ fun CostumeCard(costume: PortraitCostume) {
                 modifier = Modifier.align(Alignment.BottomEnd)
             ) {
                 Text(
-                    text = "包含 ${costume.extraAssets.size + listOfNotNull(costume.illustration, costume.frontPreview).size} 个文件",
+                    text = "包含 ${costume.extraAssets.size + listOfNotNull(costume.illustration, costume.frontPreview, costume.backPreview).size} 个文件",
                     color = MaterialTheme.colorScheme.inverseOnSurface,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
