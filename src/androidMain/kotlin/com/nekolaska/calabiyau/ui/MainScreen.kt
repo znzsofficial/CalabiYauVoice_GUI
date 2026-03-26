@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -21,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -101,69 +101,114 @@ fun MainScreen(viewModel: MainViewModel) {
 
     Scaffold(
         topBar = {
-            Column {
-                TopAppBar(
-                    title = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    // 标题栏
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            "卡拉彼丘 Wiki 下载器",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            text = "卡拉彼丘",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    },
-                    actions = {
-                        IconButton(onClick = { showLogs = true }) {
+                        Spacer(Modifier.weight(1f))
+                        FilledTonalIconButton(
+                            onClick = { showLogs = true },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
                             BadgedBox(
                                 badge = {
                                     if (logs.isNotEmpty()) Badge { Text("${logs.size}") }
                                 }
                             ) {
-                                Icon(Icons.Default.Article, "日志")
+                                Icon(Icons.Outlined.Article, "日志", modifier = Modifier.size(20.dp))
                             }
                         }
-                        IconButton(onClick = { showSettings = true }) {
-                            Icon(Icons.Default.Settings, "设置")
+                        Spacer(Modifier.width(4.dp))
+                        FilledTonalIconButton(
+                            onClick = { showSettings = true },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
+                            Icon(Icons.Outlined.Settings, "设置", modifier = Modifier.size(20.dp))
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-
-                // 搜索栏和模式切换固定在顶部
-                Surface(
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(bottom = 8.dp)) {
-                        SearchModeTabs(
-                            current = searchMode,
-                            onSelect = {
-                                viewModel.onSearchModeChange(it)
-                                focusManager.clearFocus()
-                            }
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        SearchBar(
-                            keyword = searchKeyword,
-                            onKeywordChange = { viewModel.onSearchKeywordChange(it) },
-                            onSearch = {
-                                focusManager.clearFocus()
-                                viewModel.performSearch()
-                            },
-                            onClear = { viewModel.onSearchKeywordChange("") },
-                            isSearching = isSearching,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
                     }
+
+                    // 搜索栏
+                    SearchBar(
+                        keyword = searchKeyword,
+                        onKeywordChange = { viewModel.onSearchKeywordChange(it) },
+                        onSearch = {
+                            focusManager.clearFocus()
+                            viewModel.performSearch()
+                        },
+                        onClear = { viewModel.onSearchKeywordChange("") },
+                        isSearching = isSearching,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
                 }
             }
         },
         bottomBar = {
-            if (isDownloading) {
-                DownloadStatusBar(
-                    progress = downloadProgress,
-                    statusText = downloadStatusText
-                )
+            Column {
+                // 下载进度条
+                AnimatedVisibility(
+                    visible = isDownloading,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    DownloadStatusBar(
+                        progress = downloadProgress,
+                        statusText = downloadStatusText
+                    )
+                }
+                // 底部导航栏
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 0.dp
+                ) {
+                    val modes = listOf(
+                        Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
+                        Triple(SearchMode.ALL_CATEGORIES, "全部分类", Icons.Outlined.Category),
+                        Triple(SearchMode.FILE_SEARCH, "文件搜索", Icons.Outlined.FindInPage),
+                        Triple(SearchMode.PORTRAIT, "立绘", Icons.Outlined.Image)
+                    )
+                    modes.forEach { (mode, label, icon) ->
+                        NavigationBarItem(
+                            selected = searchMode == mode,
+                            onClick = {
+                                viewModel.onSearchModeChange(mode)
+                                focusManager.clearFocus()
+                            },
+                            icon = {
+                                Icon(
+                                    if (searchMode == mode) when (mode) {
+                                        SearchMode.VOICE_ONLY -> Icons.Default.RecordVoiceOver
+                                        SearchMode.ALL_CATEGORIES -> Icons.Default.Category
+                                        SearchMode.FILE_SEARCH -> Icons.Default.FindInPage
+                                        SearchMode.PORTRAIT -> Icons.Default.Image
+                                    } else icon,
+                                    contentDescription = label
+                                )
+                            },
+                            label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                            alwaysShowLabel = true
+                        )
+                    }
+                }
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -184,6 +229,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 SearchMode.PORTRAIT -> {
                     PortraitGrid(
                         characters = portraitCharacters,
+                        characterAvatars = characterAvatars,
                         hasSearched = hasSearched,
                         onSelectCharacter = { viewModel.onSelectPortraitCharacter(it) }
                     )
@@ -212,7 +258,8 @@ fun MainScreen(viewModel: MainViewModel) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.clearSelectedPortraitCharacter() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             tonalElevation = 0.dp
         ) {
             PortraitDetailContent(
@@ -231,7 +278,9 @@ fun MainScreen(viewModel: MainViewModel) {
     if (selectedGroup != null) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.clearSelectedGroup() },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         ) {
             CategoryDetailContent(
                 group = selectedGroup!!,
@@ -251,42 +300,6 @@ fun MainScreen(viewModel: MainViewModel) {
 // --- Components ---
 
 @Composable
-fun SearchModeTabs(current: SearchMode, onSelect: (SearchMode) -> Unit) {
-    val modes = listOf(
-        SearchMode.VOICE_ONLY to "语音",
-        SearchMode.ALL_CATEGORIES to "全部分类",
-        SearchMode.FILE_SEARCH to "文件搜索",
-        SearchMode.PORTRAIT to "立绘"
-    )
-    val selectedIndex = modes.indexOfFirst { it.first == current }.takeIf { it >= 0 } ?: 0
-
-    ScrollableTabRow(
-        selectedTabIndex = selectedIndex,
-        edgePadding = 16.dp,
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.primary,
-        indicator = { tabPositions ->
-            if (selectedIndex < tabPositions.size) {
-                TabRowDefaults.SecondaryIndicator(
-                    Modifier.tabIndicatorOffset(tabPositions[selectedIndex]),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        },
-        divider = {}
-    ) {
-        modes.forEach { (mode, label) ->
-            Tab(
-                selected = current == mode,
-                onClick = { onSelect(mode) },
-                text = { Text(label, style = MaterialTheme.typography.labelLarge) },
-                unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
 fun SearchBar(
     keyword: String,
     onKeywordChange: (String) -> Unit,
@@ -295,21 +308,38 @@ fun SearchBar(
     isSearching: Boolean,
     modifier: Modifier = Modifier
 ) {
-    OutlinedTextField(
+    TextField(
         value = keyword,
         onValueChange = onKeywordChange,
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-            focusedBorderColor = MaterialTheme.colorScheme.primary
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = TextFieldDefaults.colors(
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            unfocusedIndicatorColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent
         ),
-        placeholder = { Text("搜索角色名称...") },
+        placeholder = {
+            Text(
+                "搜索角色名称...",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
         leadingIcon = {
             if (isSearching) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(
+                    Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
             } else {
-                Icon(Icons.Default.Search, null)
+                Icon(
+                    Icons.Default.Search, null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         trailingIcon = {
@@ -328,44 +358,74 @@ fun SearchBar(
 @Composable
 fun PortraitGrid(
     characters: List<String>,
+    characterAvatars: Map<String, String>,
     hasSearched: Boolean,
     onSelectCharacter: (String) -> Unit
 ) {
     if (characters.isEmpty()) {
-        EmptyState(if (hasSearched) "未找到该角色" else "输入关键词搜索立绘")
+        EmptyState(
+            icon = Icons.Outlined.Image,
+            message = if (hasSearched) "未找到该角色" else "输入关键词搜索立绘"
+        )
         return
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 100.dp),
+        columns = GridCells.Adaptive(minSize = 110.dp),
         contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
         items(characters) { name ->
-            ElevatedCard(
+            val avatarUrl = characterAvatars[name]
+            Card(
                 onClick = { onSelectCharacter(name) },
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                )
             ) {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    // 如果有头像可以在这里显示
-                    Text(
-                        text = name.firstOrNull()?.toString() ?: "?",
-                        style = MaterialTheme.typography.displayMedium,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    )
+                    if (avatarUrl != null) {
+                        AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = name,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.size(64.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = name.firstOrNull()?.toString() ?: "?",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         text = name,
                         style = MaterialTheme.typography.labelLarge,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(8.dp)
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }
@@ -408,7 +468,7 @@ fun PortraitDetailContent(
         }
 
         if (catalog == null || catalog.costumes.isEmpty()) {
-            EmptyState("该角色暂无立绘数据")
+            EmptyState(icon = Icons.Outlined.HideImage, message = "该角色暂无立绘数据")
             return
         }
 
@@ -471,12 +531,14 @@ fun PortraitDetailContent(
             onClick = onDownload,
             modifier = Modifier
                 .fillMaxWidth()
+                .height(56.dp)
                 .padding(horizontal = 24.dp),
-            enabled = !isDownloading
+            enabled = !isDownloading,
+            shape = RoundedCornerShape(28.dp)
         ) {
             Icon(Icons.Default.Download, null)
             Spacer(Modifier.width(8.dp))
-            Text("下载此装扮资产")
+            Text("下载此装扮资产", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -484,7 +546,7 @@ fun PortraitDetailContent(
 @Composable
 fun CostumeCard(costume: PortraitCostume) {
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxSize(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
@@ -503,22 +565,43 @@ fun CostumeCard(costume: PortraitCostume) {
                 )
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("无预览图", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Outlined.HideImage, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("无预览图", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 
-            // Info Badge
+            // Info Badge — pill style
+            val fileCount = costume.extraAssets.size + listOfNotNull(costume.illustration, costume.frontPreview, costume.backPreview).size
             Surface(
-                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.7f),
-                shape = RoundedCornerShape(topStart = 16.dp, bottomEnd = 16.dp),
-                modifier = Modifier.align(Alignment.BottomEnd)
+                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp)
             ) {
-                Text(
-                    text = "包含 ${costume.extraAssets.size + listOfNotNull(costume.illustration, costume.frontPreview, costume.backPreview).size} 个文件",
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Collections, null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.inverseOnSurface
+                    )
+                    Text(
+                        text = "$fileCount 个文件",
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
     }
@@ -532,7 +615,10 @@ fun CategoryGroupList(
     onSelectGroup: (WikiEngine.CharacterGroup) -> Unit
 ) {
     if (characterGroups.isEmpty()) {
-        EmptyState(if (hasSearched) "未找到相关角色" else "输入关键词搜索角色语音")
+        EmptyState(
+            icon = Icons.Outlined.RecordVoiceOver,
+            message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色语音"
+        )
         return
     }
 
@@ -552,15 +638,17 @@ fun GroupCard(
     avatarUrl: String?,
     onClick: () -> Unit
 ) {
-    ElevatedCard(
+    Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.elevatedCardElevation(2.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (avatarUrl != null) {
@@ -568,23 +656,24 @@ fun GroupCard(
                     model = avatarUrl,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape),
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(16.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    modifier = Modifier.size(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
-                    Text(
-                        text = group.characterName.take(1),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = group.characterName.take(1),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(16.dp))
@@ -594,13 +683,26 @@ fun GroupCard(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
+                Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "包含 ${group.subCategories.size} 个分类",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "${group.subCategories.size} 个分类",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.rotate(180f), tint = MaterialTheme.colorScheme.outline) // Right arrow
+            FilledTonalIconButton(
+                onClick = onClick,
+                modifier = Modifier.size(36.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack, null,
+                    modifier = Modifier.size(18.dp).rotate(180f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -621,27 +723,54 @@ fun CategoryDetailContent(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight(0.7f)
-            .padding(16.dp)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 16.dp)
         ) {
-            Text(
-                text = group.characterName,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = group.characterName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                if (subCategories.isNotEmpty()) {
+                    Text(
+                        text = "已选 ${checkedCategories.size}/${subCategories.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             if (isScanning) {
                 CircularProgressIndicator(Modifier.size(24.dp))
             }
         }
 
         if (!isScanning && subCategories.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                FilledTonalButton(onClick = onCheckAll, modifier = Modifier.weight(1f)) { Text("全选") }
-                OutlinedButton(onClick = onUncheckAll, modifier = Modifier.weight(1f)) { Text("清空") }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = onCheckAll,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.DoneAll, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("全选")
+                }
+                OutlinedButton(
+                    onClick = onUncheckAll,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.RemoveDone, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("清空")
+                }
             }
 
             LazyColumn(
@@ -667,11 +796,14 @@ fun CategoryDetailContent(
             Button(
                 onClick = onDownload,
                 enabled = !isDownloading && checkedCategories.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(28.dp)
             ) {
                 Icon(Icons.Default.Download, null)
                 Spacer(Modifier.width(8.dp))
-                Text("下载选中 (${checkedCategories.size})")
+                Text("下载选中 (${checkedCategories.size})", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -679,22 +811,28 @@ fun CategoryDetailContent(
 
 @Composable
 fun CategoryItem(name: String, checked: Boolean, isRoot: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { onCheckedChange(!checked) },
+        shape = RoundedCornerShape(12.dp),
+        color = if (checked)
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+        else
+            Color.Transparent
     ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Normal,
-            color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-        )
+        Row(
+            modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Normal,
+                color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
@@ -708,66 +846,169 @@ fun FileSearchList(
     onSelectAll: () -> Unit,
     onDownload: () -> Unit
 ) {
+    // 图片预览弹窗状态
+    var previewImage by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     if (results.isEmpty()) {
-        EmptyState(if (hasSearched) "未找到文件" else "按关键词搜索 Wiki 文件")
+        EmptyState(
+            icon = Icons.Outlined.FindInPage,
+            message = if (hasSearched) "未找到文件" else "按关键词搜索 Wiki 文件"
+        )
         return
     }
-    
-    // We need a state box to handle selection mode ideally, but simple list for now
+
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Result header
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Text("找到 ${results.size} 个文件", style = MaterialTheme.typography.labelLarge)
-            TextButton(onClick = onSelectAll) { Text("全选") }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "找到 ${results.size} 个文件",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FilledTonalButton(
+                    onClick = onSelectAll,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("全选", style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
-        
+
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(results) { (name, url) ->
-                FileItem(name, url, url in selectedUrls) { onToggle(url) }
+                FileItem(
+                    name = name,
+                    url = url,
+                    isSelected = url in selectedUrls,
+                    onToggle = { onToggle(url) },
+                    onPreview = { previewImage = Pair(name, url) }
+                )
             }
         }
 
-        if (selectedUrls.isNotEmpty()) {
-            Button(
-                onClick = onDownload,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                enabled = !isDownloading
+        // Download FAB bar
+        AnimatedVisibility(
+            visible = selectedUrls.isNotEmpty(),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("下载选中文件 (${selectedUrls.size})")
+                Button(
+                    onClick = onDownload,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .height(56.dp),
+                    enabled = !isDownloading,
+                    shape = RoundedCornerShape(28.dp)
+                ) {
+                    Icon(Icons.Default.Download, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("下载选中文件 (${selectedUrls.size})", style = MaterialTheme.typography.labelLarge)
+                }
             }
         }
+    }
+
+    // 图片预览弹窗
+    previewImage?.let { (name, url) ->
+        ImagePreviewDialog(
+            title = name,
+            imageUrl = url,
+            onDismiss = { previewImage = null }
+        )
     }
 }
 
 @Composable
-fun FileItem(name: String, url: String, isSelected: Boolean, onToggle: () -> Unit) {
-    val isImage = url.endsWith(".png") || url.endsWith(".jpg")
-    ElevatedCard(
+fun FileItem(
+    name: String,
+    url: String,
+    isSelected: Boolean,
+    onToggle: () -> Unit,
+    onPreview: () -> Unit
+) {
+    val isImage = url.lowercase().let {
+        it.endsWith(".png") || it.endsWith(".jpg") || it.endsWith(".jpeg") ||
+                it.endsWith(".webp") || it.endsWith(".gif")
+    }
+    Card(
         onClick = onToggle,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected)
+                MaterialTheme.colorScheme.secondaryContainer
+            else
+                MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             if (isImage) {
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                Box {
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onPreview() },
+                        contentScale = ContentScale.Crop
+                    )
+                    // 预览图标提示
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(18.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.6f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Default.ZoomIn, null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.inverseOnSurface
+                            )
+                        }
+                    }
+                }
             } else {
-                Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)), Alignment.Center) {
-                    Icon(Icons.Default.InsertDriveFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.InsertDriveFile, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -776,8 +1017,83 @@ fun FileItem(name: String, url: String, isSelected: Boolean, onToggle: () -> Uni
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                modifier = Modifier.weight(1f),
+                color = if (isSelected)
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                else
+                    MaterialTheme.colorScheme.onSurface
             )
+            if (isSelected) {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.Default.CheckCircle, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ImagePreviewDialog(
+    title: String,
+    imageUrl: String,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 0.dp
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalIconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                // Image
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = title,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
         }
     }
 }
@@ -785,25 +1101,60 @@ fun FileItem(name: String, url: String, isSelected: Boolean, onToggle: () -> Uni
 @Composable
 fun DownloadStatusBar(progress: Float, statusText: String) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        tonalElevation = 8.dp
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("下载中...", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "下载中",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                    )
+                }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = statusText,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -816,24 +1167,71 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            tonalElevation = 6.dp
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 0.dp
         ) {
-            Column(Modifier.padding(16.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("运行日志", style = MaterialTheme.typography.titleLarge)
-                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+            Column(Modifier.padding(20.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "运行日志",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    FilledTonalIconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
+                    }
                 }
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                LazyColumn(Modifier.weight(1f)) {
-                    items(logs.reversed()) { log ->
+                Spacer(Modifier.height(12.dp))
+
+                if (logs.isEmpty()) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = log,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            modifier = Modifier.padding(vertical = 2.dp),
-                            color = if (log.startsWith("[错误]")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                            "暂无日志",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
                         )
+                    }
+                } else {
+                    LazyColumn(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(logs.reversed()) { log ->
+                            val isError = log.startsWith("[错误]")
+                            Surface(
+                                color = if (isError)
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                                else
+                                    Color.Transparent,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = log,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        lineHeight = 18.sp
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -842,12 +1240,31 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun EmptyState(message: String) {
+fun EmptyState(
+    icon: ImageVector = Icons.Outlined.SearchOff,
+    message: String
+) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.outlineVariant)
+            Surface(
+                modifier = Modifier.size(80.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon, null,
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            }
             Spacer(Modifier.height(16.dp))
-            Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                message,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
