@@ -1,8 +1,12 @@
 package com.nekolaska.calabiyau
 
+import android.app.Application
+import android.media.MediaScannerConnection
 import android.os.Environment
-import androidx.lifecycle.ViewModel
+import android.webkit.MimeTypeMap
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.PortraitRepository
 import com.nekolaska.calabiyau.data.WikiEngine
 import portrait.CharacterPortraitCatalog
@@ -15,7 +19,7 @@ import java.io.File
 
 enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH, PORTRAIT }
 
-class MainViewModel : ViewModel() {
+class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _searchKeyword = MutableStateFlow("角色")
     val searchKeyword: StateFlow<String> = _searchKeyword.asStateFlow()
@@ -229,10 +233,7 @@ class MainViewModel : ViewModel() {
             _downloadStatusText.value = "准备下载..."
 
             try {
-                val baseDir = File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                    "CalabiYauVoice"
-                )
+                val baseDir = File(AppPrefs.savePath)
 
                 when (_searchMode.value) {
                     SearchMode.PORTRAIT -> {
@@ -263,13 +264,14 @@ class MainViewModel : ViewModel() {
                         WikiEngine.downloadSpecificFiles(
                             files = files,
                             saveDir = saveDir,
-                            maxConcurrency = _maxConcurrencyStr.value.toIntOrNull()?.coerceIn(1, 32) ?: 4,
+                            maxConcurrency = AppPrefs.maxConcurrency,
                             onLog = { addLog(it) },
                             onProgress = { current, total, name ->
                                 _downloadProgress.value = current.toFloat() / total
                                 _downloadStatusText.value = "[$current/$total] $name"
                             }
                         )
+                        scanMediaFiles(saveDir)
                         addLog("下载完成！保存至: ${saveDir.absolutePath}")
                     }
                     SearchMode.FILE_SEARCH -> {
@@ -284,13 +286,14 @@ class MainViewModel : ViewModel() {
                         WikiEngine.downloadSpecificFiles(
                             files = files,
                             saveDir = saveDir,
-                            maxConcurrency = _maxConcurrencyStr.value.toIntOrNull()?.coerceIn(1, 32) ?: 8,
+                            maxConcurrency = AppPrefs.maxConcurrency,
                             onLog = { addLog(it) },
                             onProgress = { current, total, name ->
                                 _downloadProgress.value = current.toFloat() / total
                                 _downloadStatusText.value = "[$current/$total] $name"
                             }
                         )
+                        scanMediaFiles(saveDir)
                         addLog("下载完成！保存至: ${saveDir.absolutePath}")
                     }
                     else -> {
@@ -312,7 +315,7 @@ class MainViewModel : ViewModel() {
                             WikiEngine.downloadSpecificFiles(
                                 files = files,
                                 saveDir = saveDir,
-                                maxConcurrency = _maxConcurrencyStr.value.toIntOrNull()?.coerceIn(1, 32) ?: 8,
+                                maxConcurrency = AppPrefs.maxConcurrency,
                                 onLog = { addLog(it) },
                                 onProgress = { current, total, name ->
                                     _downloadProgress.value = current.toFloat() / total
@@ -321,6 +324,7 @@ class MainViewModel : ViewModel() {
                             )
                             totalDownloaded += files.size
                         }
+                        scanMediaFiles(charDir)
                         addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")
                     }
                 }
@@ -335,5 +339,31 @@ class MainViewModel : ViewModel() {
 
     private fun addLog(msg: String) {
         _logs.value = _logs.value + msg
+    }
+
+    /**
+     * 扫描目录下的图片文件，通知系统媒体库更新（使其在相册中可见）。
+     */
+    private fun scanMediaFiles(dir: File) {
+        if (!dir.exists()) return
+        val imageExtensions = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp")
+        val imageFiles = dir.walkTopDown()
+            .filter { it.isFile && it.extension.lowercase() in imageExtensions }
+            .toList()
+        if (imageFiles.isEmpty()) return
+
+        val paths = imageFiles.map { it.absolutePath }.toTypedArray()
+        val mimeTypes = imageFiles.map { file ->
+            MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(file.extension.lowercase())
+                ?: "image/*"
+        }.toTypedArray()
+
+        MediaScannerConnection.scanFile(
+            getApplication(),
+            paths,
+            mimeTypes
+        ) { _, _ -> }
+        addLog("已通知系统媒体库更新 ${imageFiles.size} 张图片")
     }
 }
