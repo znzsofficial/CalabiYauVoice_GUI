@@ -71,6 +71,7 @@ kotlin {
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
             implementation("io.coil-kt.coil3:coil-compose:3.2.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
+            implementation("io.coil-kt.coil3:coil-gif:3.2.0")
         }
     }
 }

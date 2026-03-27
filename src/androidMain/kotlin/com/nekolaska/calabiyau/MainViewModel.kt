@@ -75,6 +75,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _characterAvatars = MutableStateFlow<Map<String, String>>(emptyMap())
     val characterAvatars: StateFlow<Map<String, String>> = _characterAvatars.asStateFlow()
 
+    // 分类文件选择对话框
+    private val _showFileDialog = MutableStateFlow(false)
+    val showFileDialog: StateFlow<Boolean> = _showFileDialog.asStateFlow()
+
+    private val _dialogCategoryName = MutableStateFlow("")
+    val dialogCategoryName: StateFlow<String> = _dialogCategoryName.asStateFlow()
+
+    private val _dialogFileList = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val dialogFileList: StateFlow<List<Pair<String, String>>> = _dialogFileList.asStateFlow()
+
+    private val _dialogIsLoading = MutableStateFlow(false)
+    val dialogIsLoading: StateFlow<Boolean> = _dialogIsLoading.asStateFlow()
+
+    private val _dialogSelectedUrls = MutableStateFlow<Set<String>>(emptySet())
+    val dialogSelectedUrls: StateFlow<Set<String>> = _dialogSelectedUrls.asStateFlow()
+
+    // 手动选择的文件映射 (分类名 -> 选中的文件列表)
+    private val _manualSelectionMap = MutableStateFlow<Map<String, List<Pair<String, String>>>>(emptyMap())
+    val manualSelectionMap: StateFlow<Map<String, List<Pair<String, String>>>> = _manualSelectionMap.asStateFlow()
+
     // 立绘相关状态
     private val _portraitCharacters = MutableStateFlow<List<String>>(emptyList())
     val portraitCharacters: StateFlow<List<String>> = _portraitCharacters.asStateFlow()
@@ -94,11 +114,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
     fun onSearchModeChange(mode: SearchMode) {
         _searchMode.value = mode
-        if (mode == SearchMode.PORTRAIT) {
-            _portraitCharacters.value = emptyList()
-            _selectedPortraitCharacter.value = null
-            _portraitCatalog.value = null
-            _selectedPortraitCostume.value = null
+        if (mode == SearchMode.FILE_SEARCH) {
+            // 文件搜索页：清空搜索栏，不主动搜索
+            _searchKeyword.value = ""
+            _fileSearchResults.value = emptyList()
+            _fileSearchSelectedUrls.value = emptySet()
+            _hasSearched.value = false
+        } else {
+            // 语音/分类/立绘页：设默认关键词"角色"并自动搜索
+            if (mode == SearchMode.PORTRAIT) {
+                _portraitCharacters.value = emptyList()
+                _selectedPortraitCharacter.value = null
+                _portraitCatalog.value = null
+                _selectedPortraitCostume.value = null
+            }
+            _searchKeyword.value = "角色"
+            performSearch()
         }
     }
     fun onMaxConcurrencyChange(value: String) { _maxConcurrencyStr.value = value.filter { it.isDigit() } }
@@ -198,6 +229,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkAllCategories() { _checkedCategories.value = _subCategories.value.toList() }
     fun uncheckAllCategories() { _checkedCategories.value = emptyList() }
+
+    // 分类文件选择对话框
+    fun openFileDialog(cat: String) {
+        _dialogCategoryName.value = cat
+        _dialogFileList.value = emptyList()
+        _dialogSelectedUrls.value = emptySet()
+        _showFileDialog.value = true
+        _dialogIsLoading.value = true
+        viewModelScope.launch {
+            try {
+                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                _dialogFileList.value = files
+                val manual = _manualSelectionMap.value[cat]
+                _dialogSelectedUrls.value = manual?.map { it.second }?.toSet()
+                    ?: files.map { it.second }.toSet()
+            } catch (e: Exception) {
+                addLog("加载分类文件失败: ${e.message}")
+            } finally {
+                _dialogIsLoading.value = false
+            }
+        }
+    }
+
+    fun closeFileDialog() { _showFileDialog.value = false }
+
+    fun toggleDialogFileSelection(url: String) {
+        val current = _dialogSelectedUrls.value.toMutableSet()
+        if (url in current) current.remove(url) else current.add(url)
+        _dialogSelectedUrls.value = current
+    }
+
+    fun selectAllDialogFiles() {
+        _dialogSelectedUrls.value = _dialogFileList.value.map { it.second }.toSet()
+    }
+
+    fun clearDialogSelection() {
+        _dialogSelectedUrls.value = emptySet()
+    }
+
+    fun confirmFileDialog() {
+        val cat = _dialogCategoryName.value
+        val selectedFiles = _dialogFileList.value.filter { it.second in _dialogSelectedUrls.value }
+        _showFileDialog.value = false
+
+        val newMap = _manualSelectionMap.value.toMutableMap()
+        newMap[cat] = selectedFiles
+        _manualSelectionMap.value = newMap
+
+        // 自动勾选该分类
+        val checked = _checkedCategories.value.toMutableList()
+        if (selectedFiles.isNotEmpty() && cat !in checked) {
+            checked.add(cat)
+            _checkedCategories.value = checked
+        }
+    }
 
     fun onSelectPortraitCharacter(characterName: String) {
         _selectedPortraitCharacter.value = characterName
@@ -308,7 +394,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val charDir = File(baseDir, WikiEngine.sanitizeFileName(group.characterName))
                         var totalDownloaded = 0
                         for (cat in cats) {
-                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                            val manual = _manualSelectionMap.value[cat]
+                            val files = if (manual != null) {
+                                addLog("[${cat.removePrefix("Category:").removePrefix("分类:")}] 使用手动选择 (${manual.size}项)")
+                                manual
+                            } else {
+                                WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                            }
                             if (files.isEmpty()) continue
                             val catName = WikiEngine.sanitizeFileName(cat.removePrefix("Category:").removePrefix("分类:"))
                             val saveDir = File(charDir, catName)
