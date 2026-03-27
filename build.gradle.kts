@@ -27,12 +27,12 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation("org.jetbrains.compose.foundation:foundation:1.10.1")
-            implementation("org.jetbrains.compose.ui:ui:1.10.1")
+            implementation("org.jetbrains.compose.foundation:foundation:1.10.3")
+            implementation("org.jetbrains.compose.ui:ui:1.10.3")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
             implementation("com.squareup.okhttp3:okhttp:5.3.2")
-            implementation("com.squareup.okio:okio:3.16.4")
+            implementation("com.squareup.okio:okio:3.17.0")
         }
 
         named("desktopMain").dependencies {
@@ -41,8 +41,8 @@ kotlin {
                 exclude(group = "org.jetbrains.compose.material3")
                 exclude(group = "org.jetbrains.compose.material3.adaptive")
             }
-            implementation("org.jetbrains.compose.foundation:foundation-desktop:1.10.1")
-            implementation("org.jetbrains.compose.ui:ui-desktop:1.10.1")
+            implementation("org.jetbrains.compose.foundation:foundation-desktop:1.10.3")
+            implementation("org.jetbrains.compose.ui:ui-desktop:1.10.3")
             implementation("io.github.compose-fluent:fluent:v0.1.0")
             implementation("io.github.compose-fluent:fluent-icons-extended:v0.1.0")
             implementation(fileTree("libs") {
@@ -50,7 +50,7 @@ kotlin {
             })
             implementation("net.java.dev.jna:jna-jpms:5.18.1")
             implementation("net.java.dev.jna:jna-platform-jpms:5.18.1")
-            implementation("com.formdev:flatlaf:3.7")
+            implementation("com.formdev:flatlaf:3.7.1")
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
             implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
             implementation("org.jflac:jflac-codec:1.5.2")
@@ -62,28 +62,28 @@ kotlin {
         }
 
         androidMain.dependencies {
-            implementation("androidx.activity:activity-compose:1.9.3")
-            implementation("androidx.compose.material3:material3:1.3.1")
-            implementation("androidx.compose.material:material-icons-extended:1.7.6")
-            implementation("androidx.compose.ui:ui-tooling-preview:1.7.6")
-            implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+            implementation("androidx.activity:activity-compose:1.13.0")
+            implementation("androidx.compose.material3:material3:1.4.0")
+            implementation("androidx.compose.material:material-icons-extended:1.7.8")
+            implementation("androidx.compose.ui:ui-tooling-preview:1.10.6")
+            implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
-            implementation("io.coil-kt.coil3:coil-compose:3.2.0")
-            implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
-            implementation("io.coil-kt.coil3:coil-gif:3.2.0")
+            implementation("io.coil-kt.coil3:coil-compose:3.4.0")
+            implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
+            implementation("io.coil-kt.coil3:coil-gif:3.4.0")
         }
     }
 }
 
 android {
     namespace = "com.nekolaska.calabiyau"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.nekolaska.calabiyau"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 13
         versionName = "1.3.0"
     }
