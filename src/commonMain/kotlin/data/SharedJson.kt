@@ -10,4 +10,3 @@ val SharedJson: Json = Json {
     ignoreUnknownKeys = true
     coerceInputValues = true
 }
-

@@ -16,4 +16,3 @@ fun isImageFile(name: String, url: String): Boolean =
 /** 根据文件名或 URL 后缀判断是否为音频文件 */
 fun isAudioFile(name: String, url: String): Boolean =
     name.fileExt() in AUDIO_EXTS || url.fileExt() in AUDIO_EXTS
-

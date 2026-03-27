@@ -143,7 +143,7 @@ object ImageLoader {
         } ?: return@withContext null
 
         try {
-            val response = jsonParser.decodeFromString<WikiEngine.WikiResponse>(jsonStr)
+            val response = jsonParser.decodeFromString<WikiResponse>(jsonStr)
             val realUrl = response.query?.pages?.values?.firstOrNull()
                 ?.imageinfo?.firstOrNull()?.url
             if (realUrl != null) avatarCache[characterName] = realUrl

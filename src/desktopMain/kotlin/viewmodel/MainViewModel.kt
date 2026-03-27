@@ -1,8 +1,10 @@
 package viewmodel
 
 import portrait.PortraitCostume
+import data.CharacterGroup
 import data.PortraitRepository
 import data.WikiEngine
+import data.sanitizeFileName
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import util.batchConvertAudioToWav
@@ -30,8 +32,8 @@ class MainViewModel(
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
-    private val _characterGroups = MutableStateFlow<List<WikiEngine.CharacterGroup>>(emptyList())
-    val characterGroups: StateFlow<List<WikiEngine.CharacterGroup>> = _characterGroups.asStateFlow()
+    private val _characterGroups = MutableStateFlow<List<CharacterGroup>>(emptyList())
+    val characterGroups: StateFlow<List<CharacterGroup>> = _characterGroups.asStateFlow()
 
     // 文件搜索模式结果
     private val _fileSearchResults = MutableStateFlow<List<Pair<String, String>>>(emptyList())
@@ -58,8 +60,8 @@ class MainViewModel(
     // =========================================================
     // 角色选择 & 分类树状态
     // =========================================================
-    private val _selectedGroup = MutableStateFlow<WikiEngine.CharacterGroup?>(null)
-    val selectedGroup: StateFlow<WikiEngine.CharacterGroup?> = _selectedGroup.asStateFlow()
+    private val _selectedGroup = MutableStateFlow<CharacterGroup?>(null)
+    val selectedGroup: StateFlow<CharacterGroup?> = _selectedGroup.asStateFlow()
 
     private val _subCategories = MutableStateFlow<List<String>>(emptyList())
     val subCategories: StateFlow<List<String>> = _subCategories.asStateFlow()
@@ -276,7 +278,7 @@ class MainViewModel(
     // =========================================================
     // 角色选择
     // =========================================================
-    fun onSelectGroup(group: WikiEngine.CharacterGroup) {
+    fun onSelectGroup(group: CharacterGroup) {
         if (_isDownloading.value) return
 
         scanJob?.cancel()
@@ -434,8 +436,8 @@ class MainViewModel(
                 return
             }
 
-            val targetDir = File(File(_savePath.value, "立绘"), WikiEngine.sanitizeFileName(charName))
-            val saveDir = File(targetDir, WikiEngine.sanitizeFileName(costume.name))
+            val targetDir = File(File(_savePath.value, "立绘"), sanitizeFileName(charName))
+            val saveDir = File(targetDir, sanitizeFileName(costume.name))
             val files = assets.map { it.title to it.url }
 
             scope.launch {
@@ -473,8 +475,8 @@ class MainViewModel(
 
         _isDownloading.value = true
         val folderName = if (isFileSearch) _searchKeyword.value
-            else WikiEngine.sanitizeFileName(_selectedGroup.value?.characterName ?: "Unknown")
-        val targetDir = File(_savePath.value, WikiEngine.sanitizeFileName(folderName))
+            else sanitizeFileName(_selectedGroup.value?.characterName ?: "Unknown")
+        val targetDir = File(_savePath.value, sanitizeFileName(folderName))
         val concurrency = _maxConcurrencyStr.value.toIntOrNull() ?: 16
 
         scope.launch {

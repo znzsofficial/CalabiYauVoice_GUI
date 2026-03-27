@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.PortraitRepository
 import com.nekolaska.calabiyau.data.WikiEngine
+import data.CharacterGroup
+import data.sanitizeFileName
 import portrait.CharacterPortraitCatalog
 import portrait.PortraitCostume
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,8 +32,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
-    private val _characterGroups = MutableStateFlow<List<WikiEngine.CharacterGroup>>(emptyList())
-    val characterGroups: StateFlow<List<WikiEngine.CharacterGroup>> = _characterGroups.asStateFlow()
+    private val _characterGroups = MutableStateFlow<List<CharacterGroup>>(emptyList())
+    val characterGroups: StateFlow<List<CharacterGroup>> = _characterGroups.asStateFlow()
 
     // 文件搜索结果
     private val _fileSearchResults = MutableStateFlow<List<Pair<String, String>>>(emptyList())
@@ -41,8 +43,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val fileSearchSelectedUrls: StateFlow<Set<String>> = _fileSearchSelectedUrls.asStateFlow()
 
     // 选中的角色组
-    private val _selectedGroup = MutableStateFlow<WikiEngine.CharacterGroup?>(null)
-    val selectedGroup: StateFlow<WikiEngine.CharacterGroup?> = _selectedGroup.asStateFlow()
+    private val _selectedGroup = MutableStateFlow<CharacterGroup?>(null)
+    val selectedGroup: StateFlow<CharacterGroup?> = _selectedGroup.asStateFlow()
 
     private val _subCategories = MutableStateFlow<List<String>>(emptyList())
     val subCategories: StateFlow<List<String>> = _subCategories.asStateFlow()
@@ -201,7 +203,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onSelectGroup(group: WikiEngine.CharacterGroup) {
+    fun onSelectGroup(group: CharacterGroup) {
         _selectedGroup.value = group
         _isScanningTree.value = true
         viewModelScope.launch {
@@ -343,9 +345,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val saveDir = File(
                             File(
                                 File(baseDir, "立绘"),
-                                WikiEngine.sanitizeFileName(characterName)
+                                sanitizeFileName(characterName)
                             ),
-                            WikiEngine.sanitizeFileName(costume.name)
+                            sanitizeFileName(costume.name)
                         )
                         addLog("开始下载 [${characterName}/${costume.name}] ${files.size} 个立绘...")
                         WikiEngine.downloadSpecificFiles(
@@ -391,7 +393,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         if (cats.isEmpty()) {
                             addLog("请至少勾选一个分类"); return@launch
                         }
-                        val charDir = File(baseDir, WikiEngine.sanitizeFileName(group.characterName))
+                        val charDir = File(baseDir, sanitizeFileName(group.characterName))
                         var totalDownloaded = 0
                         for (cat in cats) {
                             val manual = _manualSelectionMap.value[cat]
@@ -402,7 +404,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
                             }
                             if (files.isEmpty()) continue
-                            val catName = WikiEngine.sanitizeFileName(cat.removePrefix("Category:").removePrefix("分类:"))
+                            val catName = sanitizeFileName(cat.removePrefix("Category:").removePrefix("分类:"))
                             val saveDir = File(charDir, catName)
                             addLog("下载分类 [$catName]: ${files.size} 个文件")
                             WikiEngine.downloadSpecificFiles(

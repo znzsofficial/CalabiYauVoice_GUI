@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.nekolaska.calabiyau.MainViewModel
 import com.nekolaska.calabiyau.SearchMode
 import com.nekolaska.calabiyau.data.WikiEngine
+import data.CharacterGroup
 import kotlinx.coroutines.launch
 import portrait.CharacterPortraitCatalog
 import portrait.PortraitCostume
@@ -639,10 +640,10 @@ fun CostumeCard(costume: PortraitCostume) {
 
 @Composable
 fun CategoryGroupList(
-    characterGroups: List<WikiEngine.CharacterGroup>,
+    characterGroups: List<CharacterGroup>,
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
-    onSelectGroup: (WikiEngine.CharacterGroup) -> Unit
+    onSelectGroup: (CharacterGroup) -> Unit
 ) {
     if (characterGroups.isEmpty()) {
         EmptyState(
@@ -664,7 +665,7 @@ fun CategoryGroupList(
 
 @Composable
 fun GroupCard(
-    group: WikiEngine.CharacterGroup,
+    group: CharacterGroup,
     avatarUrl: String?,
     onClick: () -> Unit
 ) {
@@ -739,7 +740,7 @@ fun GroupCard(
 
 @Composable
 fun CategoryDetailContent(
-    group: WikiEngine.CharacterGroup,
+    group: CharacterGroup,
     subCategories: List<String>,
     checkedCategories: List<String>,
     isScanning: Boolean,
