@@ -18,6 +18,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material.icons.outlined.ZoomOut
 import androidx.compose.material3.*
@@ -34,6 +36,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -50,12 +53,6 @@ private val WIKI_DOMAINS = listOf(
     "line.biligame.net",
     "passport.bilibili.com",
     "api.bilibili.com"
-)
-
-/** 登录完成后会跳转到这些页面，应拦截并返回 Wiki 首页 */
-private val LOGIN_REDIRECT_HOSTS = listOf(
-    "www.bilibili.com",
-    "m.bilibili.com"
 )
 
 /** 需要直接拦截（不加载也不打开外部浏览器）的域名 */
@@ -123,6 +120,14 @@ fun WikiWebViewScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
     var textZoomLevel by remember { mutableIntStateOf(100) }
+
+    // 网络错误状态
+    var hasNetworkError by remember { mutableStateOf(false) }
+    var networkErrorUrl by remember { mutableStateOf<String?>(null) }
+
+    // 登录提示 Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    var hasShownLoginHint by remember { mutableStateOf(false) }
 
     // 长按图片保存
     var longPressImageUrl by remember { mutableStateOf<String?>(null) }
@@ -345,21 +350,47 @@ fun WikiWebViewScreen(
                 }
             }
         },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    actionColor = MaterialTheme.colorScheme.inversePrimary
+                )
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        AndroidView(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+        ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 createWikiWebView(
                     context = ctx,
                     onPageStarted = { url ->
                         currentUrl = url
                         isLoading = true
+                        // about:blank 是网络错误时主动加载的空白页，不应重置错误状态
+                        if (url != "about:blank") {
+                            hasNetworkError = false
+                        }
                     },
                     onPageFinished = { url ->
                         currentUrl = url
+                        isLoading = false
+                    },
+                    onPassportDetected = {
+                        hasShownLoginHint = true
+                    },
+                    onNetworkError = { url ->
+                        hasNetworkError = true
+                        networkErrorUrl = url
                         isLoading = false
                     },
                     onTitleChanged = { title ->
@@ -406,7 +437,84 @@ fun WikiWebViewScreen(
             },
             update = { /* WebView 状态已通过回调管理 */ }
         )
+
+        // 网络错误覆盖层
+        AnimatedVisibility(
+            visible = hasNetworkError,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Surface(
+                        modifier = Modifier.size(96.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Outlined.WifiOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        "网络连接失败",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "无法加载页面，请检查网络连接后重试",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    FilledTonalButton(
+                        onClick = {
+                            hasNetworkError = false
+                            val urlToLoad = networkErrorUrl ?: WIKI_HOME_URL
+                            webView?.loadUrl(urlToLoad)
+                        }
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("重新加载")
+                    }
+                }
+            }
+        }
+        } // Box
     }
+
+    // ── 登录后提示回到首页 ──
+    LaunchedEffect(hasShownLoginHint) {
+        if (hasShownLoginHint) {
+            val result = snackbarHostState.showSnackbar(
+                message = "登录完成后，请点击返回 Wiki 首页",
+                actionLabel = "回到首页",
+                duration = SnackbarDuration.Indefinite
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                webView?.loadUrl(WIKI_HOME_URL)
+            }
+            hasShownLoginHint = false
+        }
+    }
+
     // ── 长按图片保存对话框 ──
     if (longPressImageUrl != null) {
         val imageUrl = longPressImageUrl!!
@@ -465,6 +573,8 @@ private fun createWikiWebView(
     onTitleChanged: (String) -> Unit,
     onProgressChanged: (Int) -> Unit,
     onNavigationChanged: (canGoBack: Boolean, canGoForward: Boolean) -> Unit,
+    onNetworkError: (String) -> Unit = {},
+    onPassportDetected: () -> Unit = {},
     onFileChooser: (ValueCallback<Array<Uri>>) -> Boolean
 ): WebView {
     // 确保 Cookie 持久化
@@ -612,11 +722,19 @@ private fun createWikiWebView(
 
         // ── WebViewClient ──
         webViewClient = object : WebViewClient() {
+            private var passportHintShown = false
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 url?.let {
                     onPageStarted(it)
                     view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
+                }
+                // 检测进入登录页，弹出提示
+                if (url != null && Uri.parse(url).host.equals("passport.bilibili.com", ignoreCase = true)
+                    && !passportHintShown) {
+                    passportHintShown = true
+                    onPassportDetected()
                 }
             }
 
@@ -654,12 +772,6 @@ private fun createWikiWebView(
                     return true
                 }
 
-                // 登录成功后跳转到 B站主页 → 拦截并返回 Wiki 首页
-                if (LOGIN_REDIRECT_HOSTS.any { host.equals(it, ignoreCase = true) }) {
-                    view?.loadUrl(WIKI_HOME_URL)
-                    return true
-                }
-
                 // Wiki 域名白名单内的链接在 WebView 中打开
                 if (WIKI_DOMAINS.any { host.endsWith(it) }) {
                     return false // 交给 WebView 处理
@@ -670,6 +782,31 @@ private fun createWikiWebView(
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                 } catch (_: Exception) { }
                 return true
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                // 仅处理主框架的错误（非子资源）
+                if (request?.isForMainFrame == true) {
+                    val errorCode = error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
+                    // 网络相关错误码
+                    if (errorCode == WebViewClient.ERROR_HOST_LOOKUP ||
+                        errorCode == WebViewClient.ERROR_CONNECT ||
+                        errorCode == WebViewClient.ERROR_TIMEOUT ||
+                        errorCode == WebViewClient.ERROR_IO ||
+                        errorCode == WebViewClient.ERROR_UNKNOWN
+                    ) {
+                        val failedUrl = request?.url?.toString() ?: WIKI_HOME_URL
+                        onNetworkError(failedUrl)
+                        // 阻止 WebView 显示默认错误页
+                        view?.stopLoading()
+                        view?.loadUrl("about:blank")
+                    }
+                }
             }
         }
 

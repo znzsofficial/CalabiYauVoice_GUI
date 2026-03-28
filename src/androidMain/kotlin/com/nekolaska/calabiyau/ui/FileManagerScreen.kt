@@ -68,9 +68,20 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
     var galleryInitialIndex by remember { mutableIntStateOf(0) }
     var showGallery by remember { mutableStateOf(false) }
 
+    // ── 多选模式状态 ──
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedFiles by remember { mutableStateOf<Set<String>>(emptySet()) } // 用绝对路径作 key
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
+
     // 离开文件管理器时停止音频播放
     DisposableEffect(Unit) {
         onDispose { AudioPlayerManager.stop() }
+    }
+
+    // 切换目录时退出多选模式
+    LaunchedEffect(currentDir) {
+        isSelectionMode = false
+        selectedFiles = emptySet()
     }
 
     // 加载当前目录文件列表
@@ -86,52 +97,121 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
         isLoading = false
     }
 
-    // 返回键处理：在子目录时返回上级，在根目录时退出
+    // 返回键处理：多选模式下先退出多选，子目录时返回上级，在根目录时退出
     val isAtRoot = currentDir.absolutePath == File(rootPath).absolutePath
-    BackHandler(enabled = !isAtRoot) {
+    BackHandler(enabled = isSelectionMode) {
+        isSelectionMode = false
+        selectedFiles = emptySet()
+    }
+    BackHandler(enabled = !isAtRoot && !isSelectionMode) {
         currentDir = currentDir.parentFile ?: currentDir
+    }
+
+    // 多选模式下选中的文件对象列表
+    val selectedFileObjects by remember(selectedFiles, files) {
+        derivedStateOf {
+            files.filter { it.absolutePath in selectedFiles }
+        }
     }
 
     Scaffold(
         topBar = {
             Surface(
-                color = MaterialTheme.colorScheme.surface,
+                color = if (isSelectionMode) MaterialTheme.colorScheme.surfaceContainerHigh
+                        else MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = {
-                            if (!isAtRoot) {
-                                currentDir = currentDir.parentFile ?: currentDir
-                            } else {
-                                onBack()
+                    if (isSelectionMode) {
+                        // ── 多选模式顶栏 ──
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = {
+                                isSelectionMode = false
+                                selectedFiles = emptySet()
+                            }) {
+                                Icon(Icons.Default.Close, "退出多选")
                             }
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = if (isAtRoot) "文件管理" else currentDir.name,
+                                text = "已选 ${selectedFiles.size} 项",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                modifier = Modifier.weight(1f)
                             )
-                            Text(
-                                text = "${files.size} 项" + if (!isAtRoot) " · ${
-                                    currentDir.absolutePath.removePrefix(rootPath).trimStart('/')
-                                }" else "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            // 全选 / 取消全选
+                            val allSelected = selectedFiles.size == files.size && files.isNotEmpty()
+                            IconButton(onClick = {
+                                selectedFiles = if (allSelected) emptySet()
+                                    else files.map { it.absolutePath }.toSet()
+                            }) {
+                                Icon(
+                                    if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                                    if (allSelected) "取消全选" else "全选"
+                                )
+                            }
+                            // 批量分享（仅文件，不含文件夹）
+                            val shareableCount = selectedFileObjects.count { it.isFile }
+                            IconButton(
+                                onClick = { shareFiles(context, selectedFileObjects.filter { it.isFile }) },
+                                enabled = shareableCount > 0
+                            ) {
+                                Icon(Icons.Outlined.Share, "批量分享")
+                            }
+                            // 批量删除
+                            IconButton(
+                                onClick = { showBatchDeleteDialog = true },
+                                enabled = selectedFiles.isNotEmpty()
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Delete, "批量删除",
+                                    tint = if (selectedFiles.isNotEmpty())
+                                        MaterialTheme.colorScheme.error
+                                    else
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                )
+                            }
+                        }
+                    } else {
+                        // ── 普通模式顶栏 ──
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = {
+                                if (!isAtRoot) {
+                                    currentDir = currentDir.parentFile ?: currentDir
+                                } else {
+                                    onBack()
+                                }
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isAtRoot) "文件管理" else currentDir.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${files.size} 项" + if (!isAtRoot) " · ${
+                                        currentDir.absolutePath.removePrefix(rootPath).trimStart('/')
+                                    }" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -181,23 +261,46 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         items(files, key = { it.absolutePath }) { file ->
+                            val isSelected = file.absolutePath in selectedFiles
                             FileListItem(
                                 file = file,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = isSelected,
                                 onClick = {
-                                    if (file.isDirectory) {
-                                        currentDir = file
-                                    } else if (file.isImageFile()) {
-                                        val images = files.filter { it.isImageFile() }
-                                        galleryImages = images
-                                        galleryInitialIndex = images.indexOf(file).coerceAtLeast(0)
-                                        showGallery = true
-                                    } else if (file.isAudioFile()) {
-                                        AudioPlayerManager.play(file.absolutePath)
+                                    if (isSelectionMode) {
+                                        // 多选模式下：点击切换选中
+                                        selectedFiles = if (isSelected)
+                                            selectedFiles - file.absolutePath
+                                        else
+                                            selectedFiles + file.absolutePath
                                     } else {
-                                        openFile(context, file)
+                                        if (file.isDirectory) {
+                                            currentDir = file
+                                        } else if (file.isImageFile()) {
+                                            val images = files.filter { it.isImageFile() }
+                                            galleryImages = images
+                                            galleryInitialIndex = images.indexOf(file).coerceAtLeast(0)
+                                            showGallery = true
+                                        } else if (file.isAudioFile()) {
+                                            AudioPlayerManager.play(file.absolutePath)
+                                        } else {
+                                            openFile(context, file)
+                                        }
                                     }
                                 },
-                                onLongClick = { selectedFile = file }
+                                onLongClick = {
+                                    if (!isSelectionMode) {
+                                        // 长按进入多选模式并选中当前项
+                                        isSelectionMode = true
+                                        selectedFiles = setOf(file.absolutePath)
+                                    } else {
+                                        // 已在多选模式：切换选中
+                                        selectedFiles = if (isSelected)
+                                            selectedFiles - file.absolutePath
+                                        else
+                                            selectedFiles + file.absolutePath
+                                    }
+                                }
                             )
                         }
                     }
@@ -414,6 +517,63 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
         )
     }
 
+    // ── 批量删除确认对话框 ──
+    if (showBatchDeleteDialog && selectedFiles.isNotEmpty()) {
+        val count = selectedFiles.size
+        val folderCount = selectedFileObjects.count { it.isDirectory }
+        val fileCount = count - folderCount
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("批量删除确认") },
+            text = {
+                Text(
+                    buildString {
+                        append("确定要删除选中的 $count 项")
+                        val parts = mutableListOf<String>()
+                        if (folderCount > 0) parts.add("$folderCount 个文件夹")
+                        if (fileCount > 0) parts.add("$fileCount 个文件")
+                        if (parts.isNotEmpty()) append("（${parts.joinToString("、")}）")
+                        append("吗？")
+                        if (folderCount > 0) append("\n\n⚠️ 文件夹将连同其中所有内容一起删除！")
+                    }
+                )
+            },
+            shape = RoundedCornerShape(28.dp),
+            confirmButton = {
+                FilledTonalButton(
+                    onClick = {
+                        showBatchDeleteDialog = false
+                        val toDelete = selectedFileObjects.toList()
+                        isSelectionMode = false
+                        selectedFiles = emptySet()
+                        scope.launch {
+                            var successCount = 0
+                            var failCount = 0
+                            withContext(Dispatchers.IO) {
+                                toDelete.forEach { file ->
+                                    if (forceDelete(file)) successCount++ else failCount++
+                                }
+                            }
+                            val msg = buildString {
+                                append("已删除 $successCount 项")
+                                if (failCount > 0) append("，$failCount 项失败")
+                            }
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            refreshCounter++
+                        }
+                    },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) { Text("删除 $count 项") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
     // ── 图片画廊预览对话框（支持左右滑动） ──
     if (showGallery && galleryImages.isNotEmpty()) {
         val pagerState = rememberPagerState(
@@ -506,6 +666,8 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
 @Composable
 private fun FileListItem(
     file: File,
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -517,6 +679,12 @@ private fun FileListItem(
         }
     }
 
+    val backgroundColor = when {
+        isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        isThisPlaying -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        else -> MaterialTheme.colorScheme.surface
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -525,16 +693,20 @@ private fun FileListItem(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        color = if (isThisPlaying)
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        else
-            MaterialTheme.colorScheme.surface
+        color = backgroundColor
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (isAudio) {
+            // 多选模式显示勾选框
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.size(44.dp)
+                )
+            } else if (isAudio) {
                 AudioPlayButton(
                     source = file.absolutePath,
                     size = 44
@@ -567,12 +739,15 @@ private fun FileListItem(
                     maxLines = 1
                 )
             }
-            IconButton(onClick = onLongClick, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    Icons.Default.MoreVert, "操作",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // 多选模式下隐藏更多操作按钮
+            if (!isSelectionMode) {
+                IconButton(onClick = onLongClick, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Default.MoreVert, "操作",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -746,6 +921,31 @@ private fun shareFile(context: Context, file: File) {
             Intent(Intent.ACTION_SEND).apply {
                 type = getMimeType(file)
                 putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            },
+            null
+        )
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, "分享失败", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun shareFiles(context: Context, fileList: List<File>) {
+    if (fileList.isEmpty()) return
+    if (fileList.size == 1) {
+        shareFile(context, fileList.first())
+        return
+    }
+    try {
+        val uris = ArrayList<Uri>()
+        for (f in fileList) {
+            uris.add(getFileUri(context, f))
+        }
+        val intent = Intent.createChooser(
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "*/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             },
             null

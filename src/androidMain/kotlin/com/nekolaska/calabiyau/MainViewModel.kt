@@ -6,13 +6,19 @@ import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.NetworkMonitor
 import com.nekolaska.calabiyau.data.PortraitRepository
 import com.nekolaska.calabiyau.data.WikiEngine
 import data.CharacterGroup
 import data.sanitizeFileName
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -65,6 +71,19 @@ data class DownloadRecord(
 enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH, PORTRAIT }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    // ========== 网络状态 ==========
+    val isNetworkAvailable: StateFlow<Boolean> = NetworkMonitor
+        .observeNetworkState(application)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /** 一次性错误事件（Snackbar 消费后即消失） */
+    private val _errorEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val errorEvent: SharedFlow<String> = _errorEvent.asSharedFlow()
+
+    /** 最近一次搜索是否因网络问题失败 */
+    private val _searchError = MutableStateFlow<String?>(null)
+    val searchError: StateFlow<String?> = _searchError.asStateFlow()
 
     private val _searchKeyword = MutableStateFlow("角色")
     val searchKeyword: StateFlow<String> = _searchKeyword.asStateFlow()
@@ -296,6 +315,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            // 预先检查网络
+            if (!isNetworkAvailable.value) {
+                _searchError.value = "无网络连接，请检查网络后重试"
+                _errorEvent.tryEmit("无网络连接，请检查网络后重试")
+                addLog("[错误] 搜索失败: 无网络连接")
+                _isSearching.value = false
+                _hasSearched.value = true
+                return@launch
+            }
+            _searchError.value = null
+
             try {
                 when (_searchMode.value) {
                     SearchMode.VOICE_ONLY -> {
@@ -326,7 +356,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         addLog("搜索完成，共找到 ${results.size} 个文件")
                     }
                 }
+                _searchError.value = null
             } catch (e: Exception) {
+                val msg = if (!isNetworkAvailable.value) "网络连接失败" else "搜索失败: ${e.message}"
+                _searchError.value = msg
+                _errorEvent.tryEmit(msg)
                 addLog("[错误] 搜索失败: ${e.message}")
             } finally {
                 _isSearching.value = false
@@ -347,6 +381,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _subCategories.value = cats
                 _checkedCategories.value = cats.toList()
             } catch (e: Exception) {
+                val msg = if (!isNetworkAvailable.value) "网络连接失败，无法加载分类" else "扫描分类树失败: ${e.message}"
+                _errorEvent.tryEmit(msg)
                 addLog("[错误] 扫描分类树失败: ${e.message}")
             } finally {
                 _isScanningTree.value = false
@@ -451,6 +487,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startDownload() {
         if (_isDownloading.value) return
+        if (!isNetworkAvailable.value) {
+            _errorEvent.tryEmit("无网络连接，无法开始下载")
+            addLog("[错误] 下载失败: 无网络连接")
+            return
+        }
         viewModelScope.launch {
             _isDownloading.value = true
             _downloadProgress.value = 0f
@@ -580,6 +621,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } catch (e: Exception) {
+                val msg = if (!isNetworkAvailable.value) "网络连接失败，下载中断" else "下载失败: ${e.message}"
+                _errorEvent.tryEmit(msg)
                 addLog("[错误] 下载失败: ${e.message}")
                 addDownloadRecord(DownloadRecord(
                     name = "下载失败",
