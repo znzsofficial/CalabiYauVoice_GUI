@@ -53,6 +53,8 @@ import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import android.webkit.CookieManager
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.SegmentedButtonDefaults.Icon
 import com.nekolaska.calabiyau.DownloadRecord
 import com.nekolaska.calabiyau.MainViewModel
 import com.nekolaska.calabiyau.SearchMode
@@ -145,6 +147,13 @@ private fun AppDrawerContent(
     currentDestination: DrawerDestination,
     onDestinationSelected: (DrawerDestination) -> Unit
 ) {
+    // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
+    val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
+    var wikiUserInfo by remember { mutableStateOf<WikiUserApi.UserInfo?>(null) }
+    var isLoadingUserInfo by remember { mutableStateOf(false) }
+    var showUserInfoSheet by remember { mutableStateOf(false) }
+    val wikiCoroutineScope = rememberCoroutineScope()
+
     ModalDrawerSheet(
         drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -160,13 +169,6 @@ private fun AppDrawerContent(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
         )
-
-        // ── Wiki 用户信息（标题下方，导航项上方） ──
-        val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
-        var wikiUserInfo by remember { mutableStateOf<WikiUserApi.UserInfo?>(null) }
-        var isLoadingUserInfo by remember { mutableStateOf(false) }
-        var showUserInfoSheet by remember { mutableStateOf(false) }
-        val wikiCoroutineScope = rememberCoroutineScope()
 
         // 每次侧栏显示时刷新登录状态
         LaunchedEffect(currentDestination) {
@@ -558,13 +560,34 @@ private fun DownloaderScreen(
 
     val favorites by viewModel.favorites.collectAsState()
 
+    val isNetworkAvailable by viewModel.isNetworkAvailable.collectAsState()
+    val searchError by viewModel.searchError.collectAsState()
+
     val focusManager = LocalFocusManager.current
     var showLogs by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
     // 搜索历史
     var searchHistoryList by remember { mutableStateOf(AppPrefs.searchHistory) }
     // 每次搜索关键词变化时刷新历史
     LaunchedEffect(searchKeyword) {
         searchHistoryList = AppPrefs.searchHistory
+    }
+
+    // 收集错误事件并显示 Snackbar
+    LaunchedEffect(Unit) {
+        viewModel.errorEvent.collect { message ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "重试",
+                duration = SnackbarDuration.Short
+            ).let { result ->
+                if (result == SnackbarResult.ActionPerformed) {
+                    if (message.contains("下载")) viewModel.startDownload()
+                    else viewModel.performSearch()
+                }
+            }
+        }
     }
 
     // 处理返回键
@@ -720,9 +743,89 @@ private fun DownloaderScreen(
                 }
             }
         },
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    shape = RoundedCornerShape(12.dp),
+                    containerColor = MaterialTheme.colorScheme.inverseSurface,
+                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                    actionColor = MaterialTheme.colorScheme.inversePrimary
+                )
+            }
+        },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+            // 无网络横幅
+            AnimatedVisibility(
+                visible = !isNetworkAvailable,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.WifiOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            "当前无网络连接",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // 搜索失败提示横幅
+            AnimatedVisibility(
+                visible = searchError != null && isNetworkAvailable,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            searchError ?: "",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = { viewModel.performSearch() },
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text("重试", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (searchMode) {
                 SearchMode.FILE_SEARCH -> {
                     FileSearchList(
@@ -730,6 +833,8 @@ private fun DownloaderScreen(
                         selectedUrls = fileSearchSelectedUrls,
                         hasSearched = hasSearched,
                         isDownloading = isDownloading,
+                        searchError = searchError,
+                        onRetry = { viewModel.performSearch() },
                         onToggle = { viewModel.toggleFileSearchSelection(it) },
                         onSelectAll = { viewModel.selectAllFileSearchResults() },
                         onDownload = { viewModel.startDownload() }
@@ -741,6 +846,8 @@ private fun DownloaderScreen(
                         characterAvatars = characterAvatars,
                         hasSearched = hasSearched,
                         favorites = favorites,
+                        searchError = searchError,
+                        onRetry = { viewModel.performSearch() },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onSelectCharacter = { viewModel.onSelectPortraitCharacter(it) }
                     )
@@ -751,12 +858,15 @@ private fun DownloaderScreen(
                         characterAvatars = characterAvatars,
                         hasSearched = hasSearched,
                         favorites = favorites,
+                        searchError = searchError,
+                        onRetry = { viewModel.performSearch() },
                         onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onSelectGroup = { viewModel.onSelectGroup(it) }
                     )
                 }
             }
-        }
+            } // Box
+        } // Column
     }
 
     // --- Overlays / Sheets ---
@@ -891,13 +1001,17 @@ fun PortraitGrid(
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
     favorites: Set<String> = emptySet(),
+    searchError: String? = null,
+    onRetry: (() -> Unit)? = null,
     onToggleFavorite: (String) -> Unit = {},
     onSelectCharacter: (String) -> Unit
 ) {
     if (characters.isEmpty()) {
         EmptyState(
             icon = Icons.Outlined.Image,
-            message = if (hasSearched) "未找到该角色" else "输入关键词搜索立绘"
+            message = if (hasSearched) "未找到该角色" else "输入关键词搜索立绘",
+            errorMessage = if (hasSearched) searchError else null,
+            onRetry = onRetry
         )
         return
     }
@@ -1098,25 +1212,25 @@ fun PortraitDetailContent(
 
 @Composable
 fun CostumeCard(costume: PortraitCostume) {
+    // Collect all available images with labels
+    val allImages = remember(costume) {
+        buildList {
+            costume.illustration?.let { add("立绘" to it) }
+            costume.frontPreview?.let { add("正面预览" to it) }
+            costume.backPreview?.let { add("背面预览" to it) }
+            costume.extraAssets.forEachIndexed { i, asset ->
+                add("附加 ${i + 1}" to asset)
+            }
+        }
+    }
+
     Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxSize(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Box(Modifier.fillMaxSize()) {
-            // Priority: Illustration -> Front -> Back
-            val previewUrl = costume.illustration?.url
-                ?: costume.frontPreview?.url
-                ?: costume.backPreview?.url
-
-            if (previewUrl != null) {
-                AsyncImage(
-                    model = previewUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
+            if (allImages.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
@@ -1128,32 +1242,98 @@ fun CostumeCard(costume: PortraitCostume) {
                         Text("无预览图", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+            } else if (allImages.size == 1) {
+                // Single image — no pager needed
+                AsyncImage(
+                    model = allImages[0].second.url,
+                    contentDescription = allImages[0].first,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                // Multiple images — use nested pager
+                val imagePagerState = rememberPagerState(pageCount = { allImages.size })
+
+                HorizontalPager(
+                    state = imagePagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    val (_, asset) = allImages[page]
+                    AsyncImage(
+                        model = asset.url,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+
+                // Image label badge (top-start)
+                Surface(
+                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = allImages[imagePagerState.currentPage].first,
+                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+
+                // Page indicator dots (bottom-center)
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(allImages.size) { index ->
+                        val isSelected = imagePagerState.currentPage == index
+                        Box(
+                            modifier = Modifier
+                                .size(if (isSelected) 8.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isSelected)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                )
+                        )
+                    }
+                }
             }
 
-            // Info Badge — pill style
-            val fileCount = costume.extraAssets.size + listOfNotNull(costume.illustration, costume.frontPreview, costume.backPreview).size
-            Surface(
-                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+            // Info Badge — pill style (bottom-end)
+            val fileCount = allImages.size
+            if (fileCount > 0) {
+                Surface(
+                    color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(12.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.Collections, null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.inverseOnSurface
-                    )
-                    Text(
-                        text = "$fileCount 个文件",
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Collections, null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.inverseOnSurface
+                        )
+                        Text(
+                            text = "$fileCount 个文件",
+                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
         }
@@ -1166,13 +1346,17 @@ fun CategoryGroupList(
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
     favorites: Set<String> = emptySet(),
+    searchError: String? = null,
+    onRetry: (() -> Unit)? = null,
     onToggleFavorite: (String) -> Unit = {},
     onSelectGroup: (CharacterGroup) -> Unit
 ) {
     if (characterGroups.isEmpty()) {
         EmptyState(
             icon = Icons.Outlined.RecordVoiceOver,
-            message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色语音"
+            message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色语音",
+            errorMessage = if (hasSearched) searchError else null,
+            onRetry = onRetry
         )
         return
     }
@@ -1456,6 +1640,8 @@ fun FileSearchList(
     selectedUrls: Set<String>,
     hasSearched: Boolean,
     isDownloading: Boolean,
+    searchError: String? = null,
+    onRetry: (() -> Unit)? = null,
     onToggle: (String) -> Unit,
     onSelectAll: () -> Unit,
     onDownload: () -> Unit
@@ -1466,7 +1652,9 @@ fun FileSearchList(
     if (results.isEmpty()) {
         EmptyState(
             icon = Icons.Outlined.FindInPage,
-            message = if (hasSearched) "未找到文件" else "按关键词搜索 Wiki 文件"
+            message = if (hasSearched) "未找到文件" else "按关键词搜索 Wiki 文件",
+            errorMessage = if (hasSearched) searchError else null,
+            onRetry = onRetry
         )
         return
     }
@@ -2247,29 +2435,48 @@ private fun DownloadHistoryItem(record: DownloadRecord) {
 @Composable
 fun EmptyState(
     icon: ImageVector = Icons.Outlined.SearchOff,
-    message: String
+    message: String,
+    errorMessage: String? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            val isError = errorMessage != null
             Surface(
                 modifier = Modifier.size(80.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                color = if (isError) MaterialTheme.colorScheme.errorContainer
+                       else MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        icon, null,
+                        if (isError) Icons.Outlined.WifiOff else icon,
+                        null,
                         modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        tint = if (isError) MaterialTheme.colorScheme.onErrorContainer
+                               else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                message,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyLarge
+                if (isError) errorMessage!! else message,
+                color = if (isError) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center
             )
+            if (isError && onRetry != null) {
+                Spacer(Modifier.height(16.dp))
+                FilledTonalButton(onClick = onRetry) {
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("重试")
+                }
+            }
         }
     }
 }
