@@ -7,7 +7,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.NetworkMonitor
-import com.nekolaska.calabiyau.data.PortraitRepository
+import data.DownloadRecord
+import data.PortraitRepository
+import data.SearchMode
 import com.nekolaska.calabiyau.data.WikiEngine
 import data.CharacterGroup
 import data.sanitizeFileName
@@ -20,55 +22,19 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 import portrait.CharacterPortraitCatalog
 import portrait.PortraitCostume
 import java.io.File
 
-/**
- * 下载记录
- */
-data class DownloadRecord(
-    val name: String,        // 描述，如 "岚岚 / 默认" 或 "文件搜索"
-    val fileCount: Int,      // 文件数量
-    val timestamp: Long,     // 完成时间戳
-    val status: String,      // "success" | "error"
-    val savePath: String     // 保存路径
-) {
-    fun toJson(): JSONObject = JSONObject().apply {
-        put("name", name)
-        put("fileCount", fileCount)
-        put("timestamp", timestamp)
-        put("status", status)
-        put("savePath", savePath)
-    }
+/** Android 端下载记录持久化辅助（读写 AppPrefs） */
+private object DownloadRecordStore {
+    fun loadAll(): List<DownloadRecord> =
+        DownloadRecord.decodeFromJson(AppPrefs.downloadHistoryJson)
 
-    companion object {
-        fun fromJson(json: JSONObject): DownloadRecord = DownloadRecord(
-            name = json.optString("name", ""),
-            fileCount = json.optInt("fileCount", 0),
-            timestamp = json.optLong("timestamp", 0),
-            status = json.optString("status", "success"),
-            savePath = json.optString("savePath", "")
-        )
-
-        fun loadAll(): List<DownloadRecord> {
-            return try {
-                val arr = JSONArray(AppPrefs.downloadHistoryJson)
-                (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
-            } catch (_: Exception) { emptyList() }
-        }
-
-        fun saveAll(records: List<DownloadRecord>) {
-            val arr = JSONArray()
-            records.forEach { arr.put(it.toJson()) }
-            AppPrefs.downloadHistoryJson = arr.toString()
-        }
+    fun saveAll(records: List<DownloadRecord>) {
+        AppPrefs.downloadHistoryJson = DownloadRecord.encodeToJson(records)
     }
 }
-
-enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH, PORTRAIT }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -271,7 +237,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // 下载历史
-    private val _downloadHistory = MutableStateFlow(DownloadRecord.loadAll())
+    private val _downloadHistory = MutableStateFlow(DownloadRecordStore.loadAll())
     val downloadHistory: StateFlow<List<DownloadRecord>> = _downloadHistory.asStateFlow()
 
     private fun addDownloadRecord(record: DownloadRecord) {
@@ -279,12 +245,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         list.add(0, record) // 最新的在前
         if (list.size > 100) list.subList(100, list.size).clear()
         _downloadHistory.value = list
-        DownloadRecord.saveAll(list)
+        DownloadRecordStore.saveAll(list)
     }
 
     fun clearDownloadHistory() {
         _downloadHistory.value = emptyList()
-        DownloadRecord.saveAll(emptyList())
+        DownloadRecordStore.saveAll(emptyList())
     }
 
     fun performSearch() {

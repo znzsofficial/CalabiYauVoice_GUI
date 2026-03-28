@@ -48,7 +48,7 @@ import ui.components.*
 import ui.components.ComboBox
 import util.*
 import viewmodel.MainViewModel
-import viewmodel.SearchMode
+import data.SearchMode
 import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -299,7 +299,7 @@ fun NewDownloaderContent() {
                                 viewModel.selectAllFileSearchResults()
                                 true
                             }
-                            SearchMode.PORTRAIT_LIST -> false
+                            SearchMode.PORTRAIT -> false
                             else -> {
                                 viewModel.checkAllCategories()
                                 true
@@ -313,7 +313,7 @@ fun NewDownloaderContent() {
                                 viewModel.clearFileSearchSelection()
                                 true
                             }
-                            SearchMode.PORTRAIT_LIST -> false
+                            SearchMode.PORTRAIT -> false
                             else -> {
                                 viewModel.uncheckAllCategories()
                                 true
@@ -331,7 +331,7 @@ fun NewDownloaderContent() {
                     }
 
                     ctrl && keyEvent.key == Key.Two -> {
-                        viewModel.onSearchModeChange(SearchMode.PORTRAIT_LIST); true
+                        viewModel.onSearchModeChange(SearchMode.PORTRAIT); true
                     }
 
                     ctrl && keyEvent.key == Key.Three -> {
@@ -343,7 +343,7 @@ fun NewDownloaderContent() {
                     }
                     // ↑/↓ → 在左侧列表中导航
                     keyEvent.key == Key.DirectionUp && searchMode != SearchMode.FILE_SEARCH -> {
-                        if (searchMode == SearchMode.PORTRAIT_LIST) {
+                        if (searchMode == SearchMode.PORTRAIT) {
                             val current = selectedPortraitCharacter
                             val idx = portraitCharacters.indexOf(current)
                             if (idx > 0) {
@@ -363,7 +363,7 @@ fun NewDownloaderContent() {
                     }
 
                     keyEvent.key == Key.DirectionDown && searchMode != SearchMode.FILE_SEARCH -> {
-                        if (searchMode == SearchMode.PORTRAIT_LIST) {
+                        if (searchMode == SearchMode.PORTRAIT) {
                             val current = selectedPortraitCharacter
                             val idx = portraitCharacters.indexOf(current)
                             if (idx < portraitCharacters.size - 1 && idx >= 0) {
@@ -565,7 +565,7 @@ fun NewDownloaderContent() {
                 Column(
                     Modifier.padding(12.dp)
                 ) {
-                    Text(if (searchMode == SearchMode.PORTRAIT_LIST) "立绘角色" else "搜索列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(if (searchMode == SearchMode.PORTRAIT) "立绘角色" else "搜索列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(Modifier.height(12.dp))
                     // 搜索栏
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -608,8 +608,8 @@ fun NewDownloaderContent() {
                             icon = { Icon(Icons.Regular.MicSparkle, contentDescription = null) }
                         )
                         SelectorBarItem(
-                            selected = searchMode == SearchMode.PORTRAIT_LIST,
-                            onSelectedChange = { viewModel.onSearchModeChange(SearchMode.PORTRAIT_LIST) },
+                            selected = searchMode == SearchMode.PORTRAIT,
+                            onSelectedChange = { viewModel.onSearchModeChange(SearchMode.PORTRAIT) },
                             text = { Text("立绘") },
                             icon = { Icon(Icons.Regular.Person, contentDescription = null) }
                         )
@@ -703,7 +703,7 @@ fun NewDownloaderContent() {
                                 }
                             }
                         }
-                    } else if (searchMode == SearchMode.PORTRAIT_LIST) {
+                    } else if (searchMode == SearchMode.PORTRAIT) {
                         if (portraitCharacters.isEmpty() && !isSearching) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("未找到可预览角色", color = Color.Gray, fontSize = 12.sp)
@@ -777,7 +777,7 @@ fun NewDownloaderContent() {
                 }
 
                 // 首次使用提示
-                if (showCategoryHint && searchMode != SearchMode.PORTRAIT_LIST) {
+                if (showCategoryHint && searchMode != SearchMode.PORTRAIT) {
                     InfoBar(
                         modifier = Modifier.fillMaxWidth(),
                         title = { Text("提示") },
@@ -828,7 +828,7 @@ fun NewDownloaderContent() {
                                     }
                                 }
                             }
-                        } else if (searchMode == SearchMode.PORTRAIT_LIST) {
+                        } else if (searchMode == SearchMode.PORTRAIT) {
                             if (selectedPortraitCharacter == null) {
                                 EmptyPlaceholder(
                                     icon = Icons.Regular.CursorClick,
@@ -971,7 +971,7 @@ fun NewDownloaderContent() {
                     }
                 }
 
-                if (searchMode != SearchMode.PORTRAIT_LIST) {
+                if (searchMode != SearchMode.PORTRAIT) {
                     Spacer(Modifier.height(16.dp))
 
                     // 2. 配置与操作卡片

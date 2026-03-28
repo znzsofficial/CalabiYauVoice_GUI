@@ -22,16 +22,84 @@ import kotlin.random.Random
 
 object WikiEngine {
 
+    // UA 池：移动端浏览器配置，每次请求随机选取
+    private data class MobileBrowserProfile(
+        val userAgent: String,
+        val accept: String,
+        val acceptLanguage: String,
+        val secChUa: String? = null,          // Chromium 系专有
+        val secChUaMobile: String = "?1",     // 移动端标记
+        val secChUaPlatform: String? = null
+    )
+
+    private val MOBILE_PROFILES = listOf(
+        // Chrome 131 / Android 14 (Pixel)
+        MobileBrowserProfile(
+            userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8",
+            secChUa = "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"Android\""
+        ),
+        // Chrome 131 / Android 15 (Samsung)
+        MobileBrowserProfile(
+            userAgent = "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            secChUa = "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"Android\""
+        ),
+        // Chrome 131 / Android 14 (Xiaomi)
+        MobileBrowserProfile(
+            userAgent = "Mozilla/5.0 (Linux; Android 14; 23127PN0CC) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8",
+            secChUa = "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"Android\""
+        ),
+        // Edge 131 / Android 14
+        MobileBrowserProfile(
+            userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 EdgA/131.0.0.0",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            secChUa = "\"Microsoft Edge\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+            secChUaPlatform = "\"Android\""
+        ),
+        // Firefox 133 / Android
+        MobileBrowserProfile(
+            userAgent = "Mozilla/5.0 (Android 14; Mobile; rv:133.0) Gecko/133.0 Firefox/133.0",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            acceptLanguage = "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2"
+            // Firefox 不发送 sec-ch-ua 系列头
+        ),
+        // Samsung Internet 26 / Android 15
+        MobileBrowserProfile(
+            userAgent = "Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36",
+            accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            acceptLanguage = "zh-CN,zh;q=0.9,en;q=0.8",
+            secChUa = "\"Chromium\";v=\"122\", \"Not(A:Brand\";v=\"24\", \"Samsung Internet\";v=\"26\"",
+            secChUaPlatform = "\"Android\""
+        )
+    )
+
     val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor { chain ->
+            val profile = MOBILE_PROFILES.random()
             val req = chain.request().newBuilder()
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+                .header("User-Agent", profile.userAgent)
+                .header("Accept", profile.accept)
+                .header("Accept-Language", profile.acceptLanguage)
                 .header("Referer", "https://wiki.biligame.com/klbq/")
+                .apply {
+                    if (profile.secChUa != null) {
+                        header("Sec-CH-UA", profile.secChUa)
+                        header("Sec-CH-UA-Mobile", profile.secChUaMobile)
+                        header("Sec-CH-UA-Platform", profile.secChUaPlatform ?: "\"Android\"")
+                    }
+                }
                 .build()
             chain.proceed(req)
         }
