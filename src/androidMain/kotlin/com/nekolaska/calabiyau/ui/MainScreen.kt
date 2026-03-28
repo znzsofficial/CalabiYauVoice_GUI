@@ -309,7 +309,7 @@ private fun AppDrawerContent(
 
         // 底部版本信息
         Text(
-            text = "v1.3.0",
+            text = "v2.0.0",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)

@@ -154,6 +154,22 @@ class MainViewModel(
     private var scanJob: Job? = null
     private var portraitJob: Job? = null
 
+    // 每个模式缓存的搜索关键词，用于切换 tab 时恢复
+    private val cachedKeywords = mutableMapOf<SearchMode, String>(
+        SearchMode.VOICE_ONLY to "角色",
+        SearchMode.ALL_CATEGORIES to "角色",
+        SearchMode.PORTRAIT to "角色",
+        SearchMode.FILE_SEARCH to ""
+    )
+    // 记录哪些模式已经有搜索结果（无需再次自动搜索）
+    private val hasResultsCache = mutableSetOf<SearchMode>()
+
+    // 语音 / 分类 各自独立缓存搜索结果，切换 tab 时保存 & 恢复
+    private val cachedCharacterGroups = mutableMapOf<SearchMode, List<CharacterGroup>>()
+    private val cachedSelectedGroup = mutableMapOf<SearchMode, CharacterGroup?>()
+    private val cachedSubCategories = mutableMapOf<SearchMode, List<String>>()
+    private val cachedCheckedCategories = mutableMapOf<SearchMode, List<String>>()
+
     // =========================================================
     // 初始化
     // =========================================================
@@ -169,36 +185,87 @@ class MainViewModel(
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
 
     fun onSearchModeChange(mode: SearchMode) {
-        val changed = _searchMode.value != mode
+        val prev = _searchMode.value
+        if (prev == mode) return
+
+        // 先保存当前模式的关键词
+        cachedKeywords[prev] = _searchKeyword.value
+
+        // 保存语音/分类模式的搜索结果缓存
+        if (prev == SearchMode.VOICE_ONLY || prev == SearchMode.ALL_CATEGORIES) {
+            cachedCharacterGroups[prev] = _characterGroups.value
+            cachedSelectedGroup[prev] = _selectedGroup.value
+            cachedSubCategories[prev] = _subCategories.value
+            cachedCheckedCategories[prev] = _checkedCategories.value
+        }
+
         _searchMode.value = mode
-        if (changed && mode == SearchMode.PORTRAIT && _portraitCharacters.value.isEmpty()) {
+
+        if (mode == SearchMode.FILE_SEARCH) {
+            // 文件搜索页：恢复上次关键词，若无缓存结果则清空
+            _searchKeyword.value = cachedKeywords[mode] ?: ""
+            if (mode !in hasResultsCache) {
+                _fileSearchResults.value = emptyList()
+                _fileSearchSelectedUrls.value = emptySet()
+            }
+        } else if (mode == SearchMode.VOICE_ONLY || mode == SearchMode.ALL_CATEGORIES) {
+            // 语音/分类页：恢复各自独立的缓存
+            _searchKeyword.value = cachedKeywords[mode] ?: "角色"
+            if (mode in hasResultsCache) {
+                _characterGroups.value = cachedCharacterGroups[mode] ?: emptyList()
+                _selectedGroup.value = cachedSelectedGroup[mode]
+                _subCategories.value = cachedSubCategories[mode] ?: emptyList()
+                _checkedCategories.value = cachedCheckedCategories[mode] ?: emptyList()
+                return
+            }
+            performSearch()
+        } else {
+            // 立绘页
+            _searchKeyword.value = cachedKeywords[mode] ?: "角色"
+            if (mode in hasResultsCache) {
+                return
+            }
             performSearch()
         }
     }
 
     fun performSearch() {
         val mode = _searchMode.value
-        if (mode != SearchMode.PORTRAIT && _searchKeyword.value.isBlank()) return
+        val keyword = _searchKeyword.value.trim()
+        if (mode != SearchMode.PORTRAIT && keyword.isBlank()) return
 
         searchJob?.cancel()
         scanJob?.cancel()
         portraitJob?.cancel()
 
+        // 手动搜索时，清除当前模式的旧缓存标记
+        hasResultsCache.remove(mode)
+
         _isSearching.value = true
-        _selectedGroup.value = null
-        _characterGroups.value = emptyList()
-        _fileSearchResults.value = emptyList()
-        _fileSearchSelectedUrls.value = emptySet()
-        _portraitCharacters.value = emptyList()
-        _selectedPortraitCharacter.value = null
-        _portraitCostumes.value = emptyList()
-        _selectedPortraitCostumeKey.value = null
-        _isPortraitLoading.value = false
+
+        // 只清除当前模式相关的状态，不影响其他模式的缓存
+        when (mode) {
+            SearchMode.FILE_SEARCH -> {
+                _fileSearchResults.value = emptyList()
+                _fileSearchSelectedUrls.value = emptySet()
+            }
+            SearchMode.PORTRAIT -> {
+                _portraitCharacters.value = emptyList()
+                _selectedPortraitCharacter.value = null
+                _portraitCostumes.value = emptyList()
+                _selectedPortraitCostumeKey.value = null
+                _isPortraitLoading.value = false
+            }
+            else -> {
+                _selectedGroup.value = null
+                _characterGroups.value = emptyList()
+                _subCategories.value = emptyList()
+                _checkedCategories.value = emptyList()
+            }
+        }
 
         searchJob = scope.launch {
             try {
-                val keyword = _searchKeyword.value
-
                 when (mode) {
                     SearchMode.FILE_SEARCH -> {
                         addLog("正在搜索文件: $keyword …")
@@ -227,6 +294,9 @@ class MainViewModel(
                 addLog("搜索失败: ${e.message}")
             } finally {
                 _isSearching.value = false
+                // 标记当前模式已有结果缓存
+                hasResultsCache.add(mode)
+                cachedKeywords[mode] = keyword
             }
         }
     }
