@@ -57,3 +57,40 @@ object PortraitRepositoryCore {
         return remapped
     }
 }
+
+/**
+ * 立绘仓库统一门面 —— 双端共用。
+ *
+ * 各平台在启动时通过 [init] 注入 WikiEngine 的函数引用，
+ * 之后即可在任何地方直接调用 [searchCharacters] / [loadCharacterPortraitCatalog]。
+ */
+object PortraitRepository {
+
+    private lateinit var fetchFilesInCategory: suspend (String, Boolean) -> List<Pair<String, String>>
+    private lateinit var searchFilesFn: suspend (String, Boolean) -> List<Pair<String, String>>
+    private lateinit var getAllCharacterNames: suspend () -> List<String>
+
+    /**
+     * 初始化立绘仓库，注入平台特定的 WikiEngine 函数。
+     * 须在首次使用前调用一次（推荐在 Application / main 中调用）。
+     */
+    fun init(
+        fetchFilesInCategory: suspend (String, Boolean) -> List<Pair<String, String>>,
+        searchFilesFn: suspend (String, Boolean) -> List<Pair<String, String>>,
+        getAllCharacterNames: suspend () -> List<String>
+    ) {
+        this.fetchFilesInCategory = fetchFilesInCategory
+        this.searchFilesFn = searchFilesFn
+        this.getAllCharacterNames = getAllCharacterNames
+    }
+
+    suspend fun searchCharacters(keyword: String): List<String> =
+        PortraitRepositoryCore.searchCharacters(
+            keyword, fetchFilesInCategory, searchFilesFn, getAllCharacterNames
+        )
+
+    suspend fun loadCharacterPortraitCatalog(characterName: String): CharacterPortraitCatalog =
+        PortraitRepositoryCore.loadCharacterPortraitCatalog(
+            characterName, fetchFilesInCategory, searchFilesFn, getAllCharacterNames
+        )
+}

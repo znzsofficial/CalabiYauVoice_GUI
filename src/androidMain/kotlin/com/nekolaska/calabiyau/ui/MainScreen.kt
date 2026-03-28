@@ -55,9 +55,9 @@ import androidx.compose.ui.platform.LocalContext
 import android.webkit.CookieManager
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.SegmentedButtonDefaults.Icon
-import com.nekolaska.calabiyau.DownloadRecord
+import data.DownloadRecord
 import com.nekolaska.calabiyau.MainViewModel
-import com.nekolaska.calabiyau.SearchMode
+import data.SearchMode
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.WikiEngine
 import com.nekolaska.calabiyau.data.WikiUserApi

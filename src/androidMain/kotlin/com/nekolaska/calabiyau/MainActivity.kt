@@ -15,7 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.WikiEngine
 import com.nekolaska.calabiyau.ui.MainScreen
+import data.PortraitRepository
 
 class MainActivity : ComponentActivity() {
 
@@ -23,6 +25,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         AppPrefs.init(this)
+        PortraitRepository.init(
+            fetchFilesInCategory = { cat, audio -> WikiEngine.fetchFilesInCategory(cat, audio) },
+            searchFilesFn = { kw, audio -> WikiEngine.searchFiles(kw, audio) },
+            getAllCharacterNames = { WikiEngine.getAllCharacterNames() }
+        )
 
         setContent {
             AppTheme {

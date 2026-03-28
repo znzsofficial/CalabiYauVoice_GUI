@@ -27,9 +27,17 @@ import java.awt.Label
 
 
 @OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
-fun main() = application {
-    setupGlobalExceptionHandler()
-    val windowState = rememberWindowState(width = 1280.dp, height = 900.dp)
+fun main() {
+    // 在 Compose 启动前初始化共享立绘仓库
+    data.PortraitRepository.init(
+        fetchFilesInCategory = { cat, audio -> data.WikiEngine.fetchFilesInCategory(cat, audio) },
+        searchFilesFn = { kw, audio -> data.WikiEngine.searchFiles(kw, audio) },
+        getAllCharacterNames = { data.WikiEngine.getAllCharacterNames() }
+    )
+
+    application {
+        setupGlobalExceptionHandler()
+        val windowState = rememberWindowState(width = 1280.dp, height = 900.dp)
 
     Window(
         onCloseRequest = ::exitApplication,
@@ -100,8 +108,9 @@ fun main() = application {
                 }
             }
         }
-    }
-}
+    } // Window
+    } // application
+} // main
 
 /**
  * 全局异常处理器

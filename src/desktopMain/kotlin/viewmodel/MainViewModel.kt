@@ -3,6 +3,7 @@ package viewmodel
 import portrait.PortraitCostume
 import data.CharacterGroup
 import data.PortraitRepository
+import data.SearchMode
 import data.WikiEngine
 import data.sanitizeFileName
 import kotlinx.coroutines.*
@@ -13,8 +14,6 @@ import util.BIT_DEPTH_OPTIONS
 import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
-
-enum class SearchMode { VOICE_ONLY, PORTRAIT_LIST, ALL_CATEGORIES, FILE_SEARCH }
 
 class MainViewModel(
     private val scope: CoroutineScope
@@ -172,14 +171,14 @@ class MainViewModel(
     fun onSearchModeChange(mode: SearchMode) {
         val changed = _searchMode.value != mode
         _searchMode.value = mode
-        if (changed && mode == SearchMode.PORTRAIT_LIST && _portraitCharacters.value.isEmpty()) {
+        if (changed && mode == SearchMode.PORTRAIT && _portraitCharacters.value.isEmpty()) {
             performSearch()
         }
     }
 
     fun performSearch() {
         val mode = _searchMode.value
-        if (mode != SearchMode.PORTRAIT_LIST && _searchKeyword.value.isBlank()) return
+        if (mode != SearchMode.PORTRAIT && _searchKeyword.value.isBlank()) return
 
         searchJob?.cancel()
         scanJob?.cancel()
@@ -208,7 +207,7 @@ class MainViewModel(
                         _fileSearchSelectedUrls.value = results.map { it.second }.toSet()
                         addLog("搜索完成，找到 ${results.size} 个文件。")
                     }
-                    SearchMode.PORTRAIT_LIST -> {
+                    SearchMode.PORTRAIT -> {
                         addLog("正在搜索角色立绘列表…")
                         val results = PortraitRepository.searchCharacters(keyword)
                         _portraitCharacters.value = results
@@ -409,7 +408,7 @@ class MainViewModel(
     // =========================================================
     fun startDownload() {
         // Handle Portrait Download
-        if (_searchMode.value == SearchMode.PORTRAIT_LIST) {
+        if (_searchMode.value == SearchMode.PORTRAIT) {
             val charName = _selectedPortraitCharacter.value
             val costumeKey = _selectedPortraitCostumeKey.value
             val costume = _portraitCostumes.value.find { it.key == costumeKey }
