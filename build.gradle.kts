@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.nekolaska"
-version = "1.3.0"
+version = "2.0.0"
 
 repositories {
     mavenCentral()
@@ -84,8 +84,8 @@ android {
         applicationId = "com.nekolaska.calabiyau"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.3.0"
+        versionCode = 20
+        versionName = "2.0.0"
     }
 
     packaging {
@@ -127,7 +127,7 @@ compose.desktop {
 
         nativeDistributions {
             packageName = "CalabiYauVoice_GUI"
-            packageVersion = "1.3.0"
+            packageVersion = "2.0.0"
             description = "CalabiYau Wiki Voice Downloader GUI"
             copyright = "Apache License, Version 2.0"
             vendor = "NekoLaska"
