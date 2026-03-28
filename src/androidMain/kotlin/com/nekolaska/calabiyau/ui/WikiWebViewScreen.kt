@@ -52,6 +52,17 @@ private val WIKI_DOMAINS = listOf(
     "api.bilibili.com"
 )
 
+/** 登录完成后会跳转到这些页面，应拦截并返回 Wiki 首页 */
+private val LOGIN_REDIRECT_HOSTS = listOf(
+    "www.bilibili.com",
+    "m.bilibili.com"
+)
+
+/** 需要直接拦截（不加载也不打开外部浏览器）的域名 */
+private val BLOCKED_HOSTS = listOf(
+    "d.bilibili.com"   // B站 APP 下载页
+)
+
 /**
  * 带完整浏览器体验的 Wiki WebView 页面。
  *
@@ -64,20 +75,31 @@ private val WIKI_DOMAINS = listOf(
  * - 溢出菜单 (外部浏览器打开、分享)
  */
 /**
- * 从 CookieManager 中检测 bilibili Wiki 登录状态。
- * 若已登录返回用户名/UID，否则返回 null。
+ * 快速从 Cookie 检测是否登录（不发起网络请求）。
+ * 若 Cookie 中有 DedeUserID 则认为已登录。
  */
-fun getWikiLoginInfo(): String? {
+fun hasWikiLoginCookie(): Boolean {
+    return try {
+        val cookies = CookieManager.getInstance().getCookie("https://wiki.biligame.com") ?: return false
+        cookies.split(";").any { it.trim().startsWith("DedeUserID=") }
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
+ * 从 Cookie 中提取 Wiki 用户名（klbqwiki_UserName Cookie）。
+ * 若无此 Cookie 返回 null。
+ */
+fun getWikiUserNameFromCookie(): String? {
     return try {
         val cookies = CookieManager.getInstance().getCookie("https://wiki.biligame.com") ?: return null
         val cookieMap = cookies.split(";").associate {
             val parts = it.trim().split("=", limit = 2)
             if (parts.size == 2) parts[0].trim() to parts[1].trim() else "" to ""
         }
-        // DedeUserID 存在说明已登录；尝试获取用户名
-        val uid = cookieMap["DedeUserID"]
-        val name = cookieMap["DedeUserID__ckMd5"] // 无直接用户名cookie，显示UID
-        if (!uid.isNullOrBlank()) "UID: $uid" else null
+        val name = cookieMap["klbqwiki_UserName"]
+        if (!name.isNullOrBlank()) java.net.URLDecoder.decode(name, "UTF-8") else null
     } catch (_: Exception) {
         null
     }
@@ -626,6 +648,17 @@ private fun createWikiWebView(
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
                 val host = Uri.parse(url).host ?: ""
+
+                // 拦截 B站 APP 下载页等，直接丢弃不加载
+                if (BLOCKED_HOSTS.any { host.equals(it, ignoreCase = true) }) {
+                    return true
+                }
+
+                // 登录成功后跳转到 B站主页 → 拦截并返回 Wiki 首页
+                if (LOGIN_REDIRECT_HOSTS.any { host.equals(it, ignoreCase = true) }) {
+                    view?.loadUrl(WIKI_HOME_URL)
+                    return true
+                }
 
                 // Wiki 域名白名单内的链接在 WebView 中打开
                 if (WIKI_DOMAINS.any { host.endsWith(it) }) {

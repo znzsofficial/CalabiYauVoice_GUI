@@ -175,9 +175,18 @@ fun AboutScreen(onBack: () -> Unit) {
                         subtitle = "NekoLaska",
                         icon = Icons.Outlined.Person,
                         onClick = {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://space.bilibili.com/15544900"))
-                            )
+                            // 优先尝试 bilibili 客户端 URI，打不开再用网页
+                            try {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("bilibili://space/15544900")).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                )
+                            } catch (_: Exception) {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://space.bilibili.com/15544900"))
+                                )
+                            }
                         }
                     )
                 }

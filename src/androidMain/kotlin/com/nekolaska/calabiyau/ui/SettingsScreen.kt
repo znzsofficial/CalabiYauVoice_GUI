@@ -29,6 +29,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.data.AppPrefs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -329,6 +332,21 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
+            Spacer(Modifier.height(8.dp))
+
+            // 存储统计
+            SettingsGroupHeader("存储")
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                StorageStatisticsCard(savePath = savePath)
+            }
+
             Spacer(Modifier.height(16.dp))
 
             // 关于分组
@@ -428,6 +446,152 @@ private fun SettingsItem(
             modifier = Modifier.size(20.dp)
         )
     }
+}
+
+// ─────────────────────── 存储统计 ───────────────────────
+
+data class DirSizeInfo(
+    val name: String,
+    val size: Long
+)
+
+@Composable
+private fun StorageStatisticsCard(savePath: String) {
+    var totalSize by remember { mutableStateOf<Long?>(null) }
+    var subDirSizes by remember { mutableStateOf<List<DirSizeInfo>>(emptyList()) }
+    var fileCount by remember { mutableStateOf(0) }
+    var isCalculating by remember { mutableStateOf(true) }
+
+    // 计算目录大小
+    LaunchedEffect(savePath) {
+        isCalculating = true
+        withContext(Dispatchers.IO) {
+            try {
+                val root = File(savePath)
+                if (root.exists() && root.isDirectory) {
+                    totalSize = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                    fileCount = root.walkTopDown().count { it.isFile }
+                    subDirSizes = root.listFiles()
+                        ?.filter { it.isDirectory }
+                        ?.map { dir ->
+                            DirSizeInfo(
+                                name = dir.name,
+                                size = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+                            )
+                        }
+                        ?.filter { it.size > 0 }
+                        ?.sortedByDescending { it.size }
+                        ?.take(8) // 最多显示 8 个子目录
+                        ?: emptyList()
+                } else {
+                    totalSize = 0L
+                    fileCount = 0
+                    subDirSizes = emptyList()
+                }
+            } catch (_: Exception) {
+                totalSize = 0L
+            }
+        }
+        isCalculating = false
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Outlined.Storage, null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "已用空间",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                if (isCalculating) {
+                    Text(
+                        "计算中...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "${formatFileSize(totalSize ?: 0)}  ·  $fileCount 个文件",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (isCalculating) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+        }
+
+        // 子目录明细
+        if (!isCalculating && subDirSizes.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            )
+            Spacer(Modifier.height(12.dp))
+
+            subDirSizes.forEach { dirInfo ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Outlined.Folder,
+                        null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = dirInfo.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = formatFileSize(dirInfo.size),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return String.format("%.1f KB", kb)
+    val mb = kb / 1024.0
+    if (mb < 1024) return String.format("%.1f MB", mb)
+    val gb = mb / 1024.0
+    return String.format("%.2f GB", gb)
 }
 
 /**

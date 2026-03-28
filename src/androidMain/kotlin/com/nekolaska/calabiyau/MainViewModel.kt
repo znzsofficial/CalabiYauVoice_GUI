@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau
 
 import android.app.Application
 import android.media.MediaScannerConnection
-import android.os.Environment
 import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,13 +10,57 @@ import com.nekolaska.calabiyau.data.PortraitRepository
 import com.nekolaska.calabiyau.data.WikiEngine
 import data.CharacterGroup
 import data.sanitizeFileName
-import portrait.CharacterPortraitCatalog
-import portrait.PortraitCostume
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
+import portrait.CharacterPortraitCatalog
+import portrait.PortraitCostume
 import java.io.File
+
+/**
+ * 下载记录
+ */
+data class DownloadRecord(
+    val name: String,        // 描述，如 "岚岚 / 默认" 或 "文件搜索"
+    val fileCount: Int,      // 文件数量
+    val timestamp: Long,     // 完成时间戳
+    val status: String,      // "success" | "error"
+    val savePath: String     // 保存路径
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("name", name)
+        put("fileCount", fileCount)
+        put("timestamp", timestamp)
+        put("status", status)
+        put("savePath", savePath)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): DownloadRecord = DownloadRecord(
+            name = json.optString("name", ""),
+            fileCount = json.optInt("fileCount", 0),
+            timestamp = json.optLong("timestamp", 0),
+            status = json.optString("status", "success"),
+            savePath = json.optString("savePath", "")
+        )
+
+        fun loadAll(): List<DownloadRecord> {
+            return try {
+                val arr = JSONArray(AppPrefs.downloadHistoryJson)
+                (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
+            } catch (_: Exception) { emptyList() }
+        }
+
+        fun saveAll(records: List<DownloadRecord>) {
+            val arr = JSONArray()
+            records.forEach { arr.put(it.toJson()) }
+            AppPrefs.downloadHistoryJson = arr.toString()
+        }
+    }
+}
 
 enum class SearchMode { VOICE_ONLY, ALL_CATEGORIES, FILE_SEARCH, PORTRAIT }
 
@@ -113,6 +156,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedPortraitCostume = MutableStateFlow<PortraitCostume?>(null)
     val selectedPortraitCostume: StateFlow<PortraitCostume?> = _selectedPortraitCostume.asStateFlow()
 
+    // 每个模式缓存的搜索关键词，用于切换 tab 时恢复
+    private val cachedKeywords = mutableMapOf<SearchMode, String>(
+        SearchMode.VOICE_ONLY to "角色",
+        SearchMode.ALL_CATEGORIES to "角色",
+        SearchMode.PORTRAIT to "角色",
+        SearchMode.FILE_SEARCH to ""
+    )
+    // 记录哪些模式已经有搜索结果（无需再次自动搜索）
+    private val hasResultsCache = mutableSetOf<SearchMode>()
+
+    // 语音 / 分类 各自独立缓存搜索结果，切换 tab 时保存 & 恢复
+    private val cachedCharacterGroups = mutableMapOf<SearchMode, List<CharacterGroup>>()
+    private val cachedCharacterAvatars = mutableMapOf<SearchMode, Map<String, String>>()
+    private val cachedSelectedGroup = mutableMapOf<SearchMode, CharacterGroup?>()
+    private val cachedSubCategories = mutableMapOf<SearchMode, List<String>>()
+    private val cachedCheckedCategories = mutableMapOf<SearchMode, List<String>>()
+
     init {
         // 启动时自动以默认关键词"角色"搜索语音页
         performSearch()
@@ -120,22 +180,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
     fun onSearchModeChange(mode: SearchMode) {
+        val prev = _searchMode.value
+        // 先保存当前模式的关键词
+        cachedKeywords[prev] = _searchKeyword.value
+
+        // 保存语音/分类模式的搜索结果缓存
+        if (prev == SearchMode.VOICE_ONLY || prev == SearchMode.ALL_CATEGORIES) {
+            cachedCharacterGroups[prev] = _characterGroups.value
+            cachedCharacterAvatars[prev] = _characterAvatars.value
+            cachedSelectedGroup[prev] = _selectedGroup.value
+            cachedSubCategories[prev] = _subCategories.value
+            cachedCheckedCategories[prev] = _checkedCategories.value
+        }
+
         _searchMode.value = mode
+
         if (mode == SearchMode.FILE_SEARCH) {
-            // 文件搜索页：清空搜索栏，不主动搜索
-            _searchKeyword.value = ""
-            _fileSearchResults.value = emptyList()
-            _fileSearchSelectedUrls.value = emptySet()
-            _hasSearched.value = false
-        } else {
-            // 语音/分类/立绘页：设默认关键词"角色"并自动搜索
-            if (mode == SearchMode.PORTRAIT) {
-                _portraitCharacters.value = emptyList()
-                _selectedPortraitCharacter.value = null
-                _portraitCatalog.value = null
-                _selectedPortraitCostume.value = null
+            // 文件搜索页：恢复上次关键词，若无缓存结果则清空
+            _searchKeyword.value = cachedKeywords[mode] ?: ""
+            if (mode !in hasResultsCache) {
+                _fileSearchResults.value = emptyList()
+                _fileSearchSelectedUrls.value = emptySet()
+                _hasSearched.value = false
             }
-            _searchKeyword.value = "角色"
+        } else if (mode == SearchMode.VOICE_ONLY || mode == SearchMode.ALL_CATEGORIES) {
+            // 语音/分类页：恢复各自独立的缓存
+            _searchKeyword.value = cachedKeywords[mode] ?: "角色"
+            if (mode in hasResultsCache) {
+                _characterGroups.value = cachedCharacterGroups[mode] ?: emptyList()
+                _characterAvatars.value = cachedCharacterAvatars[mode] ?: emptyMap()
+                _selectedGroup.value = cachedSelectedGroup[mode]
+                _subCategories.value = cachedSubCategories[mode] ?: emptyList()
+                _checkedCategories.value = cachedCheckedCategories[mode] ?: emptyList()
+                _hasSearched.value = true
+                return
+            }
+            performSearch()
+        } else {
+            // 立绘页
+            _searchKeyword.value = cachedKeywords[mode] ?: "角色"
+            if (mode in hasResultsCache) {
+                _hasSearched.value = true
+                return
+            }
             performSearch()
         }
     }
@@ -164,6 +251,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _favorites.value = AppPrefs.favoriteCharacters
     }
 
+    // 下载历史
+    private val _downloadHistory = MutableStateFlow(DownloadRecord.loadAll())
+    val downloadHistory: StateFlow<List<DownloadRecord>> = _downloadHistory.asStateFlow()
+
+    private fun addDownloadRecord(record: DownloadRecord) {
+        val list = _downloadHistory.value.toMutableList()
+        list.add(0, record) // 最新的在前
+        if (list.size > 100) list.subList(100, list.size).clear()
+        _downloadHistory.value = list
+        DownloadRecord.saveAll(list)
+    }
+
+    fun clearDownloadHistory() {
+        _downloadHistory.value = emptyList()
+        DownloadRecord.saveAll(emptyList())
+    }
+
     fun performSearch() {
         if (_isSearching.value) return
         val keyword = _searchKeyword.value.trim()
@@ -172,14 +276,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 记录搜索历史
         AppPrefs.addSearchHistory(keyword)
 
+        // 手动搜索时，清除当前模式的旧缓存标记
+        hasResultsCache.remove(_searchMode.value)
+
         viewModelScope.launch {
             _isSearching.value = true
             _hasSearched.value = false
-            _selectedGroup.value = null
-            _subCategories.value = emptyList()
-            _checkedCategories.value = emptyList()
-            _fileSearchResults.value = emptyList()
-            _fileSearchSelectedUrls.value = emptySet()
+
+            // 只清除当前模式相关的状态，不影响其他模式的缓存
+            when (_searchMode.value) {
+                SearchMode.FILE_SEARCH -> {
+                    _fileSearchResults.value = emptyList()
+                    _fileSearchSelectedUrls.value = emptySet()
+                }
+                else -> {
+                    _selectedGroup.value = null
+                    _subCategories.value = emptyList()
+                    _checkedCategories.value = emptyList()
+                }
+            }
 
             try {
                 when (_searchMode.value) {
@@ -216,6 +331,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _isSearching.value = false
                 _hasSearched.value = true
+                // 标记当前模式已有结果缓存
+                hasResultsCache.add(_searchMode.value)
+                cachedKeywords[_searchMode.value] = keyword
             }
         }
     }
@@ -379,6 +497,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         scanMediaFiles(saveDir)
                         addLog("下载完成！保存至: ${saveDir.absolutePath}")
+                        addDownloadRecord(DownloadRecord(
+                            name = "$characterName / ${costume.name}",
+                            fileCount = assets.size,
+                            timestamp = System.currentTimeMillis(),
+                            status = "success",
+                            savePath = saveDir.absolutePath
+                        ))
                     }
                     SearchMode.FILE_SEARCH -> {
                         val selected = _fileSearchSelectedUrls.value
@@ -401,6 +526,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         scanMediaFiles(saveDir)
                         addLog("下载完成！保存至: ${saveDir.absolutePath}")
+                        addDownloadRecord(DownloadRecord(
+                            name = "文件搜索 (${files.size}个)",
+                            fileCount = files.size,
+                            timestamp = System.currentTimeMillis(),
+                            status = "success",
+                            savePath = saveDir.absolutePath
+                        ))
                     }
                     else -> {
                         val group = _selectedGroup.value ?: run {
@@ -438,10 +570,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         scanMediaFiles(charDir)
                         addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")
+                        addDownloadRecord(DownloadRecord(
+                            name = group.characterName,
+                            fileCount = totalDownloaded,
+                            timestamp = System.currentTimeMillis(),
+                            status = "success",
+                            savePath = charDir.absolutePath
+                        ))
                     }
                 }
             } catch (e: Exception) {
                 addLog("[错误] 下载失败: ${e.message}")
+                addDownloadRecord(DownloadRecord(
+                    name = "下载失败",
+                    fileCount = 0,
+                    timestamp = System.currentTimeMillis(),
+                    status = "error",
+                    savePath = ""
+                ))
             } finally {
                 _isDownloading.value = false
                 _downloadStatusText.value = ""
