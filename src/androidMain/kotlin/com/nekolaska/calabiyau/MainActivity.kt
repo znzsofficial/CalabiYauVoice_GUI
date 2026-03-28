@@ -11,7 +11,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nekolaska.calabiyau.data.AppPrefs
@@ -33,9 +33,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** 全局主题模式状态，可从任何 Composable 中读取/修改 */
+val LocalThemeMode = androidx.compose.runtime.staticCompositionLocalOf { androidx.compose.runtime.mutableIntStateOf(AppPrefs.themeMode) }
+
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    val darkTheme = isSystemInDarkTheme()
+    val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
+
+    val darkTheme = when (themeMode.intValue) {
+        AppPrefs.THEME_LIGHT -> false
+        AppPrefs.THEME_DARK -> true
+        else -> isSystemInDarkTheme()
+    }
     val context = LocalContext.current
     val colorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
@@ -44,5 +53,8 @@ fun AppTheme(content: @Composable () -> Unit) {
         darkTheme -> darkColorScheme()
         else -> lightColorScheme()
     }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+
+    CompositionLocalProvider(LocalThemeMode provides themeMode) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }

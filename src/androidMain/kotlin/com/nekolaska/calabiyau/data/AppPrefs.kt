@@ -13,6 +13,20 @@ object AppPrefs {
     private const val PREFS_NAME = "calabiyau_prefs"
     private const val KEY_SAVE_PATH = "save_path"
     private const val KEY_MAX_CONCURRENCY = "max_concurrency"
+    private const val KEY_THEME_MODE = "theme_mode"
+    private const val KEY_SEARCH_HISTORY = "search_history"
+    private const val KEY_FAVORITE_CHARACTERS = "favorite_characters"
+    private const val KEY_WIKI_CACHE_MODE = "wiki_cache_mode"
+    private const val KEY_DOWNLOAD_HISTORY = "download_history"
+
+    /** 主题模式：0=跟随系统, 1=浅色, 2=深色 */
+    const val THEME_SYSTEM = 0
+    const val THEME_LIGHT = 1
+    const val THEME_DARK = 2
+
+    /** Wiki 缓存模式：0=默认, 1=优先缓存 */
+    const val WIKI_CACHE_DEFAULT = 0
+    const val WIKI_CACHE_OFFLINE_FIRST = 1
 
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
@@ -42,4 +56,56 @@ object AppPrefs {
     var maxConcurrency: Int
         get() = prefs.getInt(KEY_MAX_CONCURRENCY, 8)
         set(value) = prefs.edit().putInt(KEY_MAX_CONCURRENCY, value.coerceIn(1, 32)).apply()
+
+    /** 主题模式 */
+    var themeMode: Int
+        get() = prefs.getInt(KEY_THEME_MODE, THEME_SYSTEM)
+        set(value) = prefs.edit().putInt(KEY_THEME_MODE, value).apply()
+
+    /** 搜索历史（最多 20 条，逗号分隔存储） */
+    var searchHistory: List<String>
+        get() = prefs.getString(KEY_SEARCH_HISTORY, null)
+            ?.split("|||")
+            ?.filter { it.isNotBlank() }
+            ?: emptyList()
+        set(value) = prefs.edit().putString(
+            KEY_SEARCH_HISTORY,
+            value.take(20).joinToString("|||")
+        ).apply()
+
+    fun addSearchHistory(keyword: String) {
+        val trimmed = keyword.trim()
+        if (trimmed.isBlank()) return
+        val current = searchHistory.toMutableList()
+        current.remove(trimmed) // 去重
+        current.add(0, trimmed) // 置顶
+        searchHistory = current.take(20)
+    }
+
+    fun clearSearchHistory() {
+        searchHistory = emptyList()
+    }
+
+    /** 收藏的角色名列表 */
+    var favoriteCharacters: Set<String>
+        get() = prefs.getStringSet(KEY_FAVORITE_CHARACTERS, emptySet()) ?: emptySet()
+        set(value) = prefs.edit().putStringSet(KEY_FAVORITE_CHARACTERS, value).apply()
+
+    fun toggleFavorite(name: String) {
+        val current = favoriteCharacters.toMutableSet()
+        if (name in current) current.remove(name) else current.add(name)
+        favoriteCharacters = current
+    }
+
+    fun isFavorite(name: String): Boolean = name in favoriteCharacters
+
+    /** Wiki 离线缓存模式 */
+    var wikiCacheMode: Int
+        get() = prefs.getInt(KEY_WIKI_CACHE_MODE, WIKI_CACHE_DEFAULT)
+        set(value) = prefs.edit().putInt(KEY_WIKI_CACHE_MODE, value).apply()
+
+    /** 下载历史记录（JSON 格式存储） */
+    var downloadHistoryJson: String
+        get() = prefs.getString(KEY_DOWNLOAD_HISTORY, "[]") ?: "[]"
+        set(value) = prefs.edit().putString(KEY_DOWNLOAD_HISTORY, value).apply()
 }

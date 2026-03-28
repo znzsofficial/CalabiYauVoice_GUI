@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.data.AppPrefs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,6 +36,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     var savePath by remember { mutableStateOf(AppPrefs.savePath) }
     var maxConcurrency by remember { mutableStateOf(AppPrefs.maxConcurrency.toString()) }
     var showAbout by remember { mutableStateOf(false) }
+    var themeMode by remember { mutableIntStateOf(AppPrefs.themeMode) }
+    val globalThemeMode = LocalThemeMode.current
+    var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
 
     val context = LocalContext.current
 
@@ -52,7 +56,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
     }
 
-    // 拦截返回键：关于页面内返回到设置，设置页面返回到主界面
+    // 拦截返回键：关于 > 设置 > 主界面
     BackHandler(enabled = showAbout) {
         showAbout = false
     }
@@ -118,36 +122,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                         title = "保存路径",
                         subtitle = savePath,
                         onClick = { dirPicker.launch(null) }
-                    )
-
-                    // 快速打开保存路径
-                    SettingsItem(
-                        icon = Icons.Outlined.FolderOpen,
-                        title = "打开保存目录",
-                        subtitle = "在文件管理器中查看",
-                        onClick = {
-                            val dir = java.io.File(savePath)
-                            dir.mkdirs()
-                            val storagePath = android.os.Environment.getExternalStorageDirectory().absolutePath
-                            val relativePath = savePath.removePrefix("$storagePath/")
-                            val encodedPath = Uri.encode(relativePath, "/")
-                            val docUri = Uri.parse("content://com.android.externalstorage.documents/document/primary:$encodedPath")
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    setDataAndType(docUri, "vnd.android.document/directory")
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                try {
-                                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-                                        putExtra("android.content.extra.SHOW_ADVANCED", true)
-                                        putExtra("android.provider.extra.INITIAL_URI", docUri)
-                                    }
-                                    context.startActivity(intent)
-                                } catch (_: Exception) {}
-                            }
-                        }
                     )
 
                     // 保存路径手动输入
@@ -249,6 +223,109 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
                     }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // 外观设置
+            SettingsGroupHeader("外观")
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column {
+                    var showThemeDialog by remember { mutableStateOf(false) }
+                    val themeName = when (themeMode) {
+                        AppPrefs.THEME_LIGHT -> "浅色"
+                        AppPrefs.THEME_DARK -> "深色"
+                        else -> "跟随系统"
+                    }
+                    SettingsItem(
+                        icon = Icons.Outlined.Palette,
+                        title = "主题模式",
+                        subtitle = themeName,
+                        onClick = { showThemeDialog = true }
+                    )
+
+                    if (showThemeDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showThemeDialog = false },
+                            title = { Text("选择主题") },
+                            text = {
+                                Column {
+                                    listOf(
+                                        AppPrefs.THEME_SYSTEM to "跟随系统",
+                                        AppPrefs.THEME_LIGHT to "浅色模式",
+                                        AppPrefs.THEME_DARK to "深色模式"
+                                    ).forEach { (mode, label) ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    themeMode = mode
+                                                    AppPrefs.themeMode = mode
+                                                    globalThemeMode.intValue = mode
+                                                    showThemeDialog = false
+                                                }
+                                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = themeMode == mode,
+                                                onClick = {
+                                                    themeMode = mode
+                                                    AppPrefs.themeMode = mode
+                                                    globalThemeMode.intValue = mode
+                                                    showThemeDialog = false
+                                                }
+                                            )
+                                            Spacer(Modifier.width(12.dp))
+                                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                                        }
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(28.dp),
+                            confirmButton = {}
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Wiki 设置
+            SettingsGroupHeader("Wiki")
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column {
+                    val cacheName = when (wikiCacheMode) {
+                        AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存（弱网可用）"
+                        else -> "默认（联网加载）"
+                    }
+                    SettingsItem(
+                        icon = Icons.Outlined.OfflinePin,
+                        title = "Wiki 缓存策略",
+                        subtitle = cacheName,
+                        onClick = {
+                            val newMode = if (wikiCacheMode == AppPrefs.WIKI_CACHE_DEFAULT)
+                                AppPrefs.WIKI_CACHE_OFFLINE_FIRST else AppPrefs.WIKI_CACHE_DEFAULT
+                            wikiCacheMode = newMode
+                            AppPrefs.wikiCacheMode = newMode
+                        }
+                    )
                 }
             }
 
