@@ -22,7 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,12 +42,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.os.Build
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.gif.AnimatedImageDecoder
 import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import android.webkit.CookieManager
 import com.nekolaska.calabiyau.MainViewModel
 import com.nekolaska.calabiyau.SearchMode
 import com.nekolaska.calabiyau.data.WikiEngine
@@ -56,9 +60,193 @@ import kotlinx.coroutines.launch
 import portrait.CharacterPortraitCatalog
 import portrait.PortraitCostume
 
+/** 侧栏导航目的地 */
+enum class DrawerDestination {
+    DOWNLOADER,  // 资源下载 (主页)
+    WIKI,        // Wiki 浏览器
+    FILE_MANAGER,// 文件管理
+    SETTINGS     // 设置
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
+    val coroutineScope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    var currentDestination by remember { mutableStateOf(DrawerDestination.DOWNLOADER) }
+
+    // 返回键：侧栏打开时先关闭侧栏；在 Wiki/设置页面时返回主页
+    BackHandler(enabled = drawerState.isOpen) {
+        coroutineScope.launch { drawerState.close() }
+    }
+    BackHandler(enabled = currentDestination != DrawerDestination.DOWNLOADER && !drawerState.isOpen) {
+        currentDestination = DrawerDestination.DOWNLOADER
+    }
+
+    // 切换页面时停止音频播放
+    LaunchedEffect(currentDestination) {
+        AudioPlayerManager.stop()
+    }
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = currentDestination != DrawerDestination.WIKI,
+        drawerContent = {
+            AppDrawerContent(
+                currentDestination = currentDestination,
+                onDestinationSelected = { dest ->
+                    currentDestination = dest
+                    coroutineScope.launch { drawerState.close() }
+                }
+            )
+        }
+    ) {
+        // 根据侧栏选中项切换页面
+        when (currentDestination) {
+            DrawerDestination.DOWNLOADER -> {
+                DownloaderScreen(
+                    viewModel = viewModel,
+                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } }
+                )
+            }
+            DrawerDestination.WIKI -> {
+                WikiWebViewScreen(
+                    onExitWiki = { currentDestination = DrawerDestination.DOWNLOADER }
+                )
+            }
+            DrawerDestination.FILE_MANAGER -> {
+                FileManagerScreen(
+                    rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
+                    onBack = { currentDestination = DrawerDestination.DOWNLOADER }
+                )
+            }
+            DrawerDestination.SETTINGS -> {
+                SettingsScreen(onBack = { currentDestination = DrawerDestination.DOWNLOADER })
+            }
+        }
+    }
+}
+
+// ─────────────────────── 侧栏内容 ───────────────────────
+
+@Composable
+private fun AppDrawerContent(
+    currentDestination: DrawerDestination,
+    onDestinationSelected: (DrawerDestination) -> Unit
+) {
+    ModalDrawerSheet(
+        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+        drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.width(300.dp)
+    ) {
+        Spacer(Modifier.height(16.dp))
+
+        // 标题
+        Text(
+            text = "卡拉彼丘",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp))
+
+        Spacer(Modifier.height(8.dp))
+
+        // 1. 资源下载
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+            label = { Text("资源下载") },
+            selected = currentDestination == DrawerDestination.DOWNLOADER,
+            onClick = { onDestinationSelected(DrawerDestination.DOWNLOADER) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 2. Wiki 浏览器（含登录状态）
+        val wikiLoginInfo = remember { mutableStateOf(getWikiLoginInfo()) }
+        // 每次侧栏显示时刷新登录状态
+        LaunchedEffect(currentDestination) {
+            wikiLoginInfo.value = getWikiLoginInfo()
+        }
+
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.Language, contentDescription = null) },
+            label = { Text("Wiki") },
+            badge = {
+                if (wikiLoginInfo.value != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "已登录",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "未登录",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            selected = currentDestination == DrawerDestination.WIKI,
+            onClick = { onDestinationSelected(DrawerDestination.WIKI) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 3. 文件管理
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
+            label = { Text("文件管理") },
+            selected = currentDestination == DrawerDestination.FILE_MANAGER,
+            onClick = { onDestinationSelected(DrawerDestination.FILE_MANAGER) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 4. 设置
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+            label = { Text("设置") },
+            selected = currentDestination == DrawerDestination.SETTINGS,
+            onClick = { onDestinationSelected(DrawerDestination.SETTINGS) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.weight(1f))
+
+        // 底部版本信息
+        Text(
+            text = "v1.3.0",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
+        )
+    }
+}
+
+// ─────────────────────── 资源下载主页（原 MainScreen 核心内容） ───────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DownloaderScreen(
+    viewModel: MainViewModel,
+    onOpenDrawer: () -> Unit
+) {
     val searchKeyword by viewModel.searchKeyword.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
@@ -92,18 +280,6 @@ fun MainScreen(viewModel: MainViewModel) {
 
     val focusManager = LocalFocusManager.current
     var showLogs by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-
-    // 设置页面返回键拦截
-    BackHandler(enabled = showSettings) {
-        showSettings = false
-    }
-
-    // 设置页面
-    if (showSettings) {
-        SettingsScreen(onBack = { showSettings = false })
-        return
-    }
 
     // 处理返回键
     BackHandler(enabled = selectedPortraitCharacter != null) {
@@ -126,9 +302,13 @@ fun MainScreen(viewModel: MainViewModel) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                            .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // 侧栏菜单按钮
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Default.Menu, contentDescription = "打开侧栏")
+                        }
                         Text(
                             text = "卡拉彼丘",
                             style = MaterialTheme.typography.headlineMedium,
@@ -147,17 +327,8 @@ fun MainScreen(viewModel: MainViewModel) {
                                     if (logs.isNotEmpty()) Badge { Text("${logs.size}") }
                                 }
                             ) {
-                                Icon(Icons.Outlined.Article, "日志", modifier = Modifier.size(20.dp))
+                                Icon(Icons.AutoMirrored.Outlined.Article, "日志", modifier = Modifier.size(20.dp))
                             }
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        FilledTonalIconButton(
-                            onClick = { showSettings = true },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        ) {
-                            Icon(Icons.Outlined.Settings, "设置", modifier = Modifier.size(20.dp))
                         }
                     }
 
@@ -189,8 +360,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         statusText = downloadStatusText
                     )
                 }
-                // 底部导航栏
-                NavigationBar(
+                // 底部应用栏 (BottomAppBar 风格)
+                BottomAppBar(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     tonalElevation = 0.dp
                 ) {
@@ -512,19 +683,17 @@ fun PortraitDetailContent(
         }
 
         // Costume Tabs
-        ScrollableTabRow(
+        SecondaryScrollableTabRow(
             selectedTabIndex = pagerState.currentPage,
             edgePadding = 24.dp,
             divider = {},
             containerColor = Color.Transparent,
-            indicator = { tabPositions ->
-                if (pagerState.currentPage < tabPositions.size) {
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                        height = 3.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+            indicator = {
+                TabRowDefaults.SecondaryIndicator(
+                    Modifier.tabIndicatorOffset(pagerState.currentPage),
+                    height = 3.dp,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         ) {
             costumes.forEachIndexed { index, costume ->
@@ -1018,6 +1187,10 @@ fun FileItem(
         it.endsWith(".png") || it.endsWith(".jpg") || it.endsWith(".jpeg") ||
                 it.endsWith(".webp") || it.endsWith(".gif")
     }
+    val isAudio = url.lowercase().let {
+        it.endsWith(".ogg") || it.endsWith(".mp3") || it.endsWith(".wav") ||
+                it.endsWith(".flac") || it.endsWith(".m4a") || it.endsWith(".aac")
+    }
     Card(
         onClick = onToggle,
         shape = RoundedCornerShape(16.dp),
@@ -1060,6 +1233,8 @@ fun FileItem(
                         }
                     }
                 }
+            } else if (isAudio) {
+                AudioPlayButton(source = url, size = 48)
             } else {
                 Surface(
                     modifier = Modifier.size(48.dp),
@@ -1068,7 +1243,7 @@ fun FileItem(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            Icons.Outlined.InsertDriveFile, null,
+                            Icons.AutoMirrored.Outlined.InsertDriveFile, null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

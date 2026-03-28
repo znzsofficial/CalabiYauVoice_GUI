@@ -113,6 +113,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedPortraitCostume = MutableStateFlow<PortraitCostume?>(null)
     val selectedPortraitCostume: StateFlow<PortraitCostume?> = _selectedPortraitCostume.asStateFlow()
 
+    init {
+        // 启动时自动以默认关键词"角色"搜索语音页
+        performSearch()
+    }
+
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
     fun onSearchModeChange(mode: SearchMode) {
         _searchMode.value = mode
@@ -150,10 +155,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _fileSearchSelectedUrls.value = emptySet()
     }
 
+    // 收藏状态
+    private val _favorites = MutableStateFlow(AppPrefs.favoriteCharacters)
+    val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
+
+    fun toggleFavorite(name: String) {
+        AppPrefs.toggleFavorite(name)
+        _favorites.value = AppPrefs.favoriteCharacters
+    }
+
     fun performSearch() {
         if (_isSearching.value) return
         val keyword = _searchKeyword.value.trim()
         if (keyword.isBlank()) return
+
+        // 记录搜索历史
+        AppPrefs.addSearchHistory(keyword)
 
         viewModelScope.launch {
             _isSearching.value = true

@@ -1,0 +1,754 @@
+package com.nekolaska.calabiyau.ui
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import coil3.compose.AsyncImage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.DecimalFormat
+import java.text.SimpleDateFormat
+import java.util.*
+
+/**
+ * 内置文件管理器，支持：
+ * - 浏览保存目录下的文件和子文件夹
+ * - 预览图片 / 打开文件
+ * - 重命名、删除、分享
+ * - 返回上级目录
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    var currentDir by remember { mutableStateOf(File(rootPath)) }
+    var files by remember { mutableStateOf<List<File>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var refreshCounter by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    // 选中文件的操作菜单
+    var selectedFile by remember { mutableStateOf<File?>(null) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    // 图片画廊预览（所有图片文件列表 + 初始索引）
+    var galleryImages by remember { mutableStateOf<List<File>>(emptyList()) }
+    var galleryInitialIndex by remember { mutableIntStateOf(0) }
+    var showGallery by remember { mutableStateOf(false) }
+
+    // 离开文件管理器时停止音频播放
+    DisposableEffect(Unit) {
+        onDispose { AudioPlayerManager.stop() }
+    }
+
+    // 加载当前目录文件列表
+    LaunchedEffect(currentDir, refreshCounter) {
+        isLoading = true
+        files = withContext(Dispatchers.IO) {
+            val dir = currentDir
+            if (!dir.exists()) dir.mkdirs()
+            val list = dir.listFiles()?.toList() ?: emptyList()
+            // 文件夹在前，文件在后，各自按名称排序
+            list.sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
+        }
+        isLoading = false
+    }
+
+    // 返回键处理：在子目录时返回上级，在根目录时退出
+    val isAtRoot = currentDir.absolutePath == File(rootPath).absolutePath
+    BackHandler(enabled = !isAtRoot) {
+        currentDir = currentDir.parentFile ?: currentDir
+    }
+
+    Scaffold(
+        topBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {
+                            if (!isAtRoot) {
+                                currentDir = currentDir.parentFile ?: currentDir
+                            } else {
+                                onBack()
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isAtRoot) "文件管理" else currentDir.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${files.size} 项" + if (!isAtRoot) " · ${
+                                    currentDir.absolutePath.removePrefix(rootPath).trimStart('/')
+                                }" else "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            when {
+                isLoading -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                files.isEmpty() -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                modifier = Modifier.size(80.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Outlined.FolderOpen, null,
+                                        modifier = Modifier.size(36.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "文件夹为空",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        items(files, key = { it.absolutePath }) { file ->
+                            FileListItem(
+                                file = file,
+                                onClick = {
+                                    if (file.isDirectory) {
+                                        currentDir = file
+                                    } else if (file.isImageFile()) {
+                                        previewFile = file
+                                    } else if (file.isAudioFile()) {
+                                        AudioPlayerManager.play(file.absolutePath)
+                                    } else {
+                                        openFile(context, file)
+                                    }
+                                },
+                                onLongClick = { selectedFile = file }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── 文件操作菜单 BottomSheet ──
+    if (selectedFile != null) {
+        val file = selectedFile!!
+        ModalBottomSheet(
+            onDismissRequest = { selectedFile = null },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                // 文件信息头
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FileIcon(file, size = 48)
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            file.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            buildString {
+                                if (file.isFile) append(formatFileSize(file.length()))
+                                append(" · ")
+                                append(formatDate(file.lastModified()))
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
+                Spacer(Modifier.height(8.dp))
+
+                // 打开
+                if (file.isFile) {
+                    FileActionItem(
+                        icon = Icons.Outlined.OpenInNew,
+                        label = "打开",
+                        onClick = {
+                            openFile(context, file)
+                            selectedFile = null
+                        }
+                    )
+                }
+
+                // 预览（仅图片）
+                if (file.isFile && file.isImageFile()) {
+                    FileActionItem(
+                        icon = Icons.Outlined.Image,
+                        label = "预览",
+                        onClick = {
+                            val images = files.filter { it.isFile && it.isImageFile() }
+                            galleryImages = images
+                            galleryInitialIndex = images.indexOf(file).coerceAtLeast(0)
+                            showGallery = true
+                            selectedFile = null
+                        }
+                    )
+                }
+
+                // 播放（仅音频）
+                if (file.isFile && file.isAudioFile()) {
+                    val isThisPlaying = AudioPlayerManager.playingSource.value == file.absolutePath &&
+                            AudioPlayerManager.isPlaying.value
+                    FileActionItem(
+                        icon = if (isThisPlaying) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                        label = if (isThisPlaying) "停止播放" else "播放",
+                        onClick = {
+                            if (isThisPlaying) {
+                                AudioPlayerManager.stop()
+                            } else {
+                                AudioPlayerManager.play(file.absolutePath)
+                            }
+                            selectedFile = null
+                        }
+                    )
+                }
+
+                // 分享
+                if (file.isFile) {
+                    FileActionItem(
+                        icon = Icons.Outlined.Share,
+                        label = "分享",
+                        onClick = {
+                            shareFile(context, file)
+                            selectedFile = null
+                        }
+                    )
+                }
+
+                // 重命名
+                FileActionItem(
+                    icon = Icons.Outlined.Edit,
+                    label = "重命名",
+                    onClick = {
+                        showRenameDialog = true
+                    }
+                )
+
+                // 删除
+                FileActionItem(
+                    icon = Icons.Outlined.Delete,
+                    label = "删除",
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        showDeleteDialog = true
+                    }
+                )
+            }
+        }
+    }
+
+    // ── 重命名对话框 ──
+    if (showRenameDialog && selectedFile != null) {
+        val file = selectedFile!!
+        var newName by remember { mutableStateOf(file.name) }
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("重命名") },
+            text = {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text("新名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            },
+            shape = RoundedCornerShape(28.dp),
+            confirmButton = {
+                FilledTonalButton(
+                    onClick = {
+                        val target = File(file.parent, newName)
+                        if (target.exists()) {
+                            Toast.makeText(context, "同名文件已存在", Toast.LENGTH_SHORT).show()
+                        } else if (file.renameTo(target)) {
+                            Toast.makeText(context, "已重命名", Toast.LENGTH_SHORT).show()
+                            refreshCounter++
+                            selectedFile = null
+                            showRenameDialog = false
+                        } else {
+                            Toast.makeText(context, "重命名失败", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = newName.isNotBlank() && newName != file.name
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // ── 删除确认对话框 ──
+    if (showDeleteDialog && selectedFile != null) {
+        val file = selectedFile!!
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("删除确认") },
+            text = {
+                Text(
+                    if (file.isDirectory) "确定要删除文件夹「${file.name}」及其所有内容吗？"
+                    else "确定要删除「${file.name}」吗？"
+                )
+            },
+            shape = RoundedCornerShape(28.dp),
+            confirmButton = {
+                FilledTonalButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        selectedFile = null
+                        scope.launch {
+                            val success = withContext(Dispatchers.IO) {
+                                forceDelete(file)
+                            }
+                            if (success) {
+                                Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
+                                refreshCounter++
+                            } else {
+                                Toast.makeText(context, "删除失败，请检查存储权限", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // ── 图片画廊预览对话框（支持左右滑动） ──
+    if (showGallery && galleryImages.isNotEmpty()) {
+        val pagerState = rememberPagerState(
+            initialPage = galleryInitialIndex,
+            pageCount = { galleryImages.size }
+        )
+        val currentFile = galleryImages.getOrNull(pagerState.currentPage)
+
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showGallery = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = currentFile?.name ?: "",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${pagerState.currentPage + 1} / ${galleryImages.size}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Row {
+                            if (currentFile != null) {
+                                IconButton(onClick = { shareFile(context, currentFile) }) {
+                                    Icon(Icons.Outlined.Share, "分享", modifier = Modifier.size(20.dp))
+                                }
+                            }
+                            IconButton(onClick = { showGallery = false }) {
+                                Icon(Icons.Default.Close, "关闭", modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        pageSpacing = 16.dp
+                    ) { page ->
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = galleryImages[page],
+                                contentDescription = galleryImages[page].name,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(16.dp)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (currentFile != null) {
+                        Text(
+                            text = "${formatFileSize(currentFile.length())} · ${formatDate(currentFile.lastModified())}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────── 子组件 ───────────────────────
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileListItem(
+    file: File,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val isAudio = file.isFile && file.isAudioFile()
+    val isThisPlaying by remember {
+        derivedStateOf {
+            AudioPlayerManager.playingSource.value == file.absolutePath &&
+                    AudioPlayerManager.isPlaying.value
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        color = if (isThisPlaying)
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        else
+            MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (isAudio) {
+                AudioPlayButton(
+                    source = file.absolutePath,
+                    size = 44
+                )
+            } else {
+                FileIcon(file, size = 44)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = file.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (file.isDirectory) FontWeight.Medium else FontWeight.Normal
+                )
+                Text(
+                    text = buildString {
+                        if (file.isDirectory) {
+                            val count = file.listFiles()?.size ?: 0
+                            append("$count 项")
+                        } else {
+                            append(formatFileSize(file.length()))
+                        }
+                        append(" · ")
+                        append(formatDate(file.lastModified()))
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+            IconButton(onClick = onLongClick, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Default.MoreVert, "操作",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileIcon(file: File, size: Int) {
+    if (file.isDirectory) {
+        Surface(
+            modifier = Modifier.size(size.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primaryContainer
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Folder, null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size((size * 0.5).dp)
+                )
+            }
+        }
+    } else if (file.isImageFile()) {
+        AsyncImage(
+            model = file,
+            contentDescription = null,
+            modifier = Modifier
+                .size(size.dp)
+                .clip(RoundedCornerShape(12.dp)),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
+    } else {
+        Surface(
+            modifier = Modifier.size(size.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    getFileIcon(file), null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size((size * 0.5).dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileActionItem(
+    icon: ImageVector,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(16.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
+        }
+    }
+}
+
+// ─────────────────────── 工具函数 ───────────────────────
+
+/**
+ * 强制删除文件/文件夹：先尝试 Java API，失败后尝试 shell rm 命令。
+ * 公共 Downloads 目录在 Android 11+ 可能无法通过 Java File API 删除。
+ */
+private fun forceDelete(file: File): Boolean {
+    // 方式1：Java API
+    val javaSuccess = try {
+        if (file.isDirectory) file.deleteRecursively() else file.delete()
+    } catch (_: Exception) {
+        false
+    }
+    if (javaSuccess && !file.exists()) return true
+
+    // 方式2：shell rm 命令（回退方案）
+    return try {
+        val cmd = if (file.isDirectory) "rm -rf" else "rm -f"
+        val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "$cmd '${file.absolutePath}'"))
+        val exitCode = process.waitFor()
+        exitCode == 0 && !file.exists()
+    } catch (_: Exception) {
+        false
+    }
+}
+
+private fun File.isImageFile(): Boolean {
+    val ext = extension.lowercase()
+    return ext in listOf("png", "jpg", "jpeg", "webp", "gif", "bmp")
+}
+
+private fun File.isAudioFile(): Boolean {
+    val ext = extension.lowercase()
+    return ext in listOf("ogg", "mp3", "wav", "flac", "m4a", "aac")
+}
+
+private fun File.isVideoFile(): Boolean {
+    val ext = extension.lowercase()
+    return ext in listOf("mp4", "mkv", "avi", "mov", "webm")
+}
+
+private fun getFileIcon(file: File): ImageVector {
+    return when {
+        file.isDirectory -> Icons.Default.Folder
+        file.isAudioFile() -> Icons.Outlined.AudioFile
+        file.isVideoFile() -> Icons.Outlined.VideoFile
+        file.isImageFile() -> Icons.Outlined.Image
+        else -> Icons.AutoMirrored.Outlined.InsertDriveFile
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt()
+    val idx = digitGroups.coerceIn(0, units.size - 1)
+    return DecimalFormat("#,##0.#").format(bytes / Math.pow(1024.0, idx.toDouble())) + " " + units[idx]
+}
+
+private fun formatDate(timestamp: Long): String {
+    if (timestamp <= 0) return ""
+    return SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(timestamp))
+}
+
+private fun getMimeType(file: File): String {
+    val ext = MimeTypeMap.getFileExtensionFromUrl(file.name)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+}
+
+private fun getFileUri(context: Context, file: File): Uri {
+    return try {
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+    } catch (_: Exception) {
+        Uri.fromFile(file)
+    }
+}
+
+private fun openFile(context: Context, file: File) {
+    try {
+        val uri = getFileUri(context, file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, getMimeType(file))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, "无法打开该文件", Toast.LENGTH_SHORT).show()
+    }
+}
+
+private fun shareFile(context: Context, file: File) {
+    try {
+        val uri = getFileUri(context, file)
+        val intent = Intent.createChooser(
+            Intent(Intent.ACTION_SEND).apply {
+                type = getMimeType(file)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            },
+            null
+        )
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, "分享失败", Toast.LENGTH_SHORT).show()
+    }
+}

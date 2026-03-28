@@ -1,0 +1,208 @@
+package com.nekolaska.calabiyau.ui
+
+import android.media.MediaPlayer
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+
+/**
+ * Android 端音频播放器管理器（单例），基于 MediaPlayer。
+ * 支持播放本地文件和网络 URL，同一时间只播放一个音频。
+ */
+object AudioPlayerManager {
+    private var mediaPlayer: MediaPlayer? = null
+    private var currentSource: String? = null
+    private var _isPlaying = mutableStateOf(false)
+    private var _playingSource = mutableStateOf<String?>(null)
+    private var _progress = mutableFloatStateOf(0f)
+
+    val isPlaying: State<Boolean> = _isPlaying
+    val playingSource: State<String?> = _playingSource
+
+    fun play(source: String) {
+        // 同一来源正在播放 → 暂停
+        if (currentSource == source && mediaPlayer?.isPlaying == true) {
+            mediaPlayer?.pause()
+            _isPlaying.value = false
+            return
+        }
+        // 同一来源暂停中 → 继续
+        if (currentSource == source && mediaPlayer != null) {
+            try {
+                mediaPlayer?.start()
+                _isPlaying.value = true
+                return
+            } catch (_: Exception) {
+                // 播放器状态异常，释放后重新创建
+                release()
+            }
+        }
+        // 新来源或之前的已释放 → 创建新的
+        release()
+        currentSource = source
+        _playingSource.value = source
+        try {
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(source)
+                setOnPreparedListener {
+                    start()
+                    _isPlaying.value = true
+                }
+                setOnCompletionListener {
+                    _isPlaying.value = false
+                    _progress.floatValue = 0f
+                }
+                setOnErrorListener { _, _, _ ->
+                    _isPlaying.value = false
+                    _playingSource.value = null
+                    currentSource = null
+                    false
+                }
+                prepareAsync()
+            }
+        } catch (_: Exception) {
+            _isPlaying.value = false
+            _playingSource.value = null
+            currentSource = null
+        }
+    }
+
+    fun stop() {
+        release()
+    }
+
+    fun getProgress(): Float {
+        val mp = mediaPlayer ?: return 0f
+        return try {
+            if (mp.duration > 0) mp.currentPosition.toFloat() / mp.duration else 0f
+        } catch (_: Exception) {
+            0f
+        }
+    }
+
+    fun getDuration(): Int {
+        return try {
+            mediaPlayer?.duration ?: 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    fun getCurrentPosition(): Int {
+        return try {
+            mediaPlayer?.currentPosition ?: 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    private fun release() {
+        try {
+            mediaPlayer?.stop()
+        } catch (_: Exception) { }
+        try {
+            mediaPlayer?.release()
+        } catch (_: Exception) { }
+        mediaPlayer = null
+        _isPlaying.value = false
+        _playingSource.value = null
+        _progress.floatValue = 0f
+        currentSource = null
+    }
+}
+
+/**
+ * 小型音频播放按钮，适用于列表项中（文件管理器、分类文件列表等）。
+ * @param source 音频来源（本地路径或网络 URL）
+ * @param size 按钮大小
+ */
+@Composable
+fun AudioPlayButton(
+    source: String,
+    size: Int = 36,
+    modifier: Modifier = Modifier
+) {
+    val isPlaying by AudioPlayerManager.isPlaying
+    val playingSource by AudioPlayerManager.playingSource
+    val isThisPlaying = isPlaying && playingSource == source
+
+    // 播放时的旋转动画
+    val infiniteTransition = rememberInfiniteTransition(label = "audio_spin")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    // 进度条定时刷新
+    var progress by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isThisPlaying) {
+        while (isThisPlaying) {
+            progress = AudioPlayerManager.getProgress()
+            delay(200)
+        }
+        if (!isThisPlaying) progress = 0f
+    }
+
+    Box(modifier = modifier.size(size.dp), contentAlignment = Alignment.Center) {
+        // 进度圆环
+        if (isThisPlaying) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(size.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+        }
+
+        FilledTonalIconButton(
+            onClick = { AudioPlayerManager.play(source) },
+            modifier = Modifier.size((size - 4).dp),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = if (isThisPlaying)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+            )
+        ) {
+            Icon(
+                imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (isThisPlaying) "暂停" else "播放",
+                modifier = Modifier
+                    .size((size * 0.45).dp)
+                    .then(if (isThisPlaying && false) Modifier.rotate(rotation) else Modifier),
+                tint = if (isThisPlaying)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * 音频播放图标区域，用于替代文件列表中非图片文件的 Icon。
+ * 包含播放按钮和音频文件图标。
+ */
+@Composable
+fun AudioFileIcon(
+    source: String,
+    size: Int = 48,
+    modifier: Modifier = Modifier
+) {
+    AudioPlayButton(source = source, size = size, modifier = modifier)
+}
