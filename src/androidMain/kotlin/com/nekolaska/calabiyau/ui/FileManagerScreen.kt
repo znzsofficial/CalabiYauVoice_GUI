@@ -187,7 +187,10 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                     if (file.isDirectory) {
                                         currentDir = file
                                     } else if (file.isImageFile()) {
-                                        previewFile = file
+                                        val images = files.filter { it.isImageFile() }
+                                        galleryImages = images
+                                        galleryInitialIndex = images.indexOf(file).coerceAtLeast(0)
+                                        showGallery = true
                                     } else if (file.isAudioFile()) {
                                         AudioPlayerManager.play(file.absolutePath)
                                     } else {

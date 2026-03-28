@@ -45,6 +45,7 @@ import android.os.Build
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.foundation.lazy.LazyRow
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.gif.AnimatedImageDecoder
@@ -52,9 +53,12 @@ import coil3.gif.GifDecoder
 import coil3.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import android.webkit.CookieManager
+import com.nekolaska.calabiyau.DownloadRecord
 import com.nekolaska.calabiyau.MainViewModel
 import com.nekolaska.calabiyau.SearchMode
+import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.WikiEngine
+import com.nekolaska.calabiyau.data.WikiUserApi
 import data.CharacterGroup
 import kotlinx.coroutines.launch
 import portrait.CharacterPortraitCatalog
@@ -62,10 +66,11 @@ import portrait.PortraitCostume
 
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
-    DOWNLOADER,  // 资源下载 (主页)
-    WIKI,        // Wiki 浏览器
-    FILE_MANAGER,// 文件管理
-    SETTINGS     // 设置
+    DOWNLOADER,        // 资源下载 (主页)
+    WIKI,              // Wiki 浏览器
+    FILE_MANAGER,      // 文件管理
+    DOWNLOAD_HISTORY,  // 下载历史
+    SETTINGS           // 设置
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -120,6 +125,12 @@ fun MainScreen(viewModel: MainViewModel) {
                     onBack = { currentDestination = DrawerDestination.DOWNLOADER }
                 )
             }
+            DrawerDestination.DOWNLOAD_HISTORY -> {
+                DownloadHistoryScreen(
+                    viewModel = viewModel,
+                    onBack = { currentDestination = DrawerDestination.DOWNLOADER }
+                )
+            }
             DrawerDestination.SETTINGS -> {
                 SettingsScreen(onBack = { currentDestination = DrawerDestination.DOWNLOADER })
             }
@@ -150,6 +161,65 @@ private fun AppDrawerContent(
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
         )
 
+        // ── Wiki 用户信息（标题下方，导航项上方） ──
+        val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
+        var wikiUserInfo by remember { mutableStateOf<WikiUserApi.UserInfo?>(null) }
+        var isLoadingUserInfo by remember { mutableStateOf(false) }
+        var showUserInfoSheet by remember { mutableStateOf(false) }
+        val wikiCoroutineScope = rememberCoroutineScope()
+
+        // 每次侧栏显示时刷新登录状态
+        LaunchedEffect(currentDestination) {
+            hasLoginCookie.value = hasWikiLoginCookie()
+            if (hasLoginCookie.value && wikiUserInfo == null && !isLoadingUserInfo) {
+                isLoadingUserInfo = true
+                wikiCoroutineScope.launch {
+                    when (val result = WikiUserApi.fetchCurrentUserInfo()) {
+                        is WikiUserApi.ApiResult.Success -> {
+                            val info = result.value
+                            if (info != null && info.isLoggedIn) {
+                                wikiUserInfo = info
+                            }
+                        }
+                        is WikiUserApi.ApiResult.Error -> { /* 忽略错误 */ }
+                    }
+                    isLoadingUserInfo = false
+                }
+            }
+            if (!hasLoginCookie.value) {
+                wikiUserInfo = null
+                showUserInfoSheet = false
+            }
+        }
+
+        if (wikiUserInfo != null) {
+            WikiUserInfoCard(
+                userInfo = wikiUserInfo!!,
+                onClick = { showUserInfoSheet = true },
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+            )
+        } else if (isLoadingUserInfo) {
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 28.dp, vertical = 8.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Text(
+                    text = "正在获取用户信息…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp))
 
         Spacer(Modifier.height(8.dp))
@@ -166,18 +236,12 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // 2. Wiki 浏览器（含登录状态）
-        val wikiLoginInfo = remember { mutableStateOf(getWikiLoginInfo()) }
-        // 每次侧栏显示时刷新登录状态
-        LaunchedEffect(currentDestination) {
-            wikiLoginInfo.value = getWikiLoginInfo()
-        }
-
+        // 2. Wiki 浏览器
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.Language, contentDescription = null) },
             label = { Text("Wiki") },
             badge = {
-                if (wikiLoginInfo.value != null) {
+                if (hasLoginCookie.value) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(8.dp)
@@ -217,7 +281,19 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // 4. 设置
+        // 4. 下载历史
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.History, contentDescription = null) },
+            label = { Text("下载历史") },
+            selected = currentDestination == DrawerDestination.DOWNLOAD_HISTORY,
+            onClick = { onDestinationSelected(DrawerDestination.DOWNLOAD_HISTORY) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 5. 设置
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
             label = { Text("设置") },
@@ -235,6 +311,208 @@ private fun AppDrawerContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
+        )
+    }
+
+    // ── 用户信息底部弹窗 ──
+    if (showUserInfoSheet && wikiUserInfo != null) {
+        WikiUserInfoBottomSheet(
+            userInfo = wikiUserInfo!!,
+            onDismiss = { showUserInfoSheet = false }
+        )
+    }
+}
+
+// ─────────────────────── Wiki 用户信息卡片（侧栏摘要） ───────────────────────
+
+@Composable
+private fun WikiUserInfoCard(
+    userInfo: WikiUserApi.UserInfo,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // 头像圆圈（首字母）
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = userInfo.name.firstOrNull()?.uppercase() ?: "?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = userInfo.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "编辑 ${userInfo.editCount} 次",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "查看详情",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+// ─────────────────────── Wiki 用户信息底部弹窗 ───────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WikiUserInfoBottomSheet(
+    userInfo: WikiUserApi.UserInfo,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 头像 + 用户名
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = userInfo.name.firstOrNull()?.uppercase() ?: "?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+                Column {
+                    Text(
+                        text = userInfo.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Wiki ID: ${userInfo.id}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 用户组标签
+            if (userInfo.displayGroups.isNotEmpty()) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    userInfo.displayGroups.forEach { group ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = WikiUserApi.groupLabel(group),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // 详细信息
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                UserDetailRow(label = "编辑次数", value = "${userInfo.editCount}")
+
+                if (userInfo.registrationDate.isNotBlank()) {
+                    UserDetailRow(
+                        label = "注册时间",
+                        value = WikiUserApi.formatTimestamp(userInfo.registrationDate)
+                    )
+                }
+
+                if (userInfo.email.isNotBlank()) {
+                    UserDetailRow(label = "邮箱", value = userInfo.email)
+                }
+
+                if (userInfo.realName.isNotBlank()) {
+                    UserDetailRow(label = "真实姓名", value = userInfo.realName)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserDetailRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(72.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -278,8 +556,16 @@ private fun DownloaderScreen(
     val dialogSelectedUrls by viewModel.dialogSelectedUrls.collectAsState()
     val manualSelectionMap by viewModel.manualSelectionMap.collectAsState()
 
+    val favorites by viewModel.favorites.collectAsState()
+
     val focusManager = LocalFocusManager.current
     var showLogs by remember { mutableStateOf(false) }
+    // 搜索历史
+    var searchHistoryList by remember { mutableStateOf(AppPrefs.searchHistory) }
+    // 每次搜索关键词变化时刷新历史
+    LaunchedEffect(searchKeyword) {
+        searchHistoryList = AppPrefs.searchHistory
+    }
 
     // 处理返回键
     BackHandler(enabled = selectedPortraitCharacter != null) {
@@ -344,6 +630,44 @@ private fun DownloaderScreen(
                         isSearching = isSearching,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
+
+                    // 搜索历史 chips
+                    if (searchHistoryList.isNotEmpty() && searchKeyword.isBlank()) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        AppPrefs.clearSearchHistory()
+                                        searchHistoryList = emptyList()
+                                    },
+                                    label = { Text("清除历史", style = MaterialTheme.typography.labelSmall) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(16.dp))
+                                    },
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                            }
+                            items(searchHistoryList.size) { index ->
+                                val historyItem = searchHistoryList[index]
+                                SuggestionChip(
+                                    onClick = {
+                                        viewModel.onSearchKeywordChange(historyItem)
+                                        focusManager.clearFocus()
+                                        viewModel.performSearch()
+                                    },
+                                    label = { Text(historyItem, style = MaterialTheme.typography.labelSmall) },
+                                    icon = {
+                                        Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp))
+                                    },
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -367,7 +691,7 @@ private fun DownloaderScreen(
                 ) {
                     val modes = listOf(
                         Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
-                        Triple(SearchMode.ALL_CATEGORIES, "全部分类", Icons.Outlined.Category),
+                        Triple(SearchMode.ALL_CATEGORIES, "分类", Icons.Outlined.Category),
                         Triple(SearchMode.FILE_SEARCH, "文件搜索", Icons.Outlined.FindInPage),
                         Triple(SearchMode.PORTRAIT, "立绘", Icons.Outlined.Image)
                     )
@@ -416,6 +740,8 @@ private fun DownloaderScreen(
                         characters = portraitCharacters,
                         characterAvatars = characterAvatars,
                         hasSearched = hasSearched,
+                        favorites = favorites,
+                        onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onSelectCharacter = { viewModel.onSelectPortraitCharacter(it) }
                     )
                 }
@@ -424,6 +750,8 @@ private fun DownloaderScreen(
                         characterGroups = characterGroups,
                         characterAvatars = characterAvatars,
                         hasSearched = hasSearched,
+                        favorites = favorites,
+                        onToggleFavorite = { viewModel.toggleFavorite(it) },
                         onSelectGroup = { viewModel.onSelectGroup(it) }
                     )
                 }
@@ -562,6 +890,8 @@ fun PortraitGrid(
     characters: List<String>,
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
+    favorites: Set<String> = emptySet(),
+    onToggleFavorite: (String) -> Unit = {},
     onSelectCharacter: (String) -> Unit
 ) {
     if (characters.isEmpty()) {
@@ -572,6 +902,11 @@ fun PortraitGrid(
         return
     }
 
+    // 收藏的排前面
+    val sorted = remember(characters, favorites) {
+        characters.sortedByDescending { it in favorites }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
         contentPadding = PaddingValues(16.dp),
@@ -579,8 +914,9 @@ fun PortraitGrid(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        items(characters) { name ->
+        items(sorted) { name ->
             val avatarUrl = characterAvatars[name]
+            val isFav = name in favorites
             Card(
                 onClick = { onSelectCharacter(name) },
                 shape = RoundedCornerShape(20.dp),
@@ -588,47 +924,64 @@ fun PortraitGrid(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                 )
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    if (avatarUrl != null) {
-                        AsyncImage(
-                            model = avatarUrl,
-                            contentDescription = name,
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(64.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = name.firstOrNull()?.toString() ?: "?",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
+                Box(Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (avatarUrl != null) {
+                            AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = name,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(64.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = name.firstOrNull()?.toString() ?: "?",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
                             }
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.labelLarge,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.labelLarge,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    // 收藏按钮
+                    IconButton(
+                        onClick = { onToggleFavorite(name) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(32.dp)
+                    ) {
+                        Icon(
+                            if (isFav) Icons.Default.Star else Icons.Outlined.StarBorder,
+                            contentDescription = if (isFav) "取消收藏" else "收藏",
+                            modifier = Modifier.size(18.dp),
+                            tint = if (isFav) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    }
                 }
             }
         }
@@ -812,6 +1165,8 @@ fun CategoryGroupList(
     characterGroups: List<CharacterGroup>,
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
+    favorites: Set<String> = emptySet(),
+    onToggleFavorite: (String) -> Unit = {},
     onSelectGroup: (CharacterGroup) -> Unit
 ) {
     if (characterGroups.isEmpty()) {
@@ -822,12 +1177,23 @@ fun CategoryGroupList(
         return
     }
 
+    // 收藏的排前面
+    val sorted = remember(characterGroups, favorites) {
+        characterGroups.sortedByDescending { it.characterName in favorites }
+    }
+
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(characterGroups) { group ->
-            GroupCard(group, characterAvatars[group.characterName], onClick = { onSelectGroup(group) })
+        items(sorted) { group ->
+            GroupCard(
+                group = group,
+                avatarUrl = characterAvatars[group.characterName],
+                isFavorite = group.characterName in favorites,
+                onToggleFavorite = { onToggleFavorite(group.characterName) },
+                onClick = { onSelectGroup(group) }
+            )
         }
     }
 }
@@ -836,6 +1202,8 @@ fun CategoryGroupList(
 fun GroupCard(
     group: CharacterGroup,
     avatarUrl: String?,
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
     onClick: () -> Unit
 ) {
     Card(
@@ -890,6 +1258,20 @@ fun GroupCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            // 收藏按钮
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    if (isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
+                    contentDescription = if (isFavorite) "取消收藏" else "收藏",
+                    modifier = Modifier.size(20.dp),
+                    tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            }
+            Spacer(Modifier.width(4.dp))
             FilledTonalIconButton(
                 onClick = onClick,
                 modifier = Modifier.size(36.dp),
@@ -1708,6 +2090,153 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────── 下载历史页 ───────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DownloadHistoryScreen(
+    viewModel: MainViewModel,
+    onBack: () -> Unit
+) {
+    val history by viewModel.downloadHistory.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("下载历史") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                actions = {
+                    if (history.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.clearDownloadHistory() }) {
+                            Icon(Icons.Default.DeleteSweep, "清空历史")
+                        }
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        if (history.isEmpty()) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        modifier = Modifier.size(80.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Outlined.History, null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "暂无下载记录",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.padding(innerPadding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(history.size) { index ->
+                    val record = history[index]
+                    DownloadHistoryItem(record = record)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadHistoryItem(record: DownloadRecord) {
+    val isError = record.status == "error"
+    val dateFormat = remember {
+        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+    }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isError)
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            else
+                MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 状态图标
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = if (isError)
+                    MaterialTheme.colorScheme.errorContainer
+                else
+                    MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (isError) Icons.Default.ErrorOutline else Icons.Default.CheckCircleOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                        tint = if (isError)
+                            MaterialTheme.colorScheme.onErrorContainer
+                        else
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = record.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = dateFormat.format(java.util.Date(record.timestamp)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (record.fileCount > 0) {
+                        Text(
+                            text = "${record.fileCount} 个文件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
