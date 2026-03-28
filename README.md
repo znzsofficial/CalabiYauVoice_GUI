@@ -7,97 +7,131 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-red)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE.txt)
 
-A Compose Desktop application for browsing and downloading Strinova wiki resources.<br>
-一个基于 Compose Desktop 构建的桌面应用，用于浏览与下载卡拉彼丘 Wiki 资源。
+A Kotlin Multiplatform application for browsing and downloading [Strinova](https://wiki.biligame.com/klbq/) wiki resources, built with Compose for Desktop and Android.
 
-[English](#english) • [简体中文](#简体中文)
+[简体中文](README_ZH_CN.md)
 
 <br>
 
-![App Screenshot](snapshot.png)
-*截图 | Screenshot*
+<table>
+  <tr>
+    <th>Desktop</th>
+    <th>Android</th>
+  </tr>
+  <tr>
+    <td><img src="snapshot.png" alt="Desktop Screenshot" height="500"></td>
+    <td><img src="snapshot_android.png" alt="Android Screenshot" height="500"></td>
+  </tr>
+</table>
 
 </div>
 
 ---
 
-## 🇺🇸 English
+## ✨ Features
 
-### ✨ Features
+### 🖥️ Desktop (Windows)
 
-- **🔍 Smart Search:** Search character categories (voice-only or all resource types), or switch to file search mode (namespace 6).
-- **⚡ Concurrent Downloads:** Scan category trees and download files with built-in concurrency control.
-- **🖼️ Rich Preview:** Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`. Click to enlarge, scroll to zoom.
-- **🎵 Audio Playback:** In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files directly from search results.
-- **🔄 MP3/FLAC → WAV Conversion:** Batch-convert downloaded `MP3` or `FLAC` files to WAV with configurable sample rate and bit depth.
-- **⌨️ Keyboard Shortcuts:** `Ctrl+F` focus search, `F5` re-search, `Ctrl+D` download, `Ctrl+A` / `Ctrl+Shift+A` select all / deselect, `↑↓` navigate list, and more.
-- **🎛️ Windows Backdrop:** Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles at runtime.
-- **🪟 Custom Title Bar:** Borderless native window with custom caption buttons and drag-to-move support.
-- **🖥️ Compatibility:** Gracefully falls back on non-Windows-11 devices.
+- **🔍 Smart Search** — Search by character voice categories, all resource types, file search (namespace 6), or portrait/illustration mode.
+- **⚡ Concurrent Downloads** — Scan category trees and download files with configurable concurrency.
+- **🖼️ Rich Preview** — Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`. Click to enlarge, scroll to zoom.
+- **🎵 Audio Playback** — In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files directly from search results.
+- **🔄 MP3/FLAC → WAV Conversion** — Batch-convert downloaded audio to WAV with configurable sample rate and bit depth. Optional WAV merging.
+- **⌨️ Keyboard Shortcuts** — `Ctrl+F` focus search, `F5` re-search, `Ctrl+D` download, `Ctrl+A` / `Ctrl+Shift+A` select / deselect all, `Ctrl+1~4` switch modes, `↑↓` navigate, and more.
+- **🎛️ Windows Backdrop** — Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles at runtime.
+- **🪟 Custom Title Bar** — Borderless native window with custom caption buttons and drag-to-move support.
+- **🖥️ Compatibility** — Graceful fallback on non-Windows-11 devices with gradient background.
 
-### 🛠️ Tech Stack
+### 📱 Android
 
-- **Core:** Kotlin, Coroutines
-- **UI:** Compose Desktop, [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler)
-- **Network & Data:** OkHttp, kotlinx.serialization
-- **Audio:** `javax.sound.sampled` (WAV/OGG/FLAC), `mp3spi` (MP3), `jflac-codec` (FLAC decode)
-- **Image:** `javax.imageio.ImageIO` (GIF frame decoding)
-
----
-
-## 🇨🇳 简体中文
-
-### ✨ 特性
-
-- **🔍 智能搜索：** 支持分类搜索（仅语音 / 所有类型），也可切换为文件搜索模式（命名空间 6）。
-- **⚡ 并发下载：** 扫描分类树并并发下载文件，内置完善的并发控制。
-- **🖼️ 丰富预览：** 支持 `PNG`、`JPG`、`WebP` 静态图与 `GIF` 逐帧动画预览。点击放大，滚轮缩放。
-- **🎵 音频播放：** 可直接在搜索结果中播放 `WAV`、`OGG`、`FLAC` 及 `MP3` 格式音频。
-- **🔄 MP3/FLAC 转 WAV：** 下载后批量将 `MP3` 或 `FLAC` 转换为 `WAV`，支持自定义采样率与位深。
-- **⌨️ 键盘快捷键：** `Ctrl+F` 聚焦搜索，`F5` 重新搜索，`Ctrl+D` 开始下载，`Ctrl+A` / `Ctrl+Shift+A` 全选 / 取消全选，`↑↓` 导航列表，以及更多。
-- **🎛️ 窗口特效：** 运行时动态切换 Mica、Tabbed、Acrylic、Aero 等 Windows 11 背景特效。
-- **🪟 自定义标题栏：** 无边框原生窗口，自定义标题栏按钮，支持拖拽移动。
-- **🖥️ 兼容性：** 非 Windows 11 设备自动降级，标题栏背景跟随主题色保证可读性。
-
-### 🛠️ 技术栈
-
-- **核心：** Kotlin、协程 (Coroutines)
-- **UI 框架：** Compose Desktop、[Compose Fluent UI](https://github.com/compose-fluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/MayakaApps/ComposeWindowStyler)
-- **网络与数据：** OkHttp、kotlinx.serialization
-- **音频：** `javax.sound.sampled`（WAV/OGG/FLAC）、`mp3spi`（MP3）、`jflac-codec`（FLAC 解码）
-- **图像：** `javax.imageio.ImageIO`（GIF 多帧解码动画）
+- **🔍 4 Search Modes** — Voice-only, all categories, file search, and portrait/illustration — switchable via bottom navigation bar.
+- **⚡ Concurrent Downloads** — Same powerful download engine as Desktop with configurable concurrency.
+- **🌐 Built-in Wiki Browser** — Embedded WebView with cookie persistence, auto-login detection, user info display, file download/upload support, and navigation controls.
+- **🖼️ Portrait Viewer** — Swipeable multi-image preview per costume with image type labels and page indicators.
+- **📁 File Manager** — Browse downloaded files with multi-select mode (long-press), batch delete/share, image gallery preview, and audio playback.
+- **📊 Download History** — Track past downloads with status and file count.
+- **🎵 Audio Playback** — Play `WAV`, `OGG`, `MP3` audio files from search results or local storage.
+- **🗂️ File Selection Dialog** — Per-category file picker with search, language filtering (CN/JP/EN), and image preview.
+- **⭐ Favorites** — Bookmark characters for quick access.
+- **📶 Network Detection** — Offline status banner with custom error page in WebView.
+- **🎨 Material You** — Dynamic color scheme with light/dark/system theme options.
+- **🔍 Search History** — Persistent search suggestions as chips.
 
 ---
 
-## 📂 Project Structure / 项目结构 (MVVM)
+## 🛠️ Tech Stack
+
+### Shared (commonMain)
+
+| Component     | Technology                   |
+|---------------|------------------------------|
+| Language      | Kotlin 2.3.10                |
+| Async         | Kotlin Coroutines            |
+| Network       | OkHttp 5                     |
+| Serialization | kotlinx.serialization        |
+| UI Foundation | Compose Multiplatform 1.10.3 |
+
+### Desktop
+
+| Component | Technology                                                                                                                                         |
+|-----------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| UI        | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
+| Audio     | `javax.sound.sampled`, `mp3spi`, `jflac-codec`                                                                                                     |
+| Image     | `javax.imageio.ImageIO` (GIF frame decoding)                                                                                                       |
+| Native    | JNA 5 (Windows API)                                                                                                                                |
+
+### Android
+
+| Component     | Technology                   |
+|---------------|------------------------------|
+| UI            | Jetpack Compose + Material 3 |
+| Image Loading | Coil 3 (async + GIF)         |
+| Web           | Android WebView              |
+| Audio         | Android MediaPlayer          |
+| Architecture  | AndroidViewModel + StateFlow |
+
+---
+
+## 📂 Project Structure
 
 ```text
-src/main/kotlin/
-├── data/          # 🌐 Wiki access, image/audio loading (数据与网络请求层)
-├── viewmodel/     # 🧠 ViewModel layer: state + actions (视图模型层)
-├── ui/
-│   ├── screens/   # 🖥️ Screen composables (页面组件)
-│   └── components/# 🧩 Reusable UI components (可复用 UI 组件)
-├── util/          # 🛠️ Utilities (工具类)
+src/
+├── commonMain/          # Shared business logic
+│   ├── data/            #   Wiki API core, models, serialization
+│   ├── portrait/        #   Portrait parsing & organization
+│   └── util/            #   File extension utilities
+├── desktopMain/         # Desktop (Windows) target
+│   ├── data/            #   OkHttp client, image loader, cookies
+│   ├── viewmodel/       #   State management
+│   ├── ui/screens/      #   Screen composables
+│   ├── ui/components/   #   Reusable UI components
+│   ├── util/            #   Audio conversion, preferences
+│   └── jna/windows/     #   Win32 API bindings
+└── androidMain/         # Android target
+    ├── data/            #   OkHttp client, preferences, network monitor
+    ├── ui/              #   Compose screens & components
+    └── (MainActivity, MainViewModel)
 ```
 
-## 🚀 Build and Run / 构建与运行
-
-You can build and run the application via Gradle.
-> *Windows PowerShell examples / Windows 命令行示例:*
+## 🚀 Build and Run
 
 ```powershell
-# Build the project / 构建项目
+# Build the project
 ./gradlew.bat build
 
-# Run Compose Desktop app / 运行桌面应用
+# Run Desktop app
 ./gradlew.bat run
+
+# Build Android APK
+./gradlew.bat assembleDebug
 ```
-*(For macOS/Linux, use `./gradlew` instead of `./gradlew.bat`)*
 
-## ⚠️ Notes / 注意事项
+> For macOS/Linux, use `./gradlew` instead of `./gradlew.bat`.
 
-- 📡 **API Dependency:** The app depends on Bilibili wiki endpoints; availability may vary depending on network conditions. / 本应用依赖于 Bilibili Wiki 的 API 接口，可用性可能受网络环境影响。
+## ⚠️ Notes
+
+- 📡 **API Dependency:** The app depends on Bilibili wiki endpoints; availability may vary depending on network conditions.
+- 📱 **Android:** Requires Android 8.0 (API 26) or later.
 
 ## 📄 License
 
