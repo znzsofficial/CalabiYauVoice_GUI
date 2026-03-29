@@ -42,6 +42,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var themeMode by remember { mutableIntStateOf(AppPrefs.themeMode) }
     val globalThemeMode = LocalThemeMode.current
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
+    var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
 
     val context = LocalContext.current
 
@@ -286,6 +287,61 @@ fun SettingsScreen(onBack: () -> Unit) {
                                                     AppPrefs.themeMode = mode
                                                     globalThemeMode.intValue = mode
                                                     showThemeDialog = false
+                                                }
+                                            )
+                                            Spacer(Modifier.width(12.dp))
+                                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                                        }
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(28.dp),
+                            confirmButton = {}
+                        )
+                    }
+
+                    // 底栏样式
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    var showBarStyleDialog by remember { mutableStateOf(false) }
+                    val barStyleName = when (bottomBarStyle) {
+                        AppPrefs.BAR_STYLE_DOCKED_TOOLBAR -> "悬浮工具栏"
+                        else -> "经典导航栏"
+                    }
+                    SettingsItem(
+                        icon = Icons.Outlined.ViewDay,
+                        title = "底栏样式",
+                        subtitle = "$barStyleName（重启页面生效）",
+                        onClick = { showBarStyleDialog = true }
+                    )
+
+                    if (showBarStyleDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showBarStyleDialog = false },
+                            title = { Text("底栏样式") },
+                            text = {
+                                Column {
+                                    listOf(
+                                        AppPrefs.BAR_STYLE_DOCKED_TOOLBAR to "悬浮工具栏",
+                                        AppPrefs.BAR_STYLE_BOTTOM_APP_BAR to "经典导航栏"
+                                    ).forEach { (style, label) ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    bottomBarStyle = style
+                                                    AppPrefs.bottomBarStyle = style
+                                                    showBarStyleDialog = false
+                                                }
+                                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = bottomBarStyle == style,
+                                                onClick = {
+                                                    bottomBarStyle = style
+                                                    AppPrefs.bottomBarStyle = style
+                                                    showBarStyleDialog = false
                                                 }
                                             )
                                             Spacer(Modifier.width(12.dp))

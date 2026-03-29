@@ -6,12 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.BottomAppBar
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -42,7 +37,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** 全局主题模式状态，可从任何 Composable 中读取/修改 */
-val LocalThemeMode = androidx.compose.runtime.staticCompositionLocalOf { androidx.compose.runtime.mutableIntStateOf(AppPrefs.themeMode) }
+val LocalThemeMode = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.themeMode) }
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
