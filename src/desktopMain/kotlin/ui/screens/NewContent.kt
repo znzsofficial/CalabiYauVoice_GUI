@@ -191,6 +191,7 @@ fun NewDownloaderContent() {
     var showShortcutsDialog by remember { mutableStateOf(false) }
     var showUserInfoDialog by remember { mutableStateOf(false) }
     var showConverterWindow by remember { mutableStateOf(false) }
+    var showLogWindow by remember { mutableStateOf(false) }
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
@@ -261,6 +262,16 @@ fun NewDownloaderContent() {
     }
     if (showConverterWindow) {
         Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
+    }
+    if (showLogWindow) {
+        LogWindow(
+            logLines = logLines,
+            isDownloading = isDownloading,
+            isScanningTree = isScanningTree,
+            progress = progress,
+            progressText = progressText,
+            onCloseRequest = { showLogWindow = false }
+        )
     }
 
     // --- 用户信息面板 ---
@@ -434,6 +445,11 @@ fun NewDownloaderContent() {
                         onClick = { showConverterWindow = true },
                         icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },
                         text = { Text("音频转换工具") }
+                    )
+                    MenuFlyoutItem(
+                        onClick = { showLogWindow = true },
+                        icon = { Icon(Icons.Regular.TextBulletListLtr, contentDescription = null) },
+                        text = { Text("运行日志") }
                     )
                     MenuFlyoutSeparator()
                     MenuFlyoutItem(
@@ -1155,54 +1171,7 @@ fun NewDownloaderContent() {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
 
-        // === 底部：日志面板 ===
-        Card(
-            modifier = Modifier.height(150.dp)
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                // 标题栏
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(FluentTheme.colors.control.secondary)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Image(
-                        painter = rememberVectorPainter(Icons.Regular.TextBulletListLtr),
-                        contentDescription = null,
-                        colorFilter = ColorFilter.tint(FluentTheme.colors.text.text.secondary),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("运行日志", color = FluentTheme.colors.text.text.secondary, fontSize = 12.sp)
-                    Spacer(Modifier.weight(1f))
-                    if (progressText.isNotEmpty()) {
-                        Text(
-                            progressText,
-                            color = Color(0xFF61AFEF),
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-
-                // 进度条
-                if (isDownloading || isScanningTree) {
-                    ProgressBar(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp))
-                } else {
-                    Spacer(
-                        Modifier.fillMaxWidth().height(1.dp)
-                            .background(FluentTheme.colors.stroke.card.default)
-                    )
-                }
-
-                // 日志内容
-                TerminalOutputView(logLines, Modifier.fillMaxSize())
-            }
-        }
     }
 }
 
