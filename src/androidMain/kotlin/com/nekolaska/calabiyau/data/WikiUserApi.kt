@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import okhttp3.Request
 
 /**
@@ -52,6 +53,64 @@ object WikiUserApi {
         data class Error(val message: String) : ApiResult<Nothing>
     }
 
+    // ───── 用户贡献数据模型 ───────────────────────────────────────
+
+    @Serializable
+    data class ContributionsResponse(
+        val query: ContribQuery? = null
+    )
+
+    @Serializable
+    data class ContribQuery(
+        val usercontribs: List<UserContrib>? = null
+    )
+
+    @Serializable
+    data class UserContrib(
+        @SerialName("revid") val revId: Long = 0,
+        @SerialName("pageid") val pageId: Long = 0,
+        val title: String = "",
+        val timestamp: String = "",
+        val comment: String = "",
+        val size: Int = 0,
+        @SerialName("sizediff") val sizeDiff: Int = 0,
+        val minor: JsonElement? = null,
+        val top: JsonElement? = null,
+        @SerialName("new") val isNew: JsonElement? = null
+    ) {
+        val isMinor: Boolean get() = minor != null
+        val isNewPage: Boolean get() = isNew != null
+    }
+
+    // ───── 监视列表数据模型 ─────────────────────────────────────────
+
+    @Serializable
+    data class WatchlistResponse(
+        val query: WatchlistQuery? = null
+    )
+
+    @Serializable
+    data class WatchlistQuery(
+        val watchlist: List<WatchlistItem>? = null
+    )
+
+    @Serializable
+    data class WatchlistItem(
+        val title: String = "",
+        val timestamp: String = "",
+        val type: String = "",
+        val comment: String = "",
+        val user: String = "",
+        @SerialName("revid") val revId: Long = 0,
+        @SerialName("pageid") val pageId: Long = 0,
+        @SerialName("old_revid") val oldRevId: Long = 0,
+        val minor: JsonElement? = null,
+        val anon: JsonElement? = null
+    ) {
+        val isMinor: Boolean get() = minor != null
+        val isAnon: Boolean get() = anon != null
+    }
+
     // ───── JSON 解析器 ───────────────────────────────────────────────
 
     private val json = SharedJson
@@ -75,6 +134,65 @@ object WikiUserApi {
         )
 
         fetchWithCookies(url, cookies)
+    }
+
+    /**
+     * 获取指定用户的最近编辑贡献（通过 WebView Cookie）。
+     */
+    suspend fun fetchContributions(
+        userName: String,
+        limit: Int = 20
+    ): ApiResult<List<UserContrib>> = withContext(Dispatchers.IO) {
+        val cookies = getWikiCookies()
+        if (cookies.isNullOrBlank()) {
+            return@withContext ApiResult.Error("未检测到登录 Cookie")
+        }
+
+        val url = buildUrl(
+            "action" to "query",
+            "list" to "usercontribs",
+            "ucuser" to userName,
+            "ucprop" to "ids|title|timestamp|comment|size|sizediff|flags",
+            "uclimit" to "$limit",
+            "format" to "json"
+        )
+
+        fetchJsonWithCookies(url, cookies, "解析编辑贡献失败") {
+            json.decodeFromString<ContributionsResponse>(it).query?.usercontribs ?: emptyList()
+        }
+    }
+
+    /**
+     * 获取当前用户的监视列表最近变更（需要已登录 Cookie）。
+     */
+    suspend fun fetchWatchlist(
+        limit: Int = 20
+    ): ApiResult<List<WatchlistItem>> = withContext(Dispatchers.IO) {
+        val cookies = getWikiCookies()
+        if (cookies.isNullOrBlank()) {
+            return@withContext ApiResult.Error("未检测到登录 Cookie")
+        }
+
+        val url = buildUrl(
+            "action" to "query",
+            "list" to "watchlist",
+            "wlprop" to "ids|title|type|user|comment|timestamp|flags",
+            "wllimit" to "$limit",
+            "format" to "json"
+        )
+
+        fetchJsonWithCookies(url, cookies, "解析监视列表失败") {
+            json.decodeFromString<WatchlistResponse>(it).query?.watchlist ?: emptyList()
+        }
+    }
+
+    /** 监视列表变更类型中文映射 */
+    fun watchTypeLabel(type: String): String = when (type) {
+        "edit" -> "编辑"
+        "new" -> "新建"
+        "log" -> "日志"
+        "categorize" -> "分类"
+        else -> type
     }
 
     // ───── 内部工具 ──────────────────────────────────────────────────
@@ -104,6 +222,20 @@ object WikiUserApi {
      * 用 OkHttp 发起带 Cookie 的请求并解析 UserInfo。
      */
     private fun fetchWithCookies(url: String, cookies: String): ApiResult<UserInfo?> {
+        return fetchJsonWithCookies(url, cookies, "解析用户信息失败") {
+            json.decodeFromString<UserInfoResponse>(it).query?.userinfo
+        }
+    }
+
+    /**
+     * 通用：用 OkHttp 发起带 Cookie 的 GET 请求，返回 JSON 解析结果。
+     */
+    private inline fun <T> fetchJsonWithCookies(
+        url: String,
+        cookies: String,
+        parseErrorMessage: String,
+        crossinline transform: (String) -> T
+    ): ApiResult<T> {
         return runCatching {
             val request = Request.Builder()
                 .url(url)
@@ -121,8 +253,8 @@ object WikiUserApi {
                     body.trimStart().startsWith("<") ->
                         ApiResult.Error("返回了非 JSON 页面，可能未登录或被网关拦截")
                     else -> {
-                        val userInfo = json.decodeFromString<UserInfoResponse>(body).query?.userinfo
-                        ApiResult.Success(userInfo)
+                        runCatching { ApiResult.Success(transform(body)) }
+                            .getOrElse { ApiResult.Error(parseErrorMessage) }
                     }
                 }
             }

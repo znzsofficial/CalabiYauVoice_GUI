@@ -131,55 +131,62 @@ fun WikiWebViewScreen(
 
     Scaffold(
         topBar = {
-            // 精简顶栏：仅 URL 地址栏 + 进度条
+            // 精简顶栏：仅页面信息 + 进度条
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
-                    // 地址栏
+                    // 页面信息栏
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 安全锁图标
-                        Icon(
-                            if (currentUrl.startsWith("https://")) Icons.Outlined.Lock
-                            else Icons.Outlined.LockOpen,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = if (currentUrl.startsWith("https://"))
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.error
-                        )
-                        Spacer(Modifier.width(8.dp))
+                        if (onExitWiki != null) {
+                            Surface(
+                                onClick = onExitWiki,
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.AutoMirrored.Outlined.ExitToApp,
+                                        contentDescription = "退出 Wiki",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
 
                         // 标题 + URL
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .clickable {
                                     // 点击地址栏可复制 URL
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
                                     Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
                                 }
-                                .padding(vertical = 2.dp)
+                                .padding(vertical = 1.dp)
                         ) {
                             Text(
                                 text = pageTitle,
-                                style = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.titleSmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = currentUrl.removePrefix("https://").removePrefix("http://"),
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.labelSmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -190,9 +197,9 @@ fun WikiWebViewScreen(
                         if (isLoading) {
                             IconButton(
                                 onClick = { webView?.stopLoading() },
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(32.dp)
                             ) {
-                                Icon(Icons.Default.Close, "停止", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Close, "停止", modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -510,47 +517,62 @@ private fun WikiBottomToolbar(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
     ) {
         // 等距分布 5 个按钮
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // ← 后退
             IconButton(
                 onClick = onGoBack,
-                enabled = canGoBack
+                enabled = canGoBack,
+                modifier = Modifier.size(34.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "后退")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "后退", modifier = Modifier.size(18.dp))
             }
 
             // → 前进
             IconButton(
                 onClick = onGoForward,
-                enabled = canGoForward
+                enabled = canGoForward,
+                modifier = Modifier.size(34.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "前进")
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "前进", modifier = Modifier.size(18.dp))
             }
 
             // 🏠 首页
-            IconButton(onClick = onGoHome) {
-                Icon(Icons.Default.Home, contentDescription = "首页")
+            Surface(
+                onClick = onGoHome,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Home, contentDescription = "首页", modifier = Modifier.size(18.dp))
+                }
             }
 
             // 🔄 刷新 / ✕ 停止
-            IconButton(onClick = onRefresh) {
+            IconButton(onClick = onRefresh, modifier = Modifier.size(34.dp)) {
                 Icon(
                     if (isLoading) Icons.Default.Close else Icons.Default.Refresh,
-                    contentDescription = if (isLoading) "停止" else "刷新"
+                    contentDescription = if (isLoading) "停止" else "刷新",
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
             // ⋮ 更多菜单
             Box {
-                IconButton(onClick = { onShowMenuChange(true) }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                IconButton(onClick = { onShowMenuChange(true) }, modifier = Modifier.size(34.dp)) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(18.dp))
                 }
                 DropdownMenu(
                     expanded = showMenu,
