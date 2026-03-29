@@ -1,7 +1,10 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -11,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -348,7 +352,47 @@ private fun WikiUserInfoBottomSheet(
     userInfo: WikiUserApi.UserInfo,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("个人信息", "我的编辑", "监视列表")
+
+    // 编辑贡献状态
+    var contributions by remember { mutableStateOf<List<WikiUserApi.UserContrib>>(emptyList()) }
+    var isLoadingContribs by remember { mutableStateOf(false) }
+    var contribError by remember { mutableStateOf<String?>(null) }
+
+    // 监视列表状态
+    var watchlist by remember { mutableStateOf<List<WikiUserApi.WatchlistItem>>(emptyList()) }
+    var isLoadingWatchlist by remember { mutableStateOf(false) }
+    var watchlistError by remember { mutableStateOf<String?>(null) }
+
+    val activityScope = rememberCoroutineScope()
+
+    // 切到编辑贡献 Tab 时自动加载
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1 && contributions.isEmpty() && !isLoadingContribs) {
+            isLoadingContribs = true
+            contribError = null
+            activityScope.launch {
+                when (val result = WikiUserApi.fetchContributions(userInfo.name, limit = 30)) {
+                    is WikiUserApi.ApiResult.Success -> contributions = result.value
+                    is WikiUserApi.ApiResult.Error -> contribError = result.message
+                }
+                isLoadingContribs = false
+            }
+        }
+        if (selectedTab == 2 && watchlist.isEmpty() && !isLoadingWatchlist) {
+            isLoadingWatchlist = true
+            watchlistError = null
+            activityScope.launch {
+                when (val result = WikiUserApi.fetchWatchlist(limit = 30)) {
+                    is WikiUserApi.ApiResult.Success -> watchlist = result.value
+                    is WikiUserApi.ApiResult.Error -> watchlistError = result.message
+                }
+                isLoadingWatchlist = false
+            }
+        }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -360,12 +404,11 @@ private fun WikiUserInfoBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(bottom = 16.dp)
         ) {
-            // 头像 + 用户名
+            // 头像 + 用户名（始终可见）
             Row(
+                modifier = Modifier.padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -398,47 +441,348 @@ private fun WikiUserInfoBottomSheet(
                 }
             }
 
-            // 用户组标签
-            if (userInfo.displayGroups.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    userInfo.displayGroups.forEach { group ->
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer
-                        ) {
-                            Text(
-                                text = WikiUserApi.groupLabel(group),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
+            Spacer(Modifier.height(12.dp))
+
+            // Tab 栏
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                contentColor = MaterialTheme.colorScheme.primary,
+                divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)) }
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(title, maxLines = 1) }
+                    )
+                }
+            }
+
+            // Tab 内容
+            when (selectedTab) {
+                0 -> UserInfoTabContent(userInfo = userInfo)
+                1 -> ActivityListContent(
+                    items = contributions.map { contrib ->
+                        ActivityItem(
+                            id = contrib.revId,
+                            title = contrib.title,
+                            summary = contrib.comment.ifBlank { null },
+                            timestamp = contrib.timestamp,
+                            badge = buildString {
+                                if (contrib.isNewPage) append("新建 ")
+                                if (contrib.isMinor) append("小编辑 ")
+                                val diff = contrib.sizeDiff
+                                if (diff > 0) append("+$diff") else if (diff < 0) append("$diff")
+                            }.trim().ifBlank { null },
+                            badgePositive = contrib.sizeDiff >= 0
+                        )
+                    },
+                    isLoading = isLoadingContribs,
+                    error = contribError,
+                    emptyIcon = Icons.Outlined.Edit,
+                    emptyText = "暂无编辑记录",
+                    loadingText = "正在加载编辑记录…",
+                    onRetry = {
+                        isLoadingContribs = true
+                        contribError = null
+                        activityScope.launch {
+                            when (val result = WikiUserApi.fetchContributions(userInfo.name, limit = 30)) {
+                                is WikiUserApi.ApiResult.Success -> contributions = result.value
+                                is WikiUserApi.ApiResult.Error -> contribError = result.message
+                            }
+                            isLoadingContribs = false
                         }
+                    }
+                )
+                2 -> ActivityListContent(
+                    items = watchlist.map { wl ->
+                        ActivityItem(
+                            id = wl.revId,
+                            title = wl.title,
+                            summary = wl.comment.ifBlank { null },
+                            timestamp = wl.timestamp,
+                            badge = WikiUserApi.watchTypeLabel(wl.type),
+                            badgePositive = true,
+                            subtitle = wl.user.ifBlank { null }
+                        )
+                    },
+                    isLoading = isLoadingWatchlist,
+                    error = watchlistError,
+                    emptyIcon = Icons.Outlined.Visibility,
+                    emptyText = "监视列表为空",
+                    loadingText = "正在加载监视列表…",
+                    onRetry = {
+                        isLoadingWatchlist = true
+                        watchlistError = null
+                        activityScope.launch {
+                            when (val result = WikiUserApi.fetchWatchlist(limit = 30)) {
+                                is WikiUserApi.ApiResult.Success -> watchlist = result.value
+                                is WikiUserApi.ApiResult.Error -> watchlistError = result.message
+                            }
+                            isLoadingWatchlist = false
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────── 个人信息 Tab ───────────────────────
+
+@Composable
+private fun UserInfoTabContent(userInfo: WikiUserApi.UserInfo) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 用户组标签
+        if (userInfo.displayGroups.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                userInfo.displayGroups.forEach { group ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = WikiUserApi.groupLabel(group),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+        // 详细信息
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            UserDetailRow(label = "编辑次数", value = "${userInfo.editCount}")
+
+            if (userInfo.registrationDate.isNotBlank()) {
+                UserDetailRow(
+                    label = "注册时间",
+                    value = WikiUserApi.formatTimestamp(userInfo.registrationDate)
+                )
+            }
+
+            if (userInfo.email.isNotBlank()) {
+                UserDetailRow(label = "邮箱", value = userInfo.email)
+            }
+
+            if (userInfo.realName.isNotBlank()) {
+                UserDetailRow(label = "真实姓名", value = userInfo.realName)
+            }
+        }
+    }
+}
+
+// ─────────────────────── 通用活动列表数据 ───────────────────────
+
+private data class ActivityItem(
+    val id: Long,
+    val title: String,
+    val summary: String? = null,
+    val timestamp: String = "",
+    val badge: String? = null,
+    val badgePositive: Boolean = true,
+    val subtitle: String? = null         // 操作者（监视列表用）
+)
+
+// ─────────────────────── 通用活动列表 Tab ───────────────────────
+
+@Composable
+private fun ActivityListContent(
+    items: List<ActivityItem>,
+    isLoading: Boolean,
+    error: String?,
+    emptyIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    emptyText: String,
+    loadingText: String,
+    onRetry: () -> Unit
+) {
+    when {
+        isLoading -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp)
+                    Text(
+                        text = loadingText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        error != null -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = onRetry) {
+                        Text("重试")
+                    }
+                }
+            }
+        }
+        items.isEmpty() -> {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 200.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = emptyIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Text(
+                        text = emptyText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        else -> {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(items, key = { it.id }) { item ->
+                    ActivityItemCard(item)
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────── 单条活动卡片 ───────────────────────
+
+@Composable
+private fun ActivityItemCard(item: ActivityItem) {
+    val bgColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+    val time = if (item.timestamp.isNotBlank()) WikiUserApi.formatTimestamp(item.timestamp) else ""
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            // 页面标题 + 变更标签
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (!item.badge.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (item.badgePositive)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.errorContainer
+                    ) {
+                        Text(
+                            text = item.badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (item.badgePositive)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else
+                                MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            // 摘要/评论
+            if (!item.summary.isNullOrBlank()) {
+                Text(
+                    text = item.summary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-            // 详细信息
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                UserDetailRow(label = "编辑次数", value = "${userInfo.editCount}")
-
-                if (userInfo.registrationDate.isNotBlank()) {
-                    UserDetailRow(
-                        label = "注册时间",
-                        value = WikiUserApi.formatTimestamp(userInfo.registrationDate)
+            // 底部：操作者 + 时间
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (!item.subtitle.isNullOrBlank()) {
+                    Text(
+                        text = item.subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
-
-                if (userInfo.email.isNotBlank()) {
-                    UserDetailRow(label = "邮箱", value = userInfo.email)
-                }
-
-                if (userInfo.realName.isNotBlank()) {
-                    UserDetailRow(label = "真实姓名", value = userInfo.realName)
+                if (time.isNotBlank()) {
+                    Text(
+                        text = time,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
