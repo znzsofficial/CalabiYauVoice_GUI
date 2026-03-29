@@ -18,6 +18,11 @@ object AppPrefs {
     private const val KEY_FAVORITE_CHARACTERS = "favorite_characters"
     private const val KEY_WIKI_CACHE_MODE = "wiki_cache_mode"
     private const val KEY_DOWNLOAD_HISTORY = "download_history"
+    private const val KEY_BOTTOM_BAR_STYLE = "bottom_bar_style"
+
+    /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
+    const val BAR_STYLE_DOCKED_TOOLBAR = 0
+    const val BAR_STYLE_BOTTOM_APP_BAR = 1
 
     /** 主题模式：0=跟随系统, 1=浅色, 2=深色 */
     const val THEME_SYSTEM = 0
@@ -98,6 +103,11 @@ object AppPrefs {
     }
 
     fun isFavorite(name: String): Boolean = name in favoriteCharacters
+
+    /** 底栏样式 */
+    var bottomBarStyle: Int
+        get() = prefs.getInt(KEY_BOTTOM_BAR_STYLE, BAR_STYLE_BOTTOM_APP_BAR)
+        set(value) = prefs.edit().putInt(KEY_BOTTOM_BAR_STYLE, value).apply()
 
     /** Wiki 离线缓存模式 */
     var wikiCacheMode: Int
