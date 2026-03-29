@@ -192,6 +192,7 @@ fun NewDownloaderContent() {
     var showUserInfoDialog by remember { mutableStateOf(false) }
     var showConverterWindow by remember { mutableStateOf(false) }
     var showLogWindow by remember { mutableStateOf(false) }
+    var showWikiBrowser by remember { mutableStateOf(false) }
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
@@ -262,6 +263,9 @@ fun NewDownloaderContent() {
     }
     if (showConverterWindow) {
         Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
+    }
+    if (showWikiBrowser) {
+        WikiBrowserWindow(onCloseRequest = { showWikiBrowser = false })
     }
     if (showLogWindow) {
         LogWindow(
@@ -441,6 +445,11 @@ fun NewDownloaderContent() {
             MenuBarItem(
                 content = { Text("工具") },
                 items = {
+                    MenuFlyoutItem(
+                        onClick = { showWikiBrowser = true },
+                        icon = { Icon(Icons.Regular.Globe, contentDescription = null) },
+                        text = { Text("打开 Wiki") }
+                    )
                     MenuFlyoutItem(
                         onClick = { showConverterWindow = true },
                         icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },

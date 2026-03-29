@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import io.github.composefluent.component.*
+import io.github.composefluent.surface.Card
 import ui.components.StyledWindow
 import ui.components.TerminalOutputView
 
@@ -45,20 +46,23 @@ fun LogWindow(
         onCloseRequest = onCloseRequest,
         state = windowState,
         resizable = true,
+        useLayer = false,
         onKeyEvent = { keyEvent ->
             if (keyEvent.key == Key.Escape && keyEvent.type == KeyEventType.KeyDown) {
                 onCloseRequest(); true
             } else false
         }
     ) { insetModifier ->
-        Column(insetModifier) {
-            // 进度条
-            if (isDownloading || isScanningTree) {
-                ProgressBar(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp))
-            }
+        Card(modifier = insetModifier.fillMaxSize()) {
+            Column {
+                // 进度条
+                if (isDownloading || isScanningTree) {
+                    ProgressBar(progress = progress, modifier = Modifier.fillMaxWidth().height(2.dp))
+                }
 
-            // 日志内容
-            TerminalOutputView(logLines, Modifier.fillMaxSize())
+                // 日志内容
+                TerminalOutputView(logLines, Modifier.fillMaxSize())
+            }
         }
     }
 }
