@@ -2,10 +2,11 @@ package com.nekolaska.calabiyau.ui
 
 import android.media.MediaPlayer
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -194,15 +195,4 @@ fun AudioPlayButton(
     }
 }
 
-/**
- * 音频播放图标区域，用于替代文件列表中非图片文件的 Icon。
- * 包含播放按钮和音频文件图标。
- */
-@Composable
-fun AudioFileIcon(
-    source: String,
-    size: Int = 48,
-    modifier: Modifier = Modifier
-) {
-    AudioPlayButton(source = source, size = size, modifier = modifier)
-}
+

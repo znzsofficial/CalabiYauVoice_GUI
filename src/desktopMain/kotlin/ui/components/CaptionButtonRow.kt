@@ -196,15 +196,13 @@ private fun rememberFontIconFamily(): MutableState<FontFamily?> {
     val fontFamilyResolver = LocalFontFamilyResolver.current
 
     LaunchedEffect(fontFamilyResolver) {
-        fontIconFamily.value = sequenceOf("Segoe Fluent Icons", "Segoe MDL2 Assets")
-            .mapNotNull {
-                val fontFamily = FontFamily(it)
-                runCatching {
-                    val result = fontFamilyResolver.resolve(fontFamily).value as FontLoadResult
-                    if (result.typeface == null || result.typeface?.familyName != it) null else fontFamily
-                }.getOrNull()
-            }
-            .firstOrNull()
+        fontIconFamily.value = sequenceOf("Segoe Fluent Icons", "Segoe MDL2 Assets").firstNotNullOfOrNull {
+            val fontFamily = FontFamily(it)
+            runCatching {
+                val result = fontFamilyResolver.resolve(fontFamily).value as FontLoadResult
+                if (result.typeface == null || result.typeface?.familyName != it) null else fontFamily
+            }.getOrNull()
+        }
     }
 
     return fontIconFamily

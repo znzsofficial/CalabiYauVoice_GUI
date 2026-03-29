@@ -140,7 +140,6 @@ fun convertAudioToWav(
         try {
             AudioSystem.getAudioInputStream(naturalFmt, sourceStream).use { pcm ->
                 val sameRate  = approximatelyEquals(outRate, naturalRate)
-                val sameBits  = outBits == naturalBits
                 // 降位深：源高于目标且目标不是浮点 → 用算术右移缩放，避免溢出
                 // Manual bit depth conversion logic (handle both up/down scaling)
                 // Java Sound's specific PCM conversion capability varies, manual shifting is more reliable for 16<->24/32 integer PCM.

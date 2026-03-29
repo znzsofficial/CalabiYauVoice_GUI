@@ -211,8 +211,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             performSearch()
         }
     }
-    fun onMaxConcurrencyChange(value: String) { _maxConcurrencyStr.value = value.filter { it.isDigit() } }
-
     fun toggleFileSearchSelection(url: String) {
         val current = _fileSearchSelectedUrls.value.toMutableSet()
         if (url in current) current.remove(url) else current.add(url)
@@ -221,10 +219,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectAllFileSearchResults() {
         _fileSearchSelectedUrls.value = _fileSearchResults.value.map { it.second }.toSet()
-    }
-
-    fun clearFileSearchSelection() {
-        _fileSearchSelectedUrls.value = emptySet()
     }
 
     // 收藏状态
