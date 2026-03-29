@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Environment
 import java.io.File
+import androidx.core.content.edit
 
 /**
  * Android 端应用偏好存储，使用 SharedPreferences 持久化。
@@ -56,16 +57,16 @@ object AppPrefs {
 
     var savePath: String
         get() = prefs.getString(KEY_SAVE_PATH, null) ?: defaultSavePath
-        set(value) = prefs.edit().putString(KEY_SAVE_PATH, value).apply()
+        set(value) = prefs.edit {putString(KEY_SAVE_PATH, value)}
 
     var maxConcurrency: Int
         get() = prefs.getInt(KEY_MAX_CONCURRENCY, 8)
-        set(value) = prefs.edit().putInt(KEY_MAX_CONCURRENCY, value.coerceIn(1, 32)).apply()
+        set(value) = prefs.edit { putInt(KEY_MAX_CONCURRENCY, value.coerceIn(1, 32))}
 
     /** 主题模式 */
     var themeMode: Int
         get() = prefs.getInt(KEY_THEME_MODE, THEME_SYSTEM)
-        set(value) = prefs.edit().putInt(KEY_THEME_MODE, value).apply()
+        set(value) = prefs.edit {putInt(KEY_THEME_MODE, value)}
 
     /** 搜索历史（最多 20 条，逗号分隔存储） */
     var searchHistory: List<String>
@@ -73,10 +74,11 @@ object AppPrefs {
             ?.split("|||")
             ?.filter { it.isNotBlank() }
             ?: emptyList()
-        set(value) = prefs.edit().putString(
-            KEY_SEARCH_HISTORY,
-            value.take(20).joinToString("|||")
-        ).apply()
+        set(value) = prefs.edit {
+            putString(
+                KEY_SEARCH_HISTORY,
+                value.take(20).joinToString("|||")
+        )}
 
     fun addSearchHistory(keyword: String) {
         val trimmed = keyword.trim()
@@ -94,7 +96,7 @@ object AppPrefs {
     /** 收藏的角色名列表 */
     var favoriteCharacters: Set<String>
         get() = prefs.getStringSet(KEY_FAVORITE_CHARACTERS, emptySet()) ?: emptySet()
-        set(value) = prefs.edit().putStringSet(KEY_FAVORITE_CHARACTERS, value).apply()
+        set(value) = prefs.edit { putStringSet(KEY_FAVORITE_CHARACTERS, value)}
 
     fun toggleFavorite(name: String) {
         val current = favoriteCharacters.toMutableSet()
@@ -102,20 +104,18 @@ object AppPrefs {
         favoriteCharacters = current
     }
 
-    fun isFavorite(name: String): Boolean = name in favoriteCharacters
-
     /** 底栏样式 */
     var bottomBarStyle: Int
         get() = prefs.getInt(KEY_BOTTOM_BAR_STYLE, BAR_STYLE_BOTTOM_APP_BAR)
-        set(value) = prefs.edit().putInt(KEY_BOTTOM_BAR_STYLE, value).apply()
+        set(value) = prefs.edit { putInt(KEY_BOTTOM_BAR_STYLE, value)}
 
     /** Wiki 离线缓存模式 */
     var wikiCacheMode: Int
         get() = prefs.getInt(KEY_WIKI_CACHE_MODE, WIKI_CACHE_DEFAULT)
-        set(value) = prefs.edit().putInt(KEY_WIKI_CACHE_MODE, value).apply()
+        set(value) = prefs.edit { putInt(KEY_WIKI_CACHE_MODE, value)}
 
     /** 下载历史记录（JSON 格式存储） */
     var downloadHistoryJson: String
         get() = prefs.getString(KEY_DOWNLOAD_HISTORY, "[]") ?: "[]"
-        set(value) = prefs.edit().putString(KEY_DOWNLOAD_HISTORY, value).apply()
+        set(value) = prefs.edit { putString(KEY_DOWNLOAD_HISTORY, value) }
 }

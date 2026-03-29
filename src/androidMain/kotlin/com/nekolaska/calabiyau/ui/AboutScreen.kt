@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,7 +155,7 @@ fun AboutScreen(onBack: () -> Unit) {
                         icon = Icons.Outlined.Terminal,
                         onClick = {
                             context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/znzsofficial/CalabiyauWikiVoice"))
+                                Intent(Intent.ACTION_VIEW, "https://github.com/znzsofficial/CalabiyauWikiVoice".toUri())
                             )
                         }
                     )
@@ -165,7 +166,7 @@ fun AboutScreen(onBack: () -> Unit) {
                         icon = Icons.Outlined.Code,
                         onClick = {
                             context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/znzsofficial/CalabiYauVoice_GUI"))
+                                Intent(Intent.ACTION_VIEW, "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri())
                             )
                         }
                     )
@@ -178,13 +179,13 @@ fun AboutScreen(onBack: () -> Unit) {
                             // 优先尝试 bilibili 客户端 URI，打不开再用网页
                             try {
                                 context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse("bilibili://space/15544900")).apply {
+                                    Intent(Intent.ACTION_VIEW, "bilibili://space/15544900".toUri()).apply {
                                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                     }
                                 )
                             } catch (_: Exception) {
                                 context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://space.bilibili.com/15544900"))
+                                    Intent(Intent.ACTION_VIEW, "https://space.bilibili.com/15544900".toUri())
                                 )
                             }
                         }

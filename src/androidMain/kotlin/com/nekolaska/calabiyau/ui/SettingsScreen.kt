@@ -32,6 +32,7 @@ import com.nekolaska.calabiyau.data.AppPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -428,7 +429,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                         title = "开源仓库",
                         subtitle = "github.com/znzsofficial/CalabiYauVoice_GUI",
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/znzsofficial/CalabiYauVoice_GUI"))
+                            val intent = Intent(Intent.ACTION_VIEW,
+                                "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri())
                             context.startActivity(intent)
                         }
                     )
@@ -515,7 +517,7 @@ data class DirSizeInfo(
 private fun StorageStatisticsCard(savePath: String) {
     var totalSize by remember { mutableStateOf<Long?>(null) }
     var subDirSizes by remember { mutableStateOf<List<DirSizeInfo>>(emptyList()) }
-    var fileCount by remember { mutableStateOf(0) }
+    var fileCount by remember { mutableIntStateOf(0) }
     var isCalculating by remember { mutableStateOf(true) }
 
     // 计算目录大小
