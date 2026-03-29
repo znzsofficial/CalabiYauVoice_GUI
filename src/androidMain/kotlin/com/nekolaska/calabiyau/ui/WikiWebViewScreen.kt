@@ -6,40 +6,39 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Environment
 import android.os.Message
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.Toast
-import com.nekolaska.calabiyau.data.AppPrefs
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.ExitToApp
+import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.OpenInBrowser
-import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material.icons.outlined.ZoomIn
-import androidx.compose.material.icons.outlined.ZoomOut
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
+import com.nekolaska.calabiyau.data.AppPrefs
 
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
@@ -84,23 +83,7 @@ fun hasWikiLoginCookie(): Boolean {
     }
 }
 
-/**
- * 从 Cookie 中提取 Wiki 用户名（klbqwiki_UserName Cookie）。
- * 若无此 Cookie 返回 null。
- */
-fun getWikiUserNameFromCookie(): String? {
-    return try {
-        val cookies = CookieManager.getInstance().getCookie("https://wiki.biligame.com") ?: return null
-        val cookieMap = cookies.split(";").associate {
-            val parts = it.trim().split("=", limit = 2)
-            if (parts.size == 2) parts[0].trim() to parts[1].trim() else "" to ""
-        }
-        val name = cookieMap["klbqwiki_UserName"]
-        if (!name.isNullOrBlank()) java.net.URLDecoder.decode(name, "UTF-8") else null
-    } catch (_: Exception) {
-        null
-    }
-}
+
 
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -148,42 +131,48 @@ fun WikiWebViewScreen(
 
     Scaffold(
         topBar = {
+            // 精简顶栏：仅 URL 地址栏 + 进度条
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp,
+                color = MaterialTheme.colorScheme.surfaceContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
+                    // 地址栏
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 返回/前进
-                        IconButton(
-                            onClick = { webView?.goBack() },
-                            enabled = canGoBack
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "后退")
-                        }
-                        IconButton(
-                            onClick = { webView?.goForward() },
-                            enabled = canGoForward
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, "前进")
-                        }
+                        // 安全锁图标
+                        Icon(
+                            if (currentUrl.startsWith("https://")) Icons.Outlined.Lock
+                            else Icons.Outlined.LockOpen,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = if (currentUrl.startsWith("https://"))
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            else MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.width(8.dp))
 
                         // 标题 + URL
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    // 点击地址栏可复制 URL
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
+                                    Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(vertical = 2.dp)
                         ) {
                             Text(
                                 text = pageTitle,
-                                style = MaterialTheme.typography.titleSmall,
+                                style = MaterialTheme.typography.labelLarge,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -197,138 +186,13 @@ fun WikiWebViewScreen(
                             )
                         }
 
-                        // 刷新/停止
-                        IconButton(onClick = {
-                            if (isLoading) webView?.stopLoading() else webView?.reload()
-                        }) {
-                            Icon(
-                                if (isLoading) Icons.Default.Close else Icons.Default.Refresh,
-                                contentDescription = if (isLoading) "停止" else "刷新"
-                            )
-                        }
-
-                        // 溢出菜单
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Default.MoreVert, "更多")
-                            }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                shape = RoundedCornerShape(16.dp)
+                        // 加载指示 / 刷新（小型）
+                        if (isLoading) {
+                            IconButton(
+                                onClick = { webView?.stopLoading() },
+                                modifier = Modifier.size(36.dp)
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("回到首页") },
-                                    onClick = {
-                                        webView?.loadUrl(WIKI_HOME_URL)
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("在浏览器中打开") },
-                                    onClick = {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
-                                        )
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("分享") },
-                                    onClick = {
-                                        val shareIntent = Intent.createChooser(
-                                            Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(Intent.EXTRA_TEXT, currentUrl)
-                                                putExtra(Intent.EXTRA_TITLE, pageTitle)
-                                            },
-                                            null
-                                        )
-                                        context.startActivity(shareIntent)
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Share, null, modifier = Modifier.size(20.dp))
-                                    }
-                                )
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                                // 文本缩放
-                                DropdownMenuItem(
-                                    text = { Text("放大文字") },
-                                    onClick = {
-                                        textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
-                                        webView?.settings?.textZoom = textZoomLevel
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.ZoomIn, null, modifier = Modifier.size(20.dp))
-                                    },
-                                    trailingIcon = {
-                                        Text("${textZoomLevel}%", style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("缩小文字") },
-                                    onClick = {
-                                        textZoomLevel = (textZoomLevel - 15).coerceAtLeast(50)
-                                        webView?.settings?.textZoom = textZoomLevel
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.ZoomOut, null, modifier = Modifier.size(20.dp))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("重置缩放") },
-                                    onClick = {
-                                        textZoomLevel = 100
-                                        webView?.settings?.textZoom = 100
-                                        showMenu = false
-                                    },
-                                    enabled = textZoomLevel != 100,
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp))
-                                    }
-                                )
-
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                                DropdownMenuItem(
-                                    text = { Text("清除登录状态") },
-                                    onClick = {
-                                        CookieManager.getInstance().removeAllCookies(null)
-                                        CookieManager.getInstance().flush()
-                                        webView?.reload()
-                                        Toast.makeText(context, "已清除登录状态", Toast.LENGTH_SHORT).show()
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Close, null, modifier = Modifier.size(20.dp))
-                                    }
-                                )
-
-                                // 退出 Wiki
-                                if (onExitWiki != null) {
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                    DropdownMenuItem(
-                                        text = { Text("退出 Wiki") },
-                                        onClick = {
-                                            showMenu = false
-                                            onExitWiki()
-                                        },
-                                        leadingIcon = {
-                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(20.dp))
-                                        }
-                                    )
-                                }
+                                Icon(Icons.Default.Close, "停止", modifier = Modifier.size(18.dp))
                             }
                         }
                     }
@@ -336,8 +200,8 @@ fun WikiWebViewScreen(
                     // 加载进度条
                     AnimatedVisibility(
                         visible = isLoading,
-                        enter = fadeIn(),
-                        exit = fadeOut()
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
                     ) {
                         LinearProgressIndicator(
                             progress = { loadingProgress / 100f },
@@ -349,6 +213,56 @@ fun WikiWebViewScreen(
                     }
                 }
             }
+        },
+        bottomBar = {
+            // ── 底部工具栏 ──
+            WikiBottomToolbar(
+                canGoBack = canGoBack,
+                canGoForward = canGoForward,
+                isLoading = isLoading,
+                textZoomLevel = textZoomLevel,
+                currentUrl = currentUrl,
+                pageTitle = pageTitle,
+                showMenu = showMenu,
+                onShowMenuChange = { showMenu = it },
+                onGoBack = { webView?.goBack() },
+                onGoForward = { webView?.goForward() },
+                onRefresh = { if (isLoading) webView?.stopLoading() else webView?.reload() },
+                onGoHome = { webView?.loadUrl(WIKI_HOME_URL) },
+                onZoomIn = {
+                    textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
+                    webView?.settings?.textZoom = textZoomLevel
+                },
+                onZoomOut = {
+                    textZoomLevel = (textZoomLevel - 15).coerceAtLeast(50)
+                    webView?.settings?.textZoom = textZoomLevel
+                },
+                onResetZoom = {
+                    textZoomLevel = 100
+                    webView?.settings?.textZoom = 100
+                },
+                onOpenInBrowser = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
+                },
+                onShare = {
+                    val shareIntent = Intent.createChooser(
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, currentUrl)
+                            putExtra(Intent.EXTRA_TITLE, pageTitle)
+                        },
+                        null
+                    )
+                    context.startActivity(shareIntent)
+                },
+                onClearLogin = {
+                    CookieManager.getInstance().removeAllCookies(null)
+                    CookieManager.getInstance().flush()
+                    webView?.reload()
+                    Toast.makeText(context, "已清除登录状态", Toast.LENGTH_SHORT).show()
+                },
+                onExitWiki = onExitWiki
+            )
         },
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
@@ -540,7 +454,7 @@ fun WikiWebViewScreen(
                         val savePath = AppPrefs.savePath
                         val dir = java.io.File(savePath)
                         dir.mkdirs()
-                        val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        val request = DownloadManager.Request(url.toUri()).apply {
                             addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
                             addRequestHeader("User-Agent", webView?.settings?.userAgentString ?: "")
                             setTitle(fileName)
@@ -560,6 +474,184 @@ fun WikiWebViewScreen(
                 TextButton(onClick = { longPressImageUrl = null }) { Text("取消") }
             }
         )
+    }
+}
+
+// ─────────────────────── 底部工具栏 ───────────────────────
+
+/**
+ * Wiki 底部工具栏 —— 导航 + 溢出菜单。
+ * 采用 BottomAppBar 风格，按钮宽松分布，易于单手操作。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WikiBottomToolbar(
+    canGoBack: Boolean,
+    canGoForward: Boolean,
+    isLoading: Boolean,
+    textZoomLevel: Int,
+    currentUrl: String,
+    pageTitle: String,
+    showMenu: Boolean,
+    onShowMenuChange: (Boolean) -> Unit,
+    onGoBack: () -> Unit,
+    onGoForward: () -> Unit,
+    onRefresh: () -> Unit,
+    onGoHome: () -> Unit,
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    onResetZoom: () -> Unit,
+    onOpenInBrowser: () -> Unit,
+    onShare: () -> Unit,
+    onClearLogin: () -> Unit,
+    onExitWiki: (() -> Unit)?
+) {
+    BottomAppBar(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // 等距分布 5 个按钮
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // ← 后退
+            IconButton(
+                onClick = onGoBack,
+                enabled = canGoBack
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "后退")
+            }
+
+            // → 前进
+            IconButton(
+                onClick = onGoForward,
+                enabled = canGoForward
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "前进")
+            }
+
+            // 🏠 首页
+            IconButton(onClick = onGoHome) {
+                Icon(Icons.Default.Home, contentDescription = "首页")
+            }
+
+            // 🔄 刷新 / ✕ 停止
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    if (isLoading) Icons.Default.Close else Icons.Default.Refresh,
+                    contentDescription = if (isLoading) "停止" else "刷新"
+                )
+            }
+
+            // ⋮ 更多菜单
+            Box {
+                IconButton(onClick = { onShowMenuChange(true) }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { onShowMenuChange(false) },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    // ── 页面操作 ──
+                    DropdownMenuItem(
+                        text = { Text("在浏览器中打开") },
+                        onClick = {
+                            onOpenInBrowser()
+                            onShowMenuChange(false)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("分享") },
+                        onClick = {
+                            onShare()
+                            onShowMenuChange(false)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Share, null, modifier = Modifier.size(20.dp))
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // ── 文本缩放 ──
+                    DropdownMenuItem(
+                        text = { Text("放大文字") },
+                        onClick = {
+                            onZoomIn()
+                            onShowMenuChange(false)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.ZoomIn, null, modifier = Modifier.size(20.dp))
+                        },
+                        trailingIcon = {
+                            Text(
+                                "${textZoomLevel}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("缩小文字") },
+                        onClick = {
+                            onZoomOut()
+                            onShowMenuChange(false)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.ZoomOut, null, modifier = Modifier.size(20.dp))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("重置缩放") },
+                        onClick = {
+                            onResetZoom()
+                            onShowMenuChange(false)
+                        },
+                        enabled = textZoomLevel != 100,
+                        leadingIcon = {
+                            Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(20.dp))
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // ── 登录管理 ──
+                    DropdownMenuItem(
+                        text = { Text("清除登录状态") },
+                        onClick = {
+                            onClearLogin()
+                            onShowMenuChange(false)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.AutoMirrored.Outlined.Logout, null, modifier = Modifier.size(20.dp))
+                        }
+                    )
+
+                    // 退出 Wiki
+                    if (onExitWiki != null) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        DropdownMenuItem(
+                            text = { Text("退出 Wiki") },
+                            onClick = {
+                                onShowMenuChange(false)
+                                onExitWiki()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.AutoMirrored.Outlined.ExitToApp, null, modifier = Modifier.size(20.dp))
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -631,7 +723,7 @@ private fun createWikiWebView(
 
         // ── Blob 下载桥接 ──
         addJavascriptInterface(object {
-            @android.webkit.JavascriptInterface
+            @JavascriptInterface
             fun onBlobData(base64Data: String, mimeType: String, fileName: String) {
                 try {
                     val data = Base64.decode(base64Data, Base64.DEFAULT)
@@ -699,7 +791,7 @@ private fun createWikiWebView(
 
             try {
                 val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                val request = DownloadManager.Request(Uri.parse(url)).apply {
+                val request = DownloadManager.Request(url.toUri()).apply {
                     setMimeType(mimeType ?: "application/octet-stream")
                     addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
                     addRequestHeader("User-Agent", userAgent ?: "")
@@ -731,7 +823,7 @@ private fun createWikiWebView(
                     view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
                 }
                 // 检测进入登录页，弹出提示
-                if (url != null && Uri.parse(url).host.equals("passport.bilibili.com", ignoreCase = true)
+                if (url != null && url.toUri().host.equals("passport.bilibili.com", ignoreCase = true)
                     && !passportHintShown) {
                     passportHintShown = true
                     onPassportDetected()
@@ -765,7 +857,7 @@ private fun createWikiWebView(
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
-                val host = Uri.parse(url).host ?: ""
+                val host = url.toUri().host ?: ""
 
                 // 拦截 B站 APP 下载页等，直接丢弃不加载
                 if (BLOCKED_HOSTS.any { host.equals(it, ignoreCase = true) }) {
@@ -779,7 +871,7 @@ private fun createWikiWebView(
 
                 // 其他链接用外部浏览器
                 try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
                 } catch (_: Exception) { }
                 return true
             }
@@ -794,13 +886,13 @@ private fun createWikiWebView(
                 if (request?.isForMainFrame == true) {
                     val errorCode = error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
                     // 网络相关错误码
-                    if (errorCode == WebViewClient.ERROR_HOST_LOOKUP ||
+                    if (errorCode == ERROR_HOST_LOOKUP ||
                         errorCode == WebViewClient.ERROR_CONNECT ||
                         errorCode == WebViewClient.ERROR_TIMEOUT ||
                         errorCode == WebViewClient.ERROR_IO ||
                         errorCode == WebViewClient.ERROR_UNKNOWN
                     ) {
-                        val failedUrl = request?.url?.toString() ?: WIKI_HOME_URL
+                        val failedUrl = request.url?.toString() ?: WIKI_HOME_URL
                         onNetworkError(failedUrl)
                         // 阻止 WebView 显示默认错误页
                         view?.stopLoading()
