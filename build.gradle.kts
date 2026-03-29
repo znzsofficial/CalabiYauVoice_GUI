@@ -55,6 +55,7 @@ kotlin {
             implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
             implementation("org.jflac:jflac-codec:1.5.2")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
+            implementation("io.github.kdroidfilter:composewebview:1.0.0-beta-01")
         }
 
         named("desktopTest").dependencies {
@@ -124,6 +125,8 @@ android {
 compose.desktop {
     application {
         mainClass = "MainKt"
+
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
 
         nativeDistributions {
             packageName = "CalabiYauVoice_GUI"
