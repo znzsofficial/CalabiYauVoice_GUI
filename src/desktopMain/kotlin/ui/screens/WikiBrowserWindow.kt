@@ -11,6 +11,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
@@ -32,26 +33,75 @@ import io.github.kdroidfilter.webview.web.rememberWebViewState
 import ui.components.StyledWindow
 
 private const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
+private const val CREATOR_CENTER_URL = "https://creatorcenter.idreamsky.com/creatorCenter"
+private const val MOBILE_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.113 Mobile Safari/537.36"
+
+// ────────────────────────────────────────────
+//  Wiki 浏览器窗口
+// ────────────────────────────────────────────
 
 /**
  * 内置 Wiki 浏览器窗口。
- *
- * 提供一个简单的 WebView 浏览器，用于在应用内访问 Wiki 页面。
  */
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 fun WikiBrowserWindow(
-    initialUrl: String = WIKI_HOME_URL,
     onCloseRequest: () -> Unit
 ) {
+    WebViewBrowserWindow(
+        title = "卡拉彼丘 Wiki",
+        homeUrl = WIKI_HOME_URL,
+        onCloseRequest = onCloseRequest,
+        windowWidth = 1100.dp,
+        windowHeight = 800.dp
+    )
+}
+
+// ────────────────────────────────────────────
+//  创作者中心窗口（手机 UA）
+// ────────────────────────────────────────────
+
+/**
+ * 创作者中心窗口，使用手机 UA 模拟移动端访问。
+ */
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+fun CreatorCenterWindow(
+    onCloseRequest: () -> Unit
+) {
+    WebViewBrowserWindow(
+        title = "创作者中心",
+        homeUrl = CREATOR_CENTER_URL,
+        onCloseRequest = onCloseRequest,
+        customUserAgent = MOBILE_USER_AGENT,
+        windowWidth = 480.dp,
+        windowHeight = 900.dp
+    )
+}
+
+// ────────────────────────────────────────────
+//  通用 WebView 浏览器窗口
+// ────────────────────────────────────────────
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun WebViewBrowserWindow(
+    title: String,
+    homeUrl: String,
+    onCloseRequest: () -> Unit,
+    customUserAgent: String? = null,
+    windowWidth: Dp = 1000.dp,
+    windowHeight: Dp = 750.dp
+) {
     val windowState = rememberWindowState(
-        width = 1000.dp,
-        height = 750.dp,
+        width = windowWidth,
+        height = windowHeight,
         position = WindowPosition(Alignment.Center)
     )
 
     StyledWindow(
-        title = "卡拉彼丘 Wiki",
+        title = title,
         onCloseRequest = onCloseRequest,
         state = windowState,
         onKeyEvent = { keyEvent ->
@@ -61,20 +111,26 @@ fun WikiBrowserWindow(
         },
         useLayer = false
     ) { insetModifier ->
-        WikiBrowserContent(
-            initialUrl = initialUrl,
-            modifier = insetModifier
+        WebViewBrowserContent(
+            modifier = insetModifier,
+            homeUrl = homeUrl,
+            customUserAgent = customUserAgent
         )
     }
 }
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-private fun WikiBrowserContent(
-    initialUrl: String,
-    modifier: Modifier = Modifier
+private fun WebViewBrowserContent(
+    modifier: Modifier = Modifier,
+    homeUrl: String,
+    customUserAgent: String? = null
 ) {
-    val webViewState = rememberWebViewState(initialUrl)
+    val webViewState = rememberWebViewState(homeUrl) {
+        if (customUserAgent != null) {
+            customUserAgentString = customUserAgent
+        }
+    }
     val navigator = rememberWebViewNavigator()
 
     val isLoading by remember { derivedStateOf { webViewState.isLoading } }
@@ -119,7 +175,7 @@ private fun WikiBrowserContent(
 
             // 主页按钮
             Button(
-                onClick = { navigator.loadUrl(WIKI_HOME_URL) },
+                onClick = { navigator.loadUrl(homeUrl) },
                 modifier = Modifier.size(40.dp)
             ) {
                 Icon(Icons.Regular.Home, contentDescription = "主页", modifier = Modifier.size(22.dp))

@@ -193,6 +193,7 @@ fun NewDownloaderContent() {
     var showConverterWindow by remember { mutableStateOf(false) }
     var showLogWindow by remember { mutableStateOf(false) }
     var showWikiBrowser by remember { mutableStateOf(false) }
+    var showCreatorCenter by remember { mutableStateOf(false) }
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
@@ -266,6 +267,9 @@ fun NewDownloaderContent() {
     }
     if (showWikiBrowser) {
         WikiBrowserWindow(onCloseRequest = { showWikiBrowser = false })
+    }
+    if (showCreatorCenter) {
+        CreatorCenterWindow(onCloseRequest = { showCreatorCenter = false })
     }
     if (showLogWindow) {
         LogWindow(
@@ -443,7 +447,7 @@ fun NewDownloaderContent() {
                 },
             )
             MenuBarItem(
-                content = { Text("工具") },
+                content = { Text("浏览") },
                 items = {
                     MenuFlyoutItem(
                         onClick = { showWikiBrowser = true },
@@ -451,29 +455,15 @@ fun NewDownloaderContent() {
                         text = { Text("打开 Wiki") }
                     )
                     MenuFlyoutItem(
-                        onClick = { showConverterWindow = true },
-                        icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },
-                        text = { Text("音频转换工具") }
+                        onClick = { showCreatorCenter = true },
+                        icon = { Icon(Icons.Regular.People, contentDescription = null) },
+                        text = { Text("创作者中心") }
                     )
-                    MenuFlyoutItem(
-                        onClick = { showLogWindow = true },
-                        icon = { Icon(Icons.Regular.TextBulletListLtr, contentDescription = null) },
-                        text = { Text("运行日志") }
-                    )
-                    MenuFlyoutSeparator()
-                    MenuFlyoutItem(
-                        onClick = {
-                            val path = savePath.ifBlank { null }
-                            if (path != null) {
-                                val dir = File(path)
-                                if (dir.exists()) java.awt.Desktop.getDesktop().open(dir)
-                                else java.awt.Desktop.getDesktop().open(dir.parentFile ?: dir)
-                            }
-                        },
-                        icon = { Icon(Icons.Regular.FolderOpen, contentDescription = null) },
-                        text = { Text("打开保存路径") }
-                    )
-                    MenuFlyoutSeparator()
+                },
+            )
+            MenuBarItem(
+                content = { Text("下载") },
+                items = {
                     MenuFlyoutItem(
                         onClick = { if (!isDownloading && !isScanningTree) viewModel.startDownload() },
                         icon = { Icon(Icons.Regular.ArrowDownload, contentDescription = null) },
@@ -505,6 +495,34 @@ fun NewDownloaderContent() {
                         icon = { Icon(Icons.Regular.ArrowSync, contentDescription = null) },
                         text = { Text("重新搜索") },
                         trailing = { Text("F5", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                    )
+                    MenuFlyoutSeparator()
+                    MenuFlyoutItem(
+                        onClick = {
+                            val path = savePath.ifBlank { null }
+                            if (path != null) {
+                                val dir = File(path)
+                                if (dir.exists()) java.awt.Desktop.getDesktop().open(dir)
+                                else java.awt.Desktop.getDesktop().open(dir.parentFile ?: dir)
+                            }
+                        },
+                        icon = { Icon(Icons.Regular.FolderOpen, contentDescription = null) },
+                        text = { Text("打开保存路径") }
+                    )
+                },
+            )
+            MenuBarItem(
+                content = { Text("工具") },
+                items = {
+                    MenuFlyoutItem(
+                        onClick = { showConverterWindow = true },
+                        icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },
+                        text = { Text("音频转换工具") }
+                    )
+                    MenuFlyoutItem(
+                        onClick = { showLogWindow = true },
+                        icon = { Icon(Icons.Regular.TextBulletListLtr, contentDescription = null) },
+                        text = { Text("运行日志") }
                     )
                 },
             )
