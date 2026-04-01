@@ -69,7 +69,8 @@ fun MainScreen(viewModel: MainViewModel) {
             DrawerDestination.DOWNLOADER -> {
                 DownloaderScreen(
                     viewModel = viewModel,
-                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } }
+                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                    onOpenFileManager = { currentDestination = DrawerDestination.FILE_MANAGER }
                 )
             }
             DrawerDestination.WIKI -> {
