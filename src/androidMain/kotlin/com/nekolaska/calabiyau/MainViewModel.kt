@@ -96,9 +96,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _logs = MutableStateFlow<List<String>>(emptyList())
     val logs: StateFlow<List<String>> = _logs.asStateFlow()
 
-    private val _maxConcurrencyStr = MutableStateFlow("8")
-    val maxConcurrencyStr: StateFlow<String> = _maxConcurrencyStr.asStateFlow()
-
     private val _hasSearched = MutableStateFlow(false)
     val hasSearched: StateFlow<Boolean> = _hasSearched.asStateFlow()
 
