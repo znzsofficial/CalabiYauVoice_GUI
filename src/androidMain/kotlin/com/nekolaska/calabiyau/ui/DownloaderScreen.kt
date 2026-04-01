@@ -25,7 +25,8 @@ import data.SearchMode
 @Composable
 internal fun DownloaderScreen(
     viewModel: MainViewModel,
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    onOpenFileManager: () -> Unit = {}
 ) {
     val searchKeyword by viewModel.searchKeyword.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
@@ -39,12 +40,10 @@ internal fun DownloaderScreen(
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val downloadStatusText by viewModel.downloadStatusText.collectAsState()
     val logs by viewModel.logs.collectAsState()
-    val maxConcurrencyStr by viewModel.maxConcurrencyStr.collectAsState()
     val fileSearchResults by viewModel.fileSearchResults.collectAsState()
     val fileSearchSelectedUrls by viewModel.fileSearchSelectedUrls.collectAsState()
     val hasSearched by viewModel.hasSearched.collectAsState()
     val characterAvatars by viewModel.characterAvatars.collectAsState()
-
     val portraitCharacters by viewModel.portraitCharacters.collectAsState()
     val selectedPortraitCharacter by viewModel.selectedPortraitCharacter.collectAsState()
     val portraitCatalog by viewModel.portraitCatalog.collectAsState()
@@ -215,6 +214,7 @@ internal fun DownloaderScreen(
                                 onDownload = { viewModel.startDownload() }
                             )
                         }
+
                         SearchMode.PORTRAIT -> {
                             PortraitGrid(
                                 characters = portraitCharacters,
@@ -227,6 +227,7 @@ internal fun DownloaderScreen(
                                 onSelectCharacter = { viewModel.onSelectPortraitCharacter(it) }
                             )
                         }
+
                         else -> {
                             CategoryGroupList(
                                 characterGroups = characterGroups,
@@ -246,51 +247,70 @@ internal fun DownloaderScreen(
             // 浮动工具栏模式
             if (useDockedToolbar) {
                 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                HorizontalFloatingToolbar(
+                Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(y = (-16).dp)
                         .zIndex(1f),
-                    expanded = true,
-                    content = {
-                        val modes = listOf(
-                            Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
-                            Triple(SearchMode.ALL_CATEGORIES, "分类", Icons.Outlined.Category),
-                            Triple(SearchMode.FILE_SEARCH, "文件搜索", Icons.Outlined.FindInPage),
-                            Triple(SearchMode.PORTRAIT, "立绘", Icons.Outlined.Image)
-                        )
-                        modes.forEach { (mode, label, icon) ->
-                            val isSelected = searchMode == mode
-                            val selectedIcon = when (mode) {
-                                SearchMode.VOICE_ONLY -> Icons.Default.RecordVoiceOver
-                                SearchMode.ALL_CATEGORIES -> Icons.Default.Category
-                                SearchMode.FILE_SEARCH -> Icons.Default.FindInPage
-                                SearchMode.PORTRAIT -> Icons.Default.Image
-                            }
-                            TooltipBox(
-                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                                tooltip = { PlainTooltip { Text(label) } },
-                                state = rememberTooltipState()
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        viewModel.onSearchModeChange(mode)
-                                        focusManager.clearFocus()
-                                    },
-                                    modifier = Modifier.size(48.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HorizontalFloatingToolbar(
+                        expanded = true,
+                        content = {
+                            val modes = listOf(
+                                Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
+                                Triple(SearchMode.ALL_CATEGORIES, "分类", Icons.Outlined.Category),
+                                Triple(SearchMode.FILE_SEARCH, "文件搜索", Icons.Outlined.FindInPage),
+                                Triple(SearchMode.PORTRAIT, "立绘", Icons.Outlined.Image)
+                            )
+                            modes.forEach { (mode, label, icon) ->
+                                val isSelected = searchMode == mode
+                                val selectedIcon = when (mode) {
+                                    SearchMode.VOICE_ONLY -> Icons.Default.RecordVoiceOver
+                                    SearchMode.ALL_CATEGORIES -> Icons.Default.Category
+                                    SearchMode.FILE_SEARCH -> Icons.Default.FindInPage
+                                    SearchMode.PORTRAIT -> Icons.Default.Image
+                                }
+                                TooltipBox(
+                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                        TooltipAnchorPosition.Above
+                                    ),
+                                    tooltip = { PlainTooltip { Text(label) } },
+                                    state = rememberTooltipState()
                                 ) {
-                                    Icon(
-                                        if (isSelected) selectedIcon else icon,
-                                        contentDescription = label,
-                                        modifier = Modifier.size(26.dp),
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.onSearchModeChange(mode)
+                                            focusManager.clearFocus()
+                                        },
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Icon(
+                                            if (isSelected) selectedIcon else icon,
+                                            contentDescription = label,
+                                            modifier = Modifier.size(26.dp),
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
+                    )
+
+                    FloatingActionButton(
+                        onClick = onOpenFileManager,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(
+                            Icons.Outlined.FolderOpen,
+                            contentDescription = "文件管理"
+                        )
                     }
-                )
+                }
             }
         } // outer Box
     } // Scaffold content
