@@ -17,6 +17,17 @@ pluginManagement {
     }
 }
 
+// R8 版本覆盖：AGP 8.9.1 自带的 R8 不支持 Kotlin 2.3.x metadata，
+// 需要使用更新的 R8 版本。参考：https://developer.android.com/studio/build/kotlin-d8-r8-versions
+buildscript {
+    repositories {
+        maven("https://storage.googleapis.com/r8-releases/raw")
+    }
+    dependencies {
+        classpath("com.android.tools:r8:8.13.19")
+    }
+}
+
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
