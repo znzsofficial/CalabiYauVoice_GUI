@@ -5,34 +5,39 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import com.nekolaska.calabiyau.LocalSeedColor
 import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.data.AppPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +47,11 @@ fun SettingsScreen(onBack: () -> Unit) {
     var showAbout by remember { mutableStateOf(false) }
     var themeMode by remember { mutableIntStateOf(AppPrefs.themeMode) }
     val globalThemeMode = LocalThemeMode.current
+    var seedColorInt by remember { mutableIntStateOf(AppPrefs.customSeedColor) }
+    val globalSeedColor = LocalSeedColor.current
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
+    var wikiLoadImages by remember { mutableStateOf(AppPrefs.wikiLoadImages) }
+    var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
     var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
 
     val context = LocalContext.current
@@ -301,6 +310,17 @@ fun SettingsScreen(onBack: () -> Unit) {
                         )
                     }
 
+                    // 主题色
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    ThemeColorPicker(
+                        currentSeedColor = seedColorInt,
+                        onColorSelected = { argb ->
+                            seedColorInt = argb
+                            AppPrefs.customSeedColor = argb
+                            globalSeedColor.intValue = argb
+                        }
+                    )
+
                     // 底栏样式
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     var showBarStyleDialog by remember { mutableStateOf(false) }
@@ -371,6 +391,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
+                    // 缓存策略
                     val cacheName = when (wikiCacheMode) {
                         AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存（弱网可用）"
                         else -> "默认（联网加载）"
@@ -386,6 +407,64 @@ fun SettingsScreen(onBack: () -> Unit) {
                             AppPrefs.wikiCacheMode = newMode
                         }
                     )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // 加载图片
+                    SettingsToggleItem(
+                        icon = Icons.Outlined.Image,
+                        title = "加载图片",
+                        subtitle = if (wikiLoadImages) "已开启" else "已关闭（节省流量）",
+                        checked = wikiLoadImages,
+                        onCheckedChange = {
+                            wikiLoadImages = it
+                            AppPrefs.wikiLoadImages = it
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // 桌面模式
+                    SettingsToggleItem(
+                        icon = Icons.Outlined.DesktopWindows,
+                        title = "桌面模式",
+                        subtitle = if (wikiDesktopMode) "使用桌面版 User-Agent" else "使用移动版（默认）",
+                        checked = wikiDesktopMode,
+                        onCheckedChange = {
+                            wikiDesktopMode = it
+                            AppPrefs.wikiDesktopMode = it
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    // 清除 Cookie
+                    var showClearCookieDialog by remember { mutableStateOf(false) }
+                    SettingsItem(
+                        icon = Icons.Outlined.DeleteSweep,
+                        title = "清除登录状态",
+                        subtitle = "清除 Wiki Cookie 并登出",
+                        onClick = { showClearCookieDialog = true }
+                    )
+                    if (showClearCookieDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showClearCookieDialog = false },
+                            title = { Text("清除登录状态") },
+                            text = { Text("确定要清除 Wiki 登录状态吗？\n清除后需要重新登录才能使用投票等功能。") },
+                            shape = RoundedCornerShape(28.dp),
+                            confirmButton = {
+                                FilledTonalButton(onClick = {
+                                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                                    android.webkit.CookieManager.getInstance().flush()
+                                    showClearCookieDialog = false
+                                }) { Text("确定清除") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showClearCookieDialog = false }) { Text("取消") }
+                            }
+                        )
+                    }
+
                 }
             }
 
@@ -401,7 +480,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                StorageStatisticsCard(savePath = savePath)
+                Column {
+                    StorageStatisticsCard(savePath = savePath)
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    WebViewCacheItem(context = context)
+                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -502,6 +587,298 @@ private fun SettingsItem(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsToggleItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+// ─────────────────────── 主题色选择器 ───────────────────────
+
+/** 预设主题色 */
+private val PRESET_COLORS = listOf(
+    0 to "系统默认",                          // 0 = 跟随系统动态取色
+    0xFF4285F4.toInt() to "蓝色",             // Google Blue
+    0xFF0F9D58.toInt() to "绿色",             // Google Green
+    0xFFDB4437.toInt() to "红色",             // Google Red
+    0xFFF4B400.toInt() to "琥珀",             // Google Yellow
+    0xFF9C27B0.toInt() to "紫色",             // Purple
+    0xFF00BCD4.toInt() to "青色",             // Cyan
+    0xFFFF5722.toInt() to "橙色",             // Deep Orange
+    0xFF607D8B.toInt() to "蓝灰",            // Blue Grey
+    0xFFE91E63.toInt() to "粉色",             // Pink
+    0xFF3F51B5.toInt() to "靛蓝",             // Indigo
+    0xFF009688.toInt() to "蓝绿",             // Teal
+    0xFF795548.toInt() to "棕色",             // Brown
+)
+
+@Composable
+private fun ThemeColorPicker(
+    currentSeedColor: Int,
+    onColorSelected: (Int) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val currentName = PRESET_COLORS.firstOrNull { it.first == currentSeedColor }?.second
+        ?: if (currentSeedColor == 0) "系统默认" else "自定义"
+
+    SettingsItem(
+        icon = Icons.Outlined.ColorLens,
+        title = "主题色",
+        subtitle = currentName,
+        onClick = { showDialog = true }
+    )
+
+    if (showDialog) {
+        // 自定义颜色的 HSV 状态
+        val initHsv = remember {
+            FloatArray(3).also { hsv ->
+                if (currentSeedColor != 0) {
+                    android.graphics.Color.colorToHSV(currentSeedColor, hsv)
+                } else {
+                    hsv[0] = 210f; hsv[1] = 0.7f; hsv[2] = 0.8f
+                }
+            }
+        }
+        var hue by remember { mutableFloatStateOf(initHsv[0]) }
+        var saturation by remember { mutableFloatStateOf(initHsv[1]) }
+        var value by remember { mutableFloatStateOf(initHsv[2]) }
+        var showCustomPicker by remember { mutableStateOf(
+            currentSeedColor != 0 && PRESET_COLORS.none { it.first == currentSeedColor }
+        ) }
+
+        val customColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
+
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("选择主题色") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // ── 预设色块网格 ──
+                    val rows = PRESET_COLORS.chunked(4)
+                    rows.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            row.forEach { (argb, label) ->
+                                val isSelected = argb == currentSeedColor && !showCustomPicker
+                                val displayColor = if (argb == 0) MaterialTheme.colorScheme.primary
+                                else Color(argb)
+
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            showCustomPicker = false
+                                            onColorSelected(argb)
+                                            showDialog = false
+                                        }
+                                        .then(
+                                            if (isSelected) Modifier.border(
+                                                2.dp,
+                                                MaterialTheme.colorScheme.primary,
+                                                RoundedCornerShape(14.dp)
+                                            ) else Modifier
+                                        )
+                                        .padding(vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(displayColor)
+                                            .then(
+                                                if (argb == 0) Modifier.border(
+                                                    1.dp,
+                                                    MaterialTheme.colorScheme.outline,
+                                                    CircleShape
+                                                ) else Modifier
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "已选",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        if (argb == 0 && !isSelected) {
+                                            Icon(
+                                                Icons.Outlined.Palette,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        textAlign = TextAlign.Center,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+
+                    // ── 自定义颜色展开按钮 ──
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showCustomPicker = !showCustomPicker }
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.Tune,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "自定义颜色",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            if (showCustomPicker) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // ── 自定义颜色选择器 ──
+                    if (showCustomPicker) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // 颜色预览
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(customColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val hexStr = String.format("#%06X", customColor.toArgb() and 0xFFFFFF)
+                                Text(
+                                    hexStr,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // 色相滑块
+                            Text("色相", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(
+                                value = hue,
+                                onValueChange = { hue = it },
+                                valueRange = 0f..360f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            // 饱和度滑块
+                            Text("饱和度", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(
+                                value = saturation,
+                                onValueChange = { saturation = it },
+                                valueRange = 0f..1f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            // 明度滑块
+                            Text("明度", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(
+                                value = value,
+                                onValueChange = { value = it },
+                                valueRange = 0f..1f,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            shape = RoundedCornerShape(28.dp),
+            confirmButton = {
+                if (showCustomPicker) {
+                    FilledTonalButton(onClick = {
+                        onColorSelected(customColor.toArgb())
+                        showDialog = false
+                    }) {
+                        Text("应用自定义颜色")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("取消")
+                }
+            }
         )
     }
 }
@@ -640,6 +1017,99 @@ private fun StorageStatisticsCard(savePath: String) {
             }
         }
     }
+}
+
+/** WebView 缓存统计 + 清除按钮 */
+@Composable
+private fun WebViewCacheItem(context: android.content.Context) {
+    var cacheSize by remember { mutableStateOf<Long?>(null) }
+    var isCalculating by remember { mutableStateOf(true) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(refreshKey) {
+        isCalculating = true
+        withContext(Dispatchers.IO) {
+            cacheSize = calculateWebViewCacheSize(context)
+        }
+        isCalculating = false
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable {
+                android.webkit.WebView(context).apply {
+                    clearCache(true)
+                    clearHistory()
+                    destroy()
+                }
+                refreshKey++
+            }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.CleaningServices, null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "清除 WebView 缓存",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = when {
+                    isCalculating -> "计算中…"
+                    cacheSize != null && cacheSize!! > 0 -> "当前占用 ${formatFileSize(cacheSize!!)}"
+                    else -> "无缓存"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        if (isCalculating) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(
+                Icons.Default.ChevronRight, null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/** 计算 WebView 缓存目录大小 */
+private fun calculateWebViewCacheSize(context: android.content.Context): Long {
+    var total = 0L
+    val dataDir = context.dataDir
+    // WebView 缓存可能在以下目录
+    val cacheDirs = listOf(
+        File(dataDir, "app_webview/Cache"),
+        File(dataDir, "app_webview/Default/Cache"),
+        File(dataDir, "app_webview/Default/Code Cache"),
+        File(dataDir, "app_webview/GPUCache"),
+        context.cacheDir  // 通用缓存目录
+    )
+    for (dir in cacheDirs) {
+        if (dir.exists() && dir.isDirectory) {
+            total += dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        }
+    }
+    return total
 }
 
 private fun formatFileSize(bytes: Long): String {

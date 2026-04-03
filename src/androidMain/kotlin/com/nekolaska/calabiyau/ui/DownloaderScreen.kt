@@ -26,7 +26,8 @@ import data.SearchMode
 internal fun DownloaderScreen(
     viewModel: MainViewModel,
     onOpenDrawer: () -> Unit,
-    onOpenFileManager: () -> Unit = {}
+    onOpenFileManager: () -> Unit = {},
+    onOpenDownloadHistory: () -> Unit = {}
 ) {
     val searchKeyword by viewModel.searchKeyword.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
@@ -107,6 +108,7 @@ internal fun DownloaderScreen(
                 logs = logs,
                 searchHistoryList = searchHistoryList,
                 onOpenDrawer = onOpenDrawer,
+                onOpenDownloadHistory = onOpenDownloadHistory,
                 onShowLogs = { showLogs = true },
                 onKeywordChange = { viewModel.onSearchKeywordChange(it) },
                 onSearch = {
@@ -392,6 +394,7 @@ private fun DownloaderTopBar(
     logs: List<String>,
     searchHistoryList: List<String>,
     onOpenDrawer: () -> Unit,
+    onOpenDownloadHistory: () -> Unit,
     onShowLogs: () -> Unit,
     onKeywordChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -423,6 +426,16 @@ private fun DownloaderTopBar(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.weight(1f))
+                // 下载历史按钮
+                FilledTonalIconButton(
+                    onClick = onOpenDownloadHistory,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )
+                ) {
+                    Icon(Icons.Outlined.History, contentDescription = "下载历史", modifier = Modifier.size(20.dp))
+                }
+                // 日志按钮
                 FilledTonalIconButton(
                     onClick = onShowLogs,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(

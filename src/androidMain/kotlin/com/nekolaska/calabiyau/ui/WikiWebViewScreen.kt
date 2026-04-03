@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
-import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
@@ -89,7 +88,9 @@ fun hasWikiLoginCookie(): Boolean {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiWebViewScreen(
-    onExitWiki: (() -> Unit)? = null
+    onExitWiki: (() -> Unit)? = null,
+    initialUrl: String = WIKI_HOME_URL,
+    onInitialUrlConsumed: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -97,7 +98,7 @@ fun WikiWebViewScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
-    var currentUrl by remember { mutableStateOf(WIKI_HOME_URL) }
+    var currentUrl by remember { mutableStateOf(initialUrl) }
     var pageTitle by remember { mutableStateOf("Wiki") }
     var loadingProgress by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
@@ -262,12 +263,6 @@ fun WikiWebViewScreen(
                     )
                     context.startActivity(shareIntent)
                 },
-                onClearLogin = {
-                    CookieManager.getInstance().removeAllCookies(null)
-                    CookieManager.getInstance().flush()
-                    webView?.reload()
-                    Toast.makeText(context, "已清除登录状态", Toast.LENGTH_SHORT).show()
-                },
                 onExitWiki = onExitWiki
             )
         },
@@ -353,7 +348,8 @@ fun WikiWebViewScreen(
                             else -> false
                         }
                     }
-                    wv.loadUrl(WIKI_HOME_URL)
+                    wv.loadUrl(initialUrl)
+                    onInitialUrlConsumed?.invoke()
                 }
             },
             update = { /* WebView 状态已通过回调管理 */ }
@@ -510,7 +506,6 @@ private fun WikiBottomToolbar(
     onResetZoom: () -> Unit,
     onOpenInBrowser: () -> Unit,
     onShare: () -> Unit,
-    onClearLogin: () -> Unit,
     onExitWiki: (() -> Unit)?
 ) {
     BottomAppBar(
@@ -640,20 +635,6 @@ private fun WikiBottomToolbar(
                         enabled = textZoomLevel != 100,
                         leadingIcon = {
                             Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(20.dp))
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                    // ── 登录管理 ──
-                    DropdownMenuItem(
-                        text = { Text("清除登录状态") },
-                        onClick = {
-                            onClearLogin()
-                            onShowMenuChange(false)
-                        },
-                        leadingIcon = {
-                            Icon(Icons.AutoMirrored.Outlined.Logout, null, modifier = Modifier.size(20.dp))
                         }
                     )
 

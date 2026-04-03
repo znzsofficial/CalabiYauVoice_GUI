@@ -20,6 +20,9 @@ object AppPrefs {
     private const val KEY_WIKI_CACHE_MODE = "wiki_cache_mode"
     private const val KEY_DOWNLOAD_HISTORY = "download_history"
     private const val KEY_BOTTOM_BAR_STYLE = "bottom_bar_style"
+    private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
+    private const val KEY_WIKI_LOAD_IMAGES = "wiki_load_images"
+    private const val KEY_WIKI_DESKTOP_MODE = "wiki_desktop_mode"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -113,6 +116,24 @@ object AppPrefs {
     var wikiCacheMode: Int
         get() = prefs.getInt(KEY_WIKI_CACHE_MODE, WIKI_CACHE_DEFAULT)
         set(value) = prefs.edit { putInt(KEY_WIKI_CACHE_MODE, value)}
+
+    /**
+     * 自定义主题种子色（ARGB Int）。
+     * 0 表示使用系统动态取色 / 默认配色。
+     */
+    var customSeedColor: Int
+        get() = prefs.getInt(KEY_CUSTOM_SEED_COLOR, 0)
+        set(value) = prefs.edit { putInt(KEY_CUSTOM_SEED_COLOR, value) }
+
+    /** Wiki 是否加载图片（默认 true） */
+    var wikiLoadImages: Boolean
+        get() = prefs.getBoolean(KEY_WIKI_LOAD_IMAGES, true)
+        set(value) = prefs.edit { putBoolean(KEY_WIKI_LOAD_IMAGES, value) }
+
+    /** Wiki 桌面模式 UA（默认 false） */
+    var wikiDesktopMode: Boolean
+        get() = prefs.getBoolean(KEY_WIKI_DESKTOP_MODE, false)
+        set(value) = prefs.edit { putBoolean(KEY_WIKI_DESKTOP_MODE, value) }
 
     /** 下载历史记录（JSON 格式存储） */
     var downloadHistoryJson: String
