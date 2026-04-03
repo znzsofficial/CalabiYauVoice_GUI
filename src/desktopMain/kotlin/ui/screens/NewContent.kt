@@ -194,6 +194,7 @@ fun NewDownloaderContent() {
     var showLogWindow by remember { mutableStateOf(false) }
     var showWikiBrowser by remember { mutableStateOf(false) }
     var showCreatorCenter by remember { mutableStateOf(false) }
+    var showVotingWindow by remember { mutableStateOf(false) }
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
@@ -270,6 +271,9 @@ fun NewDownloaderContent() {
     }
     if (showCreatorCenter) {
         CreatorCenterWindow(onCloseRequest = { showCreatorCenter = false })
+    }
+    if (showVotingWindow) {
+        VotingWindow(onCloseRequest = { showVotingWindow = false })
     }
     if (showLogWindow) {
         LogWindow(
@@ -563,6 +567,11 @@ fun NewDownloaderContent() {
                     if (isUserLoggedIn) {
                         val user = currentUser!!
                         MenuFlyoutSeparator()
+                        MenuFlyoutItem(
+                            onClick = { showVotingWindow = true },
+                            text = { Text("时装投票") },
+                            icon = { Icon(Icons.Regular.Vote, contentDescription = null) }
+                        )
                         MenuFlyoutItem(
                             onClick = ::refreshCurrentUser,
                             text = { Text(if (isRefreshingUser) "正在刷新账号信息..." else "刷新账号信息") },
