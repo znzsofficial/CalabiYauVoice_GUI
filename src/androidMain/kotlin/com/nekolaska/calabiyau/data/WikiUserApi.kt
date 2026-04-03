@@ -199,10 +199,23 @@ object WikiUserApi {
 
     /**
      * 从 Android WebView CookieManager 获取 Wiki 站点的 Cookie 字符串。
+     * 需要合并根路径和 /klbq/ 路径的 Cookie，因为关键的 session Cookie path=/klbq/。
      */
     private fun getWikiCookies(): String? {
         return try {
-            CookieManager.getInstance().getCookie("https://wiki.biligame.com")
+            val cm = CookieManager.getInstance()
+            val rootCookies = cm.getCookie("https://wiki.biligame.com") ?: ""
+            val klbqCookies = cm.getCookie("https://wiki.biligame.com/klbq/") ?: ""
+            val cookieMap = mutableMapOf<String, String>()
+            (rootCookies + "; " + klbqCookies).split(";").forEach { part ->
+                val trimmed = part.trim()
+                val eq = trimmed.indexOf('=')
+                if (eq > 0) {
+                    cookieMap[trimmed.substring(0, eq).trim()] = trimmed.substring(eq + 1).trim()
+                }
+            }
+            if (cookieMap.isEmpty()) return null
+            cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
         } catch (_: Exception) {
             null
         }

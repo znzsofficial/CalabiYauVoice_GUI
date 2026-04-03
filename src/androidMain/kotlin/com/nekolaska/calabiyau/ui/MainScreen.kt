@@ -24,10 +24,11 @@ import kotlinx.coroutines.launch
 
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
-    DOWNLOADER,        // 资源下载 (主页)
+    WIKI_HUB,          // 首页（Wiki 主页）
     WIKI,              // Wiki 浏览器
+    DOWNLOADER,        // 资源下载
     FILE_MANAGER,      // 文件管理
-    DOWNLOAD_HISTORY,  // 下载历史
+    DOWNLOAD_HISTORY,  // 下载历史（仅从资源下载页打开）
     SETTINGS           // 设置
 }
 
@@ -36,14 +37,15 @@ enum class DrawerDestination {
 fun MainScreen(viewModel: MainViewModel) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    var currentDestination by remember { mutableStateOf(DrawerDestination.DOWNLOADER) }
+    var currentDestination by remember { mutableStateOf(DrawerDestination.WIKI_HUB) }
+    var pendingWikiUrl by remember { mutableStateOf<String?>(null) }
 
     // 返回键：侧栏打开时先关闭侧栏；在 Wiki/设置页面时返回主页
     BackHandler(enabled = drawerState.isOpen) {
         coroutineScope.launch { drawerState.close() }
     }
-    BackHandler(enabled = currentDestination != DrawerDestination.DOWNLOADER && !drawerState.isOpen) {
-        currentDestination = DrawerDestination.DOWNLOADER
+    BackHandler(enabled = currentDestination != DrawerDestination.WIKI_HUB && !drawerState.isOpen) {
+        currentDestination = DrawerDestination.WIKI_HUB
     }
 
     // 切换页面时停止音频播放
@@ -70,28 +72,42 @@ fun MainScreen(viewModel: MainViewModel) {
                 DownloaderScreen(
                     viewModel = viewModel,
                     onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
-                    onOpenFileManager = { currentDestination = DrawerDestination.FILE_MANAGER }
+                    onOpenFileManager = { currentDestination = DrawerDestination.FILE_MANAGER },
+                    onOpenDownloadHistory = { currentDestination = DrawerDestination.DOWNLOAD_HISTORY }
                 )
             }
+
             DrawerDestination.WIKI -> {
                 WikiWebViewScreen(
-                    onExitWiki = { currentDestination = DrawerDestination.DOWNLOADER }
+                    onExitWiki = { currentDestination = DrawerDestination.DOWNLOADER },
+                    initialUrl = pendingWikiUrl ?: WIKI_HOME_URL,
+                    onInitialUrlConsumed = { pendingWikiUrl = null }
+                )
+            }
+            DrawerDestination.WIKI_HUB -> {
+                WikiHubScreen(
+                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                    onOpenWikiUrl = { url ->
+                        pendingWikiUrl = url
+                        currentDestination = DrawerDestination.WIKI
+                    }
                 )
             }
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
                     rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
-                    onBack = { currentDestination = DrawerDestination.DOWNLOADER }
+                    onBack = { currentDestination = DrawerDestination.WIKI_HUB }
                 )
             }
             DrawerDestination.DOWNLOAD_HISTORY -> {
                 DownloadHistoryScreen(
                     viewModel = viewModel,
-                    onBack = { currentDestination = DrawerDestination.DOWNLOADER }
+                    onBack = { currentDestination = DrawerDestination.WIKI_HUB }
                 )
             }
+
             DrawerDestination.SETTINGS -> {
-                SettingsScreen(onBack = { currentDestination = DrawerDestination.DOWNLOADER })
+                SettingsScreen(onBack = { currentDestination = DrawerDestination.WIKI_HUB })
             }
         }
     }
@@ -183,12 +199,12 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(8.dp))
 
-        // 1. 资源下载
+        // 1. 首页
         NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.Download, contentDescription = null) },
-            label = { Text("资源下载") },
-            selected = currentDestination == DrawerDestination.DOWNLOADER,
-            onClick = { onDestinationSelected(DrawerDestination.DOWNLOADER) },
+            icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
+            label = { Text("首页") },
+            selected = currentDestination == DrawerDestination.WIKI_HUB,
+            onClick = { onDestinationSelected(DrawerDestination.WIKI_HUB) },
             modifier = Modifier.padding(horizontal = 12.dp),
             shape = RoundedCornerShape(28.dp)
         )
@@ -228,7 +244,19 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // 3. 文件管理
+        // 3. 资源下载
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+            label = { Text("资源下载") },
+            selected = currentDestination == DrawerDestination.DOWNLOADER,
+            onClick = { onDestinationSelected(DrawerDestination.DOWNLOADER) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = RoundedCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 4. 文件管理
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
             label = { Text("文件管理") },
@@ -240,19 +268,7 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // 4. 下载历史
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.History, contentDescription = null) },
-            label = { Text("下载历史") },
-            selected = currentDestination == DrawerDestination.DOWNLOAD_HISTORY,
-            onClick = { onDestinationSelected(DrawerDestination.DOWNLOAD_HISTORY) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp)
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        // 5. 设置
+        // 4. 设置
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
             label = { Text("设置") },
@@ -445,7 +461,7 @@ private fun WikiUserInfoBottomSheet(
             Spacer(Modifier.height(12.dp))
 
             // Tab 栏
-            TabRow(
+            PrimaryTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 contentColor = MaterialTheme.colorScheme.primary,
