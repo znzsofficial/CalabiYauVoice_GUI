@@ -1,0 +1,286 @@
+package com.nekolaska.calabiyau.ui
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.data.WeaponListApi
+import kotlinx.coroutines.launch
+
+// ════════════════════════════════════════════════════════
+//  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
+// ════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WeaponListScreen(
+    onBack: () -> Unit,
+    onOpenWeaponDetail: (weaponName: String) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var categories by remember { mutableStateOf<List<WeaponListApi.WeaponCategoryData>>(emptyList()) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    fun loadData(forceRefresh: Boolean = false) {
+        scope.launch {
+            isLoading = true
+            errorMessage = null
+            when (val result = WeaponListApi.fetchAllCategories(forceRefresh)) {
+                is WeaponListApi.ApiResult.Success -> categories = result.value
+                is WeaponListApi.ApiResult.Error -> errorMessage = result.message
+            }
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) { loadData() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("武器一览", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        when {
+            isLoading -> {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text("正在加载武器列表…", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+
+            errorMessage != null && categories.isEmpty() -> {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            errorMessage!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                        FilledTonalButton(onClick = { loadData() }) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("重试")
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                Column(Modifier.padding(innerPadding)) {
+                    // 分类 Tab
+                    if (categories.size > 1) {
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedTab
+                        ) {
+                            categories.forEachIndexed { index, cat ->
+                                Tab(
+                                    selected = selectedTab == index,
+                                    onClick = { selectedTab = index },
+                                    text = {
+                                        Text(
+                                            cat.category.displayName,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // 武器网格
+                    val currentCategory = categories.getOrNull(selectedTab)
+                    if (currentCategory != null) {
+                        WeaponGrid(
+                            weapons = currentCategory.weapons,
+                            onOpenWeaponDetail = onOpenWeaponDetail
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeaponGrid(
+    weapons: List<WeaponListApi.WeaponInfo>,
+    onOpenWeaponDetail: (weaponName: String) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(weapons, key = { it.name }) { weapon ->
+            WeaponCard(
+                weapon = weapon,
+                onClick = { onOpenWeaponDetail(weapon.name) }
+            )
+        }
+
+        // 底部留白
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun WeaponCard(
+    weapon: WeaponListApi.WeaponInfo,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column {
+            // 武器图片
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 10f)
+                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (weapon.imageUrl != null) {
+                    AsyncImage(
+                        model = weapon.imageUrl,
+                        contentDescription = weapon.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp)
+                    )
+                } else {
+                    // 无图片占位
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Outlined.GpsFixed,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 武器信息
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = weapon.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // 使用者（主武器）
+                if (weapon.user.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = weapon.user,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                // 武器类型标签（主武器）
+                if (weapon.type.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = weapon.type,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                // 武器介绍（近战/副武器/战术道具，没有使用者时显示）
+                if (weapon.user.isBlank() && weapon.description.isNotBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = weapon.description.replace("<br />", " ").replace("<br/>", " "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
