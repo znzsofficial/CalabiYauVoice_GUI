@@ -74,6 +74,8 @@ kotlin {
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
             implementation("io.coil-kt.coil3:coil-gif:3.4.0")
+            implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
+            implementation("io.github.kyant0:capsule:2.1.3")
         }
     }
 }

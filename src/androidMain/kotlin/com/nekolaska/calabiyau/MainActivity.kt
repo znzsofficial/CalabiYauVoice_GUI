@@ -14,6 +14,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.WikiEngine
+import com.nekolaska.calabiyau.ui.LocalG2CornersEnabled
+import com.nekolaska.calabiyau.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.ui.MainScreen
 import data.PortraitRepository
 
@@ -48,6 +50,8 @@ val LocalSeedColor = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.custo
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
+    val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
+    val g2CornersEnabled = remember { mutableStateOf(AppPrefs.g2CornersEnabled) }
 
     val darkTheme = when (themeMode.intValue) {
         AppPrefs.THEME_LIGHT -> false
@@ -70,7 +74,9 @@ fun AppTheme(content: @Composable () -> Unit) {
 
     CompositionLocalProvider(
         LocalThemeMode provides themeMode,
-        LocalSeedColor provides seedColor
+        LocalSeedColor provides seedColor,
+        LocalLiquidGlassEnabled provides liquidGlassEnabled,
+        LocalG2CornersEnabled provides g2CornersEnabled
     ) {
         MaterialTheme(colorScheme = colorScheme, content = content)
     }

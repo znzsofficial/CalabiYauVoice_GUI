@@ -35,7 +35,10 @@ import androidx.core.net.toUri
 import com.nekolaska.calabiyau.LocalSeedColor
 import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.WallpaperApi
+import com.nekolaska.calabiyau.data.WikiEngine
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -52,6 +55,10 @@ fun SettingsScreen(onBack: () -> Unit) {
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
     var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
     var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
+    var liquidGlassEnabled by remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
+    val globalLiquidGlass = LocalLiquidGlassEnabled.current
+    var g2CornersEnabled by remember { mutableStateOf(AppPrefs.g2CornersEnabled) }
+    val globalG2Corners = LocalG2CornersEnabled.current
 
     val context = LocalContext.current
 
@@ -118,137 +125,16 @@ fun SettingsScreen(onBack: () -> Unit) {
         ) {
             Spacer(Modifier.height(4.dp))
 
-            // 下载设置分组
-            SettingsGroupHeader("下载设置")
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    // 保存路径
-                    SettingsItem(
-                        icon = Icons.Outlined.Folder,
-                        title = "保存路径",
-                        subtitle = savePath,
-                        onClick = { dirPicker.launch(null) }
-                    )
-
-                    // 保存路径手动输入
-                    var showPathDialog by remember { mutableStateOf(false) }
-                    SettingsItem(
-                        icon = Icons.Outlined.Edit,
-                        title = "手动设置路径",
-                        subtitle = "手动输入自定义保存路径",
-                        onClick = { showPathDialog = true }
-                    )
-
-                    if (showPathDialog) {
-                        var tempPath by remember { mutableStateOf(savePath) }
-                        AlertDialog(
-                            onDismissRequest = { showPathDialog = false },
-                            title = { Text("设置保存路径") },
-                            text = {
-                                OutlinedTextField(
-                                    value = tempPath,
-                                    onValueChange = { tempPath = it },
-                                    label = { Text("路径") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = false,
-                                    maxLines = 3,
-                                    shape = RoundedCornerShape(16.dp)
-                                )
-                            },
-                            shape = RoundedCornerShape(28.dp),
-                            confirmButton = {
-                                FilledTonalButton(onClick = {
-                                    savePath = tempPath
-                                    AppPrefs.savePath = tempPath
-                                    showPathDialog = false
-                                }) { Text("确定") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showPathDialog = false }) { Text("取消") }
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // 性能设置
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    // 最大并发数
-                    var showConcurrencyDialog by remember { mutableStateOf(false) }
-                    SettingsItem(
-                        icon = Icons.Outlined.Speed,
-                        title = "最大并发下载数",
-                        subtitle = "$maxConcurrency 个并发连接",
-                        onClick = { showConcurrencyDialog = true }
-                    )
-
-                    if (showConcurrencyDialog) {
-                        var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
-                        AlertDialog(
-                            onDismissRequest = { showConcurrencyDialog = false },
-                            title = { Text("最大并发下载数") },
-                            text = {
-                                Column {
-                                    Text(
-                                        "设置同时下载文件的最大数量（1-32）",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    OutlinedTextField(
-                                        value = tempConcurrency,
-                                        onValueChange = { tempConcurrency = it.filter { c -> c.isDigit() } },
-                                        label = { Text("并发数") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        shape = RoundedCornerShape(16.dp)
-                                    )
-                                }
-                            },
-                            shape = RoundedCornerShape(28.dp),
-                            confirmButton = {
-                                FilledTonalButton(onClick = {
-                                    val value = tempConcurrency.toIntOrNull()?.coerceIn(1, 32) ?: 8
-                                    maxConcurrency = value.toString()
-                                    AppPrefs.maxConcurrency = value
-                                    showConcurrencyDialog = false
-                                }) { Text("确定") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showConcurrencyDialog = false }) { Text("取消") }
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // 外观设置
+            // ═══════════════════════════════════
+            //  外观
+            // ═══════════════════════════════════
             SettingsGroupHeader("外观")
 
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
@@ -279,7 +165,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
+                                                .clip(smoothCornerShape(12.dp))
                                                 .clickable {
                                                     themeMode = mode
                                                     AppPrefs.themeMode = mode
@@ -304,7 +190,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(28.dp),
+                            shape = smoothCornerShape(28.dp),
                             confirmButton = {}
                         )
                     }
@@ -320,6 +206,240 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     )
 
+                    // G2 连续圆角
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsToggleItem(
+                        icon = Icons.Outlined.RoundedCorner,
+                        title = "G2 连续圆角",
+                        subtitle = "更平滑的圆角曲线",
+                        checked = g2CornersEnabled || liquidGlassEnabled,
+                        onCheckedChange = {
+                            if (!liquidGlassEnabled) {
+                                // 液态玻璃关闭时，G2 可独立切换
+                                g2CornersEnabled = it
+                                AppPrefs.g2CornersEnabled = it
+                                globalG2Corners.value = it
+                            }
+                            // 液态玻璃开启时，G2 强制开启不可关闭
+                        }
+                    )
+
+                    // 液态玻璃效果（开启时自动开启 G2）
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingsToggleItem(
+                        icon = Icons.Outlined.BlurOn,
+                        title = "液态玻璃效果",
+                        subtitle = "壁纸背景 + 玻璃卡片，需 Android 12+",
+                        checked = liquidGlassEnabled,
+                        onCheckedChange = {
+                            liquidGlassEnabled = it
+                            AppPrefs.liquidGlassEnabled = it
+                            globalLiquidGlass.value = it
+                            if (it) {
+                                // 开启液态玻璃时自动开启 G2
+                                g2CornersEnabled = true
+                                AppPrefs.g2CornersEnabled = true
+                                globalG2Corners.value = true
+                            }
+                        }
+                    )
+
+                    // ── 壁纸管理（仅液态玻璃开启时显示） ──
+                    if (liquidGlassEnabled) {
+                        var isRefreshing by remember { mutableStateOf(false) }
+                        var isSaving by remember { mutableStateOf(false) }
+                        var wallpaperMessage by remember { mutableStateOf<String?>(null) }
+                        var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
+                        val scope = rememberCoroutineScope()
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingsToggleItem(
+                            icon = Icons.Outlined.Autorenew,
+                            title = "启动时自动刷新壁纸",
+                            subtitle = if (wallpaperAutoRefresh) "每次进入首页随机更换"
+                                else "仅手动刷新（保持当前壁纸）",
+                            checked = wallpaperAutoRefresh,
+                            onCheckedChange = {
+                                wallpaperAutoRefresh = it
+                                AppPrefs.wallpaperAutoRefresh = it
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingsItem(
+                            icon = Icons.Outlined.Refresh,
+                            title = "刷新首页背景图",
+                            subtitle = if (isRefreshing) "正在获取新壁纸…"
+                                else wallpaperMessage ?: "随机更换一张 Wiki 壁纸",
+                            onClick = {
+                                if (isRefreshing) return@SettingsItem
+                                isRefreshing = true
+                                wallpaperMessage = null
+                                scope.launch {
+                                    val url = withContext(Dispatchers.IO) {
+                                        WallpaperApi.fetchRandomWallpaperUrl(forceRefresh = true)
+                                    }
+                                    wallpaperMessage = if (url != null) "已刷新，返回首页查看"
+                                        else "获取失败，请检查网络"
+                                    isRefreshing = false
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingsItem(
+                            icon = Icons.Outlined.SaveAlt,
+                            title = "保存当前背景图",
+                            subtitle = if (isSaving) "正在保存…"
+                                else "将当前壁纸保存到下载目录",
+                            onClick = {
+                                val currentUrl = AppPrefs.wallpaperUrl
+                                if (currentUrl.isNullOrBlank() || isSaving) return@SettingsItem
+                                isSaving = true
+                                scope.launch {
+                                    val success = withContext(Dispatchers.IO) {
+                                        try {
+                                            val fileName = currentUrl.substringAfterLast("/")
+                                                .substringBefore("?")
+                                                .ifBlank { "wallpaper_${System.currentTimeMillis()}.jpg" }
+                                            val saveDir = File(AppPrefs.savePath)
+                                            if (!saveDir.exists()) saveDir.mkdirs()
+                                            val destFile = File(saveDir, fileName)
+                                            val request = okhttp3.Request.Builder()
+                                                .url(currentUrl).build()
+                                            WikiEngine.client.newCall(request).execute().use { resp ->
+                                                if (!resp.isSuccessful) return@withContext false
+                                                resp.body.byteStream().use { input ->
+                                                    destFile.outputStream().use { output ->
+                                                        input.copyTo(output)
+                                                    }
+                                                }
+                                            }
+                                            true
+                                        } catch (_: Exception) {
+                                            false
+                                        }
+                                    }
+                                    wallpaperMessage = if (success) "已保存到 ${AppPrefs.savePath}"
+                                        else "保存失败"
+                                    isSaving = false
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // ═══════════════════════════════════
+            //  下载
+            // ═══════════════════════════════════
+            SettingsGroupHeader("下载")
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = smoothCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column {
+                    // 保存路径
+                    SettingsItem(
+                        icon = Icons.Outlined.Folder,
+                        title = "保存路径",
+                        subtitle = savePath,
+                        onClick = { dirPicker.launch(null) }
+                    )
+
+                    // 手动输入路径
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    var showPathDialog by remember { mutableStateOf(false) }
+                    SettingsItem(
+                        icon = Icons.Outlined.Edit,
+                        title = "手动设置路径",
+                        subtitle = "手动输入自定义保存路径",
+                        onClick = { showPathDialog = true }
+                    )
+                    if (showPathDialog) {
+                        var tempPath by remember { mutableStateOf(savePath) }
+                        AlertDialog(
+                            onDismissRequest = { showPathDialog = false },
+                            title = { Text("设置保存路径") },
+                            text = {
+                                OutlinedTextField(
+                                    value = tempPath,
+                                    onValueChange = { tempPath = it },
+                                    label = { Text("路径") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = false,
+                                    maxLines = 3,
+                                    shape = smoothCornerShape(16.dp)
+                                )
+                            },
+                            shape = smoothCornerShape(28.dp),
+                            confirmButton = {
+                                FilledTonalButton(onClick = {
+                                    savePath = tempPath
+                                    AppPrefs.savePath = tempPath
+                                    showPathDialog = false
+                                }) { Text("确定") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showPathDialog = false }) { Text("取消") }
+                            }
+                        )
+                    }
+
+                    // 最大并发数
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    var showConcurrencyDialog by remember { mutableStateOf(false) }
+                    SettingsItem(
+                        icon = Icons.Outlined.Speed,
+                        title = "最大并发下载数",
+                        subtitle = "$maxConcurrency 个并发连接",
+                        onClick = { showConcurrencyDialog = true }
+                    )
+                    if (showConcurrencyDialog) {
+                        var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
+                        AlertDialog(
+                            onDismissRequest = { showConcurrencyDialog = false },
+                            title = { Text("最大并发下载数") },
+                            text = {
+                                Column {
+                                    Text(
+                                        "设置同时下载文件的最大数量（1-32）",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    OutlinedTextField(
+                                        value = tempConcurrency,
+                                        onValueChange = { tempConcurrency = it.filter { c -> c.isDigit() } },
+                                        label = { Text("并发数") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        shape = smoothCornerShape(16.dp)
+                                    )
+                                }
+                            },
+                            shape = smoothCornerShape(28.dp),
+                            confirmButton = {
+                                FilledTonalButton(onClick = {
+                                    val value = tempConcurrency.toIntOrNull()?.coerceIn(1, 32) ?: 8
+                                    maxConcurrency = value.toString()
+                                    AppPrefs.maxConcurrency = value
+                                    showConcurrencyDialog = false
+                                }) { Text("确定") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showConcurrencyDialog = false }) { Text("取消") }
+                            }
+                        )
+                    }
+
                     // 底栏样式
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     var showBarStyleDialog by remember { mutableStateOf(false) }
@@ -330,10 +450,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                     SettingsItem(
                         icon = Icons.Outlined.ViewDay,
                         title = "底栏样式",
-                        subtitle = "$barStyleName（重启页面生效）",
+                        subtitle = barStyleName,
                         onClick = { showBarStyleDialog = true }
                     )
-
                     if (showBarStyleDialog) {
                         AlertDialog(
                             onDismissRequest = { showBarStyleDialog = false },
@@ -347,7 +466,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
+                                                .clip(smoothCornerShape(12.dp))
                                                 .clickable {
                                                     bottomBarStyle = style
                                                     AppPrefs.bottomBarStyle = style
@@ -370,7 +489,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     }
                                 }
                             },
-                            shape = RoundedCornerShape(28.dp),
+                            shape = smoothCornerShape(28.dp),
                             confirmButton = {}
                         )
                     }
@@ -379,14 +498,16 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(8.dp))
 
-            // Wiki 设置
+            // ═══════════════════════════════════
+            //  Wiki
+            // ═══════════════════════════════════
             SettingsGroupHeader("Wiki")
 
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
@@ -436,7 +557,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             onDismissRequest = { showClearCookieDialog = false },
                             title = { Text("清除登录状态") },
                             text = { Text("确定要清除 Wiki 登录状态吗？\n清除后需要重新登录才能使用投票等功能。") },
-                            shape = RoundedCornerShape(28.dp),
+                            shape = smoothCornerShape(28.dp),
                             confirmButton = {
                                 FilledTonalButton(onClick = {
                                     android.webkit.CookieManager.getInstance().removeAllCookies(null)
@@ -462,7 +583,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
@@ -483,7 +604,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
@@ -533,7 +654,7 @@ private fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(smoothCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -587,7 +708,7 @@ private fun SettingsToggleItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(smoothCornerShape(16.dp))
             .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -704,7 +825,7 @@ private fun ThemeColorPicker(
                                 Column(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clip(RoundedCornerShape(14.dp))
+                                        .clip(smoothCornerShape(14.dp))
                                         .clickable {
                                             showCustomPicker = false
                                             onColorSelected(argb)
@@ -714,7 +835,7 @@ private fun ThemeColorPicker(
                                             if (isSelected) Modifier.border(
                                                 2.dp,
                                                 MaterialTheme.colorScheme.primary,
-                                                RoundedCornerShape(14.dp)
+                                                smoothCornerShape(14.dp)
                                             ) else Modifier
                                         )
                                         .padding(vertical = 8.dp),
@@ -772,7 +893,7 @@ private fun ThemeColorPicker(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(smoothCornerShape(12.dp))
                             .clickable { showCustomPicker = !showCustomPicker }
                             .padding(vertical = 8.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -805,7 +926,7 @@ private fun ThemeColorPicker(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(smoothCornerShape(16.dp))
                                     .background(customColor),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -848,7 +969,7 @@ private fun ThemeColorPicker(
                     }
                 }
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 if (showCustomPicker) {
                     FilledTonalButton(onClick = {
@@ -1022,7 +1143,7 @@ private fun WebViewCacheItem(context: android.content.Context) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(smoothCornerShape(16.dp))
             .clickable {
                 android.webkit.WebView(context).apply {
                     clearCache(true)

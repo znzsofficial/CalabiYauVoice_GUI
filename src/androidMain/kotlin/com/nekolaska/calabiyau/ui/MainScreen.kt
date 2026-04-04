@@ -128,7 +128,7 @@ private fun AppDrawerContent(
     val wikiCoroutineScope = rememberCoroutineScope()
 
     ModalDrawerSheet(
-        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+        drawerShape = smoothCornerShape(28.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.width(300.dp)
     ) {
@@ -206,7 +206,7 @@ private fun AppDrawerContent(
             selected = currentDestination == DrawerDestination.WIKI_HUB,
             onClick = { onDestinationSelected(DrawerDestination.WIKI_HUB) },
             modifier = Modifier.padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp)
+            shape = smoothCornerShape(28.dp)
         )
 
         Spacer(Modifier.height(4.dp))
@@ -219,7 +219,7 @@ private fun AppDrawerContent(
                 if (hasLoginCookie.value) {
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(8.dp)
+                        shape = smoothCornerShape(8.dp)
                     ) {
                         Text(
                             text = "已登录",
@@ -239,7 +239,7 @@ private fun AppDrawerContent(
             selected = currentDestination == DrawerDestination.WIKI,
             onClick = { onDestinationSelected(DrawerDestination.WIKI) },
             modifier = Modifier.padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp)
+            shape = smoothCornerShape(28.dp)
         )
 
         Spacer(Modifier.height(4.dp))
@@ -251,7 +251,7 @@ private fun AppDrawerContent(
             selected = currentDestination == DrawerDestination.DOWNLOADER,
             onClick = { onDestinationSelected(DrawerDestination.DOWNLOADER) },
             modifier = Modifier.padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp)
+            shape = smoothCornerShape(28.dp)
         )
 
         Spacer(Modifier.height(4.dp))
@@ -263,7 +263,7 @@ private fun AppDrawerContent(
             selected = currentDestination == DrawerDestination.FILE_MANAGER,
             onClick = { onDestinationSelected(DrawerDestination.FILE_MANAGER) },
             modifier = Modifier.padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp)
+            shape = smoothCornerShape(28.dp)
         )
 
         Spacer(Modifier.height(4.dp))
@@ -275,7 +275,7 @@ private fun AppDrawerContent(
             selected = currentDestination == DrawerDestination.SETTINGS,
             onClick = { onDestinationSelected(DrawerDestination.SETTINGS) },
             modifier = Modifier.padding(horizontal = 12.dp),
-            shape = RoundedCornerShape(28.dp)
+            shape = smoothCornerShape(28.dp)
         )
 
         Spacer(Modifier.weight(1f))
@@ -308,7 +308,7 @@ private fun WikiUserInfoCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
