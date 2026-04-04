@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 // ════════════════════════════════════════════════════════
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAP_DETAIL, COSTUMES, VOTING, NAVIGATION }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, VOTING, NAVIGATION }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,11 +90,14 @@ fun WikiHubScreen(
     }
 
     // 子页面按返回键回到上一级
+    // 记录地图详情的来源页面（首页或战斗模式）
+    var mapDetailFrom by remember { mutableStateOf(WikiHubPage.HOME) }
+
     BackHandler(enabled = currentPage != WikiHubPage.HOME) {
         currentPage = when (currentPage) {
             WikiHubPage.CHAR_DETAIL -> WikiHubPage.CHARACTERS
             WikiHubPage.WEAPON_DETAIL -> WikiHubPage.WEAPONS
-            WikiHubPage.MAP_DETAIL -> WikiHubPage.HOME
+            WikiHubPage.MAP_DETAIL -> mapDetailFrom
             else -> WikiHubPage.HOME
         }
     }
@@ -113,6 +116,7 @@ fun WikiHubScreen(
                 onOpenMapDetail = { name, imageUrl ->
                     selectedMapName = name
                     selectedMapImage = imageUrl
+                    mapDetailFrom = WikiHubPage.HOME
                     currentPage = WikiHubPage.MAP_DETAIL
                 },
                 factions = factions,
@@ -159,13 +163,31 @@ fun WikiHubScreen(
             MapDetailScreen(
                 mapName = selectedMapName,
                 mapImageUrl = selectedMapImage,
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { currentPage = mapDetailFrom },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
         WikiHubPage.COSTUMES -> {
             CostumeFilterScreen(
                 onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.ANNOUNCEMENTS -> {
+            AnnouncementScreen(
+                onBack = { currentPage = WikiHubPage.HOME },
+                onOpenWikiUrl = onOpenWikiUrl
+            )
+        }
+        WikiHubPage.GAME_MODES -> {
+            GameModeScreen(
+                onBack = { currentPage = WikiHubPage.HOME },
+                onOpenWikiUrl = onOpenWikiUrl,
+                onOpenMapDetail = { name, imageUrl ->
+                    selectedMapName = name
+                    selectedMapImage = imageUrl
+                    mapDetailFrom = WikiHubPage.GAME_MODES
+                    currentPage = WikiHubPage.MAP_DETAIL
+                }
             )
         }
         WikiHubPage.VOTING -> {
@@ -255,13 +277,24 @@ private fun WikiHomePage(
                 )
             }
 
+            // ── 战斗模式 ──
+            item(key = "game_modes") {
+                ActionCard(
+                    title = "战斗模式",
+                    subtitle = "查看所有战斗模式详情",
+                    icon = Icons.Outlined.SportsEsports,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.GAME_MODES) }
+                )
+            }
+
             // ── 玩法模式 ──
             item(key = "gameplay") {
                 ContentBlockCard(
-                    title = "玩法模式",
-                    icon = Icons.Outlined.SportsEsports,
+                    title = "其他玩法",
+                    icon = Icons.Outlined.Extension,
                     items = listOf(
-                        "战斗模式" to "战斗模式",
                         "弦化" to "弦化",
                         "弦能增幅网络" to "弦能增幅网络",
                         "特别行动" to "特别行动",
@@ -283,6 +316,18 @@ private fun WikiHomePage(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiHubPage.VOTING) }
+                )
+            }
+
+            // ── 公告资讯 ──
+            item(key = "announcements") {
+                ActionCard(
+                    title = "公告资讯",
+                    subtitle = "查看最新游戏公告和更新信息",
+                    icon = Icons.Outlined.Campaign,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) }
                 )
             }
 

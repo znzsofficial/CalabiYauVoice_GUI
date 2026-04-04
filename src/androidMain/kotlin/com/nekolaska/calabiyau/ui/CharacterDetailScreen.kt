@@ -43,13 +43,9 @@ fun CharacterDetailScreen(
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<CharacterDetail?>(null) }
+    var retryTrigger by remember { mutableIntStateOf(0) }
 
-    fun loadData() {
-        isLoading = true
-        errorMessage = null
-    }
-
-    LaunchedEffect(characterName) {
+    LaunchedEffect(characterName, retryTrigger) {
         isLoading = true
         errorMessage = null
         when (val result = CharacterDetailApi.fetchCharacterDetail(characterName)) {
@@ -125,7 +121,7 @@ fun CharacterDetailScreen(
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = { loadData() }) {
+                        FilledTonalButton(onClick = { retryTrigger++ }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = null)
                             Spacer(Modifier.width(6.dp))
                             Text("重试")
