@@ -1,8 +1,12 @@
 package com.nekolaska.calabiyau.ui
 
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.webkit.URLUtil
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
@@ -28,6 +32,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.GalleryApi
 import kotlinx.coroutines.launch
 
@@ -52,6 +57,8 @@ fun GalleryScreen(
 
     // 全屏预览
     var previewImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
+    // 长按保存
+    var saveTargetImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
@@ -208,7 +215,7 @@ fun GalleryScreen(
         }
     }
 
-    // ── 全屏预览 Dialog ──
+    // ── 全屏预览 Dialog（支持缩放 + 长按保存） ──
     previewImage?.let { image ->
         Dialog(
             onDismissRequest = { previewImage = null },
@@ -217,20 +224,17 @@ fun GalleryScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.9f))
-                    .clickable { previewImage = null },
+                    .background(Color.Black.copy(alpha = 0.9f)),
                 contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(image.imageUrl)
-                        .crossfade(true)
-                        .build(),
+                ZoomableImage(
+                    model = image.imageUrl,
                     contentDescription = image.caption,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp),
-                    contentScale = ContentScale.Fit
+                    onClick = { previewImage = null },
+                    onLongPress = { saveTargetImage = image }
                 )
 
                 // 关闭按钮
@@ -244,6 +248,19 @@ fun GalleryScreen(
                     )
                 ) {
                     Icon(Icons.Outlined.Close, contentDescription = "关闭")
+                }
+
+                // 保存按钮
+                IconButton(
+                    onClick = { saveTargetImage = image },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp),
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Outlined.SaveAlt, contentDescription = "保存")
                 }
 
                 // 底部 caption
@@ -262,6 +279,49 @@ fun GalleryScreen(
                 }
             }
         }
+    }
+
+    // ── 保存图片确认对话框 ──
+    saveTargetImage?.let { image ->
+        AlertDialog(
+            onDismissRequest = { saveTargetImage = null },
+            title = { Text("保存图片") },
+            text = {
+                Text(
+                    image.fileName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            shape = RoundedCornerShape(28.dp),
+            confirmButton = {
+                FilledTonalButton(onClick = {
+                    val url = image.imageUrl
+                    saveTargetImage = null
+                    try {
+                        val fileName = URLUtil.guessFileName(url, null, null)
+                        val dir = java.io.File(AppPrefs.savePath)
+                        dir.mkdirs()
+                        val request = DownloadManager.Request(Uri.parse(url)).apply {
+                            setTitle(fileName)
+                            setDescription("正在保存图片...")
+                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            setDestinationUri(Uri.fromFile(java.io.File(dir, fileName)))
+                        }
+                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        dm.enqueue(request)
+                        Toast.makeText(context, "已保存: $fileName", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { saveTargetImage = null }) { Text("取消") }
+            }
+        )
     }
 }
 

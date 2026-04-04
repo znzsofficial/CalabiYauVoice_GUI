@@ -320,13 +320,12 @@ fun ImagePreviewDialog(
                             contentScale = ContentScale.Fit
                         )
                     } else {
-                        AsyncImage(
+                        ZoomableImage(
                             model = imageUrl,
                             contentDescription = title,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(RoundedCornerShape(16.dp)),
-                            contentScale = ContentScale.Fit
+                                .clip(RoundedCornerShape(16.dp))
                         )
                     }
                 }

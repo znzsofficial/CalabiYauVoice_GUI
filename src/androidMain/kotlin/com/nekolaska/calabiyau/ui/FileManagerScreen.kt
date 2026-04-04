@@ -637,13 +637,12 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            AsyncImage(
+                            ZoomableImage(
                                 model = galleryImages[page],
                                 contentDescription = galleryImages[page].name,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(16.dp)),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                                    .clip(RoundedCornerShape(16.dp))
                             )
                         }
                     }
