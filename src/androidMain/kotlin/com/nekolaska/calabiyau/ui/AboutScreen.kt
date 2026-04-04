@@ -83,7 +83,7 @@ fun AboutScreen(onBack: () -> Unit) {
 
             // 标题和版本
             Text(
-                text = "卡拉彼丘 Wiki 资源下载器",
+                text = "卡拉彼丘 Wiki 助手",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
@@ -116,7 +116,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 Text(
                     text = "一款基于 Kotlin Multiplatform 开发的现代化工具，" +
                             "Android 端采用 Material Design 3 设计风格。" +
-                            "旨在为卡拉彼丘玩家提供便捷、流畅的 Wiki 语音资源提取与下载体验。",
+                            "集 Wiki 资源浏览、角色图鉴、画廊预览与资源下载于一体，" +
+                            "为卡拉彼丘玩家提供便捷、流畅的一站式 Wiki 体验。",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface,

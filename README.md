@@ -7,7 +7,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-red)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE.txt)
 
-A Kotlin Multiplatform application for browsing and downloading [Strinova](https://wiki.biligame.com/klbq/) wiki resources, built with Compose for Desktop and Android.
+A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource browser & downloader, built with Compose for Desktop and Android.
 
 [简体中文](README_ZH_CN.md)
 
@@ -30,32 +30,34 @@ A Kotlin Multiplatform application for browsing and downloading [Strinova](https
 
 ## ✨ Features
 
-### 🖥️ Desktop (Windows)
+### � Shared (Both Platforms)
 
-- **🔍 Smart Search** — Search by character voice categories, all resource types, file search (namespace 6), or portrait/illustration mode.
+- **🔍 Smart Search** — 4 search modes: voice-only categories, all resource types, file search (namespace 6), and portrait/illustration.
 - **⚡ Concurrent Downloads** — Scan category trees and download files with configurable concurrency.
-- **🖼️ Rich Preview** — Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`. Click to enlarge, scroll to zoom.
-- **🎵 Audio Playback** — In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files directly from search results.
+- **🎵 Audio Playback** — In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files.
+- **🖼️ Rich Preview** — Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`.
+- **🗂️ File Selection Dialog** — Per-category file picker with search, language filtering (CN/JP/EN), and image preview.
+- **🔍 Search History** — Persistent search suggestions.
+
+### 🖥️ Desktop Extras (Windows)
+
 - **🔄 MP3/FLAC → WAV Conversion** — Batch-convert downloaded audio to WAV with configurable sample rate and bit depth. Optional WAV merging.
 - **⌨️ Keyboard Shortcuts** — `Ctrl+F` focus search, `F5` re-search, `Ctrl+D` download, `Ctrl+A` / `Ctrl+Shift+A` select / deselect all, `Ctrl+1~4` switch modes, `↑↓` navigate, and more.
 - **🎛️ Windows Backdrop** — Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles at runtime.
 - **🪟 Custom Title Bar** — Borderless native window with custom caption buttons and drag-to-move support.
 - **🖥️ Compatibility** — Graceful fallback on non-Windows-11 devices with gradient background.
 
-### 📱 Android
+### 📱 Android Extras
 
-- **🔍 4 Search Modes** — Voice-only, all categories, file search, and portrait/illustration — switchable via bottom navigation bar.
-- **⚡ Concurrent Downloads** — Same powerful download engine as Desktop with configurable concurrency.
-- **🌐 Built-in Wiki Browser** — Embedded WebView with cookie persistence, auto-login detection, user info display, file download/upload support, and navigation controls.
+- **🏠 Wiki Hub** — Native client for browsing characters, weapons, maps, costumes, game modes, announcements, voting, and more — no WebView needed.
+- **🖼️ Gallery** — Browse wallpapers, stickers, and comics in a native image gallery with section filtering and fullscreen preview.
+- **🌐 Built-in Wiki Browser** — Embedded WebView with cookie persistence, auto-login detection, user info display, and file download/upload support.
 - **🖼️ Portrait Viewer** — Swipeable multi-image preview per costume with image type labels and page indicators.
 - **📁 File Manager** — Browse downloaded files with multi-select mode (long-press), batch delete/share, image gallery preview, and audio playback.
 - **📊 Download History** — Track past downloads with status and file count.
-- **🎵 Audio Playback** — Play `WAV`, `OGG`, `MP3` audio files from search results or local storage.
-- **🗂️ File Selection Dialog** — Per-category file picker with search, language filtering (CN/JP/EN), and image preview.
 - **⭐ Favorites** — Bookmark characters for quick access.
 - **📶 Network Detection** — Offline status banner with custom error page in WebView.
-- **🎨 Material You** — Dynamic color scheme with light/dark/system theme options.
-- **🔍 Search History** — Persistent search suggestions as chips.
+- **🎨 Material You** — Dynamic color with wallpaper-based seed color, light/dark/system theme, and liquid glass effects.
 
 ---
 
@@ -108,9 +110,10 @@ src/
 │   ├── util/            #   Audio conversion, preferences
 │   └── jna/windows/     #   Win32 API bindings
 └── androidMain/         # Android target
-    ├── data/            #   OkHttp client, preferences, network monitor
+    ├── data/            #   OkHttp client, API clients, preferences
+    ├── viewmodel/       #   SearchVM, DownloadVM, PortraitVM
     ├── ui/              #   Compose screens & components
-    └── (MainActivity, MainViewModel)
+    └── MainActivity.kt
 ```
 
 ## 🚀 Build and Run
