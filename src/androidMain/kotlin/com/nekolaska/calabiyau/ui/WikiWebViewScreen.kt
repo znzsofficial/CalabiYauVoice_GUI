@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,7 +90,8 @@ fun hasWikiLoginCookie(): Boolean {
 fun WikiWebViewScreen(
     onExitWiki: (() -> Unit)? = null,
     initialUrl: String = WIKI_HOME_URL,
-    onInitialUrlConsumed: (() -> Unit)? = null
+    onInitialUrlConsumed: (() -> Unit)? = null,
+    useTopBarMode: Boolean = false
 ) {
     val context = LocalContext.current
 
@@ -130,9 +130,14 @@ fun WikiWebViewScreen(
     BackHandler(enabled = canGoBack) {
         webView?.goBack()
     }
+    // 顶栏模式：无法后退时按返回键退出 WebView
+    BackHandler(enabled = useTopBarMode && !canGoBack && onExitWiki != null) {
+        onExitWiki?.invoke()
+    }
 
-    // 侧栏进入 = 有退出回调，主页进入 = 无
-    val isSidebarMode = onExitWiki != null
+    // 侧栏模式 = 有退出回调且非顶栏模式（底部工具栏）
+    // 顶栏模式 = useTopBarMode（仅顶栏，无底部工具栏）
+    val isSidebarMode = onExitWiki != null && !useTopBarMode
 
     Scaffold(
         topBar = {
@@ -148,10 +153,10 @@ fun WikiWebViewScreen(
                             .padding(horizontal = if (isSidebarMode) 10.dp else 4.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isSidebarMode) {
-                            // 侧栏模式：退出按钮
+                        if (onExitWiki != null) {
+                            // 有退出回调：显示退出按钮（侧栏模式 & 顶栏模式共用）
                             Surface(
-                                onClick = { onExitWiki?.invoke() },
+                                onClick = { onExitWiki.invoke() },
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -167,7 +172,7 @@ fun WikiWebViewScreen(
                             }
                             Spacer(Modifier.width(8.dp))
                         } else {
-                            // 主页模式：后退按钮
+                            // 无退出回调：后退按钮
                             IconButton(
                                 onClick = { if (canGoBack) webView?.goBack() },
                                 enabled = canGoBack,
@@ -254,8 +259,9 @@ fun WikiWebViewScreen(
                                         )
                                         context.startActivity(shareIntent)
                                     },
-                                    // 主页模式额外菜单项
-                                    onGoHome = { webView?.loadUrl(WIKI_HOME_URL) },
+                                    // 顶栏模式：前进后退放溢出菜单，不放 Wiki 首页
+                                    onGoBack = if (useTopBarMode && canGoBack) {{ webView?.goBack() }} else null,
+                                    onGoHome = if (!useTopBarMode) {{ webView?.loadUrl(WIKI_HOME_URL) }} else null,
                                     onGoForward = if (canGoForward) {{ webView?.goForward() }} else null
                                 )
                             }
@@ -295,8 +301,6 @@ fun WikiWebViewScreen(
                 canGoForward = canGoForward,
                 isLoading = isLoading,
                 textZoomLevel = textZoomLevel,
-                currentUrl = currentUrl,
-                pageTitle = pageTitle,
                 showMenu = showMenu,
                 onShowMenuChange = { showMenu = it },
                 onGoBack = { webView?.goBack() },
@@ -562,8 +566,6 @@ private fun WikiBottomToolbar(
     canGoForward: Boolean,
     isLoading: Boolean,
     textZoomLevel: Int,
-    currentUrl: String,
-    pageTitle: String,
     showMenu: Boolean,
     onShowMenuChange: (Boolean) -> Unit,
     onGoBack: () -> Unit,
@@ -724,6 +726,7 @@ private fun WikiOverflowMenu(
     onResetZoom: () -> Unit,
     onOpenInBrowser: () -> Unit,
     onShare: () -> Unit,
+    onGoBack: (() -> Unit)? = null,
     onGoHome: (() -> Unit)? = null,
     onGoForward: (() -> Unit)? = null
 ) {
@@ -732,12 +735,12 @@ private fun WikiOverflowMenu(
         onDismissRequest = onDismiss,
         shape = smoothCornerShape(16.dp)
     ) {
-        // 主页模式额外导航项
-        if (onGoHome != null) {
+        // 额外导航项
+        if (onGoBack != null) {
             DropdownMenuItem(
-                text = { Text("Wiki 首页") },
-                onClick = { onGoHome(); onDismiss() },
-                leadingIcon = { Icon(Icons.Default.Home, null, modifier = Modifier.size(20.dp)) }
+                text = { Text("后退") },
+                onClick = { onGoBack(); onDismiss() },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(20.dp)) }
             )
         }
         if (onGoForward != null) {
@@ -747,7 +750,14 @@ private fun WikiOverflowMenu(
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(20.dp)) }
             )
         }
-        if (onGoHome != null || onGoForward != null) {
+        if (onGoHome != null) {
+            DropdownMenuItem(
+                text = { Text("Wiki 首页") },
+                onClick = { onGoHome(); onDismiss() },
+                leadingIcon = { Icon(Icons.Default.Home, null, modifier = Modifier.size(20.dp)) }
+            )
+        }
+        if (onGoBack != null || onGoForward != null || onGoHome != null) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
         }
 
@@ -1016,7 +1026,7 @@ private fun createWikiWebView(
                 if (request?.isForMainFrame == true) {
                     val errorCode = error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
                     // 网络相关错误码
-                    if (errorCode == ERROR_HOST_LOOKUP ||
+                    if (errorCode == WebViewClient.ERROR_HOST_LOOKUP ||
                         errorCode == WebViewClient.ERROR_CONNECT ||
                         errorCode == WebViewClient.ERROR_TIMEOUT ||
                         errorCode == WebViewClient.ERROR_IO ||
@@ -1061,10 +1071,10 @@ private fun createWikiWebView(
             ): Boolean {
                 // 创建临时 WebView 来拦截 URL，避免父 WebView 承载自身弹窗
                 val tempWebView = WebView(view!!.context)
-                tempWebView.webViewClient = object : android.webkit.WebViewClient() {
+                tempWebView.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(
                         v: WebView?,
-                        request: android.webkit.WebResourceRequest?
+                        request: WebResourceRequest?
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
                         view.loadUrl(url)

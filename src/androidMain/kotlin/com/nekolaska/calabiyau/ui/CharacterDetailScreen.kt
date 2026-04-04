@@ -2,17 +2,23 @@ package com.nekolaska.calabiyau.ui
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -158,9 +164,9 @@ private fun CharacterDetailContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ── 头部：头像 + 基本信息 ──
+        // ── 头部：立绘 + 基本信息 ──
         item(key = "header") {
-            HeaderSection(detail = detail)
+            HeaderSection(detail = detail, portraitUrl = portraitUrl)
         }
 
         // ── 个性语录 ──
@@ -174,6 +180,7 @@ private fun CharacterDetailContent(
         if (detail.description.isNotBlank() || detail.summary.isNotBlank()) {
             item(key = "description") {
                 DescriptionCard(
+                    avatarUrl = detail.avatarUrl,
                     summary = detail.summary,
                     description = detail.description
                 )
@@ -192,6 +199,13 @@ private fun CharacterDetailContent(
             }
         }
 
+        // ── 角色技能 ──
+        if (detail.skills.isNotEmpty()) {
+            item(key = "skills") {
+                SkillsCard(skills = detail.skills)
+            }
+        }
+
         // ── 超弦体特性 / 兴趣爱好 / 饮食习惯 ──
         val personalItems = buildList {
             if (detail.traits.isNotBlank()) add("超弦体特性" to detail.traits)
@@ -201,6 +215,16 @@ private fun CharacterDetailContent(
         if (personalItems.isNotEmpty()) {
             item(key = "personal") {
                 PersonalInfoCard(items = personalItems)
+            }
+        }
+
+        // ── 角色故事 & 相关剧情 ──
+        if (detail.stories.isNotEmpty()) {
+            item(key = "stories") {
+                StoriesCard(
+                    stories = detail.stories,
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
             }
         }
 
@@ -231,23 +255,27 @@ private fun CharacterDetailContent(
 // ────────────────────────────────────────────
 
 @Composable
-private fun HeaderSection(detail: CharacterDetail) {
+private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) {
+    val headerImage = portraitUrl ?: detail.avatarUrl
     ElevatedCard(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
-            // 头像区域
-            if (detail.avatarUrl != null) {
+            // 立绘/头像区域
+            if (headerImage != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .height(if (portraitUrl != null) 320.dp else 200.dp)
                 ) {
                     AsyncImage(
-                        model = detail.avatarUrl,
+                        model = headerImage,
                         contentDescription = detail.name,
                         contentScale = ContentScale.Crop,
+                        // 立绘：跳过顶部约15%空白，从偏上位置开始裁剪
+                        alignment = if (portraitUrl != null) BiasAlignment(0f, -0.7f)
+                                    else Alignment.Center,
                         modifier = Modifier.fillMaxSize()
                     )
                     // 底部渐变
@@ -255,7 +283,7 @@ private fun HeaderSection(detail: CharacterDetail) {
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .height(80.dp)
+                            .height(100.dp)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
@@ -272,7 +300,7 @@ private fun HeaderSection(detail: CharacterDetail) {
                 modifier = Modifier.padding(
                     start = 20.dp,
                     end = 20.dp,
-                    top = if (detail.avatarUrl != null) 0.dp else 20.dp,
+                    top = if (headerImage == null) 20.dp else 0.dp,
                     bottom = 20.dp
                 )
             ) {
@@ -330,6 +358,14 @@ private fun HeaderSection(detail: CharacterDetail) {
                             icon = Icons.Outlined.Badge,
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                    if (detail.activeArea.isNotBlank()) {
+                        InfoChip(
+                            label = detail.activeArea,
+                            icon = Icons.Outlined.LocationOn,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -399,7 +435,11 @@ private fun QuoteCard(quote: String) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun DescriptionCard(summary: String, description: String) {
+private fun DescriptionCard(
+    avatarUrl: String? = null,
+    summary: String,
+    description: String
+) {
     ElevatedCard(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
@@ -407,17 +447,33 @@ private fun DescriptionCard(summary: String, description: String) {
         Column(Modifier.padding(20.dp)) {
             SectionTitle(icon = Icons.Outlined.Person, title = "角色简介")
             Spacer(Modifier.height(10.dp))
-            if (summary.isNotBlank()) {
-                Text(
-                    summary,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (description.isNotBlank()) {
-                    Spacer(Modifier.height(10.dp))
+
+            // 头像 + 简介文本
+            Row {
+                if (avatarUrl != null) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                    )
+                    Spacer(Modifier.width(14.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    if (summary.isNotBlank()) {
+                        Text(
+                            summary,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
+
             if (description.isNotBlank()) {
+                Spacer(Modifier.height(10.dp))
                 Text(
                     description,
                     style = MaterialTheme.typography.bodyMedium,
@@ -440,6 +496,7 @@ private fun AttributesCard(detail: CharacterDetail) {
         if (detail.height.isNotBlank()) add("身高" to detail.height)
         if (detail.weight.isNotBlank()) add("体重" to detail.weight)
         if (detail.birthday.isNotBlank()) add("生日" to detail.birthday)
+        if (detail.activeArea.isNotBlank()) add("活动区域" to detail.activeArea)
         if (detail.cnVoiceActor.isNotBlank()) add("中文声优" to detail.cnVoiceActor)
         if (detail.jpVoiceActor.isNotBlank()) add("日文声优" to detail.jpVoiceActor)
     }
@@ -642,7 +699,7 @@ private fun SubPagesCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.Outlined.Article, title = "更多内容")
+            SectionTitle(icon = Icons.AutoMirrored.Outlined.Article, title = "更多内容")
             Spacer(Modifier.height(8.dp))
 
             subPages.forEachIndexed { index, page ->
@@ -668,7 +725,7 @@ private fun SubPagesCard(
                             page.displayName.contains("画廊") || page.displayName.contains("时装") -> Icons.Outlined.PhotoLibrary
                             page.displayName.contains("档案") -> Icons.Outlined.FolderOpen
                             page.displayName.contains("武器") -> Icons.Outlined.GpsFixed
-                            else -> Icons.Outlined.Article
+                            else -> Icons.AutoMirrored.Outlined.Article
                         }
                         Icon(
                             icon,
@@ -689,6 +746,208 @@ private fun SubPagesCard(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  角色技能卡片
+// ────────────────────────────────────────────
+
+@Composable
+private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
+    ElevatedCard(
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            SectionTitle(icon = Icons.Outlined.AutoAwesome, title = "角色技能")
+            Spacer(Modifier.height(12.dp))
+
+            skills.forEachIndexed { index, skill ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                }
+                SkillItem(skill = skill)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        // 技能标题行
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 技能槽位标签
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        skill.slot,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                skill.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        // 技能描述（可展开）
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Text(
+                skill.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 48.dp, top = 6.dp, end = 4.dp)
+            )
+        }
+
+        // 折叠时显示预览
+        if (!expanded) {
+            Text(
+                skill.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 48.dp, top = 4.dp, end = 4.dp)
+            )
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  角色故事 & 相关剧情卡片
+// ────────────────────────────────────────────
+
+@Composable
+private fun StoriesCard(
+    stories: List<CharacterDetailApi.StoryEntry>,
+    onOpenWikiUrl: (String) -> Unit
+) {
+    val characterStories = stories.filter { it.section == "角色故事" }
+    val relatedStories = stories.filter { it.section == "相关剧情" }
+
+    ElevatedCard(
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            if (characterStories.isNotEmpty()) {
+                SectionTitle(icon = Icons.AutoMirrored.Outlined.MenuBook, title = "角色故事")
+                Spacer(Modifier.height(10.dp))
+                StoryRow(stories = characterStories, onOpenWikiUrl = onOpenWikiUrl)
+            }
+
+            if (relatedStories.isNotEmpty()) {
+                if (characterStories.isNotEmpty()) {
+                    Spacer(Modifier.height(16.dp))
+                }
+                SectionTitle(icon = Icons.Outlined.AutoStories, title = "相关剧情")
+                Spacer(Modifier.height(10.dp))
+                StoryRow(stories = relatedStories, onOpenWikiUrl = onOpenWikiUrl)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryRow(
+    stories: List<CharacterDetailApi.StoryEntry>,
+    onOpenWikiUrl: (String) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp)
+    ) {
+        items(stories, key = { it.pageUrl }) { story ->
+            StoryCard(story = story, onClick = { onOpenWikiUrl(story.pageUrl) })
+        }
+    }
+}
+
+@Composable
+private fun StoryCard(
+    story: CharacterDetailApi.StoryEntry,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.width(200.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Box {
+            // 封面图
+            AsyncImage(
+                model = story.imageUrl,
+                contentDescription = story.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+            )
+            // 底部渐变 + 标题
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.7f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.BottomStart
+            ) {
+                Text(
+                    text = story.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                )
             }
         }
     }

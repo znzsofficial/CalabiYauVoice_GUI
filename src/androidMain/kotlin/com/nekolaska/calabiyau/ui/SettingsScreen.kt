@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -68,7 +67,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     ) { uri ->
         uri?.let {
             // 获取实际路径或使用 URI 的 path 部分
-            val path = getPathFromUri(context, it)
+            val path = getPathFromUri(it)
             if (path != null) {
                 savePath = path
                 AppPrefs.savePath = path
@@ -229,7 +228,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     SettingsToggleItem(
                         icon = Icons.Outlined.BlurOn,
                         title = "液态玻璃效果",
-                        subtitle = "壁纸背景 + 玻璃卡片，需 Android 12+",
+                        subtitle = "需 Android 12+",
                         checked = liquidGlassEnabled,
                         onCheckedChange = {
                             liquidGlassEnabled = it
@@ -244,15 +243,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     )
 
-                    // ── 壁纸管理（仅液态玻璃开启时显示） ──
-                    if (liquidGlassEnabled) {
-                        var isRefreshing by remember { mutableStateOf(false) }
-                        var isSaving by remember { mutableStateOf(false) }
-                        var wallpaperMessage by remember { mutableStateOf<String?>(null) }
-                        var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
-                        val scope = rememberCoroutineScope()
+                    // ── 壁纸管理 ──
+                    var isRefreshing by remember { mutableStateOf(false) }
+                    var isSaving by remember { mutableStateOf(false) }
+                    var wallpaperMessage by remember { mutableStateOf<String?>(null) }
+                    var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
+                    val scope = rememberCoroutineScope()
 
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         SettingsToggleItem(
                             icon = Icons.Outlined.Autorenew,
                             title = "启动时自动刷新壁纸",
@@ -325,8 +323,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     isSaving = false
                                 }
                             }
-                        )
-                    }
+                    )
                 }
             }
 
@@ -754,6 +751,7 @@ private fun SettingsToggleItem(
 
 /** 预设主题色 */
 private val PRESET_COLORS = listOf(
+    AppPrefs.SEED_WALLPAPER to "跟随背景图",  // -1 = 从壁纸提取主题色
     0 to "系统默认",                          // 0 = 跟随系统动态取色
     0xFF4285F4.toInt() to "蓝色",             // Google Blue
     0xFF0F9D58.toInt() to "绿色",             // Google Green
@@ -775,6 +773,7 @@ private fun ThemeColorPicker(
     onColorSelected: (Int) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    val wallpaperSeedArgb = com.nekolaska.calabiyau.LocalWallpaperSeedColor.current.intValue
     val currentName = PRESET_COLORS.firstOrNull { it.first == currentSeedColor }?.second
         ?: if (currentSeedColor == 0) "系统默认" else "自定义"
 
@@ -789,7 +788,7 @@ private fun ThemeColorPicker(
         // 自定义颜色的 HSV 状态
         val initHsv = remember {
             FloatArray(3).also { hsv ->
-                if (currentSeedColor != 0) {
+                if (currentSeedColor > 0) {
                     android.graphics.Color.colorToHSV(currentSeedColor, hsv)
                 } else {
                     hsv[0] = 210f; hsv[1] = 0.7f; hsv[2] = 0.8f
@@ -800,7 +799,7 @@ private fun ThemeColorPicker(
         var saturation by remember { mutableFloatStateOf(initHsv[1]) }
         var value by remember { mutableFloatStateOf(initHsv[2]) }
         var showCustomPicker by remember { mutableStateOf(
-            currentSeedColor != 0 && PRESET_COLORS.none { it.first == currentSeedColor }
+            currentSeedColor > 0 && PRESET_COLORS.none { it.first == currentSeedColor }
         ) }
 
         val customColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
@@ -819,8 +818,12 @@ private fun ThemeColorPicker(
                         ) {
                             row.forEach { (argb, label) ->
                                 val isSelected = argb == currentSeedColor && !showCustomPicker
-                                val displayColor = if (argb == 0) MaterialTheme.colorScheme.primary
-                                else Color(argb)
+                                val displayColor = when (argb) {
+                                    AppPrefs.SEED_WALLPAPER -> if (wallpaperSeedArgb != 0) Color(wallpaperSeedArgb)
+                                        else MaterialTheme.colorScheme.primary
+                                    0 -> MaterialTheme.colorScheme.primary
+                                    else -> Color(argb)
+                                }
 
                                 Column(
                                     modifier = Modifier
@@ -1231,7 +1234,7 @@ private fun formatFileSize(bytes: Long): String {
 /**
  * 从 SAF 返回的 URI 中提取可读路径
  */
-private fun getPathFromUri(context: android.content.Context, uri: Uri): String? {
+private fun getPathFromUri(uri: Uri): String? {
     // 对于 content:// URI，尝试解析实际路径
     val docId = try {
         android.provider.DocumentsContract.getTreeDocumentId(uri)

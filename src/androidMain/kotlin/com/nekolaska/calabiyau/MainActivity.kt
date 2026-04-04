@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau
 
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,11 +13,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.palette.graphics.Palette
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.WikiEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.nekolaska.calabiyau.ui.LocalG2CornersEnabled
 import com.nekolaska.calabiyau.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.ui.MainScreen
+import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
+import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
+import com.nekolaska.calabiyau.viewmodel.SearchViewModel
 import data.PortraitRepository
 
 class MainActivity : ComponentActivity() {
@@ -33,8 +40,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AppTheme {
-                val vm: MainViewModel = viewModel()
-                MainScreen(vm)
+                val searchVM: SearchViewModel = viewModel()
+                val downloadVM: DownloadViewModel = viewModel()
+                val portraitVM: PortraitViewModel = viewModel()
+                MainScreen(searchVM, downloadVM, portraitVM)
             }
         }
     }
@@ -43,15 +52,38 @@ class MainActivity : ComponentActivity() {
 /** 全局主题模式状态，可从任何 Composable 中读取/修改 */
 val LocalThemeMode = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.themeMode) }
 
-/** 全局自定义种子色状态（ARGB Int，0 = 系统默认） */
+/** 全局自定义种子色状态（ARGB Int，-1=跟随壁纸，0=系统默认，其他=自定义色） */
 val LocalSeedColor = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.customSeedColor) }
+
+/** 从壁纸提取的主题色（ARGB Int，0 = 尚未提取） */
+val LocalWallpaperSeedColor = staticCompositionLocalOf { mutableIntStateOf(0) }
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
+    val wallpaperSeedColor = remember { mutableIntStateOf(0) }
     val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
     val g2CornersEnabled = remember { mutableStateOf(AppPrefs.g2CornersEnabled) }
+
+    // 当选择"跟随背景图"时，立即从缓存的壁纸 URL 提取主题色
+    LaunchedEffect(seedColor.intValue) {
+        if (seedColor.intValue != AppPrefs.SEED_WALLPAPER) return@LaunchedEffect
+        if (wallpaperSeedColor.intValue != 0) return@LaunchedEffect  // 已提取过
+        val url = AppPrefs.wallpaperUrl ?: return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            try {
+                val request = okhttp3.Request.Builder().url(url).build()
+                val bytes = WikiEngine.client.newCall(request).execute().body.bytes()
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?: return@withContext
+                val palette = Palette.from(bitmap).generate()
+                val color = palette.getVibrantColor(palette.getMutedColor(0))
+                if (color != 0) wallpaperSeedColor.intValue = color
+                bitmap.recycle()
+            } catch (_: Exception) { }
+        }
+    }
 
     val darkTheme = when (themeMode.intValue) {
         AppPrefs.THEME_LIGHT -> false
@@ -59,12 +91,15 @@ fun AppTheme(content: @Composable () -> Unit) {
         else -> isSystemInDarkTheme()
     }
     val context = LocalContext.current
+
+    // 解析实际生效的种子色
+    val effectiveSeed = when (seedColor.intValue) {
+        AppPrefs.SEED_WALLPAPER -> wallpaperSeedColor.intValue  // 跟随壁纸，未取到时为 0（回退系统色）
+        else -> seedColor.intValue                               // 0=系统色，其他=自定义色
+    }
+
     val colorScheme = when {
-        // 有自定义种子色时，用种子色生成配色方案
-        seedColor.intValue != 0 -> {
-            colorSchemeFromSeed(Color(seedColor.intValue), darkTheme)
-        }
-        // Android 12+ 动态取色
+        effectiveSeed != 0 -> colorSchemeFromSeed(Color(effectiveSeed), darkTheme)
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
@@ -75,6 +110,7 @@ fun AppTheme(content: @Composable () -> Unit) {
     CompositionLocalProvider(
         LocalThemeMode provides themeMode,
         LocalSeedColor provides seedColor,
+        LocalWallpaperSeedColor provides wallpaperSeedColor,
         LocalLiquidGlassEnabled provides liquidGlassEnabled,
         LocalG2CornersEnabled provides g2CornersEnabled
     ) {

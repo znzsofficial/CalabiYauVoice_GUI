@@ -15,16 +15,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.MainViewModel
+import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import data.DownloadRecord
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadHistoryScreen(
-    viewModel: MainViewModel,
+    downloadVM: DownloadViewModel,
     onBack: () -> Unit
 ) {
-    val history by viewModel.downloadHistory.collectAsState()
+    val history by downloadVM.downloadHistory.collectAsState()
 
     Scaffold(
         topBar = {
@@ -37,7 +37,7 @@ fun DownloadHistoryScreen(
                 },
                 actions = {
                     if (history.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.clearDownloadHistory() }) {
+                        IconButton(onClick = { downloadVM.clearDownloadHistory() }) {
                             Icon(Icons.Default.DeleteSweep, "清空历史")
                         }
                     }
