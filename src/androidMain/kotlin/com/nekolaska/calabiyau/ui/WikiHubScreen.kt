@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 // ════════════════════════════════════════════════════════
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, VOTING, NAVIGATION }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAP_DETAIL, COSTUMES, VOTING, NAVIGATION }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +52,9 @@ fun WikiHubScreen(
     var currentPage by remember { mutableStateOf(WikiHubPage.HOME) }
     var selectedCharacterName by remember { mutableStateOf("") }
     var selectedCharacterPortrait by remember { mutableStateOf<String?>(null) }
+    var selectedWeaponName by remember { mutableStateOf("") }
+    var selectedMapName by remember { mutableStateOf("") }
+    var selectedMapImage by remember { mutableStateOf<String?>(null) }
 
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
     var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
@@ -86,10 +89,12 @@ fun WikiHubScreen(
         }
     }
 
-    // 子页面按返回键回到首页（详情页返回角色列表）
+    // 子页面按返回键回到上一级
     BackHandler(enabled = currentPage != WikiHubPage.HOME) {
         currentPage = when (currentPage) {
             WikiHubPage.CHAR_DETAIL -> WikiHubPage.CHARACTERS
+            WikiHubPage.WEAPON_DETAIL -> WikiHubPage.WEAPONS
+            WikiHubPage.MAP_DETAIL -> WikiHubPage.HOME
             else -> WikiHubPage.HOME
         }
     }
@@ -104,6 +109,11 @@ fun WikiHubScreen(
                     selectedCharacterName = name
                     selectedCharacterPortrait = portrait
                     currentPage = WikiHubPage.CHAR_DETAIL
+                },
+                onOpenMapDetail = { name, imageUrl ->
+                    selectedMapName = name
+                    selectedMapImage = imageUrl
+                    currentPage = WikiHubPage.MAP_DETAIL
                 },
                 factions = factions,
                 isLoadingCharacters = isLoadingCharacters,
@@ -129,6 +139,35 @@ fun WikiHubScreen(
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
+        WikiHubPage.WEAPONS -> {
+            WeaponListScreen(
+                onBack = { currentPage = WikiHubPage.HOME },
+                onOpenWeaponDetail = { name ->
+                    selectedWeaponName = name
+                    currentPage = WikiHubPage.WEAPON_DETAIL
+                }
+            )
+        }
+        WikiHubPage.WEAPON_DETAIL -> {
+            WeaponDetailScreen(
+                weaponName = selectedWeaponName,
+                onBack = { currentPage = WikiHubPage.WEAPONS },
+                onOpenWikiUrl = onOpenWikiUrl
+            )
+        }
+        WikiHubPage.MAP_DETAIL -> {
+            MapDetailScreen(
+                mapName = selectedMapName,
+                mapImageUrl = selectedMapImage,
+                onBack = { currentPage = WikiHubPage.HOME },
+                onOpenWikiUrl = onOpenWikiUrl
+            )
+        }
+        WikiHubPage.COSTUMES -> {
+            CostumeFilterScreen(
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
         WikiHubPage.VOTING -> {
             VotingScreen(onBack = { currentPage = WikiHubPage.HOME })
         }
@@ -152,6 +191,7 @@ private fun WikiHomePage(
     onOpenWikiUrl: (String) -> Unit,
     onNavigateTo: (WikiHubPage) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
+    onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     factions: List<CharacterListApi.FactionData>,
     isLoadingCharacters: Boolean,
     gameModes: List<MapListApi.GameModeData>,
@@ -196,15 +236,13 @@ private fun WikiHomePage(
 
             // ── 武器 ──
             item(key = "weapons") {
-                ContentBlockCard(
-                    title = "武器",
+                ActionCard(
+                    title = "武器一览",
+                    subtitle = "查看全部武器数据",
                     icon = Icons.Outlined.GpsFixed,
-                    items = listOf(
-                        "武器筛选" to "武器筛选",
-                        "武器外观筛选" to "武器外观筛选",
-                        "主武器理论数据表" to "主武器理论数据表"
-                    ),
-                    onOpenWikiUrl = onOpenWikiUrl
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.WEAPONS) }
                 )
             }
 
@@ -213,7 +251,7 @@ private fun WikiHomePage(
                 MapPreviewSection(
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenMapDetail = onOpenMapDetail
                 )
             }
 
@@ -302,10 +340,10 @@ private fun QuickAccessGrid(
 
     val entries = listOf(
         QuickEntry("角色", Icons.Outlined.People) { onNavigateTo(WikiHubPage.CHARACTERS) },
-        QuickEntry("武器", Icons.Outlined.GpsFixed) { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%AD%A6%E5%99%A8%E7%AD%9B%E9%80%89") },
+        QuickEntry("武器", Icons.Outlined.GpsFixed) { onNavigateTo(WikiHubPage.WEAPONS) },
         QuickEntry("地图", Icons.Outlined.Map) { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE") },
         QuickEntry("投票", Icons.Outlined.HowToVote) { onNavigateTo(WikiHubPage.VOTING) },
-        QuickEntry("时装", Icons.Outlined.Checkroom) { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E7%AD%9B%E9%80%89") },
+        QuickEntry("时装", Icons.Outlined.Checkroom) { onNavigateTo(WikiHubPage.COSTUMES) },
         QuickEntry("导航", Icons.Outlined.AccountTree) { onNavigateTo(WikiHubPage.NAVIGATION) },
     )
 
@@ -529,7 +567,7 @@ private fun CharacterPortraitCard(
 private fun MapPreviewSection(
     gameModes: List<MapListApi.GameModeData>,
     isLoading: Boolean,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenMapDetail: (name: String, imageUrl: String?) -> Unit
 ) {
     var selectedMode by remember { mutableStateOf(0) }
 
@@ -556,13 +594,6 @@ private fun MapPreviewSection(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                FilledTonalButton(
-                    onClick = { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE") },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Text("地图一览", style = MaterialTheme.typography.labelMedium)
-                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -602,7 +633,7 @@ private fun MapPreviewSection(
                         items(currentMode.maps, key = { it.name }) { map ->
                             MapCard(
                                 map = map,
-                                onClick = { onOpenWikiUrl(map.wikiUrl) }
+                                onClick = { onOpenMapDetail(map.name, map.imageUrl) }
                             )
                         }
                     }
