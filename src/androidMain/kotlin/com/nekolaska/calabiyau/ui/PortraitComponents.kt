@@ -276,11 +276,10 @@ fun CostumeCard(costume: PortraitCostume) {
                 }
             } else if (allImages.size == 1) {
                 // Single image — no pager needed
-                AsyncImage(
+                ZoomableImage(
                     model = allImages[0].second.url,
                     contentDescription = allImages[0].first,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                    modifier = Modifier.fillMaxSize()
                 )
             } else {
                 // Multiple images — use nested pager
@@ -291,11 +290,10 @@ fun CostumeCard(costume: PortraitCostume) {
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val (_, asset) = allImages[page]
-                    AsyncImage(
+                    ZoomableImage(
                         model = asset.url,
                         contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
 
