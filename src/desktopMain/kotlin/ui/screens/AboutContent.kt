@@ -26,7 +26,7 @@ fun AboutContent(modifier: Modifier = Modifier) {
         ) {
             // 1. 标题和版本
             Text(
-                text = "卡拉彼丘 Wiki 资源下载器",
+                text = "卡拉彼丘 Wiki 助手",
                 style = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -45,7 +45,7 @@ fun AboutContent(modifier: Modifier = Modifier) {
 
             // 2. 软件介绍文案
             Text(
-                text = "一款基于 Kotlin Compose Desktop 开发的现代化工具，采用 Fluent Design 设计风格。旨在为卡拉彼丘玩家提供便捷、流畅的 Wiki 语音资源提取与下载体验。",
+                text = "一款基于 Kotlin Compose Desktop 开发的现代化工具，采用 Fluent Design 设计风格。旨在为卡拉彼丘玩家提供便捷、流畅的 Wiki 资源搜索与下载体验。",
                 style = TextStyle(
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
