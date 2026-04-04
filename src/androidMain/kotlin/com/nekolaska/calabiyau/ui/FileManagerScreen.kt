@@ -298,6 +298,9 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                         else
                                             selectedFiles + file.absolutePath
                                     }
+                                },
+                                onMoreClick = {
+                                    selectedFile = file
                                 }
                             )
                         }
@@ -667,7 +670,8 @@ private fun FileListItem(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onMoreClick: () -> Unit = {}
 ) {
     val isAudio = file.isFile && file.isAudioFile()
     val isThisPlaying by remember {
@@ -739,7 +743,7 @@ private fun FileListItem(
             }
             // 多选模式下隐藏更多操作按钮
             if (!isSelectionMode) {
-                IconButton(onClick = onLongClick, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
                     Icon(
                         Icons.Default.MoreVert, "操作",
                         modifier = Modifier.size(18.dp),
