@@ -21,7 +21,6 @@ object AppPrefs {
     private const val KEY_DOWNLOAD_HISTORY = "download_history"
     private const val KEY_BOTTOM_BAR_STYLE = "bottom_bar_style"
     private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
-    private const val KEY_WIKI_LOAD_IMAGES = "wiki_load_images"
     private const val KEY_WIKI_DESKTOP_MODE = "wiki_desktop_mode"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
@@ -124,11 +123,6 @@ object AppPrefs {
     var customSeedColor: Int
         get() = prefs.getInt(KEY_CUSTOM_SEED_COLOR, 0)
         set(value) = prefs.edit { putInt(KEY_CUSTOM_SEED_COLOR, value) }
-
-    /** Wiki 是否加载图片（默认 true） */
-    var wikiLoadImages: Boolean
-        get() = prefs.getBoolean(KEY_WIKI_LOAD_IMAGES, true)
-        set(value) = prefs.edit { putBoolean(KEY_WIKI_LOAD_IMAGES, value) }
 
     /** Wiki 桌面模式 UA（默认 false） */
     var wikiDesktopMode: Boolean

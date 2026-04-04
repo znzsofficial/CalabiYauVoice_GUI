@@ -50,7 +50,6 @@ fun SettingsScreen(onBack: () -> Unit) {
     var seedColorInt by remember { mutableIntStateOf(AppPrefs.customSeedColor) }
     val globalSeedColor = LocalSeedColor.current
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
-    var wikiLoadImages by remember { mutableStateOf(AppPrefs.wikiLoadImages) }
     var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
     var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
 
@@ -405,20 +404,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 AppPrefs.WIKI_CACHE_OFFLINE_FIRST else AppPrefs.WIKI_CACHE_DEFAULT
                             wikiCacheMode = newMode
                             AppPrefs.wikiCacheMode = newMode
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // 加载图片
-                    SettingsToggleItem(
-                        icon = Icons.Outlined.Image,
-                        title = "加载图片",
-                        subtitle = if (wikiLoadImages) "已开启" else "已关闭（节省流量）",
-                        checked = wikiLoadImages,
-                        onCheckedChange = {
-                            wikiLoadImages = it
-                            AppPrefs.wikiLoadImages = it
                         }
                     )
 

@@ -29,11 +29,11 @@ import kotlinx.coroutines.launch
 
 /**
  * 角色列表页面 —— 按阵营分组展示角色卡片网格。
- * 点击角色跳转到对应 Wiki 页面。
+ * 点击角色打开原生详情页。
  */
 @Composable
 fun CharacterListScreen(
-    onOpenWikiUrl: (String) -> Unit
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit
 ) {
     val scope = rememberCoroutineScope()
 
@@ -161,7 +161,7 @@ fun CharacterListScreen(
                         items(faction.characters, key = { "${faction.faction}_${it.name}" }) { character ->
                             CharacterCard(
                                 character = character,
-                                onClick = { onOpenWikiUrl(character.wikiUrl) }
+                                onClick = { onOpenCharacterDetail(character.name, character.imageUrl) }
                             )
                         }
                     }
