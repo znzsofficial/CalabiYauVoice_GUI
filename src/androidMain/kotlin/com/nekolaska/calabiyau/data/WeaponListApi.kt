@@ -89,9 +89,9 @@ object WeaponListApi {
     private suspend fun fetchCategory(category: WeaponCategory): WeaponCategoryData? {
         return try {
             // 统一查询所有属性
-            val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍"
+            val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100"
             val encoded = URLEncoder.encode(query, "UTF-8")
-            val url = "$API?action=ask&query=$encoded|limit=100&format=json"
+            val url = "$API?action=ask&query=$encoded&format=json"
             val body = httpGet(url) ?: return null
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
