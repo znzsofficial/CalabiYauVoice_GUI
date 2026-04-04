@@ -22,6 +22,10 @@ object AppPrefs {
     private const val KEY_BOTTOM_BAR_STYLE = "bottom_bar_style"
     private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
     private const val KEY_WIKI_DESKTOP_MODE = "wiki_desktop_mode"
+    private const val KEY_LIQUID_GLASS_ENABLED = "liquid_glass_enabled"
+    private const val KEY_G2_CORNERS_ENABLED = "g2_corners_enabled"
+    private const val KEY_WALLPAPER_URL = "wallpaper_url"
+    private const val KEY_WALLPAPER_AUTO_REFRESH = "wallpaper_auto_refresh"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -133,4 +137,24 @@ object AppPrefs {
     var downloadHistoryJson: String
         get() = prefs.getString(KEY_DOWNLOAD_HISTORY, "[]") ?: "[]"
         set(value) = prefs.edit { putString(KEY_DOWNLOAD_HISTORY, value) }
+
+    /** 液态玻璃效果（默认关闭，需 Android 12+） */
+    var liquidGlassEnabled: Boolean
+        get() = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_LIQUID_GLASS_ENABLED, value) }
+
+    /** G2 连续圆角（默认关闭） */
+    var g2CornersEnabled: Boolean
+        get() = prefs.getBoolean(KEY_G2_CORNERS_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_G2_CORNERS_ENABLED, value) }
+
+    /** 缓存的首页壁纸 URL（空字符串表示未缓存） */
+    var wallpaperUrl: String?
+        get() = prefs.getString(KEY_WALLPAPER_URL, null)
+        set(value) = prefs.edit { putString(KEY_WALLPAPER_URL, value) }
+
+    /** 启动时是否自动刷新壁纸（默认 true） */
+    var wallpaperAutoRefresh: Boolean
+        get() = prefs.getBoolean(KEY_WALLPAPER_AUTO_REFRESH, true)
+        set(value) = prefs.edit { putBoolean(KEY_WALLPAPER_AUTO_REFRESH, value) }
 }

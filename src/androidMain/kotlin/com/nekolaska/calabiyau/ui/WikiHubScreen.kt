@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,9 +33,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.CharacterListApi
 import com.nekolaska.calabiyau.data.MapListApi
+import com.nekolaska.calabiyau.data.WallpaperApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.draw.drawBehind
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
@@ -55,7 +65,6 @@ fun WikiHubScreen(
     var selectedWeaponName by remember { mutableStateOf("") }
     var selectedMapName by remember { mutableStateOf("") }
     var selectedMapImage by remember { mutableStateOf<String?>(null) }
-
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
     var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
     var isLoadingCharacters by remember { mutableStateOf(true) }
@@ -219,7 +228,43 @@ private fun WikiHomePage(
     gameModes: List<MapListApi.GameModeData>,
     isLoadingMaps: Boolean
 ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+
+    // ── 壁纸背景（液态玻璃开启时加载） ──
+    var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
+    LaunchedEffect(liquidGlassEnabled) {
+        if (!liquidGlassEnabled) return@LaunchedEffect
+        val needRefresh = when {
+            wallpaperUrl == null -> true                          // 无缓存，必须获取
+            AppPrefs.wallpaperAutoRefresh
+                && !WallpaperApi.hasRefreshedThisSession -> true  // 启动后首次自动刷新
+            else -> false                                        // 已刷新过或仅手动模式
+        }
+        if (needRefresh) {
+            withContext(Dispatchers.IO) {
+                wallpaperUrl = WallpaperApi.fetchRandomWallpaperUrl(
+                    forceRefresh = wallpaperUrl != null
+                )
+            }
+        }
+    }
+
+    // ── Backdrop：始终 remember，避免分支切换时重建 ──
+    val layerBackdrop = rememberLayerBackdrop()
+    val empty = remember { emptyBackdrop() }
+    val backdrop: Backdrop = if (liquidGlassEnabled) layerBackdrop else empty
+
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val primaryColor = MaterialTheme.colorScheme.primaryContainer
+
+    // ── TopBar 滚动折叠比例（0 = 完全展开，1 = 完全折叠） ──
+    val collapsedFraction by remember {
+        derivedStateOf { scrollBehavior.state.collapsedFraction }
+    }
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
                 title = { Text("卡拉彼丘 Wiki") },
@@ -227,70 +272,128 @@ private fun WikiHomePage(
                     IconButton(onClick = onOpenDrawer) {
                         Icon(Icons.Outlined.Menu, contentDescription = "菜单")
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior,
+                colors = if (liquidGlassEnabled) {
+                    // 液态玻璃：始终透明，通过 drawBehind 实现渐变蒙层
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent
+                    )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                },
+                modifier = if (liquidGlassEnabled) {
+                    // 折叠时叠加半透明背景，展开时完全透明
+                    Modifier.drawBehind {
+                        drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
+                    }
+                } else Modifier
             )
-        }
+        },
+        containerColor = if (liquidGlassEnabled) Color.Transparent
+            else MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Box(Modifier.fillMaxSize()) {
+            // ── 壁纸背景层（仅液态玻璃开启时显示） ──
+            if (liquidGlassEnabled) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(layerBackdrop)
+                ) {
+                    // 壁纸图片
+                    if (wallpaperUrl != null) {
+                        AsyncImage(
+                            model = wallpaperUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    // 主题色渐变叠加
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        primaryColor.copy(alpha = 0.3f),
+                                        surfaceColor.copy(alpha = 0.6f),
+                                        surfaceColor.copy(alpha = 0.85f)
+                                    )
+                                )
+                            )
+                    )
+                }
+            }
+
+            // ── 内容层 ──
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // ── 快捷入口 ──
-            item(key = "quick_access") {
+            item(key = "quick_access", contentType = "grid") {
                 QuickAccessGrid(
                     onOpenWikiUrl = onOpenWikiUrl,
-                    onNavigateTo = onNavigateTo
+                    onNavigateTo = onNavigateTo,
+                    backdrop = backdrop
                 )
             }
 
             // ── 超弦体 & 晶源体 ──
-            item(key = "characters") {
+            item(key = "characters", contentType = "preview_section") {
                 CharacterPreviewSection(
                     factions = factions,
                     isLoading = isLoadingCharacters,
                     onOpenCharacterDetail = onOpenCharacterDetail,
-                    onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) }
+                    onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) },
+                    backdrop = backdrop
                 )
             }
 
             // ── 武器 ──
-            item(key = "weapons") {
+            item(key = "weapons", contentType = "action_card") {
                 ActionCard(
                     title = "武器一览",
                     subtitle = "查看全部武器数据",
                     icon = Icons.Outlined.GpsFixed,
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.WEAPONS) }
+                    onClick = { onNavigateTo(WikiHubPage.WEAPONS) },
+                    backdrop = backdrop
                 )
             }
 
             // ── 地图 ──
-            item(key = "maps") {
+            item(key = "maps", contentType = "preview_section") {
                 MapPreviewSection(
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
-                    onOpenMapDetail = onOpenMapDetail
+                    onOpenMapDetail = onOpenMapDetail,
+                    backdrop = backdrop
                 )
             }
 
             // ── 战斗模式 ──
-            item(key = "game_modes") {
+            item(key = "game_modes", contentType = "action_card") {
                 ActionCard(
                     title = "战斗模式",
                     subtitle = "查看所有战斗模式详情",
                     icon = Icons.Outlined.SportsEsports,
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.GAME_MODES) }
+                    onClick = { onNavigateTo(WikiHubPage.GAME_MODES) },
+                    backdrop = backdrop
                 )
             }
 
             // ── 玩法模式 ──
-            item(key = "gameplay") {
+            item(key = "gameplay", contentType = "content_block") {
                 ContentBlockCard(
                     title = "其他玩法",
                     icon = Icons.Outlined.Extension,
@@ -303,36 +406,39 @@ private fun WikiHomePage(
                         "印迹" to "印迹",
                         "赛事系统" to "赛事系统"
                     ),
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    backdrop = backdrop
                 )
             }
 
             // ── 时装投票 ──
-            item(key = "voting") {
+            item(key = "voting", contentType = "action_card") {
                 ActionCard(
                     title = "时装投票",
                     subtitle = "为你喜欢的时装投票",
                     icon = Icons.Outlined.HowToVote,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.VOTING) }
+                    onClick = { onNavigateTo(WikiHubPage.VOTING) },
+                    backdrop = backdrop
                 )
             }
 
             // ── 公告资讯 ──
-            item(key = "announcements") {
+            item(key = "announcements", contentType = "action_card") {
                 ActionCard(
                     title = "公告资讯",
                     subtitle = "查看最新游戏公告和更新信息",
                     icon = Icons.Outlined.Campaign,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) }
+                    onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) },
+                    backdrop = backdrop
                 )
             }
 
             // ── 其他内容 ──
-            item(key = "others") {
+            item(key = "others", contentType = "content_block") {
                 ContentBlockCard(
                     title = "其他",
                     icon = Icons.Outlined.MoreHoriz,
@@ -346,25 +452,28 @@ private fun WikiHomePage(
                         "喵言喵语" to "喵言喵语",
                         "梗百科" to "梗百科"
                     ),
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    backdrop = backdrop
                 )
             }
 
             // ── Wiki 导航 ──
-            item(key = "navigation") {
+            item(key = "navigation", contentType = "action_card") {
                 ActionCard(
                     title = "完整导航",
                     subtitle = "浏览 Wiki 全部分类目录",
                     icon = Icons.Outlined.AccountTree,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.NAVIGATION) }
+                    onClick = { onNavigateTo(WikiHubPage.NAVIGATION) },
+                    backdrop = backdrop
                 )
             }
 
             // 底部留白
             item { Spacer(Modifier.height(24.dp)) }
         }
+        } // Box
     }
 }
 
@@ -372,42 +481,59 @@ private fun WikiHomePage(
 //  快捷入口网格（2 行 3 列圆角图标按钮）
 // ────────────────────────────────────────────
 
+/** 快捷入口数据（提取到顶层避免每次重组分配） */
+private data class QuickEntry(
+    val label: String,
+    val icon: ImageVector,
+    val targetPage: WikiHubPage?,       // null 表示使用 url
+    val url: String? = null
+)
+
+private val quickEntries = listOf(
+    QuickEntry("角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
+    QuickEntry("武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
+    QuickEntry("地图", Icons.Outlined.Map, null, "https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE"),
+    QuickEntry("投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
+    QuickEntry("时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
+    QuickEntry("导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
+)
+private val quickEntryRows = quickEntries.chunked(3)
+
 @Composable
 private fun QuickAccessGrid(
     onOpenWikiUrl: (String) -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit
+    onNavigateTo: (WikiHubPage) -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
 ) {
-    data class QuickEntry(
-        val label: String,
-        val icon: ImageVector,
-        val action: () -> Unit
-    )
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val entryShape = smoothCornerShape(20.dp)
+    val surfaceColor = if (liquidGlass) Color.Transparent
+        else MaterialTheme.colorScheme.surfaceContainerHigh
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val iconTint = MaterialTheme.colorScheme.primary
 
-    val entries = listOf(
-        QuickEntry("角色", Icons.Outlined.People) { onNavigateTo(WikiHubPage.CHARACTERS) },
-        QuickEntry("武器", Icons.Outlined.GpsFixed) { onNavigateTo(WikiHubPage.WEAPONS) },
-        QuickEntry("地图", Icons.Outlined.Map) { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE") },
-        QuickEntry("投票", Icons.Outlined.HowToVote) { onNavigateTo(WikiHubPage.VOTING) },
-        QuickEntry("时装", Icons.Outlined.Checkroom) { onNavigateTo(WikiHubPage.COSTUMES) },
-        QuickEntry("导航", Icons.Outlined.AccountTree) { onNavigateTo(WikiHubPage.NAVIGATION) },
-    )
-
-    val rows = entries.chunked(3)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        rows.forEach { row ->
+        quickEntryRows.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 row.forEach { entry ->
                     Surface(
-                        onClick = entry.action,
+                        onClick = {
+                            if (entry.targetPage != null) onNavigateTo(entry.targetPage)
+                            else entry.url?.let(onOpenWikiUrl)
+                        },
                         modifier = Modifier
                             .weight(1f)
-                            .height(72.dp),
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        contentColor = MaterialTheme.colorScheme.onSurface
+                            .height(72.dp)
+                            .liquidGlassLight(
+                                backdrop = backdrop,
+                                shape = { entryShape }
+                            ),
+                        shape = entryShape,
+                        color = surfaceColor,
+                        contentColor = contentColor
                     ) {
                         Column(
                             modifier = Modifier.fillMaxSize(),
@@ -418,7 +544,7 @@ private fun QuickAccessGrid(
                                 entry.icon,
                                 contentDescription = null,
                                 modifier = Modifier.size(22.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = iconTint
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
@@ -445,13 +571,26 @@ private fun CharacterPreviewSection(
     factions: List<CharacterListApi.FactionData>,
     isLoading: Boolean,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
 ) {
     var selectedFaction by remember { mutableStateOf(0) }
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
 
+    val charCardShape = smoothCornerShape(24.dp)
+    val btnShape = smoothCornerShape(20.dp)
     ElevatedCard(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = charCardShape,
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { charCardShape },
+                surfaceAlpha = 0.3f
+            ),
+        colors = if (liquidGlass)
+            CardDefaults.elevatedCardColors(containerColor = Color.Transparent)
+        else CardDefaults.elevatedCardColors()
     ) {
         Column(Modifier.padding(16.dp)) {
             // 标题行
@@ -475,7 +614,7 @@ private fun CharacterPreviewSection(
                 FilledTonalButton(
                     onClick = onViewAll,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = btnShape
                 ) {
                     Text("查看全部", style = MaterialTheme.typography.labelMedium)
                 }
@@ -554,7 +693,7 @@ private fun CharacterPortraitCard(
 ) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         modifier = Modifier.width(90.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -612,13 +751,25 @@ private fun CharacterPortraitCard(
 private fun MapPreviewSection(
     gameModes: List<MapListApi.GameModeData>,
     isLoading: Boolean,
-    onOpenMapDetail: (name: String, imageUrl: String?) -> Unit
+    onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
 ) {
     var selectedMode by remember { mutableStateOf(0) }
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
 
+    val mapCardShape = smoothCornerShape(24.dp)
     ElevatedCard(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = mapCardShape,
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { mapCardShape },
+                surfaceAlpha = 0.3f
+            ),
+        colors = if (liquidGlass)
+            CardDefaults.elevatedCardColors(containerColor = Color.Transparent)
+        else CardDefaults.elevatedCardColors()
     ) {
         Column(Modifier.padding(16.dp)) {
             // 标题行
@@ -723,7 +874,7 @@ private fun MapCard(
 ) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         modifier = Modifier.width(220.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -782,19 +933,32 @@ private fun ContentBlockCard(
     title: String,
     icon: ImageVector,
     items: List<Pair<String, String>>,  // displayName to pageName
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
 ) {
     var expanded by remember { mutableStateOf(true) }
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
 
+    val blockCardShape = smoothCornerShape(24.dp)
+    val clickableShape = smoothCornerShape(12.dp)
     ElevatedCard(
-        shape = RoundedCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = blockCardShape,
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { blockCardShape },
+                surfaceAlpha = 0.3f
+            ),
+        colors = if (liquidGlass)
+            CardDefaults.elevatedCardColors(containerColor = Color.Transparent)
+        else CardDefaults.elevatedCardColors()
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(clickableShape)
                     .clickable { expanded = !expanded }
                     .padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -824,6 +988,7 @@ private fun ContentBlockCard(
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
+                val btnShape = smoothCornerShape(14.dp)
                 FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -836,7 +1001,7 @@ private fun ContentBlockCard(
                         else "$WIKI_BASE${java.net.URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
                         FilledTonalButton(
                             onClick = { onOpenWikiUrl(url) },
-                            shape = RoundedCornerShape(14.dp),
+                            shape = btnShape,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text(
@@ -864,20 +1029,33 @@ private fun ActionCard(
     icon: ImageVector,
     containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
 ) {
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val actionCardShape = smoothCornerShape(24.dp)
+    val capsuleShape = smoothCapsuleShape()
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        modifier = Modifier.fillMaxWidth()
+        shape = actionCardShape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (liquidGlass)
+                Color.Transparent else containerColor
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { actionCardShape },
+                surfaceAlpha = 0.25f
+            )
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = CircleShape,
+                shape = capsuleShape,
                 color = contentColor.copy(alpha = 0.15f),
                 modifier = Modifier.size(48.dp)
             ) {

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -130,25 +131,27 @@ fun WikiWebViewScreen(
         webView?.goBack()
     }
 
+    // 侧栏进入 = 有退出回调，主页进入 = 无
+    val isSidebarMode = onExitWiki != null
+
     Scaffold(
         topBar = {
-            // 精简顶栏：仅页面信息 + 进度条
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column {
-                    // 页面信息栏
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                            .padding(horizontal = if (isSidebarMode) 10.dp else 4.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (onExitWiki != null) {
+                        if (isSidebarMode) {
+                            // 侧栏模式：退出按钮
                             Surface(
-                                onClick = onExitWiki,
+                                onClick = { onExitWiki?.invoke() },
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -163,6 +166,15 @@ fun WikiWebViewScreen(
                                 }
                             }
                             Spacer(Modifier.width(8.dp))
+                        } else {
+                            // 主页模式：后退按钮
+                            IconButton(
+                                onClick = { if (canGoBack) webView?.goBack() },
+                                enabled = canGoBack,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "后退", modifier = Modifier.size(20.dp))
+                            }
                         }
 
                         // 标题 + URL
@@ -171,7 +183,6 @@ fun WikiWebViewScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable {
-                                    // 点击地址栏可复制 URL
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
                                     Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
@@ -194,13 +205,69 @@ fun WikiWebViewScreen(
                             )
                         }
 
-                        // 加载指示 / 刷新（小型）
-                        if (isLoading) {
+                        if (!isSidebarMode) {
+                            // 主页模式：刷新/停止 + 溢出菜单
                             IconButton(
-                                onClick = { webView?.stopLoading() },
-                                modifier = Modifier.size(32.dp)
+                                onClick = { if (isLoading) webView?.stopLoading() else webView?.reload() },
+                                modifier = Modifier.size(40.dp)
                             ) {
-                                Icon(Icons.Default.Close, "停止", modifier = Modifier.size(16.dp))
+                                Icon(
+                                    if (isLoading) Icons.Default.Close else Icons.Default.Refresh,
+                                    if (isLoading) "停止" else "刷新",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Box {
+                                IconButton(
+                                    onClick = { showMenu = true },
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(Icons.Default.MoreVert, "更多", modifier = Modifier.size(20.dp))
+                                }
+                                WikiOverflowMenu(
+                                    showMenu = showMenu,
+                                    onDismiss = { showMenu = false },
+                                    textZoomLevel = textZoomLevel,
+                                    onZoomIn = {
+                                        textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
+                                        webView?.settings?.textZoom = textZoomLevel
+                                    },
+                                    onZoomOut = {
+                                        textZoomLevel = (textZoomLevel - 15).coerceAtLeast(50)
+                                        webView?.settings?.textZoom = textZoomLevel
+                                    },
+                                    onResetZoom = {
+                                        textZoomLevel = 100
+                                        webView?.settings?.textZoom = 100
+                                    },
+                                    onOpenInBrowser = {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
+                                    },
+                                    onShare = {
+                                        val shareIntent = Intent.createChooser(
+                                            Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, currentUrl)
+                                                putExtra(Intent.EXTRA_TITLE, pageTitle)
+                                            },
+                                            null
+                                        )
+                                        context.startActivity(shareIntent)
+                                    },
+                                    // 主页模式额外菜单项
+                                    onGoHome = { webView?.loadUrl(WIKI_HOME_URL) },
+                                    onGoForward = if (canGoForward) {{ webView?.goForward() }} else null
+                                )
+                            }
+                        } else {
+                            // 侧栏模式：仅显示停止按钮
+                            if (isLoading) {
+                                IconButton(
+                                    onClick = { webView?.stopLoading() },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, "停止", modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
                     }
@@ -222,8 +289,7 @@ fun WikiWebViewScreen(
                 }
             }
         },
-        bottomBar = {
-            // ── 底部工具栏 ──
+        bottomBar = if (isSidebarMode) { {
             WikiBottomToolbar(
                 canGoBack = canGoBack,
                 canGoForward = canGoForward,
@@ -250,7 +316,7 @@ fun WikiWebViewScreen(
                     webView?.settings?.textZoom = 100
                 },
                 onOpenInBrowser = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
                 },
                 onShare = {
                     val shareIntent = Intent.createChooser(
@@ -263,9 +329,8 @@ fun WikiWebViewScreen(
                     )
                     context.startActivity(shareIntent)
                 },
-                onExitWiki = onExitWiki
             )
-        },
+        } } else { {} },
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
@@ -283,6 +348,9 @@ fun WikiWebViewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+        ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -414,7 +482,8 @@ fun WikiWebViewScreen(
                 }
             }
         }
-        } // Box
+        } // content Box
+        } // outer Box
     }
 
     // ── 登录后提示回到首页 ──
@@ -505,8 +574,7 @@ private fun WikiBottomToolbar(
     onZoomOut: () -> Unit,
     onResetZoom: () -> Unit,
     onOpenInBrowser: () -> Unit,
-    onShare: () -> Unit,
-    onExitWiki: (() -> Unit)?
+    onShare: () -> Unit
 ) {
     BottomAppBar(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -638,23 +706,82 @@ private fun WikiBottomToolbar(
                         }
                     )
 
-                    // 退出 Wiki
-                    if (onExitWiki != null) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        DropdownMenuItem(
-                            text = { Text("退出 Wiki") },
-                            onClick = {
-                                onShowMenuChange(false)
-                                onExitWiki()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.AutoMirrored.Outlined.ExitToApp, null, modifier = Modifier.size(20.dp))
-                            }
-                        )
-                    }
                 }
             }
         }
+    }
+}
+
+// ─────────────────────── 溢出菜单（共用） ───────────────────────
+
+@Composable
+private fun WikiOverflowMenu(
+    showMenu: Boolean,
+    onDismiss: () -> Unit,
+    textZoomLevel: Int,
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    onResetZoom: () -> Unit,
+    onOpenInBrowser: () -> Unit,
+    onShare: () -> Unit,
+    onGoHome: (() -> Unit)? = null,
+    onGoForward: (() -> Unit)? = null
+) {
+    DropdownMenu(
+        expanded = showMenu,
+        onDismissRequest = onDismiss,
+        shape = smoothCornerShape(16.dp)
+    ) {
+        // 主页模式额外导航项
+        if (onGoHome != null) {
+            DropdownMenuItem(
+                text = { Text("Wiki 首页") },
+                onClick = { onGoHome(); onDismiss() },
+                leadingIcon = { Icon(Icons.Default.Home, null, modifier = Modifier.size(20.dp)) }
+            )
+        }
+        if (onGoForward != null) {
+            DropdownMenuItem(
+                text = { Text("前进") },
+                onClick = { onGoForward(); onDismiss() },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(20.dp)) }
+            )
+        }
+        if (onGoHome != null || onGoForward != null) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        }
+
+        DropdownMenuItem(
+            text = { Text("在浏览器中打开") },
+            onClick = { onOpenInBrowser(); onDismiss() },
+            leadingIcon = { Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("分享") },
+            onClick = { onShare(); onDismiss() },
+            leadingIcon = { Icon(Icons.Outlined.Share, null, modifier = Modifier.size(20.dp)) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        DropdownMenuItem(
+            text = { Text("放大文字") },
+            onClick = { onZoomIn(); onDismiss() },
+            leadingIcon = { Icon(Icons.Outlined.ZoomIn, null, modifier = Modifier.size(20.dp)) },
+            trailingIcon = {
+                Text("${textZoomLevel}%", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("缩小文字") },
+            onClick = { onZoomOut(); onDismiss() },
+            leadingIcon = { Icon(Icons.Outlined.ZoomOut, null, modifier = Modifier.size(20.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("重置缩放") },
+            onClick = { onResetZoom(); onDismiss() },
+            enabled = textZoomLevel != 100,
+            leadingIcon = { Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(20.dp)) }
+        )
     }
 }
 
