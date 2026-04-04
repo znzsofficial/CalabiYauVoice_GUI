@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 // ════════════════════════════════════════════════════════
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, VOTING, NAVIGATION }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, VOTING, NAVIGATION }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,10 +50,48 @@ fun WikiHubScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     var currentPage by remember { mutableStateOf(WikiHubPage.HOME) }
+    var selectedCharacterName by remember { mutableStateOf("") }
+    var selectedCharacterPortrait by remember { mutableStateOf<String?>(null) }
 
-    // 子页面按返回键回到首页，而不是退出软件
+    // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
+    var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
+    var isLoadingCharacters by remember { mutableStateOf(true) }
+    var gameModes by remember { mutableStateOf<List<MapListApi.GameModeData>>(emptyList()) }
+    var isLoadingMaps by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        if (factions.isEmpty()) {
+            isLoadingCharacters = true
+            launch {
+                when (val result = CharacterListApi.fetchAllFactions()) {
+                    is CharacterListApi.ApiResult.Success -> factions = result.value
+                    is CharacterListApi.ApiResult.Error -> { /* 静默失败 */ }
+                }
+                isLoadingCharacters = false
+            }
+        } else {
+            isLoadingCharacters = false
+        }
+        if (gameModes.isEmpty()) {
+            isLoadingMaps = true
+            launch {
+                when (val result = MapListApi.fetchAllModes()) {
+                    is MapListApi.ApiResult.Success -> gameModes = result.value
+                    is MapListApi.ApiResult.Error -> { /* 静默失败 */ }
+                }
+                isLoadingMaps = false
+            }
+        } else {
+            isLoadingMaps = false
+        }
+    }
+
+    // 子页面按返回键回到首页（详情页返回角色列表）
     BackHandler(enabled = currentPage != WikiHubPage.HOME) {
-        currentPage = WikiHubPage.HOME
+        currentPage = when (currentPage) {
+            WikiHubPage.CHAR_DETAIL -> WikiHubPage.CHARACTERS
+            else -> WikiHubPage.HOME
+        }
     }
 
     when (currentPage) {
@@ -61,12 +99,33 @@ fun WikiHubScreen(
             WikiHomePage(
                 onOpenDrawer = onOpenDrawer,
                 onOpenWikiUrl = onOpenWikiUrl,
-                onNavigateTo = { currentPage = it }
+                onNavigateTo = { currentPage = it },
+                onOpenCharacterDetail = { name, portrait ->
+                    selectedCharacterName = name
+                    selectedCharacterPortrait = portrait
+                    currentPage = WikiHubPage.CHAR_DETAIL
+                },
+                factions = factions,
+                isLoadingCharacters = isLoadingCharacters,
+                gameModes = gameModes,
+                isLoadingMaps = isLoadingMaps
             )
         }
         WikiHubPage.CHARACTERS -> {
             CharacterListFullScreen(
                 onBack = { currentPage = WikiHubPage.HOME },
+                onOpenCharacterDetail = { name, portrait ->
+                    selectedCharacterName = name
+                    selectedCharacterPortrait = portrait
+                    currentPage = WikiHubPage.CHAR_DETAIL
+                }
+            )
+        }
+        WikiHubPage.CHAR_DETAIL -> {
+            CharacterDetailScreen(
+                characterName = selectedCharacterName,
+                portraitUrl = selectedCharacterPortrait,
+                onBack = { currentPage = WikiHubPage.CHARACTERS },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
@@ -91,36 +150,13 @@ fun WikiHubScreen(
 private fun WikiHomePage(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit
+    onNavigateTo: (WikiHubPage) -> Unit,
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
+    factions: List<CharacterListApi.FactionData>,
+    isLoadingCharacters: Boolean,
+    gameModes: List<MapListApi.GameModeData>,
+    isLoadingMaps: Boolean
 ) {
-    // 角色数据
-    var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
-    var isLoadingCharacters by remember { mutableStateOf(true) }
-
-    // 地图数据
-    var gameModes by remember { mutableStateOf<List<MapListApi.GameModeData>>(emptyList()) }
-    var isLoadingMaps by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        isLoadingCharacters = true
-        isLoadingMaps = true
-        // 并行加载
-        launch {
-            when (val result = CharacterListApi.fetchAllFactions()) {
-                is CharacterListApi.ApiResult.Success -> factions = result.value
-                is CharacterListApi.ApiResult.Error -> { /* 静默失败 */ }
-            }
-            isLoadingCharacters = false
-        }
-        launch {
-            when (val result = MapListApi.fetchAllModes()) {
-                is MapListApi.ApiResult.Success -> gameModes = result.value
-                is MapListApi.ApiResult.Error -> { /* 静默失败 */ }
-            }
-            isLoadingMaps = false
-        }
-    }
-
     Scaffold(
         topBar = {
             LargeTopAppBar(
@@ -153,7 +189,7 @@ private fun WikiHomePage(
                 CharacterPreviewSection(
                     factions = factions,
                     isLoading = isLoadingCharacters,
-                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenCharacterDetail = onOpenCharacterDetail,
                     onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) }
                 )
             }
@@ -325,7 +361,7 @@ private fun QuickAccessGrid(
 private fun CharacterPreviewSection(
     factions: List<CharacterListApi.FactionData>,
     isLoading: Boolean,
-    onOpenWikiUrl: (String) -> Unit,
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onViewAll: () -> Unit
 ) {
     var selectedFaction by remember { mutableStateOf(0) }
@@ -399,7 +435,7 @@ private fun CharacterPreviewSection(
                         items(currentFaction.characters, key = { it.name }) { character ->
                             CharacterPortraitCard(
                                 character = character,
-                                onClick = { onOpenWikiUrl(character.wikiUrl) }
+                                onClick = { onOpenCharacterDetail(character.name, character.imageUrl) }
                             )
                         }
                     }
@@ -810,7 +846,7 @@ private fun ActionCard(
 @Composable
 private fun CharacterListFullScreen(
     onBack: () -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -825,7 +861,7 @@ private fun CharacterListFullScreen(
         }
     ) { innerPadding ->
         Box(Modifier.padding(innerPadding)) {
-            CharacterListScreen(onOpenWikiUrl = onOpenWikiUrl)
+            CharacterListScreen(onOpenCharacterDetail = onOpenCharacterDetail)
         }
     }
 }
