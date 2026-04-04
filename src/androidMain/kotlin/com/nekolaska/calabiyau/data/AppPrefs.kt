@@ -122,10 +122,14 @@ object AppPrefs {
 
     /**
      * 自定义主题种子色（ARGB Int）。
-     * 0 表示使用系统动态取色 / 默认配色。
+     * [SEED_WALLPAPER] (-1) = 跟随背景图主题色（默认）
+     * 0 = 使用系统动态取色 / 默认配色
+     * 其他正整数 = 自定义 ARGB 色值
      */
+    const val SEED_WALLPAPER = -1
+
     var customSeedColor: Int
-        get() = prefs.getInt(KEY_CUSTOM_SEED_COLOR, 0)
+        get() = prefs.getInt(KEY_CUSTOM_SEED_COLOR, SEED_WALLPAPER)
         set(value) = prefs.edit { putInt(KEY_CUSTOM_SEED_COLOR, value) }
 
     /** Wiki 桌面模式 UA（默认 false） */

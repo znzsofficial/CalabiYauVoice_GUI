@@ -8,10 +8,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -23,16 +25,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.graphics.BitmapFactory
+import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.LocalWallpaperSeedColor
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -44,20 +50,23 @@ import com.nekolaska.calabiyau.data.WallpaperApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.draw.drawBehind
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
+/** 是否有壁纸背景（用于非液态玻璃模式下的半透明卡片） */
+private val LocalHasWallpaper = staticCompositionLocalOf { false }
+
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, VOTING, NAVIGATION }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiHubScreen(
     onOpenDrawer: () -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    isOverlaid: Boolean = false
 ) {
     var currentPage by remember { mutableStateOf(WikiHubPage.HOME) }
     var selectedCharacterName by remember { mutableStateOf("") }
@@ -102,11 +111,12 @@ fun WikiHubScreen(
     // 记录地图详情的来源页面（首页或战斗模式）
     var mapDetailFrom by remember { mutableStateOf(WikiHubPage.HOME) }
 
-    BackHandler(enabled = currentPage != WikiHubPage.HOME) {
+    BackHandler(enabled = currentPage != WikiHubPage.HOME && !isOverlaid) {
         currentPage = when (currentPage) {
             WikiHubPage.CHAR_DETAIL -> WikiHubPage.CHARACTERS
             WikiHubPage.WEAPON_DETAIL -> WikiHubPage.WEAPONS
             WikiHubPage.MAP_DETAIL -> mapDetailFrom
+            WikiHubPage.MAPS -> WikiHubPage.HOME
             else -> WikiHubPage.HOME
         }
     }
@@ -168,6 +178,19 @@ fun WikiHubScreen(
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
+        WikiHubPage.MAPS -> {
+            MapListFullScreen(
+                onBack = { currentPage = WikiHubPage.HOME },
+                onOpenMapDetail = { name, imageUrl ->
+                    selectedMapName = name
+                    selectedMapImage = imageUrl
+                    mapDetailFrom = WikiHubPage.MAPS
+                    currentPage = WikiHubPage.MAP_DETAIL
+                },
+                gameModes = gameModes,
+                isLoading = isLoadingMaps
+            )
+        }
         WikiHubPage.MAP_DETAIL -> {
             MapDetailScreen(
                 mapName = selectedMapName,
@@ -208,6 +231,27 @@ fun WikiHubScreen(
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
+        WikiHubPage.WALLPAPERS -> {
+            GalleryScreen(
+                title = "壁纸",
+                pageName = "壁纸",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.STICKERS -> {
+            GalleryScreen(
+                title = "表情包",
+                pageName = "表情包",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.COMICS -> {
+            GalleryScreen(
+                title = "四格漫画",
+                pageName = "官方四格漫画",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
     }
 }
 
@@ -231,10 +275,9 @@ private fun WikiHomePage(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
 
-    // ── 壁纸背景（液态玻璃开启时加载） ──
+    // ── 壁纸背景（液态玻璃和普通模式均可显示） ──
     var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
-    LaunchedEffect(liquidGlassEnabled) {
-        if (!liquidGlassEnabled) return@LaunchedEffect
+    LaunchedEffect(Unit) {
         val needRefresh = when {
             wallpaperUrl == null -> true                          // 无缓存，必须获取
             AppPrefs.wallpaperAutoRefresh
@@ -247,6 +290,29 @@ private fun WikiHomePage(
                     forceRefresh = wallpaperUrl != null
                 )
             }
+        }
+    }
+    val hasWallpaper = wallpaperUrl != null
+
+    // ── 壁纸刷新后重新提取主题色 ──
+    val wallpaperSeedColor = LocalWallpaperSeedColor.current
+    LaunchedEffect(wallpaperUrl) {
+        val url = wallpaperUrl ?: return@LaunchedEffect
+        // 壁纸 URL 变化时（刷新了壁纸），重新提取主题色
+        withContext(Dispatchers.IO) {
+            try {
+                val request = okhttp3.Request.Builder().url(url).build()
+                val bytes = com.nekolaska.calabiyau.data.WikiEngine.client
+                    .newCall(request).execute().body.bytes()
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    ?: return@withContext
+                val palette = Palette.from(bitmap).generate()
+                val dominant = palette.getVibrantColor(palette.getMutedColor(0))
+                if (dominant != 0) {
+                    wallpaperSeedColor.intValue = dominant
+                }
+                bitmap.recycle()
+            } catch (_: Exception) { }
         }
     }
 
@@ -274,8 +340,8 @@ private fun WikiHomePage(
                     }
                 },
                 scrollBehavior = scrollBehavior,
-                colors = if (liquidGlassEnabled) {
-                    // 液态玻璃：始终透明，通过 drawBehind 实现渐变蒙层
+                colors = if (hasWallpaper) {
+                    // 有壁纸：始终透明，通过 drawBehind 实现渐变蒙层
                     TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         scrolledContainerColor = Color.Transparent
@@ -283,7 +349,7 @@ private fun WikiHomePage(
                 } else {
                     TopAppBarDefaults.topAppBarColors()
                 },
-                modifier = if (liquidGlassEnabled) {
+                modifier = if (hasWallpaper) {
                     // 折叠时叠加半透明背景，展开时完全透明
                     Modifier.drawBehind {
                         drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
@@ -291,36 +357,42 @@ private fun WikiHomePage(
                 } else Modifier
             )
         },
-        containerColor = if (liquidGlassEnabled) Color.Transparent
+        containerColor = if (hasWallpaper) Color.Transparent
             else MaterialTheme.colorScheme.background
     ) { innerPadding ->
+        CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
         Box(Modifier.fillMaxSize()) {
-            // ── 壁纸背景层（仅液态玻璃开启时显示） ──
-            if (liquidGlassEnabled) {
+            // ── 壁纸背景层 ──
+            if (hasWallpaper) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .layerBackdrop(layerBackdrop)
+                        .then(
+                            if (liquidGlassEnabled) Modifier.layerBackdrop(layerBackdrop)
+                            else Modifier
+                        )
                 ) {
                     // 壁纸图片
-                    if (wallpaperUrl != null) {
-                        AsyncImage(
-                            model = wallpaperUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    AsyncImage(
+                        model = wallpaperUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
                     // 主题色渐变叠加
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(
+                                    colors = if (liquidGlassEnabled) listOf(
                                         primaryColor.copy(alpha = 0.3f),
                                         surfaceColor.copy(alpha = 0.6f),
                                         surfaceColor.copy(alpha = 0.85f)
+                                    ) else listOf(
+                                        surfaceColor.copy(alpha = 0.15f),
+                                        surfaceColor.copy(alpha = 0.5f),
+                                        surfaceColor.copy(alpha = 0.8f)
                                     )
                                 )
                             )
@@ -375,6 +447,7 @@ private fun WikiHomePage(
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
                     onOpenMapDetail = onOpenMapDetail,
+                    onViewAll = { onNavigateTo(WikiHubPage.MAPS) },
                     backdrop = backdrop
                 )
             }
@@ -392,24 +465,31 @@ private fun WikiHomePage(
                 )
             }
 
-            // ── 玩法模式 ──
-            item(key = "gameplay", contentType = "content_block") {
+            // ── 其他内容 ──
+            item(key = "others", contentType = "content_block") {
                 ContentBlockCard(
-                    title = "其他玩法",
-                    icon = Icons.Outlined.Extension,
+                    title = "游戏延申",
+                    icon = Icons.Outlined.MoreHoriz,
                     items = listOf(
-                        "弦化" to "弦化",
-                        "弦能增幅网络" to "弦能增幅网络",
-                        "特别行动" to "特别行动",
-                        "赫尔墨斯" to "赫尔墨斯",
-                        "誓约" to "誓约",
-                        "印迹" to "印迹",
-                        "赛事系统" to "赛事系统"
+                        "剧情故事" to "剧情故事",
+                        "游戏历史" to "游戏历史",
+                        "BGM" to "BGM",
+                        "壁纸" to "壁纸",
+                        "表情包" to "表情包",
+                        "四格漫画" to "官方四格漫画",
+                        "喵言喵语" to "喵言喵语",
+                        "梗百科" to "梗百科"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "壁纸" to { onNavigateTo(WikiHubPage.WALLPAPERS) },
+                        "表情包" to { onNavigateTo(WikiHubPage.STICKERS) },
+                        "四格漫画" to { onNavigateTo(WikiHubPage.COMICS) }
+                    ),
                     backdrop = backdrop
                 )
             }
+
 
             // ── 时装投票 ──
             item(key = "voting", contentType = "action_card") {
@@ -437,20 +517,19 @@ private fun WikiHomePage(
                 )
             }
 
-            // ── 其他内容 ──
-            item(key = "others", contentType = "content_block") {
+            // ── 玩法模式 ──
+            item(key = "gameplay", contentType = "content_block") {
                 ContentBlockCard(
-                    title = "其他",
-                    icon = Icons.Outlined.MoreHoriz,
+                    title = "其他玩法",
+                    icon = Icons.Outlined.Extension,
                     items = listOf(
-                        "剧情故事" to "剧情故事",
-                        "游戏历史" to "游戏历史",
-                        "BGM" to "BGM",
-                        "壁纸" to "壁纸",
-                        "表情包" to "表情包",
-                        "四格漫画" to "官方四格漫画",
-                        "喵言喵语" to "喵言喵语",
-                        "梗百科" to "梗百科"
+                        "弦化" to "弦化",
+                        "弦能增幅网络" to "弦能增幅网络",
+                        "特别行动" to "特别行动",
+                        "赫尔墨斯" to "赫尔墨斯",
+                        "誓约" to "誓约",
+                        "印迹" to "印迹",
+                        "赛事系统" to "赛事系统"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     backdrop = backdrop
@@ -474,6 +553,7 @@ private fun WikiHomePage(
             item { Spacer(Modifier.height(24.dp)) }
         }
         } // Box
+        } // CompositionLocalProvider
     }
 }
 
@@ -492,7 +572,7 @@ private data class QuickEntry(
 private val quickEntries = listOf(
     QuickEntry("角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
     QuickEntry("武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
-    QuickEntry("地图", Icons.Outlined.Map, null, "https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE"),
+    QuickEntry("地图", Icons.Outlined.Map, WikiHubPage.MAPS),
     QuickEntry("投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
     QuickEntry("时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
     QuickEntry("导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
@@ -506,9 +586,13 @@ private fun QuickAccessGrid(
     backdrop: Backdrop = emptyBackdrop()
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
     val entryShape = smoothCornerShape(20.dp)
-    val surfaceColor = if (liquidGlass) Color.Transparent
-        else MaterialTheme.colorScheme.surfaceContainerHigh
+    val surfaceColor = when {
+        liquidGlass -> Color.Transparent
+        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
     val contentColor = MaterialTheme.colorScheme.onSurface
     val iconTint = MaterialTheme.colorScheme.primary
 
@@ -576,9 +660,11 @@ private fun CharacterPreviewSection(
 ) {
     var selectedFaction by remember { mutableStateOf(0) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
 
     val charCardShape = smoothCornerShape(24.dp)
     val btnShape = smoothCornerShape(20.dp)
+    val onSurface = MaterialTheme.colorScheme.onSurface
     ElevatedCard(
         shape = charCardShape,
         modifier = Modifier
@@ -588,9 +674,16 @@ private fun CharacterPreviewSection(
                 shape = { charCardShape },
                 surfaceAlpha = 0.3f
             ),
-        colors = if (liquidGlass)
-            CardDefaults.elevatedCardColors(containerColor = Color.Transparent)
-        else CardDefaults.elevatedCardColors()
+        colors = when {
+            liquidGlass -> CardDefaults.elevatedCardColors(
+                containerColor = Color.Transparent, contentColor = onSurface
+            )
+            hasWallpaper -> CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
+                contentColor = onSurface
+            )
+            else -> CardDefaults.elevatedCardColors()
+        }
     ) {
         Column(Modifier.padding(16.dp)) {
             // 标题行
@@ -752,12 +845,15 @@ private fun MapPreviewSection(
     gameModes: List<MapListApi.GameModeData>,
     isLoading: Boolean,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
+    onViewAll: () -> Unit = {},
     backdrop: Backdrop = emptyBackdrop()
 ) {
     var selectedMode by remember { mutableStateOf(0) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
 
     val mapCardShape = smoothCornerShape(24.dp)
+    val onSurface = MaterialTheme.colorScheme.onSurface
     ElevatedCard(
         shape = mapCardShape,
         modifier = Modifier
@@ -767,9 +863,16 @@ private fun MapPreviewSection(
                 shape = { mapCardShape },
                 surfaceAlpha = 0.3f
             ),
-        colors = if (liquidGlass)
-            CardDefaults.elevatedCardColors(containerColor = Color.Transparent)
-        else CardDefaults.elevatedCardColors()
+        colors = when {
+            liquidGlass -> CardDefaults.elevatedCardColors(
+                containerColor = Color.Transparent, contentColor = onSurface
+            )
+            hasWallpaper -> CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
+                contentColor = onSurface
+            )
+            else -> CardDefaults.elevatedCardColors()
+        }
     ) {
         Column(Modifier.padding(16.dp)) {
             // 标题行
@@ -790,6 +893,13 @@ private fun MapPreviewSection(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
+                FilledTonalButton(
+                    onClick = onViewAll,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                    shape = smoothCornerShape(20.dp)
+                ) {
+                    Text("查看全部", style = MaterialTheme.typography.labelMedium)
+                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -934,13 +1044,16 @@ private fun ContentBlockCard(
     icon: ImageVector,
     items: List<Pair<String, String>>,  // displayName to pageName
     onOpenWikiUrl: (String) -> Unit,
+    nativePages: Map<String, () -> Unit> = emptyMap(),  // displayName → 原生导航
     backdrop: Backdrop = emptyBackdrop()
 ) {
     var expanded by remember { mutableStateOf(true) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
 
     val blockCardShape = smoothCornerShape(24.dp)
     val clickableShape = smoothCornerShape(12.dp)
+    val onSurface = MaterialTheme.colorScheme.onSurface
     ElevatedCard(
         shape = blockCardShape,
         modifier = Modifier
@@ -950,9 +1063,16 @@ private fun ContentBlockCard(
                 shape = { blockCardShape },
                 surfaceAlpha = 0.3f
             ),
-        colors = if (liquidGlass)
-            CardDefaults.elevatedCardColors(containerColor = Color.Transparent)
-        else CardDefaults.elevatedCardColors()
+        colors = when {
+            liquidGlass -> CardDefaults.elevatedCardColors(
+                containerColor = Color.Transparent, contentColor = onSurface
+            )
+            hasWallpaper -> CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
+                contentColor = onSurface
+            )
+            else -> CardDefaults.elevatedCardColors()
+        }
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -997,10 +1117,16 @@ private fun ContentBlockCard(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items.forEach { (display, page) ->
-                        val url = if (page.startsWith("http")) page
-                        else "$WIKI_BASE${java.net.URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
+                        val nativeAction = nativePages[display]
+                        val onClick: () -> Unit = if (nativeAction != null) {
+                            nativeAction
+                        } else {
+                            val url = if (page.startsWith("http")) page
+                            else "$WIKI_BASE${java.net.URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
+                            { onOpenWikiUrl(url) }
+                        }
                         FilledTonalButton(
-                            onClick = { onOpenWikiUrl(url) },
+                            onClick = onClick,
                             shape = btnShape,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -1033,14 +1159,18 @@ private fun ActionCard(
     backdrop: Backdrop = emptyBackdrop()
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
     val actionCardShape = smoothCornerShape(24.dp)
     val capsuleShape = smoothCapsuleShape()
     Card(
         onClick = onClick,
         shape = actionCardShape,
         colors = CardDefaults.cardColors(
-            containerColor = if (liquidGlass)
-                Color.Transparent else containerColor
+            containerColor = when {
+                liquidGlass -> Color.Transparent
+                hasWallpaper -> containerColor.copy(alpha = 0.85f)
+                else -> containerColor
+            }
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -1116,6 +1246,157 @@ private fun CharacterListFullScreen(
     ) { innerPadding ->
         Box(Modifier.padding(innerPadding)) {
             CharacterListScreen(onOpenCharacterDetail = onOpenCharacterDetail)
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  地图一览全屏页（从主页"查看全部"或快捷入口进入）
+// ────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MapListFullScreen(
+    onBack: () -> Unit,
+    onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
+    gameModes: List<MapListApi.GameModeData>,
+    isLoading: Boolean
+) {
+    var selectedMode by remember { mutableStateOf(0) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("地图一览", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        when {
+            isLoading -> {
+                Box(
+                    Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(12.dp))
+                        Text("正在加载地图数据…", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            gameModes.isEmpty() -> {
+                Box(
+                    Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("暂无地图数据", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            else -> {
+                Column(Modifier.padding(innerPadding)) {
+                    // 模式切换
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        gameModes.forEachIndexed { index, mode ->
+                            FilterChip(
+                                selected = selectedMode == index,
+                                onClick = { selectedMode = index },
+                                label = { Text(mode.displayName, maxLines = 1) }
+                            )
+                        }
+                    }
+
+                    // 地图网格
+                    val currentMode = gameModes.getOrNull(selectedMode)
+                    if (currentMode != null && currentMode.maps.isNotEmpty()) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 160.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(currentMode.maps, key = { it.name }) { map ->
+                                MapGridCard(
+                                    map = map,
+                                    onClick = { onOpenMapDetail(map.name, map.imageUrl) }
+                                )
+                            }
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Spacer(Modifier.height(16.dp))
+                            }
+                        }
+                    } else {
+                        Box(
+                            Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("该模式暂无地图", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 地图网格卡片 —— 16:9 图片 + 底部渐变叠加地图名 */
+@Composable
+private fun MapGridCard(
+    map: MapListApi.MapInfo,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        shape = smoothCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Box {
+            AsyncImage(
+                model = map.imageUrl,
+                contentDescription = map.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.65f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.BottomStart
+            ) {
+                Text(
+                    text = map.name,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
         }
     }
 }

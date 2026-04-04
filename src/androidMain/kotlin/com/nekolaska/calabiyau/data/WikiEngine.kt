@@ -212,27 +212,40 @@ object WikiEngine {
     }
 
     /**
-     * Android 专有：批量获取角色头像 URL。
+     * 通用：批量获取文件名→图片 URL 映射。
+     * @param fileNames 不含 "文件:" 前缀的文件名列表（如 "壁纸1.png"）
+     * @return Map<fileName, url>
      */
-    suspend fun fetchCharacterAvatars(characterNames: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
-        if (characterNames.isEmpty()) return@withContext emptyMap()
+    suspend fun fetchImageUrls(fileNames: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
+        if (fileNames.isEmpty()) return@withContext emptyMap()
         val result = ConcurrentHashMap<String, String>()
-        characterNames.chunked(50).map { chunk ->
+        fileNames.chunked(50).map { chunk ->
             async {
-                val titlesParam = chunk.joinToString("|") { URLEncoder.encode("文件:${it}头像.png", "UTF-8") }
+                val titlesParam = chunk.joinToString("|") { URLEncoder.encode("文件:$it", "UTF-8") }
                 val url = "${WikiEngineCore.API_BASE_URL}?action=query&titles=$titlesParam&prop=imageinfo&iiprop=url&format=json"
                 val json = fetchStringSimple(url) ?: return@async
                 try {
                     val res = jsonParser.decodeFromString<WikiResponse>(json)
                     res.query?.pages?.values?.forEach { page ->
-                        val avatarUrl = page.imageinfo?.firstOrNull()?.url ?: return@forEach
-                        val name = page.title.replace(filePrefixRegex, "").removeSuffix("头像.png")
-                        result[name] = avatarUrl
+                        val imageUrl = page.imageinfo?.firstOrNull()?.url ?: return@forEach
+                        val name = page.title.replace(filePrefixRegex, "")
+                        result[name] = imageUrl
                     }
                 } catch (_: Exception) {}
             }
         }.awaitAll()
         result
+    }
+
+    /**
+     * Android 专有：批量获取角色头像 URL（基于 fetchImageUrls）。
+     */
+    suspend fun fetchCharacterAvatars(characterNames: List<String>): Map<String, String> {
+        if (characterNames.isEmpty()) return emptyMap()
+        val fileNames = characterNames.map { "${it}头像.png" }
+        val urlMap = fetchImageUrls(fileNames)
+        // 将 "xxx头像.png" → url 映射回 "xxx" → url
+        return urlMap.mapKeys { (k, _) -> k.removeSuffix("头像.png") }
     }
 
     // === 平台特定的网络方法 ===

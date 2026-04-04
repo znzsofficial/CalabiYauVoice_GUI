@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,12 +15,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.ui.graphics.BlendMode
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
@@ -27,52 +27,86 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.capsule.ContinuousCapsule
-import com.kyant.capsule.ContinuousRoundedRectangle
-import com.nekolaska.calabiyau.MainViewModel
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.viewmodel.DownloadTask
+import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
+import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
+import com.nekolaska.calabiyau.viewmodel.SearchViewModel
 import data.SearchMode
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DownloaderScreen(
-    viewModel: MainViewModel,
+    searchVM: SearchViewModel,
+    downloadVM: DownloadViewModel,
+    portraitVM: PortraitViewModel,
     onOpenDrawer: () -> Unit,
     onOpenFileManager: () -> Unit = {},
     onOpenDownloadHistory: () -> Unit = {}
 ) {
-    val searchKeyword by viewModel.searchKeyword.collectAsState()
-    val searchMode by viewModel.searchMode.collectAsState()
-    val isSearching by viewModel.isSearching.collectAsState()
-    val characterGroups by viewModel.characterGroups.collectAsState()
-    val selectedGroup by viewModel.selectedGroup.collectAsState()
-    val subCategories by viewModel.subCategories.collectAsState()
-    val checkedCategories by viewModel.checkedCategories.collectAsState()
-    val isScanningTree by viewModel.isScanningTree.collectAsState()
-    val isDownloading by viewModel.isDownloading.collectAsState()
-    val downloadProgress by viewModel.downloadProgress.collectAsState()
-    val downloadStatusText by viewModel.downloadStatusText.collectAsState()
-    val logs by viewModel.logs.collectAsState()
-    val fileSearchResults by viewModel.fileSearchResults.collectAsState()
-    val fileSearchSelectedUrls by viewModel.fileSearchSelectedUrls.collectAsState()
-    val hasSearched by viewModel.hasSearched.collectAsState()
-    val characterAvatars by viewModel.characterAvatars.collectAsState()
-    val portraitCharacters by viewModel.portraitCharacters.collectAsState()
-    val selectedPortraitCharacter by viewModel.selectedPortraitCharacter.collectAsState()
-    val portraitCatalog by viewModel.portraitCatalog.collectAsState()
-    val isLoadingPortrait by viewModel.isLoadingPortrait.collectAsState()
-    val selectedPortraitCostume by viewModel.selectedPortraitCostume.collectAsState()
+    // ── SearchViewModel 状态 ──
+    val searchKeyword by searchVM.searchKeyword.collectAsState()
+    val searchMode by searchVM.searchMode.collectAsState()
+    val isSearching by searchVM.isSearching.collectAsState()
+    val characterGroups by searchVM.characterGroups.collectAsState()
+    val selectedGroup by searchVM.selectedGroup.collectAsState()
+    val subCategories by searchVM.subCategories.collectAsState()
+    val checkedCategories by searchVM.checkedCategories.collectAsState()
+    val isScanningTree by searchVM.isScanningTree.collectAsState()
+    val fileSearchResults by searchVM.fileSearchResults.collectAsState()
+    val fileSearchSelectedUrls by searchVM.fileSearchSelectedUrls.collectAsState()
+    val hasSearched by searchVM.hasSearched.collectAsState()
+    val characterAvatars by searchVM.characterAvatars.collectAsState()
+    val portraitCharacters by searchVM.portraitCharacters.collectAsState()
+    val showFileDialog by searchVM.showFileDialog.collectAsState()
+    val dialogCategoryName by searchVM.dialogCategoryName.collectAsState()
+    val dialogFileList by searchVM.dialogFileList.collectAsState()
+    val dialogIsLoading by searchVM.dialogIsLoading.collectAsState()
+    val dialogSelectedUrls by searchVM.dialogSelectedUrls.collectAsState()
+    val manualSelectionMap by searchVM.manualSelectionMap.collectAsState()
+    val searchError by searchVM.searchError.collectAsState()
 
-    val showFileDialog by viewModel.showFileDialog.collectAsState()
-    val dialogCategoryName by viewModel.dialogCategoryName.collectAsState()
-    val dialogFileList by viewModel.dialogFileList.collectAsState()
-    val dialogIsLoading by viewModel.dialogIsLoading.collectAsState()
-    val dialogSelectedUrls by viewModel.dialogSelectedUrls.collectAsState()
-    val manualSelectionMap by viewModel.manualSelectionMap.collectAsState()
+    // ── DownloadViewModel 状态 ──
+    val isDownloading by downloadVM.isDownloading.collectAsState()
+    val downloadProgress by downloadVM.downloadProgress.collectAsState()
+    val downloadStatusText by downloadVM.downloadStatusText.collectAsState()
+    val logs by downloadVM.logs.collectAsState()
+    val favorites by downloadVM.favorites.collectAsState()
+    val isNetworkAvailable by downloadVM.isNetworkAvailable.collectAsState()
 
-    val favorites by viewModel.favorites.collectAsState()
+    // ── PortraitViewModel 状态 ──
+    val selectedPortraitCharacter by portraitVM.selectedPortraitCharacter.collectAsState()
+    val portraitCatalog by portraitVM.portraitCatalog.collectAsState()
+    val isLoadingPortrait by portraitVM.isLoadingPortrait.collectAsState()
+    val selectedPortraitCostume by portraitVM.selectedPortraitCostume.collectAsState()
 
-    val isNetworkAvailable by viewModel.isNetworkAvailable.collectAsState()
-    val searchError by viewModel.searchError.collectAsState()
+    // 连接 SearchViewModel 的日志到 DownloadViewModel
+    LaunchedEffect(Unit) {
+        searchVM.onLog = { downloadVM.addLog(it) }
+    }
+
+    /** 根据当前搜索模式构造下载任务 */
+    fun buildDownloadTask(): DownloadTask? = when (searchMode) {
+        SearchMode.PORTRAIT -> {
+            val costume = selectedPortraitCostume ?: return@buildDownloadTask null
+            val name = selectedPortraitCharacter ?: return@buildDownloadTask null
+            DownloadTask.Portrait(name, costume)
+        }
+        SearchMode.FILE_SEARCH -> {
+            val files = fileSearchResults.filter { it.second in fileSearchSelectedUrls }
+            DownloadTask.FileSearch(files)
+        }
+        else -> {
+            val group = selectedGroup ?: return@buildDownloadTask null
+            DownloadTask.Category(
+                group = group,
+                checkedCategories = checkedCategories,
+                manualSelectionMap = manualSelectionMap,
+                voiceOnly = searchMode == SearchMode.VOICE_ONLY
+            )
+        }
+    }
 
     val focusManager = LocalFocusManager.current
     var showLogs by remember { mutableStateOf(false) }
@@ -88,27 +122,27 @@ internal fun DownloaderScreen(
 
     // 收集错误事件并显示 Snackbar
     LaunchedEffect(Unit) {
-        viewModel.errorEvent.collect { message ->
-            snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = "重试",
-                duration = SnackbarDuration.Short
-            ).let { result ->
-                if (result == SnackbarResult.ActionPerformed) {
-                    if (message.contains("下载")) viewModel.startDownload()
-                    else viewModel.performSearch()
-                }
+        // 合并两个 VM 的错误事件
+        launch {
+            searchVM.errorEvent.collect { message ->
+                snackbarHostState.currentSnackbarData?.dismiss()
+                snackbarHostState.showSnackbar(message, "重试", duration = SnackbarDuration.Short)
+                    .let { if (it == SnackbarResult.ActionPerformed) searchVM.performSearch() }
             }
+        }
+        downloadVM.errorEvent.collect { message ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message, "重试", duration = SnackbarDuration.Short)
+                .let { if (it == SnackbarResult.ActionPerformed) buildDownloadTask()?.let { t -> downloadVM.startDownload(t) } }
         }
     }
 
     // 处理返回键
     BackHandler(enabled = selectedPortraitCharacter != null) {
-        viewModel.clearSelectedPortraitCharacter()
+        portraitVM.clearSelectedPortraitCharacter()
     }
     BackHandler(enabled = selectedGroup != null && selectedPortraitCharacter == null) {
-        viewModel.clearSelectedGroup()
+        searchVM.clearSelectedGroup()
     }
 
     Scaffold(
@@ -121,19 +155,19 @@ internal fun DownloaderScreen(
                 onOpenDrawer = onOpenDrawer,
                 onOpenDownloadHistory = onOpenDownloadHistory,
                 onShowLogs = { showLogs = true },
-                onKeywordChange = { viewModel.onSearchKeywordChange(it) },
+                onKeywordChange = { searchVM.onSearchKeywordChange(it) },
                 onSearch = {
                     focusManager.clearFocus()
-                    viewModel.performSearch()
+                    searchVM.performSearch()
                 },
                 onClearHistory = {
                     AppPrefs.clearSearchHistory()
                     searchHistoryList = emptyList()
                 },
                 onHistoryItemClick = { item ->
-                    viewModel.onSearchKeywordChange(item)
+                    searchVM.onSearchKeywordChange(item)
                     focusManager.clearFocus()
-                    viewModel.performSearch()
+                    searchVM.performSearch()
                 }
             )
         },
@@ -166,7 +200,7 @@ internal fun DownloaderScreen(
                             NavigationBarItem(
                                 selected = searchMode == mode,
                                 onClick = {
-                                    viewModel.onSearchModeChange(mode)
+                                    searchVM.onSearchModeChange(mode)
                                     focusManager.clearFocus()
                                 },
                                 icon = {
@@ -225,7 +259,7 @@ internal fun DownloaderScreen(
                 SearchErrorBanner(
                     searchError = searchError,
                     isNetworkAvailable = isNetworkAvailable,
-                    onRetry = { viewModel.performSearch() }
+                    onRetry = { searchVM.performSearch() }
                 )
                 // 内容区
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -237,10 +271,10 @@ internal fun DownloaderScreen(
                                 hasSearched = hasSearched,
                                 isDownloading = isDownloading,
                                 searchError = searchError,
-                                onRetry = { viewModel.performSearch() },
-                                onToggle = { viewModel.toggleFileSearchSelection(it) },
-                                onSelectAll = { viewModel.selectAllFileSearchResults() },
-                                onDownload = { viewModel.startDownload() }
+                                onRetry = { searchVM.performSearch() },
+                                onToggle = { searchVM.toggleFileSearchSelection(it) },
+                                onSelectAll = { searchVM.selectAllFileSearchResults() },
+                                onDownload = { buildDownloadTask()?.let { downloadVM.startDownload(it) } }
                             )
                         }
 
@@ -251,9 +285,9 @@ internal fun DownloaderScreen(
                                 hasSearched = hasSearched,
                                 favorites = favorites,
                                 searchError = searchError,
-                                onRetry = { viewModel.performSearch() },
-                                onToggleFavorite = { viewModel.toggleFavorite(it) },
-                                onSelectCharacter = { viewModel.onSelectPortraitCharacter(it) }
+                                onRetry = { searchVM.performSearch() },
+                                onToggleFavorite = { downloadVM.toggleFavorite(it) },
+                                onSelectCharacter = { portraitVM.onSelectPortraitCharacter(it) }
                             )
                         }
 
@@ -264,9 +298,9 @@ internal fun DownloaderScreen(
                                 hasSearched = hasSearched,
                                 favorites = favorites,
                                 searchError = searchError,
-                                onRetry = { viewModel.performSearch() },
-                                onToggleFavorite = { viewModel.toggleFavorite(it) },
-                                onSelectGroup = { viewModel.onSelectGroup(it) }
+                                onRetry = { searchVM.performSearch() },
+                                onToggleFavorite = { downloadVM.toggleFavorite(it) },
+                                onSelectGroup = { searchVM.onSelectGroup(it) }
                             )
                         }
                     }
@@ -323,7 +357,7 @@ internal fun DownloaderScreen(
                                 }
                                 IconButton(
                                     onClick = {
-                                        viewModel.onSearchModeChange(mode)
+                                        searchVM.onSearchModeChange(mode)
                                         focusManager.clearFocus()
                                     },
                                     modifier = Modifier.size(48.dp)
@@ -366,7 +400,7 @@ internal fun DownloaderScreen(
                                     ) {
                                         IconButton(
                                             onClick = {
-                                                viewModel.onSearchModeChange(mode)
+                                                searchVM.onSearchModeChange(mode)
                                                 focusManager.clearFocus()
                                             },
                                             modifier = Modifier.size(48.dp)
@@ -442,7 +476,7 @@ internal fun DownloaderScreen(
     // 立绘详情 BottomSheet
     if (selectedPortraitCharacter != null) {
         ModalBottomSheet(
-            onDismissRequest = { viewModel.clearSelectedPortraitCharacter() },
+            onDismissRequest = { portraitVM.clearSelectedPortraitCharacter() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -454,8 +488,8 @@ internal fun DownloaderScreen(
                 isLoading = isLoadingPortrait,
                 selectedCostume = selectedPortraitCostume,
                 isDownloading = isDownloading,
-                onSelectCostume = { viewModel.selectPortraitCostume(it) },
-                onDownload = { viewModel.startDownload() }
+                onSelectCostume = { portraitVM.selectPortraitCostume(it) },
+                onDownload = { buildDownloadTask()?.let { downloadVM.startDownload(it) } }
             )
         }
     }
@@ -463,7 +497,7 @@ internal fun DownloaderScreen(
     // 分类详情 BottomSheet
     if (selectedGroup != null) {
         ModalBottomSheet(
-            onDismissRequest = { viewModel.clearSelectedGroup() },
+            onDismissRequest = { searchVM.clearSelectedGroup() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -475,11 +509,11 @@ internal fun DownloaderScreen(
                 isScanning = isScanningTree,
                 isDownloading = isDownloading,
                 manualSelectionMap = manualSelectionMap,
-                onCheckAll = { viewModel.checkAllCategories() },
-                onUncheckAll = { viewModel.uncheckAllCategories() },
-                onCategoryChecked = { cat, checked -> viewModel.setCategoryChecked(cat, checked) },
-                onOpenFileDialog = { viewModel.openFileDialog(it) },
-                onDownload = { viewModel.startDownload() }
+                onCheckAll = { searchVM.checkAllCategories() },
+                onUncheckAll = { searchVM.uncheckAllCategories() },
+                onCategoryChecked = { cat, checked -> searchVM.setCategoryChecked(cat, checked) },
+                onOpenFileDialog = { searchVM.openFileDialog(it) },
+                onDownload = { buildDownloadTask()?.let { downloadVM.startDownload(it) } }
             )
         }
     }
@@ -491,11 +525,11 @@ internal fun DownloaderScreen(
             files = dialogFileList,
             selectedUrls = dialogSelectedUrls,
             isLoading = dialogIsLoading,
-            onToggle = { viewModel.toggleDialogFileSelection(it) },
-            onSelectAll = { viewModel.selectAllDialogFiles() },
-            onClear = { viewModel.clearDialogSelection() },
-            onConfirm = { viewModel.confirmFileDialog() },
-            onDismiss = { viewModel.closeFileDialog() }
+            onToggle = { searchVM.toggleDialogFileSelection(it) },
+            onSelectAll = { searchVM.selectAllDialogFiles() },
+            onClear = { searchVM.clearDialogSelection() },
+            onConfirm = { searchVM.confirmFileDialog() },
+            onDismiss = { searchVM.closeFileDialog() }
         )
     }
 }

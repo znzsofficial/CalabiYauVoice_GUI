@@ -69,6 +69,7 @@ kotlin {
             implementation("androidx.compose.material:material-icons-extended:1.7.8")
             implementation("androidx.compose.ui:ui-tooling-preview:1.10.6")
             implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+            implementation("androidx.palette:palette:1.0.0")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")

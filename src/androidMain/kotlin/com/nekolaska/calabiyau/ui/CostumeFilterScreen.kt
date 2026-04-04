@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -8,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,7 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -148,6 +152,8 @@ fun CostumeFilterScreen(
                             Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
+                        var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
+
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 110.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -155,11 +161,22 @@ fun CostumeFilterScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(filteredCostumes, key = { it.name + it.character }) { costume ->
-                                CostumeCard(costume = costume)
+                                CostumeCard(
+                                    costume = costume,
+                                    onClick = { selectedCostume = costume }
+                                )
                             }
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 Spacer(Modifier.height(16.dp))
                             }
+                        }
+
+                        // ── 时装详情底部弹窗 ──
+                        if (selectedCostume != null) {
+                            CostumeDetailSheet(
+                                costume = selectedCostume!!,
+                                onDismiss = { selectedCostume = null }
+                            )
                         }
                     }
                 }
@@ -207,7 +224,7 @@ private fun CostumeFilterBar(
             }
         }
 
-        // 品质筛选
+        // 品质筛选（跳过“初始”品质）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -219,7 +236,7 @@ private fun CostumeFilterBar(
                 onClick = { onQualitySelected(null) },
                 label = { Text("全部品质", maxLines = 1) }
             )
-            Quality.entries.forEach { quality ->
+            Quality.entries.filter { it != Quality.INITIAL }.forEach { quality ->
                 FilterChip(
                     selected = selectedQuality == quality,
                     onClick = {
@@ -240,8 +257,9 @@ private fun CostumeFilterBar(
 // ────────────────────────────────────────────
 
 @Composable
-private fun CostumeCard(costume: CostumeInfo) {
+private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
@@ -284,8 +302,8 @@ private fun CostumeCard(costume: CostumeInfo) {
                     }
                 }
 
-                // 品质角标
-                if (costume.quality != null) {
+                // 品质角标（跳过“初始”品质）
+                if (costume.quality != null && costume.quality != Quality.INITIAL) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -331,10 +349,203 @@ private fun CostumeCard(costume: CostumeInfo) {
 private fun qualityColor(quality: Quality): Color {
     return when (quality) {
         Quality.INITIAL -> Color(0xFF94A3B8)    // 灰蓝
-        Quality.EXQUISITE -> Color(0xFF22C55E)  // 绿
-        Quality.SUPERIOR -> Color(0xFF3B82F6)   // 蓝
-        Quality.PERFECT -> Color(0xFFA855F7)    // 紫
-        Quality.LEGENDARY -> Color(0xFFF59E0B)  // 金
-        Quality.SECRET -> Color(0xFFEF4444)     // 红
+        Quality.EXQUISITE -> Color(0xFF3B82F6)  // 蓝
+        Quality.SUPERIOR -> Color(0xFFA855F7)   // 紫
+        Quality.PERFECT -> Color(0xFFF59E0B)    // 金
+        Quality.LEGENDARY -> Color(0xFFEF4444)  // 红
+        Quality.SECRET -> Color(0xFFFF6B2C)     // 橙
+    }
+}
+
+// ────────────────────────────────────────────
+//  时装详情底部弹窗
+// ────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CostumeDetailSheet(
+    costume: CostumeInfo,
+    onDismiss: () -> Unit
+) {
+    val qColor = costume.quality?.let { qualityColor(it) } ?: MaterialTheme.colorScheme.outline
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            // ── 头部：图片 + 渐变 + 名称 ──
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+            ) {
+                AsyncImage(
+                    model = costume.fullImageUrl ?: costume.thumbnailUrl,
+                    contentDescription = costume.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // 底部渐变
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.surfaceContainerLow
+                                )
+                            )
+                        )
+                )
+                // 品质角标
+                if (costume.quality != null && costume.quality != Quality.INITIAL) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = qColor.copy(alpha = 0.9f)
+                    ) {
+                        Text(
+                            costume.quality.displayName,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            // ── 名称 & 角色 ──
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    costume.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    costume.character,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // ── 信息卡片 ──
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    // 获取方式
+                    if (costume.sources.isNotEmpty()) {
+                        DetailRow(
+                            icon = Icons.Outlined.ShoppingBag,
+                            label = "获取方式",
+                            value = costume.sources.joinToString("、")
+                        )
+                    }
+
+                    // 巴布洛晶核价格
+                    if (costume.crystalCost.isNotBlank()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        DetailRow(
+                            icon = Icons.Outlined.Diamond,
+                            label = "巴布洛晶核",
+                            value = costume.crystalCost,
+                            valueColor = Color(0xFFFFC107)
+                        )
+                    }
+
+                    // 基弦价格
+                    if (costume.baseCost.isNotBlank()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        DetailRow(
+                            icon = Icons.Outlined.Paid,
+                            label = "基弦",
+                            value = costume.baseCost,
+                            valueColor = Color(0xFFE040FB)
+                        )
+                    }
+
+                    // 品质
+                    if (costume.quality != null && costume.quality != Quality.INITIAL) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+                        DetailRow(
+                            icon = Icons.Outlined.Star,
+                            label = "品质",
+                            value = costume.quality.displayName,
+                            valueColor = qColor
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    icon, null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(80.dp)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = valueColor
+        )
     }
 }

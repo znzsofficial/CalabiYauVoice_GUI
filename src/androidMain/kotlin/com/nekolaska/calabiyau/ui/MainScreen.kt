@@ -18,14 +18,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.MainViewModel
+import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
+import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
+import com.nekolaska.calabiyau.viewmodel.SearchViewModel
 import com.nekolaska.calabiyau.data.WikiUserApi
 import kotlinx.coroutines.launch
 
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
     WIKI_HUB,          // 首页（Wiki 主页）
-    WIKI,              // Wiki 浏览器
+    WIKI_HUB_WEBVIEW,  // 从 Hub 内打开的 WebView（叠加在 Hub 之上，保留 Hub 状态）
+    WIKI,              // Wiki 浏览器（从侧栏进入）
     DOWNLOADER,        // 资源下载
     FILE_MANAGER,      // 文件管理
     DOWNLOAD_HISTORY,  // 下载历史（仅从资源下载页打开）
@@ -34,17 +37,34 @@ enum class DrawerDestination {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel) {
+fun MainScreen(
+    searchVM: SearchViewModel,
+    downloadVM: DownloadViewModel,
+    portraitVM: PortraitViewModel
+) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var currentDestination by remember { mutableStateOf(DrawerDestination.WIKI_HUB) }
     var pendingWikiUrl by remember { mutableStateOf<String?>(null) }
+    // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
+    var wikiEnteredFromHub by remember { mutableStateOf(false) }
+    // 记录进入侧栏 Wiki 前的页面，退出时回到该页面
+    var previousDestination by remember { mutableStateOf(DrawerDestination.WIKI_HUB) }
 
-    // 返回键：侧栏打开时先关闭侧栏；在 Wiki/设置页面时返回主页
+    // 返回键：侧栏打开时先关闭侧栏
     BackHandler(enabled = drawerState.isOpen) {
         coroutineScope.launch { drawerState.close() }
     }
-    BackHandler(enabled = currentDestination != DrawerDestination.WIKI_HUB && !drawerState.isOpen) {
+    // Hub 内 WebView 的返回由 WikiWebViewScreen 内部 BackHandler 处理（onExitWiki 回调）
+    // 侧栏 Wiki 浏览器返回：回到进入前的页面
+    BackHandler(enabled = currentDestination == DrawerDestination.WIKI && !drawerState.isOpen) {
+        currentDestination = previousDestination
+    }
+    // 其他非主页页面返回主页（不含 WIKI 和 WIKI_HUB_WEBVIEW，它们有各自的退出逻辑）
+    BackHandler(enabled = currentDestination != DrawerDestination.WIKI_HUB
+            && currentDestination != DrawerDestination.WIKI
+            && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW
+            && !drawerState.isOpen) {
         currentDestination = DrawerDestination.WIKI_HUB
     }
 
@@ -55,11 +75,16 @@ fun MainScreen(viewModel: MainViewModel) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = currentDestination != DrawerDestination.WIKI,
+        gesturesEnabled = currentDestination != DrawerDestination.WIKI
+                && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
         drawerContent = {
             AppDrawerContent(
                 currentDestination = currentDestination,
                 onDestinationSelected = { dest ->
+                    if (dest == DrawerDestination.WIKI) {
+                        wikiEnteredFromHub = false
+                        previousDestination = currentDestination // 记录当前页面
+                    }
                     currentDestination = dest
                     coroutineScope.launch { drawerState.close() }
                 }
@@ -70,7 +95,9 @@ fun MainScreen(viewModel: MainViewModel) {
         when (currentDestination) {
             DrawerDestination.DOWNLOADER -> {
                 DownloaderScreen(
-                    viewModel = viewModel,
+                    searchVM = searchVM,
+                    downloadVM = downloadVM,
+                    portraitVM = portraitVM,
                     onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
                     onOpenFileManager = { currentDestination = DrawerDestination.FILE_MANAGER },
                     onOpenDownloadHistory = { currentDestination = DrawerDestination.DOWNLOAD_HISTORY }
@@ -79,19 +106,37 @@ fun MainScreen(viewModel: MainViewModel) {
 
             DrawerDestination.WIKI -> {
                 WikiWebViewScreen(
-                    onExitWiki = { currentDestination = DrawerDestination.DOWNLOADER },
+                    // 从 Hub 进入：不传 onExitWiki（顶栏模式），从侧栏进入：传 onExitWiki（底栏模式）
+                    onExitWiki = if (wikiEnteredFromHub) null
+                        else {{ currentDestination = previousDestination }},
                     initialUrl = pendingWikiUrl ?: WIKI_HOME_URL,
                     onInitialUrlConsumed = { pendingWikiUrl = null }
                 )
             }
-            DrawerDestination.WIKI_HUB -> {
-                WikiHubScreen(
-                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
-                    onOpenWikiUrl = { url ->
-                        pendingWikiUrl = url
-                        currentDestination = DrawerDestination.WIKI
+            DrawerDestination.WIKI_HUB, DrawerDestination.WIKI_HUB_WEBVIEW -> {
+                // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
+                var hubWebViewUrl by remember { mutableStateOf<String?>(null) }
+                Box {
+                    WikiHubScreen(
+                        onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                        isOverlaid = currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW,
+                        onOpenWikiUrl = { url ->
+                            hubWebViewUrl = url
+                            wikiEnteredFromHub = true
+                            currentDestination = DrawerDestination.WIKI_HUB_WEBVIEW
+                        }
+                    )
+                    // 从 Hub 内打开的 WebView 叠加在 Hub 之上
+                    if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW && hubWebViewUrl != null) {
+                        WikiWebViewScreen(
+                            onExitWiki = {
+                                currentDestination = DrawerDestination.WIKI_HUB
+                            },
+                            initialUrl = hubWebViewUrl!!,
+                            useTopBarMode = true
+                        )
                     }
-                )
+                }
             }
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
@@ -101,7 +146,7 @@ fun MainScreen(viewModel: MainViewModel) {
             }
             DrawerDestination.DOWNLOAD_HISTORY -> {
                 DownloadHistoryScreen(
-                    viewModel = viewModel,
+                    downloadVM = downloadVM,
                     onBack = { currentDestination = DrawerDestination.WIKI_HUB }
                 )
             }
