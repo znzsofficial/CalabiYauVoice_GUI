@@ -44,3 +44,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Signing ###
+local.properties
+*.jks
+*.p12
+*.keystore

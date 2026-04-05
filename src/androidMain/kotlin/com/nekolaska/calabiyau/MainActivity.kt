@@ -1,20 +1,28 @@
 package com.nekolaska.calabiyau
 
+import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.palette.graphics.Palette
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.UpdateApi
 import com.nekolaska.calabiyau.data.WikiEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,7 +51,73 @@ class MainActivity : ComponentActivity() {
                 val searchVM: SearchViewModel = viewModel()
                 val downloadVM: DownloadViewModel = viewModel()
                 val portraitVM: PortraitViewModel = viewModel()
+
+                // ── 启动时静默检查更新（每天最多一次） ──
+                val context = LocalContext.current
+                var startupUpdateInfo by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
+                LaunchedEffect(Unit) {
+                    val now = System.currentTimeMillis()
+                    val lastCheck = AppPrefs.lastUpdateCheck
+                    val oneDayMs = 24 * 60 * 60 * 1000L
+                    if (now - lastCheck < oneDayMs) return@LaunchedEffect
+                    val currentVersion = try {
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: return@LaunchedEffect
+                    } catch (_: Exception) { return@LaunchedEffect }
+                    when (val result = UpdateApi.checkUpdate(currentVersion)) {
+                        is UpdateApi.Result.NewVersion -> {
+                            startupUpdateInfo = result.info
+                            AppPrefs.lastUpdateCheck = now
+                        }
+                        is UpdateApi.Result.AlreadyLatest -> {
+                            AppPrefs.lastUpdateCheck = now
+                        }
+                        is UpdateApi.Result.Error -> { /* 静默失败 */ }
+                    }
+                }
+
                 MainScreen(searchVM, downloadVM, portraitVM)
+
+                // ── 启动更新提示 ──
+                startupUpdateInfo?.let { info ->
+                    val curVer = remember {
+                        try {
+                            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+                        } catch (_: Exception) { "?" }
+                    }
+                    AlertDialog(
+                        onDismissRequest = { startupUpdateInfo = null },
+                        title = { Text("发现新版本 ${info.versionName}") },
+                        text = {
+                            Column {
+                                Text(
+                                    "当前版本: $curVer",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (info.body.isNotBlank()) {
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = info.body.take(500),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            FilledTonalButton(onClick = {
+                                startupUpdateInfo = null
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(info.htmlUrl))
+                                )
+                            }) { Text("前往下载") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { startupUpdateInfo = null }) {
+                                Text("稍后再说")
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -62,7 +136,7 @@ val LocalWallpaperSeedColor = staticCompositionLocalOf { mutableIntStateOf(0) }
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
-    val wallpaperSeedColor = remember { mutableIntStateOf(0) }
+    val wallpaperSeedColor = remember { mutableIntStateOf(AppPrefs.wallpaperSeedColorCache) }
     val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
     val g2CornersEnabled = remember { mutableStateOf(AppPrefs.g2CornersEnabled) }
 
@@ -79,7 +153,10 @@ fun AppTheme(content: @Composable () -> Unit) {
                     ?: return@withContext
                 val palette = Palette.from(bitmap).generate()
                 val color = palette.getVibrantColor(palette.getMutedColor(0))
-                if (color != 0) wallpaperSeedColor.intValue = color
+                if (color != 0) {
+                    wallpaperSeedColor.intValue = color
+                    AppPrefs.wallpaperSeedColorCache = color
+                }
                 bitmap.recycle()
             } catch (_: Exception) { }
         }
