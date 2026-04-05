@@ -71,8 +71,11 @@ object GameModeApi {
     private suspend fun fetchFromNetwork(): ApiResult<List<GameModeDetail>> =
         withContext(Dispatchers.IO) {
             try {
+                // 先从「模板:卡拉彼丘」获取所有模式的地图映射
+                val modeMapMapping = fetchModeMapMapping()
+
                 val results = MODES.map { mode ->
-                    async { fetchMode(mode) }
+                    async { fetchMode(mode, modeMapMapping) }
                 }.awaitAll()
 
                 val data = results.filterNotNull()
@@ -86,7 +89,57 @@ object GameModeApi {
             }
         }
 
-    private suspend fun fetchMode(mode: ModeEntry): GameModeDetail? {
+    /**
+     * 从「模板:卡拉彼丘」解析模式→地图映射。
+     * 模板结构：group{N}=模式名, list{N}=地图列表
+     */
+    private fun fetchModeMapMapping(): Map<String, List<String>> {
+        val mapping = mutableMapOf<String, List<String>>()
+        try {
+            val encoded = URLEncoder.encode("模板:卡拉彼丘", "UTF-8")
+            val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+            val body = httpGet(url) ?: return mapping
+            val json = SharedJson.parseToJsonElement(body).jsonObject
+            val wikitext = json["parse"]?.jsonObject?.get("wikitext")
+                ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return mapping
+
+            // 提取 group{N} 和 list{N}
+            val groupRegex = Regex("""\|group(\d+)=(.+)""")
+            val listRegex = Regex("""\|list(\d+)=(.+)""")
+
+            val groups = mutableMapOf<String, String>() // num → 模式名
+            val lists = mutableMapOf<String, String>()  // num → 地图原文
+
+            for (line in wikitext.lines()) {
+                groupRegex.find(line)?.let { m ->
+                    groups[m.groupValues[1]] = m.groupValues[2].trim()
+                }
+                listRegex.find(line)?.let { m ->
+                    lists[m.groupValues[1]] = m.groupValues[2].trim()
+                }
+            }
+
+            // 解析每个 group 中的模式名（可能有多个，用 <br> 分隔）
+            for ((num, groupRaw) in groups) {
+                val listRaw = lists[num] ?: continue
+                // 提取地图名：[[404基地]] • [[88区]] ...
+                val maps = Regex("""\[\[([^\]|]+)]]""").findAll(listRaw)
+                    .map { it.groupValues[1] }
+                    .toList()
+                // 提取模式显示名：[[...|xxx]] 中的 xxx
+                val modeNames = Regex("""\[\[[^\]]*\|([^\]]+)]]""").findAll(groupRaw)
+                    .map { it.groupValues[1].trim() }
+                    .toList()
+                // 每个模式名都映射到同一份地图列表
+                for (modeName in modeNames) {
+                    mapping[modeName] = maps
+                }
+            }
+        } catch (_: Exception) { }
+        return mapping
+    }
+
+    private suspend fun fetchMode(mode: ModeEntry, modeMapMapping: Map<String, List<String>>): GameModeDetail? {
         return try {
             val encoded = URLEncoder.encode(mode.pageName, "UTF-8")
             val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
@@ -96,13 +149,13 @@ object GameModeApi {
             val wikitext = json["parse"]?.jsonObject?.get("wikitext")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return null
 
-            parseModeWikitext(mode, wikitext)
+            parseModeWikitext(mode, wikitext, modeMapMapping[mode.displayName] ?: emptyList())
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun parseModeWikitext(mode: ModeEntry, wikitext: String): GameModeDetail {
+    private fun parseModeWikitext(mode: ModeEntry, wikitext: String, maps: List<String>): GameModeDetail {
         // 先移除 <gallery>...</gallery> 块
         val noGallery = wikitext.replace(Regex("""<gallery[^>]*>[\s\S]*?</gallery>"""), "")
         val lines = noGallery.lines()
@@ -136,12 +189,6 @@ object GameModeApi {
         // 模式设定：==模式设定== 下的内容
         val settings = extractSection(wikitext, "模式设定")
 
-        // 提取地图名（[[地图名]] 格式）
-        val maps = Regex("""\[\[([^\]|]+)]]""").findAll(settings)
-            .map { it.groupValues[1] }
-            .filter { !it.startsWith("文件:") && !it.startsWith("File:") }
-            .toList()
-
         val enc = URLEncoder.encode(mode.pageName, "UTF-8").replace("+", "%20")
 
         return GameModeDetail(
@@ -171,11 +218,12 @@ object GameModeApi {
             .replace(Regex("""\[\[File:[^\]]*]]"""), "")               // 移除图片链接 [[File:...]]
             .replace(Regex("""\[\[([^\]|]*)\|([^\]]*)\]\]"""), "$2")  // [[link|text]] → text
             .replace(Regex("""\[\[([^\]]*)\]\]"""), "$1")              // [[link]] → link
+            .replace(Regex("""\{\{#ask:[^}]*\}\}"""), "")              // {{#ask:...}} SMW 查询
             .replace(Regex("""\{\{#info:[^}]*\}\}"""), "")             // {{#info:...}}
             .replace(Regex("""\{\{[^}]*\}\}"""), "")                   // {{template}}
             .replace(Regex("""<s>.*?</s>"""), "")                      // <s>...</s>
             .replace(Regex("""<[^>]+>"""), "")                         // HTML tags
-            .replace(Regex("""^:\s*$""", RegexOption.MULTILINE), "")    // 孤立的 : 行
+            .replace(Regex("""^:{1,}\s*$""", RegexOption.MULTILINE), "") // 孤立的 : 或 :: 行
             .replace(Regex("""^\*\s*""", RegexOption.MULTILINE), "• ") // * → •
             .replace(Regex("""\n{3,}"""), "\n\n")                      // 多余空行
             .trim()
