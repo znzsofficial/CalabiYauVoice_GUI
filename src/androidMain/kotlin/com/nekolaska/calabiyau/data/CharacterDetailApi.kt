@@ -48,7 +48,14 @@ object CharacterDetailApi {
         val avatarUrl: String?,
         val subPages: List<SubPage>,
         val skills: List<SkillInfo>,
-        val stories: List<StoryEntry>
+        val stories: List<StoryEntry>,
+        val updateHistory: List<UpdateEntry> = emptyList()
+    )
+
+    /** 更新改动历史条目 */
+    data class UpdateEntry(
+        val date: String,
+        val changes: List<String>
     )
 
     data class SubPage(
@@ -62,7 +69,8 @@ object CharacterDetailApi {
         val slot: String,
         val name: String,
         val description: String,
-        val videoUrl: String?
+        val videoUrl: String?,
+        val iconUrl: String? = null
     )
 
     /** 角色故事/相关剧情条目 */
@@ -87,12 +95,13 @@ object CharacterDetailApi {
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(characterName, "UTF-8")
-                val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+                // 同时请求 wikitext 和渲染 HTML，用于解析角色信息 + 改动历史
+                val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
                 val body = httpGet(url) ?: return@withContext ApiResult.Error("请求失败")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
-                val wikitext = json["parse"]
-                    ?.jsonObject?.get("wikitext")
+                val parseObj = json["parse"]?.jsonObject
+                val wikitext = parseObj?.get("wikitext")
                     ?.jsonObject?.get("*")
                     ?.jsonPrimitive?.content
                     ?: return@withContext ApiResult.Error("无法获取页面内容")
@@ -100,55 +109,79 @@ object CharacterDetailApi {
                 val detail = parseCharacterWikitext(characterName, wikitext)
                     ?: return@withContext ApiResult.Error("未找到角色信息模板")
 
-                ApiResult.Success(detail)
+                // 从渲染 HTML 解析改动历史
+                val html = parseObj["text"]
+                    ?.jsonObject?.get("*")
+                    ?.jsonPrimitive?.content
+                val history = if (html != null) parseUpdateHistory(html) else emptyList()
+
+                ApiResult.Success(detail.copy(updateHistory = history))
             } catch (e: Exception) {
                 ApiResult.Error("获取角色详情失败: ${e.message}")
             }
         }
 
     /**
-     * 从 wikitext 解析 `{{超弦体|...}}` 模板参数。
+     * 从 wikitext 解析 `{{超弦体|...}}` 或 `{{晶源体|...}}` 模板参数。
      */
     private fun parseCharacterWikitext(name: String, wikitext: String): CharacterDetail? {
-        // 提取 {{超弦体 ... }} 模板块
-        val templateContent = extractTemplate(wikitext, "超弦体") ?: return null
+        // 先尝试超弦体模板，再尝试晶源体模板
+        val isCrystal: Boolean
+        val templateContent: String
+        val superstring = extractTemplate(wikitext, "超弦体")
+        if (superstring != null) {
+            templateContent = superstring
+            isCrystal = false
+        } else {
+            templateContent = extractTemplate(wikitext, "晶源体") ?: return null
+            isCrystal = true
+        }
 
-        // 解析模板参数
         val params = parseTemplateParams(templateContent)
 
         // 提取 {{页顶导航 ... }} 中的子页面
         val navContent = extractTemplate(wikitext, "页顶导航")
         val subPages = if (navContent != null) parseSubPages(navContent) else emptyList()
 
-        // 获取头像 URL
         val avatarUrl = fetchAvatarUrl(name)
-
-        // 解析技能
-        val skills = parseSkills(wikitext)
-
-        // 解析角色故事 & 相关剧情
+        val skills = parseSkills(name, wikitext, isCrystal)
         val stories = parseStories(wikitext)
+
+        // 晶源体的声优字段是合并的 "声优"，需拆分中/日
+        val voiceRaw = if (isCrystal) clean(params["声优"]) else ""
+        val cnVoice: String
+        val jpVoice: String
+        if (isCrystal && voiceRaw.isNotEmpty()) {
+            // 格式如 "中文：王美心\n日文：佐々木未来"
+            cnVoice = voiceRaw.lineSequence()
+                .firstOrNull { it.startsWith("中文") }?.substringAfter("：")?.trim() ?: voiceRaw
+            jpVoice = voiceRaw.lineSequence()
+                .firstOrNull { it.startsWith("日文") }?.substringAfter("：")?.trim() ?: ""
+        } else {
+            cnVoice = clean(params["中文声优"])
+            jpVoice = clean(params["日文声优"])
+        }
 
         return CharacterDetail(
             name = name,
             englishName = clean(params["英文名"]),
             japaneseName = clean(params["日文名"]),
             gender = clean(params["性别"]),
-            role = clean(params["定位"]),
-            faction = clean(params["阵营"]),
-            summary = clean(params["角色简介"]),
+            role = if (isCrystal) "晶源体" else clean(params["定位"]),
+            faction = if (isCrystal) "晶源体" else clean(params["阵营"]),
+            summary = clean(params["角色简介"].takeUnless { it.isNullOrBlank() } ?: params["简介"]),
             identity = clean(params["身份"]),
             activeArea = clean(params["活动区域"]),
             height = clean(params["身高"]),
             weight = clean(params["体重"]),
             birthday = clean(params["生日"]),
             age = clean(params["年龄"]),
-            cnVoiceActor = clean(params["中文声优"]),
-            jpVoiceActor = clean(params["日文声优"]),
+            cnVoiceActor = cnVoice,
+            jpVoiceActor = jpVoice,
             weaponName = clean(params["武器名称"]),
             weaponType = clean(params["武器类型"]),
             weaponIntro = clean(params["武器介绍"]),
-            traits = clean(params["超弦体特性"]),
+            traits = clean(params["超弦体特性"].takeUnless { it.isNullOrBlank() } ?: params["晶源体特性"]),
             hobbies = clean(params["兴趣爱好"]),
             diet = clean(params["饮食习惯"]),
             quote = clean(params["个性语录"]),
@@ -187,15 +220,46 @@ object CharacterDetailApi {
         Triple(4, "E", "战术技能")
     )
 
-    private fun parseSkills(wikitext: String): List<SkillInfo> {
-        val skillTemplate = extractTemplate(wikitext, "角色技能") ?: return emptyList()
-        val params = parseTemplateParams(skillTemplate)
-        return SKILL_SLOTS.mapNotNull { (num, slot, name) ->
-            val desc = clean(params["技能${num}解析"])
-            if (desc.isBlank()) return@mapNotNull null
-            val videoRaw = params["技能${num}视频演示"] ?: ""
-            val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
-            SkillInfo(slot = slot, name = name, description = desc, videoUrl = videoUrl)
+    private fun parseSkills(characterName: String, wikitext: String, isCrystal: Boolean = false): List<SkillInfo> {
+        val skills: List<SkillInfo>
+        // 技能图片编号映射：超弦体 Q=1,P=2,X=3,E=4；晶源体 Q=1,X=3
+        val slotToNum = mapOf("Q" to 1, "P" to 2, "X" to 3, "E" to 4)
+
+        if (isCrystal) {
+            val skillTemplate = extractTemplate(wikitext, "晶源体技能") ?: return emptyList()
+            val params = parseTemplateParams(skillTemplate)
+            val result = mutableListOf<SkillInfo>()
+            val active = clean(params["主动技能解析"])
+            if (active.isNotBlank()) {
+                val videoRaw = params["主动技能视频演示"] ?: ""
+                val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
+                result.add(SkillInfo(slot = "Q", name = "主动技能", description = active, videoUrl = videoUrl))
+            }
+            val ultimate = clean(params["终极技能解析"])
+            if (ultimate.isNotBlank()) {
+                val videoRaw = params["终极技能视频演示"] ?: ""
+                val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
+                result.add(SkillInfo(slot = "X", name = "终极技能", description = ultimate, videoUrl = videoUrl))
+            }
+            skills = result
+        } else {
+            val skillTemplate = extractTemplate(wikitext, "角色技能") ?: return emptyList()
+            val params = parseTemplateParams(skillTemplate)
+            skills = SKILL_SLOTS.mapNotNull { (num, slot, name) ->
+                val desc = clean(params["技能${num}解析"])
+                if (desc.isBlank()) return@mapNotNull null
+                val videoRaw = params["技能${num}视频演示"] ?: ""
+                val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
+                SkillInfo(slot = slot, name = name, description = desc, videoUrl = videoUrl)
+            }
+        }
+
+        // 批量获取技能图片 URL：{characterName}技能{N}.png
+        if (skills.isEmpty()) return skills
+        val fileNames = skills.map { "${characterName}技能${slotToNum[it.slot] ?: 1}.png" }
+        val imageUrls = fetchImageUrls(fileNames)
+        return skills.mapIndexed { i, skill ->
+            skill.copy(iconUrl = imageUrls[fileNames[i]])
         }
     }
 
@@ -404,6 +468,53 @@ object CharacterDetailApi {
         } catch (_: Exception) {
             null
         }
+    }
+
+    // ────────────────────────────────────────
+    //  更新改动历史解析（从渲染 HTML）
+    // ────────────────────────────────────────
+
+    private val UPDATE_DATE_REGEX = Regex(
+        """<div\s+class="alert\s+alert-warning"[^>]*>([^<]+)</div>"""
+    )
+    private val LI_REGEX = Regex("""<li>(.+?)</li>""", RegexOption.DOT_MATCHES_ALL)
+    private val HTML_TAG_REGEX = Regex("""<[^>]+>""")
+
+    /**
+     * 从渲染后的 HTML 中解析更新改动历史。
+     * 结构：`<div class="alert alert-warning">日期</div>` 后跟 `<ul><li>...</li></ul>`
+     */
+    private fun parseUpdateHistory(html: String): List<UpdateEntry> {
+        // 定位到"更新改动历史"区域
+        val sectionStart = html.indexOf("id=\"更新改动历史\"")
+        if (sectionStart == -1) return emptyList()
+        val sectionHtml = html.substring(sectionStart)
+
+        val entries = mutableListOf<UpdateEntry>()
+        val dateMatches = UPDATE_DATE_REGEX.findAll(sectionHtml).toList()
+
+        for ((i, dateMatch) in dateMatches.withIndex()) {
+            val date = dateMatch.groupValues[1].trim()
+            // 取当前日期到下一个日期之间的内容
+            val contentStart = dateMatch.range.last + 1
+            val contentEnd = if (i + 1 < dateMatches.size) dateMatches[i + 1].range.first
+            else sectionHtml.length
+            val block = sectionHtml.substring(contentStart, contentEnd)
+
+            val changes = LI_REGEX.findAll(block).map { li ->
+                li.groupValues[1]
+                    .replace(HTML_TAG_REGEX, "")
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .trim()
+            }.filter { it.isNotBlank() }.toList()
+
+            if (changes.isNotEmpty()) {
+                entries.add(UpdateEntry(date = date, changes = changes))
+            }
+        }
+        return entries
     }
 
     private fun httpGet(url: String): String? {

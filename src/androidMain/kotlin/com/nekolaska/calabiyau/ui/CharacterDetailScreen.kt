@@ -235,6 +235,13 @@ private fun CharacterDetailContent(
             }
         }
 
+        // ── 更新改动历史 ──
+        if (detail.updateHistory.isNotEmpty()) {
+            item(key = "update_history") {
+                UpdateHistoryCard(history = detail.updateHistory)
+            }
+        }
+
         // ── 子页面导航 ──
         if (detail.subPages.isNotEmpty()) {
             item(key = "sub_pages") {
@@ -792,19 +799,30 @@ private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 技能槽位标签
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        skill.slot,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+            // 技能图标（有图片则显示图片，否则显示槽位字母）
+            if (skill.iconUrl != null) {
+                AsyncImage(
+                    model = skill.iconUrl,
+                    contentDescription = skill.name,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            skill.slot,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -972,5 +990,75 @@ private fun SectionTitle(icon: ImageVector, title: String) {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+// ────────────────────────────────────────────
+//  更新改动历史
+// ────────────────────────────────────────────
+
+@Composable
+private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
+    var expanded by remember { mutableStateOf(false) }
+    // 默认只显示前 3 条
+    val visibleHistory = if (expanded) history else history.take(3)
+
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            SectionTitle(icon = Icons.Outlined.History, title = "更新改动历史")
+            Spacer(Modifier.height(12.dp))
+
+            visibleHistory.forEach { entry ->
+                // 日期标题
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    Text(
+                        entry.date,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                // 改动条目
+                entry.changes.forEach { change ->
+                    Row(
+                        Modifier.padding(start = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            "•",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 6.dp, top = 1.dp)
+                        )
+                        Text(
+                            change,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+            }
+
+            // 展开/收起按钮
+            if (history.size > 3) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(if (expanded) "收起" else "查看全部 ${history.size} 条更新")
+                }
+            }
+        }
     }
 }
