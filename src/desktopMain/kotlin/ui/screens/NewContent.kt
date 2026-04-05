@@ -195,6 +195,7 @@ fun NewDownloaderContent() {
     var showWikiBrowser by remember { mutableStateOf(false) }
     var showCreatorCenter by remember { mutableStateOf(false) }
     var showVotingWindow by remember { mutableStateOf(false) }
+    var showBalanceDataWindow by remember { mutableStateOf(false) }
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
@@ -274,6 +275,9 @@ fun NewDownloaderContent() {
     }
     if (showVotingWindow) {
         VotingWindow(onCloseRequest = { showVotingWindow = false })
+    }
+    if (showBalanceDataWindow) {
+        BalanceDataWindow(onCloseRequest = { showBalanceDataWindow = false })
     }
     if (showLogWindow) {
         LogWindow(
@@ -462,6 +466,11 @@ fun NewDownloaderContent() {
                         onClick = { showCreatorCenter = true },
                         icon = { Icon(Icons.Regular.People, contentDescription = null) },
                         text = { Text("创作者中心") }
+                    )
+                    MenuFlyoutItem(
+                        onClick = { showBalanceDataWindow = true },
+                        icon = { Icon(Icons.Regular.DataBarVertical, contentDescription = null) },
+                        text = { Text("平衡数据") }
                     )
                 },
             )
@@ -1622,7 +1631,7 @@ private fun PortraitAssetCard(
                         onExpandedChanged = { flyoutExpanded = it },
                         positionProvider = rememberFlyoutPositionProvider(FlyoutPlacement.BottomAlignedStart),
                         secondary = { hasOverFlowItem ->
-                            portraitSecondaryItems(hasOverFlowItem) {
+                            PortraitSecondaryItems(hasOverFlowItem) {
                                 onSaveAsAsset(asset)
                                 flyoutVisible = false
                                 flyoutExpanded = false
@@ -1670,7 +1679,7 @@ private fun PortraitAssetCard(
 }
 
 @Composable
-private fun MenuFlyoutScope.portraitSecondaryItems(
+private fun MenuFlyoutScope.PortraitSecondaryItems(
     hasOverFlowItem: Boolean,
     onClick: () -> Unit
 ) {

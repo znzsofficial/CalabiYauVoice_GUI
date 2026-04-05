@@ -61,7 +61,7 @@ import kotlinx.coroutines.withContext
 private val LocalHasWallpaper = staticCompositionLocalOf { false }
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -253,6 +253,11 @@ fun WikiHubScreen(
             GalleryScreen(
                 title = "四格漫画",
                 pageName = "官方四格漫画",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.BALANCE_DATA -> {
+            BalanceDataScreen(
                 onBack = { currentPage = WikiHubPage.HOME }
             )
         }
@@ -515,6 +520,19 @@ private fun WikiHomePage(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     onClick = { onNavigateTo(WikiHubPage.GAME_MODES) },
+                    backdrop = backdrop
+                )
+            }
+
+            // ── 平衡数据 ──
+            item(key = "balance_data", contentType = "action_card") {
+                ActionCard(
+                    title = "平衡数据",
+                    subtitle = "官网角色胜率/选取率/KD等数据",
+                    icon = Icons.Outlined.BarChart,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.BALANCE_DATA) },
                     backdrop = backdrop
                 )
             }
