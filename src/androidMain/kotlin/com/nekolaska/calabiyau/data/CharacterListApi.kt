@@ -68,20 +68,24 @@ object CharacterListApi {
     }
 
     private fun fetchFaction(faction: String): ApiResult<FactionData> {
-        val wikitext = "{{阵营角色|$faction}}"
-        val encoded = URLEncoder.encode(wikitext, "UTF-8")
-        val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
+        return try {
+            val wikitext = "{{阵营角色|$faction}}"
+            val encoded = URLEncoder.encode(wikitext, "UTF-8")
+            val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-        val body = httpGet(url) ?: return ApiResult.Error("请求 $faction 失败")
-        val json = SharedJson.parseToJsonElement(body).jsonObject
-        val html = json["parse"]
-            ?.jsonObject?.get("text")
-            ?.jsonObject?.get("*")
-            ?.jsonPrimitive?.content
-            ?: return ApiResult.Error("解析 $faction HTML 失败")
+            val body = httpGet(url) ?: return ApiResult.Error("请求 $faction 失败")
+            val json = SharedJson.parseToJsonElement(body).jsonObject
+            val html = json["parse"]
+                ?.jsonObject?.get("text")
+                ?.jsonObject?.get("*")
+                ?.jsonPrimitive?.content
+                ?: return ApiResult.Error("解析 $faction HTML 失败")
 
-        val characters = parseCharactersFromHtml(html)
-        return ApiResult.Success(FactionData(faction, characters))
+            val characters = parseCharactersFromHtml(html)
+            ApiResult.Success(FactionData(faction, characters))
+        } catch (e: Exception) {
+            ApiResult.Error("加载 $faction 失败: ${e.message}")
+        }
     }
 
     /**
@@ -130,10 +134,17 @@ object CharacterListApi {
     }
 
     private fun httpGet(url: String): String? {
-        val request = Request.Builder().url(url).build()
-        WikiEngine.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            return response.body.string()
+        return try {
+            val request = Request.Builder().url(url).build()
+            WikiEngine.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body.string()
+                // 检测 CDN 拦截页面（返回 HTML 而非 JSON）
+                if (!body.trimStart().startsWith("{")) return null
+                body
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 }

@@ -28,38 +28,38 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.data.CostumeFilterApi
-import com.nekolaska.calabiyau.data.CostumeFilterApi.CostumeInfo
-import com.nekolaska.calabiyau.data.CostumeFilterApi.Quality
+import com.nekolaska.calabiyau.data.WeaponSkinFilterApi
+import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.Quality
+import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.WeaponSkinInfo
 import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════
-//  角色时装筛选页 —— 原生客户端版 (MD3 Expressive)
+//  武器外观筛选页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CostumeFilterScreen(
-    initialCharacter: String? = null,
+fun WeaponSkinFilterScreen(
+    initialWeapon: String? = null,
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var allCostumes by remember { mutableStateOf<List<CostumeInfo>>(emptyList()) }
+    var allSkins by remember { mutableStateOf<List<WeaponSkinInfo>>(emptyList()) }
 
     // 筛选状态
-    var selectedCharacter by remember { mutableStateOf(initialCharacter) }
+    var selectedWeapon by remember { mutableStateOf(initialWeapon) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
             errorMessage = null
-            when (val result = CostumeFilterApi.fetchAllCostumes(forceRefresh)) {
-                is CostumeFilterApi.ApiResult.Success -> allCostumes = result.value
-                is CostumeFilterApi.ApiResult.Error -> errorMessage = result.message
+            when (val result = WeaponSkinFilterApi.fetchAllWeaponSkins(forceRefresh)) {
+                is WeaponSkinFilterApi.ApiResult.Success -> allSkins = result.value
+                is WeaponSkinFilterApi.ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }
@@ -68,32 +68,31 @@ fun CostumeFilterScreen(
     LaunchedEffect(Unit) { loadData() }
 
     // 筛选后的列表
-    val filteredCostumes = remember(allCostumes, selectedCharacter, selectedQuality) {
-        allCostumes.filter { costume ->
-            (selectedCharacter == null || costume.character == selectedCharacter) &&
-                    (selectedQuality == null || costume.quality == selectedQuality)
+    val filteredSkins = remember(allSkins, selectedWeapon, selectedQuality) {
+        allSkins.filter { skin ->
+            (selectedWeapon == null || skin.weapon == selectedWeapon) &&
+                    (selectedQuality == null || skin.quality == selectedQuality)
         }
     }
 
-    // 角色列表（去重）
-    val characters = remember(allCostumes) {
-        allCostumes.map { it.character }.distinct().sorted()
+    // 武器列表（去重）
+    val weapons = remember(allSkins) {
+        allSkins.map { it.weapon }.distinct().sorted()
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("角色时装", fontWeight = FontWeight.Bold) },
+                title = { Text("武器外观", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    // 显示数量
-                    if (allCostumes.isNotEmpty()) {
+                    if (allSkins.isNotEmpty()) {
                         Text(
-                            "${filteredCostumes.size}/${allCostumes.size}",
+                            "${filteredSkins.size}/${allSkins.size}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(end = 16.dp)
@@ -109,11 +108,11 @@ fun CostumeFilterScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(Modifier.height(12.dp))
-                        Text("正在加载时装数据…", style = MaterialTheme.typography.bodyMedium)
+                        Text("正在加载武器外观数据…", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
-            errorMessage != null && allCostumes.isEmpty() -> {
+            errorMessage != null && allSkins.isEmpty() -> {
                 Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -136,24 +135,24 @@ fun CostumeFilterScreen(
             else -> {
                 Column(Modifier.padding(innerPadding)) {
                     // ── 筛选栏 ──
-                    CostumeFilterBar(
-                        characters = characters,
-                        selectedCharacter = selectedCharacter,
-                        onCharacterSelected = { selectedCharacter = it },
+                    WeaponSkinFilterBar(
+                        weapons = weapons,
+                        selectedWeapon = selectedWeapon,
+                        onWeaponSelected = { selectedWeapon = it },
                         selectedQuality = selectedQuality,
                         onQualitySelected = { selectedQuality = it }
                     )
 
-                    // ── 时装网格 ──
-                    if (filteredCostumes.isEmpty()) {
+                    // ── 外观网格 ──
+                    if (filteredSkins.isEmpty()) {
                         Box(
                             Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
-                        var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
+                        var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
 
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 110.dp),
@@ -161,10 +160,10 @@ fun CostumeFilterScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            items(filteredCostumes, key = { it.name + it.character }) { costume ->
-                                CostumeCard(
-                                    costume = costume,
-                                    onClick = { selectedCostume = costume }
+                            items(filteredSkins, key = { it.name + it.weapon }) { skin ->
+                                WeaponSkinCard(
+                                    skin = skin,
+                                    onClick = { selectedSkin = skin }
                                 )
                             }
                             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -172,11 +171,11 @@ fun CostumeFilterScreen(
                             }
                         }
 
-                        // ── 时装详情底部弹窗 ──
-                        if (selectedCostume != null) {
-                            CostumeDetailSheet(
-                                costume = selectedCostume!!,
-                                onDismiss = { selectedCostume = null }
+                        // ── 外观详情底部弹窗 ──
+                        if (selectedSkin != null) {
+                            WeaponSkinDetailSheet(
+                                skin = selectedSkin!!,
+                                onDismiss = { selectedSkin = null }
                             )
                         }
                     }
@@ -191,10 +190,10 @@ fun CostumeFilterScreen(
 // ────────────────────────────────────────────
 
 @Composable
-private fun CostumeFilterBar(
-    characters: List<String>,
-    selectedCharacter: String?,
-    onCharacterSelected: (String?) -> Unit,
+private fun WeaponSkinFilterBar(
+    weapons: List<String>,
+    selectedWeapon: String?,
+    onWeaponSelected: (String?) -> Unit,
     selectedQuality: Quality?,
     onQualitySelected: (Quality?) -> Unit
 ) {
@@ -202,7 +201,7 @@ private fun CostumeFilterBar(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // 角色筛选
+        // 武器筛选
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -210,22 +209,22 @@ private fun CostumeFilterBar(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(
-                selected = selectedCharacter == null,
-                onClick = { onCharacterSelected(null) },
-                label = { Text("全部角色", maxLines = 1) }
+                selected = selectedWeapon == null,
+                onClick = { onWeaponSelected(null) },
+                label = { Text("全部武器", maxLines = 1) }
             )
-            characters.forEach { char ->
+            weapons.forEach { weapon ->
                 FilterChip(
-                    selected = selectedCharacter == char,
+                    selected = selectedWeapon == weapon,
                     onClick = {
-                        onCharacterSelected(if (selectedCharacter == char) null else char)
+                        onWeaponSelected(if (selectedWeapon == weapon) null else weapon)
                     },
-                    label = { Text(char, maxLines = 1) }
+                    label = { Text(weapon, maxLines = 1) }
                 )
             }
         }
 
-        // 品质筛选（跳过“初始”品质）
+        // 品质筛选
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -237,7 +236,7 @@ private fun CostumeFilterBar(
                 onClick = { onQualitySelected(null) },
                 label = { Text("全部品质", maxLines = 1) }
             )
-            Quality.entries.filter { it != Quality.INITIAL }.forEach { quality ->
+            Quality.entries.forEach { quality ->
                 FilterChip(
                     selected = selectedQuality == quality,
                     onClick = {
@@ -245,7 +244,7 @@ private fun CostumeFilterBar(
                     },
                     label = { Text(quality.displayName, maxLines = 1) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = qualityColor(quality).copy(alpha = 0.2f)
+                        selectedContainerColor = skinQualityColor(quality).copy(alpha = 0.2f)
                     )
                 )
             }
@@ -254,11 +253,11 @@ private fun CostumeFilterBar(
 }
 
 // ────────────────────────────────────────────
-//  时装卡片
+//  外观卡片
 // ────────────────────────────────────────────
 
 @Composable
-private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
+private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -268,12 +267,12 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = costume.quality?.let { qualityColor(it).copy(alpha = 0.4f) }
+            color = skin.quality?.let { skinQualityColor(it).copy(alpha = 0.4f) }
                 ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // 时装图片
+            // 外观图片
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -281,10 +280,10 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
                     .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                if (costume.thumbnailUrl != null) {
+                if (skin.thumbnailUrl != null) {
                     AsyncImage(
-                        model = costume.fullImageUrl ?: costume.thumbnailUrl,
-                        contentDescription = costume.name,
+                        model = skin.fullImageUrl ?: skin.thumbnailUrl,
+                        contentDescription = skin.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -295,7 +294,7 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                Icons.Outlined.Checkroom, null,
+                                Icons.Outlined.Palette, null,
                                 Modifier.size(32.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                             )
@@ -303,17 +302,17 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
                     }
                 }
 
-                // 品质角标（跳过“初始”品质）
-                if (costume.quality != null && costume.quality != Quality.INITIAL) {
+                // 品质角标
+                if (skin.quality != null) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp),
                         shape = RoundedCornerShape(6.dp),
-                        color = qualityColor(costume.quality).copy(alpha = 0.85f)
+                        color = skinQualityColor(skin.quality).copy(alpha = 0.85f)
                     ) {
                         Text(
-                            costume.quality.displayName,
+                            skin.quality.displayName,
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
@@ -323,13 +322,13 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
                 }
             }
 
-            // 时装名
+            // 外观名
             Column(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    costume.name,
+                    skin.name,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
@@ -347,28 +346,27 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun qualityColor(quality: Quality): Color {
+private fun skinQualityColor(quality: Quality): Color {
     return when (quality) {
-        Quality.INITIAL -> Color(0xFF94A3B8)    // 灰蓝
-        Quality.EXQUISITE -> Color(0xFF3B82F6)  // 蓝
-        Quality.SUPERIOR -> Color(0xFFA855F7)   // 紫
-        Quality.PERFECT -> Color(0xFFF59E0B)    // 金
-        Quality.LEGENDARY -> Color(0xFFEF4444)  // 红
-        Quality.SECRET -> Color(0xFFFF6B2C)     // 橙
+        Quality.EXQUISITE -> Color(0xFF3B82F6)   // 蓝
+        Quality.SUPERIOR -> Color(0xFFA855F7)    // 紫
+        Quality.PERFECT -> Color(0xFFF59E0B)     // 金
+        Quality.LEGENDARY -> Color(0xFFEF4444)   // 红
+        Quality.COLLECTION -> Color(0xFFFF6B2C)  // 橙
     }
 }
 
 // ────────────────────────────────────────────
-//  时装详情底部弹窗
+//  外观详情底部弹窗
 // ────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CostumeDetailSheet(
-    costume: CostumeInfo,
+private fun WeaponSkinDetailSheet(
+    skin: WeaponSkinInfo,
     onDismiss: () -> Unit
 ) {
-    val qColor = costume.quality?.let { qualityColor(it) } ?: MaterialTheme.colorScheme.outline
+    val qColor = skin.quality?.let { skinQualityColor(it) } ?: MaterialTheme.colorScheme.outline
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -389,12 +387,11 @@ private fun CostumeDetailSheet(
                     .height(260.dp)
             ) {
                 AsyncImage(
-                    model = costume.fullImageUrl ?: costume.thumbnailUrl,
-                    contentDescription = costume.name,
+                    model = skin.fullImageUrl ?: skin.thumbnailUrl,
+                    contentDescription = skin.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                // 底部渐变
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -409,8 +406,7 @@ private fun CostumeDetailSheet(
                             )
                         )
                 )
-                // 品质角标
-                if (costume.quality != null && costume.quality != Quality.INITIAL) {
+                if (skin.quality != null) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -419,7 +415,7 @@ private fun CostumeDetailSheet(
                         color = qColor.copy(alpha = 0.9f)
                     ) {
                         Text(
-                            costume.quality.displayName,
+                            skin.quality.displayName,
                             style = MaterialTheme.typography.labelMedium,
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
@@ -429,16 +425,16 @@ private fun CostumeDetailSheet(
                 }
             }
 
-            // ── 名称 & 角色 ──
+            // ── 名称 & 武器 ──
             Column(Modifier.padding(horizontal = 20.dp)) {
                 Text(
-                    costume.name,
+                    skin.name,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    costume.character,
+                    skin.weapon,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -456,52 +452,52 @@ private fun CostumeDetailSheet(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     // 获取方式
-                    if (costume.sources.isNotEmpty()) {
-                        DetailRow(
+                    if (skin.sources.isNotEmpty()) {
+                        SkinDetailRow(
                             icon = Icons.Outlined.ShoppingBag,
                             label = "获取方式",
-                            value = costume.sources.joinToString("、")
+                            value = skin.sources.joinToString("、")
                         )
                     }
 
                     // 巴布洛晶核价格
-                    if (costume.crystalCost.isNotBlank()) {
+                    if (skin.crystalCost.isNotBlank()) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
-                        DetailRow(
+                        SkinDetailRow(
                             icon = Icons.Outlined.Diamond,
                             label = "巴布洛晶核",
-                            value = costume.crystalCost,
+                            value = skin.crystalCost,
                             valueColor = Color(0xFFFFC107)
                         )
                     }
 
                     // 基弦价格
-                    if (costume.baseCost.isNotBlank()) {
+                    if (skin.baseCost.isNotBlank()) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
-                        DetailRow(
+                        SkinDetailRow(
                             icon = Icons.Outlined.Paid,
                             label = "基弦",
-                            value = costume.baseCost,
+                            value = skin.baseCost,
                             valueColor = Color(0xFFE040FB)
                         )
                     }
 
                     // 品质
-                    if (costume.quality != null && costume.quality != Quality.INITIAL) {
+                    if (skin.quality != null) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
-                        DetailRow(
+                        SkinDetailRow(
                             icon = Icons.Outlined.Star,
                             label = "品质",
-                            value = costume.quality.displayName,
+                            value = skin.quality.displayName,
                             valueColor = qColor
                         )
                     }
@@ -512,7 +508,7 @@ private fun CostumeDetailSheet(
 }
 
 @Composable
-private fun DetailRow(
+private fun SkinDetailRow(
     icon: ImageVector,
     label: String,
     value: String,

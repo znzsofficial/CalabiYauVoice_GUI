@@ -44,7 +44,9 @@ fun CharacterDetailScreen(
     characterName: String,
     portraitUrl: String? = null,   // 从列表页传入的立绘 URL（可选）
     onBack: () -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    onOpenCostumes: ((String) -> Unit)? = null,
+    onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -141,6 +143,8 @@ fun CharacterDetailScreen(
                     detail = detail!!,
                     portraitUrl = portraitUrl,
                     onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenCostumes = onOpenCostumes,
+                    onOpenWeaponSkins = onOpenWeaponSkins,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -157,6 +161,8 @@ private fun CharacterDetailContent(
     detail: CharacterDetail,
     portraitUrl: String?,
     onOpenWikiUrl: (String) -> Unit,
+    onOpenCostumes: ((String) -> Unit)? = null,
+    onOpenWeaponSkins: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -196,6 +202,37 @@ private fun CharacterDetailContent(
         if (detail.weaponName.isNotBlank()) {
             item(key = "weapon") {
                 WeaponInfoCard(detail = detail)
+            }
+        }
+
+        // ── 外观跳转 ──
+        if (onOpenCostumes != null || onOpenWeaponSkins != null) {
+            item(key = "skin_nav") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (onOpenCostumes != null) {
+                        OutlinedButton(
+                            onClick = { onOpenCostumes(detail.name) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Outlined.Checkroom, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("角色时装")
+                        }
+                    }
+                    if (onOpenWeaponSkins != null && detail.weaponName.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { onOpenWeaponSkins(detail.weaponName) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("武器外观")
+                        }
+                    }
+                }
             }
         }
 
