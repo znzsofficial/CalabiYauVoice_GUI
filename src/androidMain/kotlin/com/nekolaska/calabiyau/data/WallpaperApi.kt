@@ -103,12 +103,18 @@ object WallpaperApi {
     }
 
     private fun httpGet(url: String): String? {
-        val request = Request.Builder()
-            .url(url)
-            .build()
-        WikiEngine.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            return response.body.string()
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .build()
+            WikiEngine.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body.string()
+                if (!body.trimStart().startsWith("{")) return null
+                body
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 }
