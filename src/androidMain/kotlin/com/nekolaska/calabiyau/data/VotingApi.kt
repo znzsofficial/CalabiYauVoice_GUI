@@ -447,23 +447,37 @@ object VotingApi {
     }
 
     private fun httpGet(url: String): String? {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-            .build()
-        return WikiEngine.client.newCall(request).execute().use { resp ->
-            if (resp.isSuccessful) resp.body.string() else null
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
+                .build()
+            WikiEngine.client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return null
+                val body = resp.body.string()
+                if (!body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) return null
+                body
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
     private fun httpGetWithCookies(url: String, cookies: String): String? {
-        val request = Request.Builder()
-            .url(url)
-            .header("Cookie", cookies)
-            .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-            .build()
-        return WikiEngine.client.newCall(request).execute().use { resp ->
-            if (resp.isSuccessful) resp.body.string() else null
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("Cookie", cookies)
+                .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
+                .build()
+            WikiEngine.client.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) return null
+                val body = resp.body.string()
+                if (!body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) return null
+                body
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 }
