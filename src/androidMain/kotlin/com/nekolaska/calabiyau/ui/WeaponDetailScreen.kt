@@ -31,7 +31,8 @@ import com.nekolaska.calabiyau.data.WeaponDetailApi.WeaponDetail
 fun WeaponDetailScreen(
     weaponName: String,
     onBack: () -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -102,6 +103,7 @@ fun WeaponDetailScreen(
                 WeaponDetailContent(
                     detail = detail!!,
                     onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenWeaponSkins = onOpenWeaponSkins,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -113,6 +115,7 @@ fun WeaponDetailScreen(
 private fun WeaponDetailContent(
     detail: WeaponDetail,
     onOpenWikiUrl: (String) -> Unit,
+    onOpenWeaponSkins: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -141,6 +144,27 @@ private fun WeaponDetailContent(
         if (detail.damageTable.isNotEmpty()) {
             item(key = "damage") {
                 WeaponDamageCard(detail)
+            }
+        }
+
+        // ── 冷却时间（战术道具） ──
+        if (detail.cooldowns.isNotEmpty()) {
+            item(key = "cooldown") {
+                WeaponCooldownCard(detail.cooldowns)
+            }
+        }
+
+        // ── 武器外观跳转 ──
+        if (onOpenWeaponSkins != null) {
+            item(key = "skin_nav") {
+                OutlinedButton(
+                    onClick = { onOpenWeaponSkins(detail.name) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("查看武器外观")
+                }
             }
         }
 
@@ -371,57 +395,94 @@ private fun WeaponDamageCard(detail: WeaponDetail) {
 
             Spacer(Modifier.height(12.dp))
 
-            // 表头
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text("距离", Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold)
-                    Text("头部", Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center)
-                    Text("上肢", Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center)
-                    Text("下肢", Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center)
-                }
-            }
+            // 判断是否为简单伤害表（无部位区分）
+            val isSimpleTable = detail.damageTable.all { it.upper.isBlank() && it.lower.isBlank() }
 
-            // 数据行
-            detail.damageTable.forEachIndexed { index, row ->
-                if (index > 0) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
+            if (isSimpleTable) {
+                // 简单伤害表（如焚焰者）：键值对展示
+                detail.damageTable.forEachIndexed { index, row ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                row.distance,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                row.head,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
                 }
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
+            } else {
+                // 标准伤害表：距离/头部/上肢/下肢 四列
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(row.distance, Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium)
-                    Text(row.head, Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.error)
-                    Text(row.upper, Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center)
-                    Text(row.lower, Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Text("距离", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("头部", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center)
+                        Text("上肢", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center)
+                        Text("下肢", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center)
+                    }
+                }
+
+                detail.damageTable.forEachIndexed { index, row ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Text(row.distance, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium)
+                        Text(row.head, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.error)
+                        Text(row.upper, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center)
+                        Text(row.lower, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -475,6 +536,61 @@ private fun WeaponSubPagesCard(
                             modifier = Modifier.weight(1f))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  冷却时间卡片（战术道具）
+// ────────────────────────────────────────────
+
+@Composable
+private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
+    ElevatedCard(
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            WeaponSectionTitle(Icons.Outlined.Timer, "冷却时间")
+            Spacer(Modifier.height(12.dp))
+
+            cooldowns.entries.forEachIndexed { index, (mode, seconds) ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            mode,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                "${seconds}秒",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }

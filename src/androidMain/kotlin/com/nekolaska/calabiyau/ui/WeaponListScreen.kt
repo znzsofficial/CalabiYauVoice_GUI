@@ -32,14 +32,16 @@ import kotlinx.coroutines.launch
 @Composable
 fun WeaponListScreen(
     onBack: () -> Unit,
-    onOpenWeaponDetail: (weaponName: String) -> Unit
+    onOpenWeaponDetail: (weaponName: String) -> Unit,
+    initialTab: Int = 0,
+    onTabChanged: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var categories by remember { mutableStateOf<List<WeaponListApi.WeaponCategoryData>>(emptyList()) }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
@@ -127,7 +129,10 @@ fun WeaponListScreen(
                             categories.forEachIndexed { index, cat ->
                                 Tab(
                                     selected = selectedTab == index,
-                                    onClick = { selectedTab = index },
+                                    onClick = {
+                                        selectedTab = index
+                                        onTabChanged?.invoke(index)
+                                    },
                                     text = {
                                         Text(
                                             cat.category.displayName,

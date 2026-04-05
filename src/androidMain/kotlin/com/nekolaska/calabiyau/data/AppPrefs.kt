@@ -27,6 +27,7 @@ object AppPrefs {
     private const val KEY_WALLPAPER_URL = "wallpaper_url"
     private const val KEY_WALLPAPER_AUTO_REFRESH = "wallpaper_auto_refresh"
     private const val KEY_WALLPAPER_SEED_COLOR_CACHE = "wallpaper_seed_color_cache"
+    private const val KEY_WALLPAPER_SEED_COLOR_URL = "wallpaper_seed_color_url"
     private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
@@ -168,6 +169,11 @@ object AppPrefs {
     var wallpaperSeedColorCache: Int
         get() = prefs.getInt(KEY_WALLPAPER_SEED_COLOR_CACHE, 0)
         set(value) = prefs.edit { putInt(KEY_WALLPAPER_SEED_COLOR_CACHE, value) }
+
+    /** 缓存主题色对应的壁纸 URL（用于判断壁纸是否更换） */
+    var wallpaperSeedColorUrl: String?
+        get() = prefs.getString(KEY_WALLPAPER_SEED_COLOR_URL, null)
+        set(value) = prefs.edit { putString(KEY_WALLPAPER_SEED_COLOR_URL, value) }
 
     /** 上次检查更新的时间戳（毫秒） */
     var lastUpdateCheck: Long

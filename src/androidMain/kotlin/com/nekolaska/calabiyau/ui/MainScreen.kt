@@ -525,9 +525,9 @@ private fun WikiUserInfoBottomSheet(
             when (selectedTab) {
                 0 -> UserInfoTabContent(userInfo = userInfo)
                 1 -> ActivityListContent(
-                    items = contributions.map { contrib ->
+                    items = contributions.mapIndexed { idx, contrib ->
                         ActivityItem(
-                            id = contrib.revId,
+                            id = contrib.revId * 10000 + idx,
                             title = contrib.title,
                             summary = contrib.comment.ifBlank { null },
                             timestamp = contrib.timestamp,
@@ -558,9 +558,9 @@ private fun WikiUserInfoBottomSheet(
                     }
                 )
                 2 -> ActivityListContent(
-                    items = watchlist.map { wl ->
+                    items = watchlist.mapIndexed { idx, wl ->
                         ActivityItem(
-                            id = wl.revId,
+                            id = wl.revId * 10000 + idx,
                             title = wl.title,
                             summary = wl.comment.ifBlank { null },
                             timestamp = wl.timestamp,

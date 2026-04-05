@@ -61,7 +61,7 @@ import kotlinx.coroutines.withContext
 private val LocalHasWallpaper = staticCompositionLocalOf { false }
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, WEAPON_SKINS, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +75,12 @@ fun WikiHubScreen(
     var selectedCharacterName by remember { mutableStateOf("") }
     var selectedCharacterPortrait by remember { mutableStateOf<String?>(null) }
     var selectedWeaponName by remember { mutableStateOf("") }
+    var selectedCostumeCharacter by remember { mutableStateOf<String?>(null) }
+    var selectedWeaponSkinWeapon by remember { mutableStateOf<String?>(null) }
+    var costumesFrom by remember { mutableStateOf(WikiHubPage.HOME) }
+    var weaponSkinsFrom by remember { mutableStateOf(WikiHubPage.HOME) }
+    var characterListTab by remember { mutableIntStateOf(0) }
+    var weaponListTab by remember { mutableIntStateOf(0) }
     var selectedMapName by remember { mutableStateOf("") }
     var selectedMapImage by remember { mutableStateOf<String?>(null) }
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
@@ -119,6 +125,8 @@ fun WikiHubScreen(
             WikiHubPage.CHAR_DETAIL -> WikiHubPage.CHARACTERS
             WikiHubPage.WEAPON_DETAIL -> WikiHubPage.WEAPONS
             WikiHubPage.MAP_DETAIL -> mapDetailFrom
+            WikiHubPage.COSTUMES -> costumesFrom
+            WikiHubPage.WEAPON_SKINS -> weaponSkinsFrom
             WikiHubPage.MAPS -> WikiHubPage.HOME
             else -> WikiHubPage.HOME
         }
@@ -149,13 +157,15 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.CHARACTERS -> {
-            CharacterListFullScreen(
+            CharacterListScreen(
                 onBack = { currentPage = WikiHubPage.HOME },
                 onOpenCharacterDetail = { name, portrait ->
                     selectedCharacterName = name
                     selectedCharacterPortrait = portrait
                     currentPage = WikiHubPage.CHAR_DETAIL
-                }
+                },
+                initialTab = characterListTab,
+                onTabChanged = { characterListTab = it }
             )
         }
         WikiHubPage.CHAR_DETAIL -> {
@@ -163,7 +173,17 @@ fun WikiHubScreen(
                 characterName = selectedCharacterName,
                 portraitUrl = selectedCharacterPortrait,
                 onBack = { currentPage = WikiHubPage.CHARACTERS },
-                onOpenWikiUrl = onOpenWikiUrl
+                onOpenWikiUrl = onOpenWikiUrl,
+                onOpenCostumes = { charName ->
+                    selectedCostumeCharacter = charName
+                    costumesFrom = WikiHubPage.CHAR_DETAIL
+                    currentPage = WikiHubPage.COSTUMES
+                },
+                onOpenWeaponSkins = { weaponName ->
+                    selectedWeaponSkinWeapon = weaponName
+                    weaponSkinsFrom = WikiHubPage.CHAR_DETAIL
+                    currentPage = WikiHubPage.WEAPON_SKINS
+                }
             )
         }
         WikiHubPage.WEAPONS -> {
@@ -172,14 +192,21 @@ fun WikiHubScreen(
                 onOpenWeaponDetail = { name ->
                     selectedWeaponName = name
                     currentPage = WikiHubPage.WEAPON_DETAIL
-                }
+                },
+                initialTab = weaponListTab,
+                onTabChanged = { weaponListTab = it }
             )
         }
         WikiHubPage.WEAPON_DETAIL -> {
             WeaponDetailScreen(
                 weaponName = selectedWeaponName,
                 onBack = { currentPage = WikiHubPage.WEAPONS },
-                onOpenWikiUrl = onOpenWikiUrl
+                onOpenWikiUrl = onOpenWikiUrl,
+                onOpenWeaponSkins = { weaponName ->
+                    selectedWeaponSkinWeapon = weaponName
+                    weaponSkinsFrom = WikiHubPage.WEAPON_DETAIL
+                    currentPage = WikiHubPage.WEAPON_SKINS
+                }
             )
         }
         WikiHubPage.MAPS -> {
@@ -205,7 +232,22 @@ fun WikiHubScreen(
         }
         WikiHubPage.COSTUMES -> {
             CostumeFilterScreen(
-                onBack = { currentPage = WikiHubPage.HOME }
+                initialCharacter = selectedCostumeCharacter,
+                onBack = {
+                    selectedCostumeCharacter = null
+                    currentPage = costumesFrom
+                    costumesFrom = WikiHubPage.HOME
+                }
+            )
+        }
+        WikiHubPage.WEAPON_SKINS -> {
+            WeaponSkinFilterScreen(
+                initialWeapon = selectedWeaponSkinWeapon,
+                onBack = {
+                    selectedWeaponSkinWeapon = null
+                    currentPage = weaponSkinsFrom
+                    weaponSkinsFrom = WikiHubPage.HOME
+                }
             )
         }
         WikiHubPage.ANNOUNCEMENTS -> {
@@ -355,19 +397,37 @@ private fun WikiHomePage(
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
     LaunchedEffect(wallpaperUrl) {
         val url = wallpaperUrl ?: return@LaunchedEffect
-        // 壁纸 URL 变化时（刷新了壁纸），重新提取主题色
+        // 仅当 URL 未变且已有缓存色时跳过（URL 变了说明换了壁纸，必须重新取色）
+        val cachedUrl = com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorUrl
+        val cachedColor = com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorCache
+        if (url == cachedUrl && cachedColor != 0) {
+            wallpaperSeedColor.intValue = cachedColor
+            return@LaunchedEffect
+        }
+        // 壁纸 URL 变化时，重新提取主题色
         withContext(Dispatchers.IO) {
             try {
                 val request = okhttp3.Request.Builder().url(url).build()
-                val bytes = com.nekolaska.calabiyau.data.WikiEngine.client
-                    .newCall(request).execute().body.bytes()
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                val response = com.nekolaska.calabiyau.data.WikiEngine.client
+                    .newCall(request).execute()
+                // 使用 BitmapFactory.Options 降采样，避免解码全尺寸图片
+                val bytes = response.body.bytes()
+                val opts = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                // 目标 100px 宽度足够提取主色调
+                val sampleSize = maxOf(1, minOf(opts.outWidth, opts.outHeight) / 100)
+                opts.inJustDecodeBounds = false
+                opts.inSampleSize = sampleSize
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
                     ?: return@withContext
                 val palette = Palette.from(bitmap).generate()
                 val dominant = palette.getVibrantColor(palette.getMutedColor(0))
                 if (dominant != 0) {
                     wallpaperSeedColor.intValue = dominant
                     com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorCache = dominant
+                    com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorUrl = url
                 }
                 bitmap.recycle()
             } catch (_: Exception) { }
@@ -381,6 +441,21 @@ private fun WikiHomePage(
 
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primaryContainer
+
+    // ── 壁纸渐变叠加（remember 避免每帧重建 Brush） ──
+    val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor, primaryColor) {
+        Brush.verticalGradient(
+            colors = if (liquidGlassEnabled) listOf(
+                primaryColor.copy(alpha = 0.3f),
+                surfaceColor.copy(alpha = 0.6f),
+                surfaceColor.copy(alpha = 0.85f)
+            ) else listOf(
+                surfaceColor.copy(alpha = 0.15f),
+                surfaceColor.copy(alpha = 0.5f),
+                surfaceColor.copy(alpha = 0.8f)
+            )
+        )
+    }
 
     // ── TopBar 滚动折叠比例（0 = 完全展开，1 = 完全折叠） ──
     val collapsedFraction by remember {
@@ -441,19 +516,7 @@ private fun WikiHomePage(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = if (liquidGlassEnabled) listOf(
-                                        primaryColor.copy(alpha = 0.3f),
-                                        surfaceColor.copy(alpha = 0.6f),
-                                        surfaceColor.copy(alpha = 0.85f)
-                                    ) else listOf(
-                                        surfaceColor.copy(alpha = 0.15f),
-                                        surfaceColor.copy(alpha = 0.5f),
-                                        surfaceColor.copy(alpha = 0.8f)
-                                    )
-                                )
-                            )
+                            .background(wallpaperOverlayBrush)
                     )
                 }
             }
@@ -546,6 +609,19 @@ private fun WikiHomePage(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiHubPage.COSTUMES) },
+                    backdrop = backdrop
+                )
+            }
+
+            // ── 武器外观 ──
+            item(key = "weapon_skins", contentType = "action_card") {
+                ActionCard(
+                    title = "武器外观",
+                    subtitle = "浏览全部武器外观与皮肤",
+                    icon = Icons.Outlined.Palette,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.WEAPON_SKINS) },
                     backdrop = backdrop
                 )
             }
@@ -696,6 +772,14 @@ private val quickEntries = listOf(
     QuickEntry("公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
 )
 private val quickEntryRows = quickEntries.chunked(3)
+
+// ── 预分配的渐变画笔（避免在 LazyRow item 中反复创建） ──
+private val characterGradient = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+)
+private val mapGradient = Brush.verticalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+)
 
 @Composable
 private fun QuickAccessGrid(
@@ -902,13 +986,15 @@ private fun CharacterPortraitCard(
     character: CharacterListApi.CharacterInfo,
     onClick: () -> Unit
 ) {
+    val cardShape = smoothCornerShape(16.dp)
+    val cardColors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    )
     Card(
         onClick = onClick,
-        shape = smoothCornerShape(16.dp),
+        shape = cardShape,
         modifier = Modifier.width(90.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        colors = cardColors
     ) {
         Box {
             // 立绘图片：使用原始比例 (280x680 ≈ 5:12)
@@ -927,14 +1013,7 @@ private fun CharacterPortraitCard(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(40.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.6f)
-                            )
-                        )
-                    ),
+                    .background(characterGradient),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Text(
@@ -1100,13 +1179,15 @@ private fun MapCard(
     map: MapListApi.MapInfo,
     onClick: () -> Unit
 ) {
+    val cardShape = smoothCornerShape(16.dp)
+    val cardColors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    )
     Card(
         onClick = onClick,
-        shape = smoothCornerShape(16.dp),
+        shape = cardShape,
         modifier = Modifier.width(220.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        colors = cardColors
     ) {
         Box {
             // 地图图片 (600x338 ≈ 16:9)
@@ -1125,14 +1206,7 @@ private fun MapCard(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(44.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.65f)
-                            )
-                        )
-                    ),
+                    .background(mapGradient),
                 contentAlignment = Alignment.BottomStart
             ) {
                 Text(
@@ -1221,6 +1295,14 @@ private fun ContentBlockCard(
                 )
             }
 
+            // 预计算 URL，避免每次重组都调用 URLEncoder
+            val resolvedUrls = remember(items) {
+                items.map { (display, page) ->
+                    display to if (page.startsWith("http")) page
+                    else "$WIKI_BASE${java.net.URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
+                }
+            }
+
             AnimatedVisibility(
                 visible = expanded,
                 enter = fadeIn() + expandVertically(),
@@ -1234,17 +1316,10 @@ private fun ContentBlockCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items.forEach { (display, page) ->
+                    resolvedUrls.forEach { (display, url) ->
                         val nativeAction = nativePages[display]
-                        val onClick: () -> Unit = if (nativeAction != null) {
-                            nativeAction
-                        } else {
-                            val url = if (page.startsWith("http")) page
-                            else "$WIKI_BASE${java.net.URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
-                            { onOpenWikiUrl(url) }
-                        }
                         FilledTonalButton(
-                            onClick = onClick,
+                            onClick = nativeAction ?: { onOpenWikiUrl(url) },
                             shape = btnShape,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                         ) {
@@ -1336,34 +1411,6 @@ private fun ActionCard(
                 contentDescription = null,
                 tint = contentColor.copy(alpha = 0.5f)
             )
-        }
-    }
-}
-
-// ────────────────────────────────────────────
-//  角色列表全屏页（从主页"查看全部"进入）
-// ────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CharacterListFullScreen(
-    onBack: () -> Unit,
-    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("超弦体 & 晶源体", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Box(Modifier.padding(innerPadding)) {
-            CharacterListScreen(onOpenCharacterDetail = onOpenCharacterDetail)
         }
     }
 }
@@ -1473,13 +1520,15 @@ private fun MapGridCard(
     map: MapListApi.MapInfo,
     onClick: () -> Unit
 ) {
+    val cardShape = smoothCornerShape(16.dp)
+    val cardColors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    )
     Card(
         onClick = onClick,
-        shape = smoothCornerShape(16.dp),
+        shape = cardShape,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        colors = cardColors
     ) {
         Box {
             AsyncImage(
@@ -1495,14 +1544,7 @@ private fun MapGridCard(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(44.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.65f)
-                            )
-                        )
-                    ),
+                    .background(mapGradient),
                 contentAlignment = Alignment.BottomStart
             ) {
                 Text(

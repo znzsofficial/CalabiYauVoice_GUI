@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -9,8 +8,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
@@ -27,34 +25,32 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterListApi
 import kotlinx.coroutines.launch
 
-/**
- * 角色列表页面 —— 按阵营分组展示角色卡片网格。
- * 点击角色打开原生详情页。
- */
+// ════════════════════════════════════════════════════════
+//  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
+// ════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterListScreen(
-    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit
+    onBack: () -> Unit,
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
+    initialTab: Int = 0,
+    onTabChanged: ((Int) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
-    var expandedFactions by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     fun loadData() {
         scope.launch {
             isLoading = true
             errorMessage = null
             when (val result = CharacterListApi.fetchAllFactions()) {
-                is CharacterListApi.ApiResult.Success -> {
-                    factions = result.value
-                    // 默认全部展开
-                    expandedFactions = result.value.map { it.faction }.toSet()
-                }
-                is CharacterListApi.ApiResult.Error -> {
-                    errorMessage = result.message
-                }
+                is CharacterListApi.ApiResult.Success -> factions = result.value
+                is CharacterListApi.ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }
@@ -62,116 +58,129 @@ fun CharacterListScreen(
 
     LaunchedEffect(Unit) { loadData() }
 
-    when {
-        isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    CircularProgressIndicator()
-                    Text("正在加载角色列表…", style = MaterialTheme.typography.bodyMedium)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("超弦体 & 晶源体", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                    }
                 }
-            }
+            )
         }
-
-        errorMessage != null && factions.isEmpty() -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.padding(32.dp)
+    ) { innerPadding ->
+        when {
+            isLoading -> {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Outlined.ErrorOutline,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        errorMessage!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
-                    )
-                    FilledTonalButton(onClick = { loadData() }) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("重试")
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator()
+                        Text("正在加载角色列表…", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
-        }
 
-        else -> {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 100.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                factions.forEach { faction ->
-                    val isExpanded = faction.faction in expandedFactions
-
-                    // 阵营标题
-                    item(
-                        span = { GridItemSpan(maxLineSpan) },
-                        key = "header_${faction.faction}"
+            errorMessage != null && factions.isEmpty() -> {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(32.dp)
                     ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    expandedFactions = if (isExpanded) {
-                                        expandedFactions - faction.faction
-                                    } else {
-                                        expandedFactions + faction.faction
-                                    }
-                                },
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        Icon(
+                            Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            errorMessage!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                        FilledTonalButton(onClick = { loadData() }) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("重试")
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                Column(Modifier.padding(innerPadding)) {
+                    // 阵营 Tab
+                    if (factions.size > 1) {
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedTab
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = faction.faction,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "${faction.characters.size} 位",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Icon(
-                                    if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                            factions.forEachIndexed { index, faction ->
+                                Tab(
+                                    selected = selectedTab == index,
+                                    onClick = {
+                                        selectedTab = index
+                                        onTabChanged?.invoke(index)
+                                    },
+                                    text = {
+                                        Text(
+                                            faction.faction,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 )
                             }
                         }
                     }
 
-                    // 角色卡片
-                    if (isExpanded) {
-                        items(faction.characters, key = { "${faction.faction}_${it.name}" }) { character ->
-                            CharacterCard(
-                                character = character,
-                                onClick = { onOpenCharacterDetail(character.name, character.imageUrl) }
-                            )
-                        }
+                    // 角色网格
+                    val currentFaction = factions.getOrNull(selectedTab)
+                    if (currentFaction != null) {
+                        CharacterGrid(
+                            characters = currentFaction.characters,
+                            onOpenCharacterDetail = onOpenCharacterDetail
+                        )
                     }
                 }
-
-                // 底部留白
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Spacer(Modifier.height(16.dp))
-                }
             }
+        }
+    }
+}
+
+@Composable
+private fun CharacterGrid(
+    characters: List<CharacterListApi.CharacterInfo>,
+    onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 100.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(characters, key = { it.name }) { character ->
+            CharacterCard(
+                character = character,
+                onClick = { onOpenCharacterDetail(character.name, character.imageUrl) }
+            )
+        }
+
+        // 底部留白
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
