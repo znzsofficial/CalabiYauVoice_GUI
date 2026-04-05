@@ -310,6 +310,7 @@ private fun WikiHomePage(
                 val dominant = palette.getVibrantColor(palette.getMutedColor(0))
                 if (dominant != 0) {
                     wallpaperSeedColor.intValue = dominant
+                    com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorCache = dominant
                 }
                 bitmap.recycle()
             } catch (_: Exception) { }

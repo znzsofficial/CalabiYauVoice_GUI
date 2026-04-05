@@ -34,6 +34,7 @@ import androidx.core.net.toUri
 import com.nekolaska.calabiyau.LocalSeedColor
 import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.UpdateApi
 import com.nekolaska.calabiyau.data.WallpaperApi
 import com.nekolaska.calabiyau.data.WikiEngine
 import kotlinx.coroutines.Dispatchers
@@ -597,6 +598,18 @@ fun SettingsScreen(onBack: () -> Unit) {
             // 关于分组
             SettingsGroupHeader("关于")
 
+            // ── 检查更新状态 ──
+            val updateScope = rememberCoroutineScope()
+            var isCheckingUpdate by remember { mutableStateOf(false) }
+            var updateSubtitle by remember { mutableStateOf("点击检查新版本") }
+            var updateResult by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
+
+            val currentVersion = remember {
+                try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.0"
+                } catch (_: Exception) { "2.0.0" }
+            }
+
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -613,6 +626,34 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
 
                     SettingsItem(
+                        icon = if (isCheckingUpdate) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
+                        title = "检查更新",
+                        subtitle = if (isCheckingUpdate) "正在检查…" else updateSubtitle,
+                        onClick = {
+                            if (isCheckingUpdate) return@SettingsItem
+                            isCheckingUpdate = true
+                            updateSubtitle = "正在检查…"
+                            updateScope.launch {
+                                when (val result = UpdateApi.checkUpdate(currentVersion)) {
+                                    is UpdateApi.Result.NewVersion -> {
+                                        updateSubtitle = "发现新版本: ${result.info.versionName}"
+                                        updateResult = result.info
+                                        AppPrefs.lastUpdateCheck = System.currentTimeMillis()
+                                    }
+                                    is UpdateApi.Result.AlreadyLatest -> {
+                                        updateSubtitle = "已是最新版本 ($currentVersion)"
+                                        AppPrefs.lastUpdateCheck = System.currentTimeMillis()
+                                    }
+                                    is UpdateApi.Result.Error -> {
+                                        updateSubtitle = result.message
+                                    }
+                                }
+                                isCheckingUpdate = false
+                            }
+                        }
+                    )
+
+                    SettingsItem(
                         icon = Icons.Outlined.Code,
                         title = "开源仓库",
                         subtitle = "github.com/znzsofficial/CalabiYauVoice_GUI",
@@ -623,6 +664,59 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     )
                 }
+            }
+
+            // ── 新版本对话框 ──
+            updateResult?.let { info ->
+                AlertDialog(
+                    onDismissRequest = { updateResult = null },
+                    title = {
+                        Text("发现新版本 ${info.versionName}")
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                "当前版本: $currentVersion",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            if (info.body.isNotBlank()) {
+                                Text(
+                                    "更新日志:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = smoothCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                ) {
+                                    Text(
+                                        text = info.body.take(1000),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier
+                                            .padding(12.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    shape = smoothCornerShape(28.dp),
+                    confirmButton = {
+                        FilledTonalButton(onClick = {
+                            updateResult = null
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
+                            )
+                        }) { Text("前往下载") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { updateResult = null }) { Text("稍后再说") }
+                    }
+                )
             }
 
             Spacer(Modifier.height(32.dp))

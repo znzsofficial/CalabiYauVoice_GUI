@@ -26,6 +26,8 @@ object AppPrefs {
     private const val KEY_G2_CORNERS_ENABLED = "g2_corners_enabled"
     private const val KEY_WALLPAPER_URL = "wallpaper_url"
     private const val KEY_WALLPAPER_AUTO_REFRESH = "wallpaper_auto_refresh"
+    private const val KEY_WALLPAPER_SEED_COLOR_CACHE = "wallpaper_seed_color_cache"
+    private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -157,8 +159,18 @@ object AppPrefs {
         get() = prefs.getString(KEY_WALLPAPER_URL, null)
         set(value) = prefs.edit { putString(KEY_WALLPAPER_URL, value) }
 
-    /** 启动时是否自动刷新壁纸（默认 true） */
+    /** 启动时是否自动刷新壁纸（默认 false） */
     var wallpaperAutoRefresh: Boolean
-        get() = prefs.getBoolean(KEY_WALLPAPER_AUTO_REFRESH, true)
+        get() = prefs.getBoolean(KEY_WALLPAPER_AUTO_REFRESH, false)
         set(value) = prefs.edit { putBoolean(KEY_WALLPAPER_AUTO_REFRESH, value) }
+
+    /** 缓存的壁纸主题色（ARGB Int，0 = 未缓存） */
+    var wallpaperSeedColorCache: Int
+        get() = prefs.getInt(KEY_WALLPAPER_SEED_COLOR_CACHE, 0)
+        set(value) = prefs.edit { putInt(KEY_WALLPAPER_SEED_COLOR_CACHE, value) }
+
+    /** 上次检查更新的时间戳（毫秒） */
+    var lastUpdateCheck: Long
+        get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L)
+        set(value) = prefs.edit { putLong(KEY_LAST_UPDATE_CHECK, value) }
 }

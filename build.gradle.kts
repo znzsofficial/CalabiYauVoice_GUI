@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import java.util.Properties
 
 plugins {
     kotlin("multiplatform")
@@ -93,6 +94,25 @@ android {
         versionName = "2.0.0"
     }
 
+    // ── 签名配置 ──
+    val localProps = Properties()
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) {
+        localPropsFile.inputStream().use { localProps.load(it) }
+    }
+    val keystoreFile = localProps.getProperty("KEYSTORE_FILE")
+
+    if (keystoreFile != null && file(keystoreFile).exists()) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystoreFile)
+                storePassword = localProps.getProperty("KEYSTORE_PASSWORD")
+                keyAlias = localProps.getProperty("KEY_ALIAS")
+                keyPassword = localProps.getProperty("KEY_PASSWORD")
+            }
+        }
+    }
+
     packaging {
         resources {
             excludes.add("/META-INF/{AL2.0,LGPL2.1}")
@@ -117,6 +137,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-android.pro"
             )
+            if (keystoreFile != null && file(keystoreFile).exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
