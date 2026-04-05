@@ -7,7 +7,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -59,7 +61,7 @@ import kotlinx.coroutines.withContext
 private val LocalHasWallpaper = staticCompositionLocalOf { false }
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, ANNOUNCEMENTS, GAME_MODES, VOTING, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +71,7 @@ fun WikiHubScreen(
     isOverlaid: Boolean = false
 ) {
     var currentPage by remember { mutableStateOf(WikiHubPage.HOME) }
+    val homeListState = rememberLazyListState()
     var selectedCharacterName by remember { mutableStateOf("") }
     var selectedCharacterPortrait by remember { mutableStateOf<String?>(null) }
     var selectedWeaponName by remember { mutableStateOf("") }
@@ -126,6 +129,7 @@ fun WikiHubScreen(
             WikiHomePage(
                 onOpenDrawer = onOpenDrawer,
                 onOpenWikiUrl = onOpenWikiUrl,
+                listState = homeListState,
                 onNavigateTo = { currentPage = it },
                 onOpenCharacterDetail = { name, portrait ->
                     selectedCharacterName = name
@@ -252,6 +256,53 @@ fun WikiHubScreen(
                 onBack = { currentPage = WikiHubPage.HOME }
             )
         }
+        WikiHubPage.BASEPLATES -> {
+            BaseplateScreen(
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.ENCASINGS -> {
+            PlayerDecorationScreen(
+                title = "封装",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.CHAT_BUBBLES -> {
+            PlayerDecorationScreen(
+                title = "聊天气泡",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.HEADGEAR -> {
+            PlayerDecorationScreen(
+                title = "头套",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.STRINGER_ACTIONS -> {
+            PlayerDecorationScreen(
+                title = "超弦体动作",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.MEDALS -> {
+            PlayerDecorationScreen(
+                title = "勋章",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.SPRAYS -> {
+            PlayerDecorationScreen(
+                title = "喷漆",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
+        WikiHubPage.AVATAR_FRAMES -> {
+            PlayerDecorationScreen(
+                title = "头像框",
+                onBack = { currentPage = WikiHubPage.HOME }
+            )
+        }
     }
 }
 
@@ -264,6 +315,7 @@ fun WikiHubScreen(
 private fun WikiHomePage(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
+    listState: LazyListState,
     onNavigateTo: (WikiHubPage) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
@@ -403,6 +455,7 @@ private fun WikiHomePage(
 
             // ── 内容层 ──
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
@@ -466,7 +519,20 @@ private fun WikiHomePage(
                 )
             }
 
-            // ── 其他内容 ──
+            // ── 时装筛选 ──
+            item(key = "costumes", contentType = "action_card") {
+                ActionCard(
+                    title = "时装筛选",
+                    subtitle = "浏览全部角色时装与外观",
+                    icon = Icons.Outlined.Checkroom,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.COSTUMES) },
+                    backdrop = backdrop
+                )
+            }
+
+            // ── 游戏延申 ──
             item(key = "others", contentType = "content_block") {
                 ContentBlockCard(
                     title = "游戏延申",
@@ -478,8 +544,10 @@ private fun WikiHomePage(
                         "壁纸" to "壁纸",
                         "表情包" to "表情包",
                         "四格漫画" to "官方四格漫画",
+                        "联动" to "联动",
                         "喵言喵语" to "喵言喵语",
-                        "梗百科" to "梗百科"
+                        "梗百科" to "梗百科",
+                        "游戏Tips" to "游戏Tips"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
@@ -491,6 +559,35 @@ private fun WikiHomePage(
                 )
             }
 
+            // ── 玩家装饰 ──
+            item(key = "decorations", contentType = "content_block") {
+                ContentBlockCard(
+                    title = "玩家装饰",
+                    icon = Icons.Outlined.Palette,
+                    items = listOf(
+                        "基板" to "基板",
+                        "封装" to "封装",
+                        "勋章" to "勋章",
+                        "喷漆" to "喷漆",
+                        "聊天气泡" to "聊天气泡",
+                        "头套" to "头套",
+                        "超弦体动作" to "超弦体动作",
+                        "头像框" to "头像框"
+                    ),
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "基板" to { onNavigateTo(WikiHubPage.BASEPLATES) },
+                        "封装" to { onNavigateTo(WikiHubPage.ENCASINGS) },
+                        "勋章" to { onNavigateTo(WikiHubPage.MEDALS) },
+                        "喷漆" to { onNavigateTo(WikiHubPage.SPRAYS) },
+                        "聊天气泡" to { onNavigateTo(WikiHubPage.CHAT_BUBBLES) },
+                        "头套" to { onNavigateTo(WikiHubPage.HEADGEAR) },
+                        "超弦体动作" to { onNavigateTo(WikiHubPage.STRINGER_ACTIONS) },
+                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) }
+                    ),
+                    backdrop = backdrop
+                )
+            }
 
             // ── 时装投票 ──
             item(key = "voting", contentType = "action_card") {
@@ -518,7 +615,7 @@ private fun WikiHomePage(
                 )
             }
 
-            // ── 玩法模式 ──
+            // ── 其他玩法 ──
             item(key = "gameplay", contentType = "content_block") {
                 ContentBlockCard(
                     title = "其他玩法",
@@ -528,6 +625,8 @@ private fun WikiHomePage(
                         "弦能增幅网络" to "弦能增幅网络",
                         "特别行动" to "特别行动",
                         "赫尔墨斯" to "赫尔墨斯",
+                        "超弦体天赋" to "超弦体天赋",
+                        "超弦体定位" to "超弦体定位",
                         "誓约" to "誓约",
                         "印迹" to "印迹",
                         "赛事系统" to "赛事系统"
@@ -574,9 +673,9 @@ private val quickEntries = listOf(
     QuickEntry("角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
     QuickEntry("武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
     QuickEntry("地图", Icons.Outlined.Map, WikiHubPage.MAPS),
-    QuickEntry("投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
     QuickEntry("时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
-    QuickEntry("导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
+    QuickEntry("投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
+    QuickEntry("公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
 )
 private val quickEntryRows = quickEntries.chunked(3)
 
