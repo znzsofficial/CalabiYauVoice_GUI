@@ -97,6 +97,23 @@ fun WikiWebViewScreen(
 
     // 状态
     var webView by remember { mutableStateOf<WebView?>(null) }
+
+    // WebView 生命周期管理：组件销毁时释放 WebView 资源
+    DisposableEffect(Unit) {
+        onDispose {
+            webView?.let { wv ->
+                wv.stopLoading()
+                wv.loadUrl("about:blank")
+                wv.webViewClient = WebViewClient()  // 清除回调
+                wv.webChromeClient = null
+                (wv.parent as? ViewGroup)?.removeView(wv)
+                wv.removeAllViews()
+                wv.destroy()
+            }
+            webView = null
+        }
+    }
+
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var currentUrl by remember { mutableStateOf(initialUrl) }

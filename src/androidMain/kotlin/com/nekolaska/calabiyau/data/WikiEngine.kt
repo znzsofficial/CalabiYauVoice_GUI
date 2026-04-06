@@ -115,6 +115,25 @@ object WikiEngine {
 
     fun sanitizeFileName(name: String) = data.sanitizeFileName(name)
 
+    /**
+     * 安全的 JSON GET 请求。
+     * - 自动检测 CDN 拦截页面（返回 HTML 而非 JSON）
+     * - 捕获所有异常，失败返回 null
+     */
+    fun safeGet(url: String): String? {
+        return try {
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body.string()
+                if (!body.trimStart().startsWith("{")) return null
+                body
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     // === 委托给 WikiEngineCore 的公共 API ===
 
     suspend fun getAllCharacterNames(): List<String> =

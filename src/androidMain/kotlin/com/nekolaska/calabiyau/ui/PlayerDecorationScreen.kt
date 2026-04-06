@@ -36,6 +36,7 @@ import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.GalleryApi
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  通用玩家装饰页 —— 封装/聊天气泡/头套/超弦体动作/头像框
@@ -79,11 +80,11 @@ fun PlayerDecorationScreen(
             isLoading = true
             errorMessage = null
             when (val result = PlayerDecorationApi.fetch(pageName, forceRefresh)) {
-                is GalleryApi.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     sections = result.value
                     selectedSectionIndex = 0
                 }
-                is GalleryApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

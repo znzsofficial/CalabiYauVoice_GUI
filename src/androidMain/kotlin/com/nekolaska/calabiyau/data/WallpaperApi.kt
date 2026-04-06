@@ -4,7 +4,6 @@ import data.SharedJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -58,7 +57,7 @@ object WallpaperApi {
      */
     private fun fetchWallpaperFileNames(): List<String> {
         val url = "$API?action=parse&page=${URLEncoder.encode("壁纸", "UTF-8")}&prop=wikitext&format=json"
-        val body = httpGet(url) ?: return emptyList()
+        val body = WikiEngine.safeGet(url) ?: return emptyList()
         val json = SharedJson.parseToJsonElement(body).jsonObject
         val wikitext = json["parse"]?.jsonObject
             ?.get("wikitext")?.jsonObject
@@ -93,7 +92,7 @@ object WallpaperApi {
         return try {
             val fileTitle = URLEncoder.encode("文件:$fileName", "UTF-8")
             val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
-            val body = httpGet(url) ?: return null
+            val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
@@ -102,19 +101,4 @@ object WallpaperApi {
         } catch (_: Exception) { null }
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder()
-                .url(url)
-                .build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

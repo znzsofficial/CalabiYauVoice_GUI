@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.ui
 
 import android.media.MediaPlayer
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -11,7 +10,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
@@ -136,18 +134,6 @@ fun AudioPlayButton(
     val playingSource by AudioPlayerManager.playingSource
     val isThisPlaying = isPlaying && playingSource == source
 
-    // 播放时的旋转动画
-    val infiniteTransition = rememberInfiniteTransition(label = "audio_spin")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
     // 进度条定时刷新
     var progress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isThisPlaying) {
@@ -184,8 +170,7 @@ fun AudioPlayButton(
                 imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (isThisPlaying) "暂停" else "播放",
                 modifier = Modifier
-                    .size((size * 0.45).dp)
-                    .then(if (isThisPlaying && false) Modifier.rotate(rotation) else Modifier),
+                    .size((size * 0.45).dp),
                 tint = if (isThisPlaying)
                     MaterialTheme.colorScheme.primary
                 else

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,10 +39,7 @@ object BalanceDataApi {
 
     // ── 数据模型 ──
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val data: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
+
 
     /** 筛选选项（code + 显示名） */
     data class FilterOption(val code: String, val name: String)

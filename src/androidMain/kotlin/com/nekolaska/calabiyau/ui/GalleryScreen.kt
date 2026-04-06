@@ -35,6 +35,7 @@ import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.GalleryApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  画廊页 —— 壁纸 / 表情包 / 四格漫画 通用
@@ -65,11 +66,11 @@ fun GalleryScreen(
             isLoading = true
             errorMessage = null
             when (val result = GalleryApi.fetchGallery(pageName, forceRefresh)) {
-                is GalleryApi.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     sections = result.value
                     selectedSectionIndex = 0
                 }
-                is GalleryApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

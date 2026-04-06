@@ -1,12 +1,12 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -34,15 +34,11 @@ object NavigationMenuApi {
         val children: List<NavItem> = emptyList()
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     suspend fun fetchNavigationSections(): ApiResult<List<NavSection>> = withContext(Dispatchers.IO) {
         try {
             val url = "$API?action=query&meta=allmessages&ammessages=sidebar&format=json"
-            val body = httpGet(url) ?: return@withContext ApiResult.Error("请求导航数据失败")
+            val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求导航数据失败")
             val root = SharedJson.parseToJsonElement(body).jsonObject
             val sidebar = root["query"]
                 ?.jsonObject?.get("allmessages")
@@ -144,17 +140,4 @@ object NavigationMenuApi {
         )
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.MapDetailApi
 import com.nekolaska.calabiyau.data.MapDetailApi.MapDetail
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  地图详情页 —— 原生客户端版 (MD3 Expressive)
@@ -44,8 +45,8 @@ fun MapDetailScreen(
         isLoading = true
         errorMessage = null
         when (val result = MapDetailApi.fetchMapDetail(mapName)) {
-            is MapDetailApi.ApiResult.Success -> detail = result.value
-            is MapDetailApi.ApiResult.Error -> errorMessage = result.message
+            is ApiResult.Success -> detail = result.value
+            is ApiResult.Error -> errorMessage = result.message
         }
         isLoading = false
     }

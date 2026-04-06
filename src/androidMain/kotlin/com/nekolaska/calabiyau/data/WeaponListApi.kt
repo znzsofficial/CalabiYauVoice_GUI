@@ -1,12 +1,12 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -44,10 +44,7 @@ object WeaponListApi {
         val weapons: List<WeaponInfo>
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
+
 
     // ── 内存缓存 ──
     @Volatile
@@ -92,7 +89,7 @@ object WeaponListApi {
             val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100"
             val encoded = URLEncoder.encode(query, "UTF-8")
             val url = "$API?action=ask&query=$encoded&format=json"
-            val body = httpGet(url) ?: return null
+            val body = WikiEngine.safeGet(url) ?: return null
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
@@ -160,7 +157,7 @@ object WeaponListApi {
             val titles = chunk.joinToString("|") { it.key }
             val encoded = URLEncoder.encode(titles, "UTF-8")
             val url = "$API?action=query&titles=$encoded&prop=imageinfo&iiprop=url&format=json"
-            val body = httpGet(url) ?: return@forEach
+            val body = WikiEngine.safeGet(url) ?: return@forEach
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val pages = json["query"]?.jsonObject?.get("pages")?.jsonObject ?: return@forEach
@@ -186,17 +183,4 @@ object WeaponListApi {
         }
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

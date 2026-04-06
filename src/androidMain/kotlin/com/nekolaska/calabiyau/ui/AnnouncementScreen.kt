@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.AnnouncementApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  公告资讯页 —— 原生客户端版 (MD3 Expressive)
@@ -43,8 +44,8 @@ fun AnnouncementScreen(
             isLoading = true
             errorMessage = null
             when (val result = AnnouncementApi.fetchAnnouncements(forceRefresh = forceRefresh)) {
-                is AnnouncementApi.ApiResult.Success -> announcements = result.value
-                is AnnouncementApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> announcements = result.value
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

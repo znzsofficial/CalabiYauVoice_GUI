@@ -1,12 +1,12 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -63,10 +63,6 @@ object WeaponDetailApi {
         val wikiUrl: String
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     /**
      * 获取武器详情。
@@ -77,7 +73,7 @@ object WeaponDetailApi {
             try {
                 val encoded = URLEncoder.encode(weaponName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-                val body = httpGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -470,7 +466,7 @@ object WeaponDetailApi {
         return try {
             val fileTitle = URLEncoder.encode("文件:$fileName", "UTF-8")
             val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
-            val body = httpGet(url) ?: return null
+            val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
@@ -487,7 +483,7 @@ object WeaponDetailApi {
         return try {
             val encoded = URLEncoder.encode("战术道具冷却时间表", "UTF-8")
             val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-            val body = httpGet(url) ?: return emptyMap()
+            val body = WikiEngine.safeGet(url) ?: return emptyMap()
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val wikitext = json["parse"]?.jsonObject?.get("wikitext")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return emptyMap()
@@ -552,17 +548,4 @@ object WeaponDetailApi {
         return result
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

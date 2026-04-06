@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -7,7 +8,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -24,6 +24,10 @@ object CharacterListApi {
     /** 四个阵营（与 Wiki 首页"超弦体 & 晶源体"内容块一致） */
     val FACTIONS = listOf("欧泊", "剪刀手", "乌尔比诺", "晶源体")
 
+    /** 内存缓存 */
+    @Volatile
+    private var cachedFactions: List<FactionData>? = null
+
     data class CharacterInfo(
         val name: String,
         val wikiUrl: String,
@@ -35,16 +39,12 @@ object CharacterListApi {
         val characters: List<CharacterInfo>
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
-
     /**
      * 获取所有阵营的角色列表。
      * 并行请求四个阵营，返回按 [FACTIONS] 顺序排列的结果。
      */
-    suspend fun fetchAllFactions(): ApiResult<List<FactionData>> = withContext(Dispatchers.IO) {
+    suspend fun fetchAllFactions(forceRefresh: Boolean = false): ApiResult<List<FactionData>> = withContext(Dispatchers.IO) {
+        if (!forceRefresh) cachedFactions?.let { return@withContext ApiResult.Success(it) }
         try {
             val results = FACTIONS.map { faction ->
                 async { fetchFaction(faction) }
@@ -61,6 +61,7 @@ object CharacterListApi {
                     is ApiResult.Error -> FactionData(FACTIONS[index], emptyList())
                 }
             }
+            cachedFactions = factions
             ApiResult.Success(factions)
         } catch (e: Exception) {
             ApiResult.Error("获取角色列表失败: ${e.message}")
@@ -73,7 +74,7 @@ object CharacterListApi {
             val encoded = URLEncoder.encode(wikitext, "UTF-8")
             val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-            val body = httpGet(url) ?: return ApiResult.Error("请求 $faction 失败")
+            val body = WikiEngine.safeGet(url) ?: return ApiResult.Error("请求 $faction 失败")
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")
@@ -133,18 +134,4 @@ object CharacterListApi {
             .replace("&apos;", "'")
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                // 检测 CDN 拦截页面（返回 HTML 而非 JSON）
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

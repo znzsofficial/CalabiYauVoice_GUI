@@ -1,12 +1,12 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -29,10 +29,6 @@ object MapDetailApi {
         val galleryUrls: List<String> // 概览图 URL 列表
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     /**
      * 获取地图详情。
@@ -43,7 +39,7 @@ object MapDetailApi {
             try {
                 val encoded = URLEncoder.encode(mapName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-                val body = httpGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -104,7 +100,7 @@ object MapDetailApi {
             val titles = chunk.joinToString("|") { "文件:$it" }
             val encoded = URLEncoder.encode(titles, "UTF-8")
             val url = "$API?action=query&titles=$encoded&prop=imageinfo&iiprop=url&format=json"
-            val body = httpGet(url) ?: return@forEach
+            val body = WikiEngine.safeGet(url) ?: return@forEach
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val pages = json["query"]?.jsonObject?.get("pages")?.jsonObject ?: return@forEach
@@ -162,17 +158,4 @@ object MapDetailApi {
         return params
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

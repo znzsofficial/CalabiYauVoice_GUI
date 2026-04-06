@@ -1,11 +1,11 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -48,10 +48,6 @@ object WeaponSkinFilterApi {
         val fullImageUrl: String?   // 原图 URL
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     /**
      * 获取所有武器外观数据。
@@ -67,7 +63,7 @@ object WeaponSkinFilterApi {
 
                 val text = URLEncoder.encode("{{#invoke:武器|武器外观筛选}}", "UTF-8")
                 val url = "$API?action=parse&text=$text&prop=text&format=json"
-                val body = httpGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val html = json["parse"]?.jsonObject?.get("text")
@@ -149,17 +145,4 @@ object WeaponSkinFilterApi {
         return skins
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

@@ -36,6 +36,7 @@ import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.GalleryApi
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  基板页 —— 展示所有基板（名片/横幅）
@@ -75,11 +76,11 @@ fun BaseplateScreen(
             isLoading = true
             errorMessage = null
             when (val result = PlayerDecorationApi.fetch("基板", forceRefresh)) {
-                is GalleryApi.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     sections = result.value
                     selectedSectionIndex = 0
                 }
-                is GalleryApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }
