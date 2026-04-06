@@ -5,19 +5,26 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekolaska.calabiyau.MainActivity
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel
@@ -36,7 +43,7 @@ enum class DrawerDestination {
     SETTINGS           // 设置
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun MainScreen(
     searchVM: SearchViewModel,
@@ -46,6 +53,11 @@ fun MainScreen(
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var currentDestination by remember { mutableStateOf(DrawerDestination.WIKI_HUB) }
+
+    // ── 自适应布局：平板/折叠屏使用常驻侧栏 ──
+    val activity = LocalContext.current as? MainActivity
+    val windowSizeClass = activity?.let { calculateWindowSizeClass(it) }
+    val useExpandedLayout = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
     var pendingWikiUrl by remember { mutableStateOf<String?>(null) }
     // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
     var wikiEnteredFromHub by remember { mutableStateOf(false) }
@@ -74,32 +86,36 @@ fun MainScreen(
         AudioPlayerManager.stop()
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = currentDestination != DrawerDestination.WIKI
-                && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
-        drawerContent = {
-            AppDrawerContent(
-                currentDestination = currentDestination,
-                onDestinationSelected = { dest ->
-                    if (dest == DrawerDestination.WIKI) {
-                        wikiEnteredFromHub = false
-                        previousDestination = currentDestination // 记录当前页面
-                    }
-                    currentDestination = dest
-                    coroutineScope.launch { drawerState.close() }
+    val drawerContent: @Composable () -> Unit = {
+        AppDrawerContent(
+            currentDestination = currentDestination,
+            onDestinationSelected = { dest ->
+                if (dest == DrawerDestination.WIKI) {
+                    wikiEnteredFromHub = false
+                    previousDestination = currentDestination
                 }
-            )
-        }
-    ) {
-        // 根据侧栏选中项切换页面
+                currentDestination = dest
+                if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
+            }
+        )
+    }
+
+    val openDrawer: () -> Unit = {
+        if (!useExpandedLayout) coroutineScope.launch { drawerState.open() }
+    }
+
+    // ── 页面内容（Drawer 和 PermanentDrawer 共用） ──
+    val pageContent: @Composable () -> Unit = {
+        // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
+        var hubWebViewUrl by remember { mutableStateOf<String?>(null) }
+
         when (currentDestination) {
             DrawerDestination.DOWNLOADER -> {
                 DownloaderScreen(
                     searchVM = searchVM,
                     downloadVM = downloadVM,
                     portraitVM = portraitVM,
-                    onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                    onOpenDrawer = openDrawer,
                     onOpenFileManager = { currentDestination = DrawerDestination.FILE_MANAGER },
                     onOpenDownloadHistory = { currentDestination = DrawerDestination.DOWNLOAD_HISTORY }
                 )
@@ -107,7 +123,6 @@ fun MainScreen(
 
             DrawerDestination.WIKI -> {
                 WikiWebViewScreen(
-                    // 从 Hub 进入：不传 onExitWiki（顶栏模式），从侧栏进入：传 onExitWiki（底栏模式）
                     onExitWiki = if (wikiEnteredFromHub) null
                         else {{ currentDestination = previousDestination }},
                     initialUrl = pendingWikiUrl ?: WIKI_HOME_URL,
@@ -115,11 +130,9 @@ fun MainScreen(
                 )
             }
             DrawerDestination.WIKI_HUB, DrawerDestination.WIKI_HUB_WEBVIEW -> {
-                // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
-                var hubWebViewUrl by remember { mutableStateOf<String?>(null) }
                 Box {
                     WikiHubScreen(
-                        onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                        onOpenDrawer = openDrawer,
                         isOverlaid = currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW,
                         onOpenWikiUrl = { url ->
                             hubWebViewUrl = url
@@ -127,7 +140,6 @@ fun MainScreen(
                             currentDestination = DrawerDestination.WIKI_HUB_WEBVIEW
                         }
                     )
-                    // 从 Hub 内打开的 WebView 叠加在 Hub 之上
                     if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW && hubWebViewUrl != null) {
                         WikiWebViewScreen(
                             onExitWiki = {
@@ -157,6 +169,24 @@ fun MainScreen(
             }
         }
     }
+
+    // ── 根据屏幕宽度选择布局 ──
+    Surface(color = MaterialTheme.colorScheme.background) {
+        if (useExpandedLayout) {
+            PermanentNavigationDrawer(
+                drawerContent = drawerContent,
+                content = pageContent
+            )
+        } else {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                gesturesEnabled = currentDestination != DrawerDestination.WIKI
+                        && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
+                drawerContent = drawerContent,
+                content = pageContent
+            )
+        }
+    }
 }
 
 // ─────────────────────── 侧栏内容 ───────────────────────
@@ -178,6 +208,11 @@ private fun AppDrawerContent(
         drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.width(300.dp)
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+        ) {
         Spacer(Modifier.height(16.dp))
 
         // 标题
@@ -314,7 +349,7 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // 4. 设置
+        // 5. 设置
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
             label = { Text("设置") },
@@ -324,15 +359,8 @@ private fun AppDrawerContent(
             shape = smoothCornerShape(28.dp)
         )
 
-        Spacer(Modifier.weight(1f))
-
-        // 底部版本信息
-        Text(
-            text = "v2.0.0",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
-        )
+        Spacer(Modifier.height(16.dp))
+        } // Column
     }
 
     // ── 用户信息底部弹窗 ──

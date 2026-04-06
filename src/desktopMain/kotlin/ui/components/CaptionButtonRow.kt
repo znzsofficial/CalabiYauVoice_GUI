@@ -359,11 +359,11 @@ fun CustomTextButton(
 @OptIn(ExperimentalFoundationApi::class, ExperimentalFluentApi::class)
 @Composable
 fun CustomIconButton(
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     name: String,
-    icon: Painter = painterResource("calabiyau.png"),
+    icon: Painter = painterResource("icon.svg"),
     isActive: Boolean,
-    modifier: Modifier = Modifier,
     colors: VisualStateScheme<CaptionButtonColor> = CaptionButtonDefaults.defaultColors(),
     interaction: MutableInteractionSource = remember { MutableInteractionSource() }
 ) {

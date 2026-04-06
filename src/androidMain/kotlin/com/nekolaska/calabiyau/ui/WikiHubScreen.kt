@@ -1,9 +1,14 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import com.nekolaska.calabiyau.data.CharacterListApi
 import com.nekolaska.calabiyau.data.MapListApi
 import kotlinx.coroutines.launch
@@ -34,6 +39,7 @@ fun WikiHubScreen(
     var weaponSkinsFrom by remember { mutableStateOf(WikiHubPage.HOME) }
     var characterListTab by remember { mutableIntStateOf(0) }
     var weaponListTab by remember { mutableIntStateOf(0) }
+    var mapListTab by remember { mutableIntStateOf(0) }
     var selectedMapName by remember { mutableStateOf("") }
     var selectedMapImage by remember { mutableStateOf<String?>(null) }
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
@@ -73,7 +79,11 @@ fun WikiHubScreen(
     // 记录地图详情的来源页面（首页或战斗模式）
     var mapDetailFrom by remember { mutableStateOf(WikiHubPage.HOME) }
 
+    // ── 导航方向追踪（用于过渡动画） ──
+    var isNavigatingBack by remember { mutableStateOf(false) }
+
     BackHandler(enabled = currentPage != WikiHubPage.HOME && !isOverlaid) {
+        isNavigatingBack = true
         currentPage = when (currentPage) {
             WikiHubPage.CHAR_DETAIL -> WikiHubPage.CHARACTERS
             WikiHubPage.WEAPON_DETAIL -> WikiHubPage.WEAPONS
@@ -85,23 +95,50 @@ fun WikiHubScreen(
         }
     }
 
-    when (currentPage) {
+    // 包装导航回调：前进时标记方向
+    fun navigateForward(page: WikiHubPage) {
+        isNavigatingBack = false
+        currentPage = page
+    }
+    fun navigateBack(page: WikiHubPage) {
+        isNavigatingBack = true
+        currentPage = page
+    }
+
+    val animDuration = 300
+    AnimatedContent(
+        targetState = currentPage,
+        modifier = Modifier.background(MaterialTheme.colorScheme.background),
+        transitionSpec = {
+            if (isNavigatingBack) {
+                // 返回：从左滑入 + 淡入，旧页面向右滑出 + 淡出
+                (slideInHorizontally(tween(animDuration)) { -it / 4 } + fadeIn(tween(animDuration)))
+                    .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 4 } + fadeOut(tween(animDuration / 2)))
+            } else {
+                // 前进：从右滑入 + 淡入，旧页面向左滑出 + 淡出
+                (slideInHorizontally(tween(animDuration)) { it / 4 } + fadeIn(tween(animDuration)))
+                    .togetherWith(slideOutHorizontally(tween(animDuration)) { -it / 4 } + fadeOut(tween(animDuration / 2)))
+            }
+        },
+        label = "WikiHubPageTransition"
+    ) { page ->
+    when (page) {
         WikiHubPage.HOME -> {
             WikiHomePage(
                 onOpenDrawer = onOpenDrawer,
                 onOpenWikiUrl = onOpenWikiUrl,
                 listState = homeListState,
-                onNavigateTo = { currentPage = it },
+                onNavigateTo = { navigateForward(it) },
                 onOpenCharacterDetail = { name, portrait ->
                     selectedCharacterName = name
                     selectedCharacterPortrait = portrait
-                    currentPage = WikiHubPage.CHAR_DETAIL
+                    navigateForward(WikiHubPage.CHAR_DETAIL)
                 },
                 onOpenMapDetail = { name, imageUrl ->
                     selectedMapName = name
                     selectedMapImage = imageUrl
                     mapDetailFrom = WikiHubPage.HOME
-                    currentPage = WikiHubPage.MAP_DETAIL
+                    navigateForward(WikiHubPage.MAP_DETAIL)
                 },
                 factions = factions,
                 isLoadingCharacters = isLoadingCharacters,
@@ -111,11 +148,11 @@ fun WikiHubScreen(
         }
         WikiHubPage.CHARACTERS -> {
             CharacterListScreen(
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenCharacterDetail = { name, portrait ->
                     selectedCharacterName = name
                     selectedCharacterPortrait = portrait
-                    currentPage = WikiHubPage.CHAR_DETAIL
+                    navigateForward(WikiHubPage.CHAR_DETAIL)
                 },
                 initialTab = characterListTab,
                 onTabChanged = { characterListTab = it }
@@ -125,26 +162,26 @@ fun WikiHubScreen(
             CharacterDetailScreen(
                 characterName = selectedCharacterName,
                 portraitUrl = selectedCharacterPortrait,
-                onBack = { currentPage = WikiHubPage.CHARACTERS },
+                onBack = { navigateBack(WikiHubPage.CHARACTERS) },
                 onOpenWikiUrl = onOpenWikiUrl,
                 onOpenCostumes = { charName ->
                     selectedCostumeCharacter = charName
                     costumesFrom = WikiHubPage.CHAR_DETAIL
-                    currentPage = WikiHubPage.COSTUMES
+                    navigateForward(WikiHubPage.COSTUMES)
                 },
                 onOpenWeaponSkins = { weaponName ->
                     selectedWeaponSkinWeapon = weaponName
                     weaponSkinsFrom = WikiHubPage.CHAR_DETAIL
-                    currentPage = WikiHubPage.WEAPON_SKINS
+                    navigateForward(WikiHubPage.WEAPON_SKINS)
                 }
             )
         }
         WikiHubPage.WEAPONS -> {
             WeaponListScreen(
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWeaponDetail = { name ->
                     selectedWeaponName = name
-                    currentPage = WikiHubPage.WEAPON_DETAIL
+                    navigateForward(WikiHubPage.WEAPON_DETAIL)
                 },
                 initialTab = weaponListTab,
                 onTabChanged = { weaponListTab = it }
@@ -153,33 +190,35 @@ fun WikiHubScreen(
         WikiHubPage.WEAPON_DETAIL -> {
             WeaponDetailScreen(
                 weaponName = selectedWeaponName,
-                onBack = { currentPage = WikiHubPage.WEAPONS },
+                onBack = { navigateBack(WikiHubPage.WEAPONS) },
                 onOpenWikiUrl = onOpenWikiUrl,
                 onOpenWeaponSkins = { weaponName ->
                     selectedWeaponSkinWeapon = weaponName
                     weaponSkinsFrom = WikiHubPage.WEAPON_DETAIL
-                    currentPage = WikiHubPage.WEAPON_SKINS
+                    navigateForward(WikiHubPage.WEAPON_SKINS)
                 }
             )
         }
         WikiHubPage.MAPS -> {
             MapListFullScreen(
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenMapDetail = { name, imageUrl ->
                     selectedMapName = name
                     selectedMapImage = imageUrl
                     mapDetailFrom = WikiHubPage.MAPS
-                    currentPage = WikiHubPage.MAP_DETAIL
+                    navigateForward(WikiHubPage.MAP_DETAIL)
                 },
                 gameModes = gameModes,
-                isLoading = isLoadingMaps
+                isLoading = isLoadingMaps,
+                initialTab = mapListTab,
+                onTabChanged = { mapListTab = it }
             )
         }
         WikiHubPage.MAP_DETAIL -> {
             MapDetailScreen(
                 mapName = selectedMapName,
                 mapImageUrl = selectedMapImage,
-                onBack = { currentPage = mapDetailFrom },
+                onBack = { navigateBack(mapDetailFrom) },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
@@ -188,7 +227,7 @@ fun WikiHubScreen(
                 initialCharacter = selectedCostumeCharacter,
                 onBack = {
                     selectedCostumeCharacter = null
-                    currentPage = costumesFrom
+                    navigateBack(costumesFrom)
                     costumesFrom = WikiHubPage.HOME
                 }
             )
@@ -198,35 +237,35 @@ fun WikiHubScreen(
                 initialWeapon = selectedWeaponSkinWeapon,
                 onBack = {
                     selectedWeaponSkinWeapon = null
-                    currentPage = weaponSkinsFrom
+                    navigateBack(weaponSkinsFrom)
                     weaponSkinsFrom = WikiHubPage.HOME
                 }
             )
         }
         WikiHubPage.ANNOUNCEMENTS -> {
             AnnouncementScreen(
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
         WikiHubPage.GAME_MODES -> {
             GameModeScreen(
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl,
                 onOpenMapDetail = { name, imageUrl ->
                     selectedMapName = name
                     selectedMapImage = imageUrl
                     mapDetailFrom = WikiHubPage.GAME_MODES
-                    currentPage = WikiHubPage.MAP_DETAIL
+                    navigateForward(WikiHubPage.MAP_DETAIL)
                 }
             )
         }
         WikiHubPage.VOTING -> {
-            VotingScreen(onBack = { currentPage = WikiHubPage.HOME })
+            VotingScreen(onBack = { navigateBack(WikiHubPage.HOME) })
         }
         WikiHubPage.NAVIGATION -> {
             NavigationMenuScreen(
-                onBack = { currentPage = WikiHubPage.HOME },
+                onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
@@ -234,75 +273,76 @@ fun WikiHubScreen(
             GalleryScreen(
                 title = "壁纸",
                 pageName = "壁纸",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.STICKERS -> {
             GalleryScreen(
                 title = "表情包",
                 pageName = "表情包",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.COMICS -> {
             GalleryScreen(
                 title = "四格漫画",
                 pageName = "官方四格漫画",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.BALANCE_DATA -> {
             BalanceDataScreen(
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.BASEPLATES -> {
             BaseplateScreen(
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.ENCASINGS -> {
             PlayerDecorationScreen(
                 title = "封装",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.CHAT_BUBBLES -> {
             PlayerDecorationScreen(
                 title = "聊天气泡",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.HEADGEAR -> {
             PlayerDecorationScreen(
                 title = "头套",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.STRINGER_ACTIONS -> {
             PlayerDecorationScreen(
                 title = "超弦体动作",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.MEDALS -> {
             PlayerDecorationScreen(
                 title = "勋章",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.SPRAYS -> {
             PlayerDecorationScreen(
                 title = "喷漆",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.AVATAR_FRAMES -> {
             PlayerDecorationScreen(
                 title = "头像框",
-                onBack = { currentPage = WikiHubPage.HOME }
+                onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
     }
+    } // AnimatedContent
 }
 

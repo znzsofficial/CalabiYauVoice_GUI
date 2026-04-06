@@ -326,10 +326,10 @@ internal fun WikiHomePage(
                 )
             }
 
-            // ── 游戏延申 ──
+            // ── 游戏延伸 ──
             item(key = "others", contentType = "content_block") {
                 ContentBlockCard(
-                    title = "游戏延申",
+                    title = "游戏延伸",
                     icon = Icons.Outlined.MoreHoriz,
                     items = listOf(
                         "剧情故事" to "剧情故事",
@@ -1125,9 +1125,11 @@ internal fun MapListFullScreen(
     onBack: () -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     gameModes: List<MapListApi.GameModeData>,
-    isLoading: Boolean
+    isLoading: Boolean,
+    initialTab: Int = 0,
+    onTabChanged: ((Int) -> Unit)? = null
 ) {
-    var selectedMode by remember { mutableStateOf(0) }
+    var selectedMode by remember { mutableIntStateOf(initialTab) }
 
     Scaffold(
         topBar = {
@@ -1175,7 +1177,10 @@ internal fun MapListFullScreen(
                         gameModes.forEachIndexed { index, mode ->
                             FilterChip(
                                 selected = selectedMode == index,
-                                onClick = { selectedMode = index },
+                                onClick = {
+                                    selectedMode = index
+                                    onTabChanged?.invoke(index)
+                                },
                                 label = { Text(mode.displayName, maxLines = 1) }
                             )
                         }

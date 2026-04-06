@@ -649,16 +649,120 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     )
 
+                    // ── 调试菜单 ──
+                    var showDebugMenu by remember { mutableStateOf(false) }
                     SettingsItem(
-                        icon = Icons.Outlined.Code,
-                        title = "开源仓库",
-                        subtitle = "github.com/znzsofficial/CalabiYauVoice_GUI",
-                        onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW,
-                                "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri())
-                            context.startActivity(intent)
-                        }
+                        icon = Icons.Outlined.BugReport,
+                        title = "调试信息",
+                        subtitle = "版本 $currentVersion · API ${android.os.Build.VERSION.SDK_INT}",
+                        onClick = { showDebugMenu = true }
                     )
+                    if (showDebugMenu) {
+                        var showCrashConfirm by remember { mutableStateOf(false) }
+                        val debugScope = rememberCoroutineScope()
+
+                        AlertDialog(
+                            onDismissRequest = { showDebugMenu = false },
+                            icon = { Icon(Icons.Outlined.BugReport, null) },
+                            title = { Text("调试菜单") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    // 设备信息
+                                    Surface(
+                                        shape = smoothCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            buildString {
+                                                appendLine("版本: $currentVersion (${android.os.Build.VERSION.SDK_INT})")
+                                                appendLine("设备: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                                                appendLine("系统: Android ${android.os.Build.VERSION.RELEASE}")
+                                                append("保存路径: ${AppPrefs.savePath}")
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                            modifier = Modifier.padding(12.dp)
+                                        )
+                                    }
+
+                                    Spacer(Modifier.height(4.dp))
+
+                                    // 开源仓库
+                                    FilledTonalButton(
+                                        onClick = {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW,
+                                                "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri()))
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Outlined.Code, null, Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("开源仓库")
+                                    }
+
+                                    // 复制设备信息
+                                    OutlinedButton(
+                                        onClick = {
+                                            val info = buildString {
+                                                appendLine("版本: $currentVersion")
+                                                appendLine("设备: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                                                appendLine("系统: Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                                                append("保存路径: ${AppPrefs.savePath}")
+                                            }
+                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("设备信息", info))
+                                            android.widget.Toast.makeText(context, "已复制", android.widget.Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("复制设备信息")
+                                    }
+
+                                    // 触发崩溃测试
+                                    OutlinedButton(
+                                        onClick = { showCrashConfirm = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error
+                                        )
+                                    ) {
+                                        Icon(Icons.Outlined.Warning, null, Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("触发测试崩溃")
+                                    }
+                                }
+                            },
+                            shape = smoothCornerShape(28.dp),
+                            confirmButton = {
+                                TextButton(onClick = { showDebugMenu = false }) { Text("关闭") }
+                            }
+                        )
+
+                        if (showCrashConfirm) {
+                            AlertDialog(
+                                onDismissRequest = { showCrashConfirm = false },
+                                icon = { Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.error) },
+                                title = { Text("确认触发崩溃？") },
+                                text = { Text("应用会立即关闭并显示崩溃日志页面。") },
+                                shape = smoothCornerShape(28.dp),
+                                confirmButton = {
+                                    FilledTonalButton(
+                                        onClick = { throw RuntimeException("手动触发的测试崩溃 — CrashHandler 功能验证") },
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    ) { Text("确认") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showCrashConfirm = false }) { Text("取消") }
+                                }
+                            )
+                        }
+                    }
                 }
             }
 

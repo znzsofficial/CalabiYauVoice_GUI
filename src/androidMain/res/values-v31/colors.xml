@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ 使用系统主题色作为图标背景 -->
+    <color name="ic_launcher_background">@android:color/system_accent1_600</color>
+</resources>

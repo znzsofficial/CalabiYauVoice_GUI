@@ -5,6 +5,7 @@ import android.media.MediaScannerConnection
 import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nekolaska.calabiyau.NotificationHelper
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.NetworkMonitor
 import com.nekolaska.calabiyau.data.WikiEngine
@@ -107,6 +108,21 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         if (list.size > 100) list.subList(100, list.size).clear()
         _downloadHistory.value = list
         DownloadRecordStore.saveAll(list)
+
+        // 发送通知
+        if (record.status == "success") {
+            NotificationHelper.notifyDownloadComplete(
+                context = getApplication(),
+                title = record.name,
+                fileCount = record.fileCount,
+                savePath = record.savePath
+            )
+        } else if (record.status == "error") {
+            NotificationHelper.notifyDownloadError(
+                context = getApplication(),
+                message = record.name
+            )
+        }
     }
 
     /**

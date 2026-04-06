@@ -1,81 +1,95 @@
-# 1. 忽略非关键的警告（避免打包时被警告打断）
-# - OkHttp 可选依赖 (GraalVM, Conscrypt, BouncyCastle, OpenJSSE)
+# ============================================================
+# Desktop ProGuard Rules — CalabiYauVoice_GUI
+# ============================================================
+
+# ============================================================
+# Desktop ProGuard Rules — CalabiYauVoice_GUI
+# ============================================================
+
+# ---------- 通用 ----------
+-keepattributes *Annotation*,InnerClasses,Signature,SourceFile,LineNumberTable
+-dontnote **
+
+# ---------- 抑制警告 ----------
 -dontwarn okhttp3.internal.graal.**
 -dontwarn okhttp3.internal.platform.**
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
-
-# - Jsoup 可选依赖 (Google RE2J 正则库)
 -dontwarn org.jsoup.helper.Re2jRegex
 -dontwarn com.google.re2j.**
-
-# - Compose Desktop/Material 内部引用警告（使用 Fluent UI 时常见）
 -dontwarn androidx.compose.desktop.**
 -dontwarn androidx.compose.material.**
-
-# - FlatLaf 兼容性检查警告 (Java 版本相关)
 -dontwarn com.formdev.flatlaf.**
 -dontwarn java.lang.invoke.MethodHandle
-
-# - Okio 非关键警告
 -dontwarn okio.**
+-dontwarn junit.**
 
-# ==============================
-# 核心功能保护（防止运行崩溃）
-# ==============================
+# ---------- Kotlin Serialization ----------
+-keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
+-keepclasseswithmembers class **$$serializer {
+    static **$$serializer INSTANCE;
+}
+-keepclassmembers @kotlinx.serialization.Serializable class ** {
+    *** Companion;
+    *** INSTANCE;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class data.**$$serializer { *; }
 
-# 1. 协程相关（Compose 核心依赖）
--keep class kotlinx.coroutines.** { *; }
-
-# 2. OkHttp & Okio 核心保护（解决 BufferedSource 类型错误）
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
--keep class okio.** { *; }
-
-# 3. JNA 完整保护（解决反射/结构体/本地方法问题）
-# - 基础 JNA 类和接口
--keep class com.sun.jna.** { *; }
--keepclassmembers class * extends com.sun.jna.Library {
-    public *;
+# ---------- Kotlin Coroutines ----------
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
 }
 
-# - JNA 结构体（包括 WindowMargins）
+# ---------- OkHttp / Okio ----------
+# Okio 的接口/抽象类层次不能被 optimize 破坏
+-keep class okio.BufferedSource { *; }
+-keep class okio.BufferedSink { *; }
+-keep class okio.Source { *; }
+-keep class okio.Sink { *; }
+-keep class okio.RealBufferedSource { *; }
+-keep class okio.RealBufferedSink { *; }
+-keep class okio.Okio { *; }
+-keep class okio.Okio__OkioKt { *; }
+# OkHttp 核心接口
+-keep class okhttp3.CookieJar { *; }
+-keep class okhttp3.Interceptor { *; }
+-keep,includedescriptorclasses class * implements okhttp3.CookieJar { *; }
+-keep,includedescriptorclasses class * implements okhttp3.Interceptor { *; }
+
+# ---------- FlatLaf（仅使用 SystemFileChooser） ----------
+-keep class com.formdev.flatlaf.util.SystemFileChooser { *; }
+-keep class com.formdev.flatlaf.util.SystemFileChooser$* { *; }
+
+# ---------- JNA（反射 + 本地方法，必须保留） ----------
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.Library { public *; }
 -keepclassmembers class * extends com.sun.jna.Structure {
     <fields>;
     <methods>;
 }
--keep class jna.windows.structure.WindowMargins {
-    <fields>;
-}
+-keep class jna.windows.structure.** { <fields>; }
+-keepclasseswithmembers class * { native <methods>; }
 
-# - 本地方法（Native Method）
--keepclasseswithmembers class * {
-    native <methods>;
-}
+# ---------- ComposeWebView (Uniffi/JNA 绑定) ----------
+-keep,includedescriptorclasses class io.github.kdroidfilter.webview.wry.** { *; }
 
-# 4. Window Styler 保护（桌面窗口样式相关）
+# ---------- Window Styler（反射调用 Windows API） ----------
 -keep class com.mayakapps.compose.windowstyler.** { *; }
 
-# 5. Java Sound SPI 保护
-# mp3spi、tritonus 和 jflac 通过 META-INF/services 动态加载，ProGuard 无法静态分析到引用，
-# 必须显式保留，否则打包后 AudioSystem 找不到 MP3/FLAC/PCM 解码器导致播放或转换失败。
--keep class javazoom.spi.** { *; }
--keep class javazoom.jl.** { *; }
--keep class org.tritonus.** { *; }
--keep class org.kc7bfi.jflac.** { *; }
--keep class org.jflac.** { *; }
--keep class javax.sound.sampled.spi.** { *; }
--keep class javax.sound.sampled.AudioSystem { *; }
-
-# 保留所有 SPI 实现类（AudioFileReader / AudioInputStream / FormatConversionProvider）
+# ---------- Java Sound SPI（ServiceLoader 动态加载） ----------
 -keep class * implements javax.sound.sampled.spi.AudioFileReader { *; }
--keep class * implements javax.sound.sampled.spi.AudioInputStream { *; }
 -keep class * implements javax.sound.sampled.spi.FormatConversionProvider { *; }
 -keep class * implements javax.sound.sampled.spi.MixerProvider { *; }
+-keepnames class javazoom.spi.** {}
+-keepnames class javazoom.jl.decoder.** {}
+-keepnames class org.tritonus.** {}
+-keepnames class org.kc7bfi.jflac.** {}
+-keepnames class org.jflac.** {}
 
-# 同时防止 SPI 服务文件里的类名被混淆（obfuscate 关闭时无影响，但作为保障）
--keepnames class javazoom.** { *; }
--keepnames class org.tritonus.** { *; }
--keepnames class org.kc7bfi.jflac.** { *; }
--keepnames class org.jflac.** { *; }
+# ---------- App 数据模型 ----------
+-keepclassmembers class data.** { <fields>; }
+-keepnames class data.** {}
