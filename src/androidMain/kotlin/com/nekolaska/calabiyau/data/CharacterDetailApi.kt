@@ -1,11 +1,11 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -82,10 +82,6 @@ object CharacterDetailApi {
         val section: String
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     /**
      * 获取角色详情。
@@ -97,7 +93,7 @@ object CharacterDetailApi {
                 val encoded = URLEncoder.encode(characterName, "UTF-8")
                 // 同时请求 wikitext 和渲染 HTML，用于解析角色信息 + 改动历史
                 val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
-                val body = httpGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -325,7 +321,7 @@ object CharacterDetailApi {
             val titles = fileNames.joinToString("|") { "文件:$it" }
             val encoded = URLEncoder.encode(titles, "UTF-8")
             val url = "$API?action=query&titles=$encoded&prop=imageinfo&iiprop=url&format=json"
-            val body = httpGet(url) ?: return result
+            val body = WikiEngine.safeGet(url) ?: return result
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values?.forEach { page ->
                 val pageObj = page.jsonObject
@@ -459,7 +455,7 @@ object CharacterDetailApi {
         return try {
             val fileTitle = URLEncoder.encode("文件:${characterName}头像.png", "UTF-8")
             val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
-            val body = httpGet(url) ?: return null
+            val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
@@ -517,17 +513,4 @@ object CharacterDetailApi {
         return entries
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

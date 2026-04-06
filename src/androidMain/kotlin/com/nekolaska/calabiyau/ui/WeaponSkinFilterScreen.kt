@@ -32,6 +32,7 @@ import com.nekolaska.calabiyau.data.WeaponSkinFilterApi
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.WeaponSkinInfo
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  武器外观筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -58,8 +59,8 @@ fun WeaponSkinFilterScreen(
             isLoading = true
             errorMessage = null
             when (val result = WeaponSkinFilterApi.fetchAllWeaponSkins(forceRefresh)) {
-                is WeaponSkinFilterApi.ApiResult.Success -> allSkins = result.value
-                is WeaponSkinFilterApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> allSkins = result.value
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

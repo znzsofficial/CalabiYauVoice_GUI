@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.GameModeApi
 import com.nekolaska.calabiyau.data.GameModeApi.GameModeDetail
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  战斗模式页 —— 原生客户端版 (MD3 Expressive)
@@ -44,8 +45,8 @@ fun GameModeScreen(
             isLoading = true
             errorMessage = null
             when (val result = GameModeApi.fetchAllModes(forceRefresh)) {
-                is GameModeApi.ApiResult.Success -> modes = result.value
-                is GameModeApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> modes = result.value
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

@@ -32,6 +32,7 @@ import com.nekolaska.calabiyau.data.CostumeFilterApi
 import com.nekolaska.calabiyau.data.CostumeFilterApi.CostumeInfo
 import com.nekolaska.calabiyau.data.CostumeFilterApi.Quality
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  角色时装筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -58,8 +59,8 @@ fun CostumeFilterScreen(
             isLoading = true
             errorMessage = null
             when (val result = CostumeFilterApi.fetchAllCostumes(forceRefresh)) {
-                is CostumeFilterApi.ApiResult.Success -> allCostumes = result.value
-                is CostumeFilterApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> allCostumes = result.value
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

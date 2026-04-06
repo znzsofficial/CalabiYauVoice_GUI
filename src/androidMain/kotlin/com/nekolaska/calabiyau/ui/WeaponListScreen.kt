@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponListApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
@@ -48,8 +49,8 @@ fun WeaponListScreen(
             isLoading = true
             errorMessage = null
             when (val result = WeaponListApi.fetchAllCategories(forceRefresh)) {
-                is WeaponListApi.ApiResult.Success -> categories = result.value
-                is WeaponListApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> categories = result.value
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

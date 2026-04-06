@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.data
 
 import android.webkit.CookieManager
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,10 +52,6 @@ object VotingApi {
         val pollDataMap: Map<String, PollData>  // candidateName → PollData
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     // ───── 公开方法 ──────────────────────────────────────────────────
 

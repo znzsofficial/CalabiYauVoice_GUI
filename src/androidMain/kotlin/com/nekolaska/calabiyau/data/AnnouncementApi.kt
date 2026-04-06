@@ -1,10 +1,10 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -27,10 +27,6 @@ object AnnouncementApi {
         val wikiUrl: String     // Wiki 页面链接
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     // ── 内存缓存 ──
     @Volatile
@@ -58,7 +54,7 @@ object AnnouncementApi {
                 val query = "[[分类:公告资讯]]|?时间|?b站|?官网|sort=时间|order=desc|limit=$limit"
                 val encoded = URLEncoder.encode(query, "UTF-8")
                 val url = "$API?action=ask&query=$encoded&format=json"
-                val body = httpGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val results = json["query"]?.jsonObject?.get("results")?.jsonObject
@@ -104,17 +100,4 @@ object AnnouncementApi {
             }
         }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

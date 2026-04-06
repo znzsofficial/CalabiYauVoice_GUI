@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterListApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
@@ -49,8 +50,8 @@ fun CharacterListScreen(
             isLoading = true
             errorMessage = null
             when (val result = CharacterListApi.fetchAllFactions()) {
-                is CharacterListApi.ApiResult.Success -> factions = result.value
-                is CharacterListApi.ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> factions = result.value
+                is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
         }

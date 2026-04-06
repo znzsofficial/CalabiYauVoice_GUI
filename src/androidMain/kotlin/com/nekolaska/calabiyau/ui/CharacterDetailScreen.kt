@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterDetailApi
 import com.nekolaska.calabiyau.data.CharacterDetailApi.CharacterDetail
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  角色详情页 —— 原生客户端版 (MD3 Expressive)
@@ -57,8 +58,8 @@ fun CharacterDetailScreen(
         isLoading = true
         errorMessage = null
         when (val result = CharacterDetailApi.fetchCharacterDetail(characterName)) {
-            is CharacterDetailApi.ApiResult.Success -> detail = result.value
-            is CharacterDetailApi.ApiResult.Error -> errorMessage = result.message
+            is ApiResult.Success -> detail = result.value
+            is ApiResult.Error -> errorMessage = result.message
         }
         isLoading = false
     }

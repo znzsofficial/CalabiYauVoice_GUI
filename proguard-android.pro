@@ -1,29 +1,28 @@
 # ============================================================
-# Android ProGuard Rules — CalabiYauVoice_GUI
+# Android ProGuard / R8 Rules — CalabiYauVoice_GUI
 # ============================================================
 
+# ---------- 通用属性 ----------
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+-keepattributes Signature,Exceptions,*Annotation*,InnerClasses
+
 # ---------- Kotlin ----------
--keep class kotlin.** { *; }
--keep class kotlin.Metadata { *; }
+# R8 已内置 Kotlin 支持，无需 -keep class kotlin.**
 -dontwarn kotlin.**
 -keepclassmembers class **$WhenMappings {
     <fields>;
 }
--keepclassmembers class kotlin.Lazy {
-    <fields>;
-    <methods>;
-}
 
 # ---------- Kotlin Coroutines ----------
--keepnames class kotlinx.coroutines.internal.MainDispatcherFactory { *; }
--keepnames class kotlinx.coroutines.CoroutineExceptionHandler { *; }
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -keepclassmembernames class kotlinx.** {
     volatile <fields>;
 }
 -dontwarn kotlinx.coroutines.**
 
 # ---------- Kotlin Serialization ----------
--keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
 -keepclasseswithmembers class **$$serializer {
@@ -34,33 +33,29 @@
     *** INSTANCE;
     kotlinx.serialization.KSerializer serializer(...);
 }
+# 保留 app 内所有 @Serializable 生成的 $$serializer（含 commonMain 的 data 包）
 -keep,includedescriptorclasses class com.nekolaska.calabiyau.**$$serializer { *; }
+-keep,includedescriptorclasses class data.**$$serializer { *; }
 
 # ---------- OkHttp / Okio ----------
--dontwarn okhttp3.**
--dontwarn okio.**
--keep class okhttp3.** { *; }
--keep interface okhttp3.** { *; }
--keep class okio.** { *; }
+# R8 已内置 OkHttp 规则；仅需抑制可选依赖警告
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
 
 # ---------- Jetpack Compose ----------
--keep class androidx.compose.** { *; }
+# R8 已内置 Compose 规则，无需 -keep class androidx.compose.**
 -dontwarn androidx.compose.**
 
-# ---------- AndroidX / Lifecycle / ViewModel ----------
--keep class androidx.lifecycle.** { *; }
--keep class androidx.activity.** { *; }
--keepclassmembers class * extends androidx.lifecycle.ViewModel {
-    <init>();
+# ---------- App 数据模型 ----------
+# 保留 @Serializable 数据类的字段名（JSON 解析依赖字段名）
+-keepclassmembers class com.nekolaska.calabiyau.data.** {
+    <fields>;
 }
-
-# ---------- App model classes ----------
--keep class com.nekolaska.calabiyau.data.** { *; }
--keep class com.nekolaska.calabiyau.MainViewModel { *; }
--keep class com.nekolaska.calabiyau.SearchMode { *; }
-
-# ---------- General ----------
--keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile
--keepattributes Signature
--keepattributes Exceptions
+-keepclassmembers class data.** {
+    <fields>;
+}
+# 保留 API object 单例（反射/序列化可能用到）
+-keepnames class com.nekolaska.calabiyau.data.** {}
+-keepnames class data.** {}

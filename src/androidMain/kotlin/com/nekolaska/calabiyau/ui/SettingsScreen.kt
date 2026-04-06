@@ -48,17 +48,22 @@ fun SettingsScreen(onBack: () -> Unit) {
     var savePath by remember { mutableStateOf(AppPrefs.savePath) }
     var maxConcurrency by remember { mutableStateOf(AppPrefs.maxConcurrency.toString()) }
     var showAbout by remember { mutableStateOf(false) }
-    var themeMode by remember { mutableIntStateOf(AppPrefs.themeMode) }
+    // 全局状态（单一数据源：CompositionLocal）
     val globalThemeMode = LocalThemeMode.current
-    var seedColorInt by remember { mutableIntStateOf(AppPrefs.customSeedColor) }
     val globalSeedColor = LocalSeedColor.current
+    val globalLiquidGlass = LocalLiquidGlassEnabled.current
+    val globalG2Corners = LocalG2CornersEnabled.current
+
+    // 直接从全局状态派生，避免三重同步
+    var themeMode by globalThemeMode
+    var seedColorInt by globalSeedColor
+    var liquidGlassEnabled by globalLiquidGlass
+    var g2CornersEnabled by globalG2Corners
+
+    // 这些没有对应的 CompositionLocal，保留本地 remember
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
     var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
     var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
-    var liquidGlassEnabled by remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
-    val globalLiquidGlass = LocalLiquidGlassEnabled.current
-    var g2CornersEnabled by remember { mutableStateOf(AppPrefs.g2CornersEnabled) }
-    val globalG2Corners = LocalG2CornersEnabled.current
 
     val context = LocalContext.current
 
@@ -169,7 +174,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                                                 .clickable {
                                                     themeMode = mode
                                                     AppPrefs.themeMode = mode
-                                                    globalThemeMode.intValue = mode
                                                     showThemeDialog = false
                                                 }
                                                 .padding(vertical = 12.dp, horizontal = 8.dp),
@@ -180,7 +184,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                                                 onClick = {
                                                     themeMode = mode
                                                     AppPrefs.themeMode = mode
-                                                    globalThemeMode.intValue = mode
                                                     showThemeDialog = false
                                                 }
                                             )
@@ -202,7 +205,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                         onColorSelected = { argb ->
                             seedColorInt = argb
                             AppPrefs.customSeedColor = argb
-                            globalSeedColor.intValue = argb
                         }
                     )
 
@@ -215,12 +217,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                         checked = g2CornersEnabled || liquidGlassEnabled,
                         onCheckedChange = {
                             if (!liquidGlassEnabled) {
-                                // 液态玻璃关闭时，G2 可独立切换
                                 g2CornersEnabled = it
                                 AppPrefs.g2CornersEnabled = it
-                                globalG2Corners.value = it
                             }
-                            // 液态玻璃开启时，G2 强制开启不可关闭
                         }
                     )
 
@@ -234,12 +233,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                         onCheckedChange = {
                             liquidGlassEnabled = it
                             AppPrefs.liquidGlassEnabled = it
-                            globalLiquidGlass.value = it
                             if (it) {
-                                // 开启液态玻璃时自动开启 G2
                                 g2CornersEnabled = true
                                 AppPrefs.g2CornersEnabled = true
-                                globalG2Corners.value = true
                             }
                         }
                     )
@@ -255,7 +251,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         SettingsToggleItem(
                             icon = Icons.Outlined.Autorenew,
                             title = "启动时自动刷新壁纸",
-                            subtitle = if (wallpaperAutoRefresh) "每次进入首页随机更换"
+                            subtitle = if (wallpaperAutoRefresh) "每次启动软件时随机更换"
                                 else "仅手动刷新（保持当前壁纸）",
                             checked = wallpaperAutoRefresh,
                             onCheckedChange = {

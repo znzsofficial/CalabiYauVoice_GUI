@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.BalanceDataApi
-import com.nekolaska.calabiyau.data.BalanceDataApi.ApiResult
+import data.ApiResult
 import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════
@@ -90,7 +90,7 @@ fun BalanceDataScreen(onBack: () -> Unit) {
             errorMessage = null
             when (val result = BalanceDataApi.fetchSettings()) {
                 is ApiResult.Success -> {
-                    val s = result.data
+                    val s = result.value
                     settings = s
                     // 默认选中：排位爆破、全选地图、全选段位、最新赛季
                     selectedMode = s.modes.find { it.name == "排位爆破" } ?: s.modes.firstOrNull()
@@ -121,7 +121,7 @@ fun BalanceDataScreen(onBack: () -> Unit) {
                 season1Code = season.code
             )) {
                 is ApiResult.Success -> {
-                    balanceResult = result.data
+                    balanceResult = result.value
                     errorMessage = null
                 }
                 is ApiResult.Error -> errorMessage = result.message

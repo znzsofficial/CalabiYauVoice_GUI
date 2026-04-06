@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponDetailApi
 import com.nekolaska.calabiyau.data.WeaponDetailApi.WeaponDetail
+import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  武器详情页 —— 原生客户端版 (MD3 Expressive)
@@ -43,8 +44,8 @@ fun WeaponDetailScreen(
         isLoading = true
         errorMessage = null
         when (val result = WeaponDetailApi.fetchWeaponDetail(weaponName)) {
-            is WeaponDetailApi.ApiResult.Success -> detail = result.value
-            is WeaponDetailApi.ApiResult.Error -> errorMessage = result.message
+            is ApiResult.Success -> detail = result.value
+            is ApiResult.Error -> errorMessage = result.message
         }
         isLoading = false
     }

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,10 +31,6 @@ object GalleryApi {
         val images: List<GalleryImage>
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
 
     // ── 内存缓存 ──
     private val cache = mutableMapOf<String, List<GallerySection>>()

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -7,7 +8,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
 import java.net.URLEncoder
 
 /**
@@ -20,6 +20,10 @@ object MapListApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
+
+    /** 内存缓存 */
+    @Volatile
+    private var cachedModes: List<GameModeData>? = null
 
     /** 游戏模式列表（与 Wiki 首页一致） */
     val GAME_MODES = listOf(
@@ -46,15 +50,13 @@ object MapListApi {
         val maps: List<MapInfo>
     )
 
-    sealed interface ApiResult<out T> {
-        data class Success<T>(val value: T) : ApiResult<T>
-        data class Error(val message: String) : ApiResult<Nothing>
-    }
+
 
     /**
      * 获取所有模式的地图列表（并行请求）。
      */
-    suspend fun fetchAllModes(): ApiResult<List<GameModeData>> = withContext(Dispatchers.IO) {
+    suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeData>> = withContext(Dispatchers.IO) {
+        if (!forceRefresh) cachedModes?.let { return@withContext ApiResult.Success(it) }
         try {
             val results = GAME_MODES.map { (display, template) ->
                 async { fetchMode(display, template) }
@@ -74,6 +76,7 @@ object MapListApi {
                     }
                 }
             }
+            cachedModes = modes
             ApiResult.Success(modes)
         } catch (e: Exception) {
             ApiResult.Error("获取地图列表失败: ${e.message}")
@@ -86,7 +89,7 @@ object MapListApi {
             val encoded = URLEncoder.encode(wikitext, "UTF-8")
             val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-            val body = httpGet(url) ?: return ApiResult.Error("请求 $displayName 失败")
+            val body = WikiEngine.safeGet(url) ?: return ApiResult.Error("请求 $displayName 失败")
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")
@@ -161,18 +164,4 @@ object MapListApi {
             .replace("&#039;", "'")
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder().url(url).build()
-            WikiEngine.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
-                val body = response.body.string()
-                // 检测 CDN 拦截页面（返回 HTML 而非 JSON）
-                if (!body.trimStart().startsWith("{")) return null
-                body
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
 }

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.VotingApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,27 +49,27 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
         isLoadingConfig = true
         errorMessage = null
         when (val result = VotingApi.fetchPollConfig()) {
-            is VotingApi.ApiResult.Success -> {
+            is ApiResult.Success -> {
                 pollConfig = result.value
                 // 继续加载投票数据
                 if (isLoggedIn) {
                     isLoadingData = true
                     when (val dataResult = VotingApi.fetchVoteData(result.value)) {
-                        is VotingApi.ApiResult.Success -> {
+                        is ApiResult.Success -> {
                             voteState = dataResult.value
                             // 恢复用户之前的投票选择
                             selectedNames = dataResult.value.pollDataMap
                                 .filter { it.value.userVoted }
                                 .keys
                         }
-                        is VotingApi.ApiResult.Error -> {
+                        is ApiResult.Error -> {
                             errorMessage = dataResult.message
                         }
                     }
                     isLoadingData = false
                 }
             }
-            is VotingApi.ApiResult.Error -> {
+            is ApiResult.Error -> {
                 errorMessage = result.message
             }
         }
@@ -103,25 +104,25 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                                     errorMessage = null
                                     isLoggedIn = hasWikiLoginCookie()
                                     when (val result = VotingApi.fetchPollConfig()) {
-                                        is VotingApi.ApiResult.Success -> {
+                                        is ApiResult.Success -> {
                                             pollConfig = result.value
                                             if (isLoggedIn) {
                                                 isLoadingData = true
                                                 when (val dataResult = VotingApi.fetchVoteData(result.value)) {
-                                                    is VotingApi.ApiResult.Success -> {
+                                                    is ApiResult.Success -> {
                                                         voteState = dataResult.value
                                                         selectedNames = dataResult.value.pollDataMap
                                                             .filter { it.value.userVoted }
                                                             .keys
                                                     }
-                                                    is VotingApi.ApiResult.Error -> {
+                                                    is ApiResult.Error -> {
                                                         errorMessage = dataResult.message
                                                     }
                                                 }
                                                 isLoadingData = false
                                             }
                                         }
-                                        is VotingApi.ApiResult.Error -> {
+                                        is ApiResult.Error -> {
                                             errorMessage = result.message
                                         }
                                     }
@@ -162,22 +163,22 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                         scope.launch {
                             isSubmitting = true
                             when (val result = VotingApi.submitVotes(state, selectedNames)) {
-                                is VotingApi.ApiResult.Success -> {
+                                is ApiResult.Success -> {
                                     snackbarHostState.showSnackbar("投票提交成功！")
                                     // 刷新数据
                                     isLoadingData = true
                                     when (val refreshResult = VotingApi.fetchVoteData(state.config)) {
-                                        is VotingApi.ApiResult.Success -> {
+                                        is ApiResult.Success -> {
                                             voteState = refreshResult.value
                                             selectedNames = refreshResult.value.pollDataMap
                                                 .filter { it.value.userVoted }
                                                 .keys
                                         }
-                                        is VotingApi.ApiResult.Error -> { /* 忽略刷新失败 */ }
+                                        is ApiResult.Error -> { /* 忽略刷新失败 */ }
                                     }
                                     isLoadingData = false
                                 }
-                                is VotingApi.ApiResult.Error -> {
+                                is ApiResult.Error -> {
                                     snackbarHostState.showSnackbar("提交失败: ${result.message}")
                                 }
                             }

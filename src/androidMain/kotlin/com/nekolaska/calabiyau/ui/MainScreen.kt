@@ -23,6 +23,7 @@ import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel
 import com.nekolaska.calabiyau.data.WikiUserApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
@@ -195,13 +196,13 @@ private fun AppDrawerContent(
                 isLoadingUserInfo = true
                 wikiCoroutineScope.launch {
                     when (val result = WikiUserApi.fetchCurrentUserInfo()) {
-                        is WikiUserApi.ApiResult.Success -> {
+                        is ApiResult.Success -> {
                             val info = result.value
                             if (info != null && info.isLoggedIn) {
                                 wikiUserInfo = info
                             }
                         }
-                        is WikiUserApi.ApiResult.Error -> { /* 忽略错误 */ }
+                        is ApiResult.Error -> { /* 忽略错误 */ }
                     }
                     isLoadingUserInfo = false
                 }
@@ -437,8 +438,8 @@ private fun WikiUserInfoBottomSheet(
             contribError = null
             activityScope.launch {
                 when (val result = WikiUserApi.fetchContributions(userInfo.name, limit = 30)) {
-                    is WikiUserApi.ApiResult.Success -> contributions = result.value
-                    is WikiUserApi.ApiResult.Error -> contribError = result.message
+                    is ApiResult.Success -> contributions = result.value
+                    is ApiResult.Error -> contribError = result.message
                 }
                 isLoadingContribs = false
             }
@@ -448,8 +449,8 @@ private fun WikiUserInfoBottomSheet(
             watchlistError = null
             activityScope.launch {
                 when (val result = WikiUserApi.fetchWatchlist(limit = 30)) {
-                    is WikiUserApi.ApiResult.Success -> watchlist = result.value
-                    is WikiUserApi.ApiResult.Error -> watchlistError = result.message
+                    is ApiResult.Success -> watchlist = result.value
+                    is ApiResult.Error -> watchlistError = result.message
                 }
                 isLoadingWatchlist = false
             }
@@ -550,8 +551,8 @@ private fun WikiUserInfoBottomSheet(
                         contribError = null
                         activityScope.launch {
                             when (val result = WikiUserApi.fetchContributions(userInfo.name, limit = 30)) {
-                                is WikiUserApi.ApiResult.Success -> contributions = result.value
-                                is WikiUserApi.ApiResult.Error -> contribError = result.message
+                                is ApiResult.Success -> contributions = result.value
+                                is ApiResult.Error -> contribError = result.message
                             }
                             isLoadingContribs = false
                         }
@@ -579,8 +580,8 @@ private fun WikiUserInfoBottomSheet(
                         watchlistError = null
                         activityScope.launch {
                             when (val result = WikiUserApi.fetchWatchlist(limit = 30)) {
-                                is WikiUserApi.ApiResult.Success -> watchlist = result.value
-                                is WikiUserApi.ApiResult.Error -> watchlistError = result.message
+                                is ApiResult.Success -> watchlist = result.value
+                                is ApiResult.Error -> watchlistError = result.message
                             }
                             isLoadingWatchlist = false
                         }

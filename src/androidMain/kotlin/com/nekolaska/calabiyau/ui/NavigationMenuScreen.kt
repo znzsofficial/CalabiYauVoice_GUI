@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.NavigationMenuApi
 import kotlinx.coroutines.launch
+import data.ApiResult
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,12 +43,12 @@ fun NavigationMenuScreen(
             isLoading = true
             errorMessage = null
             when (val result = NavigationMenuApi.fetchNavigationSections()) {
-                is NavigationMenuApi.ApiResult.Success -> {
+                is ApiResult.Success -> {
                     sections = result.value
                     // 默认只展开"首页"
                     expandedSections = setOf("首页")
                 }
-                is NavigationMenuApi.ApiResult.Error -> {
+                is ApiResult.Error -> {
                     sections = emptyList()
                     errorMessage = result.message
                 }

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.data
 
+import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -47,35 +48,35 @@ object PlayerDecorationApi {
     suspend fun fetch(
         pageName: String,
         forceRefresh: Boolean = false
-    ): GalleryApi.ApiResult<List<DecorationSection>> {
+    ): ApiResult<List<DecorationSection>> {
         if (!forceRefresh) {
-            cacheMap[pageName]?.let { return GalleryApi.ApiResult.Success(it) }
+            cacheMap[pageName]?.let { return ApiResult.Success(it) }
         }
         return fetchFromNetwork(pageName).also {
-            if (it is GalleryApi.ApiResult.Success) cacheMap[pageName] = it.value
+            if (it is ApiResult.Success) cacheMap[pageName] = it.value
         }
     }
 
     private val json = SharedJson
 
-    private suspend fun fetchFromNetwork(pageName: String): GalleryApi.ApiResult<List<DecorationSection>> =
+    private suspend fun fetchFromNetwork(pageName: String): ApiResult<List<DecorationSection>> =
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(pageName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=text&format=json"
                 val response = WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
                 val body = response.use { if (it.isSuccessful) it.body.string() else null }
-                    ?: return@withContext GalleryApi.ApiResult.Error("获取页面失败")
+                    ?: return@withContext ApiResult.Error("获取页面失败")
 
                 val root = json.parseToJsonElement(body).jsonObject
                 val html = root["parse"]?.jsonObject
                     ?.get("text")?.jsonObject
                     ?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext GalleryApi.ApiResult.Error("解析 HTML 失败")
+                    ?: return@withContext ApiResult.Error("解析 HTML 失败")
 
                 val rawSections = parseHtml(html)
                 if (rawSections.isEmpty()) {
-                    return@withContext GalleryApi.ApiResult.Error("未找到${pageName}数据")
+                    return@withContext ApiResult.Error("未找到${pageName}数据")
                 }
 
                 // 收集所有文件名，批量获取真实 URL
@@ -104,12 +105,12 @@ object PlayerDecorationApi {
                 }
 
                 if (sections.isEmpty()) {
-                    GalleryApi.ApiResult.Error("未找到${pageName}内容")
+                    ApiResult.Error("未找到${pageName}内容")
                 } else {
-                    GalleryApi.ApiResult.Success(sections)
+                    ApiResult.Success(sections)
                 }
             } catch (e: Exception) {
-                GalleryApi.ApiResult.Error("网络异常: ${e.message}")
+                ApiResult.Error("网络异常: ${e.message}")
             }
         }
 
