@@ -204,16 +204,20 @@ fun AppTheme(content: @Composable () -> Unit) {
  * 通过 HSL 色彩空间派生出各色调层级。
  */
 private fun colorSchemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
+    // 使用 HSL 色彩空间（不是 HSV），lightness 参数才是真正的亮度
     val hsl = FloatArray(3)
-    android.graphics.Color.colorToHSV(seed.toArgb(), hsl)
-    val h = hsl[0]; val s = hsl[1]
+    androidx.core.graphics.ColorUtils.colorToHSL(seed.toArgb(), hsl)
+    val h = hsl[0]  // 色相 0-360
+    val s = hsl[1]  // 饱和度 0-1
 
+    /** 从种子色的色相出发，生成指定亮度和饱和度倍率的颜色 */
     fun tone(lightness: Float, satMul: Float = 1f): Color {
-        val argb = android.graphics.Color.HSVToColor(
-            floatArrayOf(h, (s * satMul).coerceIn(0f, 1f), lightness.coerceIn(0f, 1f))
-        )
-        return Color(argb)
+        val outHsl = floatArrayOf(h, (s * satMul).coerceIn(0f, 1f), lightness.coerceIn(0f, 1f))
+        return Color(androidx.core.graphics.ColorUtils.HSLToColor(outHsl))
     }
+
+    // 中性色饱和度倍率（surface / background / outline 等）
+    val ns = 0.12f
 
     return if (dark) {
         darkColorScheme(
@@ -229,10 +233,29 @@ private fun colorSchemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
             onTertiary = tone(0.20f, 0.4f),
             tertiaryContainer = tone(0.30f, 0.4f),
             onTertiaryContainer = tone(0.90f, 0.4f),
-            surface = tone(0.10f, 0.1f),
-            onSurface = tone(0.90f, 0.1f),
-            surfaceVariant = tone(0.20f, 0.2f),
-            onSurfaceVariant = tone(0.80f, 0.2f),
+            background = tone(0.06f, ns),
+            onBackground = tone(0.90f, ns),
+            surface = tone(0.06f, ns),
+            onSurface = tone(0.90f, ns),
+            surfaceVariant = tone(0.20f, 0.25f),
+            onSurfaceVariant = tone(0.80f, 0.25f),
+            surfaceTint = tone(0.80f),
+            inverseSurface = tone(0.90f, ns),
+            inverseOnSurface = tone(0.20f, ns),
+            inversePrimary = tone(0.40f),
+            outline = tone(0.60f, 0.2f),
+            outlineVariant = tone(0.30f, 0.2f),
+            surfaceBright = tone(0.24f, ns),
+            surfaceDim = tone(0.06f, ns),
+            surfaceContainer = tone(0.12f, ns),
+            surfaceContainerHigh = tone(0.17f, ns),
+            surfaceContainerHighest = tone(0.22f, ns),
+            surfaceContainerLow = tone(0.10f, ns),
+            surfaceContainerLowest = tone(0.04f, ns),
+            error = Color(0xFFFFB4AB),
+            onError = Color(0xFF690005),
+            errorContainer = Color(0xFF93000A),
+            onErrorContainer = Color(0xFFFFDAD6),
         )
     } else {
         lightColorScheme(
@@ -244,14 +267,33 @@ private fun colorSchemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
             onSecondary = Color.White,
             secondaryContainer = tone(0.90f, 0.5f),
             onSecondaryContainer = tone(0.10f, 0.5f),
-            tertiary = tone(0.40f, 0.4f),
+            tertiary = tone(0.45f, 0.4f),
             onTertiary = Color.White,
             tertiaryContainer = tone(0.90f, 0.4f),
             onTertiaryContainer = tone(0.10f, 0.4f),
-            surface = tone(0.98f, 0.05f),
-            onSurface = tone(0.10f, 0.1f),
-            surfaceVariant = tone(0.92f, 0.15f),
-            onSurfaceVariant = tone(0.30f, 0.2f),
+            background = tone(0.98f, ns),
+            onBackground = tone(0.10f, ns),
+            surface = tone(0.98f, ns),
+            onSurface = tone(0.10f, ns),
+            surfaceVariant = tone(0.90f, 0.2f),
+            onSurfaceVariant = tone(0.30f, 0.25f),
+            surfaceTint = tone(0.40f),
+            inverseSurface = tone(0.20f, ns),
+            inverseOnSurface = tone(0.95f, ns),
+            inversePrimary = tone(0.80f),
+            outline = tone(0.50f, 0.25f),
+            outlineVariant = tone(0.80f, 0.15f),
+            surfaceBright = tone(0.98f, ns),
+            surfaceDim = tone(0.87f, ns),
+            surfaceContainer = tone(0.94f, ns),
+            surfaceContainerHigh = tone(0.92f, ns),
+            surfaceContainerHighest = tone(0.90f, ns),
+            surfaceContainerLow = tone(0.96f, ns),
+            surfaceContainerLowest = Color.White,
+            error = Color(0xFFBA1A1A),
+            onError = Color.White,
+            errorContainer = Color(0xFFFFDAD6),
+            onErrorContainer = Color(0xFF410002),
         )
     }
 }

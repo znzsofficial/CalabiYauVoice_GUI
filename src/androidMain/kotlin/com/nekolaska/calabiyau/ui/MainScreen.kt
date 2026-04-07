@@ -106,7 +106,8 @@ fun MainScreen(
     }
 
     // ── 页面内容（Drawer 和 PermanentDrawer 共用） ──
-    val pageContent: @Composable () -> Unit = {
+    // 使用 movableContentOf 保持组合树身份，避免 Drawer 类型切换时子树重建
+    val pageContent = remember { movableContentOf {
         // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
         var hubWebViewUrl by remember { mutableStateOf<String?>(null) }
 
@@ -169,14 +170,14 @@ fun MainScreen(
                 SettingsScreen(onBack = { currentDestination = DrawerDestination.WIKI_HUB })
             }
         }
-    }
+    } }
 
     // ── 根据屏幕宽度选择布局 ──
     Surface(color = MaterialTheme.colorScheme.background) {
         if (useExpandedLayout) {
             PermanentNavigationDrawer(
                 drawerContent = drawerContent,
-                content = pageContent
+                content = { pageContent() }
             )
         } else {
             ModalNavigationDrawer(
@@ -184,7 +185,7 @@ fun MainScreen(
                 gesturesEnabled = currentDestination != DrawerDestination.WIKI
                         && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
                 drawerContent = drawerContent,
-                content = pageContent
+                content = { pageContent() }
             )
         }
     }
