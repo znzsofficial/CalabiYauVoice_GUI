@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -137,7 +138,7 @@ private fun GameModeCard(
     onOpenWikiUrl: (String) -> Unit,
     onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)?
 ) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -257,7 +258,7 @@ private fun GameModeCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Outlined.Article, null,
+                            Icons.AutoMirrored.Outlined.Article, null,
                             Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )

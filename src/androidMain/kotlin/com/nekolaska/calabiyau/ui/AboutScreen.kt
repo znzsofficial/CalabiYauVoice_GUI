@@ -2,7 +2,9 @@ package com.nekolaska.calabiyau.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,10 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.nekolaska.calabiyau.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,14 +73,14 @@ fun AboutScreen(onBack: () -> Unit) {
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "丘",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                Image(
+                    painter = painterResource(R.drawable.ic_launcher_foreground),
+                    contentDescription = "应用图标",
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.onPrimaryContainer),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp)
+                )
             }
 
             Spacer(Modifier.height(20.dp))

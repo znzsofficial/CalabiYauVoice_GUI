@@ -159,7 +159,7 @@ private fun MapDetailContent(
 
 @Composable
 private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -204,7 +204,7 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MapInfoCard(detail: MapDetail) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -280,7 +280,7 @@ private fun MapInfoCard(detail: MapDetail) {
 
 @Composable
 private fun MapTerrainCard(terrainMapUrl: String) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -305,7 +305,7 @@ private fun MapTerrainCard(terrainMapUrl: String) {
 
 @Composable
 private fun MapGalleryCard(galleryUrls: List<String>) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {

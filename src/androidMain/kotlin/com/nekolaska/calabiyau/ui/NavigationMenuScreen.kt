@@ -1,6 +1,10 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,20 +13,37 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.NavigationMenuApi
 import kotlinx.coroutines.launch
 import data.ApiResult
+
+// ════════════════════════════════════════════════════════
+//  Wiki 导航页 —— 原生客户端版 (MD3 Expressive)
+// ════════════════════════════════════════════════════════
+
+/** 根据分区标题返回对应图标 */
+private fun sectionIcon(title: String): ImageVector = when {
+    title.contains("首页") -> Icons.Outlined.Home
+    title.contains("角色") -> Icons.Outlined.People
+    title.contains("武器") -> Icons.Outlined.GpsFixed
+    title.contains("地图") -> Icons.Outlined.Map
+    title.contains("玩法") -> Icons.Outlined.SportsEsports
+    title.contains("其他") -> Icons.Outlined.MoreHoriz
+    else -> Icons.AutoMirrored.Outlined.Article
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,8 +66,8 @@ fun NavigationMenuScreen(
             when (val result = NavigationMenuApi.fetchNavigationSections()) {
                 is ApiResult.Success -> {
                     sections = result.value
-                    // 默认只展开"首页"
-                    expandedSections = setOf("首页")
+                    // 默认展开所有分区
+                    expandedSections = result.value.map { it.title }.toSet()
                 }
                 is ApiResult.Error -> {
                     sections = emptyList()
@@ -64,7 +85,7 @@ fun NavigationMenuScreen(
             if (!embedded) {
                 TopAppBar(
                     title = {
-                        Text("导航", fontWeight = FontWeight.Bold)
+                        Text("Wiki 导航", fontWeight = FontWeight.Bold)
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
@@ -72,6 +93,19 @@ fun NavigationMenuScreen(
                         }
                     },
                     actions = {
+                        // 全部展开/折叠切换
+                        if (sections.isNotEmpty()) {
+                            val allExpanded = expandedSections.size == sections.size
+                            IconButton(onClick = {
+                                expandedSections = if (allExpanded) emptySet()
+                                else sections.map { it.title }.toSet()
+                            }) {
+                                Icon(
+                                    if (allExpanded) Icons.Outlined.UnfoldLess else Icons.Outlined.UnfoldMore,
+                                    contentDescription = if (allExpanded) "全部折叠" else "全部展开"
+                                )
+                            }
+                        }
                         IconButton(onClick = { loadNavigation() }, enabled = !isLoading) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
@@ -132,59 +166,22 @@ fun NavigationMenuScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(sections, key = { it.title }) { section ->
-                            val isExpanded = section.title in expandedSections
-
-                            ElevatedCard(
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(Modifier.fillMaxWidth()) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                expandedSections = if (isExpanded) {
-                                                    expandedSections - section.title
-                                                } else {
-                                                    expandedSections + section.title
-                                                }
-                                            }
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = section.title,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Icon(
-                                            if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                            contentDescription = if (isExpanded) "折叠" else "展开"
-                                        )
+                            NavSectionCard(
+                                section = section,
+                                isExpanded = section.title in expandedSections,
+                                onToggle = {
+                                    expandedSections = if (section.title in expandedSections) {
+                                        expandedSections - section.title
+                                    } else {
+                                        expandedSections + section.title
                                     }
-
-                                    AnimatedVisibility(visible = isExpanded) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 8.dp, vertical = 6.dp)
-                                        ) {
-                                            section.items.forEach { item ->
-                                                NavNodeRow(
-                                                    item = item,
-                                                    level = 0,
-                                                    onOpenWikiUrl = onOpenWikiUrl
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                                },
+                                onOpenWikiUrl = onOpenWikiUrl
+                            )
                         }
                     }
                 }
@@ -193,43 +190,169 @@ fun NavigationMenuScreen(
     }
 }
 
+// ────────────────────────────────────────────
+//  分区卡片
+// ────────────────────────────────────────────
+
+@Composable
+private fun NavSectionCard(
+    section: NavigationMenuApi.NavSection,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    onOpenWikiUrl: (String) -> Unit
+) {
+    val sectionShape = smoothCornerShape(24.dp)
+    val icon = sectionIcon(section.title)
+
+    Card(
+        shape = sectionShape,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            // 分区标题行
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(sectionShape)
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 分区图标
+                Surface(
+                    shape = smoothCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = section.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${section.items.size} 个条目",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (isExpanded) "折叠" else "展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // 展开内容
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    section.items.forEach { item ->
+                        NavNodeRow(
+                            item = item,
+                            level = 0,
+                            onOpenWikiUrl = onOpenWikiUrl
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  导航条目行（递归支持子级）
+// ────────────────────────────────────────────
+
 @Composable
 private fun NavNodeRow(
     item: NavigationMenuApi.NavItem,
     level: Int,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    val indent = (12 + level * 14).dp
+    val indent = (level * 16).dp
+    val hasChildren = item.children.isNotEmpty()
+    val isClickable = item.url != null
+    val itemShape = smoothCornerShape(14.dp)
 
     Column(Modifier.fillMaxWidth()) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(enabled = item.url != null) {
-                    item.url?.let(onOpenWikiUrl)
-                }
-                .padding(start = indent, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = indent),
+            shape = itemShape,
+            color = if (isClickable) MaterialTheme.colorScheme.surface
+                    else androidx.compose.ui.graphics.Color.Transparent,
+            onClick = { item.url?.let(onOpenWikiUrl) },
+            enabled = isClickable
         ) {
-            Text(
-                text = item.title,
-                style = if (level == 0) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
-                color = if (item.url != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            if (item.url != null) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 层级指示圆点
+                if (level > 0) {
+                    Surface(
+                        modifier = Modifier.size(6.dp),
+                        shape = RoundedCornerShape(50),
+                        color = if (isClickable) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                else MaterialTheme.colorScheme.outlineVariant
+                    ) {}
+                    Spacer(Modifier.width(10.dp))
+                }
+
+                Text(
+                    text = item.title,
+                    style = when (level) {
+                        0 if hasChildren -> MaterialTheme.typography.titleSmall
+                        0 -> MaterialTheme.typography.bodyLarge
+                        else -> MaterialTheme.typography.bodyMedium
+                    },
+                    fontWeight = if (level == 0 && hasChildren) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isClickable) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+
+                if (isClickable) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 
-        item.children.forEach { child ->
-            NavNodeRow(item = child, level = level + 1, onOpenWikiUrl = onOpenWikiUrl)
+        // 递归渲染子级
+        if (hasChildren) {
+            item.children.forEach { child ->
+                NavNodeRow(item = child, level = level + 1, onOpenWikiUrl = onOpenWikiUrl)
+            }
         }
     }
 }

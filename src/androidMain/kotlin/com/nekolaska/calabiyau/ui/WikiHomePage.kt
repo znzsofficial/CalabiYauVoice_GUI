@@ -567,7 +567,7 @@ private fun CharacterPreviewSection(
     val charCardShape = smoothCornerShape(24.dp)
     val btnShape = smoothCornerShape(20.dp)
     val onSurface = MaterialTheme.colorScheme.onSurface
-    ElevatedCard(
+    Card(
         shape = charCardShape,
         modifier = Modifier
             .fillMaxWidth()
@@ -577,14 +577,16 @@ private fun CharacterPreviewSection(
                 surfaceAlpha = 0.3f
             ),
         colors = when {
-            liquidGlass -> CardDefaults.elevatedCardColors(
+            liquidGlass -> CardDefaults.cardColors(
                 containerColor = Color.Transparent, contentColor = onSurface
             )
-            hasWallpaper -> CardDefaults.elevatedCardColors(
+            hasWallpaper -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
                 contentColor = onSurface
             )
-            else -> CardDefaults.elevatedCardColors()
+            else -> CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
         }
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -751,7 +753,7 @@ private fun MapPreviewSection(
 
     val mapCardShape = smoothCornerShape(24.dp)
     val onSurface = MaterialTheme.colorScheme.onSurface
-    ElevatedCard(
+    Card(
         shape = mapCardShape,
         modifier = Modifier
             .fillMaxWidth()
@@ -761,14 +763,16 @@ private fun MapPreviewSection(
                 surfaceAlpha = 0.3f
             ),
         colors = when {
-            liquidGlass -> CardDefaults.elevatedCardColors(
+            liquidGlass -> CardDefaults.cardColors(
                 containerColor = Color.Transparent, contentColor = onSurface
             )
-            hasWallpaper -> CardDefaults.elevatedCardColors(
+            hasWallpaper -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
                 contentColor = onSurface
             )
-            else -> CardDefaults.elevatedCardColors()
+            else -> CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
         }
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -946,7 +950,7 @@ private fun ContentBlockCard(
     val blockCardShape = smoothCornerShape(24.dp)
     val clickableShape = smoothCornerShape(12.dp)
     val onSurface = MaterialTheme.colorScheme.onSurface
-    ElevatedCard(
+    Card(
         shape = blockCardShape,
         modifier = Modifier
             .fillMaxWidth()
@@ -956,14 +960,16 @@ private fun ContentBlockCard(
                 surfaceAlpha = 0.3f
             ),
         colors = when {
-            liquidGlass -> CardDefaults.elevatedCardColors(
+            liquidGlass -> CardDefaults.cardColors(
                 containerColor = Color.Transparent, contentColor = onSurface
             )
-            hasWallpaper -> CardDefaults.elevatedCardColors(
+            hasWallpaper -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
                 contentColor = onSurface
             )
-            else -> CardDefaults.elevatedCardColors()
+            else -> CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
         }
     ) {
         Column(Modifier.padding(16.dp)) {

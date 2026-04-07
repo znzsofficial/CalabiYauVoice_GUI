@@ -302,7 +302,7 @@ private fun CharacterDetailContent(
 @Composable
 private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) {
     val headerImage = portraitUrl ?: detail.avatarUrl
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -449,7 +449,7 @@ private fun InfoChip(
 
 @Composable
 private fun QuoteCard(quote: String) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -485,7 +485,7 @@ private fun DescriptionCard(
     summary: String,
     description: String
 ) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -547,7 +547,7 @@ private fun AttributesCard(detail: CharacterDetail) {
     }
     if (attributes.isEmpty()) return
 
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -594,7 +594,7 @@ private fun AttributesCard(detail: CharacterDetail) {
 
 @Composable
 private fun WeaponInfoCard(detail: CharacterDetail) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -658,7 +658,7 @@ private fun WeaponInfoCard(detail: CharacterDetail) {
 
 @Composable
 private fun PersonalInfoCard(items: List<Pair<String, String>>) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -739,7 +739,7 @@ private fun SubPagesCard(
     subPages: List<CharacterDetailApi.SubPage>,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -802,7 +802,7 @@ private fun SubPagesCard(
 
 @Composable
 private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -918,7 +918,7 @@ private fun StoriesCard(
     val characterStories = stories.filter { it.section == "角色故事" }
     val relatedStories = stories.filter { it.section == "相关剧情" }
 
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1041,7 +1041,7 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
     // 默认只显示前 3 条
     val visibleHistory = if (expanded) history else history.take(3)
 
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
