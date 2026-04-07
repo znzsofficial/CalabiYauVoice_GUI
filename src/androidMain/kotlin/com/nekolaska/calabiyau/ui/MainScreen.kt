@@ -17,6 +17,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,17 +53,17 @@ fun MainScreen(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    var currentDestination by remember { mutableStateOf(DrawerDestination.WIKI_HUB) }
+    var currentDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
 
     // ── 自适应布局：平板/折叠屏使用常驻侧栏 ──
     val activity = LocalContext.current as? MainActivity
     val windowSizeClass = activity?.let { calculateWindowSizeClass(it) }
     val useExpandedLayout = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
-    var pendingWikiUrl by remember { mutableStateOf<String?>(null) }
+    var pendingWikiUrl by rememberSaveable { mutableStateOf<String?>(null) }
     // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
-    var wikiEnteredFromHub by remember { mutableStateOf(false) }
+    var wikiEnteredFromHub by rememberSaveable { mutableStateOf(false) }
     // 记录进入侧栏 Wiki 前的页面，退出时回到该页面
-    var previousDestination by remember { mutableStateOf(DrawerDestination.WIKI_HUB) }
+    var previousDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
 
     // 返回键：侧栏打开时先关闭侧栏
     BackHandler(enabled = drawerState.isOpen) {

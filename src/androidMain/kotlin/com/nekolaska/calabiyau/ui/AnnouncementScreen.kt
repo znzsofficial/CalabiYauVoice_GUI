@@ -126,7 +126,7 @@ private fun AnnouncementCard(
     onOpenWikiUrl: (String) -> Unit,
     onOpenExternalUrl: (String) -> Unit
 ) {
-    ElevatedCard(
+    Card(
         onClick = { onOpenWikiUrl(announcement.wikiUrl) },
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()

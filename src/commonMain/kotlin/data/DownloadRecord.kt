@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class DownloadRecord(
     val name: String = "",          // 描述，如 "岚岚 / 默认" 或 "文件搜索"
-    val fileCount: Int = 0,         // 文���数量
+    val fileCount: Int = 0,         // 文件数量
     val timestamp: Long = 0L,      // 完成时间戳
     val status: String = "success", // "success" | "error"
     val savePath: String = ""       // 保存路径

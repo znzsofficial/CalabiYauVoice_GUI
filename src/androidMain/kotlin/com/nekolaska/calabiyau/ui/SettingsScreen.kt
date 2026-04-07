@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -89,10 +91,27 @@ fun SettingsScreen(onBack: () -> Unit) {
         onBack()
     }
 
-    if (showAbout) {
-        AboutScreen(onBack = { showAbout = false })
-        return
-    }
+    val animDuration = 300
+    AnimatedContent(
+        targetState = showAbout,
+        modifier = Modifier.background(MaterialTheme.colorScheme.background),
+        transitionSpec = {
+            if (targetState) {
+                // 进入关于：从右滑入 + 淡入
+                (slideInHorizontally(tween(animDuration)) { it / 4 } + fadeIn(tween(animDuration)))
+                    .togetherWith(slideOutHorizontally(tween(animDuration)) { -it / 4 } + fadeOut(tween(animDuration / 2)))
+            } else {
+                // 返回设置：从左滑入 + 淡入
+                (slideInHorizontally(tween(animDuration)) { -it / 4 } + fadeIn(tween(animDuration)))
+                    .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 4 } + fadeOut(tween(animDuration / 2)))
+            }
+        },
+        label = "SettingsAboutTransition"
+    ) { isAbout ->
+        if (isAbout) {
+            AboutScreen(onBack = { showAbout = false })
+            return@AnimatedContent
+        }
 
     Scaffold(
         topBar = {
@@ -822,6 +841,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(32.dp))
         }
     }
+    } // AnimatedContent
 }
 
 @Composable

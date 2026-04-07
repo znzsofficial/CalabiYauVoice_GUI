@@ -375,7 +375,7 @@ private fun BaseplateCard(
     val context = LocalContext.current
     val cardShape = smoothCornerShape(16.dp)
 
-    ElevatedCard(
+    Card(
         onClick = onClick,
         shape = cardShape,
         modifier = Modifier.fillMaxWidth()

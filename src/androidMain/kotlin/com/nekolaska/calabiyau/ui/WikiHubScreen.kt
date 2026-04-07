@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.nekolaska.calabiyau.data.CharacterListApi
 import com.nekolaska.calabiyau.data.MapListApi
@@ -28,20 +29,20 @@ fun WikiHubScreen(
     onOpenWikiUrl: (String) -> Unit,
     isOverlaid: Boolean = false
 ) {
-    var currentPage by remember { mutableStateOf(WikiHubPage.HOME) }
+    var currentPage by rememberSaveable { mutableStateOf(WikiHubPage.HOME) }
     val homeListState = rememberLazyListState()
-    var selectedCharacterName by remember { mutableStateOf("") }
-    var selectedCharacterPortrait by remember { mutableStateOf<String?>(null) }
-    var selectedWeaponName by remember { mutableStateOf("") }
-    var selectedCostumeCharacter by remember { mutableStateOf<String?>(null) }
-    var selectedWeaponSkinWeapon by remember { mutableStateOf<String?>(null) }
-    var costumesFrom by remember { mutableStateOf(WikiHubPage.HOME) }
-    var weaponSkinsFrom by remember { mutableStateOf(WikiHubPage.HOME) }
-    var characterListTab by remember { mutableIntStateOf(0) }
-    var weaponListTab by remember { mutableIntStateOf(0) }
-    var mapListTab by remember { mutableIntStateOf(0) }
-    var selectedMapName by remember { mutableStateOf("") }
-    var selectedMapImage by remember { mutableStateOf<String?>(null) }
+    var selectedCharacterName by rememberSaveable { mutableStateOf("") }
+    var selectedCharacterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedWeaponName by rememberSaveable { mutableStateOf("") }
+    var selectedCostumeCharacter by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedWeaponSkinWeapon by rememberSaveable { mutableStateOf<String?>(null) }
+    var costumesFrom by rememberSaveable { mutableStateOf(WikiHubPage.HOME) }
+    var weaponSkinsFrom by rememberSaveable { mutableStateOf(WikiHubPage.HOME) }
+    var characterListTab by rememberSaveable { mutableIntStateOf(0) }
+    var weaponListTab by rememberSaveable { mutableIntStateOf(0) }
+    var mapListTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedMapName by rememberSaveable { mutableStateOf("") }
+    var selectedMapImage by rememberSaveable { mutableStateOf<String?>(null) }
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
     var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
     var isLoadingCharacters by remember { mutableStateOf(true) }
@@ -77,10 +78,10 @@ fun WikiHubScreen(
 
     // 子页面按返回键回到上一级
     // 记录地图详情的来源页面（首页或战斗模式）
-    var mapDetailFrom by remember { mutableStateOf(WikiHubPage.HOME) }
+    var mapDetailFrom by rememberSaveable { mutableStateOf(WikiHubPage.HOME) }
 
     // ── 导航方向追踪（用于过渡动画） ──
-    var isNavigatingBack by remember { mutableStateOf(false) }
+    var isNavigatingBack by remember { mutableStateOf(false) }  // 动画方向无需持久化
 
     BackHandler(enabled = currentPage != WikiHubPage.HOME && !isOverlaid) {
         isNavigatingBack = true

@@ -2,11 +2,11 @@ package com.nekolaska.calabiyau.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -186,7 +186,7 @@ private fun WeaponDetailContent(
 
 @Composable
 private fun WeaponHeaderCard(detail: WeaponDetail) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -281,7 +281,7 @@ private fun WeaponInfoChip(
 
 @Composable
 private fun WeaponDescriptionCard(description: String) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -317,7 +317,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
     }
     if (stats.isEmpty()) return
 
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -356,7 +356,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
 
 @Composable
 private fun WeaponDamageCard(detail: WeaponDetail) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -499,12 +499,12 @@ private fun WeaponSubPagesCard(
     subPages: List<WeaponDetailApi.SubPage>,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            WeaponSectionTitle(Icons.Outlined.Article, "更多内容")
+            WeaponSectionTitle(Icons.AutoMirrored.Outlined.Article, "更多内容")
             Spacer(Modifier.height(8.dp))
 
             subPages.forEachIndexed { index, page ->
@@ -528,7 +528,7 @@ private fun WeaponSubPagesCard(
                             page.displayName.contains("武器") -> Icons.Outlined.GpsFixed
                             page.displayName.contains("语音") -> Icons.Outlined.RecordVoiceOver
                             page.displayName.contains("画廊") -> Icons.Outlined.PhotoLibrary
-                            else -> Icons.Outlined.Article
+                            else -> Icons.AutoMirrored.Outlined.Article
                         }
                         Icon(icon, null, Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.primary)
@@ -550,7 +550,7 @@ private fun WeaponSubPagesCard(
 
 @Composable
 private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
-    ElevatedCard(
+    Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {

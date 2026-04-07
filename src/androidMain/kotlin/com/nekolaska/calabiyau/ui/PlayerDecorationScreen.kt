@@ -332,7 +332,7 @@ private fun DecorationCard(
     val context = LocalContext.current
     val cardShape = smoothCornerShape(16.dp)
 
-    ElevatedCard(
+    Card(
         onClick = onClick,
         shape = cardShape,
         modifier = Modifier.fillMaxWidth()

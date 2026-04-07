@@ -1,11 +1,17 @@
 package com.nekolaska.calabiyau.ui
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -14,9 +20,11 @@ import androidx.compose.ui.unit.IntSize
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import kotlin.math.abs
 
 // ════════════════════════════════════════════════════════
 //  ZoomableImage — 支持双指缩放、双击放大/还原、拖拽平移
+//  与 HorizontalPager 兼容：未缩放时不拦截水平滑动
 // ════════════════════════════════════════════════════════
 
 private const val MIN_SCALE = 1f
@@ -31,6 +39,8 @@ private const val DOUBLE_TAP_SCALE = 2.5f
  * - 缩放后可拖拽平移，边界限制
  * - 单击回调 [onClick]（仅在未缩放时触发）
  * - 长按回调 [onLongPress]
+ * - **与 HorizontalPager 兼容**：未缩放时水平滑动传递给外层 Pager；
+ *   缩放状态下拖到边界时也会放行水平手势。
  *
  * @param model Coil 图片数据源（URL / File / Uri 等）
  * @param contentDescription 无障碍描述
@@ -63,6 +73,14 @@ fun ZoomableImage(
         )
     }
 
+    /** 检查水平方向是否已到达边界 */
+    fun isAtHorizontalEdge(panX: Float): Boolean {
+        if (scale <= 1.05f) return true  // 未缩放，始终放行
+        val maxX = (containerSize.width * (scale - 1f)) / 2f
+        // 向右滑（panX > 0）且已在左边界，或向左滑（panX < 0）且已在右边界
+        return (panX > 0 && offset.x >= maxX - 1f) || (panX < 0 && offset.x <= -maxX + 1f)
+    }
+
     AsyncImage(
         model = ImageRequest.Builder(context)
             .data(model)
@@ -78,17 +96,41 @@ fun ZoomableImage(
                 translationX = offset.x
                 translationY = offset.y
             }
-            // 缩放 + 平移手势
+            // 缩放 + 平移手势（手动实现，按需消费事件）
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    val newScale = (scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
-                    val newOffset = if (newScale > 1f) {
-                        offset + pan * scale
-                    } else {
-                        Offset.Zero
-                    }
-                    scale = newScale
-                    offset = clampOffset(newOffset, newScale)
+                awaitEachGesture {
+                    // 等待第一根手指按下
+                    awaitFirstDown(requireUnconsumed = false)
+                    var isZooming = false
+
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val pointerCount = event.changes.count { it.pressed }
+
+                        if (pointerCount >= 2) {
+                            // 多指：始终处理缩放
+                            isZooming = true
+                            val zoom = event.calculateZoom()
+                            val pan = event.calculatePan()
+                            val newScale = (scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
+                            val newOffset = if (newScale > 1f) offset + pan * scale else Offset.Zero
+                            scale = newScale
+                            offset = clampOffset(newOffset, newScale)
+                            // 消费所有指针事件
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        } else if (pointerCount == 1 && scale > 1.05f) {
+                            // 单指 + 已缩放：处理平移
+                            val pan = event.calculatePan()
+                            if (!isAtHorizontalEdge(pan.x) || abs(pan.y) > abs(pan.x)) {
+                                // 未到边界，或纵向拖拽为主 → 消费事件，自己处理平移
+                                val newOffset = offset + pan * scale
+                                offset = clampOffset(newOffset, scale)
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                            // 到达水平边界且水平拖拽为主 → 不消费，让 Pager 处理
+                        }
+                        // 单指 + 未缩放 → 完全不消费，Pager 正常滑动
+                    } while (event.changes.any { it.pressed })
                 }
             }
             // 双击 + 单击 + 长按
