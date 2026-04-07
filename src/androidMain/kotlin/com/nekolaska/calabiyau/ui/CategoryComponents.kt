@@ -171,59 +171,85 @@ fun CategoryDetailContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .fillMaxHeight(0.7f)
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .fillMaxHeight(0.75f)
+            .padding(bottom = 16.dp)
     ) {
+        // ── 标题区 ──
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 16.dp)
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp, top = 8.dp)
         ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Outlined.RecordVoiceOver, null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = group.characterName,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 if (subCategories.isNotEmpty()) {
                     Text(
-                        text = "已选 ${checkedCategories.size}/${subCategories.size}",
+                        text = "已选 ${checkedCategories.size} / ${subCategories.size} 个分类",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             if (isScanning) {
-                CircularProgressIndicator(Modifier.size(24.dp))
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         }
 
         if (!isScanning && subCategories.isNotEmpty()) {
+            // ── 操作栏 ──
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(bottom = 12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
             ) {
-                FilledTonalButton(
-                    onClick = onCheckAll,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.DoneAll, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("全选")
-                }
-                OutlinedButton(
-                    onClick = onUncheckAll,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.RemoveDone, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("清空")
-                }
+                FilterChip(
+                    selected = checkedCategories.size == subCategories.size,
+                    onClick = {
+                        if (checkedCategories.size == subCategories.size) onUncheckAll()
+                        else onCheckAll()
+                    },
+                    label = {
+                        Text(
+                            if (checkedCategories.size == subCategories.size) "取消全选" else "全选",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            if (checkedCategories.size == subCategories.size) Icons.Default.RemoveDone
+                            else Icons.Default.DoneAll,
+                            null, modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                )
             }
 
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+
+            // ── 分类列表 ──
             LazyColumn(
                 modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(subCategories) { cat ->
@@ -243,19 +269,23 @@ fun CategoryDetailContent(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
+            // ── 下载按钮 ──
+            Spacer(Modifier.height(12.dp))
             Button(
                 onClick = onDownload,
                 enabled = !isDownloading && checkedCategories.isNotEmpty(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .padding(horizontal = 24.dp),
                 shape = RoundedCornerShape(28.dp)
             ) {
                 Icon(Icons.Default.Download, null)
                 Spacer(Modifier.width(8.dp))
-                Text("下载选中 (${checkedCategories.size})", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "下载选中分类 (${checkedCategories.size})",
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         }
     }
@@ -273,41 +303,52 @@ fun CategoryItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         onClick = { onCheckedChange(!checked) },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = if (checked)
-            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
         else
-            Color.Transparent
+            MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+            modifier = Modifier.padding(start = 6.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-            Spacer(Modifier.width(8.dp))
+            Checkbox(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.size(40.dp)
+            )
+            Spacer(Modifier.width(4.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = name,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (isRoot) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (isRoot) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (isRoot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
                 if (manualCount != null) {
+                    Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "已选 $manualCount 个文件",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        text = "已手动选择 $manualCount 个文件",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
             }
             // 文件选择按钮
-            IconButton(
+            FilledTonalIconButton(
                 onClick = onSelectFiles,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(34.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (checked)
+                        MaterialTheme.colorScheme.secondaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                )
             ) {
                 Icon(
                     Icons.Outlined.Checklist, "选择文件",
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

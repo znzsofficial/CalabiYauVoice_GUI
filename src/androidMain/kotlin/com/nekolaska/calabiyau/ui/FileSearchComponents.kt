@@ -368,17 +368,31 @@ fun FileSelectionSheet(
                 .fillMaxHeight(0.92f)
                 .padding(bottom = 16.dp)
         ) {
-            // Header
+            // ── 标题区 ──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Folder, null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = categoryName.removePrefix("Category:").removePrefix("分类:"),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -399,13 +413,13 @@ fun FileSelectionSheet(
                 }
             }
 
-            // Search field
+            // ── 搜索栏 ──
             TextField(
                 value = searchKeyword,
                 onValueChange = { searchKeyword = it },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 shape = RoundedCornerShape(28.dp),
                 colors = TextFieldDefaults.colors(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -414,7 +428,7 @@ fun FileSelectionSheet(
                     focusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent
                 ),
-                placeholder = { Text("搜索文件名...", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                placeholder = { Text("搜索文件名…") },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                 trailingIcon = {
                     if (searchKeyword.isNotEmpty()) {
@@ -426,77 +440,91 @@ fun FileSelectionSheet(
                 singleLine = true
             )
 
-            // Toolbar
+            // ── 操作栏：全选/清空 + 语言筛选 ──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                FilledTonalButton(
-                    onClick = onSelectAll,
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text("全选", style = MaterialTheme.typography.labelMedium)
-                }
-                OutlinedButton(
-                    onClick = onClear,
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text("清空", style = MaterialTheme.typography.labelMedium)
-                }
+                // 全选/清空合并为一个 FilterChip
+                val allSelected = files.isNotEmpty() && selectedUrls.size == files.size
+                FilterChip(
+                    selected = allSelected,
+                    onClick = { if (allSelected) onClear() else onSelectAll() },
+                    label = { Text(if (allSelected) "取消全选" else "全选") },
+                    leadingIcon = {
+                        Icon(
+                            if (allSelected) Icons.Default.RemoveDone else Icons.Default.DoneAll,
+                            null, modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                )
 
-                // Language suffix filters
                 Spacer(Modifier.weight(1f))
-                listOf("CN", "JP", "EN").forEach { lang ->
+
+                // 语言快捷筛选
+                listOf("CN" to "中", "JP" to "日", "EN" to "英").forEach { (lang, label) ->
                     val targets = files
                         .filter { (n, _) -> n.uppercase().let { it.endsWith(lang) || it.contains("$lang.") } }
                         .map { it.second }
                     if (targets.isNotEmpty()) {
-                        val isSelected = targets.all { it in selectedUrls }
+                        val isLangSelected = targets.all { it in selectedUrls }
                         FilterChip(
-                            selected = isSelected,
+                            selected = isLangSelected,
                             onClick = {
-                                if (isSelected) {
+                                if (isLangSelected) {
                                     targets.forEach { onToggle(it) }
                                 } else {
                                     targets.filter { it !in selectedUrls }.forEach { onToggle(it) }
                                 }
                             },
-                            label = { Text(lang, style = MaterialTheme.typography.labelSmall) },
-                            modifier = Modifier.height(28.dp)
+                            label = { Text(label) },
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
                 }
             }
 
-            // File list
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            )
+
+            // ── 文件列表 ──
             when {
                 isLoading -> {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Spacer(Modifier.height(8.dp))
-                            Text("正在加载文件列表...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("正在加载文件列表…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 filteredFiles.isEmpty() -> {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text(
-                            if (files.isEmpty()) "无文件" else "无搜索结果",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                if (files.isEmpty()) Icons.Default.FolderOff else Icons.Default.SearchOff,
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                if (files.isEmpty()) "此分类下无文件" else "无匹配结果",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
                 else -> {
                     LazyColumn(
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(filteredFiles) { (name, url) ->
@@ -512,7 +540,7 @@ fun FileSelectionSheet(
                 }
             }
 
-            // Confirm button
+            // ── 确认按钮 ──
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = onConfirm,

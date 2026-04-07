@@ -3,10 +3,13 @@ package com.nekolaska.calabiyau.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.overscroll
+import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -215,12 +218,14 @@ fun PortraitDetailContent(
         // Content Pager
         HorizontalPager(
             state = pagerState,
-            contentPadding = PaddingValues(horizontal = 32.dp),
-            pageSpacing = 16.dp,
+            beyondViewportPageCount = 1,
+            overscrollEffect = null,
             modifier = Modifier.weight(1f)
         ) { page ->
             val costume = costumes[page]
-            CostumeCard(costume = costume)
+            Box(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
+                CostumeCard(costume = costume)
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -282,10 +287,10 @@ fun CostumeCard(costume: PortraitCostume) {
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
-                // Multiple images — use nested pager
+                // Multiple images — use vertical pager to avoid gesture conflict with outer costume HorizontalPager
                 val imagePagerState = rememberPagerState(pageCount = { allImages.size })
 
-                HorizontalPager(
+                VerticalPager(
                     state = imagePagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
@@ -313,13 +318,13 @@ fun CostumeCard(costume: PortraitCostume) {
                     )
                 }
 
-                // Page indicator dots (bottom-center)
-                Row(
+                // Page indicator dots (right-center, vertical)
+                Column(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 48.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     repeat(allImages.size) { index ->
                         val isSelected = imagePagerState.currentPage == index
