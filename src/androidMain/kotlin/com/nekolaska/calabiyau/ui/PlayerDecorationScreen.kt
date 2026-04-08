@@ -113,16 +113,7 @@ fun PlayerDecorationScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                LoadingState(modifier = Modifier.padding(innerPadding))
             }
             errorMessage != null && sections.isEmpty() -> {
                 ErrorState(

@@ -238,11 +238,13 @@ private fun colorSchemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
             onTertiary = tone(0.20f, 0.4f),
             tertiaryContainer = tone(0.30f, 0.4f),
             onTertiaryContainer = tone(0.90f, 0.4f),
-            background = tone(0.06f, ns),
+            // HSL lightness 在暗色端偏暗于 HCT tone，需要适当补偿
+            // HCT tone 6 ≈ HSL 0.08, tone 10 ≈ HSL 0.14, tone 12 ≈ HSL 0.16
+            background = tone(0.08f, ns),
             onBackground = tone(0.90f, ns),
-            surface = tone(0.06f, ns),
+            surface = tone(0.08f, ns),
             onSurface = tone(0.90f, ns),
-            surfaceVariant = tone(0.20f, 0.25f),
+            surfaceVariant = tone(0.28f, 0.25f),
             onSurfaceVariant = tone(0.80f, 0.25f),
             surfaceTint = tone(0.80f),
             inverseSurface = tone(0.90f, ns),
@@ -250,13 +252,13 @@ private fun colorSchemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
             inversePrimary = tone(0.40f),
             outline = tone(0.60f, 0.2f),
             outlineVariant = tone(0.30f, 0.2f),
-            surfaceBright = tone(0.24f, ns),
-            surfaceDim = tone(0.06f, ns),
-            surfaceContainer = tone(0.12f, ns),
-            surfaceContainerHigh = tone(0.17f, ns),
-            surfaceContainerHighest = tone(0.22f, ns),
-            surfaceContainerLow = tone(0.10f, ns),
-            surfaceContainerLowest = tone(0.04f, ns),
+            surfaceBright = tone(0.28f, ns),       // HCT tone 24
+            surfaceDim = tone(0.08f, ns),          // HCT tone 6
+            surfaceContainer = tone(0.16f, ns),    // HCT tone 12
+            surfaceContainerHigh = tone(0.21f, ns),// HCT tone 17
+            surfaceContainerHighest = tone(0.26f, ns),// HCT tone 22
+            surfaceContainerLow = tone(0.14f, ns), // HCT tone 10
+            surfaceContainerLowest = tone(0.06f, ns),// HCT tone 4
             error = Color(0xFFFFB4AB),
             onError = Color(0xFF690005),
             errorContainer = Color(0xFF93000A),

@@ -66,7 +66,7 @@ fun PortraitGrid(
             val isFavorite = name in favorites
             Card(
                 onClick = { onSelectCharacter(name) },
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )

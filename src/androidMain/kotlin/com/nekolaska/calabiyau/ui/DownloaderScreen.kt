@@ -3,7 +3,6 @@ package com.nekolaska.calabiyau.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -236,9 +235,7 @@ internal fun DownloaderScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         val dlLiquidGlass = LocalLiquidGlassEnabled.current.value
-        val dlIsDark = isSystemInDarkTheme()
-        val dlBgColor = if (dlIsDark) androidx.compose.ui.graphics.Color(0xFF121212)
-            else androidx.compose.ui.graphics.Color(0xFFFAFAFA)
+        val dlBgColor = MaterialTheme.colorScheme.surface
         val dlBackdrop = if (dlLiquidGlass && useDockedToolbar) rememberLayerBackdrop {
             drawRect(dlBgColor)
             drawContent()
@@ -310,8 +307,7 @@ internal fun DownloaderScreen(
             // 浮动工具栏模式
             @OptIn(ExperimentalMaterial3ExpressiveApi::class)
             if (useDockedToolbar) {
-                val surfaceColor = if (dlIsDark) androidx.compose.ui.graphics.Color.White.copy(alpha = 0.35f)
-                    else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f)
+                val surfaceColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
                 val tintColor = MaterialTheme.colorScheme.secondaryContainer
                 Row(
                     modifier = Modifier
@@ -444,7 +440,7 @@ internal fun DownloaderScreen(
                             Icon(
                                 Icons.Outlined.FolderOpen,
                                 contentDescription = "文件管理",
-                                tint = androidx.compose.ui.graphics.Color.White,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(24.dp)
                             )
                         }

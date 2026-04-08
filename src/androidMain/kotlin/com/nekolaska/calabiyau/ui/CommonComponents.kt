@@ -1,10 +1,14 @@
 package com.nekolaska.calabiyau.ui
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -42,7 +46,7 @@ fun SearchBar(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp),
-        shape = RoundedCornerShape(28.dp),
+        shape = smoothCornerShape(28.dp),
         colors = TextFieldDefaults.colors(
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -114,7 +118,7 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
                 }
                 Surface(
                     color = MaterialTheme.colorScheme.primary,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = smoothCornerShape(12.dp)
                 ) {
                     Text(
                         "${(progress * 100).toInt()}%",
@@ -130,7 +134,7 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .clip(smoothCornerShape(4.dp)),
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
             Spacer(Modifier.height(6.dp))
@@ -155,7 +159,7 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 0.dp
         ) {
@@ -204,7 +208,7 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
                                     MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
                                 else
                                     Color.Transparent,
-                                shape = RoundedCornerShape(8.dp)
+                                shape = smoothCornerShape(8.dp)
                             ) {
                                 Text(
                                     text = log,
@@ -359,7 +363,7 @@ fun ErrorState(
                 Spacer(Modifier.height(20.dp))
                 FilledTonalButton(
                     onClick = onRetry,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = smoothCornerShape(24.dp)
                 ) {
                     Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -368,4 +372,131 @@ fun ErrorState(
             }
         }
     }
+}
+
+// ────────────────────────────────────────────
+//  通用区块标题
+// ────────────────────────────────────────────
+
+/**
+ * 卡片内的区块标题（图标 + 标题文字）。
+ *
+ * 用于 CharacterDetail、WeaponDetail、MapDetail 等详情页的各区块。
+ */
+@Composable
+fun SectionTitle(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+// ────────────────────────────────────────────
+//  信息标签 Chip
+// ────────────────────────────────────────────
+
+/**
+ * 带图标的信息标签，用于角色/武器的属性标签行。
+ */
+@Composable
+fun InfoChip(
+    label: String,
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color
+) {
+    Surface(
+        shape = smoothCornerShape(12.dp),
+        color = containerColor,
+        contentColor = contentColor
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  加载状态
+// ────────────────────────────────────────────
+
+/**
+ * 统一的加载中状态组件，与 [EmptyState] / [ErrorState] 风格一致。
+ */
+@Composable
+fun LoadingState(
+    message: String = "正在加载…",
+    modifier: Modifier = Modifier
+) {
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(12.dp))
+            Text(
+                message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  Shimmer / 骨架屏基础
+// ────────────────────────────────────────────
+
+/**
+ * 为组件添加 shimmer 光泽扫过动画。
+ * 颜色自动适配 MaterialTheme，无需外部库。
+ */
+@Composable
+fun Modifier.shimmerEffect(): Modifier {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = -300f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerTranslate"
+    )
+    val baseColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val highlightColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val brush = Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(translateAnim, 0f),
+        end = Offset(translateAnim + 300f, 0f)
+    )
+    return this.background(brush)
+}
+
+/**
+ * 骨架屏占位块。
+ */
+@Composable
+fun ShimmerBox(
+    modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = smoothCornerShape(8.dp)
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .shimmerEffect()
+    )
 }

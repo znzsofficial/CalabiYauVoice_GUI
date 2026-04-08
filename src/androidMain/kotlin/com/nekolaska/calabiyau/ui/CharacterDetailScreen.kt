@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -64,9 +65,12 @@ fun CharacterDetailScreen(
         isLoading = false
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
                 title = {
                     Text(
                         characterName,
@@ -89,24 +93,14 @@ fun CharacterDetailScreen(
                     }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior
             )
         }
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载角色信息…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                CharacterDetailSkeleton(Modifier.padding(innerPadding))
             }
 
             errorMessage != null && detail == null -> {
@@ -192,7 +186,7 @@ private fun CharacterDetailContent(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (onOpenCostumes != null) {
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = { onOpenCostumes(detail.name) },
                             modifier = Modifier.weight(1f)
                         ) {
@@ -202,7 +196,7 @@ private fun CharacterDetailContent(
                         }
                     }
                     if (onOpenWeaponSkins != null && detail.weaponName.isNotBlank()) {
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = { onOpenWeaponSkins(detail.weaponName) },
                             modifier = Modifier.weight(1f)
                         ) {
@@ -394,30 +388,6 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
                     }
                 }
             }
-        }
-    }
-}
-
-/** 信息标签 Chip */
-@Composable
-private fun InfoChip(
-    label: String,
-    icon: ImageVector,
-    containerColor: Color,
-    contentColor: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        contentColor = contentColor
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -988,27 +958,7 @@ private fun StoryCard(
     }
 }
 
-// ────────────────────────────────────────────
-//  通用区块标题
-// ────────────────────────────────────────────
 
-@Composable
-private fun SectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            icon,
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
 
 // ────────────────────────────────────────────
 //  更新改动历史
@@ -1021,10 +971,10 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
     val visibleHistory = if (expanded) history else history.take(3)
 
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(20.dp)) {
             SectionTitle(icon = Icons.Outlined.History, title = "更新改动历史")
             Spacer(Modifier.height(12.dp))
 
@@ -1074,6 +1024,71 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
                     Text(if (expanded) "收起" else "查看全部 ${history.size} 条更新")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 头部卡片骨架
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column {
+                ShimmerBox(
+                    modifier = Modifier.fillMaxWidth().height(320.dp),
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                )
+                Column(Modifier.padding(20.dp)) {
+                    ShimmerBox(Modifier.width(120.dp).height(24.dp))
+                    Spacer(Modifier.height(8.dp))
+                    ShimmerBox(Modifier.width(180.dp).height(14.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShimmerBox(Modifier.width(72.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
+                        ShimmerBox(Modifier.width(64.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
+                        ShimmerBox(Modifier.width(56.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
+                    }
+                }
+            }
+        }
+        // 语录卡片骨架
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(20.dp)) {
+                ShimmerBox(Modifier.size(28.dp), shape = RoundedCornerShape(6.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    ShimmerBox(Modifier.fillMaxWidth().height(14.dp))
+                    Spacer(Modifier.height(6.dp))
+                    ShimmerBox(Modifier.fillMaxWidth(0.7f).height(14.dp))
+                }
+            }
+        }
+        // 属性卡片骨架
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                ShimmerBox(Modifier.width(100.dp).height(18.dp))
+                Spacer(Modifier.height(12.dp))
+                repeat(3) { row ->
+                    if (row > 0) Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth()) {
+                        Column(Modifier.weight(1f)) {
+                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
+                            Spacer(Modifier.height(4.dp))
+                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
+                            Spacer(Modifier.height(4.dp))
+                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
+                        }
+                    }
                 }
             }
         }

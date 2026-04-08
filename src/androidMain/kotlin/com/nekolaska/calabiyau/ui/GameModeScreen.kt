@@ -76,13 +76,7 @@ fun GameModeScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载模式信息…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                LoadingState("正在加载模式信息…", Modifier.padding(innerPadding))
             }
             errorMessage != null && modes.isEmpty() -> {
                 ErrorState(
@@ -127,10 +121,10 @@ private fun GameModeCard(
     onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)?
 ) {
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(20.dp)) {
             // 标题行（可点击展开/折叠）
             Surface(
                 onClick = onToggle,

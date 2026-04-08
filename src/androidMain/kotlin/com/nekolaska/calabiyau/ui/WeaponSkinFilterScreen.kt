@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,8 +33,8 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.WeaponSkinInfo
-import kotlinx.coroutines.launch
 import data.ApiResult
+import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════
 //  武器外观筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -53,6 +55,8 @@ fun WeaponSkinFilterScreen(
     // 筛选状态
     var selectedWeapon by remember { mutableStateOf(initialWeapon) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
@@ -69,10 +73,12 @@ fun WeaponSkinFilterScreen(
     LaunchedEffect(Unit) { loadData() }
 
     // 筛选后的列表
-    val filteredSkins = remember(allSkins, selectedWeapon, selectedQuality) {
+    val filteredSkins = remember(allSkins, selectedWeapon, selectedQuality, searchQuery) {
         allSkins.filter { skin ->
             (selectedWeapon == null || skin.weapon == selectedWeapon) &&
-                    (selectedQuality == null || skin.quality == selectedQuality)
+                    (selectedQuality == null || skin.quality == selectedQuality) &&
+                    (searchQuery.isBlank() || skin.name.contains(searchQuery, ignoreCase = true)
+                            || skin.weapon.contains(searchQuery, ignoreCase = true))
         }
     }
 
@@ -83,35 +89,67 @@ fun WeaponSkinFilterScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("武器外观", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    if (allSkins.isNotEmpty()) {
-                        Text(
-                            "${filteredSkins.size}/${allSkins.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 16.dp)
+            if (isSearchActive) {
+                TopAppBar(
+                    title = {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("搜索外观名称…") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            isSearchActive = false
+                            searchQuery = ""
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "关闭搜索")
+                        }
+                    },
+                    actions = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "清空")
+                            }
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("武器外观", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        }
+                        if (allSkins.isNotEmpty()) {
+                            Text(
+                                "${filteredSkins.size}/${allSkins.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
+                    }
+                )
+            }
         }
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载武器外观数据…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                LoadingState("正在加载武器外观数据…", Modifier.padding(innerPadding))
             }
             errorMessage != null && allSkins.isEmpty() -> {
                 ErrorState(
@@ -435,10 +473,10 @@ private fun WeaponSkinDetailSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(20.dp)) {
                     // 获取方式
                     if (skin.sources.isNotEmpty()) {
                         SkinDetailRow(
