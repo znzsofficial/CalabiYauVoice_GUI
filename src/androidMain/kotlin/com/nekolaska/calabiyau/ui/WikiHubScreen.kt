@@ -27,9 +27,10 @@ enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, 
 fun WikiHubScreen(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
-    isOverlaid: Boolean = false
+    isOverlaid: Boolean = false,
+    initialPage: WikiHubPage = WikiHubPage.HOME
 ) {
-    var currentPage by rememberSaveable { mutableStateOf(WikiHubPage.HOME) }
+    var currentPage by rememberSaveable { mutableStateOf(initialPage) }
     val homeListState = rememberLazyListState()
     var selectedCharacterName by rememberSaveable { mutableStateOf("") }
     var selectedCharacterPortrait by rememberSaveable { mutableStateOf<String?>(null) }

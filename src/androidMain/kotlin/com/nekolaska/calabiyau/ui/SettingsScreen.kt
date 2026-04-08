@@ -36,6 +36,7 @@ import androidx.core.net.toUri
 import com.nekolaska.calabiyau.LocalSeedColor
 import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.OfflineCache
 import com.nekolaska.calabiyau.data.UpdateApi
 import com.nekolaska.calabiyau.data.WallpaperApi
 import com.nekolaska.calabiyau.data.WikiEngine
@@ -605,6 +606,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
                     WebViewCacheItem(context = context)
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                    OfflineCacheItem()
                 }
             }
 
@@ -1396,6 +1401,78 @@ private fun WebViewCacheItem(context: android.content.Context) {
                 text = when {
                     isCalculating -> "计算中…"
                     cacheSize != null && cacheSize!! > 0 -> "当前占用 ${formatFileSize(cacheSize!!)}"
+                    else -> "无缓存"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        if (isCalculating) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(
+                Icons.Default.ChevronRight, null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/** 离线缓存统计 + 清除按钮 */
+@Composable
+private fun OfflineCacheItem() {
+    var cacheSize by remember { mutableStateOf<Long?>(null) }
+    var isCalculating by remember { mutableStateOf(true) }
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(refreshKey) {
+        isCalculating = true
+        withContext(Dispatchers.IO) {
+            cacheSize = OfflineCache.totalSize()
+        }
+        isCalculating = false
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(smoothCornerShape(16.dp))
+            .clickable {
+                scope.launch {
+                    OfflineCache.clearAll()
+                    refreshKey++
+                }
+            }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.Cached, null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "清除离线缓存",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = when {
+                    isCalculating -> "计算中…"
+                    cacheSize != null && cacheSize!! > 0 -> "已缓存 ${formatFileSize(cacheSize!!)}（离线可用）"
                     else -> "无缓存"
                 },
                 style = MaterialTheme.typography.bodyMedium,

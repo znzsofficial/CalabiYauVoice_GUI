@@ -43,9 +43,10 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
     var voteState by remember { mutableStateOf<VotingApi.VoteState?>(null) }
     var selectedNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var isLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
+    var retryTrigger by remember { mutableIntStateOf(0) }
 
     // 加载投票页面配置
-    LaunchedEffect(Unit) {
+    LaunchedEffect(retryTrigger) {
         isLoadingConfig = true
         errorMessage = null
         when (val result = VotingApi.fetchPollConfig()) {
@@ -208,26 +209,10 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                     }
                 }
                 errorMessage != null && pollConfig == null -> {
-                    // 加载失败
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.padding(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Text(
-                                errorMessage!!,
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
+                    ErrorState(
+                        message = errorMessage!!,
+                        onRetry = { retryTrigger++ }
+                    )
                 }
                 pollConfig != null -> {
                     VotingContent(

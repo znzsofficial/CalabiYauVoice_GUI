@@ -76,23 +76,11 @@ fun AnnouncementScreen(
                 }
             }
             errorMessage != null && announcements.isEmpty() -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(32.dp)
-                    ) {
-                        Icon(Icons.Outlined.ErrorOutline, null, Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(12.dp))
-                        Text(errorMessage!!, textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = { loadData(forceRefresh = true) }) {
-                            Icon(Icons.Outlined.Refresh, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("重试")
-                        }
-                    }
-                }
+                ErrorState(
+                    message = errorMessage!!,
+                    onRetry = { loadData(forceRefresh = true) },
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
             else -> {
                 LazyColumn(

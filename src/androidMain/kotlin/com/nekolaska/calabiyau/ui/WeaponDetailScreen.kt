@@ -84,21 +84,11 @@ fun WeaponDetailScreen(
                 }
             }
             errorMessage != null && detail == null -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Outlined.ErrorOutline, null, Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(12.dp))
-                        Text(errorMessage!!, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center)
-                        Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = { retryTrigger++ }) {
-                            Icon(Icons.Outlined.Refresh, null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("重试")
-                        }
-                    }
-                }
+                ErrorState(
+                    message = errorMessage!!,
+                    onRetry = { retryTrigger++ },
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
             detail != null -> {
                 WeaponDetailContent(

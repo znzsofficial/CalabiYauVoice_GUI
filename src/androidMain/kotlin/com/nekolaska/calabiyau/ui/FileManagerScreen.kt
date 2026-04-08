@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -39,6 +40,8 @@ import java.io.File
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.log10
+import kotlin.math.pow
 
 /**
  * 内置文件管理器，支持：
@@ -358,7 +361,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                 // 打开
                 if (file.isFile) {
                     FileActionItem(
-                        icon = Icons.Outlined.OpenInNew,
+                        icon = Icons.AutoMirrored.Outlined.OpenInNew,
                         label = "打开",
                         onClick = {
                             openFile(context, file)
@@ -874,9 +877,9 @@ private fun getFileIcon(file: File): ImageVector {
 private fun formatFileSize(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = arrayOf("B", "KB", "MB", "GB")
-    val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt()
+    val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
     val idx = digitGroups.coerceIn(0, units.size - 1)
-    return DecimalFormat("#,##0.#").format(bytes / Math.pow(1024.0, idx.toDouble())) + " " + units[idx]
+    return DecimalFormat("#,##0.#").format(bytes / 1024.0.pow(idx.toDouble())) + " " + units[idx]
 }
 
 private fun formatDate(timestamp: Long): String {

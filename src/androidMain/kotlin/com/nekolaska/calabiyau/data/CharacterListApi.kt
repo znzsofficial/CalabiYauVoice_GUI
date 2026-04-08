@@ -68,13 +68,17 @@ object CharacterListApi {
         }
     }
 
-    private fun fetchFaction(faction: String): ApiResult<FactionData> {
+    private suspend fun fetchFaction(faction: String): ApiResult<FactionData> {
         return try {
             val wikitext = "{{阵营角色|$faction}}"
             val encoded = URLEncoder.encode(wikitext, "UTF-8")
             val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-            val body = WikiEngine.safeGet(url) ?: return ApiResult.Error("请求 $faction 失败")
+            val (body, isOffline) = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.CHARACTER_LIST,
+                key = "faction_$faction"
+            ) { WikiEngine.safeGet(url) }
+                ?: return ApiResult.Error("请求 $faction 失败，且无离线缓存")
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")

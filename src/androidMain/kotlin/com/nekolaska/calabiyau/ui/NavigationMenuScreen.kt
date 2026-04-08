@@ -133,28 +133,10 @@ fun NavigationMenuScreen(
                 }
 
                 errorMessage != null -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Outlined.WarningAmber,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(40.dp)
-                            )
-                            Text(
-                                text = errorMessage!!,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            FilledTonalButton(onClick = { loadNavigation() }) {
-                                Text("重试")
-                            }
-                        }
-                    }
+                    ErrorState(
+                        message = errorMessage!!,
+                        onRetry = { loadNavigation() }
+                    )
                 }
 
                 sections.isEmpty() -> {

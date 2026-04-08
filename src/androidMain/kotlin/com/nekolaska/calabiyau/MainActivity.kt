@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.palette.graphics.Palette
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.data.OfflineCache
 import com.nekolaska.calabiyau.data.UpdateApi
 import com.nekolaska.calabiyau.data.WikiEngine
 import kotlinx.coroutines.Dispatchers
@@ -44,11 +45,15 @@ class MainActivity : ComponentActivity() {
         CrashHandler.install(this)
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
+        OfflineCache.init(this)
         PortraitRepository.init(
             fetchFilesInCategory = { cat, audio -> WikiEngine.fetchFilesInCategory(cat, audio) },
             searchFilesFn = { kw, audio -> WikiEngine.searchFiles(kw, audio) },
             getAllCharacterNames = { WikiEngine.getAllCharacterNames() }
         )
+
+        // 解析 Shortcut 目标
+        val shortcutTarget = intent?.getStringExtra("shortcut_target")
 
         setContent {
             AppTheme {
@@ -79,7 +84,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MainScreen(searchVM, downloadVM, portraitVM)
+                MainScreen(searchVM, downloadVM, portraitVM, shortcutTarget = shortcutTarget)
 
                 // ── 启动更新提示 ──
                 startupUpdateInfo?.let { info ->

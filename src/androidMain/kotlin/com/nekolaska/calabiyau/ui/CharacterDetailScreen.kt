@@ -110,33 +110,11 @@ fun CharacterDetailScreen(
             }
 
             errorMessage != null && detail == null -> {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Outlined.ErrorOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            errorMessage!!,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        FilledTonalButton(onClick = { retryTrigger++ }) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("重试")
-                        }
-                    }
-                }
+                ErrorState(
+                    message = errorMessage!!,
+                    onRetry = { retryTrigger++ },
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
 
             detail != null -> {
@@ -302,6 +280,7 @@ private fun CharacterDetailContent(
 @Composable
 private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) {
     val headerImage = portraitUrl ?: detail.avatarUrl
+    val cardColor = CardDefaults.cardColors().containerColor
     Card(
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
@@ -323,7 +302,7 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
                                     else Alignment.Center,
                         modifier = Modifier.fillMaxSize()
                     )
-                    // 底部渐变
+                    // 底部渐变（颜色与 Card 背景一致）
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -333,7 +312,7 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        MaterialTheme.colorScheme.surfaceContainerLow
+                                        cardColor
                                     )
                                 )
                             )

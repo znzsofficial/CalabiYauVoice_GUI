@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">卡丘Wiki助手</string>
+
+    <!-- App Shortcuts -->
+    <string name="shortcut_characters">角色图鉴</string>
+    <string name="shortcut_characters_long">浏览角色图鉴</string>
+    <string name="shortcut_downloader">资源下载</string>
+    <string name="shortcut_downloader_long">下载 Wiki 资源</string>
+    <string name="shortcut_wiki">Wiki 浏览</string>
+    <string name="shortcut_wiki_long">打开 Wiki 浏览器</string>
 </resources>

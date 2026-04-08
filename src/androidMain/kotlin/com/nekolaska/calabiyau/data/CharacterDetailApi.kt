@@ -91,9 +91,13 @@ object CharacterDetailApi {
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(characterName, "UTF-8")
-                // 同时请求 wikitext 和渲染 HTML，用于解析角色信息 + 改动历史
                 val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
-                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
+
+                val (body, isOffline) = OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.CHARACTER_DETAIL,
+                    key = characterName
+                ) { WikiEngine.safeGet(url) }
+                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -111,7 +115,7 @@ object CharacterDetailApi {
                     ?.jsonPrimitive?.content
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
 
-                ApiResult.Success(detail.copy(updateHistory = history))
+                ApiResult.Success(detail.copy(updateHistory = history), isOffline = isOffline)
             } catch (e: Exception) {
                 ApiResult.Error("获取角色详情失败: ${e.message}")
             }

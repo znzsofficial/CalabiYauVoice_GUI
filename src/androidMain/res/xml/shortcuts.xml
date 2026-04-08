@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="characters"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_characters"
+        android:shortcutShortLabel="@string/shortcut_characters"
+        android:shortcutLongLabel="@string/shortcut_characters_long">
+        <intent
+            android:action="com.nekolaska.calabiyau.SHORTCUT"
+            android:targetPackage="${applicationId}"
+            android:targetClass="com.nekolaska.calabiyau.MainActivity">
+            <extra android:name="shortcut_target" android:value="characters" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="downloader"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_download"
+        android:shortcutShortLabel="@string/shortcut_downloader"
+        android:shortcutLongLabel="@string/shortcut_downloader_long">
+        <intent
+            android:action="com.nekolaska.calabiyau.SHORTCUT"
+            android:targetPackage="${applicationId}"
+            android:targetClass="com.nekolaska.calabiyau.MainActivity">
+            <extra android:name="shortcut_target" android:value="downloader" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="wiki"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_wiki"
+        android:shortcutShortLabel="@string/shortcut_wiki"
+        android:shortcutLongLabel="@string/shortcut_wiki_long">
+        <intent
+            android:action="com.nekolaska.calabiyau.SHORTCUT"
+            android:targetPackage="${applicationId}"
+            android:targetClass="com.nekolaska.calabiyau.MainActivity">
+            <extra android:name="shortcut_target" android:value="wiki" />
+        </intent>
+    </shortcut>
+
+</shortcuts>

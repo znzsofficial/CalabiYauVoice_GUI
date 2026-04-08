@@ -89,12 +89,15 @@ object GameModeApi {
      * 从「模板:卡拉彼丘」解析模式→地图映射。
      * 模板结构：group{N}=模式名, list{N}=地图列表
      */
-    private fun fetchModeMapMapping(): Map<String, List<String>> {
+    private suspend fun fetchModeMapMapping(): Map<String, List<String>> {
         val mapping = mutableMapOf<String, List<String>>()
         try {
             val encoded = URLEncoder.encode("模板:卡拉彼丘", "UTF-8")
             val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-            val body = WikiEngine.safeGet(url) ?: return mapping
+            val (body, _) = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.GAME_MODES,
+                key = "mode_map_mapping"
+            ) { WikiEngine.safeGet(url) } ?: return mapping
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val wikitext = json["parse"]?.jsonObject?.get("wikitext")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return mapping
@@ -139,7 +142,10 @@ object GameModeApi {
         return try {
             val encoded = URLEncoder.encode(mode.pageName, "UTF-8")
             val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-            val body = WikiEngine.safeGet(url) ?: return null
+            val (body, _) = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.GAME_MODES,
+                key = "mode_${mode.pageName}"
+            ) { WikiEngine.safeGet(url) } ?: return null
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val wikitext = json["parse"]?.jsonObject?.get("wikitext")

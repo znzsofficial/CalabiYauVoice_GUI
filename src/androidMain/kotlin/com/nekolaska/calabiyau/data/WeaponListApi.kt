@@ -89,7 +89,10 @@ object WeaponListApi {
             val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100"
             val encoded = URLEncoder.encode(query, "UTF-8")
             val url = "$API?action=ask&query=$encoded&format=json"
-            val body = WikiEngine.safeGet(url) ?: return null
+            val (body, _) = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.WEAPON_LIST,
+                key = "category_${category.name}"
+            ) { WikiEngine.safeGet(url) } ?: return null
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
