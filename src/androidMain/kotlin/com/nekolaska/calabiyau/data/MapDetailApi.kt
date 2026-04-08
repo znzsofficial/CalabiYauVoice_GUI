@@ -39,7 +39,12 @@ object MapDetailApi {
             try {
                 val encoded = URLEncoder.encode(mapName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
+
+                val (body, isOffline) = OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.MAP_DETAIL,
+                    key = mapName
+                ) { WikiEngine.safeGet(url) }
+                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -51,7 +56,7 @@ object MapDetailApi {
                 val detail = parseMapWikitext(mapName, wikitext)
                     ?: return@withContext ApiResult.Error("未找到地图信息模板")
 
-                ApiResult.Success(detail)
+                ApiResult.Success(detail, isOffline = isOffline)
             } catch (e: Exception) {
                 ApiResult.Error("获取地图详情失败: ${e.message}")
             }

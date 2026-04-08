@@ -38,7 +38,11 @@ object NavigationMenuApi {
     suspend fun fetchNavigationSections(): ApiResult<List<NavSection>> = withContext(Dispatchers.IO) {
         try {
             val url = "$API?action=query&meta=allmessages&ammessages=sidebar&format=json"
-            val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求导航数据失败")
+            val (body, _) = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.NAVIGATION,
+                key = "sidebar"
+            ) { WikiEngine.safeGet(url) }
+                ?: return@withContext ApiResult.Error("请求导航数据失败，且无离线缓存")
             val root = SharedJson.parseToJsonElement(body).jsonObject
             val sidebar = root["query"]
                 ?.jsonObject?.get("allmessages")

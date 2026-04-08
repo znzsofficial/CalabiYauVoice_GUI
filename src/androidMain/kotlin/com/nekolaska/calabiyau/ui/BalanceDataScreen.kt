@@ -24,9 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.BalanceDataApi
 import data.ApiResult
@@ -190,16 +188,10 @@ fun BalanceDataScreen(onBack: () -> Unit) {
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 }
                 errorMessage != null && settings == null -> {
-                    Column(
-                        Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedButton(onClick = { loadSettings() }) {
-                            Text("重试")
-                        }
-                    }
+                    ErrorState(
+                        message = errorMessage!!,
+                        onRetry = { loadSettings() }
+                    )
                 }
                 settings != null -> {
                     Column(Modifier.fillMaxSize()) {
@@ -608,7 +600,7 @@ private fun HeroRow(
 
         // 角色头像（点击浮动显示角色名 + 定位）
         TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(),
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
             tooltip = {
                 PlainTooltip {
                     val name = meta?.name ?: hero.heroName

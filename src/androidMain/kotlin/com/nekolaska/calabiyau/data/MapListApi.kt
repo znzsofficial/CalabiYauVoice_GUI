@@ -83,13 +83,17 @@ object MapListApi {
         }
     }
 
-    private fun fetchMode(displayName: String, templateName: String): ApiResult<GameModeData> {
+    private suspend fun fetchMode(displayName: String, templateName: String): ApiResult<GameModeData> {
         return try {
             val wikitext = "{{游戏地图|$templateName}}"
             val encoded = URLEncoder.encode(wikitext, "UTF-8")
             val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-            val body = WikiEngine.safeGet(url) ?: return ApiResult.Error("请求 $displayName 失败")
+            val (body, _) = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.MAP_LIST,
+                key = "mode_$templateName"
+            ) { WikiEngine.safeGet(url) }
+                ?: return ApiResult.Error("请求 $displayName 失败，且无离线缓存")
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")

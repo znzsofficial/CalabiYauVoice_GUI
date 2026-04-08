@@ -54,7 +54,11 @@ object AnnouncementApi {
                 val query = "[[分类:公告资讯]]|?时间|?b站|?官网|sort=时间|order=desc|limit=$limit"
                 val encoded = URLEncoder.encode(query, "UTF-8")
                 val url = "$API?action=ask&query=$encoded&format=json"
-                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val (body, _) = OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.ANNOUNCEMENTS,
+                    key = "announcements_$limit"
+                ) { WikiEngine.safeGet(url) }
+                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val results = json["query"]?.jsonObject?.get("results")?.jsonObject

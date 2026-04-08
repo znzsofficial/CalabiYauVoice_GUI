@@ -59,9 +59,13 @@ object GalleryApi {
                 // 1. 获取 wikitext
                 val encoded = URLEncoder.encode(pageName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-                val response = WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
-                val body = response.use { if (it.isSuccessful) it.body.string() else null }
-                    ?: return@withContext ApiResult.Error("获取页面失败")
+                val (body, _) = OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.GALLERY,
+                    key = "gallery_$pageName"
+                ) {
+                    val response = WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
+                    response.use { if (it.isSuccessful) it.body.string() else null }
+                } ?: return@withContext ApiResult.Error("获取页面失败，且无离线缓存")
 
                 val root = jsonParser.parseToJsonElement(body).jsonObject
                 val wikitext = root["parse"]?.jsonObject

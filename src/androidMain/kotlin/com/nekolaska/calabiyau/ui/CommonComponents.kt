@@ -272,3 +272,100 @@ fun EmptyState(
         }
     }
 }
+
+/**
+ * 统一的请求失败/错误状态组件。
+ *
+ * 根据错误信息自动判断错误类型，显示对应的图标和友好提示。
+ */
+@Composable
+fun ErrorState(
+    message: String,
+    onRetry: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    // 根据错误信息推断类型
+    val isOffline = message.contains("离线") || message.contains("网络")
+            || message.contains("连接") || message.contains("timeout", ignoreCase = true)
+            || message.contains("Unable to resolve", ignoreCase = true)
+    val isTimeout = message.contains("超时") || message.contains("timeout", ignoreCase = true)
+    val isCdn = message.contains("CDN") || message.contains("403") || message.contains("拦截")
+
+    val icon = when {
+        isOffline -> Icons.Outlined.WifiOff
+        isTimeout -> Icons.Outlined.Timer
+        isCdn -> Icons.Outlined.Shield
+        else -> Icons.Outlined.ErrorOutline
+    }
+    val friendlyTitle = when {
+        isOffline -> "无法连接网络"
+        isTimeout -> "请求超时"
+        isCdn -> "访问被拦截"
+        else -> "加载失败"
+    }
+    val friendlyHint = when {
+        isOffline -> "请检查网络连接后重试"
+        isTimeout -> "服务器响应缓慢，请稍后重试"
+        isCdn -> "请求被 CDN 拦截，请稍后重试"
+        else -> "请检查网络后重试"
+    }
+
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        ) {
+            Surface(
+                modifier = Modifier.size(80.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon, null,
+                        modifier = Modifier.size(36.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                friendlyTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                friendlyHint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            // 仅在未识别的通用错误时显示原始信息作为补充
+            val isRecognized = isOffline || isTimeout || isCdn
+            if (!isRecognized && message.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (onRetry != null) {
+                Spacer(Modifier.height(20.dp))
+                FilledTonalButton(
+                    onClick = onRetry,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("重试")
+                }
+            }
+        }
+    }
+}

@@ -49,11 +49,22 @@ enum class DrawerDestination {
 fun MainScreen(
     searchVM: SearchViewModel,
     downloadVM: DownloadViewModel,
-    portraitVM: PortraitViewModel
+    portraitVM: PortraitViewModel,
+    shortcutTarget: String? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    var currentDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
+
+    // 根据 Shortcut 目标决定初始页面
+    val initialDestination = remember {
+        when (shortcutTarget) {
+            "characters" -> DrawerDestination.WIKI_HUB  // Hub 内再导航到角色列表
+            "downloader" -> DrawerDestination.DOWNLOADER
+            "wiki" -> DrawerDestination.WIKI
+            else -> DrawerDestination.WIKI_HUB
+        }
+    }
+    var currentDestination by rememberSaveable { mutableStateOf(initialDestination) }
 
     // ── 自适应布局：平板/折叠屏使用常驻侧栏 ──
     val activity = LocalContext.current as? MainActivity
@@ -132,10 +143,16 @@ fun MainScreen(
                 )
             }
             DrawerDestination.WIKI_HUB, DrawerDestination.WIKI_HUB_WEBVIEW -> {
+                // Shortcut "characters" → 直接进入角色列表
+                val hubInitialPage = remember {
+                    if (shortcutTarget == "characters") WikiHubPage.CHARACTERS
+                    else WikiHubPage.HOME
+                }
                 Box {
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
                         isOverlaid = currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW,
+                        initialPage = hubInitialPage,
                         onOpenWikiUrl = { url ->
                             hubWebViewUrl = url
                             wikiEnteredFromHub = true

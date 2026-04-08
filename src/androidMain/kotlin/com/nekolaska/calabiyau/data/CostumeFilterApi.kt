@@ -64,7 +64,11 @@ object CostumeFilterApi {
 
                 val text = URLEncoder.encode("{{#invoke:角色|角色时装筛选}}", "UTF-8")
                 val url = "$API?action=parse&text=$text&prop=text&format=json"
-                val body = WikiEngine.safeGet(url) ?: return@withContext ApiResult.Error("请求失败")
+                val (body, _) = OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.COSTUMES,
+                    key = "all_costumes"
+                ) { WikiEngine.safeGet(url) }
+                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val html = json["parse"]?.jsonObject?.get("text")
