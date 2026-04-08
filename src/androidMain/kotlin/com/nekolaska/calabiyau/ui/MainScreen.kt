@@ -1,6 +1,8 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -122,7 +124,19 @@ fun MainScreen(
         // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
         var hubWebViewUrl by remember { mutableStateOf<String?>(null) }
 
-        when (currentDestination) {
+        // 将 WIKI_HUB 和 WIKI_HUB_WEBVIEW 视为同一动画状态（WebView 叠加在 Hub 上，不需要转场）
+        val animKey = if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW)
+            DrawerDestination.WIKI_HUB else currentDestination
+
+        AnimatedContent(
+            targetState = animKey,
+            transitionSpec = {
+                (fadeIn(tween(250)) + scaleIn(tween(250), initialScale = 0.96f))
+                    .togetherWith(fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.96f))
+            },
+            label = "MainPageTransition"
+        ) { destination ->
+        when (destination) {
             DrawerDestination.DOWNLOADER -> {
                 DownloaderScreen(
                     searchVM = searchVM,
@@ -142,7 +156,8 @@ fun MainScreen(
                     onInitialUrlConsumed = { pendingWikiUrl = null }
                 )
             }
-            DrawerDestination.WIKI_HUB, DrawerDestination.WIKI_HUB_WEBVIEW -> {
+            DrawerDestination.WIKI_HUB -> {
+                // WIKI_HUB_WEBVIEW 也映射到此分支（animKey 合并）
                 // Shortcut "characters" → 直接进入角色列表
                 val hubInitialPage = remember {
                     if (shortcutTarget == "characters") WikiHubPage.CHARACTERS
@@ -186,6 +201,9 @@ fun MainScreen(
             DrawerDestination.SETTINGS -> {
                 SettingsScreen(onBack = { currentDestination = DrawerDestination.WIKI_HUB })
             }
+
+            else -> {} // WIKI_HUB_WEBVIEW 已合并到 WIKI_HUB 处理
+        }
         }
     } }
 

@@ -76,13 +76,7 @@ fun MapDetailScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载地图信息…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                LoadingState("正在加载地图信息…", Modifier.padding(innerPadding))
             }
             errorMessage != null && detail == null -> {
                 ErrorState(
@@ -199,7 +193,7 @@ private fun MapInfoCard(detail: MapDetail) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            MapSectionTitle(Icons.Outlined.Info, "地图信息")
+            SectionTitle(Icons.Outlined.Info, "地图信息")
             Spacer(Modifier.height(12.dp))
 
             // 支持模式
@@ -275,7 +269,7 @@ private fun MapTerrainCard(terrainMapUrl: String) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            MapSectionTitle(Icons.Outlined.Layers, "地形图")
+            SectionTitle(Icons.Outlined.Layers, "地形图")
             Spacer(Modifier.height(12.dp))
             AsyncImage(
                 model = terrainMapUrl,
@@ -300,7 +294,7 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            MapSectionTitle(Icons.Outlined.PhotoLibrary, "地图概览")
+            SectionTitle(Icons.Outlined.PhotoLibrary, "地图概览")
             Spacer(Modifier.height(12.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -325,11 +319,4 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
     }
 }
 
-@Composable
-private fun MapSectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(10.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-    }
-}
+

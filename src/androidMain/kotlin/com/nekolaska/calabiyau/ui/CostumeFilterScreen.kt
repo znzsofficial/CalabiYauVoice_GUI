@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,6 +55,8 @@ fun CostumeFilterScreen(
     // 筛选状态
     var selectedCharacter by remember { mutableStateOf(initialCharacter) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
@@ -69,10 +73,12 @@ fun CostumeFilterScreen(
     LaunchedEffect(Unit) { loadData() }
 
     // 筛选后的列表
-    val filteredCostumes = remember(allCostumes, selectedCharacter, selectedQuality) {
+    val filteredCostumes = remember(allCostumes, selectedCharacter, selectedQuality, searchQuery) {
         allCostumes.filter { costume ->
             (selectedCharacter == null || costume.character == selectedCharacter) &&
-                    (selectedQuality == null || costume.quality == selectedQuality)
+                    (selectedQuality == null || costume.quality == selectedQuality) &&
+                    (searchQuery.isBlank() || costume.name.contains(searchQuery, ignoreCase = true)
+                            || costume.character.contains(searchQuery, ignoreCase = true))
         }
     }
 
@@ -83,36 +89,67 @@ fun CostumeFilterScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("角色时装", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    // 显示数量
-                    if (allCostumes.isNotEmpty()) {
-                        Text(
-                            "${filteredCostumes.size}/${allCostumes.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 16.dp)
+            if (isSearchActive) {
+                TopAppBar(
+                    title = {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("搜索时装名称…") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
                         )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            isSearchActive = false
+                            searchQuery = ""
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "关闭搜索")
+                        }
+                    },
+                    actions = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "清空")
+                            }
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                TopAppBar(
+                    title = { Text("角色时装", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "搜索")
+                        }
+                        if (allCostumes.isNotEmpty()) {
+                            Text(
+                                "${filteredCostumes.size}/${allCostumes.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
+                    }
+                )
+            }
         }
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载时装数据…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                LoadingState("正在加载时装数据…", Modifier.padding(innerPadding))
             }
             errorMessage != null && allCostumes.isEmpty() -> {
                 ErrorState(
@@ -439,10 +476,10 @@ private fun CostumeDetailSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(20.dp)) {
                     // 获取方式
                     if (costume.sources.isNotEmpty()) {
                         DetailRow(

@@ -73,20 +73,7 @@ fun CharacterListScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator()
-                        Text("正在加载角色列表…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                CharacterListSkeleton(Modifier.padding(innerPadding))
             }
 
             errorMessage != null && factions.isEmpty() -> {
@@ -208,6 +195,44 @@ private fun CharacterCard(
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp, vertical = 8.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 100.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxSize(),
+        userScrollEnabled = false
+    ) {
+        items(9) {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(5f / 12f),
+                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(12.dp)
+                            .padding(horizontal = 4.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
         }
     }
 }

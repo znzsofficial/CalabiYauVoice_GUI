@@ -72,20 +72,7 @@ fun WeaponListScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        CircularProgressIndicator()
-                        Text("正在加载武器列表…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                WeaponListSkeleton(Modifier.padding(innerPadding))
             }
 
             errorMessage != null && categories.isEmpty() -> {
@@ -261,6 +248,43 @@ private fun WeaponCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 140.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxSize(),
+        userScrollEnabled = false
+    ) {
+        items(6) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            ) {
+                Column {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 10f),
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                    )
+                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                        ShimmerBox(Modifier.fillMaxWidth(0.7f).height(14.dp))
+                        Spacer(Modifier.height(6.dp))
+                        ShimmerBox(Modifier.fillMaxWidth(0.4f).height(10.dp))
+                        Spacer(Modifier.height(6.dp))
+                        ShimmerBox(Modifier.width(48.dp).height(18.dp), shape = RoundedCornerShape(6.dp))
+                    }
                 }
             }
         }

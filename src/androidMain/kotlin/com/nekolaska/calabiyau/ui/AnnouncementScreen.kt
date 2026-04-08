@@ -67,13 +67,7 @@ fun AnnouncementScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载公告…", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
+                AnnouncementSkeleton(Modifier.padding(innerPadding))
             }
             errorMessage != null && announcements.isEmpty() -> {
                 ErrorState(
@@ -166,6 +160,36 @@ private fun AnnouncementCard(
                             Spacer(Modifier.width(4.dp))
                             Text("官网", style = MaterialTheme.typography.labelSmall)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnnouncementSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        repeat(5) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    ShimmerBox(Modifier.fillMaxWidth(0.85f).height(14.dp))
+                    Spacer(Modifier.height(6.dp))
+                    ShimmerBox(Modifier.fillMaxWidth(0.5f).height(14.dp))
+                    Spacer(Modifier.height(8.dp))
+                    ShimmerBox(Modifier.width(80.dp).height(10.dp))
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShimmerBox(Modifier.width(60.dp).height(32.dp), shape = RoundedCornerShape(10.dp))
+                        ShimmerBox(Modifier.width(60.dp).height(32.dp), shape = RoundedCornerShape(10.dp))
                     }
                 }
             }

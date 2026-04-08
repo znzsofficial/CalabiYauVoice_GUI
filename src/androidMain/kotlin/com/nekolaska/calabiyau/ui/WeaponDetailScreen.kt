@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,9 +51,12 @@ fun WeaponDetailScreen(
         isLoading = false
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
                 title = {
                     Text(weaponName, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -69,19 +73,14 @@ fun WeaponDetailScreen(
                     }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior
             )
         }
     ) { innerPadding ->
         when {
             isLoading -> {
-                Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(Modifier.height(12.dp))
-                        Text("正在加载武器信息…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+                WeaponDetailSkeleton(Modifier.padding(innerPadding))
             }
             errorMessage != null && detail == null -> {
                 ErrorState(
@@ -148,7 +147,7 @@ private fun WeaponDetailContent(
         // ── 武器外观跳转 ──
         if (onOpenWeaponSkins != null) {
             item(key = "skin_nav") {
-                OutlinedButton(
+                FilledTonalButton(
                     onClick = { onOpenWeaponSkins(detail.name) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -217,50 +216,27 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (detail.user.isNotBlank()) {
-                        WeaponInfoChip(detail.user, Icons.Outlined.Person,
+                        InfoChip(detail.user, Icons.Outlined.Person,
                             MaterialTheme.colorScheme.primaryContainer,
                             MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     if (detail.type.isNotBlank()) {
-                        WeaponInfoChip(detail.type, Icons.Outlined.Category,
+                        InfoChip(detail.type, Icons.Outlined.Category,
                             MaterialTheme.colorScheme.secondaryContainer,
                             MaterialTheme.colorScheme.onSecondaryContainer)
                     }
                     if (detail.fireMode.isNotBlank()) {
-                        WeaponInfoChip(detail.fireMode, Icons.Outlined.FlashOn,
+                        InfoChip(detail.fireMode, Icons.Outlined.FlashOn,
                             MaterialTheme.colorScheme.tertiaryContainer,
                             MaterialTheme.colorScheme.onTertiaryContainer)
                     }
                     if (detail.obtainMethod.isNotBlank()) {
-                        WeaponInfoChip(detail.obtainMethod, Icons.Outlined.Lock,
+                        InfoChip(detail.obtainMethod, Icons.Outlined.Lock,
                             MaterialTheme.colorScheme.surfaceContainerHighest,
                             MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun WeaponInfoChip(
-    label: String,
-    icon: ImageVector,
-    containerColor: androidx.compose.ui.graphics.Color,
-    contentColor: androidx.compose.ui.graphics.Color
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        contentColor = contentColor
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -276,7 +252,7 @@ private fun WeaponDescriptionCard(description: String) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            WeaponSectionTitle(Icons.Outlined.Description, "武器介绍")
+            SectionTitle(Icons.Outlined.Description, "武器介绍")
             Spacer(Modifier.height(10.dp))
             Text(description, style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -312,7 +288,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            WeaponSectionTitle(Icons.Outlined.BarChart, "武器数据")
+            SectionTitle(Icons.Outlined.BarChart, "武器数据")
             Spacer(Modifier.height(12.dp))
 
             val rows = stats.chunked(2)
@@ -351,7 +327,7 @@ private fun WeaponDamageCard(detail: WeaponDetail) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            WeaponSectionTitle(Icons.Outlined.GpsFixed, "武器伤害")
+            SectionTitle(Icons.Outlined.GpsFixed, "武器伤害")
 
             // 倍率信息
             if (detail.baseDamage.isNotBlank()) {
@@ -448,6 +424,8 @@ private fun WeaponDamageCard(detail: WeaponDetail) {
                     }
                 }
 
+                Spacer(Modifier.height(4.dp))
+
                 detail.damageTable.forEachIndexed { index, row ->
                     if (index > 0) {
                         HorizontalDivider(
@@ -494,7 +472,7 @@ private fun WeaponSubPagesCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            WeaponSectionTitle(Icons.AutoMirrored.Outlined.Article, "更多内容")
+            SectionTitle(Icons.AutoMirrored.Outlined.Article, "更多内容")
             Spacer(Modifier.height(8.dp))
 
             subPages.forEachIndexed { index, page ->
@@ -545,7 +523,7 @@ private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            WeaponSectionTitle(Icons.Outlined.Timer, "冷却时间")
+            SectionTitle(Icons.Outlined.Timer, "冷却时间")
             Spacer(Modifier.height(12.dp))
 
             cooldowns.entries.forEachIndexed { index, (mode, seconds) ->
@@ -590,10 +568,66 @@ private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
 }
 
 @Composable
-private fun WeaponSectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(10.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 头部卡片骨架
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                ShimmerBox(
+                    modifier = Modifier.fillMaxWidth().height(160.dp),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                ShimmerBox(Modifier.width(140.dp).height(24.dp))
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ShimmerBox(Modifier.width(72.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
+                    ShimmerBox(Modifier.width(64.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
+                    ShimmerBox(Modifier.width(80.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
+                }
+            }
+        }
+        // 武器数据卡片骨架
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                ShimmerBox(Modifier.width(100.dp).height(18.dp))
+                Spacer(Modifier.height(12.dp))
+                repeat(3) { row ->
+                    if (row > 0) Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth()) {
+                        Column(Modifier.weight(1f)) {
+                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
+                            Spacer(Modifier.height(4.dp))
+                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
+                        }
+                        Column(Modifier.weight(1f)) {
+                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
+                            Spacer(Modifier.height(4.dp))
+                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
+                        }
+                    }
+                }
+            }
+        }
+        // 伤害表卡片骨架
+        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                ShimmerBox(Modifier.width(100.dp).height(18.dp))
+                Spacer(Modifier.height(12.dp))
+                ShimmerBox(Modifier.fillMaxWidth().height(32.dp), shape = RoundedCornerShape(8.dp))
+                Spacer(Modifier.height(4.dp))
+                repeat(3) {
+                    Spacer(Modifier.height(4.dp))
+                    ShimmerBox(Modifier.fillMaxWidth().height(28.dp))
+                }
+            }
+        }
     }
 }
+
+
