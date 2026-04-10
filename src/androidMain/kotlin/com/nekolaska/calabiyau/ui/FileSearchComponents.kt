@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.ui
 
-import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,17 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil3.ImageLoader
 import coil3.compose.AsyncImage
-import coil3.gif.AnimatedImageDecoder
-import coil3.gif.GifDecoder
-import coil3.request.ImageRequest
 
 @Composable
 fun FileSearchList(
@@ -282,52 +276,21 @@ fun ImagePreviewDialog(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                // Image
-                val context = LocalContext.current
-                val isGif = imageUrl.lowercase().let {
-                    it.endsWith(".gif") || it.contains(".gif?")
-                }
-                val imageLoader = remember(isGif) {
-                    if (isGif) {
-                        ImageLoader.Builder(context)
-                            .components {
-                                if (Build.VERSION.SDK_INT >= 28) {
-                                    add(AnimatedImageDecoder.Factory())
-                                } else {
-                                    add(GifDecoder.Factory())
-                                }
-                            }
-                            .build()
-                    } else null
-                }
+                // Image — 全局 SingletonImageLoader 已注册 AnimatedImageDecoder / GifDecoder，
+                // GIF 与静态图都直接走 ZoomableImage / AsyncImage。
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isGif && imageLoader != null) {
-                        val request = ImageRequest.Builder(context)
-                            .data(imageUrl)
-                            .build()
-                        AsyncImage(
-                            model = request,
-                            imageLoader = imageLoader,
-                            contentDescription = title,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(16.dp)),
-                            contentScale = ContentScale.Fit
-                        )
-                    } else {
-                        ZoomableImage(
-                            model = imageUrl,
-                            contentDescription = title,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(16.dp))
-                        )
-                    }
+                    ZoomableImage(
+                        model = imageUrl,
+                        contentDescription = title,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(16.dp))
+                    )
                 }
             }
         }
