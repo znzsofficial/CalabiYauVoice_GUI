@@ -114,6 +114,8 @@ fun SettingsScreen(onBack: () -> Unit) {
             return@AnimatedContent
         }
 
+    val showSnack = rememberSnackbarLauncher()
+
     Scaffold(
         topBar = {
             Row(
@@ -605,11 +607,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-                    WebViewCacheItem(context = context)
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    OfflineCacheItem()
+                    CacheManagementItem()
                 }
             }
 
@@ -736,7 +734,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                             }
                                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                             clipboard.setPrimaryClip(android.content.ClipData.newPlainText("设备信息", info))
-                                            android.widget.Toast.makeText(context, "已复制", android.widget.Toast.LENGTH_SHORT).show()
+                                            showSnack("已复制")
                                         },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
@@ -1347,147 +1345,250 @@ private fun StorageStatisticsCard(savePath: String) {
     }
 }
 
-/** WebView 缓存统计 + 清除按钮 */
+/** 缓存类别 */
+private enum class CacheCategory(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector
+) {
+    OFFLINE("离线数据", "Wiki 页面 JSON 缓存", Icons.Outlined.Cached),
+    IMAGE("图片缓存", "Coil 磁盘缓存", Icons.Outlined.Image),
+    WEBVIEW("WebView 缓存", "网页数据和代码缓存", Icons.Outlined.CleaningServices),
+}
+
+/**
+ * 统一的缓存管理项。
+ *
+ * 单行展示三类缓存的总大小，点击弹出对话框显示明细 + 单项/全部清除按钮。
+ */
 @Composable
-private fun WebViewCacheItem(context: android.content.Context) {
-    var cacheSize by remember { mutableStateOf<Long?>(null) }
+private fun CacheManagementItem() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val showSnack = rememberSnackbarLauncher()
+
+    var sizes by remember { mutableStateOf<Map<CacheCategory, Long>>(emptyMap()) }
     var isCalculating by remember { mutableStateOf(true) }
+    var clearingCategory by remember { mutableStateOf<CacheCategory?>(null) }
+    var isClearingAll by remember { mutableStateOf(false) }
+    var showDialog by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(refreshKey) {
         isCalculating = true
-        withContext(Dispatchers.IO) {
-            cacheSize = calculateWebViewCacheSize(context)
-        }
+        sizes = withContext(Dispatchers.IO) { computeAllCacheSizes(context) }
         isCalculating = false
     }
+
+    val totalSize = sizes.values.sum()
+    val isBusy = isCalculating || clearingCategory != null || isClearingAll
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(smoothCornerShape(16.dp))
-            .clickable {
+            .clickable(enabled = !isBusy) { showDialog = true }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.DeleteSweep, null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "缓存管理",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = when {
+                    isCalculating -> "计算中…"
+                    totalSize > 0 -> "总计 ${formatFileSize(totalSize)}"
+                    else -> "无缓存"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        if (isBusy) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(
+                Icons.Default.ChevronRight, null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { if (clearingCategory == null && !isClearingAll) showDialog = false },
+            title = { Text("缓存管理") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    CacheCategory.entries.forEach { category ->
+                        CacheCategoryRow(
+                            category = category,
+                            size = sizes[category] ?: 0L,
+                            isClearing = clearingCategory == category,
+                            enabled = clearingCategory == null && !isClearingAll,
+                            onClear = {
+                                scope.launch {
+                                    clearingCategory = category
+                                    withContext(Dispatchers.IO) { clearCache(context, category) }
+                                    clearingCategory = null
+                                    refreshKey++
+                                    showSnack("${category.title}已清除")
+                                }
+                            }
+                        )
+                    }
+                }
+            },
+            shape = smoothCornerShape(28.dp),
+            confirmButton = {
+                FilledTonalButton(
+                    enabled = totalSize > 0 && clearingCategory == null && !isClearingAll,
+                    onClick = {
+                        scope.launch {
+                            isClearingAll = true
+                            withContext(Dispatchers.IO) {
+                                CacheCategory.entries.forEach { clearCache(context, it) }
+                            }
+                            isClearingAll = false
+                            refreshKey++
+                            showDialog = false
+                            showSnack("所有缓存已清除")
+                        }
+                    },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    if (isClearingAll) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text("全部清除")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = clearingCategory == null && !isClearingAll,
+                    onClick = { showDialog = false }
+                ) { Text("关闭") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun CacheCategoryRow(
+    category: CacheCategory,
+    size: Long,
+    isClearing: Boolean,
+    enabled: Boolean,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            category.icon,
+            null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                category.title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (size > 0) formatFileSize(size) else category.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        if (isClearing) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        } else {
+            IconButton(
+                onClick = onClear,
+                enabled = enabled && size > 0,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Delete,
+                    contentDescription = "清除${category.title}",
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.error.copy(
+                        alpha = if (enabled && size > 0) 1f else 0.3f
+                    )
+                )
+            }
+        }
+    }
+}
+
+private suspend fun computeAllCacheSizes(
+    context: android.content.Context
+): Map<CacheCategory, Long> = withContext(Dispatchers.IO) {
+    val loader = coil3.SingletonImageLoader.get(context)
+    mapOf(
+        CacheCategory.OFFLINE to OfflineCache.totalSize(),
+        CacheCategory.IMAGE to (loader.diskCache?.size ?: 0L),
+        CacheCategory.WEBVIEW to calculateWebViewCacheSize(context),
+    )
+}
+
+private suspend fun clearCache(
+    context: android.content.Context,
+    category: CacheCategory
+) = withContext(Dispatchers.IO) {
+    when (category) {
+        CacheCategory.OFFLINE -> {
+            OfflineCache.clearAll()
+            OfflineCache.clearMemoryCaches()
+        }
+        CacheCategory.IMAGE -> {
+            val loader = coil3.SingletonImageLoader.get(context)
+            loader.diskCache?.clear()
+            loader.memoryCache?.clear()
+        }
+        CacheCategory.WEBVIEW -> {
+            // WebView 必须在主线程调用
+            withContext(Dispatchers.Main) {
                 android.webkit.WebView(context).apply {
                     clearCache(true)
                     clearHistory()
                     destroy()
                 }
-                refreshKey++
             }
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(40.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Outlined.CleaningServices, null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                "清除 WebView 缓存",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = when {
-                    isCalculating -> "计算中…"
-                    cacheSize != null && cacheSize!! > 0 -> "当前占用 ${formatFileSize(cacheSize!!)}"
-                    else -> "无缓存"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
-        }
-        if (isCalculating) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-        } else {
-            Icon(
-                Icons.Default.ChevronRight, null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-/** 离线缓存统计 + 清除按钮 */
-@Composable
-private fun OfflineCacheItem() {
-    var cacheSize by remember { mutableStateOf<Long?>(null) }
-    var isCalculating by remember { mutableStateOf(true) }
-    var refreshKey by remember { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(refreshKey) {
-        isCalculating = true
-        withContext(Dispatchers.IO) {
-            cacheSize = OfflineCache.totalSize()
-        }
-        isCalculating = false
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(smoothCornerShape(16.dp))
-            .clickable {
-                scope.launch {
-                    OfflineCache.clearAll()
-                    refreshKey++
-                }
-            }
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(40.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Outlined.Cached, null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                "清除离线缓存",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = when {
-                    isCalculating -> "计算中…"
-                    cacheSize != null && cacheSize!! > 0 -> "已缓存 ${formatFileSize(cacheSize!!)}（离线可用）"
-                    else -> "无缓存"
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
-        }
-        if (isCalculating) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-        } else {
-            Icon(
-                Icons.Default.ChevronRight, null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
-            )
         }
     }
 }
