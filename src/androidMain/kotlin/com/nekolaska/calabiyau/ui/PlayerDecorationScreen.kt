@@ -38,11 +38,11 @@ import com.nekolaska.calabiyau.data.PlayerDecorationApi
 // ════════════════════════════════════════════════════════
 
 private fun qualityColor(quality: Int): Color = when (quality) {
-    6 -> Color(0xFFFF8C00)
-    5 -> Color(0xFFE040FB)
-    4 -> Color(0xFFAB47BC)
-    3 -> Color(0xFF42A5F5)
-    2 -> Color(0xFF66BB6A)
+    6 -> Color(0xFFFF6B2C)
+    5 -> Color(0xFFEF4444)
+    4 -> Color(0xFFF59E0B)
+    3 -> Color(0xFFAB47BC)
+    2 -> Color(0xFF42A5F5)
     1 -> Color(0xFF90A4AE)
     else -> Color(0xFF90A4AE)
 }
@@ -97,7 +97,8 @@ fun PlayerDecorationScreen(
     ) { innerPadding ->
         ApiResourceContent(
             state = state,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> PlayerDecorationSkeleton(mod) }
         ) {
             Column(Modifier.fillMaxSize()) {
                 // Section 切换
@@ -269,6 +270,71 @@ fun PlayerDecorationScreen(
                 TextButton(onClick = { saveTargetItem = null }) { Text("取消") }
             }
         )
+    }
+}
+
+@Composable
+private fun PlayerDecorationSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            repeat(4) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(if (it == 0) 80.dp else 68.dp)
+                        .height(32.dp),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 150.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            userScrollEnabled = false
+        ) {
+            items(10) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Column {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f),
+                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ShimmerBox(
+                                modifier = Modifier.size(8.dp),
+                                shape = RoundedCornerShape(50)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            ShimmerBox(Modifier.fillMaxWidth(0.7f).height(11.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
