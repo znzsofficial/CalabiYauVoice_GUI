@@ -207,21 +207,39 @@ fun MainScreen(
         }
     } }
 
+    // ── 全局 Snackbar 宿主，替代 Toast + 接收 SearchViewModel.errorEvent ──
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(searchVM) {
+        searchVM.errorEvent.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
     // ── 根据屏幕宽度选择布局 ──
-    Surface(color = MaterialTheme.colorScheme.background) {
-        if (useExpandedLayout) {
-            PermanentNavigationDrawer(
-                drawerContent = drawerContent,
-                content = { pageContent() }
-            )
-        } else {
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                gesturesEnabled = currentDestination != DrawerDestination.WIKI
-                        && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
-                drawerContent = drawerContent,
-                content = { pageContent() }
-            )
+    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Box(Modifier.fillMaxSize()) {
+                if (useExpandedLayout) {
+                    PermanentNavigationDrawer(
+                        drawerContent = drawerContent,
+                        content = { pageContent() }
+                    )
+                } else {
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        gesturesEnabled = currentDestination != DrawerDestination.WIKI
+                                && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
+                        drawerContent = drawerContent,
+                        content = { pageContent() }
+                    )
+                }
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                )
+            }
         }
     }
 }

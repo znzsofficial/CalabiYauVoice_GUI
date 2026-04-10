@@ -10,6 +10,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,17 +39,23 @@ fun GameModeScreen(
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var modes by remember { mutableStateOf<List<GameModeDetail>>(emptyList()) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
     var expandedMode by remember { mutableStateOf<String?>(null) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
+            errorResult = null
             when (val result = GameModeApi.fetchAllModes(forceRefresh)) {
-                is ApiResult.Success -> modes = result.value
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> {
+                    modes = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
+                }
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -75,36 +83,49 @@ fun GameModeScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && modes.isEmpty() -> {
                 LoadingState("正在加载模式信息…", Modifier.padding(innerPadding))
             }
-            errorMessage != null && modes.isEmpty() -> {
+            errorResult != null && modes.isEmpty() -> {
                 ErrorState(
-                    message = errorMessage!!,
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
                     onRetry = { loadData(forceRefresh = true) },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
             else -> {
-                LazyColumn(
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadData(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(innerPadding)
                 ) {
-                    items(modes, key = { it.name }) { mode ->
-                        GameModeCard(
-                            mode = mode,
-                            isExpanded = expandedMode == mode.name,
-                            onToggle = {
-                                expandedMode = if (expandedMode == mode.name) null else mode.name
-                            },
-                            onOpenWikiUrl = onOpenWikiUrl,
-                            onOpenMapDetail = onOpenMapDetail
-                        )
+                    Column(Modifier.fillMaxSize()) {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
+                        }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(modes, key = { it.name }) { mode ->
+                                GameModeCard(
+                                    mode = mode,
+                                    isExpanded = expandedMode == mode.name,
+                                    onToggle = {
+                                        expandedMode = if (expandedMode == mode.name) null else mode.name
+                                    },
+                                    onOpenWikiUrl = onOpenWikiUrl,
+                                    onOpenMapDetail = onOpenMapDetail
+                                )
+                            }
+                            item { Spacer(Modifier.height(16.dp)) }
+                        }
                     }
-                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
         }

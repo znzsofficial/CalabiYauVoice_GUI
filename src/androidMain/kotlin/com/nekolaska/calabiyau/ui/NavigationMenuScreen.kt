@@ -18,6 +18,8 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,24 +57,27 @@ fun NavigationMenuScreen(
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var sections by remember { mutableStateOf<List<NavigationMenuApi.NavSection>>(emptyList()) }
     var expandedSections by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
-    fun loadNavigation() {
+    fun loadNavigation(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
-            when (val result = NavigationMenuApi.fetchNavigationSections()) {
+            errorResult = null
+            when (val result = NavigationMenuApi.fetchNavigationSections(forceRefresh)) {
                 is ApiResult.Success -> {
                     sections = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
                     // 默认展开所有分区
-                    expandedSections = result.value.map { it.title }.toSet()
+                    if (expandedSections.isEmpty()) {
+                        expandedSections = result.value.map { it.title }.toSet()
+                    }
                 }
-                is ApiResult.Error -> {
-                    sections = emptyList()
-                    errorMessage = result.message
-                }
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -106,7 +111,7 @@ fun NavigationMenuScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { loadNavigation() }, enabled = !isLoading) {
+                        IconButton(onClick = { loadNavigation(forceRefresh = true) }, enabled = !isLoading) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
                     }
@@ -114,56 +119,56 @@ fun NavigationMenuScreen(
             }
         }
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when {
-                isLoading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            CircularProgressIndicator()
-                            Text("正在加载 Wiki 导航…", style = MaterialTheme.typography.bodyMedium)
+        when {
+            isLoading && sections.isEmpty() -> {
+                LoadingState("正在加载 Wiki 导航…", Modifier.padding(innerPadding))
+            }
+            errorResult != null && sections.isEmpty() -> {
+                ErrorState(
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
+                    onRetry = { loadNavigation(forceRefresh = true) },
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+            else -> {
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadNavigation(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
                         }
-                    }
-                }
-
-                errorMessage != null -> {
-                    ErrorState(
-                        message = errorMessage!!,
-                        onRetry = { loadNavigation() }
-                    )
-                }
-
-                sections.isEmpty() -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("暂无可用导航数据", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(sections, key = { it.title }) { section ->
-                            NavSectionCard(
-                                section = section,
-                                isExpanded = section.title in expandedSections,
-                                onToggle = {
-                                    expandedSections = if (section.title in expandedSections) {
-                                        expandedSections - section.title
-                                    } else {
-                                        expandedSections + section.title
-                                    }
-                                },
-                                onOpenWikiUrl = onOpenWikiUrl
-                            )
+                        if (sections.isEmpty()) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("暂无可用导航数据", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(sections, key = { it.title }) { section ->
+                                    NavSectionCard(
+                                        section = section,
+                                        isExpanded = section.title in expandedSections,
+                                        onToggle = {
+                                            expandedSections = if (section.title in expandedSections) {
+                                                expandedSections - section.title
+                                            } else {
+                                                expandedSections + section.title
+                                            }
+                                        },
+                                        onOpenWikiUrl = onOpenWikiUrl
+                                    )
+                                }
+                            }
                         }
                     }
                 }

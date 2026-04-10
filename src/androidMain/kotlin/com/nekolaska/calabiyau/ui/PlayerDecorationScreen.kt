@@ -4,7 +4,6 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.webkit.URLUtil
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -16,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,24 +68,29 @@ fun PlayerDecorationScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val showSnack = rememberSnackbarLauncher()
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var sections by remember { mutableStateOf<List<PlayerDecorationApi.DecorationSection>>(emptyList()) }
     var selectedSectionIndex by remember { mutableStateOf(0) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
     var previewItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
     var saveTargetItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
+            errorResult = null
             when (val result = PlayerDecorationApi.fetch(pageName, forceRefresh)) {
                 is ApiResult.Success -> {
                     sections = result.value
                     selectedSectionIndex = 0
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
                 }
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -112,70 +118,83 @@ fun PlayerDecorationScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && sections.isEmpty() -> {
                 LoadingState(modifier = Modifier.padding(innerPadding))
             }
-            errorMessage != null && sections.isEmpty() -> {
+            errorResult != null && sections.isEmpty() -> {
                 ErrorState(
-                    message = errorMessage!!,
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
                     onRetry = { loadData(forceRefresh = true) },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
             else -> {
-                Column(Modifier.fillMaxSize().padding(innerPadding)) {
-                    // Section 切换
-                    if (sections.size > 1) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            sections.forEachIndexed { index, section ->
-                                FilterChip(
-                                    selected = selectedSectionIndex == index,
-                                    onClick = { selectedSectionIndex = index },
-                                    label = {
-                                        Text(
-                                            section.title,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            maxLines = 1
-                                        )
-                                    },
-                                    leadingIcon = if (selectedSectionIndex == index) {
-                                        {
-                                            Icon(
-                                                Icons.Outlined.Check, null,
-                                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadData(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
+                        }
+                        // Section 切换
+                        if (sections.size > 1) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                sections.forEachIndexed { index, section ->
+                                    FilterChip(
+                                        selected = selectedSectionIndex == index,
+                                        onClick = { selectedSectionIndex = index },
+                                        label = {
+                                            Text(
+                                                section.title,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                maxLines = 1
                                             )
-                                        }
-                                    } else null
-                                )
+                                        },
+                                        leadingIcon = if (selectedSectionIndex == index) {
+                                            {
+                                                Icon(
+                                                    Icons.Outlined.Check, null,
+                                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                                )
+                                            }
+                                        } else null
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // 网格
-                    val currentSection = sections.getOrNull(selectedSectionIndex)
-                    if (currentSection != null) {
-                        val gridState = rememberLazyGridState()
-                        LaunchedEffect(selectedSectionIndex) { gridState.scrollToItem(0) }
+                        // 网格
+                        val currentSection = sections.getOrNull(selectedSectionIndex)
+                        if (currentSection != null) {
+                            val gridState = rememberLazyGridState()
+                            LaunchedEffect(selectedSectionIndex) { gridState.scrollToItem(0) }
 
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 150.dp),
-                            state = gridState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = 12.dp, end = 12.dp,
-                                top = 8.dp, bottom = 16.dp
-                            ),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(currentSection.items, key = { it.id }) { item ->
-                                DecorationCard(item = item, onClick = { previewItem = item })
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 150.dp),
+                                state = gridState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = 12.dp, end = 12.dp,
+                                    top = 8.dp, bottom = 16.dp
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(currentSection.items, key = { it.id }) { item ->
+                                    DecorationCard(item = item, onClick = { previewItem = item })
+                                }
                             }
                         }
                     }
@@ -284,9 +303,9 @@ fun PlayerDecorationScreen(
                         }
                         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                         dm.enqueue(request)
-                        Toast.makeText(context, "已保存: $fileName", Toast.LENGTH_SHORT).show()
+                        showSnack("已保存: $fileName")
                     } catch (e: Exception) {
-                        Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                        showSnack("保存失败: ${e.message}")
                     }
                 }) { Text("保存") }
             },

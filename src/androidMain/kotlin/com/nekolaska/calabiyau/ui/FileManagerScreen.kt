@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.webkit.MimeTypeMap
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -54,6 +53,7 @@ import kotlin.math.pow
 @Composable
 fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
     val context = LocalContext.current
+    val showSnack = rememberSnackbarLauncher()
     var currentDir by remember { mutableStateOf(File(rootPath)) }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -158,7 +158,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                             // 批量分享（仅文件，不含文件夹）
                             val shareableCount = selectedFileObjects.count { it.isFile }
                             IconButton(
-                                onClick = { shareFiles(context, selectedFileObjects.filter { it.isFile }) },
+                                onClick = { shareFiles(context, selectedFileObjects.filter { it.isFile }, showSnack) },
                                 enabled = shareableCount > 0
                             ) {
                                 Icon(Icons.Outlined.Share, "批量分享")
@@ -285,7 +285,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                         } else if (file.isAudioFile()) {
                                             AudioPlayerManager.play(file.absolutePath)
                                         } else {
-                                            openFile(context, file)
+                                            openFile(context, file, showSnack)
                                         }
                                     }
                                 },
@@ -364,7 +364,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                         icon = Icons.AutoMirrored.Outlined.OpenInNew,
                         label = "打开",
                         onClick = {
-                            openFile(context, file)
+                            openFile(context, file, showSnack)
                             selectedFile = null
                         }
                     )
@@ -409,7 +409,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                         icon = Icons.Outlined.Share,
                         label = "分享",
                         onClick = {
-                            shareFile(context, file)
+                            shareFile(context, file, showSnack)
                             selectedFile = null
                         }
                     )
@@ -460,14 +460,14 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                     onClick = {
                         val target = File(file.parent, newName)
                         if (target.exists()) {
-                            Toast.makeText(context, "同名文件已存在", Toast.LENGTH_SHORT).show()
+                            showSnack("同名文件已存在")
                         } else if (file.renameTo(target)) {
-                            Toast.makeText(context, "已重命名", Toast.LENGTH_SHORT).show()
+                            showSnack("已重命名")
                             refreshCounter++
                             selectedFile = null
                             showRenameDialog = false
                         } else {
-                            Toast.makeText(context, "重命名失败", Toast.LENGTH_SHORT).show()
+                            showSnack("重命名失败")
                         }
                     },
                     enabled = newName.isNotBlank() && newName != file.name
@@ -502,10 +502,10 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                 forceDelete(file)
                             }
                             if (success) {
-                                Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
+                                showSnack("已删除")
                                 refreshCounter++
                             } else {
-                                Toast.makeText(context, "删除失败，请检查存储权限", Toast.LENGTH_SHORT).show()
+                                showSnack("删除失败，请检查存储权限")
                             }
                         }
                     },
@@ -562,7 +562,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                 append("已删除 $successCount 项")
                                 if (failCount > 0) append("，$failCount 项失败")
                             }
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            showSnack(msg)
                             refreshCounter++
                         }
                     },
@@ -619,7 +619,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                         }
                         Row {
                             if (currentFile != null) {
-                                IconButton(onClick = { shareFile(context, currentFile) }) {
+                                IconButton(onClick = { shareFile(context, currentFile, showSnack) }) {
                                     Icon(Icons.Outlined.Share, "分享", modifier = Modifier.size(20.dp))
                                 }
                             }
@@ -904,7 +904,7 @@ private fun getFileUri(context: Context, file: File): Uri {
     }
 }
 
-private fun openFile(context: Context, file: File) {
+private fun openFile(context: Context, file: File, onError: (String) -> Unit) {
     try {
         val uri = getFileUri(context, file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -914,11 +914,11 @@ private fun openFile(context: Context, file: File) {
         }
         context.startActivity(intent)
     } catch (_: Exception) {
-        Toast.makeText(context, "无法打开该文件", Toast.LENGTH_SHORT).show()
+        onError("无法打开该文件")
     }
 }
 
-private fun shareFile(context: Context, file: File) {
+private fun shareFile(context: Context, file: File, onError: (String) -> Unit) {
     try {
         val uri = getFileUri(context, file)
         val intent = Intent.createChooser(
@@ -931,14 +931,14 @@ private fun shareFile(context: Context, file: File) {
         )
         context.startActivity(intent)
     } catch (_: Exception) {
-        Toast.makeText(context, "分享失败", Toast.LENGTH_SHORT).show()
+        onError("分享失败")
     }
 }
 
-private fun shareFiles(context: Context, fileList: List<File>) {
+private fun shareFiles(context: Context, fileList: List<File>, onError: (String) -> Unit) {
     if (fileList.isEmpty()) return
     if (fileList.size == 1) {
-        shareFile(context, fileList.first())
+        shareFile(context, fileList.first(), onError)
         return
     }
     try {
@@ -956,6 +956,6 @@ private fun shareFiles(context: Context, fileList: List<File>) {
         )
         context.startActivity(intent)
     } catch (_: Exception) {
-        Toast.makeText(context, "分享失败", Toast.LENGTH_SHORT).show()
+        onError("分享失败")
     }
 }
