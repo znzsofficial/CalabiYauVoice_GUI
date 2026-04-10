@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -52,6 +54,8 @@ object GameModeApi {
     @Volatile
     private var cachedModes: List<GameModeDetail>? = null
 
+    fun clearMemoryCache() { cachedModes = null }
+
     /**
      * 获取所有游戏模式详情（带缓存）。
      */
@@ -59,29 +63,44 @@ object GameModeApi {
         if (!forceRefresh) {
             cachedModes?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork().also {
+        return fetchFromNetwork(forceRefresh).also {
             if (it is ApiResult.Success) cachedModes = it.value
         }
     }
 
-    private suspend fun fetchFromNetwork(): ApiResult<List<GameModeDetail>> =
+    /** 内部：带缓存元数据的模式结果 */
+    private data class ModeResult(
+        val detail: GameModeDetail,
+        val isFromCache: Boolean,
+        val ageMs: Long
+    )
+
+    private suspend fun fetchFromNetwork(
+        forceRefresh: Boolean
+    ): ApiResult<List<GameModeDetail>> =
         withContext(Dispatchers.IO) {
             try {
                 // 先从「模板:卡拉彼丘」获取所有模式的地图映射
-                val modeMapMapping = fetchModeMapMapping()
+                val modeMapMapping = fetchModeMapMapping(forceRefresh)
 
                 val results = MODES.map { mode ->
-                    async { fetchMode(mode, modeMapMapping) }
+                    async { fetchMode(mode, modeMapMapping, forceRefresh) }
                 }.awaitAll()
 
                 val data = results.filterNotNull()
                 if (data.isEmpty()) {
-                    ApiResult.Error("获取游戏模式失败")
+                    ApiResult.Error("获取游戏模式失败", kind = ErrorKind.NETWORK)
                 } else {
-                    ApiResult.Success(data)
+                    val isOffline = data.any { it.isFromCache }
+                    val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
+                    ApiResult.Success(
+                        data.map { it.detail },
+                        isOffline = isOffline,
+                        cacheAgeMs = maxAge
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("获取游戏模式失败: ${e.message}")
+                ApiResult.Error("获取游戏模式失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 
@@ -89,15 +108,17 @@ object GameModeApi {
      * 从「模板:卡拉彼丘」解析模式→地图映射。
      * 模板结构：group{N}=模式名, list{N}=地图列表
      */
-    private suspend fun fetchModeMapMapping(): Map<String, List<String>> {
+    private suspend fun fetchModeMapMapping(forceRefresh: Boolean): Map<String, List<String>> {
         val mapping = mutableMapOf<String, List<String>>()
         try {
             val encoded = URLEncoder.encode("模板:卡拉彼丘", "UTF-8")
             val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-            val (body, _) = OfflineCache.fetchWithCache(
+            val cacheResult = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.GAME_MODES,
-                key = "mode_map_mapping"
+                key = "mode_map_mapping",
+                forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) } ?: return mapping
+            val body = cacheResult.json
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val wikitext = json["parse"]?.jsonObject?.get("wikitext")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return mapping
@@ -138,20 +159,35 @@ object GameModeApi {
         return mapping
     }
 
-    private suspend fun fetchMode(mode: ModeEntry, modeMapMapping: Map<String, List<String>>): GameModeDetail? {
+    private suspend fun fetchMode(
+        mode: ModeEntry,
+        modeMapMapping: Map<String, List<String>>,
+        forceRefresh: Boolean
+    ): ModeResult? {
         return try {
             val encoded = URLEncoder.encode(mode.pageName, "UTF-8")
             val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-            val (body, _) = OfflineCache.fetchWithCache(
+            val cacheResult = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.GAME_MODES,
-                key = "mode_${mode.pageName}"
+                key = "mode_${mode.pageName}",
+                forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) } ?: return null
+            val body = cacheResult.json
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val wikitext = json["parse"]?.jsonObject?.get("wikitext")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return null
 
-            parseModeWikitext(mode, wikitext, modeMapMapping[mode.displayName] ?: emptyList())
+            val detail = parseModeWikitext(
+                mode,
+                wikitext,
+                modeMapMapping[mode.displayName] ?: emptyList()
+            )
+            ModeResult(
+                detail = detail,
+                isFromCache = cacheResult.isFromCache,
+                ageMs = cacheResult.ageMs
+            )
         } catch (_: Exception) {
             null
         }

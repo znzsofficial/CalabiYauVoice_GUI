@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -32,6 +34,8 @@ object AnnouncementApi {
     @Volatile
     private var cachedData: List<Announcement>? = null
 
+    fun clearMemoryCache() { cachedData = null }
+
     /**
      * 获取公告列表（带缓存）。
      * @param limit 获取数量
@@ -43,26 +47,37 @@ object AnnouncementApi {
         if (!forceRefresh) {
             cachedData?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(limit).also {
+        return fetchFromNetwork(limit, forceRefresh).also {
             if (it is ApiResult.Success) cachedData = it.value
         }
     }
 
-    private suspend fun fetchFromNetwork(limit: Int): ApiResult<List<Announcement>> =
+    private suspend fun fetchFromNetwork(
+        limit: Int,
+        forceRefresh: Boolean
+    ): ApiResult<List<Announcement>> =
         withContext(Dispatchers.IO) {
             try {
                 val query = "[[分类:公告资讯]]|?时间|?b站|?官网|sort=时间|order=desc|limit=$limit"
                 val encoded = URLEncoder.encode(query, "UTF-8")
                 val url = "$API?action=ask&query=$encoded&format=json"
-                val (body, _) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.ANNOUNCEMENTS,
-                    key = "announcements_$limit"
+                    key = "announcements_$limit",
+                    forceRefresh = forceRefresh
                 ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
+                    ?: return@withContext ApiResult.Error(
+                        "请求失败，且无离线缓存",
+                        kind = ErrorKind.NETWORK
+                    )
+                val body = result.json
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val results = json["query"]?.jsonObject?.get("results")?.jsonObject
-                    ?: return@withContext ApiResult.Error("无法获取公告数据")
+                    ?: return@withContext ApiResult.Error(
+                        "无法获取公告数据",
+                        kind = ErrorKind.PARSE
+                    )
 
                 val announcements = results.entries.map { (title, value) ->
                     val obj = value.jsonObject
@@ -95,12 +110,16 @@ object AnnouncementApi {
                 }.sortedByDescending { it.date }
 
                 if (announcements.isEmpty()) {
-                    ApiResult.Error("未找到公告数据")
+                    ApiResult.Error("未找到公告数据", kind = ErrorKind.NOT_FOUND)
                 } else {
-                    ApiResult.Success(announcements)
+                    ApiResult.Success(
+                        announcements,
+                        isOffline = result.isFromCache,
+                        cacheAgeMs = result.ageMs
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("获取公告失败: ${e.message}")
+                ApiResult.Error("获取公告失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 

@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
@@ -34,31 +36,52 @@ object MapDetailApi {
      * 获取地图详情。
      * @param mapName 地图名（如"风曳镇"）
      */
-    suspend fun fetchMapDetail(mapName: String): ApiResult<MapDetail> =
+    suspend fun fetchMapDetail(
+        mapName: String,
+        forceRefresh: Boolean = false
+    ): ApiResult<MapDetail> =
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(mapName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
 
-                val (body, isOffline) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.MAP_DETAIL,
-                    key = mapName
+                    key = mapName,
+                    forceRefresh = forceRefresh
                 ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
+                    ?: return@withContext ApiResult.Error(
+                        "请求失败，且无离线缓存",
+                        kind = ErrorKind.NETWORK
+                    )
+                val body = result.json
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
-                    ?: return@withContext ApiResult.Error("无法获取页面内容")
+                    ?: return@withContext ApiResult.Error(
+                        "无法获取页面内容",
+                        kind = ErrorKind.PARSE
+                    )
                 val wikitext = parseObj["wikitext"]?.jsonObject?.get("*")
                     ?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error("无法获取页面内容")
+                    ?: return@withContext ApiResult.Error(
+                        "无法获取页面内容",
+                        kind = ErrorKind.PARSE
+                    )
 
                 val detail = parseMapWikitext(mapName, wikitext)
-                    ?: return@withContext ApiResult.Error("未找到地图信息模板")
+                    ?: return@withContext ApiResult.Error(
+                        "未找到地图信息模板",
+                        kind = ErrorKind.NOT_FOUND
+                    )
 
-                ApiResult.Success(detail, isOffline = isOffline)
+                ApiResult.Success(
+                    detail,
+                    isOffline = result.isFromCache,
+                    cacheAgeMs = result.ageMs
+                )
             } catch (e: Exception) {
-                ApiResult.Error("获取地图详情失败: ${e.message}")
+                ApiResult.Error("获取地图详情失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 

@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -28,6 +30,8 @@ object CharacterListApi {
     @Volatile
     private var cachedFactions: List<FactionData>? = null
 
+    fun clearMemoryCache() { cachedFactions = null }
+
     data class CharacterInfo(
         val name: String,
         val wikiUrl: String,
@@ -47,13 +51,20 @@ object CharacterListApi {
         if (!forceRefresh) cachedFactions?.let { return@withContext ApiResult.Success(it) }
         try {
             val results = FACTIONS.map { faction ->
-                async { fetchFaction(faction) }
+                async { fetchFaction(faction, forceRefresh) }
             }.awaitAll()
 
             val errors = results.filterIsInstance<ApiResult.Error>()
             if (errors.size == results.size) {
-                return@withContext ApiResult.Error("所有阵营加载失败: ${errors.first().message}")
+                return@withContext ApiResult.Error(
+                    "所有阵营加载失败: ${errors.first().message}",
+                    kind = errors.first().kind
+                )
             }
+
+            val successes = results.filterIsInstance<ApiResult.Success<FactionData>>()
+            val isOffline = successes.any { it.isOffline }
+            val maxAge = successes.maxOfOrNull { it.cacheAgeMs } ?: 0L
 
             val factions = results.mapIndexed { index, result ->
                 when (result) {
@@ -62,34 +73,46 @@ object CharacterListApi {
                 }
             }
             cachedFactions = factions
-            ApiResult.Success(factions)
+            ApiResult.Success(factions, isOffline = isOffline, cacheAgeMs = maxAge)
         } catch (e: Exception) {
-            ApiResult.Error("获取角色列表失败: ${e.message}")
+            ApiResult.Error("获取角色列表失败: ${e.message}", kind = e.toErrorKind())
         }
     }
 
-    private suspend fun fetchFaction(faction: String): ApiResult<FactionData> {
+    private suspend fun fetchFaction(
+        faction: String,
+        forceRefresh: Boolean
+    ): ApiResult<FactionData> {
         return try {
             val wikitext = "{{阵营角色|$faction}}"
             val encoded = URLEncoder.encode(wikitext, "UTF-8")
             val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-            val (body, isOffline) = OfflineCache.fetchWithCache(
+            val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.CHARACTER_LIST,
-                key = "faction_$faction"
+                key = "faction_$faction",
+                forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) }
-                ?: return ApiResult.Error("请求 $faction 失败，且无离线缓存")
+                ?: return ApiResult.Error(
+                    "请求 $faction 失败，且无离线缓存",
+                    kind = ErrorKind.NETWORK
+                )
+            val body = result.json
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")
                 ?.jsonObject?.get("*")
                 ?.jsonPrimitive?.content
-                ?: return ApiResult.Error("解析 $faction HTML 失败")
+                ?: return ApiResult.Error("解析 $faction HTML 失败", kind = ErrorKind.PARSE)
 
             val characters = parseCharactersFromHtml(html)
-            ApiResult.Success(FactionData(faction, characters))
+            ApiResult.Success(
+                FactionData(faction, characters),
+                isOffline = result.isFromCache,
+                cacheAgeMs = result.ageMs
+            )
         } catch (e: Exception) {
-            ApiResult.Error("加载 $faction 失败: ${e.message}")
+            ApiResult.Error("加载 $faction 失败: ${e.message}", kind = e.toErrorKind())
         }
     }
 

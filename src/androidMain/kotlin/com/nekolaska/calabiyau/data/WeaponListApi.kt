@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,6 +52,8 @@ object WeaponListApi {
     @Volatile
     private var cachedData: List<WeaponCategoryData>? = null
 
+    fun clearMemoryCache() { cachedData = null }
+
     /**
      * 获取所有分类的武器列表（带内存缓存）。
      */
@@ -57,42 +61,62 @@ object WeaponListApi {
         if (!forceRefresh) {
             cachedData?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork().also {
+        return fetchFromNetwork(forceRefresh).also {
             if (it is ApiResult.Success) cachedData = it.value
         }
     }
 
-    private suspend fun fetchFromNetwork(): ApiResult<List<WeaponCategoryData>> =
+    /** 内部：带缓存元数据的分类结果 */
+    private data class CategoryResult(
+        val data: WeaponCategoryData,
+        val isFromCache: Boolean,
+        val ageMs: Long
+    )
+
+    private suspend fun fetchFromNetwork(
+        forceRefresh: Boolean
+    ): ApiResult<List<WeaponCategoryData>> =
         withContext(Dispatchers.IO) {
             try {
                 val results = WeaponCategory.entries.map { category ->
-                    async { fetchCategory(category) }
+                    async { fetchCategory(category, forceRefresh) }
                 }.awaitAll()
 
                 val data = results.filterNotNull()
                 if (data.isEmpty()) {
-                    ApiResult.Error("获取武器列表失败")
+                    ApiResult.Error("获取武器列表失败", kind = ErrorKind.NETWORK)
                 } else {
-                    ApiResult.Success(data)
+                    val isOffline = data.any { it.isFromCache }
+                    val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
+                    ApiResult.Success(
+                        data.map { it.data },
+                        isOffline = isOffline,
+                        cacheAgeMs = maxAge
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("获取武器列表失败: ${e.message}")
+                ApiResult.Error("获取武器列表失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 
     /**
      * 获取单个分类的武器列表。
      */
-    private suspend fun fetchCategory(category: WeaponCategory): WeaponCategoryData? {
+    private suspend fun fetchCategory(
+        category: WeaponCategory,
+        forceRefresh: Boolean
+    ): CategoryResult? {
         return try {
             // 统一查询所有属性
             val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100"
             val encoded = URLEncoder.encode(query, "UTF-8")
             val url = "$API?action=ask&query=$encoded&format=json"
-            val (body, _) = OfflineCache.fetchWithCache(
+            val cacheResult = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_LIST,
-                key = "category_${category.name}"
+                key = "category_${category.name}",
+                forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) } ?: return null
+            val body = cacheResult.json
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
@@ -123,9 +147,13 @@ object WeaponListApi {
             // 批量获取武器图片
             val weaponsWithImages = fetchWeaponImages(weapons, category)
 
-            WeaponCategoryData(
-                category = category,
-                weapons = weaponsWithImages
+            CategoryResult(
+                data = WeaponCategoryData(
+                    category = category,
+                    weapons = weaponsWithImages
+                ),
+                isFromCache = cacheResult.isFromCache,
+                ageMs = cacheResult.ageMs
             )
         } catch (_: Exception) {
             null
