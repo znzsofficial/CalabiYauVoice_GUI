@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -35,6 +37,8 @@ object GalleryApi {
     // ── 内存缓存 ──
     private val cache = mutableMapOf<String, List<GallerySection>>()
 
+    fun clearMemoryCache() { cache.clear() }
+
     /**
      * 获取画廊数据（带缓存）。
      * @param pageName Wiki 页面名（如 "壁纸"、"表情包"、"官方四格漫画"）
@@ -46,37 +50,51 @@ object GalleryApi {
         if (!forceRefresh) {
             cache[pageName]?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(pageName).also {
+        return fetchFromNetwork(pageName, forceRefresh).also {
             if (it is ApiResult.Success) cache[pageName] = it.value
         }
     }
 
     private val jsonParser = SharedJson
 
-    private suspend fun fetchFromNetwork(pageName: String): ApiResult<List<GallerySection>> =
+    private suspend fun fetchFromNetwork(
+        pageName: String,
+        forceRefresh: Boolean
+    ): ApiResult<List<GallerySection>> =
         withContext(Dispatchers.IO) {
             try {
                 // 1. 获取 wikitext
                 val encoded = URLEncoder.encode(pageName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
-                val (body, _) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.GALLERY,
-                    key = "gallery_$pageName"
+                    key = "gallery_$pageName",
+                    forceRefresh = forceRefresh
                 ) {
                     val response = WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
                     response.use { if (it.isSuccessful) it.body.string() else null }
-                } ?: return@withContext ApiResult.Error("获取页面失败，且无离线缓存")
+                } ?: return@withContext ApiResult.Error(
+                    "获取页面失败，且无离线缓存",
+                    kind = ErrorKind.NETWORK
+                )
+                val body = result.json
 
                 val root = jsonParser.parseToJsonElement(body).jsonObject
                 val wikitext = root["parse"]?.jsonObject
                     ?.get("wikitext")?.jsonObject
                     ?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error("解析 wikitext 失败")
+                    ?: return@withContext ApiResult.Error(
+                        "解析 wikitext 失败",
+                        kind = ErrorKind.PARSE
+                    )
 
                 // 2. 解析 wikitext → sections
                 val rawSections = parseWikitext(wikitext)
                 if (rawSections.isEmpty()) {
-                    return@withContext ApiResult.Error("未找到图片内容")
+                    return@withContext ApiResult.Error(
+                        "未找到图片内容",
+                        kind = ErrorKind.NOT_FOUND
+                    )
                 }
 
                 // 3. 收集所有文件名，批量获取 URL
@@ -93,12 +111,16 @@ object GalleryApi {
                 }
 
                 if (sections.isEmpty()) {
-                    ApiResult.Error("未能解析到图片 URL")
+                    ApiResult.Error("未能解析到图片 URL", kind = ErrorKind.NOT_FOUND)
                 } else {
-                    ApiResult.Success(sections)
+                    ApiResult.Success(
+                        sections,
+                        isOffline = result.isFromCache,
+                        cacheAgeMs = result.ageMs
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("网络异常: ${e.message}")
+                ApiResult.Error("网络异常: ${e.message}", kind = e.toErrorKind())
             }
         }
 

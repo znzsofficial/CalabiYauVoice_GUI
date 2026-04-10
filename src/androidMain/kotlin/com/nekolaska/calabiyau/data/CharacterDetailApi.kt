@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
@@ -87,27 +89,41 @@ object CharacterDetailApi {
      * 获取角色详情。
      * @param characterName 角色名（如"米雪儿·李"）
      */
-    suspend fun fetchCharacterDetail(characterName: String): ApiResult<CharacterDetail> =
+    suspend fun fetchCharacterDetail(
+        characterName: String,
+        forceRefresh: Boolean = false
+    ): ApiResult<CharacterDetail> =
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(characterName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
 
-                val (body, isOffline) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.CHARACTER_DETAIL,
-                    key = characterName
+                    key = characterName,
+                    forceRefresh = forceRefresh
                 ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
+                    ?: return@withContext ApiResult.Error(
+                        "请求失败，且无离线缓存",
+                        kind = ErrorKind.NETWORK
+                    )
+                val body = result.json
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
                 val wikitext = parseObj?.get("wikitext")
                     ?.jsonObject?.get("*")
                     ?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error("无法获取页面内容")
+                    ?: return@withContext ApiResult.Error(
+                        "无法获取页面内容",
+                        kind = ErrorKind.PARSE
+                    )
 
                 val detail = parseCharacterWikitext(characterName, wikitext)
-                    ?: return@withContext ApiResult.Error("未找到角色信息模板")
+                    ?: return@withContext ApiResult.Error(
+                        "未找到角色信息模板",
+                        kind = ErrorKind.NOT_FOUND
+                    )
 
                 // 从渲染 HTML 解析改动历史
                 val html = parseObj["text"]
@@ -115,9 +131,13 @@ object CharacterDetailApi {
                     ?.jsonPrimitive?.content
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
 
-                ApiResult.Success(detail.copy(updateHistory = history), isOffline = isOffline)
+                ApiResult.Success(
+                    detail.copy(updateHistory = history),
+                    isOffline = result.isFromCache,
+                    cacheAgeMs = result.ageMs
+                )
             } catch (e: Exception) {
-                ApiResult.Error("获取角色详情失败: ${e.message}")
+                ApiResult.Error("获取角色详情失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 

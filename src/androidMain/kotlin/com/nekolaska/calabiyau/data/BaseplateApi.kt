@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -41,6 +43,8 @@ object PlayerDecorationApi {
     // ── 内存缓存（按页面名分别缓存）──
     private val cacheMap = mutableMapOf<String, List<DecorationSection>>()
 
+    fun clearMemoryCache() { cacheMap.clear() }
+
     /**
      * 获取装饰数据（带缓存）。
      * @param pageName Wiki 页面名，如 "基板"、"封装"、"聊天气泡"、"头套"、"超弦体动作"、"头像框"
@@ -52,35 +56,49 @@ object PlayerDecorationApi {
         if (!forceRefresh) {
             cacheMap[pageName]?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(pageName).also {
+        return fetchFromNetwork(pageName, forceRefresh).also {
             if (it is ApiResult.Success) cacheMap[pageName] = it.value
         }
     }
 
     private val json = SharedJson
 
-    private suspend fun fetchFromNetwork(pageName: String): ApiResult<List<DecorationSection>> =
+    private suspend fun fetchFromNetwork(
+        pageName: String,
+        forceRefresh: Boolean
+    ): ApiResult<List<DecorationSection>> =
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(pageName, "UTF-8")
                 val url = "$API?action=parse&page=$encoded&prop=text&format=json"
-                val (body, _) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.DECORATIONS,
-                    key = "decoration_$pageName"
+                    key = "decoration_$pageName",
+                    forceRefresh = forceRefresh
                 ) {
                     val response = WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
                     response.use { if (it.isSuccessful) it.body.string() else null }
-                } ?: return@withContext ApiResult.Error("获取页面失败，且无离线缓存")
+                } ?: return@withContext ApiResult.Error(
+                    "获取页面失败，且无离线缓存",
+                    kind = ErrorKind.NETWORK
+                )
+                val body = result.json
 
                 val root = json.parseToJsonElement(body).jsonObject
                 val html = root["parse"]?.jsonObject
                     ?.get("text")?.jsonObject
                     ?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error("解析 HTML 失败")
+                    ?: return@withContext ApiResult.Error(
+                        "解析 HTML 失败",
+                        kind = ErrorKind.PARSE
+                    )
 
                 val rawSections = parseHtml(html)
                 if (rawSections.isEmpty()) {
-                    return@withContext ApiResult.Error("未找到${pageName}数据")
+                    return@withContext ApiResult.Error(
+                        "未找到${pageName}数据",
+                        kind = ErrorKind.NOT_FOUND
+                    )
                 }
 
                 // 收集所有文件名，批量获取真实 URL
@@ -109,12 +127,16 @@ object PlayerDecorationApi {
                 }
 
                 if (sections.isEmpty()) {
-                    ApiResult.Error("未找到${pageName}内容")
+                    ApiResult.Error("未找到${pageName}内容", kind = ErrorKind.NOT_FOUND)
                 } else {
-                    ApiResult.Success(sections)
+                    ApiResult.Success(
+                        sections,
+                        isOffline = result.isFromCache,
+                        cacheAgeMs = result.ageMs
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("网络异常: ${e.message}")
+                ApiResult.Error("网络异常: ${e.message}", kind = e.toErrorKind())
             }
         }
 

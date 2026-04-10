@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
@@ -21,6 +23,8 @@ object CostumeFilterApi {
     /** 内存缓存（进程生命周期内有效，避免重复请求） */
     @Volatile
     private var cachedCostumes: List<CostumeInfo>? = null
+
+    fun clearMemoryCache() { cachedCostumes = null }
 
     /** 品质等级 */
     enum class Quality(val level: Int, val displayName: String) {
@@ -64,26 +68,38 @@ object CostumeFilterApi {
 
                 val text = URLEncoder.encode("{{#invoke:角色|角色时装筛选}}", "UTF-8")
                 val url = "$API?action=parse&text=$text&prop=text&format=json"
-                val (body, _) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.COSTUMES,
-                    key = "all_costumes"
+                    key = "all_costumes",
+                    forceRefresh = forceRefresh
                 ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
+                    ?: return@withContext ApiResult.Error(
+                        "请求失败，且无离线缓存",
+                        kind = ErrorKind.NETWORK
+                    )
+                val body = result.json
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val html = json["parse"]?.jsonObject?.get("text")
                     ?.jsonObject?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error("无法获取时装数据")
+                    ?: return@withContext ApiResult.Error(
+                        "无法获取时装数据",
+                        kind = ErrorKind.PARSE
+                    )
 
                 val costumes = parseCostumeHtml(html)
                 if (costumes.isEmpty()) {
-                    ApiResult.Error("未找到时装数据")
+                    ApiResult.Error("未找到时装数据", kind = ErrorKind.NOT_FOUND)
                 } else {
                     cachedCostumes = costumes
-                    ApiResult.Success(costumes)
+                    ApiResult.Success(
+                        costumes,
+                        isOffline = result.isFromCache,
+                        cacheAgeMs = result.ageMs
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("获取时装数据失败: ${e.message}")
+                ApiResult.Error("获取时装数据失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 

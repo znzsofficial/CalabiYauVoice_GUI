@@ -18,6 +18,8 @@ object WallpaperApi {
     @Volatile
     private var cachedFileNames: List<String>? = null
 
+    fun clearMemoryCache() { cachedFileNames = null }
+
     /** 本次进程是否已自动刷新过壁纸（冷启动后第一次为 false） */
     @Volatile
     var hasRefreshedThisSession: Boolean = false

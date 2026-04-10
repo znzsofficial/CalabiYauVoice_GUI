@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
@@ -21,6 +23,8 @@ object WeaponSkinFilterApi {
     /** 内存缓存（进程生命周期内有效，避免重复请求） */
     @Volatile
     private var cachedSkins: List<WeaponSkinInfo>? = null
+
+    fun clearMemoryCache() { cachedSkins = null }
 
     /** 品质等级 */
     enum class Quality(val level: Int, val displayName: String) {
@@ -63,26 +67,38 @@ object WeaponSkinFilterApi {
 
                 val text = URLEncoder.encode("{{#invoke:武器|武器外观筛选}}", "UTF-8")
                 val url = "$API?action=parse&text=$text&prop=text&format=json"
-                val (body, _) = OfflineCache.fetchWithCache(
+                val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.WEAPON_SKINS,
-                    key = "all_weapon_skins"
+                    key = "all_weapon_skins",
+                    forceRefresh = forceRefresh
                 ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error("请求失败，且无离线缓存")
+                    ?: return@withContext ApiResult.Error(
+                        "请求失败，且无离线缓存",
+                        kind = ErrorKind.NETWORK
+                    )
+                val body = result.json
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val html = json["parse"]?.jsonObject?.get("text")
                     ?.jsonObject?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error("无法获取武器外观数据")
+                    ?: return@withContext ApiResult.Error(
+                        "无法获取武器外观数据",
+                        kind = ErrorKind.PARSE
+                    )
 
                 val skins = parseWeaponSkinHtml(html)
                 if (skins.isEmpty()) {
-                    ApiResult.Error("未找到武器外观数据")
+                    ApiResult.Error("未找到武器外观数据", kind = ErrorKind.NOT_FOUND)
                 } else {
                     cachedSkins = skins
-                    ApiResult.Success(skins)
+                    ApiResult.Success(
+                        skins,
+                        isOffline = result.isFromCache,
+                        cacheAgeMs = result.ageMs
+                    )
                 }
             } catch (e: Exception) {
-                ApiResult.Error("获取武器外观数据失败: ${e.message}")
+                ApiResult.Error("获取武器外观数据失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 
