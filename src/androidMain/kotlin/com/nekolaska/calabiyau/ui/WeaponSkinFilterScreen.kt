@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,8 +51,10 @@ fun WeaponSkinFilterScreen(
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var allSkins by remember { mutableStateOf<List<WeaponSkinInfo>>(emptyList()) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
     // 筛选状态
     var selectedWeapon by remember { mutableStateOf(initialWeapon) }
@@ -61,10 +65,14 @@ fun WeaponSkinFilterScreen(
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
+            errorResult = null
             when (val result = WeaponSkinFilterApi.fetchAllWeaponSkins(forceRefresh)) {
-                is ApiResult.Success -> allSkins = result.value
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> {
+                    allSkins = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
+                }
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -148,61 +156,72 @@ fun WeaponSkinFilterScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && allSkins.isEmpty() -> {
                 LoadingState("正在加载武器外观数据…", Modifier.padding(innerPadding))
             }
-            errorMessage != null && allSkins.isEmpty() -> {
+            errorResult != null && allSkins.isEmpty() -> {
                 ErrorState(
-                    message = errorMessage!!,
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
                     onRetry = { loadData(forceRefresh = true) },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
             else -> {
-                Column(Modifier.padding(innerPadding)) {
-                    // ── 筛选栏 ──
-                    WeaponSkinFilterBar(
-                        weapons = weapons,
-                        selectedWeapon = selectedWeapon,
-                        onWeaponSelected = { selectedWeapon = it },
-                        selectedQuality = selectedQuality,
-                        onQualitySelected = { selectedQuality = it }
-                    )
-
-                    // ── 外观网格 ──
-                    if (filteredSkins.isEmpty()) {
-                        Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadData(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = Modifier.padding(innerPadding)
+                ) {
+                    Column {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
                         }
-                    } else {
-                        var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
+                        // ── 筛选栏 ──
+                        WeaponSkinFilterBar(
+                            weapons = weapons,
+                            selectedWeapon = selectedWeapon,
+                            onWeaponSelected = { selectedWeapon = it },
+                            selectedQuality = selectedQuality,
+                            onQualitySelected = { selectedQuality = it }
+                        )
 
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 110.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(filteredSkins, key = { it.name + it.weapon }) { skin ->
-                                WeaponSkinCard(
-                                    skin = skin,
-                                    onClick = { selectedSkin = skin }
+                        // ── 外观网格 ──
+                        if (filteredSkins.isEmpty()) {
+                            Box(
+                                Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 110.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(filteredSkins, key = { it.name + it.weapon }) { skin ->
+                                    WeaponSkinCard(
+                                        skin = skin,
+                                        onClick = { selectedSkin = skin }
+                                    )
+                                }
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(Modifier.height(16.dp))
+                                }
+                            }
+
+                            // ── 外观详情底部弹窗 ──
+                            if (selectedSkin != null) {
+                                WeaponSkinDetailSheet(
+                                    skin = selectedSkin!!,
+                                    onDismiss = { selectedSkin = null }
                                 )
                             }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Spacer(Modifier.height(16.dp))
-                            }
-                        }
-
-                        // ── 外观详情底部弹窗 ──
-                        if (selectedSkin != null) {
-                            WeaponSkinDetailSheet(
-                                skin = selectedSkin!!,
-                                onDismiss = { selectedSkin = null }
-                            )
                         }
                     }
                 }

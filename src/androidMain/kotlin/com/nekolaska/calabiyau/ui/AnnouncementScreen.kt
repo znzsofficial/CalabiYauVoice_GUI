@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,16 +38,22 @@ fun AnnouncementScreen(
     val context = LocalContext.current
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var announcements by remember { mutableStateOf<List<AnnouncementApi.Announcement>>(emptyList()) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
+            errorResult = null
             when (val result = AnnouncementApi.fetchAnnouncements(forceRefresh = forceRefresh)) {
-                is ApiResult.Success -> announcements = result.value
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> {
+                    announcements = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
+                }
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -66,36 +74,49 @@ fun AnnouncementScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && announcements.isEmpty() -> {
                 AnnouncementSkeleton(Modifier.padding(innerPadding))
             }
-            errorMessage != null && announcements.isEmpty() -> {
+            errorResult != null && announcements.isEmpty() -> {
                 ErrorState(
-                    message = errorMessage!!,
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
                     onRetry = { loadData(forceRefresh = true) },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
             else -> {
-                LazyColumn(
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadData(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(innerPadding)
                 ) {
-                    items(announcements, key = { it.title }) { announcement ->
-                        AnnouncementCard(
-                            announcement = announcement,
-                            onOpenWikiUrl = onOpenWikiUrl,
-                            onOpenExternalUrl = { url ->
-                                try {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                } catch (_: Exception) { }
+                    Column {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
+                        }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(announcements, key = { it.title }) { announcement ->
+                                AnnouncementCard(
+                                    announcement = announcement,
+                                    onOpenWikiUrl = onOpenWikiUrl,
+                                    onOpenExternalUrl = { url ->
+                                        try {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        } catch (_: Exception) { }
+                                    }
+                                )
                             }
-                        )
+                            item { Spacer(Modifier.height(16.dp)) }
+                        }
                     }
-                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
         }

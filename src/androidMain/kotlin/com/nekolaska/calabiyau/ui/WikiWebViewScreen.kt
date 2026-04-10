@@ -10,7 +10,6 @@ import android.os.Message
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.*
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
@@ -38,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.data.AppPrefs
+import kotlinx.coroutines.launch
 
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
@@ -129,6 +129,10 @@ fun WikiWebViewScreen(
 
     // 登录提示 Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
+    val showSnack: (String) -> Unit = remember(snackbarScope, snackbarHostState) {
+        { msg -> snackbarScope.launch { snackbarHostState.showSnackbar(msg) }; Unit }
+    }
     var hasShownLoginHint by remember { mutableStateOf(false) }
 
     // 长按图片保存
@@ -207,7 +211,7 @@ fun WikiWebViewScreen(
                                 .clickable {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
-                                    Toast.makeText(context, "已复制链接", Toast.LENGTH_SHORT).show()
+                                    showSnack("已复制链接")
                                 }
                                 .padding(vertical = 1.dp)
                         ) {
@@ -420,7 +424,8 @@ fun WikiWebViewScreen(
                             fileChooserCallback = null
                         }
                         true
-                    }
+                    },
+                    showSnack = showSnack
                 ).also { wv ->
                     webView = wv
                     // 长按图片检测
@@ -557,9 +562,9 @@ fun WikiWebViewScreen(
                         }
                         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                         dm.enqueue(request)
-                        Toast.makeText(context, "已保存: $fileName", Toast.LENGTH_SHORT).show()
+                        showSnack("已保存: $fileName")
                     } catch (e: Exception) {
-                        Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                        showSnack("保存失败: ${e.message}")
                     }
                 }) { Text("保存") }
             },
@@ -824,7 +829,8 @@ private fun createWikiWebView(
     onNavigationChanged: (canGoBack: Boolean, canGoForward: Boolean) -> Unit,
     onNetworkError: (String) -> Unit = {},
     onPassportDetected: () -> Unit = {},
-    onFileChooser: (ValueCallback<Array<Uri>>) -> Boolean
+    onFileChooser: (ValueCallback<Array<Uri>>) -> Boolean,
+    showSnack: (String) -> Unit
 ): WebView {
     // 确保 Cookie 持久化
     val cookieManager = CookieManager.getInstance()
@@ -893,11 +899,11 @@ private fun createWikiWebView(
                     val file = java.io.File(dir, fileName)
                     file.writeBytes(data)
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        Toast.makeText(context, "已保存: $fileName", Toast.LENGTH_SHORT).show()
+                        showSnack("已保存: $fileName")
                     }
                 } catch (e: Exception) {
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                        showSnack("保存失败: ${e.message}")
                     }
                 }
             }
@@ -942,10 +948,10 @@ private fun createWikiWebView(
                         val dir = java.io.File(AppPrefs.savePath)
                         dir.mkdirs()
                         java.io.File(dir, guessedName).writeBytes(data)
-                        Toast.makeText(context, "已保存: $guessedName", Toast.LENGTH_SHORT).show()
+                        showSnack("已保存: $guessedName")
                     }
                 } catch (e: Exception) {
-                    Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                    showSnack("保存失败: ${e.message}")
                 }
                 return@setDownloadListener
             }
@@ -963,13 +969,13 @@ private fun createWikiWebView(
                 }
                 val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 dm.enqueue(request)
-                Toast.makeText(context, "已加入下载队列: $fileName", Toast.LENGTH_SHORT).show()
-            } catch (e: SecurityException) {
-                Toast.makeText(context, "缺少存储权限，无法下载", Toast.LENGTH_LONG).show()
-            } catch (e: IllegalArgumentException) {
-                Toast.makeText(context, "无法下载该文件", Toast.LENGTH_SHORT).show()
+                showSnack("已加入下载队列: $fileName")
+            } catch (_: SecurityException) {
+                showSnack("缺少存储权限，无法下载")
+            } catch (_: IllegalArgumentException) {
+                showSnack("无法下载该文件")
             } catch (e: Exception) {
-                Toast.makeText(context, "下载失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                showSnack("下载失败: ${e.message}")
             }
         }
 

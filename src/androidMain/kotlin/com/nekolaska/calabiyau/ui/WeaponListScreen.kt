@@ -11,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,17 +42,23 @@ fun WeaponListScreen(
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var categories by remember { mutableStateOf<List<WeaponListApi.WeaponCategoryData>>(emptyList()) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
     var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
+            errorResult = null
             when (val result = WeaponListApi.fetchAllCategories(forceRefresh)) {
-                is ApiResult.Success -> categories = result.value
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> {
+                    categories = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
+                }
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -71,51 +79,62 @@ fun WeaponListScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && categories.isEmpty() -> {
                 WeaponListSkeleton(Modifier.padding(innerPadding))
             }
 
-            errorMessage != null && categories.isEmpty() -> {
+            errorResult != null && categories.isEmpty() -> {
                 ErrorState(
-                    message = errorMessage!!,
-                    onRetry = { loadData() },
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
+                    onRetry = { loadData(forceRefresh = true) },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
 
             else -> {
-                Column(Modifier.padding(innerPadding)) {
-                    // 分类 Tab
-                    if (categories.size > 1) {
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTab
-                        ) {
-                            categories.forEachIndexed { index, cat ->
-                                Tab(
-                                    selected = selectedTab == index,
-                                    onClick = {
-                                        selectedTab = index
-                                        onTabChanged?.invoke(index)
-                                    },
-                                    text = {
-                                        Text(
-                                            cat.category.displayName,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                )
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadData(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = Modifier.padding(innerPadding)
+                ) {
+                    Column {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
+                        }
+                        // 分类 Tab
+                        if (categories.size > 1) {
+                            PrimaryTabRow(
+                                selectedTabIndex = selectedTab
+                            ) {
+                                categories.forEachIndexed { index, cat ->
+                                    Tab(
+                                        selected = selectedTab == index,
+                                        onClick = {
+                                            selectedTab = index
+                                            onTabChanged?.invoke(index)
+                                        },
+                                        text = {
+                                            Text(
+                                                cat.category.displayName,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // 武器网格
-                    val currentCategory = categories.getOrNull(selectedTab)
-                    if (currentCategory != null) {
-                        WeaponGrid(
-                            weapons = currentCategory.weapons,
-                            onOpenWeaponDetail = onOpenWeaponDetail
-                        )
+                        // 武器网格
+                        val currentCategory = categories.getOrNull(selectedTab)
+                        if (currentCategory != null) {
+                            WeaponGrid(
+                                weapons = currentCategory.weapons,
+                                onOpenWeaponDetail = onOpenWeaponDetail
+                            )
+                        }
                     }
                 }
             }

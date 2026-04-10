@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlinx.coroutines.launch
 
 @Composable
 fun SearchBar(
@@ -280,38 +281,38 @@ fun EmptyState(
 /**
  * 统一的请求失败/错误状态组件。
  *
- * 根据错误信息自动判断错误类型，显示对应的图标和友好提示。
+ * 根据 [kind] 选择图标和友好提示语。
  */
 @Composable
 fun ErrorState(
     message: String,
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    kind: data.ErrorKind = data.ErrorKind.UNKNOWN
 ) {
-    // 根据错误信息推断类型
-    val isOffline = message.contains("离线") || message.contains("网络")
-            || message.contains("连接") || message.contains("timeout", ignoreCase = true)
-            || message.contains("Unable to resolve", ignoreCase = true)
-    val isTimeout = message.contains("超时") || message.contains("timeout", ignoreCase = true)
-    val isCdn = message.contains("CDN") || message.contains("403") || message.contains("拦截")
-
-    val icon = when {
-        isOffline -> Icons.Outlined.WifiOff
-        isTimeout -> Icons.Outlined.Timer
-        isCdn -> Icons.Outlined.Shield
-        else -> Icons.Outlined.ErrorOutline
+    val icon = when (kind) {
+        data.ErrorKind.NETWORK -> Icons.Outlined.WifiOff
+        data.ErrorKind.TIMEOUT -> Icons.Outlined.Timer
+        data.ErrorKind.CDN_BLOCKED -> Icons.Outlined.Shield
+        data.ErrorKind.PARSE -> Icons.Outlined.BrokenImage
+        data.ErrorKind.NOT_FOUND -> Icons.Outlined.SearchOff
+        data.ErrorKind.UNKNOWN -> Icons.Outlined.ErrorOutline
     }
-    val friendlyTitle = when {
-        isOffline -> "无法连接网络"
-        isTimeout -> "请求超时"
-        isCdn -> "访问被拦截"
-        else -> "加载失败"
+    val friendlyTitle = when (kind) {
+        data.ErrorKind.NETWORK -> "无法连接网络"
+        data.ErrorKind.TIMEOUT -> "请求超时"
+        data.ErrorKind.CDN_BLOCKED -> "访问被拦截"
+        data.ErrorKind.PARSE -> "数据解析失败"
+        data.ErrorKind.NOT_FOUND -> "未找到数据"
+        data.ErrorKind.UNKNOWN -> "加载失败"
     }
-    val friendlyHint = when {
-        isOffline -> "请检查网络连接后重试"
-        isTimeout -> "服务器响应缓慢，请稍后重试"
-        isCdn -> "请求被 CDN 拦截，请稍后重试"
-        else -> "请检查网络后重试"
+    val friendlyHint = when (kind) {
+        data.ErrorKind.NETWORK -> "请检查网络连接后重试"
+        data.ErrorKind.TIMEOUT -> "服务器响应缓慢，请稍后重试"
+        data.ErrorKind.CDN_BLOCKED -> "请求被 CDN 拦截，请稍后重试"
+        data.ErrorKind.PARSE -> "数据格式异常，请稍后重试"
+        data.ErrorKind.NOT_FOUND -> "没有可展示的内容"
+        data.ErrorKind.UNKNOWN -> "请检查网络后重试"
     }
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -347,8 +348,7 @@ fun ErrorState(
                 textAlign = TextAlign.Center
             )
             // 仅在未识别的通用错误时显示原始信息作为补充
-            val isRecognized = isOffline || isTimeout || isCdn
-            if (!isRecognized && message.isNotBlank()) {
+            if (kind == data.ErrorKind.UNKNOWN && message.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     message,
@@ -499,4 +499,92 @@ fun ShimmerBox(
             .clip(shape)
             .shimmerEffect()
     )
+}
+
+// ────────────────────────────────────────────
+//  离线提示横条
+// ────────────────────────────────────────────
+
+/**
+ * 展示"离线数据 · N 小时前"的横条。
+ * 由 [ApiResult.Success.isOffline] 与 [ApiResult.Success.cacheAgeMs] 驱动。
+ */
+@Composable
+fun OfflineBanner(
+    ageMs: Long,
+    modifier: Modifier = Modifier
+) {
+    val label = remember(ageMs) {
+        buildString {
+            append("离线数据")
+            if (ageMs > 0) {
+                val minutes = ageMs / 60_000
+                val hours = minutes / 60
+                val days = hours / 24
+                append(" · ")
+                append(
+                    when {
+                        days >= 1 -> "$days 天前"
+                        hours >= 1 -> "$hours 小时前"
+                        minutes >= 1 -> "$minutes 分钟前"
+                        else -> "刚刚"
+                    }
+                )
+            }
+        }
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.CloudOff,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  全局 Snackbar 宿主
+// ────────────────────────────────────────────
+
+/**
+ * 由 [MainScreen] 提供的全局 [SnackbarHostState]。
+ * 任意子组件通过 [rememberSnackbarLauncher] 获取发送器。
+ */
+val LocalSnackbarHostState = staticCompositionLocalOf<SnackbarHostState> {
+    error("No SnackbarHostState provided. Wrap content in MainScreen's CompositionLocalProvider.")
+}
+
+/**
+ * 返回一个简单的 `(String) -> Unit` 发送器，便于替代 Toast。
+ *
+ * 用法：
+ * ```
+ * val showSnack = rememberSnackbarLauncher()
+ * // …
+ * showSnack("已保存: $fileName")
+ * ```
+ */
+@Composable
+fun rememberSnackbarLauncher(): (String) -> Unit {
+    val host = LocalSnackbarHostState.current
+    val scope = rememberCoroutineScope()
+    return remember(host, scope) {
+        val launcher: (String) -> Unit = { msg -> scope.launch { host.showSnackbar(msg) }; Unit }
+        launcher
+    }
 }
