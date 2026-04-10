@@ -233,9 +233,14 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
     ) {
         items(6) {
             Card(
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                 )
             ) {
                 Column {
@@ -247,6 +252,8 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
                     )
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                         ShimmerBox(Modifier.fillMaxWidth(0.7f).height(14.dp))
+                        Spacer(Modifier.height(4.dp))
+                        ShimmerBox(Modifier.fillMaxWidth(0.55f).height(10.dp))
                         Spacer(Modifier.height(6.dp))
                         ShimmerBox(Modifier.fillMaxWidth(0.4f).height(10.dp))
                         Spacer(Modifier.height(6.dp))

@@ -83,7 +83,8 @@ fun GalleryScreen(
     ) { innerPadding ->
         ApiResourceContent(
             state = state,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> GallerySkeleton(mod) }
         ) { sections ->
             Column(Modifier.fillMaxSize()) {
                 // ── Section 切换 FilterChip ──
@@ -263,6 +264,66 @@ fun GalleryScreen(
                 TextButton(onClick = { saveTargetImage = null }) { Text("取消") }
             }
         )
+    }
+}
+
+@Composable
+private fun GallerySkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            repeat(4) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(if (it == 0) 76.dp else 64.dp)
+                        .height(32.dp),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 160.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            userScrollEnabled = false
+        ) {
+            items(8) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Column {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 10f),
+                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth(0.75f)
+                                .height(11.dp)
+                                .padding(start = 12.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
     }
 }
 

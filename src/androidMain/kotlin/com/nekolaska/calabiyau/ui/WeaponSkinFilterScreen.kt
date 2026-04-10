@@ -133,7 +133,7 @@ fun WeaponSkinFilterScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState("正在加载武器外观数据…", mod) }
+            loading = { mod -> WeaponSkinFilterSkeleton(mod) }
         ) {
             Column {
                 // ── 筛选栏 ──
@@ -179,6 +179,82 @@ fun WeaponSkinFilterScreen(
                             skin = selectedSkin!!,
                             onDismiss = { selectedSkin = null }
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                repeat(6) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .width(if (it == 0) 72.dp else 64.dp)
+                            .height(32.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                repeat(6) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .width(if (it == 0) 72.dp else 60.dp)
+                            .height(32.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 110.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            userScrollEnabled = false
+        ) {
+            items(12) {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f),
+                            shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ShimmerBox(Modifier.fillMaxWidth(0.75f).height(12.dp))
+                        Spacer(Modifier.height(6.dp))
+                        ShimmerBox(Modifier.fillMaxWidth(0.5f).height(10.dp))
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
             }
