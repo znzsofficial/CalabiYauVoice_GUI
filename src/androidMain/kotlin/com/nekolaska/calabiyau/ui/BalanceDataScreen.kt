@@ -16,6 +16,8 @@ import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +58,7 @@ fun BalanceDataScreen(onBack: () -> Unit) {
     // ── 状态 ──
     var isLoadingSettings by remember { mutableStateOf(true) }
     var isLoadingData by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var settings by remember { mutableStateOf<BalanceDataApi.BalanceSettings?>(null) }
     var balanceResult by remember { mutableStateOf<BalanceDataApi.BalanceResult?>(null) }
 
@@ -82,11 +84,11 @@ fun BalanceDataScreen(onBack: () -> Unit) {
     }
 
     // ── 加载设置 ──
-    fun loadSettings() {
+    fun loadSettings(forceRefresh: Boolean = false) {
         scope.launch {
             isLoadingSettings = true
-            errorMessage = null
-            when (val result = BalanceDataApi.fetchSettings()) {
+            errorResult = null
+            when (val result = BalanceDataApi.fetchSettings(forceRefresh)) {
                 is ApiResult.Success -> {
                     val s = result.value
                     settings = s
@@ -96,7 +98,7 @@ fun BalanceDataScreen(onBack: () -> Unit) {
                     selectedSeason = s.seasons.firstOrNull()
                     selectedRanks = emptyList() // 空表示全选
                 }
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> errorResult = result
             }
             isLoadingSettings = false
         }
@@ -120,9 +122,9 @@ fun BalanceDataScreen(onBack: () -> Unit) {
             )) {
                 is ApiResult.Success -> {
                     balanceResult = result.value
-                    errorMessage = null
+                    errorResult = null
                 }
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> errorResult = result
             }
             isLoadingData = false
         }
@@ -168,7 +170,7 @@ fun BalanceDataScreen(onBack: () -> Unit) {
                 actions = {
                     IconButton(
                         onClick = {
-                            loadSettings()
+                            loadSettings(forceRefresh = true)
                         },
                         enabled = !isLoadingSettings && !isLoadingData
                     ) {
@@ -178,22 +180,27 @@ fun BalanceDataScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when {
-                isLoadingSettings -> {
-                    CircularProgressIndicator(Modifier.align(Alignment.Center))
-                }
-                errorMessage != null && settings == null -> {
-                    ErrorState(
-                        message = errorMessage!!,
-                        onRetry = { loadSettings() }
-                    )
-                }
-                settings != null -> {
+        when {
+            isLoadingSettings && settings == null -> {
+                LoadingState("正在加载平衡数据…", Modifier.padding(padding))
+            }
+            errorResult != null && settings == null -> {
+                ErrorState(
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
+                    onRetry = { loadSettings(forceRefresh = true) },
+                    modifier = Modifier.padding(padding)
+                )
+            }
+            settings != null -> {
+                PullToRefreshBox(
+                    isRefreshing = isLoadingSettings || isLoadingData,
+                    onRefresh = { loadSettings(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
                     Column(Modifier.fillMaxSize()) {
                         // ── 筛选栏 ──
                         FilterBar(

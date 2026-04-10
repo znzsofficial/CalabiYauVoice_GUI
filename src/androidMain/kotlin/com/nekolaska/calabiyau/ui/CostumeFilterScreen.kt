@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,8 +51,10 @@ fun CostumeFilterScreen(
     val scope = rememberCoroutineScope()
 
     var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
     var allCostumes by remember { mutableStateOf<List<CostumeInfo>>(emptyList()) }
+    var isOffline by remember { mutableStateOf(false) }
+    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
     // 筛选状态
     var selectedCharacter by remember { mutableStateOf(initialCharacter) }
@@ -61,10 +65,14 @@ fun CostumeFilterScreen(
     fun loadData(forceRefresh: Boolean = false) {
         scope.launch {
             isLoading = true
-            errorMessage = null
+            errorResult = null
             when (val result = CostumeFilterApi.fetchAllCostumes(forceRefresh)) {
-                is ApiResult.Success -> allCostumes = result.value
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Success -> {
+                    allCostumes = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
+                }
+                is ApiResult.Error -> errorResult = result
             }
             isLoading = false
         }
@@ -148,61 +156,72 @@ fun CostumeFilterScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && allCostumes.isEmpty() -> {
                 LoadingState("正在加载时装数据…", Modifier.padding(innerPadding))
             }
-            errorMessage != null && allCostumes.isEmpty() -> {
+            errorResult != null && allCostumes.isEmpty() -> {
                 ErrorState(
-                    message = errorMessage!!,
+                    message = errorResult!!.message,
+                    kind = errorResult!!.kind,
                     onRetry = { loadData(forceRefresh = true) },
                     modifier = Modifier.padding(innerPadding)
                 )
             }
             else -> {
-                Column(Modifier.padding(innerPadding)) {
-                    // ── 筛选栏 ──
-                    CostumeFilterBar(
-                        characters = characters,
-                        selectedCharacter = selectedCharacter,
-                        onCharacterSelected = { selectedCharacter = it },
-                        selectedQuality = selectedQuality,
-                        onQualitySelected = { selectedQuality = it }
-                    )
-
-                    // ── 时装网格 ──
-                    if (filteredCostumes.isEmpty()) {
-                        Box(
-                            Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                PullToRefreshBox(
+                    isRefreshing = isLoading,
+                    onRefresh = { loadData(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = Modifier.padding(innerPadding)
+                ) {
+                    Column {
+                        if (isOffline) {
+                            OfflineBanner(ageMs = cacheAgeMs)
                         }
-                    } else {
-                        var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
+                        // ── 筛选栏 ──
+                        CostumeFilterBar(
+                            characters = characters,
+                            selectedCharacter = selectedCharacter,
+                            onCharacterSelected = { selectedCharacter = it },
+                            selectedQuality = selectedQuality,
+                            onQualitySelected = { selectedQuality = it }
+                        )
 
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 110.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(filteredCostumes, key = { it.name + it.character }) { costume ->
-                                CostumeCard(
-                                    costume = costume,
-                                    onClick = { selectedCostume = costume }
+                        // ── 时装网格 ──
+                        if (filteredCostumes.isEmpty()) {
+                            Box(
+                                Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = 110.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(filteredCostumes, key = { it.name + it.character }) { costume ->
+                                    CostumeCard(
+                                        costume = costume,
+                                        onClick = { selectedCostume = costume }
+                                    )
+                                }
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    Spacer(Modifier.height(16.dp))
+                                }
+                            }
+
+                            // ── 时装详情底部弹窗 ──
+                            if (selectedCostume != null) {
+                                CostumeDetailSheet(
+                                    costume = selectedCostume!!,
+                                    onDismiss = { selectedCostume = null }
                                 )
                             }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Spacer(Modifier.height(16.dp))
-                            }
-                        }
-
-                        // ── 时装详情底部弹窗 ──
-                        if (selectedCostume != null) {
-                            CostumeDetailSheet(
-                                costume = selectedCostume!!,
-                                onDismiss = { selectedCostume = null }
-                            )
                         }
                     }
                 }
