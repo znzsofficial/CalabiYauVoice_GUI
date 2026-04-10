@@ -35,9 +35,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.graphics.BitmapFactory
 import androidx.palette.graphics.Palette
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.size.Size
+import coil3.toBitmap
 import com.nekolaska.calabiyau.LocalWallpaperSeedColor
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
@@ -94,43 +99,38 @@ internal fun WikiHomePage(
     val hasWallpaper = wallpaperUrl != null
 
     // ── 壁纸刷新后重新提取主题色 ──
+    //
+    // 复用 Coil 的 ImageLoader：走内存/磁盘缓存，命中时几乎瞬时返回，
+    // 且共享 WikiEngine.client（UA 轮换 + 403/429/503 重试）。
+    // 相比原先手动 OkHttp 下载 + 两次 BitmapFactory 解码，省一次网络请求和一次 decode。
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(wallpaperUrl) {
         val url = wallpaperUrl ?: return@LaunchedEffect
-        // 仅当 URL 未变且已有缓存色时跳过（URL 变了说明换了壁纸，必须重新取色）
-        val cachedUrl = com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorUrl
-        val cachedColor = com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorCache
+        // URL 未变且已缓存过取色结果：直接使用缓存色
+        val cachedUrl = AppPrefs.wallpaperSeedColorUrl
+        val cachedColor = AppPrefs.wallpaperSeedColorCache
         if (url == cachedUrl && cachedColor != 0) {
             wallpaperSeedColor.intValue = cachedColor
             return@LaunchedEffect
         }
-        // 壁纸 URL 变化时，重新提取主题色
         withContext(Dispatchers.IO) {
-            try {
-                val request = okhttp3.Request.Builder().url(url).build()
-                val response = com.nekolaska.calabiyau.data.WikiEngine.client
-                    .newCall(request).execute()
-                // 使用 BitmapFactory.Options 降采样，避免解码全尺寸图片
-                val bytes = response.body.bytes()
-                val opts = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-                // 目标 100px 宽度足够提取主色调
-                val sampleSize = maxOf(1, minOf(opts.outWidth, opts.outHeight) / 100)
-                opts.inJustDecodeBounds = false
-                opts.inSampleSize = sampleSize
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-                    ?: return@withContext
-                val palette = Palette.from(bitmap).generate()
-                val dominant = palette.getVibrantColor(palette.getMutedColor(0))
-                if (dominant != 0) {
-                    wallpaperSeedColor.intValue = dominant
-                    com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorCache = dominant
-                    com.nekolaska.calabiyau.data.AppPrefs.wallpaperSeedColorUrl = url
-                }
-                bitmap.recycle()
-            } catch (_: Exception) { }
+            val request = ImageRequest.Builder(context)
+                .data(url)
+                .allowHardware(false)  // Palette 需读像素，必须软件位图
+                .size(Size(128, 128))  // 降采样：128px 提取主色已足够，省显存
+                .build()
+            val result = SingletonImageLoader.get(context).execute(request)
+            if (result !is SuccessResult) return@withContext
+            val bitmap = runCatching { result.image.toBitmap() }.getOrNull()
+                ?: return@withContext
+            val palette = Palette.from(bitmap).generate()
+            val dominant = palette.getVibrantColor(palette.getMutedColor(0))
+            if (dominant != 0) {
+                wallpaperSeedColor.intValue = dominant
+                AppPrefs.wallpaperSeedColorCache = dominant
+                AppPrefs.wallpaperSeedColorUrl = url
+            }
         }
     }
 
