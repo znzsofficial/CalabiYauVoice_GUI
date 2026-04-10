@@ -11,21 +11,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponListApi
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
@@ -39,32 +34,10 @@ fun WeaponListScreen(
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null
 ) {
-    val scope = rememberCoroutineScope()
-
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var categories by remember { mutableStateOf<List<WeaponListApi.WeaponCategoryData>>(emptyList()) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
-    var selectedTab by remember { mutableIntStateOf(initialTab) }
-
-    fun loadData(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = WeaponListApi.fetchAllCategories(forceRefresh)) {
-                is ApiResult.Success -> {
-                    categories = result.value
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
-        }
+    val state = rememberLoadState(emptyList<WeaponListApi.WeaponCategoryData>()) { force ->
+        WeaponListApi.fetchAllCategories(force)
     }
-
-    LaunchedEffect(Unit) { loadData() }
+    var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     Scaffold(
         topBar = {
@@ -78,65 +51,40 @@ fun WeaponListScreen(
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading && categories.isEmpty() -> {
-                WeaponListSkeleton(Modifier.padding(innerPadding))
-            }
-
-            errorResult != null && categories.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadData(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadData(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier.padding(innerPadding)
-                ) {
-                    Column {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
-                        }
-                        // 分类 Tab
-                        if (categories.size > 1) {
-                            PrimaryTabRow(
-                                selectedTabIndex = selectedTab
-                            ) {
-                                categories.forEachIndexed { index, cat ->
-                                    Tab(
-                                        selected = selectedTab == index,
-                                        onClick = {
-                                            selectedTab = index
-                                            onTabChanged?.invoke(index)
-                                        },
-                                        text = {
-                                            Text(
-                                                cat.category.displayName,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    )
-                                }
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> WeaponListSkeleton(mod) }
+        ) { categories ->
+            // 分类 Tab
+            if (categories.size > 1) {
+                PrimaryTabRow(selectedTabIndex = selectedTab) {
+                    categories.forEachIndexed { index, cat ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = {
+                                selectedTab = index
+                                onTabChanged?.invoke(index)
+                            },
+                            text = {
+                                Text(
+                                    cat.category.displayName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-                        }
-
-                        // 武器网格
-                        val currentCategory = categories.getOrNull(selectedTab)
-                        if (currentCategory != null) {
-                            WeaponGrid(
-                                weapons = currentCategory.weapons,
-                                onOpenWeaponDetail = onOpenWeaponDetail
-                            )
-                        }
+                        )
                     }
                 }
+            }
+
+            // 武器网格
+            val currentCategory = categories.getOrNull(selectedTab)
+            if (currentCategory != null) {
+                WeaponGrid(
+                    weapons = currentCategory.weapons,
+                    onOpenWeaponDetail = onOpenWeaponDetail
+                )
             }
         }
     }
