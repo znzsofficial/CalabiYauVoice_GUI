@@ -22,11 +22,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.palette.graphics.Palette
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.disk.DiskCache
+import coil3.disk.directory
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
+import coil3.memory.MemoryCache
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.OfflineCache
 import com.nekolaska.calabiyau.data.UpdateApi
 import com.nekolaska.calabiyau.data.WikiEngine
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.nekolaska.calabiyau.ui.LocalG2CornersEnabled
 import com.nekolaska.calabiyau.ui.LocalLiquidGlassEnabled
@@ -46,6 +57,37 @@ class MainActivity : ComponentActivity() {
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
         OfflineCache.init(this)
+        // 仅冷启动时异步清理过期磁盘缓存，避免配置变更时重复执行
+        if (savedInstanceState == null) {
+            lifecycleScope.launch(Dispatchers.IO) { OfflineCache.pruneExpired() }
+        }
+
+        // ── 全局 Coil ImageLoader：共享 WikiEngine 的 OkHttp 客户端（UA 轮换 + 403/429/503 重试）──
+        SingletonImageLoader.setSafe { ctx ->
+            ImageLoader.Builder(ctx)
+                .components {
+                    add(OkHttpNetworkFetcherFactory(callFactory = { WikiEngine.client }))
+                    if (Build.VERSION.SDK_INT >= 28) {
+                        add(AnimatedImageDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                }
+                .memoryCache {
+                    MemoryCache.Builder()
+                        .maxSizePercent(ctx, 0.25)
+                        .build()
+                }
+                .diskCache {
+                    DiskCache.Builder()
+                        .directory(ctx.cacheDir.resolve("image_cache"))
+                        .maxSizeBytes(128L * 1024 * 1024) // 128 MB
+                        .build()
+                }
+                .crossfade(true)
+                .build()
+        }
+
         PortraitRepository.init(
             fetchFilesInCategory = { cat, audio -> WikiEngine.fetchFilesInCategory(cat, audio) },
             searchFilesFn = { kw, audio -> WikiEngine.searchFiles(kw, audio) },
