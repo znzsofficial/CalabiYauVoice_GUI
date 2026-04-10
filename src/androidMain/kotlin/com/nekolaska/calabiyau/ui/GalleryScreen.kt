@@ -4,7 +4,6 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.webkit.URLUtil
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -15,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +32,6 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.GalleryApi
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  画廊页 —— 壁纸 / 表情包 / 四格漫画 通用
@@ -49,40 +44,23 @@ fun GalleryScreen(
     pageName: String,
     onBack: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
 
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var sections by remember { mutableStateOf<List<GalleryApi.GallerySection>>(emptyList()) }
+    val state = rememberLoadState(
+        initial = emptyList<GalleryApi.GallerySection>(),
+        key = pageName
+    ) { force ->
+        GalleryApi.fetchGallery(pageName, force)
+    }
     var selectedSectionIndex by remember { mutableStateOf(0) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
     // 全屏预览
     var previewImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
     // 长按保存
     var saveTargetImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
 
-    fun loadData(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = GalleryApi.fetchGallery(pageName, forceRefresh)) {
-                is ApiResult.Success -> {
-                    sections = result.value
-                    selectedSectionIndex = 0
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
-        }
-    }
-
-    LaunchedEffect(pageName) { loadData() }
+    LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
     Scaffold(
         topBar = {
@@ -94,8 +72,8 @@ fun GalleryScreen(
                     }
                 },
                 actions = {
-                    if (sections.isNotEmpty()) {
-                        IconButton(onClick = { loadData(forceRefresh = true) }) {
+                    if (state.data.isNotEmpty()) {
+                        IconButton(onClick = { state.reload(forceRefresh = true) }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
                     }
@@ -103,33 +81,13 @@ fun GalleryScreen(
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading && sections.isEmpty() -> {
-                LoadingState(modifier = Modifier.padding(innerPadding))
-            }
-            errorResult != null && sections.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadData(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadData(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    Column(Modifier.fillMaxSize()) {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
-                        }
-                        // ── Section 切换 FilterChip ──
-                        if (sections.size > 1) {
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding)
+        ) { sections ->
+            Column(Modifier.fillMaxSize()) {
+                // ── Section 切换 FilterChip ──
+                if (sections.size > 1) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -160,39 +118,37 @@ fun GalleryScreen(
                                     )
                                 }
                             }
-                        }
+                }
 
-                        // ── 图片网格 ──
-                        val currentSection = sections.getOrNull(selectedSectionIndex)
-                        if (currentSection != null) {
-                            val gridState = rememberLazyGridState()
+                // ── 图片网格 ──
+                val currentSection = sections.getOrNull(selectedSectionIndex)
+                if (currentSection != null) {
+                    val gridState = rememberLazyGridState()
 
-                            // section 切换时滚动到顶部
-                            LaunchedEffect(selectedSectionIndex) {
-                                gridState.scrollToItem(0)
-                            }
+                    // section 切换时滚动到顶部
+                    LaunchedEffect(selectedSectionIndex) {
+                        gridState.scrollToItem(0)
+                    }
 
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 160.dp),
-                                state = gridState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    start = 12.dp, end = 12.dp,
-                                    top = 8.dp, bottom = 16.dp
-                                ),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(
-                                    currentSection.images,
-                                    key = { it.fileName }
-                                ) { image ->
-                                    GalleryImageCard(
-                                        image = image,
-                                        onClick = { previewImage = image }
-                                    )
-                                }
-                            }
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 160.dp),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 12.dp, end = 12.dp,
+                            top = 8.dp, bottom = 16.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            currentSection.images,
+                            key = { it.fileName }
+                        ) { image ->
+                            GalleryImageCard(
+                                image = image,
+                                onClick = { previewImage = image }
+                            )
                         }
                     }
                 }

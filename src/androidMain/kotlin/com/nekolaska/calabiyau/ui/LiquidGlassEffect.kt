@@ -1,15 +1,17 @@
 package com.nekolaska.calabiyau.ui
 
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
@@ -30,6 +32,18 @@ val LocalLiquidGlassEnabled = staticCompositionLocalOf { mutableStateOf(false) }
 
 /** G2 连续圆角是否启用（可独立开启） */
 val LocalG2CornersEnabled = staticCompositionLocalOf { mutableStateOf(false) }
+
+/**
+ * 根据 App 当前生效主题（非系统主题）判断是否处于暗色模式。
+ *
+ * 从 [MaterialTheme.colorScheme] 的 surface 亮度反推——AppTheme 已经根据
+ * themeMode (LIGHT/DARK/SYSTEM) 解析好 colorScheme，所以这个判断跟随 app 设置，
+ * 不会被 `isSystemInDarkTheme()` 那种系统级读取绕过。
+ */
+@Composable
+@ReadOnlyComposable
+private fun isAppInDarkTheme(): Boolean =
+    MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
 // ────────────────────────────────────────────
 //  G2 连续圆角 Shape 工具
@@ -77,7 +91,7 @@ fun Modifier.liquidGlass(
     enabled: Boolean = LocalLiquidGlassEnabled.current.value
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val surfaceColor = if (isDark) Color.Black.copy(alpha = surfaceAlpha)
     else Color.White.copy(alpha = surfaceAlpha)
 
@@ -105,7 +119,7 @@ fun Modifier.liquidGlassLight(
     enabled: Boolean = LocalLiquidGlassEnabled.current.value
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDarkTheme()
     val surfaceColor = if (isDark) Color.Black.copy(alpha = 0.25f)
     else Color.White.copy(alpha = 0.3f)
 

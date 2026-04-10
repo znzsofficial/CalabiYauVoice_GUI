@@ -162,66 +162,75 @@ internal fun WikiHomePage(
         derivedStateOf { scrollBehavior.state.collapsedFraction }
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = { Text("卡拉彼丘 Wiki") },
-                navigationIcon = {
-                    IconButton(onClick = onOpenDrawer) {
-                        Icon(Icons.Outlined.Menu, contentDescription = "菜单")
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                colors = if (hasWallpaper) {
-                    // 有壁纸：始终透明，通过 drawBehind 实现渐变蒙层
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent
+    // ── 根 Box：把壁纸层放在 Scaffold 外面，确保一定覆盖整个窗口 ──
+    //
+    // 如果把壁纸放在 Scaffold 的 content lambda 里，渐变会受 Scaffold 内部布局影响，
+    // 可能不会延伸到 TopAppBar 背后的区域，导致顶栏看起来比下方列表亮一截。
+    // 在 Scaffold 外层的 Box 里渲染壁纸则不存在这个问题——Scaffold 整体透明，
+    // 所有内容都叠在壁纸之上。
+    Box(Modifier.fillMaxSize()) {
+        // ── 壁纸背景层（根层，一定覆盖整屏） ──
+        if (hasWallpaper) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (liquidGlassEnabled) Modifier.layerBackdrop(layerBackdrop)
+                        else Modifier
                     )
-                } else {
-                    TopAppBarDefaults.topAppBarColors()
-                },
-                modifier = if (hasWallpaper) {
-                    // 折叠时叠加半透明背景，展开时完全透明
-                    Modifier.drawBehind {
-                        drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
-                    }
-                } else Modifier
-            )
-        },
-        containerColor = if (hasWallpaper) Color.Transparent
-            else MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
-        Box(Modifier.fillMaxSize()) {
-            // ── 壁纸背景层 ──
-            if (hasWallpaper) {
+            ) {
+                AsyncImage(
+                    model = wallpaperUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(
-                            if (liquidGlassEnabled) Modifier.layerBackdrop(layerBackdrop)
-                            else Modifier
-                        )
-                ) {
-                    // 壁纸图片
-                    AsyncImage(
-                        model = wallpaperUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    // 主题色渐变叠加
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(wallpaperOverlayBrush)
-                    )
-                }
+                        .background(wallpaperOverlayBrush)
+                )
             }
+        } else {
+            // 无壁纸时用主题背景填底，保持与原行为一致
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            )
+        }
 
-            // ── 内容层 ──
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                LargeTopAppBar(
+                    title = { Text("卡拉彼丘 Wiki") },
+                    navigationIcon = {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Outlined.Menu, contentDescription = "菜单")
+                        }
+                    },
+                    scrollBehavior = scrollBehavior,
+                    colors = if (hasWallpaper) {
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent
+                        )
+                    } else {
+                        TopAppBarDefaults.topAppBarColors()
+                    },
+                    modifier = if (hasWallpaper) {
+                        // 展开时顶栏完全透明（壁纸渐变已有平台期，顶栏与下方内容区 tint 一致）；
+                        // 滚动折叠时逐渐叠加 surface 遮罩，收起后变成正常的 surface 顶栏。
+                        Modifier.drawBehind {
+                            drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
+                        }
+                    } else Modifier
+                )
+            },
+            containerColor = Color.Transparent
+        ) { innerPadding ->
+            CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -445,10 +454,10 @@ internal fun WikiHomePage(
 
             // 底部留白
             item { Spacer(Modifier.height(24.dp)) }
-        }
-        } // Box
-        } // CompositionLocalProvider
-    }
+            }
+            } // CompositionLocalProvider
+        } // Scaffold content
+    } // 根 Box
 }
 
 // ────────────────────────────────────────────

@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -12,8 +11,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.nekolaska.calabiyau.data.CharacterListApi
 import com.nekolaska.calabiyau.data.MapListApi
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
@@ -45,37 +42,16 @@ fun WikiHubScreen(
     var selectedMapName by rememberSaveable { mutableStateOf("") }
     var selectedMapImage by rememberSaveable { mutableStateOf<String?>(null) }
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
-    var factions by remember { mutableStateOf<List<CharacterListApi.FactionData>>(emptyList()) }
-    var isLoadingCharacters by remember { mutableStateOf(true) }
-    var gameModes by remember { mutableStateOf<List<MapListApi.GameModeData>>(emptyList()) }
-    var isLoadingMaps by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        if (factions.isEmpty()) {
-            isLoadingCharacters = true
-            launch {
-                when (val result = CharacterListApi.fetchAllFactions()) {
-                    is ApiResult.Success -> factions = result.value
-                    is ApiResult.Error -> { /* 静默失败 */ }
-                }
-                isLoadingCharacters = false
-            }
-        } else {
-            isLoadingCharacters = false
-        }
-        if (gameModes.isEmpty()) {
-            isLoadingMaps = true
-            launch {
-                when (val result = MapListApi.fetchAllModes()) {
-                    is ApiResult.Success -> gameModes = result.value
-                    is ApiResult.Error -> { /* 静默失败 */ }
-                }
-                isLoadingMaps = false
-            }
-        } else {
-            isLoadingMaps = false
-        }
+    val characterState = rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
+        CharacterListApi.fetchAllFactions(force)
     }
+    val mapState = rememberLoadState(emptyList<MapListApi.GameModeData>()) { force ->
+        MapListApi.fetchAllModes(force)
+    }
+    val factions = characterState.data
+    val isLoadingCharacters = characterState.isLoading
+    val gameModes = mapState.data
+    val isLoadingMaps = mapState.isLoading
 
     // 子页面按返回键回到上一级
     // 记录地图详情的来源页面（首页或战斗模式）

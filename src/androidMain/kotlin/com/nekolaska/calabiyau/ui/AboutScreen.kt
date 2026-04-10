@@ -70,7 +70,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Surface(
                 modifier = Modifier.size(96.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+                color = MaterialTheme.colorScheme.primary
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_launcher_foreground),

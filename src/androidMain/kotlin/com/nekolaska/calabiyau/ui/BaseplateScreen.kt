@@ -4,7 +4,6 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.webkit.URLUtil
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -15,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,10 +31,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.data.GalleryApi
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  基板页 —— 展示所有基板（名片/横幅）
@@ -59,40 +53,21 @@ private fun qualityColor(quality: Int): Color = when (quality) {
 fun BaseplateScreen(
     onBack: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
 
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var sections by remember { mutableStateOf<List<PlayerDecorationApi.DecorationSection>>(emptyList()) }
+    val state = rememberLoadState(emptyList<PlayerDecorationApi.DecorationSection>()) { force ->
+        PlayerDecorationApi.fetch("基板", force)
+    }
+    val sections = state.data
     var selectedSectionIndex by remember { mutableStateOf(0) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
     // 全屏预览
     var previewItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
     // 长按保存
     var saveTargetItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
 
-    fun loadData(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = PlayerDecorationApi.fetch("基板", forceRefresh)) {
-                is ApiResult.Success -> {
-                    sections = result.value
-                    selectedSectionIndex = 0
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
-        }
-    }
-
-    LaunchedEffect(Unit) { loadData() }
+    LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
     Scaffold(
         topBar = {
@@ -105,7 +80,7 @@ fun BaseplateScreen(
                 },
                 actions = {
                     if (sections.isNotEmpty()) {
-                        IconButton(onClick = { loadData(forceRefresh = true) }) {
+                        IconButton(onClick = { state.reload(forceRefresh = true) }) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
                     }
@@ -113,33 +88,13 @@ fun BaseplateScreen(
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading && sections.isEmpty() -> {
-                LoadingState(modifier = Modifier.padding(innerPadding))
-            }
-            errorResult != null && sections.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadData(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadData(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    Column(Modifier.fillMaxSize()) {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
-                        }
-                        // ── Section 切换 FilterChip ──
-                        if (sections.size > 1) {
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                // ── Section 切换 FilterChip ──
+                if (sections.size > 1) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -170,38 +125,36 @@ fun BaseplateScreen(
                                     )
                                 }
                             }
-                        }
+                }
 
-                        // ── 基板网格 ──
-                        val currentSection = sections.getOrNull(selectedSectionIndex)
-                        if (currentSection != null) {
-                            val gridState = rememberLazyGridState()
+                // ── 基板网格 ──
+                val currentSection = sections.getOrNull(selectedSectionIndex)
+                if (currentSection != null) {
+                    val gridState = rememberLazyGridState()
 
-                            LaunchedEffect(selectedSectionIndex) {
-                                gridState.scrollToItem(0)
-                            }
+                    LaunchedEffect(selectedSectionIndex) {
+                        gridState.scrollToItem(0)
+                    }
 
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 150.dp),
-                                state = gridState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(
-                                    start = 12.dp, end = 12.dp,
-                                    top = 8.dp, bottom = 16.dp
-                                ),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(
-                                    currentSection.items,
-                                    key = { it.id }
-                                ) { item ->
-                                    BaseplateCard(
-                                        item = item,
-                                        onClick = { previewItem = item }
-                                    )
-                                }
-                            }
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 150.dp),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 12.dp, end = 12.dp,
+                            top = 8.dp, bottom = 16.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            currentSection.items,
+                            key = { it.id }
+                        ) { item ->
+                            BaseplateCard(
+                                item = item,
+                                onClick = { previewItem = item }
+                            )
                         }
                     }
                 }

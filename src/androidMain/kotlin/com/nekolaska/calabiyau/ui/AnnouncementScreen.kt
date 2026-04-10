@@ -10,19 +10,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.AnnouncementApi
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  公告资讯页 —— 原生客户端版 (MD3 Expressive)
@@ -34,32 +28,10 @@ fun AnnouncementScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var announcements by remember { mutableStateOf<List<AnnouncementApi.Announcement>>(emptyList()) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
-
-    fun loadData(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = AnnouncementApi.fetchAnnouncements(forceRefresh = forceRefresh)) {
-                is ApiResult.Success -> {
-                    announcements = result.value
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
-        }
+    val state = rememberLoadState(emptyList<AnnouncementApi.Announcement>()) { force ->
+        AnnouncementApi.fetchAnnouncements(forceRefresh = force)
     }
-
-    LaunchedEffect(Unit) { loadData() }
 
     Scaffold(
         topBar = {
@@ -73,51 +45,28 @@ fun AnnouncementScreen(
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading && announcements.isEmpty() -> {
-                AnnouncementSkeleton(Modifier.padding(innerPadding))
-            }
-            errorResult != null && announcements.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadData(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadData(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    Column {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> AnnouncementSkeleton(mod) }
+        ) { announcements ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(announcements, key = { it.title }) { announcement ->
+                    AnnouncementCard(
+                        announcement = announcement,
+                        onOpenWikiUrl = onOpenWikiUrl,
+                        onOpenExternalUrl = { url ->
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            } catch (_: Exception) { }
                         }
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(announcements, key = { it.title }) { announcement ->
-                                AnnouncementCard(
-                                    announcement = announcement,
-                                    onOpenWikiUrl = onOpenWikiUrl,
-                                    onOpenExternalUrl = { url ->
-                                        try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        } catch (_: Exception) { }
-                                    }
-                                )
-                            }
-                            item { Spacer(Modifier.height(16.dp)) }
-                        }
-                    }
+                    )
                 }
+                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }

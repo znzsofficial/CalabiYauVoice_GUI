@@ -17,8 +17,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +33,6 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.data.WeaponSkinFilterApi.WeaponSkinInfo
-import data.ApiResult
-import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════
 //  武器外观筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -48,37 +44,16 @@ fun WeaponSkinFilterScreen(
     initialWeapon: String? = null,
     onBack: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var allSkins by remember { mutableStateOf<List<WeaponSkinInfo>>(emptyList()) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
+    val state = rememberLoadState(emptyList<WeaponSkinInfo>()) { force ->
+        WeaponSkinFilterApi.fetchAllWeaponSkins(force)
+    }
+    val allSkins = state.data
 
     // 筛选状态
     var selectedWeapon by remember { mutableStateOf(initialWeapon) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
-
-    fun loadData(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = WeaponSkinFilterApi.fetchAllWeaponSkins(forceRefresh)) {
-                is ApiResult.Success -> {
-                    allSkins = result.value
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
-        }
-    }
-
-    LaunchedEffect(Unit) { loadData() }
 
     // 筛选后的列表
     val filteredSkins = remember(allSkins, selectedWeapon, selectedQuality, searchQuery) {
@@ -155,74 +130,55 @@ fun WeaponSkinFilterScreen(
             }
         }
     ) { innerPadding ->
-        when {
-            isLoading && allSkins.isEmpty() -> {
-                LoadingState("正在加载武器外观数据…", Modifier.padding(innerPadding))
-            }
-            errorResult != null && allSkins.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadData(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> LoadingState("正在加载武器外观数据…", mod) }
+        ) {
+            Column {
+                // ── 筛选栏 ──
+                WeaponSkinFilterBar(
+                    weapons = weapons,
+                    selectedWeapon = selectedWeapon,
+                    onWeaponSelected = { selectedWeapon = it },
+                    selectedQuality = selectedQuality,
+                    onQualitySelected = { selectedQuality = it }
                 )
-            }
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadData(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier.padding(innerPadding)
-                ) {
-                    Column {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
+
+                // ── 外观网格 ──
+                if (filteredSkins.isEmpty()) {
+                    Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 110.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredSkins, key = { it.name + it.weapon }) { skin ->
+                            WeaponSkinCard(
+                                skin = skin,
+                                onClick = { selectedSkin = skin }
+                            )
                         }
-                        // ── 筛选栏 ──
-                        WeaponSkinFilterBar(
-                            weapons = weapons,
-                            selectedWeapon = selectedWeapon,
-                            onWeaponSelected = { selectedWeapon = it },
-                            selectedQuality = selectedQuality,
-                            onQualitySelected = { selectedQuality = it }
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
+
+                    // ── 外观详情底部弹窗 ──
+                    if (selectedSkin != null) {
+                        WeaponSkinDetailSheet(
+                            skin = selectedSkin!!,
+                            onDismiss = { selectedSkin = null }
                         )
-
-                        // ── 外观网格 ──
-                        if (filteredSkins.isEmpty()) {
-                            Box(
-                                Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        } else {
-                            var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
-
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 110.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(filteredSkins, key = { it.name + it.weapon }) { skin ->
-                                    WeaponSkinCard(
-                                        skin = skin,
-                                        onClick = { selectedSkin = skin }
-                                    )
-                                }
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(Modifier.height(16.dp))
-                                }
-                            }
-
-                            // ── 外观详情底部弹窗 ──
-                            if (selectedSkin != null) {
-                                WeaponSkinDetailSheet(
-                                    skin = selectedSkin!!,
-                                    onDismiss = { selectedSkin = null }
-                                )
-                            }
-                        }
                     }
                 }
             }

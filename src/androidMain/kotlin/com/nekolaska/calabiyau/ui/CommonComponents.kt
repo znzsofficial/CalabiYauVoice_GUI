@@ -15,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import data.ApiResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
@@ -587,4 +591,140 @@ fun rememberSnackbarLauncher(): (String) -> Unit {
         val launcher: (String) -> Unit = { msg -> scope.launch { host.showSnackbar(msg) }; Unit }
         launcher
     }
+}
+
+// ════════════════════════════════════════════════════════
+//  LoadState<T> —— 列表/详情屏幕统一的加载状态容器
+// ════════════════════════════════════════════════════════
+
+/**
+ * 承载列表/详情屏幕的 "loading / data / error / offline" 四态的容器，
+ * 把每个屏幕重复的 `var isLoading by remember / var errorResult by remember / ... /
+ * fun loadData(force) { scope.launch { ... when(result) { ... } } }` 样板收敛到一处。
+ *
+ * 用法：
+ * ```kotlin
+ * val state = rememberLoadState(emptyList<FactionData>()) { force ->
+ *     CharacterListApi.fetchAllFactions(force)
+ * }
+ * // state.data / state.isLoading / state.error / state.isOffline / state.cacheAgeMs
+ * // state.reload(forceRefresh = true)           // 手动重载
+ * ```
+ *
+ * 搭配 [ApiResourceContent] 可以进一步收敛 UI 层的 `when { loading -> ...; error -> ...; else -> PullToRefresh }` 样板。
+ */
+@Stable
+class LoadState<T> internal constructor(
+    initial: T,
+    private val scope: CoroutineScope,
+    private val fetchRef: State<suspend (forceRefresh: Boolean) -> ApiResult<T>>
+) {
+    var data: T by mutableStateOf(initial)
+        private set
+    var isLoading: Boolean by mutableStateOf(true)
+        private set
+    var error: ApiResult.Error? by mutableStateOf(null)
+        private set
+    var isOffline: Boolean by mutableStateOf(false)
+        private set
+    var cacheAgeMs: Long by mutableLongStateOf(0L)
+        private set
+
+    /** 触发一次加载；`forceRefresh = true` 时绕过内存 + 磁盘缓存。 */
+    fun reload(forceRefresh: Boolean = false) {
+        scope.launch {
+            isLoading = true
+            error = null
+            when (val result = fetchRef.value(forceRefresh)) {
+                is ApiResult.Success -> {
+                    data = result.value
+                    isOffline = result.isOffline
+                    cacheAgeMs = result.cacheAgeMs
+                }
+                is ApiResult.Error -> error = result
+            }
+            isLoading = false
+        }
+    }
+}
+
+/**
+ * 创建一个 [LoadState] 并在首次组合时自动加载数据。
+ *
+ * @param initial 数据的初始值（通常是 `emptyList()`），同时决定 `T` 的类型推断。
+ * @param key 变化时重新触发加载——适用于 pageName 等参数化屏幕；默认 `Unit` 只加载一次。
+ * @param fetch 抓取数据的挂起函数。接收 `forceRefresh` 参数以区分首次加载与重试。
+ */
+@Composable
+fun <T> rememberLoadState(
+    initial: T,
+    key: Any? = Unit,
+    fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
+): LoadState<T> {
+    val scope = rememberCoroutineScope()
+    // 捕获最新的 fetch lambda，避免 remember 固化旧闭包
+    val fetchRef = rememberUpdatedState(fetch)
+    val state = remember(scope) { LoadState(initial, scope, fetchRef) }
+    LaunchedEffect(key) { state.reload() }
+    return state
+}
+
+// ════════════════════════════════════════════════════════
+//  ApiResourceContent —— 加载 / 错误 / 下拉刷新 / 离线横幅 四合一包装
+// ════════════════════════════════════════════════════════
+
+/**
+ * 列表屏幕常用的四态 UI 包装：
+ * - 数据为空 + 正在加载 → 骨架屏 / LoadingState
+ * - 数据为空 + 有错误 → 错误占位（带 retry）
+ * - 其他 → PullToRefreshBox 包裹的内容，首行按需显示离线横幅
+ *
+ * 不符合这个模板的屏幕（例如 BalanceDataScreen 这种多数据源）可以直接
+ * 使用 [LoadState] 自己写 when 分支。
+ *
+ * @param loading 自定义加载占位；默认用通用 [LoadingState]
+ * @param isDataEmpty 判断数据是否为空的谓词；默认对 Collection / Map / null 生效
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> ApiResourceContent(
+    state: LoadState<T>,
+    modifier: Modifier = Modifier,
+    isDataEmpty: (T) -> Boolean = ::defaultIsDataEmpty,
+    loading: @Composable (Modifier) -> Unit = { mod -> LoadingState(modifier = mod) },
+    content: @Composable (T) -> Unit
+) {
+    val dataEmpty = isDataEmpty(state.data)
+    when {
+        state.isLoading && dataEmpty -> loading(modifier)
+        state.error != null && dataEmpty -> {
+            val err = state.error!!
+            ErrorState(
+                message = err.message,
+                kind = err.kind,
+                onRetry = { state.reload(forceRefresh = true) },
+                modifier = modifier
+            )
+        }
+        else -> {
+            PullToRefreshBox(
+                isRefreshing = state.isLoading,
+                onRefresh = { state.reload(forceRefresh = true) },
+                state = rememberPullToRefreshState(),
+                modifier = modifier.fillMaxSize()
+            ) {
+                Column(Modifier.fillMaxSize()) {
+                    if (state.isOffline) OfflineBanner(ageMs = state.cacheAgeMs)
+                    content(state.data)
+                }
+            }
+        }
+    }
+}
+
+private fun defaultIsDataEmpty(data: Any?): Boolean = when (data) {
+    null -> true
+    is Collection<*> -> data.isEmpty()
+    is Map<*, *> -> data.isEmpty()
+    else -> false
 }
