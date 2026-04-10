@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
@@ -35,30 +37,44 @@ object NavigationMenuApi {
     )
 
 
-    suspend fun fetchNavigationSections(): ApiResult<List<NavSection>> = withContext(Dispatchers.IO) {
+    suspend fun fetchNavigationSections(
+        forceRefresh: Boolean = false
+    ): ApiResult<List<NavSection>> = withContext(Dispatchers.IO) {
         try {
             val url = "$API?action=query&meta=allmessages&ammessages=sidebar&format=json"
-            val (body, _) = OfflineCache.fetchWithCache(
+            val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.NAVIGATION,
-                key = "sidebar"
+                key = "sidebar",
+                forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) }
-                ?: return@withContext ApiResult.Error("请求导航数据失败，且无离线缓存")
+                ?: return@withContext ApiResult.Error(
+                    "请求导航数据失败，且无离线缓存",
+                    kind = ErrorKind.NETWORK
+                )
+            val body = result.json
             val root = SharedJson.parseToJsonElement(body).jsonObject
             val sidebar = root["query"]
                 ?.jsonObject?.get("allmessages")
                 ?.jsonArray?.firstOrNull()
                 ?.jsonObject?.get("*")
                 ?.jsonPrimitive?.content
-                ?: return@withContext ApiResult.Error("未找到 sidebar 数据")
+                ?: return@withContext ApiResult.Error(
+                    "未找到 sidebar 数据",
+                    kind = ErrorKind.PARSE
+                )
 
             val sections = parseSidebar(sidebar)
             if (sections.isEmpty()) {
-                ApiResult.Error("导航菜单为空")
+                ApiResult.Error("导航菜单为空", kind = ErrorKind.NOT_FOUND)
             } else {
-                ApiResult.Success(sections)
+                ApiResult.Success(
+                    sections,
+                    isOffline = result.isFromCache,
+                    cacheAgeMs = result.ageMs
+                )
             }
         } catch (e: Exception) {
-            ApiResult.Error("解析导航失败: ${e.message}")
+            ApiResult.Error("解析导航失败: ${e.message}", kind = e.toErrorKind())
         }
     }
 

@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -91,6 +93,8 @@ object BalanceDataApi {
 
     private var cachedSettings: BalanceSettings? = null
 
+    fun clearMemoryCache() { cachedSettings = null }
+
     // ── 公共 API ──
 
     /** 获取筛选设置选项 */
@@ -102,13 +106,23 @@ object BalanceDataApi {
                 val url = "$BASE_URL/api/pages/KLBQ_BALANCE/index"
                 val request = Request.Builder().url(url).get().build()
                 val body = client.newCall(request).execute().use { resp ->
-                    if (!resp.isSuccessful) return@withContext ApiResult.Error("HTTP ${resp.code}")
+                    if (!resp.isSuccessful) return@withContext ApiResult.Error(
+                        "HTTP ${resp.code}",
+                        kind = when (resp.code) {
+                            403, 429, 503 -> ErrorKind.CDN_BLOCKED
+                            404 -> ErrorKind.NOT_FOUND
+                            else -> ErrorKind.NETWORK
+                        }
+                    )
                     resp.body.string()
                 }
 
                 val root = json.parseToJsonElement(body).jsonObject
                 if (root["code"]?.jsonPrimitive?.intOrNull != 0) {
-                    return@withContext ApiResult.Error(root["msg"]?.jsonPrimitive?.contentOrNull ?: "未知错误")
+                    return@withContext ApiResult.Error(
+                        root["msg"]?.jsonPrimitive?.contentOrNull ?: "未知错误",
+                        kind = ErrorKind.PARSE
+                    )
                 }
 
                 val value = root["data"]!!.jsonObject["value"]!!.jsonObject
@@ -161,7 +175,7 @@ object BalanceDataApi {
                 cachedSettings = result
                 ApiResult.Success(result)
             } catch (e: Exception) {
-                ApiResult.Error(e.message ?: "网络错误")
+                ApiResult.Error(e.message ?: "网络错误", kind = e.toErrorKind())
             }
         }
     }
@@ -192,17 +206,30 @@ object BalanceDataApi {
                 .build()
 
             val body = client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext ApiResult.Error("HTTP ${resp.code}")
+                if (!resp.isSuccessful) return@withContext ApiResult.Error(
+                    "HTTP ${resp.code}",
+                    kind = when (resp.code) {
+                        403, 429, 503 -> ErrorKind.CDN_BLOCKED
+                        404 -> ErrorKind.NOT_FOUND
+                        else -> ErrorKind.NETWORK
+                    }
+                )
                 resp.body.string()
             }
 
             val root = json.parseToJsonElement(body).jsonObject
             val jData = root["jData"]?.jsonObject
-                ?: return@withContext ApiResult.Error("返回数据格式异常")
+                ?: return@withContext ApiResult.Error(
+                    "返回数据格式异常",
+                    kind = ErrorKind.PARSE
+                )
 
             val iRet = jData["iRet"]?.jsonPrimitive?.contentOrNull
             if (iRet != "0") {
-                return@withContext ApiResult.Error(jData["sMsg"]?.jsonPrimitive?.contentOrNull ?: "查询失败")
+                return@withContext ApiResult.Error(
+                    jData["sMsg"]?.jsonPrimitive?.contentOrNull ?: "查询失败",
+                    kind = ErrorKind.NOT_FOUND
+                )
             }
 
             val data1 = jData["data1"]!!.jsonObject
@@ -225,7 +252,7 @@ object BalanceDataApi {
 
             ApiResult.Success(BalanceResult(attackers = side1, defenders = side2))
         } catch (e: Exception) {
-            ApiResult.Error(e.message ?: "网络错误")
+            ApiResult.Error(e.message ?: "网络错误", kind = e.toErrorKind())
         }
     }
 }

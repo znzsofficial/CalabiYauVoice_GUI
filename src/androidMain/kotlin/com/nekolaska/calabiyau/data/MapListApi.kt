@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import data.ApiResult
+import data.ErrorKind
 import data.SharedJson
+import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -24,6 +26,8 @@ object MapListApi {
     /** 内存缓存 */
     @Volatile
     private var cachedModes: List<GameModeData>? = null
+
+    fun clearMemoryCache() { cachedModes = null }
 
     /** 游戏模式列表（与 Wiki 首页一致） */
     val GAME_MODES = listOf(
@@ -59,13 +63,20 @@ object MapListApi {
         if (!forceRefresh) cachedModes?.let { return@withContext ApiResult.Success(it) }
         try {
             val results = GAME_MODES.map { (display, template) ->
-                async { fetchMode(display, template) }
+                async { fetchMode(display, template, forceRefresh) }
             }.awaitAll()
 
             val errors = results.filterIsInstance<ApiResult.Error>()
             if (errors.size == results.size) {
-                return@withContext ApiResult.Error("所有模式加载失败: ${errors.first().message}")
+                return@withContext ApiResult.Error(
+                    "所有模式加载失败: ${errors.first().message}",
+                    kind = errors.first().kind
+                )
             }
+
+            val successes = results.filterIsInstance<ApiResult.Success<GameModeData>>()
+            val isOffline = successes.any { it.isOffline }
+            val maxAge = successes.maxOfOrNull { it.cacheAgeMs } ?: 0L
 
             val modes = results.mapIndexed { index, result ->
                 when (result) {
@@ -77,34 +88,47 @@ object MapListApi {
                 }
             }
             cachedModes = modes
-            ApiResult.Success(modes)
+            ApiResult.Success(modes, isOffline = isOffline, cacheAgeMs = maxAge)
         } catch (e: Exception) {
-            ApiResult.Error("获取地图列表失败: ${e.message}")
+            ApiResult.Error("获取地图列表失败: ${e.message}", kind = e.toErrorKind())
         }
     }
 
-    private suspend fun fetchMode(displayName: String, templateName: String): ApiResult<GameModeData> {
+    private suspend fun fetchMode(
+        displayName: String,
+        templateName: String,
+        forceRefresh: Boolean
+    ): ApiResult<GameModeData> {
         return try {
             val wikitext = "{{游戏地图|$templateName}}"
             val encoded = URLEncoder.encode(wikitext, "UTF-8")
             val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
 
-            val (body, _) = OfflineCache.fetchWithCache(
+            val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.MAP_LIST,
-                key = "mode_$templateName"
+                key = "mode_$templateName",
+                forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) }
-                ?: return ApiResult.Error("请求 $displayName 失败，且无离线缓存")
+                ?: return ApiResult.Error(
+                    "请求 $displayName 失败，且无离线缓存",
+                    kind = ErrorKind.NETWORK
+                )
+            val body = result.json
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")
                 ?.jsonObject?.get("*")
                 ?.jsonPrimitive?.content
-                ?: return ApiResult.Error("解析 $displayName HTML 失败")
+                ?: return ApiResult.Error("解析 $displayName HTML 失败", kind = ErrorKind.PARSE)
 
             val maps = parseMapsFromHtml(html)
-            ApiResult.Success(GameModeData(displayName, templateName, maps))
+            ApiResult.Success(
+                GameModeData(displayName, templateName, maps),
+                isOffline = result.isFromCache,
+                cacheAgeMs = result.ageMs
+            )
         } catch (e: Exception) {
-            ApiResult.Error("加载 $displayName 失败: ${e.message}")
+            ApiResult.Error("加载 $displayName 失败: ${e.message}", kind = e.toErrorKind())
         }
     }
 
