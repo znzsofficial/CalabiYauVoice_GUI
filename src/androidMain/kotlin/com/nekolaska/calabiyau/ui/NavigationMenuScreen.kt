@@ -18,8 +18,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,8 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.NavigationMenuApi
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  Wiki 导航页 —— 原生客户端版 (MD3 Expressive)
@@ -54,36 +50,18 @@ fun NavigationMenuScreen(
     onOpenWikiUrl: (String) -> Unit,
     embedded: Boolean = false
 ) {
-    val scope = rememberCoroutineScope()
-
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var sections by remember { mutableStateOf<List<NavigationMenuApi.NavSection>>(emptyList()) }
+    val state = rememberLoadState(emptyList<NavigationMenuApi.NavSection>()) { force ->
+        NavigationMenuApi.fetchNavigationSections(force)
+    }
+    val sections = state.data
     var expandedSections by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
 
-    fun loadNavigation(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = NavigationMenuApi.fetchNavigationSections(forceRefresh)) {
-                is ApiResult.Success -> {
-                    sections = result.value
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                    // 默认展开所有分区
-                    if (expandedSections.isEmpty()) {
-                        expandedSections = result.value.map { it.title }.toSet()
-                    }
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
+    // 默认展开所有分区（首次成功加载后）
+    LaunchedEffect(sections) {
+        if (expandedSections.isEmpty() && sections.isNotEmpty()) {
+            expandedSections = sections.map { it.title }.toSet()
         }
     }
-
-    LaunchedEffect(Unit) { loadNavigation() }
 
     Scaffold(
         topBar = {
@@ -111,7 +89,7 @@ fun NavigationMenuScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { loadNavigation(forceRefresh = true) }, enabled = !isLoading) {
+                        IconButton(onClick = { state.reload(forceRefresh = true) }, enabled = !state.isLoading) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
                     }
@@ -119,57 +97,34 @@ fun NavigationMenuScreen(
             }
         }
     ) { innerPadding ->
-        when {
-            isLoading && sections.isEmpty() -> {
-                LoadingState("正在加载 Wiki 导航…", Modifier.padding(innerPadding))
-            }
-            errorResult != null && sections.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadNavigation(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadNavigation(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> LoadingState("正在加载 Wiki 导航…", mod) }
+        ) {
+            if (sections.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("暂无可用导航数据", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(Modifier.fillMaxSize()) {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
-                        }
-                        if (sections.isEmpty()) {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("暂无可用导航数据", style = MaterialTheme.typography.bodyMedium)
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(sections, key = { it.title }) { section ->
-                                    NavSectionCard(
-                                        section = section,
-                                        isExpanded = section.title in expandedSections,
-                                        onToggle = {
-                                            expandedSections = if (section.title in expandedSections) {
-                                                expandedSections - section.title
-                                            } else {
-                                                expandedSections + section.title
-                                            }
-                                        },
-                                        onOpenWikiUrl = onOpenWikiUrl
-                                    )
+                    items(sections, key = { it.title }) { section ->
+                        NavSectionCard(
+                            section = section,
+                            isExpanded = section.title in expandedSections,
+                            onToggle = {
+                                expandedSections = if (section.title in expandedSections) {
+                                    expandedSections - section.title
+                                } else {
+                                    expandedSections + section.title
                                 }
-                            }
-                        }
+                            },
+                            onOpenWikiUrl = onOpenWikiUrl
+                        )
                     }
                 }
             }

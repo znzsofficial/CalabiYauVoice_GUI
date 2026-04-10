@@ -17,8 +17,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +33,6 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CostumeFilterApi
 import com.nekolaska.calabiyau.data.CostumeFilterApi.CostumeInfo
 import com.nekolaska.calabiyau.data.CostumeFilterApi.Quality
-import kotlinx.coroutines.launch
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  角色时装筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -48,37 +44,16 @@ fun CostumeFilterScreen(
     initialCharacter: String? = null,
     onBack: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
-    var isLoading by remember { mutableStateOf(true) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var allCostumes by remember { mutableStateOf<List<CostumeInfo>>(emptyList()) }
-    var isOffline by remember { mutableStateOf(false) }
-    var cacheAgeMs by remember { mutableLongStateOf(0L) }
+    val state = rememberLoadState(emptyList<CostumeInfo>()) { force ->
+        CostumeFilterApi.fetchAllCostumes(force)
+    }
+    val allCostumes = state.data
 
     // 筛选状态
     var selectedCharacter by remember { mutableStateOf(initialCharacter) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
-
-    fun loadData(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoading = true
-            errorResult = null
-            when (val result = CostumeFilterApi.fetchAllCostumes(forceRefresh)) {
-                is ApiResult.Success -> {
-                    allCostumes = result.value
-                    isOffline = result.isOffline
-                    cacheAgeMs = result.cacheAgeMs
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoading = false
-        }
-    }
-
-    LaunchedEffect(Unit) { loadData() }
 
     // 筛选后的列表
     val filteredCostumes = remember(allCostumes, selectedCharacter, selectedQuality, searchQuery) {
@@ -155,74 +130,55 @@ fun CostumeFilterScreen(
             }
         }
     ) { innerPadding ->
-        when {
-            isLoading && allCostumes.isEmpty() -> {
-                LoadingState("正在加载时装数据…", Modifier.padding(innerPadding))
-            }
-            errorResult != null && allCostumes.isEmpty() -> {
-                ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
-                    onRetry = { loadData(forceRefresh = true) },
-                    modifier = Modifier.padding(innerPadding)
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            loading = { mod -> LoadingState("正在加载时装数据…", mod) }
+        ) {
+            Column {
+                // ── 筛选栏 ──
+                CostumeFilterBar(
+                    characters = characters,
+                    selectedCharacter = selectedCharacter,
+                    onCharacterSelected = { selectedCharacter = it },
+                    selectedQuality = selectedQuality,
+                    onQualitySelected = { selectedQuality = it }
                 )
-            }
-            else -> {
-                PullToRefreshBox(
-                    isRefreshing = isLoading,
-                    onRefresh = { loadData(forceRefresh = true) },
-                    state = rememberPullToRefreshState(),
-                    modifier = Modifier.padding(innerPadding)
-                ) {
-                    Column {
-                        if (isOffline) {
-                            OfflineBanner(ageMs = cacheAgeMs)
+
+                // ── 时装网格 ──
+                if (filteredCostumes.isEmpty()) {
+                    Box(
+                        Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 110.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredCostumes, key = { it.name + it.character }) { costume ->
+                            CostumeCard(
+                                costume = costume,
+                                onClick = { selectedCostume = costume }
+                            )
                         }
-                        // ── 筛选栏 ──
-                        CostumeFilterBar(
-                            characters = characters,
-                            selectedCharacter = selectedCharacter,
-                            onCharacterSelected = { selectedCharacter = it },
-                            selectedQuality = selectedQuality,
-                            onQualitySelected = { selectedQuality = it }
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
+
+                    // ── 时装详情底部弹窗 ──
+                    if (selectedCostume != null) {
+                        CostumeDetailSheet(
+                            costume = selectedCostume!!,
+                            onDismiss = { selectedCostume = null }
                         )
-
-                        // ── 时装网格 ──
-                        if (filteredCostumes.isEmpty()) {
-                            Box(
-                                Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        } else {
-                            var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
-
-                            LazyVerticalGrid(
-                                columns = GridCells.Adaptive(minSize = 110.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(filteredCostumes, key = { it.name + it.character }) { costume ->
-                                    CostumeCard(
-                                        costume = costume,
-                                        onClick = { selectedCostume = costume }
-                                    )
-                                }
-                                item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Spacer(Modifier.height(16.dp))
-                                }
-                            }
-
-                            // ── 时装详情底部弹窗 ──
-                            if (selectedCostume != null) {
-                                CostumeDetailSheet(
-                                    costume = selectedCostume!!,
-                                    onDismiss = { selectedCostume = null }
-                                )
-                            }
-                        }
                     }
                 }
             }
