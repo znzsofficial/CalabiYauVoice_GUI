@@ -7,12 +7,16 @@ import com.nekolaska.calabiyau.data.WikiEngine
 import data.CharacterGroup
 import data.PortraitRepository
 import data.SearchMode
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /**
@@ -110,6 +114,29 @@ class SearchViewModel : ViewModel() {
 
     init {
         performSearch()
+        observeKeywordForAutoSearch()
+    }
+
+    /**
+     * 关键词变化后自动延迟搜索（FILE_SEARCH 模式除外——遍历分类树开销大，仍需手动触发）。
+     *
+     * 跳过 mode-switch 回显：onSearchModeChange 会把模式缓存的关键词同步到 _searchKeyword，
+     * 若此时的值与当前模式 `cachedKeywords` 一致，则说明该发射是由模式切换触发的回显
+     * （已由 performSearch() 同步处理或走缓存恢复），不应再触发一次网络请求。
+     */
+    @OptIn(FlowPreview::class)
+    private fun observeKeywordForAutoSearch() {
+        viewModelScope.launch {
+            _searchKeyword
+                .drop(1)  // 跳过初始 "角色" 值（已由 init 中的 performSearch() 处理）
+                .distinctUntilChanged()
+                .debounce(300)
+                .collect { kw ->
+                    if (_searchMode.value == SearchMode.FILE_SEARCH) return@collect
+                    if (kw == cachedKeywords[_searchMode.value]) return@collect
+                    performSearch()
+                }
+        }
     }
 
     fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
