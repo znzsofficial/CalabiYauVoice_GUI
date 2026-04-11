@@ -22,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponDetailApi
 import com.nekolaska.calabiyau.data.WeaponDetailApi.WeaponDetail
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  武器详情页 —— 原生客户端版 (MD3 Expressive)
@@ -36,19 +35,12 @@ fun WeaponDetailScreen(
     onOpenWikiUrl: (String) -> Unit,
     onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var detail by remember { mutableStateOf<WeaponDetail?>(null) }
-    var retryTrigger by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(weaponName, retryTrigger) {
-        isLoading = true
-        errorMessage = null
-        when (val result = WeaponDetailApi.fetchWeaponDetail(weaponName)) {
-            is ApiResult.Success -> detail = result.value
-            is ApiResult.Error -> errorMessage = result.message
-        }
-        isLoading = false
+    val state = rememberLoadState<WeaponDetail?>(null, key = weaponName) { force ->
+        WeaponDetailApi.fetchWeaponDetail(weaponName, force)
+    }
+    val wikiUrl = remember(weaponName) {
+        val encoded = java.net.URLEncoder.encode(weaponName, "UTF-8").replace("+", "%20")
+        "https://wiki.biligame.com/klbq/$encoded"
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -67,10 +59,7 @@ fun WeaponDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        val enc = java.net.URLEncoder.encode(weaponName, "UTF-8").replace("+", "%20")
-                        onOpenWikiUrl("https://wiki.biligame.com/klbq/$enc")
-                    }) {
+                    IconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 },
@@ -78,25 +67,17 @@ fun WeaponDetailScreen(
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading -> {
-                WeaponDetailSkeleton(Modifier.padding(innerPadding))
-            }
-            errorMessage != null && detail == null -> {
-                ErrorState(
-                    message = errorMessage!!,
-                    onRetry = { retryTrigger++ },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            detail != null -> {
-                WeaponDetailContent(
-                    detail = detail!!,
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    onOpenWeaponSkins = onOpenWeaponSkins,
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it == null },
+            loading = { mod -> WeaponDetailSkeleton(mod) }
+        ) { detail ->
+            WeaponDetailContent(
+                detail = detail!!,
+                onOpenWikiUrl = onOpenWikiUrl,
+                onOpenWeaponSkins = onOpenWeaponSkins
+            )
         }
     }
 }
@@ -105,11 +86,10 @@ fun WeaponDetailScreen(
 private fun WeaponDetailContent(
     detail: WeaponDetail,
     onOpenWikiUrl: (String) -> Unit,
-    onOpenWeaponSkins: ((String) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -576,7 +556,7 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 头部卡片骨架
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        SkeletonCard {
             Column(Modifier.padding(20.dp)) {
                 ShimmerBox(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
@@ -585,39 +565,24 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
                 Spacer(Modifier.height(12.dp))
                 ShimmerBox(Modifier.width(140.dp).height(24.dp))
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ShimmerBox(Modifier.width(72.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
-                    ShimmerBox(Modifier.width(64.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
-                    ShimmerBox(Modifier.width(80.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
-                }
+                SkeletonChipRow(count = 3)
             }
         }
         // 武器数据卡片骨架
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        SkeletonCard {
             Column(Modifier.padding(20.dp)) {
-                ShimmerBox(Modifier.width(100.dp).height(18.dp))
+                SkeletonSectionTitle()
                 Spacer(Modifier.height(12.dp))
                 repeat(3) { row ->
                     if (row > 0) Spacer(Modifier.height(12.dp))
-                    Row(Modifier.fillMaxWidth()) {
-                        Column(Modifier.weight(1f)) {
-                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
-                            Spacer(Modifier.height(4.dp))
-                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
-                            Spacer(Modifier.height(4.dp))
-                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
-                        }
-                    }
+                    SkeletonStatRow()
                 }
             }
         }
         // 伤害表卡片骨架
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        SkeletonCard {
             Column(Modifier.padding(20.dp)) {
-                ShimmerBox(Modifier.width(100.dp).height(18.dp))
+                SkeletonSectionTitle()
                 Spacer(Modifier.height(12.dp))
                 ShimmerBox(Modifier.fillMaxWidth().height(32.dp), shape = RoundedCornerShape(8.dp))
                 Spacer(Modifier.height(4.dp))

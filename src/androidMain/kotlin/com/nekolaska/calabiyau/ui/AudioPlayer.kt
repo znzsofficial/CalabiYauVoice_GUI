@@ -27,6 +27,8 @@ object AudioPlayerManager {
     val isPlaying: State<Boolean> = _isPlaying
     val playingSource: State<String?> = _playingSource
 
+    private fun isCurrentSource(source: String): Boolean = currentSource == source
+
     fun play(source: String) {
         // 同一来源正在播放 → 暂停
         if (currentSource == source && mediaPlayer?.isPlaying == true) {
@@ -53,14 +55,19 @@ object AudioPlayerManager {
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(source)
                 setOnPreparedListener {
+                    if (!isCurrentSource(source)) return@setOnPreparedListener
                     start()
                     _isPlaying.value = true
                 }
                 setOnCompletionListener {
+                    if (!isCurrentSource(source)) return@setOnCompletionListener
                     _isPlaying.value = false
+                    _playingSource.value = null
+                    currentSource = null
                     _progress.floatValue = 0f
                 }
                 setOnErrorListener { _, _, _ ->
+                    if (!isCurrentSource(source)) return@setOnErrorListener false
                     _isPlaying.value = false
                     _playingSource.value = null
                     currentSource = null
@@ -69,9 +76,11 @@ object AudioPlayerManager {
                 prepareAsync()
             }
         } catch (_: Exception) {
-            _isPlaying.value = false
-            _playingSource.value = null
-            currentSource = null
+            if (isCurrentSource(source)) {
+                _isPlaying.value = false
+                _playingSource.value = null
+                currentSource = null
+            }
         }
     }
 
