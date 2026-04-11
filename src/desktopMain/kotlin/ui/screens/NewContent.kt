@@ -1136,7 +1136,7 @@ fun NewDownloaderContent() {
                                                 header = "位深",
                                                 placeholder = "16 bit",
                                                 selected = targetBitDepthIndex,
-                                                items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
+                                                items = BIT_DEPTH_OPTION_LABELS,
                                                 onSelectionChange = { i, _ -> viewModel.onTargetBitDepthIndexChange(i) },
                                                 modifier = Modifier.weight(1f)
                                             )

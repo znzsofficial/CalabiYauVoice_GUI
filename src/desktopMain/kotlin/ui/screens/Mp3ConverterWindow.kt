@@ -71,6 +71,7 @@ fun Mp3ConverterWindow(
     var isConverting by remember { mutableStateOf(false) }
     var logLines by remember { mutableStateOf<List<String>>(emptyList()) }
     var progressText by remember { mutableStateOf("") }
+    var isFlyoutVisible by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     val windowState = rememberWindowState(
@@ -78,6 +79,8 @@ fun Mp3ConverterWindow(
         height = 680.dp,
         position = WindowPosition(Alignment.Center)
     )
+
+    val selectedBitDepthOption = bitDepthOptionAt(targetBitDepthIndex)
 
     StyledWindow(
         title = "MP3/FLAC → WAV 转换工具",
@@ -167,7 +170,7 @@ fun Mp3ConverterWindow(
                             header = "位深",
                             placeholder = "16 bit",
                             selected = targetBitDepthIndex,
-                            items = BIT_DEPTH_OPTIONS.map { bitDepthLabel(it) },
+                            items = BIT_DEPTH_OPTION_LABELS,
                             onSelectionChange = { i, _ -> targetBitDepthIndex = i },
                             modifier = Modifier.weight(1f)
                         )
@@ -426,7 +429,7 @@ fun Mp3ConverterWindow(
                                 val files = mp3Files.toList()
                                 if (files.isEmpty()) return@Button
                                 // 合并分片时必须设置具体位深
-                                if (mergeWav && BIT_DEPTH_OPTIONS.getOrNull(targetBitDepthIndex) == null) {
+                                if (mergeWav && selectedBitDepthOption.bitDepth == null) {
                                     isFlyoutVisible = true
                                     return@Button
                                 }
@@ -437,7 +440,8 @@ fun Mp3ConverterWindow(
                                 progressText = ""
                                 coroutineScope.launch(Dispatchers.IO) {
                                     val sampleRate = SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex)
-                                    val bitDepth = BIT_DEPTH_OPTIONS.getOrNull(targetBitDepthIndex)
+                                    val bitDepth = selectedBitDepthOption.bitDepth
+                                    val use16BitDither = selectedBitDepthOption.enable16BitDither
                                     val mergeCount = mergeWavMaxCountStr.toIntOrNull() ?: 0
                                     val doMerge = mergeWav
                                     val doDeleteOriginalMp3 = deleteOriginalMp3
@@ -453,6 +457,7 @@ fun Mp3ConverterWindow(
                                             deleteOriginal = false,
                                             targetSampleRate = sampleRate,
                                             targetBitDepth = bitDepth,
+                                            enable16BitDither = use16BitDither,
                                             onLog = { msg ->
                                                 coroutineScope.launch(Dispatchers.Main) {
                                                     logLines = logLines + msg
