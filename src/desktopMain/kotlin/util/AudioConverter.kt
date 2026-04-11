@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Collections
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import javax.sound.sampled.AudioFileFormat
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioInputStream
@@ -22,6 +23,22 @@ val SAMPLE_RATE_OPTIONS: List<Float?> = listOf(null, 44100f, 48000f, 88200f, 960
 /** 可选位深列表；null 表示"原位深" */
 val BIT_DEPTH_OPTIONS: List<Int?> = listOf(null, 16, 24, 32)
 
+data class BitDepthOption(
+    val bitDepth: Int?,
+    val enable16BitDither: Boolean,
+    val label: String
+)
+
+val BIT_DEPTH_OPTIONS_WITH_DITHER: List<BitDepthOption> = listOf(
+    BitDepthOption(bitDepth = null, enable16BitDither = false, label = bitDepthLabel(null)),
+    BitDepthOption(bitDepth = 16, enable16BitDither = false, label = bitDepthLabel(16)),
+    BitDepthOption(bitDepth = 16, enable16BitDither = true, label = "16 bit（抖动）"),
+    BitDepthOption(bitDepth = 24, enable16BitDither = false, label = bitDepthLabel(24)),
+    BitDepthOption(bitDepth = 32, enable16BitDither = false, label = bitDepthLabel(32))
+)
+
+val BIT_DEPTH_OPTION_LABELS: List<String> = BIT_DEPTH_OPTIONS_WITH_DITHER.map(BitDepthOption::label)
+
 /** 默认位深索引（原位深） */
 const val DEFAULT_BIT_DEPTH_INDEX = 0
 
@@ -32,6 +49,9 @@ private const val AUDIO_RATE_TOLERANCE = 0.5f
 
 fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" else "${rate.toInt()} Hz"
 fun bitDepthLabel(bits: Int?): String = when (bits) { null -> "原位深"; 32 -> "浮点 32 bit"; else -> "$bits bit" }
+fun bitDepthOptionAt(index: Int): BitDepthOption =
+    BIT_DEPTH_OPTIONS_WITH_DITHER.getOrElse(index) { BIT_DEPTH_OPTIONS_WITH_DITHER[DEFAULT_BIT_DEPTH_INDEX] }
+
 fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.lowercase() in SUPPORTED_AUDIO_SOURCE_EXTENSIONS
 
 /**
@@ -49,6 +69,7 @@ suspend fun batchConvertAudioToWav(
     deleteOriginal: Boolean = true,
     targetSampleRate: Float? = null,
     targetBitDepth: Int? = null,
+    enable16BitDither: Boolean = false,
     onLog: (String) -> Unit = {},
     onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
 ) = withContext(Dispatchers.IO) {
@@ -65,7 +86,8 @@ suspend fun batchConvertAudioToWav(
 
     val rateDesc = sampleRateLabel(targetSampleRate)
     val depthDesc = bitDepthLabel(targetBitDepth)
-    onLog("找到 ${sourceFiles.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc)…")
+    val ditherDesc = if (enable16BitDither && targetBitDepth == 16) " / 16-bit 抖动" else ""
+    onLog("找到 ${sourceFiles.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc$ditherDesc)…")
     var successCount = 0
     var failCount = 0
 
@@ -76,7 +98,7 @@ suspend fun batchConvertAudioToWav(
         onProgress(index, sourceFiles.size, sourceFile.name)
 
         try {
-            convertAudioToWav(sourceFile, wavFile, targetSampleRate, targetBitDepth)
+            convertAudioToWav(sourceFile, wavFile, targetSampleRate, targetBitDepth, enable16BitDither)
             successCount++
             if (deleteOriginal && !sourceFile.delete()) {
                 onLog("[删除失败] ${sourceFile.name}")
@@ -105,7 +127,8 @@ fun convertAudioToWav(
     sourceFile: File,
     wavFile: File,
     targetSampleRate: Float? = null,
-    targetBitDepth: Int? = null
+    targetBitDepth: Int? = null,
+    enable16BitDither: Boolean = false
 ) {
     require(sourceFile.isFile) { "音频文件不存在：${sourceFile.absolutePath}" }
     require(isSupportedAudioSource(sourceFile)) {
@@ -126,6 +149,7 @@ fun convertAudioToWav(
         val outRate  = targetSampleRate ?: naturalRate
         val outBits  = targetBitDepth   ?: naturalBits
         val outFloat = targetBitDepth == 32   // 用户显式选了"浮点 32 bit"
+        val use16BitDither = enable16BitDither && !outFloat && outBits == 16 && naturalBits > outBits
 
         // 第一步：将压缩流解码为 PCM_SIGNED LE（固定用源采样率）。
         // mp3spi 只支持 PCM_SIGNED 16-bit 输出，不在此步骤指定目标格式，
@@ -165,7 +189,12 @@ fun convertAudioToWav(
                             channels, channels * (outBits / 8), outRate, false
                         )
                         AudioInputStream(
-                            BitDepthConversionInputStream(srcStream, naturalBits, outBits),
+                            BitDepthConversionInputStream(
+                                source = srcStream,
+                                sourceBits = naturalBits,
+                                targetBits = outBits,
+                                enableDither = use16BitDither
+                            ),
                             targetFmt,
                             AudioSystem.NOT_SPECIFIED.toLong() // Resampling/Conversion might change length, safest to use unknown
                         ).use { scaled ->
@@ -375,7 +404,8 @@ private fun replaceFile(tempFile: File, targetFile: File) {
 private class BitDepthConversionInputStream(
     private val source: AudioInputStream,
     private val sourceBits: Int,
-    private val targetBits: Int
+    private val targetBits: Int,
+    private val enableDither: Boolean = false
 ) : InputStream() {
     private val srcBytesPerSample = sourceBits / 8
     private val dstBytesPerSample = targetBits / 8
@@ -383,6 +413,8 @@ private class BitDepthConversionInputStream(
     private val srcFrameBuf = ByteArray(channels * srcBytesPerSample)
     private val dstFrameBuf = ByteArray(channels * dstBytesPerSample)
     private var dstPos = dstFrameBuf.size // 初始设为末尾，触发首次填充
+    private val previousError = DoubleArray(channels)
+    private var rngState = initialNoiseSeed(sourceBits, targetBits, channels)
 
     // 计算位移量
     // 降位深: source > target, shift > 0 (右移)
@@ -416,7 +448,9 @@ private class BitDepthConversionInputStream(
         }
         for (ch in 0 until channels) {
             val sample = readSignedLE(srcFrameBuf, ch * srcBytesPerSample, sourceBits)
-            val converted = if (shift > 0) {
+            val converted = if (enableDither && shift > 0 && targetBits == 16) {
+                ditheredDownscale(sample, ch)
+            } else if (shift > 0) {
                 sample shr shift // Downscale
             } else {
                 sample shl (-shift) // Upscale
@@ -425,6 +459,32 @@ private class BitDepthConversionInputStream(
         }
         dstPos = 0
         return true
+    }
+
+    private fun ditheredDownscale(sample: Int, channel: Int): Int {
+        val sourcePeak = (1 shl (sourceBits - 1)).toDouble()
+        val targetPeak = (1 shl (targetBits - 1)).toDouble()
+        val normalized = sample.toDouble() / sourcePeak
+        val targetSample = normalized * targetPeak
+
+        val shaped = targetSample + previousError[channel] * 0.85
+        val dither = triangularPdfNoise()
+        val quantized = (shaped + dither)
+            .roundToInt()
+            .coerceIn(-(targetPeak.toInt()), targetPeak.toInt() - 1)
+
+        previousError[channel] = (shaped - quantized).coerceIn(-2.0, 2.0)
+        return quantized
+    }
+
+    private fun triangularPdfNoise(): Double = nextUnitNoise() - nextUnitNoise()
+
+    private fun nextUnitNoise(): Double {
+        rngState = rngState xor (rngState shl 13)
+        rngState = rngState xor (rngState ushr 7)
+        rngState = rngState xor (rngState shl 17)
+        val mantissa = rngState ushr 11
+        return mantissa.toDouble() / (1L shl 53).toDouble()
     }
 
     private fun readSignedLE(b: ByteArray, off: Int, bits: Int): Int {
@@ -444,4 +504,12 @@ private class BitDepthConversionInputStream(
     }
 
     override fun close() = source.close()
+}
+
+private fun initialNoiseSeed(sourceBits: Int, targetBits: Int, channels: Int): Long {
+    var seed = 0x9E3779B97F4A7C15uL.toLong()
+    seed = seed xor (sourceBits.toLong() shl 32)
+    seed = seed xor (targetBits.toLong() shl 16)
+    seed = seed xor channels.toLong()
+    return if (seed != 0L) seed else 0x6A09E667F3BCC909uL.toLong()
 }
