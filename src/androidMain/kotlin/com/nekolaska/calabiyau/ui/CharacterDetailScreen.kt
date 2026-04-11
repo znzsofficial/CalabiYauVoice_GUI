@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterDetailApi
 import com.nekolaska.calabiyau.data.CharacterDetailApi.CharacterDetail
-import data.ApiResult
 
 // ════════════════════════════════════════════════════════
 //  角色详情页 —— 原生客户端版 (MD3 Expressive)
@@ -50,19 +49,12 @@ fun CharacterDetailScreen(
     onOpenCostumes: ((String) -> Unit)? = null,
     onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var detail by remember { mutableStateOf<CharacterDetail?>(null) }
-    var retryTrigger by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(characterName, retryTrigger) {
-        isLoading = true
-        errorMessage = null
-        when (val result = CharacterDetailApi.fetchCharacterDetail(characterName)) {
-            is ApiResult.Success -> detail = result.value
-            is ApiResult.Error -> errorMessage = result.message
-        }
-        isLoading = false
+    val state = rememberLoadState<CharacterDetail?>(null, key = characterName) { force ->
+        CharacterDetailApi.fetchCharacterDetail(characterName, force)
+    }
+    val wikiUrl = remember(characterName) {
+        val encoded = java.net.URLEncoder.encode(characterName, "UTF-8").replace("+", "%20")
+        "https://wiki.biligame.com/klbq/$encoded"
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -85,12 +77,7 @@ fun CharacterDetailScreen(
                     }
                 },
                 actions = {
-                    // 在 WebView 中打开
-                    IconButton(onClick = {
-                        val encoded = java.net.URLEncoder.encode(characterName, "UTF-8")
-                            .replace("+", "%20")
-                        onOpenWikiUrl("https://wiki.biligame.com/klbq/$encoded")
-                    }) {
+                    IconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 },
@@ -98,29 +85,19 @@ fun CharacterDetailScreen(
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading -> {
-                CharacterDetailSkeleton(Modifier.padding(innerPadding))
-            }
-
-            errorMessage != null && detail == null -> {
-                ErrorState(
-                    message = errorMessage!!,
-                    onRetry = { retryTrigger++ },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-
-            detail != null -> {
-                CharacterDetailContent(
-                    detail = detail!!,
-                    portraitUrl = portraitUrl,
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    onOpenCostumes = onOpenCostumes,
-                    onOpenWeaponSkins = onOpenWeaponSkins,
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
+        ApiResourceContent(
+            state = state,
+            modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it == null },
+            loading = { mod -> CharacterDetailSkeleton(mod) }
+        ) { detail ->
+            CharacterDetailContent(
+                detail = detail!!,
+                portraitUrl = portraitUrl,
+                onOpenWikiUrl = onOpenWikiUrl,
+                onOpenCostumes = onOpenCostumes,
+                onOpenWeaponSkins = onOpenWeaponSkins
+            )
         }
     }
 }
@@ -135,11 +112,10 @@ private fun CharacterDetailContent(
     portraitUrl: String?,
     onOpenWikiUrl: (String) -> Unit,
     onOpenCostumes: ((String) -> Unit)? = null,
-    onOpenWeaponSkins: ((String) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1039,56 +1015,39 @@ private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 头部卡片骨架
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
-            Column {
-                ShimmerBox(
-                    modifier = Modifier.fillMaxWidth().height(320.dp),
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-                )
-                Column(Modifier.padding(20.dp)) {
-                    ShimmerBox(Modifier.width(120.dp).height(24.dp))
-                    Spacer(Modifier.height(8.dp))
-                    ShimmerBox(Modifier.width(180.dp).height(14.dp))
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ShimmerBox(Modifier.width(72.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
-                        ShimmerBox(Modifier.width(64.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
-                        ShimmerBox(Modifier.width(56.dp).height(28.dp), shape = RoundedCornerShape(12.dp))
-                    }
-                }
+        SkeletonCard {
+            ShimmerBox(
+                modifier = Modifier.fillMaxWidth().height(320.dp),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            )
+            Column(Modifier.padding(20.dp)) {
+                ShimmerBox(Modifier.width(120.dp).height(24.dp))
+                Spacer(Modifier.height(8.dp))
+                SkeletonTextLine(widthFraction = 0.7f)
+                Spacer(Modifier.height(12.dp))
+                SkeletonChipRow(count = 3)
             }
         }
         // 语录卡片骨架
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        SkeletonCard {
             Row(Modifier.padding(20.dp)) {
                 ShimmerBox(Modifier.size(28.dp), shape = RoundedCornerShape(6.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    ShimmerBox(Modifier.fillMaxWidth().height(14.dp))
+                    SkeletonTextLine()
                     Spacer(Modifier.height(6.dp))
-                    ShimmerBox(Modifier.fillMaxWidth(0.7f).height(14.dp))
+                    SkeletonTextLine(widthFraction = 0.7f)
                 }
             }
         }
         // 属性卡片骨架
-        Card(shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+        SkeletonCard {
             Column(Modifier.padding(20.dp)) {
-                ShimmerBox(Modifier.width(100.dp).height(18.dp))
+                SkeletonSectionTitle()
                 Spacer(Modifier.height(12.dp))
                 repeat(3) { row ->
                     if (row > 0) Spacer(Modifier.height(12.dp))
-                    Row(Modifier.fillMaxWidth()) {
-                        Column(Modifier.weight(1f)) {
-                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
-                            Spacer(Modifier.height(4.dp))
-                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
-                        }
-                        Column(Modifier.weight(1f)) {
-                            ShimmerBox(Modifier.width(40.dp).height(10.dp))
-                            Spacer(Modifier.height(4.dp))
-                            ShimmerBox(Modifier.width(60.dp).height(14.dp))
-                        }
-                    }
+                    SkeletonStatRow()
                 }
             }
         }

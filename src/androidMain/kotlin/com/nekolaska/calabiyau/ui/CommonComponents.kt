@@ -506,6 +506,78 @@ fun ShimmerBox(
 }
 
 // ────────────────────────────────────────────
+//  骨架屏通用片段组件
+// ────────────────────────────────────────────
+
+/** 骨架屏卡片容器 —— 统一详情页骨架屏的卡片圆角和间距。 */
+@Composable
+fun SkeletonCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(content = content)
+    }
+}
+
+/** 骨架屏标题行（宽度约 100dp，高度 18dp）。 */
+@Composable
+fun SkeletonSectionTitle(modifier: Modifier = Modifier) {
+    ShimmerBox(modifier.width(100.dp).height(18.dp))
+}
+
+/** 骨架屏属性网格行（2 列，每列 label + value）。 */
+@Composable
+fun SkeletonStatRow(modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth()) {
+        SkeletonStatCell()
+        SkeletonStatCell()
+    }
+}
+
+/** 骨架屏标签行（模拟 InfoChip / 标签组）。 */
+@Composable
+fun SkeletonChipRow(
+    count: Int = 3,
+    modifier: Modifier = Modifier
+) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(count) { index ->
+            ShimmerBox(
+                Modifier
+                    .width(skeletonChipWidth(index))
+                    .height(28.dp),
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
+    }
+}
+
+/** 骨架屏文本行（模拟一行文字，可指定宽度比例）。 */
+@Composable
+fun SkeletonTextLine(
+    widthFraction: Float = 0.85f,
+    height: androidx.compose.ui.unit.Dp = 14.dp,
+    modifier: Modifier = Modifier
+) {
+    ShimmerBox(modifier.fillMaxWidth(widthFraction).height(height))
+}
+
+@Composable
+private fun RowScope.SkeletonStatCell() {
+    Column(Modifier.weight(1f)) {
+        ShimmerBox(Modifier.width(40.dp).height(10.dp))
+        Spacer(Modifier.height(4.dp))
+        ShimmerBox(Modifier.width(60.dp).height(14.dp))
+    }
+}
+
+private fun skeletonChipWidth(index: Int) = if (index == 0) 72.dp else (64 - index * 4).dp
+
+// ────────────────────────────────────────────
 //  离线提示横条
 // ────────────────────────────────────────────
 
