@@ -18,8 +18,10 @@ import kotlinx.coroutines.delay
  * 支持播放本地文件和网络 URL，同一时间只播放一个音频。
  */
 object AudioPlayerManager {
+    private val playerLock = Any()
     private var mediaPlayer: MediaPlayer? = null
     private var currentSource: String? = null
+    private var playbackToken: Long = 0L
     private var _isPlaying = mutableStateOf(false)
     private var _playingSource = mutableStateOf<String?>(null)
     private var _progress = mutableFloatStateOf(0f)
@@ -27,69 +29,88 @@ object AudioPlayerManager {
     val isPlaying: State<Boolean> = _isPlaying
     val playingSource: State<String?> = _playingSource
 
-    private fun isCurrentSource(source: String): Boolean = currentSource == source
+    private fun isActivePlayback(source: String, token: Long, player: MediaPlayer): Boolean =
+        currentSource == source && playbackToken == token && mediaPlayer === player
 
     fun play(source: String) {
-        // 同一来源正在播放 → 暂停
-        if (currentSource == source && mediaPlayer?.isPlaying == true) {
-            mediaPlayer?.pause()
-            _isPlaying.value = false
-            return
-        }
-        // 同一来源暂停中 → 继续
-        if (currentSource == source && mediaPlayer != null) {
-            try {
-                mediaPlayer?.start()
-                _isPlaying.value = true
-                return
-            } catch (_: Exception) {
-                // 播放器状态异常，释放后重新创建
-                release()
+        synchronized(playerLock) {
+            val existingPlayer = mediaPlayer
+
+            // 同一来源正在播放 → 暂停
+            if (currentSource == source && existingPlayer?.isPlaying == true) {
+                try {
+                    existingPlayer.pause()
+                    _isPlaying.value = false
+                    return
+                } catch (_: Exception) {
+                    // 播放器状态异常，释放后重新创建
+                    releaseLocked()
+                }
             }
-        }
-        // 新来源或之前的已释放 → 创建新的
-        release()
-        currentSource = source
-        _playingSource.value = source
-        try {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(source)
-                setOnPreparedListener {
-                    if (!isCurrentSource(source)) return@setOnPreparedListener
-                    start()
+
+            // 同一来源暂停中 → 继续
+            if (currentSource == source && existingPlayer != null) {
+                try {
+                    existingPlayer.start()
                     _isPlaying.value = true
+                    return
+                } catch (_: Exception) {
+                    releaseLocked()
                 }
-                setOnCompletionListener {
-                    if (!isCurrentSource(source)) return@setOnCompletionListener
-                    _isPlaying.value = false
-                    _playingSource.value = null
-                    currentSource = null
-                    _progress.floatValue = 0f
-                }
-                setOnErrorListener { _, _, _ ->
-                    if (!isCurrentSource(source)) return@setOnErrorListener false
-                    _isPlaying.value = false
-                    _playingSource.value = null
-                    currentSource = null
-                    false
-                }
-                prepareAsync()
             }
-        } catch (_: Exception) {
-            if (isCurrentSource(source)) {
-                _isPlaying.value = false
-                _playingSource.value = null
-                currentSource = null
+
+            // 新来源或之前的已释放 → 创建新的
+            releaseLocked()
+            currentSource = source
+            _playingSource.value = source
+            val token = ++playbackToken
+
+            try {
+                val player = MediaPlayer()
+                mediaPlayer = player
+                player.apply {
+                    setDataSource(source)
+                    setOnPreparedListener {
+                        synchronized(playerLock) {
+                            if (!isActivePlayback(source, token, player)) return@setOnPreparedListener
+                            try {
+                                player.start()
+                                _isPlaying.value = true
+                            } catch (_: Exception) {
+                                releaseLocked(player)
+                            }
+                        }
+                    }
+                    setOnCompletionListener {
+                        synchronized(playerLock) {
+                            if (!isActivePlayback(source, token, player)) return@setOnCompletionListener
+                            releaseLocked(player)
+                        }
+                    }
+                    setOnErrorListener { _, _, _ ->
+                        synchronized(playerLock) {
+                            if (isActivePlayback(source, token, player)) {
+                                releaseLocked(player)
+                            }
+                        }
+                        true
+                    }
+                    prepareAsync()
+                }
+            } catch (_: Exception) {
+                if (currentSource == source && playbackToken == token) {
+                    releaseLocked()
+                }
             }
         }
     }
 
     fun stop() {
-        release()
+        synchronized(playerLock) { releaseLocked() }
     }
 
     fun getProgress(): Float {
-        val mp = mediaPlayer ?: return 0f
+        val mp = synchronized(playerLock) { mediaPlayer } ?: return 0f
         return try {
             if (mp.duration > 0) mp.currentPosition.toFloat() / mp.duration else 0f
         } catch (_: Exception) {
@@ -99,7 +120,7 @@ object AudioPlayerManager {
 
     fun getDuration(): Int {
         return try {
-            mediaPlayer?.duration ?: 0
+            synchronized(playerLock) { mediaPlayer?.duration ?: 0 }
         } catch (_: Exception) {
             0
         }
@@ -107,20 +128,27 @@ object AudioPlayerManager {
 
     fun getCurrentPosition(): Int {
         return try {
-            mediaPlayer?.currentPosition ?: 0
+            synchronized(playerLock) { mediaPlayer?.currentPosition ?: 0 }
         } catch (_: Exception) {
             0
         }
     }
 
-    private fun release() {
+    private fun releaseLocked(expectedPlayer: MediaPlayer? = null) {
+        val player = mediaPlayer ?: return clearPlaybackState()
+        if (expectedPlayer != null && player !== expectedPlayer) return
         try {
-            mediaPlayer?.stop()
+            player.stop()
         } catch (_: Exception) { }
         try {
-            mediaPlayer?.release()
+            player.release()
         } catch (_: Exception) { }
+        playbackToken++
         mediaPlayer = null
+        clearPlaybackState()
+    }
+
+    private fun clearPlaybackState() {
         _isPlaying.value = false
         _playingSource.value = null
         _progress.floatValue = 0f

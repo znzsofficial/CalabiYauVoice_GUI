@@ -197,10 +197,13 @@ fun AppTheme(content: @Composable () -> Unit) {
         if (wallpaperSeedColor.intValue != 0) return@LaunchedEffect  // 已提取过
         val url = AppPrefs.wallpaperUrl ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
+            var bitmap: android.graphics.Bitmap? = null
             try {
                 val request = okhttp3.Request.Builder().url(url).build()
-                val bytes = WikiEngine.client.newCall(request).execute().body.bytes()
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                val bytes = WikiEngine.client.newCall(request).execute().use { response ->
+                    response.body.bytes()
+                }
+                bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: return@withContext
                 val palette = Palette.from(bitmap).generate()
                 val color = palette.getVibrantColor(palette.getMutedColor(0))
@@ -208,8 +211,10 @@ fun AppTheme(content: @Composable () -> Unit) {
                     wallpaperSeedColor.intValue = color
                     AppPrefs.wallpaperSeedColorCache = color
                 }
-                bitmap.recycle()
             } catch (_: Exception) { }
+            finally {
+                bitmap?.recycle()
+            }
         }
     }
 
