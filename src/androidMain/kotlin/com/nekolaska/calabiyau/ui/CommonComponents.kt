@@ -34,6 +34,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import data.ApiResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
@@ -691,6 +692,8 @@ class LoadState<T> internal constructor(
     private val scope: CoroutineScope,
     private val fetchRef: State<suspend (forceRefresh: Boolean) -> ApiResult<T>>
 ) {
+    private var activeRequestJob: Job? = null
+    private var requestVersion: Long = 0L
     var data: T by mutableStateOf(initial)
         private set
     var isLoading: Boolean by mutableStateOf(true)
@@ -704,18 +707,27 @@ class LoadState<T> internal constructor(
 
     /** 触发一次加载；`forceRefresh = true` 时绕过内存 + 磁盘缓存。 */
     fun reload(forceRefresh: Boolean = false) {
-        scope.launch {
+        val currentVersion = ++requestVersion
+        activeRequestJob?.cancel()
+        activeRequestJob = scope.launch {
             isLoading = true
             error = null
             when (val result = fetchRef.value(forceRefresh)) {
                 is ApiResult.Success -> {
+                    if (currentVersion != requestVersion) return@launch
                     data = result.value
                     isOffline = result.isOffline
                     cacheAgeMs = result.cacheAgeMs
                 }
-                is ApiResult.Error -> error = result
+                is ApiResult.Error -> {
+                    if (currentVersion != requestVersion) return@launch
+                    error = result
+                }
             }
-            isLoading = false
+            if (currentVersion == requestVersion) {
+                isLoading = false
+                activeRequestJob = null
+            }
         }
     }
 }
