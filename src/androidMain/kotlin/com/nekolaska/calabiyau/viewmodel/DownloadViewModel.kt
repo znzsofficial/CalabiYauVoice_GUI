@@ -57,6 +57,9 @@ sealed class DownloadTask {
  * 需要 Application 上下文用于 MediaScanner。
  */
 class DownloadViewModel(application: Application) : AndroidViewModel(application) {
+    private companion object {
+        const val MEDIA_SCAN_BATCH_SIZE = 128
+    }
 
     // ========== 网络状态 ==========
     val isNetworkAvailable: StateFlow<Boolean> = NetworkMonitor
@@ -279,23 +282,38 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     private fun scanMediaFiles(dir: File) {
         if (!dir.exists()) return
         val imageExtensions = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp")
-        val imageFiles = dir.walkTopDown()
+        val app = getApplication<Application>()
+        val pathsBatch = ArrayList<String>(MEDIA_SCAN_BATCH_SIZE)
+        val mimeTypesBatch = ArrayList<String>(MEDIA_SCAN_BATCH_SIZE)
+        var totalScanned = 0
+
+        fun flushBatch() {
+            if (pathsBatch.isEmpty()) return
+            MediaScannerConnection.scanFile(
+                app,
+                pathsBatch.toTypedArray(),
+                mimeTypesBatch.toTypedArray()
+            ) { _, _ -> }
+            totalScanned += pathsBatch.size
+            pathsBatch.clear()
+            mimeTypesBatch.clear()
+        }
+
+        dir.walkTopDown()
             .filter { it.isFile && it.extension.lowercase() in imageExtensions }
-            .toList()
-        if (imageFiles.isEmpty()) return
+            .forEach { file ->
+                pathsBatch += file.absolutePath
+                mimeTypesBatch += (
+                    MimeTypeMap.getSingleton()
+                        .getMimeTypeFromExtension(file.extension.lowercase())
+                        ?: "image/*"
+                )
+                if (pathsBatch.size >= MEDIA_SCAN_BATCH_SIZE) flushBatch()
+            }
 
-        val paths = imageFiles.map { it.absolutePath }.toTypedArray()
-        val mimeTypes = imageFiles.map { file ->
-            MimeTypeMap.getSingleton()
-                .getMimeTypeFromExtension(file.extension.lowercase())
-                ?: "image/*"
-        }.toTypedArray()
-
-        MediaScannerConnection.scanFile(
-            getApplication(),
-            paths,
-            mimeTypes
-        ) { _, _ -> }
-        addLog("已通知系统媒体库更新 ${imageFiles.size} 张图片")
+        flushBatch()
+        if (totalScanned > 0) {
+            addLog("已通知系统媒体库更新 $totalScanned 张图片")
+        }
     }
 }
