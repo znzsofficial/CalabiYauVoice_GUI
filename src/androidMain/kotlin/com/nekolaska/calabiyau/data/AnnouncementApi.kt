@@ -87,10 +87,11 @@ object AnnouncementApi {
 
                     // 时间字段可能是字符串或对象
                     val dateStr = printouts?.get("时间")?.jsonArray?.firstOrNull()?.let { elem ->
-                        when {
-                            elem is JsonPrimitive -> elem.content
-                            elem is JsonObject -> elem["raw"]?.jsonPrimitive?.content
+                        when (elem) {
+                            is JsonPrimitive -> elem.content
+                            is JsonObject -> elem["raw"]?.jsonPrimitive?.content
                                 ?: elem["timestamp"]?.jsonPrimitive?.content ?: ""
+
                             else -> ""
                         }
                     } ?: ""

@@ -660,7 +660,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                     if (showDebugMenu) {
                         var showCrashConfirm by remember { mutableStateOf(false) }
-                        val debugScope = rememberCoroutineScope()
 
                         AlertDialog(
                             onDismissRequest = { showDebugMenu = false },
@@ -1212,6 +1211,7 @@ private fun StorageStatisticsCard(savePath: String) {
                     totalSize = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
                     fileCount = root.walkTopDown().count { it.isFile }
                     subDirSizes = root.listFiles()
+                        ?.asSequence()
                         ?.filter { it.isDirectory }
                         ?.map { dir ->
                             DirSizeInfo(
@@ -1221,7 +1221,8 @@ private fun StorageStatisticsCard(savePath: String) {
                         }
                         ?.filter { it.size > 0 }
                         ?.sortedByDescending { it.size }
-                        ?.take(8) // 最多显示 8 个子目录
+                        ?.take(8)
+                        ?.toList() // 最多显示 8 个子目录
                         ?: emptyList()
                 } else {
                     totalSize = 0L
@@ -1615,11 +1616,11 @@ private fun getPathFromUri(uri: Uri): String? {
 
     // 常见的 ExternalStorageProvider 格式: "primary:some/path"
     val split = docId.split(":")
-    return when {
-        split.size == 2 && split[0].equals("primary", ignoreCase = true) -> {
+    return when (split.size) {
+        2 if split[0].equals("primary", ignoreCase = true) -> {
             "${android.os.Environment.getExternalStorageDirectory().absolutePath}/${split[1]}"
         }
-        split.size == 2 -> {
+        2 -> {
             // 外部 SD 卡等
             "/storage/${split[0]}/${split[1]}"
         }

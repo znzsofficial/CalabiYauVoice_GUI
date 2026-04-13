@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Process
 import kotlin.system.exitProcess
+import androidx.core.content.edit
 
 /**
  * 全局未捕获异常处理器。
@@ -59,10 +60,10 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
 
             // 同步写入（commit），确保崩溃时数据不丢失
             appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(KEY_CRASH_LOG, log)
-                .putLong(KEY_CRASH_TIME, System.currentTimeMillis())
-                .commit()
+                .edit(commit = true) {
+                    putString(KEY_CRASH_LOG, log)
+                        .putLong(KEY_CRASH_TIME, System.currentTimeMillis())
+                }
 
             // 启动崩溃报告页面
             val intent = Intent(appContext, CrashReportActivity::class.java).apply {
@@ -83,7 +84,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val log = prefs.getString(KEY_CRASH_LOG, null)
         if (log != null) {
-            prefs.edit().remove(KEY_CRASH_LOG).remove(KEY_CRASH_TIME).apply()
+            prefs.edit {remove(KEY_CRASH_LOG).remove(KEY_CRASH_TIME)}
         }
         return log
     }

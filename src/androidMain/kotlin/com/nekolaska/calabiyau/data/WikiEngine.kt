@@ -113,8 +113,6 @@ object WikiEngine {
     private val jsonParser = SharedJson
     private val nameCache = WikiEngineCore.CharacterNameCache()
 
-    fun sanitizeFileName(name: String) = data.sanitizeFileName(name)
-
     /**
      * 安全的 JSON GET 请求。
      * - 自动检测 CDN 拦截页面（返回 HTML 而非 JSON）

@@ -569,7 +569,7 @@ private fun CharacterPreviewSection(
     onViewAll: () -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    var selectedFaction by remember { mutableStateOf(0) }
+    var selectedFaction by remember { mutableIntStateOf(0) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
@@ -756,7 +756,7 @@ private fun MapPreviewSection(
     onViewAll: () -> Unit = {},
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    var selectedMode by remember { mutableStateOf(0) }
+    var selectedMode by remember { mutableIntStateOf(0) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 

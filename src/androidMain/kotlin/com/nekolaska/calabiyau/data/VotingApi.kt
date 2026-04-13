@@ -403,7 +403,7 @@ object VotingApi {
             val klbqCookies = cm.getCookie("https://wiki.biligame.com/klbq/") ?: ""
             // 合并去重
             val cookieMap = mutableMapOf<String, String>()
-            (rootCookies + "; " + klbqCookies).split(";").forEach { part ->
+            ("$rootCookies; $klbqCookies").split(";").forEach { part ->
                 val trimmed = part.trim()
                 val eq = trimmed.indexOf('=')
                 if (eq > 0) {
