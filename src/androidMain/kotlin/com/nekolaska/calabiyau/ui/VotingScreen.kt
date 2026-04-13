@@ -145,7 +145,7 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
             SnackbarHost(snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     containerColor = MaterialTheme.colorScheme.inverseSurface,
                     contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                     actionColor = MaterialTheme.colorScheme.inversePrimary
@@ -281,7 +281,7 @@ private fun VotingContent(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = smoothCornerShape(12.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
@@ -318,7 +318,7 @@ private fun VotingContent(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = smoothCornerShape(12.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -431,7 +431,7 @@ private fun CandidateCard(
         onClick = onClick,
         enabled = isLoggedIn,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = smoothCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -449,7 +449,7 @@ private fun CandidateCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(3f / 4f)
-                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                    .clip(smoothCornerShape(12.dp))
             ) {
                 AsyncImage(
                     model = imageUrl,
@@ -465,7 +465,7 @@ private fun CandidateCard(
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
                             .size(24.dp),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = smoothCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.primary
                     ) {
                         Icon(
@@ -559,7 +559,7 @@ private fun VotingBottomBar(
             FilledTonalButton(
                 onClick = onSubmit,
                 enabled = hasChanges && !isSubmitting,
-                shape = RoundedCornerShape(12.dp)
+                shape = smoothCornerShape(12.dp)
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(

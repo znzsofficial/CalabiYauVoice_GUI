@@ -92,14 +92,14 @@ private fun GameModeCard(
     onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)?
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
             // 标题行（可点击展开/折叠）
             Surface(
                 onClick = onToggle,
-                shape = RoundedCornerShape(12.dp),
+                shape = smoothCornerShape(12.dp),
                 color = androidx.compose.ui.graphics.Color.Transparent
             ) {
                 Row(
@@ -188,7 +188,7 @@ private fun GameModeCard(
                                         onOpenWikiUrl("https://wiki.biligame.com/klbq/$enc")
                                     }
                                 },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = smoothCornerShape(12.dp),
                                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                             ) {
                                 Text(mapName, style = MaterialTheme.typography.labelMedium)
@@ -201,7 +201,7 @@ private fun GameModeCard(
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     onClick = { onOpenWikiUrl(mode.wikiUrl) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     color = androidx.compose.ui.graphics.Color.Transparent
                 ) {
                     Row(

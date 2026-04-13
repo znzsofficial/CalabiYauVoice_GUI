@@ -114,6 +114,7 @@ fun PlayerDecorationScreen(
                                     FilterChip(
                                         selected = selectedSectionIndex == index,
                                         onClick = { selectedSectionIndex = index },
+                                        shape = smoothCornerShape(12.dp),
                                         label = {
                                             Text(
                                                 section.title,
@@ -243,7 +244,7 @@ fun PlayerDecorationScreen(
                 Text(item.name, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(onClick = {
                     val url = item.imageUrl.ifEmpty { item.iconUrl }
@@ -291,7 +292,7 @@ private fun PlayerDecorationSkeleton(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(if (it == 0) 80.dp else 68.dp)
                         .height(32.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = smoothCapsuleShape()
                 )
             }
         }
@@ -306,7 +307,7 @@ private fun PlayerDecorationSkeleton(modifier: Modifier = Modifier) {
         ) {
             items(10) {
                 Card(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = smoothCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     )
@@ -316,7 +317,7 @@ private fun PlayerDecorationSkeleton(modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f),
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                            shape = smoothCornerShape(16.dp)
                         )
                         Row(
                             modifier = Modifier
@@ -361,7 +362,7 @@ private fun DecorationCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    .clip(smoothCornerShape(16.dp)),
                 contentScale = ContentScale.Crop
             )
             Row(

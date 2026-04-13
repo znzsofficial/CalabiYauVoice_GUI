@@ -55,13 +55,11 @@ fun SettingsScreen(onBack: () -> Unit) {
     val globalThemeMode = LocalThemeMode.current
     val globalSeedColor = LocalSeedColor.current
     val globalLiquidGlass = LocalLiquidGlassEnabled.current
-    val globalG2Corners = LocalG2CornersEnabled.current
 
     // 直接从全局状态派生，避免三重同步
     var themeMode by globalThemeMode
     var seedColorInt by globalSeedColor
     var liquidGlassEnabled by globalLiquidGlass
-    var g2CornersEnabled by globalG2Corners
 
     // 这些没有对应的 CompositionLocal，保留本地 remember
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
@@ -230,21 +228,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     )
 
-                    // G2 连续圆角
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingsToggleItem(
-                        icon = Icons.Outlined.RoundedCorner,
-                        title = "G2 连续圆角",
-                        subtitle = "更平滑的圆角曲线",
-                        checked = g2CornersEnabled || liquidGlassEnabled,
-                        onCheckedChange = {
-                            if (!liquidGlassEnabled) {
-                                g2CornersEnabled = it
-                                AppPrefs.g2CornersEnabled = it
-                            }
-                        }
-                    )
-
                     // 液态玻璃效果（开启时自动开启 G2）
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsToggleItem(
@@ -255,10 +238,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                         onCheckedChange = {
                             liquidGlassEnabled = it
                             AppPrefs.liquidGlassEnabled = it
-                            if (it) {
-                                g2CornersEnabled = true
-                                AppPrefs.g2CornersEnabled = true
-                            }
                         }
                     )
 

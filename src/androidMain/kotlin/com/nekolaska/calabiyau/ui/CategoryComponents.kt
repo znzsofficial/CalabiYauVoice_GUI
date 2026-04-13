@@ -73,7 +73,7 @@ fun GroupCard(
 ) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -90,13 +90,13 @@ fun GroupCard(
                     contentDescription = null,
                     modifier = Modifier
                         .size(52.dp)
-                        .clip(RoundedCornerShape(16.dp)),
+                        .clip(smoothCornerShape(16.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Surface(
                     modifier = Modifier.size(52.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = smoothCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -180,7 +180,7 @@ fun CategoryDetailContent(
             modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp, top = 8.dp)
         ) {
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = smoothCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(48.dp)
             ) {
@@ -224,6 +224,7 @@ fun CategoryDetailContent(
                         if (checkedCategories.size == subCategories.size) onUncheckAll()
                         else onCheckAll()
                     },
+                    shape = smoothCornerShape(12.dp),
                     label = {
                         Text(
                             if (checkedCategories.size == subCategories.size) "取消全选" else "全选",
@@ -236,8 +237,7 @@ fun CategoryDetailContent(
                             else Icons.Default.DoneAll,
                             null, modifier = Modifier.size(16.dp)
                         )
-                    },
-                    shape = RoundedCornerShape(12.dp)
+                    }
                 )
             }
 
@@ -278,7 +278,7 @@ fun CategoryDetailContent(
                     .fillMaxWidth()
                     .height(56.dp)
                     .padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(28.dp)
+                shape = smoothCornerShape(28.dp)
             ) {
                 Icon(Icons.Default.Download, null)
                 Spacer(Modifier.width(8.dp))
@@ -303,7 +303,7 @@ fun CategoryItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         onClick = { onCheckedChange(!checked) },
-        shape = RoundedCornerShape(14.dp),
+        shape = smoothCornerShape(14.dp),
         color = if (checked)
             MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
         else

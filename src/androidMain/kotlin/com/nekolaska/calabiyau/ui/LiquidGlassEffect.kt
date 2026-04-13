@@ -18,8 +18,8 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
 import com.kyant.capsule.ContinuousCapsule
 import com.kyant.capsule.ContinuousRoundedRectangle
 
@@ -27,11 +27,8 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 //  液态玻璃效果 & G2 连续圆角 工具集
 // ════════════════════════════════════════════════════════
 
-/** 液态玻璃是否启用（开启时自动开启 G2） */
+/** 液态玻璃是否启用 */
 val LocalLiquidGlassEnabled = staticCompositionLocalOf { mutableStateOf(false) }
-
-/** G2 连续圆角是否启用（可独立开启） */
-val LocalG2CornersEnabled = staticCompositionLocalOf { mutableStateOf(false) }
 
 /**
  * 根据 App 当前生效主题（非系统主题）判断是否处于暗色模式。
@@ -45,31 +42,51 @@ val LocalG2CornersEnabled = staticCompositionLocalOf { mutableStateOf(false) }
 private fun isAppInDarkTheme(): Boolean =
     MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
+private data class LiquidGlassTuning(
+    val brightness: Float,
+    val contrast: Float,
+    val saturation: Float,
+    val surfaceColor: Color
+)
+
+@Composable
+private fun rememberLiquidGlassTuning(surfaceAlpha: Float, isLightVariant: Boolean): LiquidGlassTuning {
+    val isDark = isAppInDarkTheme()
+    return remember(isDark, surfaceAlpha, isLightVariant) {
+        if (isDark) {
+            LiquidGlassTuning(
+                brightness = if (isLightVariant) -0.02f else -0.04f,
+                contrast = if (isLightVariant) 1.04f else 1.08f,
+                saturation = if (isLightVariant) 1.10f else 1.16f,
+                surfaceColor = Color.Black.copy(alpha = surfaceAlpha)
+            )
+        } else {
+            LiquidGlassTuning(
+                brightness = if (isLightVariant) 0.03f else 0.05f,
+                contrast = if (isLightVariant) 0.98f else 0.96f,
+                saturation = if (isLightVariant) 1.06f else 1.10f,
+                surfaceColor = Color.White.copy(alpha = surfaceAlpha)
+            )
+        }
+    }
+}
+
 // ────────────────────────────────────────────
 //  G2 连续圆角 Shape 工具
 // ────────────────────────────────────────────
 
 /**
- * 根据 G2 开关返回对应的圆角 Shape。
- * 液态玻璃开启时也自动使用 G2 圆角。
+ * 返回统一使用的连续圆角 Shape。
  */
 @Composable
 fun smoothCornerShape(radius: Dp): Shape {
-    val useG2 = LocalG2CornersEnabled.current.value || LocalLiquidGlassEnabled.current.value
-    return remember(useG2, radius) {
-        if (useG2) ContinuousRoundedRectangle(radius)
-        else RoundedCornerShape(radius)
-    }
+    return remember(radius) { ContinuousRoundedRectangle(radius) }
 }
 
 /** 胶囊形状 */
 @Composable
 fun smoothCapsuleShape(): Shape {
-    val useG2 = LocalG2CornersEnabled.current.value || LocalLiquidGlassEnabled.current.value
-    return remember(useG2) {
-        if (useG2) ContinuousCapsule
-        else RoundedCornerShape(50)
-    }
+    return remember { ContinuousCapsule }
 }
 
 // ────────────────────────────────────────────
@@ -91,21 +108,23 @@ fun Modifier.liquidGlass(
     enabled: Boolean = LocalLiquidGlassEnabled.current.value
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    val isDark = isAppInDarkTheme()
-    val surfaceColor = if (isDark) Color.Black.copy(alpha = surfaceAlpha)
-    else Color.White.copy(alpha = surfaceAlpha)
+    val tuning = rememberLiquidGlassTuning(surfaceAlpha = surfaceAlpha, isLightVariant = false)
 
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = shape,
         effects = {
-            vibrancy()
+            colorControls(
+                brightness = tuning.brightness,
+                contrast = tuning.contrast,
+                saturation = tuning.saturation
+            )
             blur(blurRadius.toPx())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 lens(lensHeight.toPx(), lensAmount.toPx())
             }
         },
-        onDrawSurface = { drawRect(surfaceColor) }
+        onDrawSurface = { drawRect(tuning.surfaceColor) }
     )
 }
 
@@ -119,20 +138,25 @@ fun Modifier.liquidGlassLight(
     enabled: Boolean = LocalLiquidGlassEnabled.current.value
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    val isDark = isAppInDarkTheme()
-    val surfaceColor = if (isDark) Color.Black.copy(alpha = 0.25f)
-    else Color.White.copy(alpha = 0.3f)
+    val tuning = rememberLiquidGlassTuning(
+        surfaceAlpha = if (isAppInDarkTheme()) 0.22f else 0.26f,
+        isLightVariant = true
+    )
 
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = shape,
         effects = {
-            vibrancy()
+            colorControls(
+                brightness = tuning.brightness,
+                contrast = tuning.contrast,
+                saturation = tuning.saturation
+            )
             blur(2.dp.toPx())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 lens(12.dp.toPx(), 20.dp.toPx())
             }
         },
-        onDrawSurface = { drawRect(surfaceColor) }
+        onDrawSurface = { drawRect(tuning.surfaceColor) }
     )
 }

@@ -66,7 +66,7 @@ fun PortraitGrid(
             val isFavorite = name in favorites
             Card(
                 onClick = { onSelectCharacter(name) },
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
@@ -238,7 +238,7 @@ fun PortraitDetailContent(
                 .height(56.dp)
                 .padding(horizontal = 24.dp),
             enabled = !isDownloading,
-            shape = RoundedCornerShape(28.dp)
+            shape = smoothCapsuleShape()
         ) {
             Icon(Icons.Default.Download, null)
             Spacer(Modifier.width(8.dp))
@@ -262,7 +262,7 @@ fun CostumeCard(costume: PortraitCostume) {
     }
 
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxSize(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
@@ -305,7 +305,7 @@ fun CostumeCard(costume: PortraitCostume) {
                 // Image label badge (top-start)
                 Surface(
                     color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = smoothCapsuleShape(),
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(12.dp)
@@ -348,7 +348,7 @@ fun CostumeCard(costume: PortraitCostume) {
             if (fileCount > 0) {
                 Surface(
                     color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.75f),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = smoothCapsuleShape(),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(12.dp)
