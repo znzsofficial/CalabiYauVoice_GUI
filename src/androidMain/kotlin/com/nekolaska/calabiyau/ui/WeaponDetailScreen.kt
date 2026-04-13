@@ -156,7 +156,7 @@ private fun WeaponDetailContent(
 @Composable
 private fun WeaponHeaderCard(detail: WeaponDetail) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -228,7 +228,7 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
 @Composable
 private fun WeaponDescriptionCard(description: String) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -264,7 +264,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
     if (stats.isEmpty()) return
 
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -303,7 +303,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
 @Composable
 private fun WeaponDamageCard(detail: WeaponDetail) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -354,7 +354,7 @@ private fun WeaponDamageCard(detail: WeaponDetail) {
                         )
                     }
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = smoothCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -381,7 +381,7 @@ private fun WeaponDamageCard(detail: WeaponDetail) {
             } else {
                 // 标准伤害表：距离/头部/上肢/下肢 四列
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = smoothCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -448,7 +448,7 @@ private fun WeaponSubPagesCard(
     onOpenWikiUrl: (String) -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -463,7 +463,7 @@ private fun WeaponSubPagesCard(
                 }
                 Surface(
                     onClick = { onOpenWikiUrl(page.wikiUrl) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     color = androidx.compose.ui.graphics.Color.Transparent
                 ) {
                     Row(
@@ -499,7 +499,7 @@ private fun WeaponSubPagesCard(
 @Composable
 private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -514,7 +514,7 @@ private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = smoothCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -529,7 +529,7 @@ private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
                             modifier = Modifier.weight(1f)
                         )
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = smoothCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
@@ -560,7 +560,7 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
             Column(Modifier.padding(20.dp)) {
                 ShimmerBox(
                     modifier = Modifier.fillMaxWidth().height(160.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = smoothCornerShape(12.dp)
                 )
                 Spacer(Modifier.height(12.dp))
                 ShimmerBox(Modifier.width(140.dp).height(24.dp))
@@ -584,7 +584,7 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
             Column(Modifier.padding(20.dp)) {
                 SkeletonSectionTitle()
                 Spacer(Modifier.height(12.dp))
-                ShimmerBox(Modifier.fillMaxWidth().height(32.dp), shape = RoundedCornerShape(8.dp))
+                ShimmerBox(Modifier.fillMaxWidth().height(32.dp), shape = smoothCornerShape(8.dp))
                 Spacer(Modifier.height(4.dp))
                 repeat(3) {
                     Spacer(Modifier.height(4.dp))

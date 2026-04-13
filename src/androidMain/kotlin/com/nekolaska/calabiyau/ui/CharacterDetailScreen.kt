@@ -252,7 +252,7 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
     val headerImage = portraitUrl ?: detail.avatarUrl
     val cardColor = CardDefaults.cardColors().containerColor
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
@@ -375,7 +375,7 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
 @Composable
 private fun QuoteCard(quote: String) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -411,7 +411,7 @@ private fun DescriptionCard(
     description: String
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -473,7 +473,7 @@ private fun AttributesCard(detail: CharacterDetail) {
     if (attributes.isEmpty()) return
 
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -520,7 +520,7 @@ private fun AttributesCard(detail: CharacterDetail) {
 @Composable
 private fun WeaponInfoCard(detail: CharacterDetail) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -584,7 +584,7 @@ private fun WeaponInfoCard(detail: CharacterDetail) {
 @Composable
 private fun PersonalInfoCard(items: List<Pair<String, String>>) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -622,7 +622,7 @@ private fun PersonalInfoCard(items: List<Pair<String, String>>) {
 @Composable
 private fun ObserverQuoteCard(quote: String) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
@@ -665,7 +665,7 @@ private fun SubPagesCard(
     onOpenWikiUrl: (String) -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -680,7 +680,7 @@ private fun SubPagesCard(
                 }
                 Surface(
                     onClick = { onOpenWikiUrl(page.wikiUrl) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     color = Color.Transparent
                 ) {
                     Row(
@@ -728,7 +728,7 @@ private fun SubPagesCard(
 @Composable
 private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -757,7 +757,7 @@ private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(smoothCornerShape(12.dp))
                 .clickable { expanded = !expanded }
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -769,12 +769,12 @@ private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
                     contentDescription = skill.name,
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(8.dp)),
+                        .clip(smoothCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = smoothCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(36.dp)
                 ) {
@@ -844,7 +844,7 @@ private fun StoriesCard(
     val relatedStories = stories.filter { it.section == "相关剧情" }
 
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -888,7 +888,7 @@ private fun StoryCard(
 ) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         modifier = Modifier.width(200.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -947,7 +947,7 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
     val visibleHistory = if (expanded) history else history.take(3)
 
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -958,7 +958,7 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
                 // 日期标题
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = RoundedCornerShape(6.dp),
+                    shape = smoothCapsuleShape(),
                     modifier = Modifier.padding(bottom = 6.dp)
                 ) {
                     Text(
@@ -1018,7 +1018,7 @@ private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
         SkeletonCard {
             ShimmerBox(
                 modifier = Modifier.fillMaxWidth().height(320.dp),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                shape = smoothCornerShape(24.dp)
             )
             Column(Modifier.padding(20.dp)) {
                 ShimmerBox(Modifier.width(120.dp).height(24.dp))
@@ -1031,7 +1031,7 @@ private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
         // 语录卡片骨架
         SkeletonCard {
             Row(Modifier.padding(20.dp)) {
-                ShimmerBox(Modifier.size(28.dp), shape = RoundedCornerShape(6.dp))
+                ShimmerBox(Modifier.size(28.dp), shape = smoothCornerShape(6.dp))
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     SkeletonTextLine()

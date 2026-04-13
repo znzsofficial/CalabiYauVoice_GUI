@@ -517,7 +517,7 @@ fun SkeletonCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(content = content)
@@ -551,7 +551,7 @@ fun SkeletonChipRow(
                 Modifier
                     .width(skeletonChipWidth(index))
                     .height(28.dp),
-                shape = RoundedCornerShape(12.dp)
+                shape = smoothCapsuleShape()
             )
         }
     }

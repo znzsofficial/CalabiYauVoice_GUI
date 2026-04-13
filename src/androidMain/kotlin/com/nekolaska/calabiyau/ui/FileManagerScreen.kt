@@ -319,7 +319,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
         ModalBottomSheet(
             onDismissRequest = { selectedFile = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            shape = smoothCornerShape(28.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -451,10 +451,10 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                     label = { Text("新名称") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = smoothCornerShape(16.dp)
                 )
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
@@ -491,7 +491,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                     else "确定要删除「${file.name}」吗？"
                 )
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
@@ -542,7 +542,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                     }
                 )
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
@@ -594,7 +594,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(16.dp),
-                shape = RoundedCornerShape(28.dp),
+                shape = smoothCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column(Modifier.padding(16.dp)) {
@@ -645,7 +645,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                 contentDescription = galleryImages[page].name,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .clip(smoothCornerShape(16.dp))
                             )
                         }
                     }
@@ -692,7 +692,7 @@ private fun FileListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(smoothCornerShape(12.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -762,7 +762,7 @@ private fun FileIcon(file: File, size: Int) {
     if (file.isDirectory) {
         Surface(
             modifier = Modifier.size(size.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = smoothCornerShape(12.dp),
             color = MaterialTheme.colorScheme.primaryContainer
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -779,13 +779,13 @@ private fun FileIcon(file: File, size: Int) {
             contentDescription = null,
             modifier = Modifier
                 .size(size.dp)
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(smoothCornerShape(12.dp)),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop
         )
     } else {
         Surface(
             modifier = Modifier.size(size.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = smoothCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -809,7 +809,7 @@ private fun FileActionItem(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = smoothCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(

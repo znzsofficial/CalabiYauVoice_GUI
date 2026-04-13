@@ -6,7 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -94,7 +93,7 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(6.dp))
 
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = smoothCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Text(
@@ -112,7 +111,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Text(
@@ -148,7 +147,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
@@ -220,7 +219,7 @@ private fun LinkItem(
     Surface(
         onClick = onClick,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(16.dp)
+        shape = smoothCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier

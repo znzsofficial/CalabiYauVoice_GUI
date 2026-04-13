@@ -150,11 +150,6 @@ object AppPrefs {
         get() = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_LIQUID_GLASS_ENABLED, value) }
 
-    /** G2 连续圆角（默认关闭） */
-    var g2CornersEnabled: Boolean
-        get() = prefs.getBoolean(KEY_G2_CORNERS_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(KEY_G2_CORNERS_ENABLED, value) }
-
     /** 缓存的首页壁纸 URL（空字符串表示未缓存） */
     var wallpaperUrl: String?
         get() = prefs.getString(KEY_WALLPAPER_URL, null)

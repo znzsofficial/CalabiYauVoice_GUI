@@ -225,7 +225,7 @@ internal fun DownloaderScreen(
             SnackbarHost(snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     containerColor = MaterialTheme.colorScheme.inverseSurface,
                     contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                     actionColor = MaterialTheme.colorScheme.inversePrimary
@@ -475,7 +475,7 @@ internal fun DownloaderScreen(
             onDismissRequest = { portraitVM.clearSelectedPortraitCharacter() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            shape = smoothCornerShape(28.dp),
             tonalElevation = 0.dp
         ) {
             PortraitDetailContent(
@@ -496,7 +496,7 @@ internal fun DownloaderScreen(
             onDismissRequest = { searchVM.clearSelectedGroup() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            shape = smoothCornerShape(28.dp)
         ) {
             CategoryDetailContent(
                 group = selectedGroup!!,
@@ -621,7 +621,7 @@ private fun DownloaderTopBar(
                             leadingIcon = {
                                 Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(16.dp))
                             },
-                            shape = RoundedCornerShape(20.dp)
+                            shape = smoothCornerShape(12.dp)
                         )
                     }
                     items(searchHistoryList.size) { index ->
@@ -632,7 +632,7 @@ private fun DownloaderTopBar(
                             icon = {
                                 Icon(Icons.Default.History, null, modifier = Modifier.size(16.dp))
                             },
-                            shape = RoundedCornerShape(20.dp)
+                            shape = smoothCornerShape(12.dp)
                         )
                     }
                 }

@@ -826,6 +826,7 @@ private fun MapPreviewSection(
                         FilterChip(
                             selected = selectedMode == index,
                             onClick = { selectedMode = index },
+                            shape = smoothCornerShape(12.dp),
                             label = {
                                 Text(
                                     mode.displayName,
@@ -1196,6 +1197,7 @@ internal fun MapListFullScreen(
                                     selectedMode = index
                                     onTabChanged?.invoke(index)
                                 },
+                                shape = smoothCornerShape(12.dp),
                                 label = { Text(mode.displayName, maxLines = 1) }
                             )
                         }
