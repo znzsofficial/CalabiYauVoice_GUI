@@ -40,6 +40,7 @@ object OfflineCache {
         GAME_MODES("game_modes", 3 * DAY),
         COSTUMES("costumes", 3 * DAY),
         WEAPON_SKINS("weapon_skins", 3 * DAY),
+        BIO_CARDS("bio_cards", 3 * DAY),
         GALLERY("gallery", 3 * DAY),
         DECORATIONS("decorations", 3 * DAY),
         NAVIGATION("navigation", 3 * DAY),
@@ -146,6 +147,7 @@ object OfflineCache {
         MapListApi.clearMemoryCache()
         CostumeFilterApi.clearMemoryCache()
         WeaponSkinFilterApi.clearMemoryCache()
+        BioCardApi.clearMemoryCache()
         AnnouncementApi.clearMemoryCache()
         GameModeApi.clearMemoryCache()
         WallpaperApi.clearMemoryCache()
