@@ -51,7 +51,8 @@ fun BioCardScreen(
             decks = emptyList(),
             pcWikiUrl = "",
             mobileWikiUrl = "",
-            deckWikiUrl = ""
+            deckWikiUrl = "",
+            refreshProbabilityWikiUrl = ""
         )
     ) { force ->
         BioCardApi.fetchAll(force)
@@ -147,6 +148,7 @@ fun BioCardScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            enablePullToRefresh = false,
             loading = { mod -> LoadingState("正在加载卡牌数据…", mod) }
         ) {
             LazyColumn(
@@ -488,7 +490,6 @@ private fun BioInfoCard(
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -506,6 +507,9 @@ private fun PcCardDetailSheet(card: PcCard, onDismiss: () -> Unit) {
     ) {
         DetailLine("最大等级", card.maxLevel)
         DetailLine("效果", card.effect)
+        card.refreshProbability?.let { probability ->
+            ProbabilitySection(probability)
+        }
         if (card.roles.isNotEmpty()) ChipSection("适用角色", card.roles)
         val tags = listOfNotNull(
             card.defaultTag.takeIf { it.isNotBlank() },
@@ -513,6 +517,49 @@ private fun PcCardDetailSheet(card: PcCard, onDismiss: () -> Unit) {
             card.releaseDate.takeIf { it.isNotBlank() }
         )
         if (tags.isNotEmpty()) ChipSection("标签", tags)
+    }
+}
+
+@Composable
+private fun ProbabilitySection(probability: BioCardApi.CardRefreshProbability) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "刷新概率",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        listOf(
+            "第1阶段" to probability.stage1,
+            "第2阶段" to probability.stage2,
+            "第3阶段" to probability.stage3,
+            "第4阶段" to probability.stage4
+        ).forEach { (label, value) ->
+            Surface(
+                shape = smoothCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }
 

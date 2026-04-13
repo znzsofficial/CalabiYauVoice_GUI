@@ -29,6 +29,7 @@ object BioCardApi {
     private const val PC_PAGE = "战斗模式/晶源感染/PC端卡牌筛选"
     private const val MOBILE_PAGE = "战斗模式/晶源感染/移动端卡牌筛选"
     private const val DECK_PAGE = "晶源感染卡组分享"
+    private const val MODE_PAGE = "战斗模式/晶源感染"
 
     @Volatile
     private var cachedData: CardPageData? = null
@@ -43,8 +44,21 @@ object BioCardApi {
         val decks: List<SharedDeck>,
         val pcWikiUrl: String,
         val mobileWikiUrl: String,
-        val deckWikiUrl: String
+        val deckWikiUrl: String,
+        val refreshProbabilityWikiUrl: String
     )
+
+    data class CardRefreshProbability(
+        val stage1: String,
+        val stage2: String,
+        val stage3: String,
+        val stage4: String
+    ) {
+        val summary: String
+            get() = listOf(stage1, stage2, stage3, stage4)
+                .mapIndexed { index, value -> "${index + 1}阶段 $value" }
+                .joinToString(" · ")
+    }
 
     data class PcCard(
         val name: String,
@@ -57,7 +71,8 @@ object BioCardApi {
         val maxLevel: String,
         val effect: String,
         val roles: List<String>,
-        val imageUrl: String?
+        val imageUrl: String?,
+        val refreshProbability: CardRefreshProbability?
     )
 
     data class MobileCard(
@@ -89,20 +104,25 @@ object BioCardApi {
                 val results = awaitAll(
                     async { fetchPageHtml(PC_PAGE, "bio_cards_pc", forceRefresh) },
                     async { fetchPageHtml(MOBILE_PAGE, "bio_cards_mobile", forceRefresh) },
-                    async { fetchPageHtml(DECK_PAGE, "bio_cards_decks", forceRefresh) }
+                    async { fetchPageHtml(DECK_PAGE, "bio_cards_decks", forceRefresh) },
+                    async { fetchPageHtml(MODE_PAGE, "bio_cards_mode", forceRefresh) }
                 )
 
                 val pc = results[0] ?: return@withContext ApiResult.Error("无法获取 PC 卡牌数据", kind = ErrorKind.NETWORK)
                 val mobile = results[1] ?: return@withContext ApiResult.Error("无法获取移动端卡牌数据", kind = ErrorKind.NETWORK)
                 val decks = results[2] ?: return@withContext ApiResult.Error("无法获取卡组分享数据", kind = ErrorKind.NETWORK)
+                val mode = results[3] ?: return@withContext ApiResult.Error("无法获取刷新概率数据", kind = ErrorKind.NETWORK)
+
+                val refreshProbabilityMap = parseRefreshProbabilities(mode.json)
 
                 val data = CardPageData(
-                    pcCards = parsePcCards(pc.json),
+                    pcCards = parsePcCards(pc.json, refreshProbabilityMap),
                     mobileCards = parseMobileCards(mobile.json),
                     decks = parseDecks(decks.json),
                     pcWikiUrl = pageUrl(PC_PAGE),
                     mobileWikiUrl = pageUrl(MOBILE_PAGE),
-                    deckWikiUrl = pageUrl(DECK_PAGE)
+                    deckWikiUrl = pageUrl(DECK_PAGE),
+                    refreshProbabilityWikiUrl = pageUrl(MODE_PAGE)
                 )
 
                 if (data.pcCards.isEmpty() && data.mobileCards.isEmpty() && data.decks.isEmpty()) {
@@ -111,8 +131,8 @@ object BioCardApi {
                     cachedData = data
                     ApiResult.Success(
                         data,
-                        isOffline = listOf(pc, mobile, decks).any { it.isFromCache },
-                        cacheAgeMs = listOf(pc, mobile, decks).maxOfOrNull { it.ageMs } ?: 0L
+                        isOffline = listOf(pc, mobile, decks, mode).any { it.isFromCache },
+                        cacheAgeMs = listOf(pc, mobile, decks, mode).maxOfOrNull { it.ageMs } ?: 0L
                     )
                 }
             } catch (e: Exception) {
@@ -141,7 +161,10 @@ object BioCardApi {
         return result.copy(json = html)
     }
 
-    private fun parsePcCards(html: String): List<PcCard> {
+    private fun parsePcCards(
+        html: String,
+        refreshProbabilityMap: Map<String, CardRefreshProbability>
+    ): List<PcCard> {
         val rowRegex = Regex(
             """<tr\s+class=\"divsort\"([^>]*)>([\s\S]*?)</tr>""",
             RegexOption.DOT_MATCHES_ALL
@@ -182,9 +205,43 @@ object BioCardApi {
                 maxLevel = maxLevel,
                 effect = effect,
                 roles = roles,
-                imageUrl = imageUrl
+                imageUrl = imageUrl,
+                refreshProbability = refreshProbabilityMap[name.ifBlank { "未知卡牌" }]
             )
         }.toList()
+    }
+
+    private fun parseRefreshProbabilities(html: String): Map<String, CardRefreshProbability> {
+        val sectionMatch = Regex(
+            """<span[^>]*id=\"卡牌刷新概率表\"[\s\S]*?</h2>([\s\S]*?)<h2""",
+            RegexOption.DOT_MATCHES_ALL
+        ).find(html) ?: return emptyMap()
+
+        val tableHtml = Regex(
+            """<table[^>]*class=\"klbqtable\"[^>]*>([\s\S]*?)</table>""",
+            RegexOption.DOT_MATCHES_ALL
+        ).find(sectionMatch.groupValues[1])?.groupValues?.get(1) ?: return emptyMap()
+
+        val rowRegex = Regex("""<tr[^>]*>([\s\S]*?)</tr>""", RegexOption.DOT_MATCHES_ALL)
+        val cellRegex = Regex("""<t[hd][^>]*>([\s\S]*?)</t[hd]>""", RegexOption.DOT_MATCHES_ALL)
+
+        return rowRegex.findAll(tableHtml)
+            .drop(1)
+            .mapNotNull { row ->
+                val cells = cellRegex.findAll(row.groupValues[1])
+                    .map { cleanHtml(it.groupValues[1]) }
+                    .toList()
+                if (cells.size < 5) return@mapNotNull null
+                val name = cells[0]
+                if (name.isBlank()) return@mapNotNull null
+                name to CardRefreshProbability(
+                    stage1 = cells[1],
+                    stage2 = cells[2],
+                    stage3 = cells[3],
+                    stage4 = cells[4]
+                )
+            }
+            .toMap()
     }
 
     private fun parseMobileCards(html: String): List<MobileCard> {
