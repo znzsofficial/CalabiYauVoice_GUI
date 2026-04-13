@@ -144,7 +144,7 @@ private fun MapDetailContent(
 @Composable
 private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
@@ -158,7 +158,7 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                        .clip(smoothCornerShape(24.dp))
                 )
             }
 
@@ -189,7 +189,7 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
 @Composable
 private fun MapInfoCard(detail: MapDetail) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -209,7 +209,7 @@ private fun MapInfoCard(detail: MapDetail) {
                         val trimmed = mode.trim()
                         if (trimmed.isNotBlank()) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = smoothCapsuleShape(),
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
                                 Text(
@@ -240,7 +240,7 @@ private fun MapInfoCard(detail: MapDetail) {
                         val trimmed = platform.trim()
                         if (trimmed.isNotBlank()) {
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = smoothCapsuleShape(),
                                 color = MaterialTheme.colorScheme.tertiaryContainer
                             ) {
                                 Text(
@@ -265,7 +265,7 @@ private fun MapInfoCard(detail: MapDetail) {
 @Composable
 private fun MapTerrainCard(terrainMapUrl: String) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -277,7 +277,7 @@ private fun MapTerrainCard(terrainMapUrl: String) {
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(smoothCornerShape(16.dp))
             )
         }
     }
@@ -290,7 +290,7 @@ private fun MapTerrainCard(terrainMapUrl: String) {
 @Composable
 private fun MapGalleryCard(galleryUrls: List<String>) {
     Card(
-        shape = RoundedCornerShape(24.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -301,7 +301,7 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
             ) {
                 items(galleryUrls) { url ->
                     Card(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = smoothCornerShape(16.dp),
                         modifier = Modifier.width(280.dp)
                     ) {
                         AsyncImage(

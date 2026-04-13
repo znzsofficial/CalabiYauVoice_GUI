@@ -318,12 +318,14 @@ private fun FilterBar(
             FilterChip(
                 selected = selectedMap == null,
                 onClick = { onMapChange(null) },
+                shape = smoothCornerShape(12.dp),
                 label = { Text("全选", maxLines = 1) }
             )
             settings.maps.forEach { map ->
                 FilterChip(
                     selected = selectedMap == map,
                     onClick = { onMapChange(map) },
+                    shape = smoothCornerShape(12.dp),
                     label = { Text(map.name, maxLines = 1) }
                 )
             }
@@ -346,6 +348,7 @@ private fun FilterBar(
             FilterChip(
                 selected = selectedRanks.isEmpty(),
                 onClick = { onRanksChange(emptyList()) },
+                shape = smoothCornerShape(12.dp),
                 label = { Text("全选", maxLines = 1) }
             )
             settings.ranks.forEach { rank ->
@@ -357,6 +360,7 @@ private fun FilterBar(
                             else selectedRanks + rank
                         )
                     },
+                    shape = smoothCornerShape(12.dp),
                     label = { Text(rank.name, maxLines = 1) }
                 )
             }
@@ -439,6 +443,7 @@ private fun SideAndSortBar(
             FilterChip(
                 selected = !showAttackers,
                 onClick = { onSideToggle(false) },
+                shape = smoothCornerShape(12.dp),
                 label = { Text("防守方") },
                 leadingIcon = if (!showAttackers) {
                     { Icon(Icons.Outlined.Shield, null, Modifier.size(16.dp)) }
@@ -447,6 +452,7 @@ private fun SideAndSortBar(
             FilterChip(
                 selected = showAttackers,
                 onClick = { onSideToggle(true) },
+                shape = smoothCornerShape(12.dp),
                 label = { Text("进攻方") },
                 leadingIcon = if (showAttackers) {
                     { Icon(Icons.Outlined.FlashOn, null, Modifier.size(16.dp)) }

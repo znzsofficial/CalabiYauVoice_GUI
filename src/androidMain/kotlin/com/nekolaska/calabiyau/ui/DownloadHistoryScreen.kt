@@ -97,7 +97,7 @@ private fun DownloadHistoryItem(record: DownloadRecord) {
     }
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isError)
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
@@ -114,7 +114,7 @@ private fun DownloadHistoryItem(record: DownloadRecord) {
             // 状态图标
             Surface(
                 modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = smoothCornerShape(14.dp),
                 color = if (isError)
                     MaterialTheme.colorScheme.errorContainer
                 else

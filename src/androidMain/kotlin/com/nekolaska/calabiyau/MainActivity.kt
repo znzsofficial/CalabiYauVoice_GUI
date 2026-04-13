@@ -39,7 +39,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.nekolaska.calabiyau.ui.LocalG2CornersEnabled
 import com.nekolaska.calabiyau.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.ui.MainScreen
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
@@ -189,7 +188,6 @@ fun AppTheme(content: @Composable () -> Unit) {
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
     val wallpaperSeedColor = remember { mutableIntStateOf(AppPrefs.wallpaperSeedColorCache) }
     val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
-    val g2CornersEnabled = remember { mutableStateOf(AppPrefs.g2CornersEnabled) }
 
     // 当选择"跟随背景图"时，立即从缓存的壁纸 URL 提取主题色
     LaunchedEffect(seedColor.intValue) {
@@ -244,8 +242,7 @@ fun AppTheme(content: @Composable () -> Unit) {
         LocalThemeMode provides themeMode,
         LocalSeedColor provides seedColor,
         LocalWallpaperSeedColor provides wallpaperSeedColor,
-        LocalLiquidGlassEnabled provides liquidGlassEnabled,
-        LocalG2CornersEnabled provides g2CornersEnabled
+        LocalLiquidGlassEnabled provides liquidGlassEnabled
     ) {
         MaterialTheme(colorScheme = colorScheme, content = content)
     }

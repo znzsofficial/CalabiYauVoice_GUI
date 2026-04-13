@@ -15,7 +15,6 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -207,7 +206,7 @@ fun WikiWebViewScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(smoothCornerShape(10.dp))
                                 .clickable {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
@@ -360,7 +359,7 @@ fun WikiWebViewScreen(
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = smoothCornerShape(16.dp),
                     containerColor = MaterialTheme.colorScheme.inverseSurface,
                     contentColor = MaterialTheme.colorScheme.inverseOnSurface,
                     actionColor = MaterialTheme.colorScheme.inversePrimary
@@ -542,7 +541,7 @@ fun WikiWebViewScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(onClick = {
                     val url = imageUrl
@@ -664,7 +663,7 @@ private fun WikiBottomToolbar(
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { onShowMenuChange(false) },
-                    shape = RoundedCornerShape(16.dp)
+                    shape = smoothCornerShape(16.dp)
                 ) {
                     // ── 页面操作 ──
                     DropdownMenuItem(

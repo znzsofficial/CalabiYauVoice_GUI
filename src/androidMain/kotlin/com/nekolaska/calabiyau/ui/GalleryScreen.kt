@@ -100,6 +100,7 @@ fun GalleryScreen(
                                     FilterChip(
                                         selected = selectedSectionIndex == index,
                                         onClick = { selectedSectionIndex = index },
+                                        shape = smoothCornerShape(12.dp),
                                         label = {
                                             Text(
                                                 section.title,
@@ -237,7 +238,7 @@ fun GalleryScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             },
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(onClick = {
                     val url = image.imageUrl
@@ -285,7 +286,7 @@ private fun GallerySkeleton(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .width(if (it == 0) 76.dp else 64.dp)
                         .height(32.dp),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = smoothCapsuleShape()
                 )
             }
         }
@@ -300,7 +301,7 @@ private fun GallerySkeleton(modifier: Modifier = Modifier) {
         ) {
             items(8) {
                 Card(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = smoothCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     )
@@ -310,7 +311,7 @@ private fun GallerySkeleton(modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 10f),
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                            shape = smoothCornerShape(16.dp)
                         )
                         Spacer(Modifier.height(8.dp))
                         ShimmerBox(
@@ -354,7 +355,7 @@ private fun GalleryImageCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 10f)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    .clip(smoothCornerShape(16.dp)),
                 contentScale = ContentScale.Crop
             )
             if (image.caption.isNotBlank()) {

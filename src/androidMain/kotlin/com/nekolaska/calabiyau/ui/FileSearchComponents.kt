@@ -54,7 +54,7 @@ fun FileSearchList(
         // Result header
         Surface(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = RoundedCornerShape(16.dp),
+            shape = smoothCornerShape(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -73,7 +73,7 @@ fun FileSearchList(
                 )
                 FilledTonalButton(
                     onClick = onSelectAll,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
@@ -116,7 +116,7 @@ fun FileSearchList(
                         .padding(16.dp)
                         .height(56.dp),
                     enabled = !isDownloading,
-                    shape = RoundedCornerShape(28.dp)
+                    shape = smoothCornerShape(28.dp)
                 ) {
                     Icon(Icons.Default.Download, null)
                     Spacer(Modifier.width(8.dp))
@@ -154,7 +154,7 @@ fun FileItem(
     }
     Card(
         onClick = onToggle,
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected)
                 MaterialTheme.colorScheme.secondaryContainer
@@ -173,7 +173,7 @@ fun FileItem(
                         contentDescription = null,
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(smoothCornerShape(12.dp))
                             .clickable { onPreview() },
                         contentScale = ContentScale.Crop
                     )
@@ -199,7 +199,7 @@ fun FileItem(
             } else {
                 Surface(
                     modifier = Modifier.size(48.dp),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = smoothCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -248,7 +248,7 @@ fun ImagePreviewDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = smoothCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 0.dp
         ) {
@@ -289,7 +289,7 @@ fun ImagePreviewDialog(
                         contentDescription = title,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(smoothCornerShape(16.dp))
                     )
                 }
             }
@@ -322,7 +322,7 @@ fun FileSelectionSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = smoothCornerShape(28.dp),
         tonalElevation = 0.dp
     ) {
         Column(
@@ -339,7 +339,7 @@ fun FileSelectionSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = smoothCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                     modifier = Modifier.size(44.dp)
                 ) {
@@ -383,7 +383,7 @@ fun FileSelectionSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(28.dp),
+                shape = smoothCornerShape(28.dp),
                 colors = TextFieldDefaults.colors(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -423,7 +423,7 @@ fun FileSelectionSheet(
                             null, modifier = Modifier.size(16.dp)
                         )
                     },
-                    shape = RoundedCornerShape(12.dp)
+                    shape = smoothCornerShape(12.dp)
                 )
 
                 Spacer(Modifier.weight(1f))
@@ -445,7 +445,7 @@ fun FileSelectionSheet(
                                 }
                             },
                             label = { Text(label) },
-                            shape = RoundedCornerShape(12.dp)
+                            shape = smoothCornerShape(12.dp)
                         )
                     }
                 }
@@ -512,7 +512,7 @@ fun FileSelectionSheet(
                     .height(56.dp)
                     .padding(horizontal = 24.dp),
                 enabled = !isLoading,
-                shape = RoundedCornerShape(28.dp)
+                shape = smoothCornerShape(28.dp)
             ) {
                 Icon(Icons.Default.Check, null)
                 Spacer(Modifier.width(8.dp))

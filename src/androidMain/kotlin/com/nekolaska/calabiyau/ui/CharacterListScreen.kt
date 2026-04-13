@@ -125,7 +125,7 @@ private fun CharacterCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = smoothCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -140,7 +140,7 @@ private fun CharacterCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(5f / 12f)
-                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                    .clip(smoothCornerShape(12.dp))
             ) {
                 AsyncImage(
                     model = character.imageUrl,
@@ -179,7 +179,7 @@ private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
     ) {
         items(9) {
             Card(
-                shape = RoundedCornerShape(12.dp),
+                shape = smoothCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 )
@@ -189,7 +189,7 @@ private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(5f / 12f),
-                        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
+                        shape = smoothCornerShape(12.dp)
                     )
                     Spacer(Modifier.height(8.dp))
                     ShimmerBox(

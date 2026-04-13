@@ -543,7 +543,7 @@ private fun WikiUserInfoBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = smoothCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
@@ -693,7 +693,7 @@ private fun UserInfoTabContent(userInfo: WikiUserApi.UserInfo) {
             ) {
                 userInfo.displayGroups.forEach { group ->
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = smoothCapsuleShape(),
                         color = MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Text(
@@ -855,7 +855,7 @@ private fun ActivityItemCard(item: ActivityItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(smoothCornerShape(12.dp))
             .background(bgColor)
             .padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -881,7 +881,7 @@ private fun ActivityItemCard(item: ActivityItem) {
                 )
                 if (!item.badge.isNullOrBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = smoothCapsuleShape(),
                         color = if (item.badgePositive)
                             MaterialTheme.colorScheme.primaryContainer
                         else

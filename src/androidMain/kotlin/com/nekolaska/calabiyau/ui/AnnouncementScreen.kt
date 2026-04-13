@@ -80,7 +80,7 @@ private fun AnnouncementCard(
 ) {
     Card(
         onClick = { onOpenWikiUrl(announcement.wikiUrl) },
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -111,7 +111,7 @@ private fun AnnouncementCard(
                         FilledTonalButton(
                             onClick = { onOpenExternalUrl(announcement.biliUrl) },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = smoothCornerShape(10.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Icon(Icons.Outlined.PlayCircle, null, Modifier.size(16.dp))
@@ -123,7 +123,7 @@ private fun AnnouncementCard(
                         FilledTonalButton(
                             onClick = { onOpenExternalUrl(announcement.officialUrl) },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(10.dp),
+                            shape = smoothCornerShape(10.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Icon(Icons.Outlined.Language, null, Modifier.size(16.dp))
@@ -147,7 +147,7 @@ private fun AnnouncementSkeleton(modifier: Modifier = Modifier) {
     ) {
         repeat(5) {
             Card(
-                shape = RoundedCornerShape(16.dp),
+                shape = smoothCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
@@ -158,8 +158,8 @@ private fun AnnouncementSkeleton(modifier: Modifier = Modifier) {
                     ShimmerBox(Modifier.width(80.dp).height(10.dp))
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ShimmerBox(Modifier.width(60.dp).height(32.dp), shape = RoundedCornerShape(10.dp))
-                        ShimmerBox(Modifier.width(60.dp).height(32.dp), shape = RoundedCornerShape(10.dp))
+                        ShimmerBox(Modifier.width(60.dp).height(32.dp), shape = smoothCapsuleShape())
+                        ShimmerBox(Modifier.width(60.dp).height(32.dp), shape = smoothCapsuleShape())
                     }
                 }
             }

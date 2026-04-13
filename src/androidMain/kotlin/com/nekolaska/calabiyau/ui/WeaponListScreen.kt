@@ -123,7 +123,7 @@ private fun WeaponCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = smoothCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -138,7 +138,7 @@ private fun WeaponCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 10f)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    .clip(smoothCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (weapon.imageUrl != null) {
@@ -194,7 +194,7 @@ private fun WeaponCard(
                 if (weapon.type.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = smoothCapsuleShape(),
                         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
                     ) {
                         Text(
@@ -234,7 +234,7 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
         items(6) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = smoothCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ),
@@ -248,7 +248,7 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 10f),
-                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        shape = smoothCornerShape(16.dp)
                     )
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                         ShimmerBox(Modifier.fillMaxWidth(0.7f).height(14.dp))
@@ -257,7 +257,7 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
                         Spacer(Modifier.height(6.dp))
                         ShimmerBox(Modifier.fillMaxWidth(0.4f).height(10.dp))
                         Spacer(Modifier.height(6.dp))
-                        ShimmerBox(Modifier.width(48.dp).height(18.dp), shape = RoundedCornerShape(6.dp))
+                        ShimmerBox(Modifier.width(48.dp).height(18.dp), shape = smoothCapsuleShape())
                     }
                 }
             }

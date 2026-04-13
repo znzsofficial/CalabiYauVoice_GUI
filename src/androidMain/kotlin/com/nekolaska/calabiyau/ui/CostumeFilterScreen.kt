@@ -207,7 +207,7 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
                         modifier = Modifier
                             .width(if (it == 0) 72.dp else 64.dp)
                             .height(32.dp),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = smoothCapsuleShape()
                     )
                 }
             }
@@ -222,7 +222,7 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
                         modifier = Modifier
                             .width(if (it == 0) 72.dp else 60.dp)
                             .height(32.dp),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = smoothCapsuleShape()
                     )
                 }
             }
@@ -238,7 +238,7 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
         ) {
             items(12) {
                 Card(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = smoothCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     )
@@ -248,7 +248,7 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f),
-                            shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
+                            shape = smoothCornerShape(14.dp)
                         )
                         Spacer(Modifier.height(8.dp))
                         ShimmerBox(Modifier.fillMaxWidth(0.75f).height(12.dp))
@@ -288,6 +288,7 @@ private fun CostumeFilterBar(
             FilterChip(
                 selected = selectedCharacter == null,
                 onClick = { onCharacterSelected(null) },
+                shape = smoothCornerShape(12.dp),
                 label = { Text("全部角色", maxLines = 1) }
             )
             characters.forEach { char ->
@@ -296,6 +297,7 @@ private fun CostumeFilterBar(
                     onClick = {
                         onCharacterSelected(if (selectedCharacter == char) null else char)
                     },
+                    shape = smoothCornerShape(12.dp),
                     label = { Text(char, maxLines = 1) }
                 )
             }
@@ -311,6 +313,7 @@ private fun CostumeFilterBar(
             FilterChip(
                 selected = selectedQuality == null,
                 onClick = { onQualitySelected(null) },
+                shape = smoothCornerShape(12.dp),
                 label = { Text("全部品质", maxLines = 1) }
             )
             Quality.entries.filter { it != Quality.INITIAL }.forEach { quality ->
@@ -319,6 +322,7 @@ private fun CostumeFilterBar(
                     onClick = {
                         onQualitySelected(if (selectedQuality == quality) null else quality)
                     },
+                    shape = smoothCornerShape(12.dp),
                     label = { Text(quality.displayName, maxLines = 1) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = qualityColor(quality).copy(alpha = 0.2f)
@@ -338,7 +342,7 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = smoothCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -354,7 +358,7 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)),
+                    .clip(smoothCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (costume.thumbnailUrl != null) {
@@ -385,7 +389,7 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = smoothCapsuleShape(),
                         color = qualityColor(costume.quality).copy(alpha = 0.85f)
                     ) {
                         Text(
@@ -450,7 +454,7 @@ private fun CostumeDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = smoothCornerShape(28.dp),
         tonalElevation = 0.dp
     ) {
         Column(
@@ -491,7 +495,7 @@ private fun CostumeDetailSheet(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(12.dp),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = smoothCapsuleShape(),
                         color = qColor.copy(alpha = 0.9f)
                     ) {
                         Text(
@@ -527,7 +531,7 @@ private fun CostumeDetailSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
+                shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
                 Column(Modifier.padding(20.dp)) {
