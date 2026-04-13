@@ -32,6 +32,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
+import androidx.core.net.toUri
 
 // ════════════════════════════════════════════════════════
 //  通用玩家装饰页 —— 封装/聊天气泡/头套/超弦体动作/头像框
@@ -70,7 +71,7 @@ fun PlayerDecorationScreen(
         PlayerDecorationApi.fetch(pageName, force)
     }
     val sections = state.data
-    var selectedSectionIndex by remember { mutableStateOf(0) }
+    var selectedSectionIndex by remember { mutableIntStateOf(0) }
     var previewItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
     var saveTargetItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
 
@@ -253,7 +254,7 @@ fun PlayerDecorationScreen(
                         val fileName = URLUtil.guessFileName(url, null, null)
                         val dir = java.io.File(AppPrefs.savePath)
                         dir.mkdirs()
-                        val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        val request = DownloadManager.Request(url.toUri()).apply {
                             setTitle(fileName)
                             setDescription("正在保存图片...")
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)

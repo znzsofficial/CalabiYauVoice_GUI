@@ -6,7 +6,6 @@ import data.SharedJson
 import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URLEncoder
@@ -243,7 +242,7 @@ object WeaponDetailApi {
             val damageSection = wikitext.substringAfter("==武器伤害==", "")
             val tableStart = damageSection.indexOf("{|")
             val tableEnd = damageSection.indexOf("|}", tableStart)
-            if (tableStart >= 0 && tableEnd > tableStart) {
+            if (tableStart in 0..<tableEnd) {
                 val table = damageSection.substring(tableStart, tableEnd + 2)
                 val tableRows = table.split("|-").drop(1) // 跳过表头定义行
 

@@ -229,5 +229,3 @@ object PlayerDecorationApi {
     }
 }
 
-// ── 兼容别名，BaseplateScreen 等旧代码可继续使用 ──
-typealias BaseplateApi = PlayerDecorationApi

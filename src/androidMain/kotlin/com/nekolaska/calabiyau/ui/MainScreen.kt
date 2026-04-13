@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -8,9 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.*
@@ -23,17 +23,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.MainActivity
+import com.nekolaska.calabiyau.data.WikiUserApi
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel
-import com.nekolaska.calabiyau.data.WikiUserApi
-import kotlinx.coroutines.launch
 import data.ApiResult
+import kotlinx.coroutines.launch
 
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
@@ -69,7 +67,7 @@ fun MainScreen(
     var currentDestination by rememberSaveable { mutableStateOf(initialDestination) }
 
     // ── 自适应布局：平板/折叠屏使用常驻侧栏 ──
-    val activity = LocalContext.current as? MainActivity
+    val activity = LocalActivity.current
     val windowSizeClass = activity?.let { calculateWindowSizeClass(it) }
     val useExpandedLayout = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
     var pendingWikiUrl by rememberSaveable { mutableStateOf<String?>(null) }

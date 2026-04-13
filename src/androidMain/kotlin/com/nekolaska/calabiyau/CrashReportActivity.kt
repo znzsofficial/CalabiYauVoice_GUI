@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 
 /**
  * 崩溃报告页面。
@@ -69,7 +70,7 @@ class CrashReportActivity : ComponentActivity() {
         // 先复制到剪贴板，因为 URL 长度有限
         copyToClipboard(log)
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_ISSUE_URL)))
+            startActivity(Intent(Intent.ACTION_VIEW, GITHUB_ISSUE_URL.toUri()))
         } catch (_: Exception) {
             Toast.makeText(this, "无法打开浏览器，日志已复制到剪贴板", Toast.LENGTH_LONG).show()
         }

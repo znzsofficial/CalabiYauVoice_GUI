@@ -45,6 +45,7 @@ import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel
 import data.PortraitRepository
+import androidx.core.net.toUri
 
 class MainActivity : ComponentActivity() {
 
@@ -53,6 +54,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         CrashHandler.install(this)
+
+        if (CrashHandler.hasPendingCrashLog(this)) {
+            startActivity(
+                Intent(this, CrashReportActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                }
+            )
+            finish()
+            return
+        }
+
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
         OfflineCache.init(this)
@@ -157,7 +169,7 @@ class MainActivity : ComponentActivity() {
                             FilledTonalButton(onClick = {
                                 startupUpdateInfo = null
                                 context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(info.htmlUrl))
+                                    Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
                                 )
                             }) { Text("前往下载") }
                         },

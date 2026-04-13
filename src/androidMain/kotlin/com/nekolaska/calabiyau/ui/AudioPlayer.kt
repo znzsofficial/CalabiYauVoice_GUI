@@ -174,11 +174,14 @@ fun AudioPlayButton(
     // 进度条定时刷新
     var progress by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isThisPlaying) {
-        while (isThisPlaying) {
+        if (!isThisPlaying) {
+            progress = 0f
+            return@LaunchedEffect
+        }
+        while (true) {
             progress = AudioPlayerManager.getProgress()
             delay(200)
         }
-        if (!isThisPlaying) progress = 0f
     }
 
     Box(modifier = modifier.size(size.dp), contentAlignment = Alignment.Center) {

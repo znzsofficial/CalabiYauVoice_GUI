@@ -102,7 +102,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun addLog(msg: String) {
-        _logs.value = _logs.value + msg
+        _logs.value += msg
     }
 
     private fun addDownloadRecord(record: DownloadRecord) {

@@ -7,12 +7,17 @@ import android.webkit.URLUtil
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,6 +37,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.GalleryApi
+import androidx.core.net.toUri
 
 // ════════════════════════════════════════════════════════
 //  画廊页 —— 壁纸 / 表情包 / 四格漫画 通用
@@ -53,7 +59,7 @@ fun GalleryScreen(
     ) { force ->
         GalleryApi.fetchGallery(pageName, force)
     }
-    var selectedSectionIndex by remember { mutableStateOf(0) }
+    var selectedSectionIndex by remember { mutableIntStateOf(0) }
 
     // 全屏预览
     var previewImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
@@ -247,7 +253,7 @@ fun GalleryScreen(
                         val fileName = URLUtil.guessFileName(url, null, null)
                         val dir = java.io.File(AppPrefs.savePath)
                         dir.mkdirs()
-                        val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        val request = DownloadManager.Request(url.toUri()).apply {
                             setTitle(fileName)
                             setDescription("正在保存图片...")
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)

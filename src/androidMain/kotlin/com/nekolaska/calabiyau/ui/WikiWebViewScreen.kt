@@ -868,10 +868,10 @@ private fun createWikiWebView(
             displayZoomControls = false
 
             // User-Agent
-            if (AppPrefs.wikiDesktopMode) {
-                userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 CalabiYauVoice/1.3"
+            userAgentString = if (AppPrefs.wikiDesktopMode) {
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 CalabiYauVoice/1.3"
             } else {
-                userAgentString = "$userAgentString CalabiYauVoice/1.3"
+                "$userAgentString CalabiYauVoice/1.3"
             }
 
             // 支持多窗口（处理 target=_blank）

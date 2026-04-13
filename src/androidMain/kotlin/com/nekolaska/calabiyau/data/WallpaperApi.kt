@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.data
 
 import data.SharedJson
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URLEncoder
@@ -29,7 +28,7 @@ object WallpaperApi {
      * 获取一张随机壁纸的 URL。
      * 优先使用 AppPrefs 中持久化的 URL，仅在无缓存或强制刷新时重新获取。
      */
-    suspend fun fetchRandomWallpaperUrl(forceRefresh: Boolean = false): String? {
+    fun fetchRandomWallpaperUrl(forceRefresh: Boolean = false): String? {
         // 非强制刷新时，优先返回持久化缓存
         if (!forceRefresh) {
             val cached = AppPrefs.wallpaperUrl
