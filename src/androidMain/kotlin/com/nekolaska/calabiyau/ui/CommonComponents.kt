@@ -45,6 +45,7 @@ fun SearchBar(
     onSearch: () -> Unit,
     onClear: () -> Unit,
     isSearching: Boolean,
+    placeholder: String = "搜索角色名称...",
     modifier: Modifier = Modifier
 ) {
     TextField(
@@ -63,7 +64,7 @@ fun SearchBar(
         ),
         placeholder = {
             Text(
-                "搜索角色名称...",
+                placeholder,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
@@ -561,9 +562,9 @@ fun SkeletonChipRow(
 /** 骨架屏文本行（模拟一行文字，可指定宽度比例）。 */
 @Composable
 fun SkeletonTextLine(
+    modifier: Modifier = Modifier,
     widthFraction: Float = 0.85f,
-    height: androidx.compose.ui.unit.Dp = 14.dp,
-    modifier: Modifier = Modifier
+    height: androidx.compose.ui.unit.Dp = 14.dp
 ) {
     ShimmerBox(modifier.fillMaxWidth(widthFraction).height(height))
 }
@@ -662,7 +663,9 @@ fun rememberSnackbarLauncher(): (String) -> Unit {
     val host = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
     return remember(host, scope) {
-        val launcher: (String) -> Unit = { msg -> scope.launch { host.showSnackbar(msg) }; Unit }
+        val launcher: (String) -> Unit = { msg ->
+            scope.launch { host.showSnackbar(msg) }
+        }
         launcher
     }
 }

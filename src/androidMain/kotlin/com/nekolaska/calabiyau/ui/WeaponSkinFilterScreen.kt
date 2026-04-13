@@ -12,8 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,7 +50,6 @@ fun WeaponSkinFilterScreen(
     var selectedWeapon by remember { mutableStateOf(initialWeapon) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
     var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
 
     // 筛选后的列表
     val filteredSkins = remember(allSkins, selectedWeapon, selectedQuality, searchQuery) {
@@ -71,62 +68,27 @@ fun WeaponSkinFilterScreen(
 
     Scaffold(
         topBar = {
-            if (isSearchActive) {
-                TopAppBar(
-                    title = {
-                        TextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("搜索外观名称…") },
-                            singleLine = true,
-                            colors = TextFieldDefaults.colors(
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+            TopAppBar(
+                title = { Text("武器外观", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回"
                         )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            isSearchActive = false
-                            searchQuery = ""
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "关闭搜索")
-                        }
-                    },
-                    actions = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "清空")
-                            }
-                        }
                     }
-                )
-            } else {
-                TopAppBar(
-                    title = { Text("武器外观", fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { isSearchActive = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "搜索")
-                        }
-                        if (allSkins.isNotEmpty()) {
-                            Text(
-                                "${filteredSkins.size}/${allSkins.size}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 16.dp)
-                            )
-                        }
+                },
+                actions = {
+                    if (allSkins.isNotEmpty()) {
+                        Text(
+                            text = filteredSkins.size.toString(),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 16.dp)
+                        )
                     }
-                )
-            }
+                }
+            )
         }
     ) { innerPadding ->
         ApiResourceContent(
@@ -135,6 +97,16 @@ fun WeaponSkinFilterScreen(
             loading = { mod -> WeaponSkinFilterSkeleton(mod) }
         ) {
             Column {
+                SearchBar(
+                    keyword = searchQuery,
+                    onKeywordChange = { searchQuery = it },
+                    onSearch = {},
+                    onClear = { searchQuery = "" },
+                    isSearching = false,
+                    placeholder = "搜索外观名称或武器…",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
+                )
+
                 // ── 筛选栏 ──
                 WeaponSkinFilterBar(
                     weapons = weapons,
@@ -191,30 +163,40 @@ private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        ShimmerBox(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp)
+                .height(52.dp),
+            shape = smoothCornerShape(28.dp)
+        )
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            ShimmerBox(
+                modifier = Modifier
+                    .width(72.dp)
+                    .height(14.dp),
+                shape = smoothCornerShape(6.dp)
+            )
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = smoothCornerShape(20.dp)
+            )
+            ShimmerBox(
+                modifier = Modifier
+                    .width(72.dp)
+                    .height(14.dp),
+                shape = smoothCornerShape(6.dp)
+            )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                repeat(6) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .width(if (it == 0) 72.dp else 64.dp)
-                            .height(32.dp),
-                        shape = smoothCapsuleShape()
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 repeat(6) {
                     ShimmerBox(
@@ -265,6 +247,7 @@ private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
 //  筛选栏
 // ────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeaponSkinFilterBar(
     weapons: List<String>,
@@ -273,41 +256,78 @@ private fun WeaponSkinFilterBar(
     selectedQuality: Quality?,
     onQualitySelected: (Quality?) -> Unit
 ) {
+    var weaponMenuExpanded by remember { mutableStateOf(false) }
+
     Column(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 武器筛选
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Text(
+            text = "按武器筛选",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ExposedDropdownMenuBox(
+            expanded = weaponMenuExpanded,
+            onExpandedChange = { weaponMenuExpanded = !weaponMenuExpanded }
         ) {
-            FilterChip(
-                selected = selectedWeapon == null,
-                onClick = { onWeaponSelected(null) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("全部武器", maxLines = 1) }
-            )
-            weapons.forEach { weapon ->
-                FilterChip(
-                    selected = selectedWeapon == weapon,
-                    onClick = {
-                        onWeaponSelected(if (selectedWeapon == weapon) null else weapon)
-                    },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text(weapon, maxLines = 1) }
+            OutlinedTextField(
+                value = selectedWeapon ?: "全部武器",
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                shape = smoothCornerShape(20.dp),
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                textStyle = MaterialTheme.typography.bodyLarge,
+                label = { Text("武器") },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = weaponMenuExpanded)
+                },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
+                    focusedBorderColor = MaterialTheme.colorScheme.outline,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
                 )
+            )
+            ExposedDropdownMenu(
+                expanded = weaponMenuExpanded,
+                onDismissRequest = { weaponMenuExpanded = false },
+                shape = smoothCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ) {
+                DropdownMenuItem(
+                    text = { Text("全部武器") },
+                    onClick = {
+                        onWeaponSelected(null)
+                        weaponMenuExpanded = false
+                    }
+                )
+                weapons.forEach { weapon ->
+                    DropdownMenuItem(
+                        text = { Text(weapon) },
+                        onClick = {
+                            onWeaponSelected(weapon)
+                            weaponMenuExpanded = false
+                        }
+                    )
+                }
             }
         }
 
         // 品质筛选
+        Text(
+            text = "按品质筛选",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
                 selected = selectedQuality == null,
@@ -331,6 +351,7 @@ private fun WeaponSkinFilterBar(
         }
     }
 }
+
 
 // ────────────────────────────────────────────
 //  外观卡片
