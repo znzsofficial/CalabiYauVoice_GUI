@@ -151,6 +151,10 @@ fun WikiHubScreen(
                     selectedWeaponSkinWeapon = weaponName
                     weaponSkinsFrom = WikiHubPage.CHAR_DETAIL
                     navigateForward(WikiHubPage.WEAPON_SKINS)
+                },
+                onOpenWeaponDetail = { weaponName ->
+                    selectedWeaponName = weaponName
+                    navigateForward(WikiHubPage.WEAPON_DETAIL)
                 }
             )
         }

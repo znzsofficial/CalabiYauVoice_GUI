@@ -44,7 +44,8 @@ fun CharacterDetailScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     onOpenCostumes: ((String) -> Unit)? = null,
-    onOpenWeaponSkins: ((String) -> Unit)? = null
+    onOpenWeaponSkins: ((String) -> Unit)? = null,
+    onOpenWeaponDetail: ((String) -> Unit)? = null
 ) {
     val state = rememberLoadState<CharacterDetail?>(null, key = characterName) { force ->
         CharacterDetailApi.fetchCharacterDetail(characterName, force)
@@ -93,7 +94,8 @@ fun CharacterDetailScreen(
                 portraitUrl = portraitUrl,
                 onOpenWikiUrl = onOpenWikiUrl,
                 onOpenCostumes = onOpenCostumes,
-                onOpenWeaponSkins = onOpenWeaponSkins
+                onOpenWeaponSkins = onOpenWeaponSkins,
+                onOpenWeaponDetail = onOpenWeaponDetail
             )
         }
     }
@@ -109,7 +111,8 @@ private fun CharacterDetailContent(
     portraitUrl: String?,
     onOpenWikiUrl: (String) -> Unit,
     onOpenCostumes: ((String) -> Unit)? = null,
-    onOpenWeaponSkins: ((String) -> Unit)? = null
+    onOpenWeaponSkins: ((String) -> Unit)? = null,
+    onOpenWeaponDetail: ((String) -> Unit)? = null
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -147,7 +150,12 @@ private fun CharacterDetailContent(
         // ── 武器信息 ──
         if (detail.weaponName.isNotBlank()) {
             item(key = "weapon") {
-                WeaponInfoCard(detail = detail)
+                WeaponInfoCard(
+                    detail = detail,
+                    onClick = if (onOpenWeaponDetail != null) {
+                        { onOpenWeaponDetail(detail.weaponName) }
+                    } else null
+                )
             }
         }
 
@@ -515,10 +523,12 @@ private fun AttributesCard(detail: CharacterDetail) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun WeaponInfoCard(detail: CharacterDetail) {
+private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = null) {
     Card(
+        onClick = { onClick?.invoke() },
         shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        enabled = onClick != null
     ) {
         Column(Modifier.padding(20.dp)) {
             SectionTitle(icon = Icons.Outlined.GpsFixed, title = "专属武器")

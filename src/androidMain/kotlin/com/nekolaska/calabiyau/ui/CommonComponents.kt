@@ -779,6 +779,7 @@ fun <T> ApiResourceContent(
     state: LoadState<T>,
     modifier: Modifier = Modifier,
     isDataEmpty: (T) -> Boolean = ::defaultIsDataEmpty,
+    enablePullToRefresh: Boolean = true,
     loading: @Composable (Modifier) -> Unit = { mod -> LoadingState(modifier = mod) },
     content: @Composable (T) -> Unit
 ) {
@@ -795,15 +796,25 @@ fun <T> ApiResourceContent(
             )
         }
         else -> {
-            PullToRefreshBox(
-                isRefreshing = state.isLoading,
-                onRefresh = { state.reload(forceRefresh = true) },
-                state = rememberPullToRefreshState(),
-                modifier = modifier.fillMaxSize()
-            ) {
+            val body: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize()) {
                     if (state.isOffline) OfflineBanner(ageMs = state.cacheAgeMs)
                     content(state.data)
+                }
+            }
+
+            if (enablePullToRefresh) {
+                PullToRefreshBox(
+                    isRefreshing = state.isLoading,
+                    onRefresh = { state.reload(forceRefresh = true) },
+                    state = rememberPullToRefreshState(),
+                    modifier = modifier.fillMaxSize()
+                ) {
+                    body()
+                }
+            } else {
+                Box(modifier = modifier.fillMaxSize()) {
+                    body()
                 }
             }
         }
