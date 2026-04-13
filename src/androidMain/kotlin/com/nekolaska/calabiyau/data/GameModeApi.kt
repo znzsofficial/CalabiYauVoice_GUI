@@ -206,20 +206,18 @@ object GameModeApi {
                     .replace(Regex("""\[\[File:[^\]]*]]"""), "")
                     .replace(Regex("""<br\s*/?>"""), "")           // 移除换行标记
                     .trim()
-            }
-            .filter {
+            }.firstOrNull {
                 it.isNotBlank() &&
-                !it.startsWith("{{") &&
-                !it.startsWith("==") &&
-                !it.startsWith("__") &&
-                !it.startsWith("<") &&
-                !it.startsWith("*") &&
-                !it.startsWith(":") &&
-                !it.startsWith(";") &&
-                !it.startsWith("文件:") &&
-                !it.startsWith("File:")
-            }
-            .firstOrNull() ?: ""
+                        !it.startsWith("{{") &&
+                        !it.startsWith("==") &&
+                        !it.startsWith("__") &&
+                        !it.startsWith("<") &&
+                        !it.startsWith("*") &&
+                        !it.startsWith(":") &&
+                        !it.startsWith(";") &&
+                        !it.startsWith("文件:") &&
+                        !it.startsWith("File:")
+            } ?: ""
 
         // 获胜条件：==获胜条件== 下的内容
         val winCondition = extractSection(wikitext, "获胜条件")

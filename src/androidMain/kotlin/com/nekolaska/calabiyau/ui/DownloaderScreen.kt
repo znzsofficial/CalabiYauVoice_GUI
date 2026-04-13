@@ -5,7 +5,6 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.filled.*
@@ -88,8 +87,8 @@ internal fun DownloaderScreen(
     /** 根据当前搜索模式构造下载任务 */
     fun buildDownloadTask(): DownloadTask? = when (searchMode) {
         SearchMode.PORTRAIT -> {
-            val costume = selectedPortraitCostume ?: return@buildDownloadTask null
-            val name = selectedPortraitCharacter ?: return@buildDownloadTask null
+            val costume = selectedPortraitCostume ?: return null
+            val name = selectedPortraitCharacter ?: return null
             DownloadTask.Portrait(name, costume)
         }
         SearchMode.FILE_SEARCH -> {
@@ -97,7 +96,7 @@ internal fun DownloaderScreen(
             DownloadTask.FileSearch(files)
         }
         else -> {
-            val group = selectedGroup ?: return@buildDownloadTask null
+            val group = selectedGroup ?: return null
             DownloadTask.Category(
                 group = group,
                 checkedCategories = checkedCategories,

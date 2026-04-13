@@ -32,6 +32,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
+import androidx.core.net.toUri
 
 // ════════════════════════════════════════════════════════
 //  基板页 —— 展示所有基板（名片/横幅）
@@ -60,7 +61,7 @@ fun BaseplateScreen(
         PlayerDecorationApi.fetch("基板", force)
     }
     val sections = state.data
-    var selectedSectionIndex by remember { mutableStateOf(0) }
+    var selectedSectionIndex by remember { mutableIntStateOf(0) }
 
     // 全屏预览
     var previewItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
@@ -281,7 +282,7 @@ fun BaseplateScreen(
                         val fileName = URLUtil.guessFileName(url, null, null)
                         val dir = java.io.File(AppPrefs.savePath)
                         dir.mkdirs()
-                        val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        val request = DownloadManager.Request(url.toUri()).apply {
                             setTitle(fileName)
                             setDescription("正在保存图片...")
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)

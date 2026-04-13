@@ -1,18 +1,13 @@
 package com.nekolaska.calabiyau.ui
 
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroidSize
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -101,7 +96,6 @@ fun ZoomableImage(
                 awaitEachGesture {
                     // 等待第一根手指按下
                     awaitFirstDown(requireUnconsumed = false)
-                    var isZooming = false
 
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Main)
@@ -109,7 +103,6 @@ fun ZoomableImage(
 
                         if (pointerCount >= 2) {
                             // 多指：始终处理缩放
-                            isZooming = true
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
                             val newScale = (scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
