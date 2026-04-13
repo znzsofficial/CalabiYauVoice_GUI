@@ -395,12 +395,12 @@ internal fun WikiHomePage(
             // ── 时装投票 ──
             item(key = "voting", contentType = "action_card") {
                 ActionCard(
-                    title = "时装投票",
-                    subtitle = "为你喜欢的时装投票",
-                    icon = Icons.Outlined.HowToVote,
+                    title = "卡牌",
+                    subtitle = "整合 PC、生化卡牌与卡组分享",
+                    icon = Icons.Outlined.Style,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.VOTING) },
+                    onClick = { onNavigateTo(WikiHubPage.BIO_CARDS) },
                     backdrop = backdrop
                 )
             }
@@ -426,6 +426,7 @@ internal fun WikiHomePage(
                     items = listOf(
                         "弦化" to "弦化",
                         "弦能增幅网络" to "弦能增幅网络",
+                        "生化卡牌" to "生化卡牌",
                         "特别行动" to "特别行动",
                         "赫尔墨斯" to "赫尔墨斯",
                         "超弦体天赋" to "超弦体天赋",
@@ -435,6 +436,9 @@ internal fun WikiHomePage(
                         "赛事系统" to "赛事系统"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "生化卡牌" to { onNavigateTo(WikiHubPage.BIO_MOBILE_CARDS) }
+                    ),
                     backdrop = backdrop
                 )
             }
@@ -477,7 +481,7 @@ private val quickEntries = listOf(
     QuickEntry("武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
     QuickEntry("地图", Icons.Outlined.Map, WikiHubPage.MAPS),
     QuickEntry("时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
-    QuickEntry("投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
+    QuickEntry("卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
     QuickEntry("公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
 )
 private val quickEntryRows = quickEntries.chunked(3)
