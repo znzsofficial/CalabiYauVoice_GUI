@@ -4,11 +4,14 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
+    <path
+        android:fillColor="#FF26A69A"
+        android:pathData="M24,24m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0" />
     <group
         android:translateX="12"
         android:translateY="12">
         <path
-            android:fillColor="#FF000000"
+            android:fillColor="#FFFFFFFF"
             android:pathData="M5,20h14v-2H5v2zM19,9h-4V3H9v6H5l7,7 7,-7z" />
     </group>
 </vector>
