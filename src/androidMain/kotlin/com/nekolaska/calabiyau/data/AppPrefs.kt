@@ -29,6 +29,7 @@ object AppPrefs {
     private const val KEY_WALLPAPER_SEED_COLOR_CACHE = "wallpaper_seed_color_cache"
     private const val KEY_WALLPAPER_SEED_COLOR_URL = "wallpaper_seed_color_url"
     private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+    private const val KEY_HOME_QUICK_ENTRY_IDS = "home_quick_entry_ids"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -174,4 +175,16 @@ object AppPrefs {
     var lastUpdateCheck: Long
         get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L)
         set(value) = prefs.edit { putLong(KEY_LAST_UPDATE_CHECK, value) }
+
+    /** 首页顶部六按钮的配置 ID 列表，最多 6 个。 */
+    var homeQuickEntryIds: List<String>
+        get() = prefs.getString(KEY_HOME_QUICK_ENTRY_IDS, null)
+            ?.split("|||")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.take(6)
+            ?: emptyList()
+        set(value) = prefs.edit {
+            putString(KEY_HOME_QUICK_ENTRY_IDS, value.take(6).joinToString("|||"))
+        }
 }

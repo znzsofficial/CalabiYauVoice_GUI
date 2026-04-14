@@ -494,7 +494,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
     QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
     QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
-    QuickEntry("balance_data", "平衡", Icons.Outlined.Balance, WikiHubPage.BALANCE_DATA),
+    QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiHubPage.BALANCE_DATA),
     QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAME_MODES),
     QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiHubPage.WALLPAPERS),
     QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
