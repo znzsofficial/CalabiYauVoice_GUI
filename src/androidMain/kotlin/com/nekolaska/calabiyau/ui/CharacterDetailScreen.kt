@@ -142,6 +142,26 @@ private fun CharacterDetailContent(
             }
         }
 
+        if (detail.positionDuty.isNotBlank()) {
+            item(key = "position_detail") {
+                PositionInfoCard(
+                    positionName = detail.positionName.ifBlank { detail.role },
+                    positionDuty = detail.positionDuty
+                )
+            }
+        }
+
+        if (
+            detail.settingSummary.isNotBlank() ||
+            detail.settingObserverQuote.isNotBlank() ||
+            detail.relations.isNotEmpty() ||
+            detail.lifeInfo.isNotEmpty()
+        ) {
+            item(key = "setting_extra") {
+                SettingExtraCard(detail = detail)
+            }
+        }
+
         // ── 详细属性 ──
         item(key = "attributes") {
             AttributesCard(detail = detail)
@@ -343,7 +363,14 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
-                    if (detail.role.isNotBlank()) {
+                    if (detail.positionName.isNotBlank()) {
+                        InfoChip(
+                            label = detail.positionName,
+                            icon = Icons.Outlined.WorkOutline,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    } else if (detail.role.isNotBlank()) {
                         InfoChip(
                             label = detail.role,
                             icon = Icons.Outlined.WorkOutline,
@@ -373,6 +400,46 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
     }
 }
 
+@Composable
+private fun PositionInfoCard(
+    positionName: String,
+    positionDuty: String
+) {
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            SectionTitle(icon = Icons.Outlined.Explore, title = "定位说明")
+            Spacer(Modifier.height(12.dp))
+
+            if (positionName.isNotBlank()) {
+                Surface(
+                    shape = smoothCapsuleShape(),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.WorkOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(positionName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+
+            Text(
+                positionDuty,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
 // ────────────────────────────────────────────
 //  个性语录卡片
 // ────────────────────────────────────────────
@@ -381,7 +448,10 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
 private fun QuoteCard(quote: String) {
     Card(
         shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+        )
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
@@ -619,6 +689,117 @@ private fun PersonalInfoCard(items: List<Pair<String, String>>) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SettingExtraCard(detail: CharacterDetail) {
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            SectionTitle(icon = Icons.AutoMirrored.Outlined.Article, title = "设定补充")
+
+            if (detail.settingSummary.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "设定页简介",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    detail.settingSummary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (detail.settingObserverQuote.isNotBlank()) {
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    "设定页观测语录",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    detail.settingObserverQuote,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontStyle = FontStyle.Italic
+                )
+            }
+
+            if (detail.relations.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(Modifier.height(16.dp))
+                KeyValueSection(
+                    title = "关系信息",
+                    icon = Icons.Outlined.PeopleAlt,
+                    items = detail.relations
+                )
+            }
+
+            if (detail.lifeInfo.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(Modifier.height(16.dp))
+                KeyValueSection(
+                    title = "生活信息",
+                    icon = Icons.Outlined.Coffee,
+                    items = detail.lifeInfo
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeyValueSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    items: List<CharacterDetailApi.InfoPair>
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+    Spacer(Modifier.height(10.dp))
+
+    items.forEachIndexed { index, item ->
+        if (index > 0) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+            )
+        }
+        Text(
+            item.label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            item.value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
