@@ -11,6 +11,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -65,6 +67,11 @@ fun SettingsScreen(onBack: () -> Unit) {
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
     var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
     var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
+    var homeQuickEntryIds by remember {
+        mutableStateOf(
+            AppPrefs.homeQuickEntryIds.takeIf { it.isNotEmpty() } ?: defaultQuickEntryIds
+        )
+    }
 
     val context = LocalContext.current
 
@@ -89,6 +96,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     BackHandler(enabled = !showAbout) {
         onBack()
     }
+
+    val settingsScrollState = rememberScrollState()
 
     val animDuration = 300
     AnimatedContent(
@@ -146,7 +155,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(settingsScrollState)
         ) {
             Spacer(Modifier.height(4.dp))
 
@@ -228,7 +237,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     )
 
-                    // 液态玻璃效果（开启时自动开启 G2）
+                    // 液态玻璃效果
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingsToggleItem(
                         icon = Icons.Outlined.BlurOn,
@@ -251,9 +260,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         SettingsToggleItem(
                             icon = Icons.Outlined.Autorenew,
-                            title = "启动时自动刷新壁纸",
-                            subtitle = if (wallpaperAutoRefresh) "每次启动软件时随机更换"
-                                else "仅手动刷新（保持当前壁纸）",
+                            title = "自动刷新壁纸",
+                            subtitle = "启动时随机更换首页背景图",
                             checked = wallpaperAutoRefresh,
                             onCheckedChange = {
                                 wallpaperAutoRefresh = it
@@ -321,6 +329,31 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     isSaving = false
                                 }
                             }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // ═══════════════════════════════════
+            //  首页快捷入口
+            // ═══════════════════════════════════
+            SettingsGroupHeader("首页")
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = smoothCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow
+            ) {
+                Column {
+                    QuickEntryCustomizeSection(
+                        selectedIds = homeQuickEntryIds,
+                        onSelectedIdsChange = {
+                            homeQuickEntryIds = it
+                            AppPrefs.homeQuickEntryIds = it
+                        }
                     )
                 }
             }
@@ -939,6 +972,140 @@ private fun SettingsToggleItem(
             checked = checked,
             onCheckedChange = onCheckedChange
         )
+    }
+}
+
+@Composable
+private fun QuickEntryCustomizeSection(
+    selectedIds: List<String>,
+    onSelectedIdsChange: (List<String>) -> Unit
+) {
+    val selectedEntries = remember(selectedIds) { selectedIds.mapNotNull(quickEntryById::get) }
+    val remainingEntries = remember(selectedIds) {
+        allQuickEntries.filterNot { candidate -> selectedIds.contains(candidate.id) }
+    }
+
+    Column(Modifier.padding(20.dp)) {
+        Text(
+            "顶部六按钮自定义",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "已选中的按钮会显示在 Wiki 首页顶部。可移除、补充，并调整顺序。",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "当前顺序",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(10.dp))
+
+        selectedEntries.forEachIndexed { index, entry ->
+            QuickEntryEditorRow(
+                entry = entry,
+                index = index,
+                canMoveUp = index > 0,
+                canMoveDown = index < selectedEntries.lastIndex,
+                onMoveUp = { onSelectedIdsChange(selectedIds.moveQuickEntry(index, index - 1)) },
+                onMoveDown = { onSelectedIdsChange(selectedIds.moveQuickEntry(index, index + 1)) },
+                onRemove = {
+                    if (selectedIds.size <= 1) return@QuickEntryEditorRow
+                    onSelectedIdsChange(selectedIds.filterNot { it == entry.id })
+                }
+            )
+            if (index < selectedEntries.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "可添加项",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(10.dp))
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(remainingEntries, key = { it.id }) { entry ->
+                AssistChip(
+                    onClick = {
+                        if (selectedIds.size >= 6) return@AssistChip
+                        onSelectedIdsChange(selectedIds + entry.id)
+                    },
+                    label = { Text(entry.label) },
+                    leadingIcon = {
+                        Icon(entry.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        TextButton(onClick = { onSelectedIdsChange(defaultQuickEntryIds) }) {
+            Text("恢复默认六按钮")
+        }
+    }
+}
+
+private fun List<String>.moveQuickEntry(fromIndex: Int, toIndex: Int): List<String> {
+    val mutable = toMutableList()
+    mutable[fromIndex] = mutable[toIndex].also { mutable[toIndex] = mutable[fromIndex] }
+    return mutable
+}
+
+@Composable
+private fun QuickEntryEditorRow(
+    entry: QuickEntry,
+    index: Int,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(40.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(entry.icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(
+                "位置 ${index + 1}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+            Icon(Icons.Default.ExpandLess, contentDescription = "上移")
+        }
+        IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+            Icon(Icons.Default.ExpandMore, contentDescription = "下移")
+        }
+        IconButton(onClick = onRemove) {
+            Icon(Icons.Outlined.Close, contentDescription = "移除")
+        }
     }
 }
 
