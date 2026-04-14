@@ -37,6 +37,7 @@ object OfflineCache {
         WEAPON_LIST("weapon_list", 1 * DAY),
         MAP_LIST("map_list", 1 * DAY),
         ANNOUNCEMENTS("announcements", 2 * HOUR),
+        ACTIVITIES("activities", 2 * HOUR),
         GAME_MODES("game_modes", 3 * DAY),
         COSTUMES("costumes", 3 * DAY),
         WEAPON_SKINS("weapon_skins", 3 * DAY),
