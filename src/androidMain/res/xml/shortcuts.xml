@@ -9,7 +9,7 @@
         android:shortcutLongLabel="@string/shortcut_characters_long">
         <intent
             android:action="com.nekolaska.calabiyau.SHORTCUT"
-            android:targetPackage="${applicationId}"
+            android:targetPackage="com.nekolaska.calabiyau"
             android:targetClass="com.nekolaska.calabiyau.MainActivity">
             <extra android:name="shortcut_target" android:value="characters" />
         </intent>
@@ -23,7 +23,7 @@
         android:shortcutLongLabel="@string/shortcut_downloader_long">
         <intent
             android:action="com.nekolaska.calabiyau.SHORTCUT"
-            android:targetPackage="${applicationId}"
+            android:targetPackage="com.nekolaska.calabiyau"
             android:targetClass="com.nekolaska.calabiyau.MainActivity">
             <extra android:name="shortcut_target" android:value="downloader" />
         </intent>
@@ -37,7 +37,7 @@
         android:shortcutLongLabel="@string/shortcut_wiki_long">
         <intent
             android:action="com.nekolaska.calabiyau.SHORTCUT"
-            android:targetPackage="${applicationId}"
+            android:targetPackage="com.nekolaska.calabiyau"
             android:targetClass="com.nekolaska.calabiyau.MainActivity">
             <extra android:name="shortcut_target" android:value="wiki" />
         </intent>

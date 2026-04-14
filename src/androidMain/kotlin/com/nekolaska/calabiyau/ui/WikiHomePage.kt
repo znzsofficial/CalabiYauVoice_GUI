@@ -405,14 +405,26 @@ internal fun WikiHomePage(
                 )
             }
 
-            // ── 公告资讯 ──
+            // ── 活动页 ──
+            item(key = "activities", contentType = "action_card") {
+                ActionCard(
+                    title = "活动",
+                    subtitle = "浏览当前与历史活动时间和内容简介",
+                    icon = Icons.Outlined.Event,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.ACTIVITIES) },
+                    backdrop = backdrop
+                )
+            }
+
             item(key = "announcements", contentType = "action_card") {
                 ActionCard(
                     title = "公告资讯",
                     subtitle = "查看最新游戏公告和更新信息",
                     icon = Icons.Outlined.Campaign,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) },
                     backdrop = backdrop
                 )
@@ -426,7 +438,6 @@ internal fun WikiHomePage(
                     items = listOf(
                         "弦化" to "弦化",
                         "弦能增幅网络" to "弦能增幅网络",
-                        "生化卡牌" to "生化卡牌",
                         "特别行动" to "特别行动",
                         "赫尔墨斯" to "赫尔墨斯",
                         "超弦体天赋" to "超弦体天赋",
@@ -436,9 +447,7 @@ internal fun WikiHomePage(
                         "赛事系统" to "赛事系统"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
-                    nativePages = mapOf(
-                        "生化卡牌" to { onNavigateTo(WikiHubPage.BIO_MOBILE_CARDS) }
-                    ),
+                    nativePages = emptyMap(),
                     backdrop = backdrop
                 )
             }
@@ -469,22 +478,31 @@ internal fun WikiHomePage(
 // ────────────────────────────────────────────
 
 /** 快捷入口数据（提取到顶层避免每次重组分配） */
-private data class QuickEntry(
+internal data class QuickEntry(
+    val id: String,
     val label: String,
     val icon: ImageVector,
     val targetPage: WikiHubPage?,       // null 表示使用 url
     val url: String? = null
 )
 
-private val quickEntries = listOf(
-    QuickEntry("角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
-    QuickEntry("武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
-    QuickEntry("地图", Icons.Outlined.Map, WikiHubPage.MAPS),
-    QuickEntry("时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
-    QuickEntry("卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
-    QuickEntry("公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
+internal val allQuickEntries = listOf(
+    QuickEntry("characters", "角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
+    QuickEntry("weapons", "武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
+    QuickEntry("maps", "地图", Icons.Outlined.Map, WikiHubPage.MAPS),
+    QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
+    QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
+    QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
+    QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
+    QuickEntry("balance_data", "平衡", Icons.Outlined.Balance, WikiHubPage.BALANCE_DATA),
+    QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAME_MODES),
+    QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiHubPage.WALLPAPERS),
+    QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
 )
-private val quickEntryRows = quickEntries.chunked(3)
+internal val defaultQuickEntryIds = listOf(
+    "characters", "weapons", "maps", "costumes", "bio_cards", "activities"
+)
+internal val quickEntryById = allQuickEntries.associateBy(QuickEntry::id)
 
 // ── 预分配的渐变画笔（避免在 LazyRow item 中反复创建） ──
 private val characterGradient = Brush.verticalGradient(
@@ -500,6 +518,12 @@ private fun QuickAccessGrid(
     onNavigateTo: (WikiHubPage) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
+    val configuredIds = remember { AppPrefs.homeQuickEntryIds }
+    val quickEntries = remember(configuredIds) {
+        configuredIds.resolveQuickEntries()
+    }
+    val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
+
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
     val entryShape = smoothCornerShape(20.dp)
@@ -559,6 +583,14 @@ private fun QuickAccessGrid(
             }
         }
     }
+}
+
+private fun List<String>.resolveQuickEntries(): List<QuickEntry> {
+    val sourceIds = if (isEmpty()) defaultQuickEntryIds else this
+    val selectedEntries = sourceIds.mapNotNull(quickEntryById::get)
+    val selectedIds = selectedEntries.mapTo(mutableSetOf()) { it.id }
+    val fallbackEntries = allQuickEntries.filterNot { it.id in selectedIds }
+    return (selectedEntries + fallbackEntries).take(6)
 }
 
 // ────────────────────────────────────────────

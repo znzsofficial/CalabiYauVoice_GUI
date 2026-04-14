@@ -48,6 +48,8 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
+    private val shortcutTargetState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -105,7 +107,7 @@ class MainActivity : ComponentActivity() {
         )
 
         // 解析 Shortcut 目标
-        val shortcutTarget = intent?.getStringExtra("shortcut_target")
+        shortcutTargetState.value = intent?.getStringExtra("shortcut_target")
 
         setContent {
             AppTheme {
@@ -136,7 +138,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MainScreen(searchVM, downloadVM, portraitVM, shortcutTarget = shortcutTarget)
+                MainScreen(searchVM, downloadVM, portraitVM, shortcutTarget = shortcutTargetState.value)
 
                 // ── 启动更新提示 ──
                 startupUpdateInfo?.let { info ->
@@ -181,6 +183,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        shortcutTargetState.value = intent.getStringExtra("shortcut_target")
     }
 }
 

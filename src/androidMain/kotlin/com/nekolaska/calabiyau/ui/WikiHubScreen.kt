@@ -17,7 +17,7 @@ import com.nekolaska.calabiyau.data.MapListApi
 // ════════════════════════════════════════════════════════
 
 /** 子页面枚举 */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, WEAPON_SKINS, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS, BIO_MOBILE_CARDS, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
+enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS, BIO_MOBILE_CARDS, NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -222,6 +222,12 @@ fun WikiHubScreen(
                     navigateBack(weaponSkinsFrom)
                     weaponSkinsFrom = WikiHubPage.HOME
                 }
+            )
+        }
+        WikiHubPage.ACTIVITIES -> {
+            ActivityScreen(
+                onBack = { navigateBack(WikiHubPage.HOME) },
+                onOpenWikiUrl = onOpenWikiUrl
             )
         }
         WikiHubPage.ANNOUNCEMENTS -> {
