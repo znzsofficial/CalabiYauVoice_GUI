@@ -1,10 +1,14 @@
 package com.nekolaska.calabiyau.data
 
+import android.text.Html
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -20,6 +24,11 @@ object CharacterDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
+    private const val POSITION_PAGE = "超弦体定位"
+    private const val SETTING_PAGE = "超弦体设定"
+
+    @Volatile
+    private var cachedExtras: Map<String, CharacterExtraInfo>? = null
 
     /** 角色详情信息 */
     data class CharacterDetail(
@@ -51,7 +60,27 @@ object CharacterDetailApi {
         val subPages: List<SubPage>,
         val skills: List<SkillInfo>,
         val stories: List<StoryEntry>,
+        val positionName: String = "",
+        val positionDuty: String = "",
+        val settingSummary: String = "",
+        val settingObserverQuote: String = "",
+        val lifeInfo: List<InfoPair> = emptyList(),
+        val relations: List<InfoPair> = emptyList(),
         val updateHistory: List<UpdateEntry> = emptyList()
+    )
+
+    data class InfoPair(
+        val label: String,
+        val value: String
+    )
+
+    private data class CharacterExtraInfo(
+        val positionName: String = "",
+        val positionDuty: String = "",
+        val settingSummary: String = "",
+        val settingObserverQuote: String = "",
+        val lifeInfo: List<InfoPair> = emptyList(),
+        val relations: List<InfoPair> = emptyList()
     )
 
     /** 更新改动历史条目 */
@@ -125,6 +154,11 @@ object CharacterDetailApi {
                         kind = ErrorKind.NOT_FOUND
                     )
 
+                val extras = fetchCharacterExtras(forceRefresh)
+                val extraInfo = extras[normalizeCharacterName(characterName)]
+                    ?: extras[characterName]
+                    ?: CharacterExtraInfo()
+
                 // 从渲染 HTML 解析改动历史
                 val html = parseObj["text"]
                     ?.jsonObject?.get("*")
@@ -132,7 +166,7 @@ object CharacterDetailApi {
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
 
                 ApiResult.Success(
-                    detail.copy(updateHistory = history),
+                    mergeExtraInfo(detail, extraInfo).copy(updateHistory = history),
                     isOffline = result.isFromCache,
                     cacheAgeMs = result.ageMs
                 )
@@ -213,6 +247,226 @@ object CharacterDetailApi {
             stories = stories
         )
     }
+
+    private fun mergeExtraInfo(
+        detail: CharacterDetail,
+        extraInfo: CharacterExtraInfo
+    ): CharacterDetail {
+        val mergedLifeInfo = extraInfo.lifeInfo.filterNot { extra ->
+            val normalizedValue = normalizeText(extra.value)
+            when (extra.label) {
+                "生日" -> normalizedValue == normalizeText(detail.birthday)
+                "年龄" -> normalizedValue == normalizeText(detail.age)
+                "身高" -> normalizedValue == normalizeText(detail.height)
+                "体重" -> normalizedValue == normalizeText(detail.weight)
+                "活动区域" -> normalizedValue == normalizeText(detail.activeArea)
+                "兴趣爱好" -> normalizedValue == normalizeText(detail.hobbies)
+                "饮食习惯" -> normalizedValue == normalizeText(detail.diet)
+                "个性语录" -> normalizedValue == normalizeText(detail.quote)
+                else -> false
+            }
+        }
+
+        return detail.copy(
+            positionName = extraInfo.positionName.ifBlank { detail.role },
+            positionDuty = extraInfo.positionDuty,
+            settingSummary = extraInfo.settingSummary.takeUnless { normalizeText(it) == normalizeText(detail.summary) || normalizeText(it) == normalizeText(detail.description) }.orEmpty(),
+            settingObserverQuote = extraInfo.settingObserverQuote.takeUnless { normalizeText(it) == normalizeText(detail.observerQuote) }.orEmpty(),
+            lifeInfo = mergedLifeInfo,
+            relations = extraInfo.relations
+        )
+    }
+
+    private suspend fun fetchCharacterExtras(forceRefresh: Boolean): Map<String, CharacterExtraInfo> {
+        if (!forceRefresh) {
+            cachedExtras?.let { return it }
+        }
+
+        val results = coroutineScope {
+            awaitAll(
+                async { fetchAggregatePageHtml(POSITION_PAGE, "character_position", forceRefresh) },
+                async { fetchAggregatePageHtml(SETTING_PAGE, "character_setting", forceRefresh) }
+            )
+        }
+
+        val positionHtml = results[0]?.json.orEmpty()
+        val settingHtml = results[1]?.json.orEmpty()
+
+        val merged = mutableMapOf<String, CharacterExtraInfo>()
+        parsePositionExtras(positionHtml).forEach { (name, info) ->
+            merged[name] = merged[name].merge(info)
+        }
+        parseSettingExtras(settingHtml).forEach { (name, info) ->
+            merged[name] = merged[name].merge(info)
+        }
+
+        cachedExtras = merged
+        return merged
+    }
+
+    private suspend fun fetchAggregatePageHtml(
+        pageName: String,
+        cacheKey: String,
+        forceRefresh: Boolean
+    ): OfflineCache.CacheResult? {
+        val encoded = URLEncoder.encode(pageName, "UTF-8")
+        val url = "$API?action=parse&page=$encoded&prop=text&format=json"
+        val result = OfflineCache.fetchWithCache(
+            type = OfflineCache.Type.CHARACTER_DETAIL,
+            key = cacheKey,
+            forceRefresh = forceRefresh
+        ) { WikiEngine.safeGet(url) } ?: return null
+
+        val root = SharedJson.parseToJsonElement(result.json).jsonObject
+        val html = root["parse"]?.jsonObject?.get("text")
+            ?.jsonObject?.get("*")?.jsonPrimitive?.content
+            ?: return null
+        return result.copy(json = html)
+    }
+
+    private fun parsePositionExtras(html: String): Map<String, CharacterExtraInfo> {
+        if (html.isBlank()) return emptyMap()
+
+        val result = mutableMapOf<String, CharacterExtraInfo>()
+        val sectionRegex = Regex(
+            """<h2><span[^>]*></span><span class=\"mw-headline\" id=\"([^\"]+)\">([^<]+)</span>[\s\S]*?(?=<h2>|$)""",
+            RegexOption.DOT_MATCHES_ALL
+        )
+        val dutyRegex = Regex("""<li><b>定位职责：</b>([\s\S]*?)</li>""")
+        val nameRegex = Regex("""title=\"([^\"]+)\"><span[^>]*>([^<]+)</span></a>""")
+
+        sectionRegex.findAll(html).forEach { match ->
+            val positionName = cleanHtml(match.groupValues[2])
+            if (positionName !in POSITION_NAMES) return@forEach
+            val block = match.value
+            val duty = cleanHtml(dutyRegex.find(block)?.groupValues?.get(1).orEmpty())
+            nameRegex.findAll(block).forEach { nameMatch ->
+                val displayName = cleanHtml(nameMatch.groupValues[2])
+                if (displayName.isBlank() || displayName == positionName || displayName == "编辑") return@forEach
+                val key = normalizeCharacterName(displayName)
+                result[key] = result[key].merge(
+                    CharacterExtraInfo(
+                        positionName = positionName,
+                        positionDuty = duty
+                    )
+                )
+            }
+        }
+
+        return result
+    }
+
+    private fun parseSettingExtras(html: String): Map<String, CharacterExtraInfo> {
+        if (html.isBlank()) return emptyMap()
+
+        val normalizedHtml = html.replace("\r", "")
+        val markerRegex = Regex(
+            """<a href=\"/klbq/文件:[^\"]+?初始立绘[^\"]*\" class=\"image\">[\s\S]*?</a>[\s\S]*?(?=<a href=\"/klbq/文件:[^\"]+?初始立绘|<div class=\"comment-widget-box\"|$)""",
+            RegexOption.DOT_MATCHES_ALL
+        )
+
+        return markerRegex.findAll(normalizedHtml).mapNotNull { match ->
+            parseSingleSettingBlock(match.value)
+        }.toMap()
+    }
+
+    private fun parseSingleSettingBlock(block: String): Pair<String, CharacterExtraInfo>? {
+        val nameLineMatch = Regex(
+            """<p>\s*([^<\n]+?)\s*[A-Za-z][\s\S]*?</p>""",
+            RegexOption.DOT_MATCHES_ALL
+        ).find(block) ?: return null
+
+        val rawName = cleanHtml(nameLineMatch.groupValues[1])
+            .lineSequence()
+            .firstOrNull { it.isNotBlank() }
+            ?.trim()
+            .orEmpty()
+        val name = rawName.takeWhile { !it.isWhitespace() }
+        if (name.isBlank()) return null
+
+        val relationLine = Regex(
+            """中文CV：.*?(?=(?:<ul>|</p>))""",
+            RegexOption.DOT_MATCHES_ALL
+        ).find(block)?.value.orEmpty()
+
+        val relations = Regex("""([\u4e00-\u9fa5A-Za-z&]+)：([\s\S]*?)(?=(?:[\u4e00-\u9fa5A-Za-z&]+：)|$)""")
+            .findAll(cleanHtml(relationLine).replace("日文CV：", "\n日文CV：").replace("中文CV：", "\n中文CV："))
+            .mapNotNull { relation ->
+                val label = relation.groupValues[1].trim()
+                val value = relation.groupValues[2].trim().trim('、', '，', ',', ' ')
+                if (label.isBlank() || value.isBlank() || label == "中文CV" || label == "日文CV") null
+                else InfoPair(label, value)
+            }
+            .toList()
+
+        val infoRegex = Regex("""<li><b>([^<]+)</b>\s*([^<][\s\S]*?)</li>""", RegexOption.DOT_MATCHES_ALL)
+        val infoMap = linkedMapOf<String, String>()
+        infoRegex.findAll(block).forEach { info ->
+            val label = cleanHtml(info.groupValues[1]).removeSuffix("：").trim()
+            val value = cleanHtml(info.groupValues[2]).trim()
+            if (label.isNotBlank() && value.isNotBlank()) {
+                infoMap[label] = value
+            }
+        }
+
+        val summary = infoMap.remove("简介").orEmpty()
+        val observerQuote = infoMap.remove("观测语录").orEmpty()
+        infoMap.remove("萌点")
+
+        val lifeInfo = infoMap.map { (label, value) -> InfoPair(label, value) }
+        return normalizeCharacterName(name) to CharacterExtraInfo(
+            settingSummary = summary,
+            settingObserverQuote = observerQuote,
+            lifeInfo = lifeInfo,
+            relations = relations
+        )
+    }
+
+    private fun CharacterExtraInfo?.merge(other: CharacterExtraInfo): CharacterExtraInfo {
+        val base = this ?: CharacterExtraInfo()
+        return CharacterExtraInfo(
+            positionName = other.positionName.ifBlank { base.positionName },
+            positionDuty = other.positionDuty.ifBlank { base.positionDuty },
+            settingSummary = other.settingSummary.ifBlank { base.settingSummary },
+            settingObserverQuote = other.settingObserverQuote.ifBlank { base.settingObserverQuote },
+            lifeInfo = if (other.lifeInfo.isNotEmpty()) other.lifeInfo else base.lifeInfo,
+            relations = if (other.relations.isNotEmpty()) other.relations else base.relations
+        )
+    }
+
+    private fun cleanHtml(raw: String): String {
+        if (raw.isBlank()) return ""
+        val normalized = raw
+            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+            .replace("&nbsp;", " ")
+        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
+            .toString()
+            .replace("￼", "")
+            .replace("\uFFFC", "")
+            .replace('\u00A0', ' ')
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
+            .trim()
+    }
+
+    private fun normalizeCharacterName(name: String): String {
+        return name
+            .replace("·", "")
+            .replace("・", "")
+            .replace(" ", "")
+            .trim()
+    }
+
+    private fun normalizeText(text: String): String {
+        return text
+            .replace(Regex("""\s+"""), "")
+            .replace("：", ":")
+            .trim()
+    }
+
+    private val POSITION_NAMES = setOf("决斗", "守护", "支援", "先锋", "控场")
 
     /** 清理 Wiki 标记 */
     private fun clean(raw: String?): String {
