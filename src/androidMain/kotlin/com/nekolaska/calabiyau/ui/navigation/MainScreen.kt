@@ -33,6 +33,20 @@ import com.nekolaska.calabiyau.viewmodel.SearchViewModel
 import data.ApiResult
 import kotlinx.coroutines.launch
 
+private data class ToolFileManagerOverlayState(
+    val initialPath: String? = null,
+    val directoryPickerConfig: FileManagerDirectoryPickerConfig? = null,
+    val onDirectoryPicked: ((String) -> Unit)? = null,
+    val onFilesPicked: ((List<String>) -> Unit)? = null
+)
+
+private sealed interface MainBackTarget {
+    data object CloseDrawer : MainBackTarget
+    data object CloseToolOverlay : MainBackTarget
+    data object ExitWikiToPrevious : MainBackTarget
+    data object GoHome : MainBackTarget
+}
+
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
     WIKI_HUB,          // 首页（Wiki 主页）
@@ -40,6 +54,7 @@ enum class DrawerDestination {
     WIKI,              // Wiki 浏览器（从侧栏进入）
     DOWNLOADER,        // 资源下载
     FILE_MANAGER,      // 文件管理
+    TOOLS,             // 素材工具
     DOWNLOAD_HISTORY,  // 下载历史（仅从资源下载页打开）
     SETTINGS           // 设置
 }
@@ -71,26 +86,31 @@ fun MainScreen(
     val windowSizeClass = activity?.let { calculateWindowSizeClass(it) }
     val useExpandedLayout = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
     var pendingWikiUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var fileManagerInitialPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var toolFileManagerOverlay by remember { mutableStateOf<ToolFileManagerOverlayState?>(null) }
     // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
     var wikiEnteredFromHub by rememberSaveable { mutableStateOf(false) }
     // 记录进入侧栏 Wiki 前的页面，退出时回到该页面
     var previousDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
 
-    // 返回键：侧栏打开时先关闭侧栏
-    BackHandler(enabled = drawerState.isOpen) {
-        coroutineScope.launch { drawerState.close() }
+    val backTarget = when {
+        drawerState.isOpen -> MainBackTarget.CloseDrawer
+        toolFileManagerOverlay != null -> MainBackTarget.CloseToolOverlay
+        currentDestination == DrawerDestination.WIKI && !drawerState.isOpen -> MainBackTarget.ExitWikiToPrevious
+        currentDestination != DrawerDestination.WIKI_HUB
+                && currentDestination != DrawerDestination.WIKI
+                && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW
+                && !drawerState.isOpen -> MainBackTarget.GoHome
+        else -> null
     }
-    // Hub 内 WebView 的返回由 WikiWebViewScreen 内部 BackHandler 处理（onExitWiki 回调）
-    // 侧栏 Wiki 浏览器返回：回到进入前的页面
-    BackHandler(enabled = currentDestination == DrawerDestination.WIKI && !drawerState.isOpen) {
-        currentDestination = previousDestination
-    }
-    // 其他非主页页面返回主页（不含 WIKI 和 WIKI_HUB_WEBVIEW，它们有各自的退出逻辑）
-    BackHandler(enabled = currentDestination != DrawerDestination.WIKI_HUB
-            && currentDestination != DrawerDestination.WIKI
-            && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW
-            && !drawerState.isOpen) {
-        currentDestination = DrawerDestination.WIKI_HUB
+    BackHandler(enabled = backTarget != null) {
+        when (backTarget) {
+            MainBackTarget.CloseDrawer -> coroutineScope.launch { drawerState.close() }
+            MainBackTarget.CloseToolOverlay -> toolFileManagerOverlay = null
+            MainBackTarget.ExitWikiToPrevious -> currentDestination = previousDestination
+            MainBackTarget.GoHome -> currentDestination = DrawerDestination.WIKI_HUB
+            null -> Unit
+        }
     }
 
     // 切换页面时停止音频播放
@@ -186,8 +206,73 @@ fun MainScreen(
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
                     rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
+                    initialPath = fileManagerInitialPath,
                     onBack = { currentDestination = DrawerDestination.WIKI_HUB }
                 )
+            }
+            DrawerDestination.TOOLS -> {
+                Box(Modifier.fillMaxSize()) {
+                    ToolsHomeScreen(
+                        onBack = { currentDestination = DrawerDestination.WIKI_HUB },
+                        onOpenFileManager = { path ->
+                            toolFileManagerOverlay = ToolFileManagerOverlayState(initialPath = path)
+                        },
+                        onPickDirectoryFromFileManager = { initialPath, title, description, onPicked ->
+                            toolFileManagerOverlay = ToolFileManagerOverlayState(
+                                initialPath = initialPath,
+                                directoryPickerConfig = FileManagerDirectoryPickerConfig(
+                                    title = title,
+                                    description = description
+                                ),
+                                onDirectoryPicked = onPicked
+                            )
+                        },
+                        onPickFilesFromFileManager = { initialPath, title, description, allowMultiSelect, onOpenSystemPicker, onPicked ->
+                            toolFileManagerOverlay = ToolFileManagerOverlayState(
+                                initialPath = initialPath,
+                                directoryPickerConfig = FileManagerDirectoryPickerConfig(
+                                    title = title,
+                                    description = description,
+                                    actionLabel = if (allowMultiSelect) "确认所选文件" else "选择当前文件",
+                                    pickMode = FileManagerPickerMode.FILES,
+                                    allowMultiSelect = allowMultiSelect,
+                                    systemPickerLabel = "打开系统选择器",
+                                    onOpenSystemPicker = onOpenSystemPicker
+                                ),
+                                onFilesPicked = onPicked
+                            )
+                        }
+                    )
+
+                    AnimatedVisibility(
+                        visible = toolFileManagerOverlay != null,
+                        enter = fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 6 },
+                        exit = fadeOut(tween(180)) + slideOutHorizontally(tween(220)) { it / 6 }
+                    ) {
+                        val overlay = toolFileManagerOverlay
+                        if (overlay != null) {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                FileManagerScreen(
+                                    rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
+                                    initialPath = overlay.initialPath,
+                                    onBack = { toolFileManagerOverlay = null },
+                                    directoryPickerConfig = overlay.directoryPickerConfig,
+                                    onDirectoryPicked = { file ->
+                                        overlay.onDirectoryPicked?.invoke(file.absolutePath)
+                                        toolFileManagerOverlay = null
+                                    },
+                                    onFilesPicked = { files ->
+                                        overlay.onFilesPicked?.invoke(files.map { it.absolutePath })
+                                        toolFileManagerOverlay = null
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
             }
             DrawerDestination.DOWNLOAD_HISTORY -> {
                 DownloadHistoryScreen(
@@ -403,6 +488,18 @@ private fun AppDrawerContent(
         Spacer(Modifier.height(4.dp))
 
         // 5. 设置
+        NavigationDrawerItem(
+            icon = { Icon(Icons.Outlined.BuildCircle, contentDescription = null) },
+            label = { Text("素材工具") },
+            selected = currentDestination == DrawerDestination.TOOLS,
+            onClick = { onDestinationSelected(DrawerDestination.TOOLS) },
+            modifier = Modifier.padding(horizontal = 12.dp),
+            shape = smoothCornerShape(28.dp)
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        // 6. 设置
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
             label = { Text("设置") },

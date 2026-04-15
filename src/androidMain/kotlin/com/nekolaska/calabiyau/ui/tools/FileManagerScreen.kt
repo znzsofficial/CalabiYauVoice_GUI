@@ -1,9 +1,5 @@
 package com.nekolaska.calabiyau.ui
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -29,17 +25,26 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.DecimalFormat
-import java.text.SimpleDateFormat
-import java.util.*
-import kotlin.math.log10
-import kotlin.math.pow
+
+data class FileManagerDirectoryPickerConfig(
+    val title: String,
+    val description: String,
+    val actionLabel: String = "选择当前目录",
+    val pickMode: FileManagerPickerMode = FileManagerPickerMode.DIRECTORY,
+    val allowMultiSelect: Boolean = true,
+    val systemPickerLabel: String? = null,
+    val onOpenSystemPicker: (() -> Unit)? = null
+)
+
+enum class FileManagerPickerMode {
+    DIRECTORY,
+    FILES
+}
 
 /**
  * 内置文件管理器，支持：
@@ -50,10 +55,24 @@ import kotlin.math.pow
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
+fun FileManagerScreen(
+    rootPath: String,
+    onBack: () -> Unit,
+    initialPath: String? = null,
+    directoryPickerConfig: FileManagerDirectoryPickerConfig? = null,
+    onDirectoryPicked: ((File) -> Unit)? = null,
+    onFilesPicked: ((List<File>) -> Unit)? = null
+) {
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
-    var currentDir by remember { mutableStateOf(File(rootPath)) }
+    var currentDir by remember(rootPath, initialPath) {
+        mutableStateOf(
+            initialPath
+                ?.let(::File)
+                ?.takeIf { it.exists() && it.absolutePath.startsWith(File(rootPath).absolutePath) }
+                ?: File(rootPath)
+        )
+    }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var refreshCounter by remember { mutableIntStateOf(0) }
@@ -100,8 +119,12 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
     // 返回键处理：多选模式下先退出多选，子目录时返回上级，在根目录时退出
     val isAtRoot = currentDir.absolutePath == File(rootPath).absolutePath
     BackHandler(enabled = isSelectionMode) {
-        isSelectionMode = false
-        selectedFiles = emptySet()
+        if (directoryPickerConfig?.pickMode == FileManagerPickerMode.FILES && onFilesPicked != null) {
+            onBack()
+        } else {
+            isSelectionMode = false
+            selectedFiles = emptySet()
+        }
     }
     BackHandler(enabled = !isAtRoot && !isSelectionMode) {
         currentDir = currentDir.parentFile ?: currentDir
@@ -113,6 +136,12 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
             files.filter { it.absolutePath in selectedFiles }
         }
     }
+    val isPickerMode = directoryPickerConfig != null && (onDirectoryPicked != null || onFilesPicked != null)
+    val pickerConfig = if (isPickerMode) directoryPickerConfig else null
+    val pickerMode = pickerConfig?.pickMode ?: FileManagerPickerMode.DIRECTORY
+    val pickDirectory = if (pickerMode == FileManagerPickerMode.DIRECTORY && isPickerMode) onDirectoryPicked else null
+    val pickFiles = if (pickerMode == FileManagerPickerMode.FILES && isPickerMode) onFilesPicked else null
+    val canPickFiles = pickerMode == FileManagerPickerMode.FILES && pickFiles != null
 
     Scaffold(
         topBar = {
@@ -196,7 +225,11 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                             }
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (isAtRoot) "文件管理" else currentDir.name,
+                                    text = when {
+                                        pickerConfig != null && isAtRoot -> pickerConfig.title
+                                        isAtRoot -> "文件管理"
+                                        else -> currentDir.name
+                                    },
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
@@ -260,6 +293,21 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        if (isPickerMode) {
+                            item {
+                                DirectoryPickerBanner(
+                                    config = pickerConfig!!,
+                                    currentDir = currentDir,
+                                    selectedFiles = selectedFileObjects,
+                                    onPickCurrentDirectory = { pickDirectory?.invoke(currentDir) },
+                                    onPickSelectedFiles = {
+                                        if (selectedFileObjects.isNotEmpty()) {
+                                            pickFiles?.invoke(selectedFileObjects.filter { it.isFile })
+                                        }
+                                    }
+                                )
+                            }
+                        }
                         items(files, key = { it.absolutePath }) { file ->
                             val isSelected = file.absolutePath in selectedFiles
                             FileListItem(
@@ -276,6 +324,19 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                     } else {
                                         if (file.isDirectory) {
                                             currentDir = file
+                                        } else if (pickerMode == FileManagerPickerMode.DIRECTORY && isPickerMode) {
+                                            showSnack("当前模式仅支持选择目录")
+                                        } else if (canPickFiles && file.isFile) {
+                                            if (pickerConfig?.allowMultiSelect == true) {
+                                                selectedFiles = if (isSelected) {
+                                                    selectedFiles - file.absolutePath
+                                                } else {
+                                                    selectedFiles + file.absolutePath
+                                                }
+                                                isSelectionMode = selectedFiles.isNotEmpty()
+                                            } else {
+                                                pickFiles.invoke(listOf(file))
+                                            }
                                         } else if (file.isImageFile()) {
                                             val images = files.filter { it.isImageFile() }
                                             galleryImages = images
@@ -289,7 +350,18 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                                     }
                                 },
                                 onLongClick = {
-                                    if (!isSelectionMode) {
+                                    if (canPickFiles && file.isFile) {
+                                        if (pickerConfig?.allowMultiSelect == true) {
+                                            isSelectionMode = true
+                                            selectedFiles = if (isSelected) {
+                                                selectedFiles - file.absolutePath
+                                            } else {
+                                                selectedFiles + file.absolutePath
+                                            }
+                                        } else {
+                                            pickFiles.invoke(listOf(file))
+                                        }
+                                    } else if (!isSelectionMode) {
                                         // 长按进入多选模式并选中当前项
                                         isSelectionMode = true
                                         selectedFiles = setOf(file.absolutePath)
@@ -345,7 +417,7 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                             buildString {
                                 if (file.isFile) append(formatFileSize(file.length()))
                                 append(" · ")
-                                append(formatDate(file.lastModified()))
+                                append(formatDateTime(file.lastModified()))
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -651,10 +723,122 @@ fun FileManagerScreen(rootPath: String, onBack: () -> Unit) {
                     Spacer(Modifier.height(8.dp))
                     if (currentFile != null) {
                         Text(
-                            text = "${formatFileSize(currentFile.length())} · ${formatDate(currentFile.lastModified())}",
+                            text = "${formatFileSize(currentFile.length())} · ${formatDateTime(currentFile.lastModified())}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectoryPickerBanner(
+    config: FileManagerDirectoryPickerConfig,
+    currentDir: File,
+    selectedFiles: List<File>,
+    onPickCurrentDirectory: () -> Unit,
+    onPickSelectedFiles: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        shape = smoothCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(config.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                config.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(
+                shape = smoothCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest
+            ) {
+                Text(
+                    currentDir.absolutePath,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (config.pickMode == FileManagerPickerMode.FILES && config.allowMultiSelect) {
+                Text(
+                    text = if (selectedFiles.isEmpty()) "尚未选择文件" else "已选择 ${selectedFiles.size} 个文件",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            when (config.pickMode) {
+                FileManagerPickerMode.DIRECTORY -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = onPickCurrentDirectory,
+                            shape = smoothCornerShape(24.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(config.actionLabel)
+                        }
+                        config.systemPickerLabel?.let { label ->
+                            OutlinedButton(
+                                onClick = { config.onOpenSystemPicker?.invoke() },
+                                enabled = config.onOpenSystemPicker != null,
+                                shape = smoothCornerShape(24.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+                FileManagerPickerMode.FILES -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = onPickSelectedFiles,
+                            enabled = selectedFiles.isNotEmpty(),
+                            shape = smoothCornerShape(24.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                if (config.allowMultiSelect) {
+                                    "确认所选（${selectedFiles.size}）"
+                                } else {
+                                    config.actionLabel
+                                }
+                            )
+                        }
+                        config.systemPickerLabel?.let { label ->
+                            OutlinedButton(
+                                onClick = { config.onOpenSystemPicker?.invoke() },
+                                enabled = config.onOpenSystemPicker != null,
+                                shape = smoothCornerShape(24.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(label)
+                            }
+                        }
                     }
                 }
             }
@@ -735,7 +919,7 @@ private fun FileListItem(
                             append(formatFileSize(file.length()))
                         }
                         append(" · ")
-                        append(formatDate(file.lastModified()))
+                        append(formatDateTime(file.lastModified()))
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -873,88 +1057,3 @@ private fun getFileIcon(file: File): ImageVector {
     }
 }
 
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB")
-    val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
-    val idx = digitGroups.coerceIn(0, units.size - 1)
-    return DecimalFormat("#,##0.#").format(bytes / 1024.0.pow(idx.toDouble())) + " " + units[idx]
-}
-
-private fun formatDate(timestamp: Long): String {
-    if (timestamp <= 0) return ""
-    return SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(timestamp))
-}
-
-private fun getMimeType(file: File): String {
-    val ext = MimeTypeMap.getFileExtensionFromUrl(file.name)
-    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
-}
-
-private fun getFileUri(context: Context, file: File): Uri {
-    return try {
-        FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-    } catch (_: Exception) {
-        Uri.fromFile(file)
-    }
-}
-
-private fun openFile(context: Context, file: File, onError: (String) -> Unit) {
-    try {
-        val uri = getFileUri(context, file)
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, getMimeType(file))
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-    } catch (_: Exception) {
-        onError("无法打开该文件")
-    }
-}
-
-private fun shareFile(context: Context, file: File, onError: (String) -> Unit) {
-    try {
-        val uri = getFileUri(context, file)
-        val intent = Intent.createChooser(
-            Intent(Intent.ACTION_SEND).apply {
-                type = getMimeType(file)
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            },
-            null
-        )
-        context.startActivity(intent)
-    } catch (_: Exception) {
-        onError("分享失败")
-    }
-}
-
-private fun shareFiles(context: Context, fileList: List<File>, onError: (String) -> Unit) {
-    if (fileList.isEmpty()) return
-    if (fileList.size == 1) {
-        shareFile(context, fileList.first(), onError)
-        return
-    }
-    try {
-        val uris = ArrayList<Uri>()
-        for (f in fileList) {
-            uris.add(getFileUri(context, f))
-        }
-        val intent = Intent.createChooser(
-            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = "*/*"
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            },
-            null
-        )
-        context.startActivity(intent)
-    } catch (_: Exception) {
-        onError("分享失败")
-    }
-}
