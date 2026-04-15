@@ -1760,37 +1760,3 @@ private fun calculateWebViewCacheSize(context: android.content.Context): Long {
     return total
 }
 
-private fun formatFileSize(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024) return String.format("%.1f KB", kb)
-    val mb = kb / 1024.0
-    if (mb < 1024) return String.format("%.1f MB", mb)
-    val gb = mb / 1024.0
-    return String.format("%.2f GB", gb)
-}
-
-/**
- * 从 SAF 返回的 URI 中提取可读路径
- */
-private fun getPathFromUri(uri: Uri): String? {
-    // 对于 content:// URI，尝试解析实际路径
-    val docId = try {
-        android.provider.DocumentsContract.getTreeDocumentId(uri)
-    } catch (_: Exception) {
-        return uri.path
-    }
-
-    // 常见的 ExternalStorageProvider 格式: "primary:some/path"
-    val split = docId.split(":")
-    return when (split.size) {
-        2 if split[0].equals("primary", ignoreCase = true) -> {
-            "${android.os.Environment.getExternalStorageDirectory().absolutePath}/${split[1]}"
-        }
-        2 -> {
-            // 外部 SD 卡等
-            "/storage/${split[0]}/${split[1]}"
-        }
-        else -> uri.path
-    }
-}
