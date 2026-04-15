@@ -30,6 +30,7 @@ object AppPrefs {
     private const val KEY_WALLPAPER_SEED_COLOR_URL = "wallpaper_seed_color_url"
     private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
     private const val KEY_HOME_QUICK_ENTRY_IDS = "home_quick_entry_ids"
+    private const val KEY_TOOLS_OUTPUT_PATH = "tools_output_path"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -187,4 +188,10 @@ object AppPrefs {
         set(value) = prefs.edit {
             putString(KEY_HOME_QUICK_ENTRY_IDS, value.take(6).joinToString("|||"))
         }
+
+    /** 素材工具默认输出目录 */
+    var toolsOutputPath: String
+        get() = prefs.getString(KEY_TOOLS_OUTPUT_PATH, null)
+            ?: File(savePath, "素材工具").absolutePath
+        set(value) = prefs.edit { putString(KEY_TOOLS_OUTPUT_PATH, value) }
 }
