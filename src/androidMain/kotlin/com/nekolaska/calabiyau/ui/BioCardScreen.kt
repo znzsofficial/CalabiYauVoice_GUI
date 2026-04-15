@@ -32,6 +32,13 @@ import com.nekolaska.calabiyau.data.BioCardApi
 import com.nekolaska.calabiyau.data.BioCardApi.MobileCard
 import com.nekolaska.calabiyau.data.BioCardApi.PcCard
 import com.nekolaska.calabiyau.data.BioCardApi.SharedDeck
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.LoadingState
+import com.nekolaska.calabiyau.ui.shared.SearchBar
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import kotlinx.coroutines.launch
 
 private enum class BioCardTab { PC, MOBILE, DECK }
@@ -207,6 +214,7 @@ fun BioCardScreen(
                             onCategoryChange = { pcCategory = it },
                             onRarityChange = { pcRarity = it }
                         )
+
                         BioCardTab.MOBILE -> MobileFilterBar(
                             factions = mobileFactions,
                             categories = mobileCategories,
@@ -217,6 +225,7 @@ fun BioCardScreen(
                             onCategoryChange = { mobileCategory = it },
                             onRarityChange = { mobileRarity = it }
                         )
+
                         BioCardTab.DECK -> DeckFilterBar(
                             factions = deckFactions,
                             selectedFaction = deckFaction,
@@ -246,6 +255,7 @@ fun BioCardScreen(
                             }
                         }
                     }
+
                     BioCardTab.MOBILE -> {
                         if (filteredMobile.isEmpty()) {
                             item { EmptyBioCardState("没有匹配的移动端卡牌") }
@@ -267,6 +277,7 @@ fun BioCardScreen(
                             }
                         }
                     }
+
                     BioCardTab.DECK -> {
                         if (filteredDecks.isEmpty()) {
                             item { EmptyBioCardState("没有匹配的卡组") }
@@ -278,8 +289,7 @@ fun BioCardScreen(
                                 BioInfoCard(
                                     imageUrl = null,
                                     title = deck.title,
-                                    subtitle = listOf(deck.faction, deck.author.takeIf { it.isNotBlank() })
-                                        .filterNotNull()
+                                    subtitle = listOfNotNull(deck.faction, deck.author.takeIf { it.isNotBlank() })
                                         .joinToString(" · "),
                                     accentColor = MaterialTheme.colorScheme.tertiary,
                                     icon = Icons.Outlined.BrowseGallery,
@@ -591,7 +601,7 @@ private fun DeckDetailSheet(
 
     CardDetailSheet(
         title = deck.title,
-        subtitle = listOf(deck.faction, deck.author.takeIf { it.isNotBlank() }).filterNotNull().joinToString(" · "),
+        subtitle = listOfNotNull(deck.faction, deck.author.takeIf { it.isNotBlank() }).joinToString(" · "),
         imageUrl = null,
         badge = "卡组",
         badgeColor = MaterialTheme.colorScheme.tertiary,

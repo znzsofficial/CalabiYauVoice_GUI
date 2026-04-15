@@ -36,8 +36,8 @@ import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.OfflineCache
 import com.nekolaska.calabiyau.data.UpdateApi
 import com.nekolaska.calabiyau.data.WikiEngine
-import com.nekolaska.calabiyau.ui.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.ui.MainScreen
+import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.ui.navigation.MainScreen
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel

@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.character
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -20,6 +20,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterListApi
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
@@ -33,9 +37,10 @@ fun CharacterListScreen(
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null
 ) {
-    val state = rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
-        CharacterListApi.fetchAllFactions(force)
-    }
+    val state =
+        rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
+            CharacterListApi.fetchAllFactions(force)
+        }
     var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     Scaffold(

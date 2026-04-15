@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.shared
 
 import android.os.Build
 import androidx.compose.material3.MaterialTheme

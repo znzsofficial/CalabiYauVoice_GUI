@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.weapon
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -20,6 +20,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponListApi
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
@@ -33,9 +38,10 @@ fun WeaponListScreen(
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null
 ) {
-    val state = rememberLoadState(emptyList<WeaponListApi.WeaponCategoryData>()) { force ->
-        WeaponListApi.fetchAllCategories(force)
-    }
+    val state =
+        rememberLoadState(emptyList<WeaponListApi.WeaponCategoryData>()) { force ->
+            WeaponListApi.fetchAllCategories(force)
+        }
     var selectedTab by remember { mutableIntStateOf(initialTab) }
 
     Scaffold(
@@ -250,13 +256,22 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
                         shape = smoothCornerShape(16.dp)
                     )
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                        ShimmerBox(Modifier.fillMaxWidth(0.7f).height(14.dp))
+                        ShimmerBox(
+                            Modifier.fillMaxWidth(0.7f).height(14.dp)
+                        )
                         Spacer(Modifier.height(4.dp))
-                        ShimmerBox(Modifier.fillMaxWidth(0.55f).height(10.dp))
+                        ShimmerBox(
+                            Modifier.fillMaxWidth(0.55f).height(10.dp)
+                        )
                         Spacer(Modifier.height(6.dp))
-                        ShimmerBox(Modifier.fillMaxWidth(0.4f).height(10.dp))
+                        ShimmerBox(
+                            Modifier.fillMaxWidth(0.4f).height(10.dp)
+                        )
                         Spacer(Modifier.height(6.dp))
-                        ShimmerBox(Modifier.width(48.dp).height(18.dp), shape = smoothCapsuleShape())
+                        ShimmerBox(
+                            Modifier.width(48.dp).height(18.dp),
+                            shape = smoothCapsuleShape()
+                        )
                     }
                 }
             }

@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.download
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,8 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import data.DownloadRecord
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +101,7 @@ fun DownloadHistoryScreen(
 private fun DownloadHistoryItem(record: DownloadRecord) {
     val isError = record.status == "error"
     val dateFormat = remember {
-        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
     }
 
     Card(
@@ -150,7 +154,7 @@ private fun DownloadHistoryItem(record: DownloadRecord) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = dateFormat.format(java.util.Date(record.timestamp)),
+                        text = dateFormat.format(Date(record.timestamp)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

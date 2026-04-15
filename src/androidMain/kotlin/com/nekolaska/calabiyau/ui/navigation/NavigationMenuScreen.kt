@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -27,6 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.NavigationMenuApi
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.LoadingState
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  Wiki 导航页 —— 原生客户端版 (MD3 Expressive)
@@ -50,9 +54,10 @@ fun NavigationMenuScreen(
     onOpenWikiUrl: (String) -> Unit,
     embedded: Boolean = false
 ) {
-    val state = rememberLoadState(emptyList<NavigationMenuApi.NavSection>()) { force ->
-        NavigationMenuApi.fetchNavigationSections(force)
-    }
+    val state =
+        rememberLoadState(emptyList<NavigationMenuApi.NavSection>()) { force ->
+            NavigationMenuApi.fetchNavigationSections(force)
+        }
     val sections = state.data
     var expandedSections by remember { mutableStateOf<Set<String>>(emptySet()) }
 

@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.shared
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -23,17 +23,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import data.ApiResult
+import data.ErrorKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -295,31 +298,31 @@ fun ErrorState(
     message: String,
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    kind: data.ErrorKind = data.ErrorKind.UNKNOWN
+    kind: ErrorKind = ErrorKind.UNKNOWN
 ) {
     val icon = when (kind) {
-        data.ErrorKind.NETWORK -> Icons.Outlined.WifiOff
-        data.ErrorKind.TIMEOUT -> Icons.Outlined.Timer
-        data.ErrorKind.CDN_BLOCKED -> Icons.Outlined.Shield
-        data.ErrorKind.PARSE -> Icons.Outlined.BrokenImage
-        data.ErrorKind.NOT_FOUND -> Icons.Outlined.SearchOff
-        data.ErrorKind.UNKNOWN -> Icons.Outlined.ErrorOutline
+        ErrorKind.NETWORK -> Icons.Outlined.WifiOff
+        ErrorKind.TIMEOUT -> Icons.Outlined.Timer
+        ErrorKind.CDN_BLOCKED -> Icons.Outlined.Shield
+        ErrorKind.PARSE -> Icons.Outlined.BrokenImage
+        ErrorKind.NOT_FOUND -> Icons.Outlined.SearchOff
+        ErrorKind.UNKNOWN -> Icons.Outlined.ErrorOutline
     }
     val friendlyTitle = when (kind) {
-        data.ErrorKind.NETWORK -> "无法连接网络"
-        data.ErrorKind.TIMEOUT -> "请求超时"
-        data.ErrorKind.CDN_BLOCKED -> "访问被拦截"
-        data.ErrorKind.PARSE -> "数据解析失败"
-        data.ErrorKind.NOT_FOUND -> "未找到数据"
-        data.ErrorKind.UNKNOWN -> "加载失败"
+        ErrorKind.NETWORK -> "无法连接网络"
+        ErrorKind.TIMEOUT -> "请求超时"
+        ErrorKind.CDN_BLOCKED -> "访问被拦截"
+        ErrorKind.PARSE -> "数据解析失败"
+        ErrorKind.NOT_FOUND -> "未找到数据"
+        ErrorKind.UNKNOWN -> "加载失败"
     }
     val friendlyHint = when (kind) {
-        data.ErrorKind.NETWORK -> "请检查网络连接后重试"
-        data.ErrorKind.TIMEOUT -> "服务器响应缓慢，请稍后重试"
-        data.ErrorKind.CDN_BLOCKED -> "请求被 CDN 拦截，请稍后重试"
-        data.ErrorKind.PARSE -> "数据格式异常，请稍后重试"
-        data.ErrorKind.NOT_FOUND -> "没有可展示的内容"
-        data.ErrorKind.UNKNOWN -> "请检查网络后重试"
+        ErrorKind.NETWORK -> "请检查网络连接后重试"
+        ErrorKind.TIMEOUT -> "服务器响应缓慢，请稍后重试"
+        ErrorKind.CDN_BLOCKED -> "请求被 CDN 拦截，请稍后重试"
+        ErrorKind.PARSE -> "数据格式异常，请稍后重试"
+        ErrorKind.NOT_FOUND -> "没有可展示的内容"
+        ErrorKind.UNKNOWN -> "请检查网络后重试"
     }
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -355,7 +358,7 @@ fun ErrorState(
                 textAlign = TextAlign.Center
             )
             // 仅在未识别的通用错误时显示原始信息作为补充
-            if (kind == data.ErrorKind.UNKNOWN && message.isNotBlank()) {
+            if (kind == ErrorKind.UNKNOWN && message.isNotBlank()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     message,
@@ -499,7 +502,7 @@ fun Modifier.shimmerEffect(): Modifier {
 @Composable
 fun ShimmerBox(
     modifier: Modifier = Modifier,
-    shape: androidx.compose.ui.graphics.Shape = smoothCornerShape(8.dp)
+    shape: Shape = smoothCornerShape(8.dp)
 ) {
     Box(
         modifier = modifier
@@ -564,7 +567,7 @@ fun SkeletonChipRow(
 fun SkeletonTextLine(
     modifier: Modifier = Modifier,
     widthFraction: Float = 0.85f,
-    height: androidx.compose.ui.unit.Dp = 14.dp
+    height: Dp = 14.dp
 ) {
     ShimmerBox(modifier.fillMaxWidth(widthFraction).height(height))
 }

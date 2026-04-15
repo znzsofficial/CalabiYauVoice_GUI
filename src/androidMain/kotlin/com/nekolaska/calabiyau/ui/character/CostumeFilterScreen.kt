@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.character
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -30,6 +30,12 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CostumeFilterApi
 import com.nekolaska.calabiyau.data.CostumeFilterApi.CostumeInfo
 import com.nekolaska.calabiyau.data.CostumeFilterApi.Quality
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.SearchBar
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  角色时装筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -232,9 +238,13 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
                             shape = smoothCornerShape(14.dp)
                         )
                         Spacer(Modifier.height(8.dp))
-                        ShimmerBox(Modifier.fillMaxWidth(0.75f).height(12.dp))
+                        ShimmerBox(
+                            Modifier.fillMaxWidth(0.75f).height(12.dp)
+                        )
                         Spacer(Modifier.height(6.dp))
-                        ShimmerBox(Modifier.fillMaxWidth(0.5f).height(10.dp))
+                        ShimmerBox(
+                            Modifier.fillMaxWidth(0.5f).height(10.dp)
+                        )
                         Spacer(Modifier.height(8.dp))
                     }
                 }

@@ -29,6 +29,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.BalanceDataApi
+import com.nekolaska.calabiyau.ui.shared.ErrorState
+import com.nekolaska.calabiyau.ui.shared.LoadingState
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import data.ApiResult
 import kotlinx.coroutines.launch
 
@@ -688,10 +691,10 @@ private fun HeroRow(
 
 @Composable
 private fun DataCell(
+    modifier: Modifier = Modifier,
     value: String,
     isHighlight: Boolean,
-    color: Color? = null,
-    modifier: Modifier = Modifier
+    color: Color? = null
 ) {
     Text(
         text = value,
