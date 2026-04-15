@@ -429,8 +429,8 @@ object CharacterDetailApi {
             positionDuty = other.positionDuty.ifBlank { base.positionDuty },
             settingSummary = other.settingSummary.ifBlank { base.settingSummary },
             settingObserverQuote = other.settingObserverQuote.ifBlank { base.settingObserverQuote },
-            lifeInfo = if (other.lifeInfo.isNotEmpty()) other.lifeInfo else base.lifeInfo,
-            relations = if (other.relations.isNotEmpty()) other.relations else base.relations
+            lifeInfo = other.lifeInfo.ifEmpty { base.lifeInfo },
+            relations = other.relations.ifEmpty { base.relations }
         )
     }
 

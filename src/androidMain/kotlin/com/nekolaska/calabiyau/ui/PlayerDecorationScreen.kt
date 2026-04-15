@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,6 +33,7 @@ import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.ShimmerBox
 import com.nekolaska.calabiyau.ui.shared.ZoomableImage
 import com.nekolaska.calabiyau.ui.shared.rememberLoadState
@@ -89,9 +89,7 @@ fun PlayerDecorationScreen(
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
                     if (sections.isNotEmpty()) {

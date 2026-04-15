@@ -60,7 +60,7 @@ class CrashReportActivity : ComponentActivity() {
     }
 
     private fun copyToClipboard(text: String) {
-        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("崩溃日志", text))
         Toast.makeText(this, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
     }
