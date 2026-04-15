@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -32,6 +31,7 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterDetailApi
 import com.nekolaska.calabiyau.data.CharacterDetailApi.CharacterDetail
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.InfoChip
 import com.nekolaska.calabiyau.ui.shared.SectionTitle
 import com.nekolaska.calabiyau.ui.shared.ShimmerBox
@@ -85,12 +85,10 @@ fun CharacterDetailScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
+                    FilledTonalIconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 },

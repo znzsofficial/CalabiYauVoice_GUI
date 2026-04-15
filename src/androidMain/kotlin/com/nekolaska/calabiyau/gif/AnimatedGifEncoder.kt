@@ -8,6 +8,8 @@ import java.io.BufferedOutputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
+import androidx.core.graphics.createBitmap
+import kotlin.math.roundToInt
 
 
 /**
@@ -88,7 +90,7 @@ class AnimatedGifEncoder {
      * int delay time in milliseconds
      */
     fun setDelay(ms: Int) {
-        delay = Math.round(ms / 10.0f)
+        delay = (ms / 10.0f).roundToInt()
     }
 
     /**
@@ -240,7 +242,7 @@ class AnimatedGifEncoder {
      */
     fun setFrameRate(fps: Float) {
         if (fps != 0f) {
-            delay = Math.round(100f / fps)
+            delay = (100f / fps).roundToInt()
         }
     }
 
@@ -418,7 +420,7 @@ class AnimatedGifEncoder {
             if ((w != width) || (h != height)) {
                 // create new image with right size/format
                 val temp =
-                    Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    createBitmap(width, height)
                 val canvas = Canvas(temp)
                 canvas.drawBitmap(temp, 0f, 0f, null)
                 image = temp
@@ -585,7 +587,7 @@ class AnimatedGifEncoder {
     @Throws(IOException::class)
     private fun writeString(s: String) {
         for (i in 0..<s.length) {
-            out!!.write(s.get(i).code.toByte().toInt())
+            out!!.write(s[i].code.toByte().toInt())
         }
     }
 

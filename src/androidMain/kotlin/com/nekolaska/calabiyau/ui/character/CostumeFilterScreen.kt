@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +30,7 @@ import com.nekolaska.calabiyau.data.CostumeFilterApi
 import com.nekolaska.calabiyau.data.CostumeFilterApi.CostumeInfo
 import com.nekolaska.calabiyau.data.CostumeFilterApi.Quality
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.SearchBar
 import com.nekolaska.calabiyau.ui.shared.ShimmerBox
 import com.nekolaska.calabiyau.ui.shared.rememberLoadState
@@ -77,12 +77,7 @@ fun CostumeFilterScreen(
             TopAppBar(
                 title = { Text("角色时装", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
                     if (allCostumes.isNotEmpty()) {

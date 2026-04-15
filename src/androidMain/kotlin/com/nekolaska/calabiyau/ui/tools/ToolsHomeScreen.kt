@@ -14,8 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,7 +26,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -51,8 +50,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -60,11 +59,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.gif.AnimatedGifEncoder
 import com.nekolaska.calabiyau.gif.GifDecoder
 import com.nekolaska.calabiyau.gif.StandardGifDecoder
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
 import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
@@ -75,13 +77,10 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.nio.ByteBuffer
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import androidx.core.graphics.scale
-import androidx.core.graphics.createBitmap
 
 private enum class ToolsSection(
     val title: String,
@@ -195,7 +194,7 @@ private data class DirectorySummary(
 
 private object DefaultGifBitmapProvider : GifDecoder.BitmapProvider {
     override fun obtain(width: Int, height: Int, config: Bitmap.Config): Bitmap =
-        Bitmap.createBitmap(width, height, config)
+        createBitmap(width, height, config)
 
     override fun release(bitmap: Bitmap) {
         if (!bitmap.isRecycled) bitmap.recycle()
@@ -380,22 +379,14 @@ private fun ToolsTopBar(
         LargeTopAppBar(
             title = { Text("素材工具") },
             navigationIcon = {
-                TextButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    Spacer(Modifier.size(4.dp))
-                    Text("返回")
-                }
+                BackNavButton(onClick = onBack)
             }
         )
     } else {
         TopAppBar(
             title = { Text(sectionTitle) },
             navigationIcon = {
-                TextButton(onClick = onBackToHome) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    Spacer(Modifier.size(4.dp))
-                    Text("返回")
-                }
+                BackNavButton(onClick = onBackToHome)
             },
             actions = {
                 if (onOpenOutputDirectory != null) {

@@ -5,7 +5,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.OpenInBrowser
@@ -21,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.MapDetailApi
 import com.nekolaska.calabiyau.data.MapDetailApi.MapDetail
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.ErrorState
 import com.nekolaska.calabiyau.ui.shared.LoadingState
 import com.nekolaska.calabiyau.ui.shared.SectionTitle
@@ -63,12 +63,10 @@ fun MapDetailScreen(
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = {
+                    FilledTonalIconButton(onClick = {
                         val enc = java.net.URLEncoder.encode(mapName, "UTF-8").replace("+", "%20")
                         onOpenWikiUrl("https://wiki.biligame.com/klbq/$enc")
                     }) {

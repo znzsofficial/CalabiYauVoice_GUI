@@ -13,7 +13,7 @@ internal class LZWEncoder(
     private val pixAry: ByteArray,
     color_depth: Int
 ) {
-    private val initCodeSize: Int
+    private val initCodeSize: Int = max(2, color_depth)
 
     private var remaining = 0
 
@@ -95,11 +95,6 @@ internal class LZWEncoder(
     // Define the storage for the packet accumulator
     var accum: ByteArray = ByteArray(256)
 
-    // ----------------------------------------------------------------------------
-    init {
-        initCodeSize = max(2, color_depth)
-    }
-
     // Add a character to the end of the current packet, and if it is 254
     // characters, flush the packet to disk.
     @Throws(IOException::class)
@@ -131,8 +126,6 @@ internal class LZWEncoder(
         var c: Int
         var ent: Int
         var disp: Int
-        val hsize_reg: Int
-        var hshift: Int
 
         // Set up the globals: g_init_bits - initial number of bits
         g_init_bits = init_bits
@@ -150,7 +143,7 @@ internal class LZWEncoder(
 
         ent = nextPixel()
 
-        hshift = 0
+        var hshift: Int = 0
         fcode = hsize
         while (fcode < 65536) {
             ++hshift
@@ -158,7 +151,7 @@ internal class LZWEncoder(
         }
         hshift = 8 - hshift // set hash code range bound
 
-        hsize_reg = hsize
+        val hsize_reg: Int = hsize
         cl_hash(hsize_reg) // clear hash table
 
         output(ClearCode, outs)
@@ -239,8 +232,8 @@ internal class LZWEncoder(
     fun output(code: Int, outs: OutputStream) {
         cur_accum = cur_accum and masks!![cur_bits]
 
-        if (cur_bits > 0) cur_accum = cur_accum or (code shl cur_bits)
-        else cur_accum = code
+        cur_accum = if (cur_bits > 0) cur_accum or (code shl cur_bits)
+        else code
 
         cur_bits += n_bits
 
@@ -258,8 +251,8 @@ internal class LZWEncoder(
                 clear_flg = false
             } else {
                 ++n_bits
-                if (n_bits == maxbits) maxcode = maxmaxcode
-                else maxcode = MAXCODE(n_bits)
+                maxcode = if (n_bits == maxbits) maxmaxcode
+                else MAXCODE(n_bits)
             }
         }
 
@@ -276,7 +269,7 @@ internal class LZWEncoder(
     }
 
     companion object {
-        private val EOF = -1
+        private const val EOF = -1
 
         // GIFCOMPR.C - GIF Image compression routines
         //

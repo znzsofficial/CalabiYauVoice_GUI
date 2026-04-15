@@ -62,8 +62,12 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .build()
 
-        NotificationManagerCompat.from(context)
-            .notify(NOTIFICATION_ID_BASE + notificationCounter++, notification)
+        try {
+            NotificationManagerCompat.from(context)
+                .notify(NOTIFICATION_ID_BASE + notificationCounter++, notification)
+        } catch (_: SecurityException) {
+            // 权限在运行时被撤销或系统拒绝时，安全忽略，避免崩溃
+        }
     }
 
     /** 发送下载失败通知 */
@@ -77,8 +81,12 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context)
-            .notify(NOTIFICATION_ID_BASE + notificationCounter++, notification)
+        try {
+            NotificationManagerCompat.from(context)
+                .notify(NOTIFICATION_ID_BASE + notificationCounter++, notification)
+        } catch (_: SecurityException) {
+            // 权限在运行时被撤销或系统拒绝时，安全忽略，避免崩溃
+        }
     }
 
     private fun hasNotificationPermission(context: Context): Boolean {

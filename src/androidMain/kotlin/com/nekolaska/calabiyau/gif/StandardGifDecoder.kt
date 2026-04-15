@@ -202,7 +202,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
             }
             if (status == GifDecoder.STATUS_FORMAT_ERROR || status == GifDecoder.STATUS_OPEN_ERROR) {
                 if (Log.isLoggable(TAG, Log.DEBUG)) {
-                    Log.d(TAG, "Unable to decode frame, status=" + status)
+                    Log.d(TAG, "Unable to decode frame, status=$status")
                 }
                 return null
             }
@@ -276,9 +276,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         }
 
         try {
-            if (`is` != null) {
-                `is`.close()
-            }
+            `is`?.close()
         } catch (e: IOException) {
             Log.w(TAG, "Error closing stream", e)
         }
@@ -313,7 +311,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         sampleSize: Int
     ) {
         var sampleSize = sampleSize
-        require(sampleSize > 0) { "Sample size must be >=0, not: " + sampleSize }
+        require(sampleSize > 0) { "Sample size must be >=0, not: $sampleSize" }
         // Make sure sample size is a power of 2.
         sampleSize = Integer.highestOneBit(sampleSize)
         this.status = GifDecoder.STATUS_OK
@@ -592,10 +590,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         }
 
         if (this.isFirstFrameTransparent == null) {
-            this.isFirstFrameTransparent = if (isFirstFrameTransparent == null)
-                false
-            else
-                isFirstFrameTransparent
+            this.isFirstFrameTransparent = isFirstFrameTransparent ?: false
         }
     }
 
@@ -642,10 +637,10 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
             }
             i++
         }
-        if (totalAdded == 0) {
-            return COLOR_TRANSPARENT_BLACK
+        return if (totalAdded == 0) {
+            COLOR_TRANSPARENT_BLACK
         } else {
-            return (((alphaSum / totalAdded) shl 24)
+            (((alphaSum / totalAdded) shl 24)
                     or ((redSum / totalAdded) shl 16)
                     or ((greenSum / totalAdded) shl 8)
                     or (blueSum / totalAdded))
@@ -845,13 +840,13 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         private val TAG: String = StandardGifDecoder::class.java.getSimpleName()
 
         /** Maximum pixel stack size for decoding LZW compressed data.  */
-        private val MAX_STACK_SIZE = 4 * 1024
+        private const val MAX_STACK_SIZE = 4 * 1024
 
-        private val NULL_CODE = -1
+        private const val NULL_CODE = -1
 
-        private val INITIAL_FRAME_POINTER = -1
+        private const val INITIAL_FRAME_POINTER = -1
 
-        private val BYTES_PER_INTEGER = Integer.SIZE / 8
+        private const val BYTES_PER_INTEGER = Integer.SIZE / 8
 
         private const val MASK_INT_LOWEST_BYTE = 0x000000FF
 

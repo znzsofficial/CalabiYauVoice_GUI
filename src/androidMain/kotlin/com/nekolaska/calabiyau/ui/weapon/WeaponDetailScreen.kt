@@ -3,7 +3,6 @@ package com.nekolaska.calabiyau.ui.weapon
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.*
@@ -22,6 +21,7 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponDetailApi
 import com.nekolaska.calabiyau.data.WeaponDetailApi.WeaponDetail
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.InfoChip
 import com.nekolaska.calabiyau.ui.shared.SectionTitle
 import com.nekolaska.calabiyau.ui.shared.ShimmerBox
@@ -66,12 +66,10 @@ fun WeaponDetailScreen(
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
+                    FilledTonalIconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 },

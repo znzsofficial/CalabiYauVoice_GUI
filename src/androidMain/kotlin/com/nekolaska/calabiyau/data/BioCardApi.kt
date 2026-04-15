@@ -260,7 +260,7 @@ object BioCardApi {
             RegexOption.DOT_MATCHES_ALL
         )
 
-        return itemRegex.findAll(html).mapNotNull { match ->
+        return itemRegex.findAll(html).map { match ->
             val attrs = match.groupValues[1]
             val body = match.groupValues[2]
             val values = fieldRegex.findAll(body).associate {

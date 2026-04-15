@@ -86,7 +86,7 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
         return map
     }
 
-    /*
+    /**
      * Insertion sort of network and building of netindex[0..255] (to do after
      * unbias)
      * -------------------------------------------------------------------------------
@@ -193,14 +193,12 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
         }
 
         // fprintf(stderr,"beginning 1D learning: initial radius=%d\n", rad);
-        if (lengthcount < minpicturebytes) step = 3
-        else if ((lengthcount % prime1) != 0) step = 3 * prime1
-        else {
-            if ((lengthcount % prime2) != 0) step = 3 * prime2
-            else {
-                if ((lengthcount % prime3) != 0) step = 3 * prime3
-                else step = 3 * prime4
-            }
+        step = when {
+            lengthcount < minpicturebytes -> 3
+            (lengthcount % prime1) != 0 -> 3 * prime1
+            (lengthcount % prime2) != 0 -> 3 * prime2
+            (lengthcount % prime3) != 0 -> 3 * prime3
+            else -> 3 * prime4
         }
 
         i = 0
@@ -451,7 +449,7 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
 
         protected const val prime4: Int = 503
 
-        protected val minpicturebytes: Int = (3 * prime4)
+        protected const val minpicturebytes: Int = (3 * prime4)
 
         /* minimum size for input image */ /*
    * Program Skeleton ---------------- [select samplefac in range 1..30] [read
@@ -463,7 +461,7 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
         /*
    * Network Definitions -------------------
    */
-        protected val maxnetpos: Int = (netsize - 1)
+        protected const val maxnetpos: Int = (netsize - 1)
 
         protected const val netbiasshift: Int = 4 /* bias for colour values */
 
@@ -472,11 +470,11 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
         /* defs for freq and bias */
         protected const val intbiasshift: Int = 16 /* bias for fractions */
 
-        protected val intbias: Int = (1 shl intbiasshift)
+        protected const val intbias: Int = (1 shl intbiasshift)
 
         protected const val gammashift: Int = 10 /* gamma = 1024 */
 
-        protected val gamma: Int = (1 shl gammashift)
+        protected const val gamma: Int = (1 shl gammashift)
 
         protected const val betashift: Int = 10
 
@@ -485,14 +483,14 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
         protected val betagamma: Int = (intbias shl (gammashift - betashift))
 
         /* defs for decreasing radius factor */
-        protected val initrad: Int = (netsize shr 3) /*
+        protected const val initrad: Int = (netsize shr 3) /*
                                                          * for 256 cols, radius
                                                          * starts
                                                          */
 
         protected const val radiusbiasshift: Int = 6 /* at 32.0 biased by 6 bits */
 
-        protected val radiusbias: Int = (1 shl radiusbiasshift)
+        protected const val radiusbias: Int = (1 shl radiusbiasshift)
 
         protected val initradius: Int = (initrad * radiusbias) /*
                                                                    * and
@@ -505,14 +503,14 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
         /* defs for decreasing alpha factor */
         protected const val alphabiasshift: Int = 10 /* alpha starts at 1.0 */
 
-        protected val initalpha: Int = (1 shl alphabiasshift)
+        protected const val initalpha: Int = (1 shl alphabiasshift)
 
         /* radbias and alpharadbias used for radpower calculation */
         protected const val radbiasshift: Int = 8
 
-        protected val radbias: Int = (1 shl radbiasshift)
+        protected const val radbias: Int = (1 shl radbiasshift)
 
-        protected val alpharadbshift: Int = (alphabiasshift + radbiasshift)
+        protected const val alpharadbshift: Int = (alphabiasshift + radbiasshift)
 
         protected val alpharadbias: Int = (1 shl alpharadbshift)
     }

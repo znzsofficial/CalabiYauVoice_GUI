@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HowToVote
 import androidx.compose.material.icons.outlined.*
@@ -24,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.VotingApi
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.ErrorState
 import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
@@ -94,9 +94,7 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                        }
+                        BackNavButton(onClick = onBack)
                     },
                     actions = {
                         // 刷新按钮
