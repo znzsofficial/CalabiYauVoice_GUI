@@ -18,6 +18,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.GameModeApi
 import com.nekolaska.calabiyau.data.GameModeApi.GameModeDetail
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.LoadingState
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  战斗模式页 —— 原生客户端版 (MD3 Expressive)

@@ -24,6 +24,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.VotingApi
+import com.nekolaska.calabiyau.ui.shared.ErrorState
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
 

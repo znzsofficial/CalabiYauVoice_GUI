@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.character
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -31,6 +31,18 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterDetailApi
 import com.nekolaska.calabiyau.data.CharacterDetailApi.CharacterDetail
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.InfoChip
+import com.nekolaska.calabiyau.ui.shared.SectionTitle
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.SkeletonCard
+import com.nekolaska.calabiyau.ui.shared.SkeletonChipRow
+import com.nekolaska.calabiyau.ui.shared.SkeletonSectionTitle
+import com.nekolaska.calabiyau.ui.shared.SkeletonStatRow
+import com.nekolaska.calabiyau.ui.shared.SkeletonTextLine
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  角色详情页 —— 原生客户端版 (MD3 Expressive)
@@ -47,7 +59,10 @@ fun CharacterDetailScreen(
     onOpenWeaponSkins: ((String) -> Unit)? = null,
     onOpenWeaponDetail: ((String) -> Unit)? = null
 ) {
-    val state = rememberLoadState<CharacterDetail?>(null, key = characterName) { force ->
+    val state = rememberLoadState<CharacterDetail?>(
+        null,
+        key = characterName
+    ) { force ->
         CharacterDetailApi.fetchCharacterDetail(characterName, force)
     }
     val wikiUrl = remember(characterName) {
@@ -410,7 +425,10 @@ private fun PositionInfoCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.Outlined.Explore, title = "定位说明")
+            SectionTitle(
+                icon = Icons.Outlined.Explore,
+                title = "定位说明"
+            )
             Spacer(Modifier.height(12.dp))
 
             if (positionName.isNotBlank()) {
@@ -601,7 +619,10 @@ private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = nul
         enabled = onClick != null
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.Outlined.GpsFixed, title = "专属武器")
+            SectionTitle(
+                icon = Icons.Outlined.GpsFixed,
+                title = "专属武器"
+            )
             Spacer(Modifier.height(12.dp))
 
             // 武器名 + 类型
@@ -665,7 +686,10 @@ private fun PersonalInfoCard(items: List<Pair<String, String>>) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.Outlined.FavoriteBorder, title = "个人特质")
+            SectionTitle(
+                icon = Icons.Outlined.FavoriteBorder,
+                title = "个人特质"
+            )
             Spacer(Modifier.height(12.dp))
 
             items.forEachIndexed { index, (label, value) ->
@@ -699,7 +723,10 @@ private fun SettingExtraCard(detail: CharacterDetail) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.AutoMirrored.Outlined.Article, title = "设定补充")
+            SectionTitle(
+                icon = Icons.AutoMirrored.Outlined.Article,
+                title = "设定补充"
+            )
 
             if (detail.settingSummary.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
@@ -857,7 +884,10 @@ private fun SubPagesCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.AutoMirrored.Outlined.Article, title = "更多内容")
+            SectionTitle(
+                icon = Icons.AutoMirrored.Outlined.Article,
+                title = "更多内容"
+            )
             Spacer(Modifier.height(8.dp))
 
             subPages.forEachIndexed { index, page ->
@@ -920,7 +950,10 @@ private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.Outlined.AutoAwesome, title = "角色技能")
+            SectionTitle(
+                icon = Icons.Outlined.AutoAwesome,
+                title = "角色技能"
+            )
             Spacer(Modifier.height(12.dp))
 
             skills.forEachIndexed { index, skill ->
@@ -1037,7 +1070,10 @@ private fun StoriesCard(
     ) {
         Column(Modifier.padding(20.dp)) {
             if (characterStories.isNotEmpty()) {
-                SectionTitle(icon = Icons.AutoMirrored.Outlined.MenuBook, title = "角色故事")
+                SectionTitle(
+                    icon = Icons.AutoMirrored.Outlined.MenuBook,
+                    title = "角色故事"
+                )
                 Spacer(Modifier.height(10.dp))
                 StoryRow(stories = characterStories, onOpenWikiUrl = onOpenWikiUrl)
             }
@@ -1046,7 +1082,10 @@ private fun StoriesCard(
                 if (characterStories.isNotEmpty()) {
                     Spacer(Modifier.height(16.dp))
                 }
-                SectionTitle(icon = Icons.Outlined.AutoStories, title = "相关剧情")
+                SectionTitle(
+                    icon = Icons.Outlined.AutoStories,
+                    title = "相关剧情"
+                )
                 Spacer(Modifier.height(10.dp))
                 StoryRow(stories = relatedStories, onOpenWikiUrl = onOpenWikiUrl)
             }
@@ -1139,7 +1178,10 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(icon = Icons.Outlined.History, title = "更新改动历史")
+            SectionTitle(
+                icon = Icons.Outlined.History,
+                title = "更新改动历史"
+            )
             Spacer(Modifier.height(12.dp))
 
             visibleHistory.forEach { entry ->
@@ -1219,7 +1261,10 @@ private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
         // 语录卡片骨架
         SkeletonCard {
             Row(Modifier.padding(20.dp)) {
-                ShimmerBox(Modifier.size(28.dp), shape = smoothCornerShape(6.dp))
+                ShimmerBox(
+                    Modifier.size(28.dp),
+                    shape = smoothCornerShape(6.dp)
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     SkeletonTextLine()

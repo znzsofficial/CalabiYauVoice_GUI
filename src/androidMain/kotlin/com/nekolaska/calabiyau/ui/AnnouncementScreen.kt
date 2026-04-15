@@ -17,6 +17,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.data.AnnouncementApi
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  公告资讯页 —— 原生客户端版 (MD3 Expressive)
@@ -62,7 +67,8 @@ fun AnnouncementScreen(
                         onOpenExternalUrl = { url ->
                             try {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                            } catch (_: Exception) { }
+                            } catch (_: Exception) {
+                            }
                         }
                     )
                 }

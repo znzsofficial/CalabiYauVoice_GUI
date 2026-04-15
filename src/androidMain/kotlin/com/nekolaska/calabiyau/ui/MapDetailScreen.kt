@@ -21,6 +21,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.MapDetailApi
 import com.nekolaska.calabiyau.data.MapDetailApi.MapDetail
+import com.nekolaska.calabiyau.ui.shared.ErrorState
+import com.nekolaska.calabiyau.ui.shared.LoadingState
+import com.nekolaska.calabiyau.ui.shared.SectionTitle
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import data.ApiResult
 
 // ════════════════════════════════════════════════════════

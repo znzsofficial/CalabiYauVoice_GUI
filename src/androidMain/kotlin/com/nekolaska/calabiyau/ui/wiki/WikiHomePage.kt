@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.wiki
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,8 +53,14 @@ import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.CharacterListApi
 import com.nekolaska.calabiyau.data.MapListApi
 import com.nekolaska.calabiyau.data.WallpaperApi
+import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.ui.shared.liquidGlass
+import com.nekolaska.calabiyau.ui.shared.liquidGlassLight
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.URLEncoder
 
 // ────────────────────────────────────────────
 //  Wiki 主页
@@ -104,7 +111,7 @@ internal fun WikiHomePage(
     // 且共享 WikiEngine.client（UA 轮换 + 403/429/503 重试）。
     // 相比原先手动 OkHttp 下载 + 两次 BitmapFactory 解码，省一次网络请求和一次 decode。
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     LaunchedEffect(wallpaperUrl) {
         val url = wallpaperUrl ?: return@LaunchedEffect
         // URL 未变且已缓存过取色结果：直接使用缓存色
@@ -586,7 +593,7 @@ private fun QuickAccessGrid(
 }
 
 private fun List<String>.resolveQuickEntries(): List<QuickEntry> {
-    val sourceIds = if (isEmpty()) defaultQuickEntryIds else this
+    val sourceIds = ifEmpty { defaultQuickEntryIds }
     val selectedEntries = sourceIds.mapNotNull(quickEntryById::get)
     val selectedIds = selectedEntries.mapTo(mutableSetOf()) { it.id }
     val fallbackEntries = allQuickEntries.filterNot { it.id in selectedIds }
@@ -1051,7 +1058,7 @@ private fun ContentBlockCard(
             val resolvedUrls = remember(items) {
                 items.map { (display, page) ->
                     display to if (page.startsWith("http")) page
-                    else "$WIKI_BASE${java.net.URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
+                    else "$WIKI_BASE${URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
                 }
             }
 

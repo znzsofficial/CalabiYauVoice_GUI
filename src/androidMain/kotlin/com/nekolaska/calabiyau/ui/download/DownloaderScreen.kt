@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.download
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -26,6 +26,11 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.capsule.ContinuousCapsule
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.ui.shared.DownloadStatusBar
+import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.ui.shared.LogsDialog
+import com.nekolaska.calabiyau.ui.shared.SearchBar
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import com.nekolaska.calabiyau.viewmodel.DownloadTask
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel

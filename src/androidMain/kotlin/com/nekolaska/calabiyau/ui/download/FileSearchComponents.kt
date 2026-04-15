@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.download
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
@@ -23,6 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.ui.media.AudioPlayButton
+import com.nekolaska.calabiyau.ui.shared.EmptyState
+import com.nekolaska.calabiyau.ui.shared.ZoomableImage
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 @Composable
 fun FileSearchList(

@@ -1,7 +1,10 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.tools
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -21,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
@@ -30,11 +34,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -50,19 +59,27 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
+import androidx.core.graphics.scale
+import androidx.core.graphics.createBitmap
 
 private enum class ToolsSection(
     val title: String,
     val subtitle: String,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector
+    val icon: ImageVector
 ) {
     IMAGE("图片工具", "压缩、转换、九宫格与裁切入口", Icons.Outlined.Image),
     TEXT("文本工具", "清洗文本、查找替换、文件名净化", Icons.Outlined.TextFields),
@@ -108,7 +125,17 @@ private enum class ImagePreviewMode {
     CROP
 }
 
-private val CROP_PRESETS = listOf("1:1", "4:5", "16:9", "3:4", "2:3", "9:16")
+private enum class StitchDirection(val label: String) {
+    HORIZONTAL("横向"),
+    VERTICAL("纵向")
+}
+
+private val CROP_PRESETS = listOf(
+    "1:1" to (1 to 1),
+    "1:2" to (1 to 2),
+    "16:9" to (16 to 9),
+    "4:3" to (4 to 3)
+)
 private val CropPreviewNestedScrollBlocker = object : NestedScrollConnection {
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset = available
 
@@ -128,6 +155,12 @@ private data class CropPreviewState(
     val offset: Offset = Offset.Zero,
     val viewportSize: IntSize = IntSize.Zero,
     val imageSize: IntSize = IntSize.Zero
+)
+
+private data class CompressPreviewData(
+    val previewBytes: ByteArray,
+    val originalSizeBytes: Long?,
+    val compressedSizeBytes: Int
 )
 
 private data class AudioInfoItem(
@@ -541,11 +574,64 @@ private fun ToolsOutputDirectoryCard(
                     )
                 }
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onPickDirectory, shape = smoothCornerShape(24.dp)) { Text("选择输出目录") }
-                FilledTonalButton(onClick = onPickDirectoryInFileManager, shape = smoothCornerShape(24.dp)) { Text("从文件管理选择") }
-                FilledTonalButton(onClick = onOpenDirectory, shape = smoothCornerShape(24.dp)) { Text("打开目录") }
-                FilledTonalButton(onClick = onOpenInFileManager, shape = smoothCornerShape(24.dp)) { Text("文件管理中查看") }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "设置保存位置",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onPickDirectory,
+                        shape = smoothCornerShape(20.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Outlined.Folder, contentDescription = null)
+                        Spacer(Modifier.size(6.dp))
+                        Text("系统选择")
+                    }
+                    OutlinedButton(
+                        onClick = onPickDirectoryInFileManager,
+                        shape = smoothCornerShape(20.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = null)
+                        Spacer(Modifier.size(6.dp))
+                        Text("文件管理")
+                    }
+                }
+
+                Text(
+                    text = "查看输出目录",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = onOpenDirectory,
+                        shape = smoothCornerShape(20.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
+                        Spacer(Modifier.size(6.dp))
+                        Text("其他应用打开")
+                    }
+                    FilledTonalButton(
+                        onClick = onOpenInFileManager,
+                        shape = smoothCornerShape(20.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Outlined.FolderOpen, contentDescription = null)
+                        Spacer(Modifier.size(6.dp))
+                        Text("文件管理")
+                    }
+                }
             }
         }
     }
@@ -605,7 +691,7 @@ private fun ToolPageColumn(content: @Composable ColumnScope.() -> Unit) {
 private fun ToolCard(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -692,14 +778,18 @@ private fun ImagePreviewStrip(
 private fun ImagePreviewBottomSheet(
     state: ImagePreviewSheetState,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    compressQuality: Float = 0.82f,
+    onCompressQualityChange: (Float) -> Unit = {},
+    compressFormat: ExportFormat = ExportFormat.JPG,
+    onCompressFormatChange: (ExportFormat) -> Unit = {}
 ) {
     val previewHeight = 320.dp
     var currentIndex by remember(state) { mutableIntStateOf(state.initialIndex.coerceIn(0, state.items.lastIndex)) }
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val currentItem = state.items.getOrNull(currentIndex)
     val confirmLabel = when (state.mode) {
-        ImagePreviewMode.COMPRESS -> "确认输出"
+        ImagePreviewMode.COMPRESS -> "导出压缩图片"
         ImagePreviewMode.NINE_GRID -> "确认切图"
         ImagePreviewMode.CROP -> "确认裁切"
     }
@@ -717,81 +807,124 @@ private fun ImagePreviewBottomSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("处理前预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            currentItem?.let { item ->
-                when (state.mode) {
-                    ImagePreviewMode.COMPRESS -> {
-                        Surface(
-                            shape = smoothCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            AsyncImage(
-                                model = item.file ?: item.uri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(previewHeight)
-                            )
-                        }
-                    }
-                    ImagePreviewMode.NINE_GRID -> {
-                        OverlayImagePreview(
-                            item = item,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(previewHeight),
-                            overlay = { size ->
-                                NineGridOverlay(size = size)
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                currentItem?.let { item ->
+                    when (state.mode) {
+                        ImagePreviewMode.COMPRESS -> {
+                            Surface(
+                                shape = smoothCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                AsyncImage(
+                                    model = item.file ?: item.uri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(previewHeight)
+                                )
                             }
-                        )
-                    }
-                    ImagePreviewMode.CROP -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            InteractiveCropPreview(
+                            Text(
+                                "输出质量：${(compressQuality * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Slider(
+                                value = compressQuality,
+                                onValueChange = onCompressQualityChange,
+                                valueRange = 0.05f..1f
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ExportFormat.entries.forEach { format ->
+                                    AssistChip(
+                                        onClick = { onCompressFormatChange(format) },
+                                        shape = smoothCapsuleShape(),
+                                        label = { Text(format.label) },
+                                        colors = AssistChipDefaults.assistChipColors(
+                                            containerColor = if (format == compressFormat) {
+                                                MaterialTheme.colorScheme.secondaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceContainerHighest
+                                            }
+                                        )
+                                    )
+                                }
+                            }
+                            CompressRealtimePreview(
                                 item = item,
-                                preset = state.cropPreset,
-                                previewState = state.cropPreviewStates[currentIndex] ?: CropPreviewState(),
-                                onPreviewStateChange = { updated ->
-                                    state.cropPreviewStates[currentIndex] = updated
-                                },
+                                quality = compressQuality,
+                                format = compressFormat,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(previewHeight)
-                            )
-                            Text(
-                                text = "双击可快速放大/还原，拖动可微调构图。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    .height(220.dp)
                             )
                         }
+                        ImagePreviewMode.NINE_GRID -> {
+                            OverlayImagePreview(
+                                item = item,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(previewHeight),
+                                overlay = { size ->
+                                    NineGridOverlay(size = size)
+                                }
+                            )
+                        }
+                        ImagePreviewMode.CROP -> {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                InteractiveCropPreview(
+                                    item = item,
+                                    preset = state.cropPreset,
+                                    previewState = state.cropPreviewStates[currentIndex] ?: CropPreviewState(),
+                                    onPreviewStateChange = { updated ->
+                                        state.cropPreviewStates[currentIndex] = updated
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(previewHeight)
+                                )
+                                Text(
+                                    text = "双击可快速放大/还原，拖动可微调构图。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
+                    Text(
+                        inputDisplayName(LocalContext.current, item) ?: "未命名图片",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Text(
-                    inputDisplayName(LocalContext.current, item) ?: "未命名图片",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (state.items.size > 1) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = { currentIndex = (currentIndex - 1).coerceAtLeast(0) },
-                        enabled = currentIndex > 0,
-                        shape = smoothCornerShape(20.dp)
-                    ) { Text("上一张") }
-                    Text("${currentIndex + 1} / ${state.items.size}")
-                    OutlinedButton(
-                        onClick = { currentIndex = (currentIndex + 1).coerceAtMost(state.items.lastIndex) },
-                        enabled = currentIndex < state.items.lastIndex,
-                        shape = smoothCornerShape(20.dp)
-                    ) { Text("下一张") }
+                if (state.items.size > 1) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { currentIndex = (currentIndex - 1).coerceAtLeast(0) },
+                            enabled = currentIndex > 0,
+                            shape = smoothCornerShape(20.dp)
+                        ) { Text("上一张") }
+                        Text("${currentIndex + 1} / ${state.items.size}")
+                        OutlinedButton(
+                            onClick = { currentIndex = (currentIndex + 1).coerceAtMost(state.items.lastIndex) },
+                            enabled = currentIndex < state.items.lastIndex,
+                            shape = smoothCornerShape(20.dp)
+                        ) { Text("下一张") }
+                    }
                 }
             }
             Row(
@@ -801,6 +934,67 @@ private fun ImagePreviewBottomSheet(
                 TextButton(onClick = onDismiss) { Text("取消") }
                 FilledTonalButton(onClick = onConfirm, shape = smoothCornerShape(24.dp)) {
                     Text(confirmLabel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompressRealtimePreview(
+    item: PickedInput,
+    quality: Float,
+    format: ExportFormat,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val previewData by produceState<CompressPreviewData?>(initialValue = null, item, quality, format) {
+        value = null
+        delay(120)
+        value = withContext(Dispatchers.IO) {
+            buildCompressPreviewData(context, item, format, quality)
+        }
+    }
+
+    Surface(
+        shape = smoothCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        modifier = modifier
+    ) {
+        when (val data = previewData) {
+            null -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(strokeWidth = 2.dp)
+                }
+            }
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "压缩后预览",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    val ratioText = data.originalSizeBytes?.takeIf { it > 0 }?.let {
+                        "约 ${(data.compressedSizeBytes * 100 / it.toFloat()).toInt()}%"
+                    } ?: ""
+                    Text(
+                        text = "${format.label}  ${formatFileSize(data.compressedSizeBytes.toLong())} $ratioText",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    AsyncImage(
+                        model = data.previewBytes,
+                        contentDescription = "压缩后预览",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
@@ -990,15 +1184,15 @@ private fun CropOverlay(cropRect: Rect) {
     androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
         val overlayColor = Color.Black.copy(alpha = 0.45f)
         val fullPath = Path().apply { addRect(Rect(Offset.Zero, size)) }
-        val cutoutPath = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(cropRect, 22.dp.toPx(), 22.dp.toPx())) }
-        val maskPath = Path.combine(androidx.compose.ui.graphics.PathOperation.Difference, fullPath, cutoutPath)
+        val cutoutPath = Path().apply { addRoundRect(RoundRect(cropRect, 22.dp.toPx(), 22.dp.toPx())) }
+        val maskPath = Path.combine(PathOperation.Difference, fullPath, cutoutPath)
         drawPath(maskPath, overlayColor)
         drawRoundRect(
             color = Color.White.copy(alpha = 0.95f),
             topLeft = cropRect.topLeft,
             size = cropRect.size,
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(22.dp.toPx(), 22.dp.toPx()),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+            cornerRadius = CornerRadius(22.dp.toPx(), 22.dp.toPx()),
+            style = Stroke(width = 2.dp.toPx())
         )
     }
 }
@@ -1129,11 +1323,25 @@ private fun ImageToolsPage(
     var imageQuality by rememberSaveable { mutableFloatStateOf(0.82f) }
     var exportFormat by rememberSaveable { mutableStateOf(ExportFormat.JPG) }
     var cropPreset by rememberSaveable { mutableStateOf("1:1") }
+    var cropRatioW by rememberSaveable { mutableIntStateOf(1) }
+    var cropRatioH by rememberSaveable { mutableIntStateOf(1) }
+    var stitchDirection by rememberSaveable { mutableStateOf(StitchDirection.HORIZONTAL) }
+    var stitchUpscaleSmall by rememberSaveable { mutableStateOf(false) }
     var compressSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var nineGridSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var cropSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
+    var stitchSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     val cropPreviewStates = remember { mutableStateMapOf<Int, CropPreviewState>() }
     var previewSheetState by remember { mutableStateOf<ImagePreviewSheetState?>(null) }
+
+    fun setCropRatio(width: Int, height: Int) {
+        val safeW = width.coerceIn(1, 20)
+        val safeH = height.coerceIn(1, 20)
+        cropRatioW = safeW
+        cropRatioH = safeH
+        cropPreset = "${safeW}:${safeH}"
+        cropPreviewStates.clear()
+    }
 
     fun showPreview(
         mode: ImagePreviewMode,
@@ -1255,6 +1463,42 @@ private fun ImageToolsPage(
         }
     }
 
+    fun runStitch(inputs: List<PickedInput>) {
+        if (inputs.size < 2) {
+            showSnack("请至少选择 2 张图片")
+            return
+        }
+        scope.launch {
+            onBusyChange(true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val outputDir = resolveOutputDirectory(outputPath, "图片工具/拼图")
+                    val merged = stitchImages(
+                        context = context,
+                        inputs = inputs,
+                        outputDir = outputDir,
+                        direction = stitchDirection,
+                        upscaleSmall = stitchUpscaleSmall
+                    ) ?: throw IllegalStateException("拼图失败")
+                    scanMediaLibrary(context, listOf(merged))
+                    ToolOutput(
+                        title = "拼图完成",
+                        message = "已导出 ${merged.name}",
+                        files = listOf(merged),
+                        directory = outputDir
+                    )
+                }
+            }.onSuccess {
+                onResult(it)
+                showSnack(it.message)
+                stitchSources = emptyList()
+            }.onFailure {
+                showSnack("拼图失败：${it.message ?: "未知错误"}")
+            }
+            onBusyChange(false)
+        }
+    }
+
     val pickImagesForCompress = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         updatePreviewItems(
             mode = ImagePreviewMode.COMPRESS,
@@ -1280,26 +1524,16 @@ private fun ImageToolsPage(
         )
     }
 
+    val pickImagesForStitch = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        stitchSources = uris.toPickedUriInputs()
+    }
+
     ToolPageColumn {
         ToolCard(
             title = "压缩图片",
             subtitle = "调整格式与质量后导出图片",
             icon = Icons.Outlined.Compress
         ) {
-            Slider(value = imageQuality, onValueChange = { imageQuality = it }, valueRange = 0.3f..1f)
-            Text("输出质量：${(imageQuality * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ExportFormat.entries.forEach { format ->
-                    AssistChip(
-                        onClick = { exportFormat = format },
-                        shape = smoothCapsuleShape(),
-                        label = { Text(format.label) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (format == exportFormat) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-                        )
-                    )
-                }
-            }
             FilledTonalButton(
                 onClick = {
                     onPickFilesFromFileManager(
@@ -1326,8 +1560,11 @@ private fun ImageToolsPage(
                 showPreview(ImagePreviewMode.COMPRESS, compressSources, index)
             }
             if (compressSources.isNotEmpty()) {
-                FilledTonalButton(onClick = { runCompress(compressSources) }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
-                    Text("开始压缩并导出")
+                FilledTonalButton(onClick = { showPreview(ImagePreviewMode.COMPRESS, compressSources) }, enabled = !isBusy, shape = smoothCornerShape(
+                    24.dp
+                )
+                ) {
+                    Text("在弹窗中导出")
                 }
             }
         }
@@ -1361,8 +1598,75 @@ private fun ImageToolsPage(
                 showPreview(ImagePreviewMode.NINE_GRID, nineGridSources, index)
             }
             if (nineGridSources.isNotEmpty()) {
-                FilledTonalButton(onClick = { runNineGrid(nineGridSources) }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                FilledTonalButton(onClick = { runNineGrid(nineGridSources) }, enabled = !isBusy, shape = smoothCornerShape(
+                    24.dp
+                )
+                ) {
                     Text("开始切图")
+                }
+            }
+        }
+
+        ToolCard(
+            title = "图片拼图",
+            subtitle = "多图横向/纵向拼接并导出",
+            icon = Icons.Outlined.ViewAgenda
+        ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StitchDirection.entries.forEach { direction ->
+                    AssistChip(
+                        onClick = { stitchDirection = direction },
+                        shape = smoothCapsuleShape(),
+                        label = { Text(direction.label) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (stitchDirection == direction) {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHighest
+                            }
+                        )
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("放大小图到统一${if (stitchDirection == StitchDirection.HORIZONTAL) "高度" else "宽度"}")
+                Switch(
+                    checked = stitchUpscaleSmall,
+                    onCheckedChange = { stitchUpscaleSmall = it }
+                )
+            }
+            FilledTonalButton(onClick = {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择要拼图的图片",
+                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    true,
+                    { pickImagesForStitch.launch("image/*") }
+                ) { paths ->
+                    stitchSources = paths.toPickedFileInputs()
+                }
+            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                Text("选择图片")
+            }
+            if (stitchSources.isNotEmpty()) {
+                Text(
+                    "已选 ${stitchSources.size} 张图片",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            ImagePreviewStrip(items = stitchSources) { }
+            if (stitchSources.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = { runStitch(stitchSources) },
+                    enabled = !isBusy,
+                    shape = smoothCornerShape(24.dp)
+                ) {
+                    Text("开始拼图并导出")
                 }
             }
         }
@@ -1372,17 +1676,31 @@ private fun ImageToolsPage(
             subtitle = "按比例裁切图片并导出",
             icon = Icons.Outlined.ContentCut
         ) {
+            Text("裁切比例：$cropPreset", style = MaterialTheme.typography.bodyMedium)
+            Text("横向比例：$cropRatioW", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Slider(
+                value = cropRatioW.toFloat(),
+                onValueChange = { setCropRatio(it.toInt(), cropRatioH) },
+                valueRange = 1f..20f,
+                steps = 18
+            )
+            Text("纵向比例：$cropRatioH", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Slider(
+                value = cropRatioH.toFloat(),
+                onValueChange = { setCropRatio(cropRatioW, it.toInt()) },
+                valueRange = 1f..20f,
+                steps = 18
+            )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CROP_PRESETS.forEach { preset ->
+                CROP_PRESETS.forEach { (label, ratio) ->
                     AssistChip(
                         onClick = {
-                            cropPreset = preset
-                            cropPreviewStates.clear()
+                            setCropRatio(ratio.first, ratio.second)
                         },
                         shape = smoothCapsuleShape(),
-                        label = { Text(preset) },
+                        label = { Text(label) },
                         colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (cropPreset == preset) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                            containerColor = if (cropPreset == label) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
                         )
                     )
                 }
@@ -1419,7 +1737,10 @@ private fun ImageToolsPage(
                 )
             }
             if (cropSources.isNotEmpty()) {
-                FilledTonalButton(onClick = { runCrop(cropSources, cropPreviewStates) }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                FilledTonalButton(onClick = { runCrop(cropSources, cropPreviewStates) }, enabled = !isBusy, shape = smoothCornerShape(
+                    24.dp
+                )
+                ) {
                     Text("开始裁切并导出")
                 }
             }
@@ -1431,6 +1752,10 @@ private fun ImageToolsPage(
         ImagePreviewBottomSheet(
             state = sheetState,
             onDismiss = { previewSheetState = null },
+            compressQuality = imageQuality,
+            onCompressQualityChange = { imageQuality = it },
+            compressFormat = exportFormat,
+            onCompressFormatChange = { exportFormat = it },
             onConfirm = {
                 when (sheetState.mode) {
                     ImagePreviewMode.COMPRESS -> runCompress(sheetState.items)
@@ -2079,24 +2404,24 @@ private fun SubmissionToolsPage(
     }
 }
 
-private fun openBitmap(context: android.content.Context, input: PickedInput): Bitmap? {
+private fun openBitmap(context: Context, input: PickedInput): Bitmap? {
     input.file?.let { return BitmapFactory.decodeFile(it.absolutePath) }
     return input.uri?.let { uri ->
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
     }
 }
 
-private fun inputDisplayName(context: android.content.Context, input: PickedInput): String? {
+private fun inputDisplayName(context: Context, input: PickedInput): String? {
     return input.file?.name ?: input.uri?.let(context::queryDisplayName)
 }
 
-private fun readTextFromInput(context: android.content.Context, input: PickedInput): String? {
+private fun readTextFromInput(context: Context, input: PickedInput): String? {
     input.file?.takeIf { it.isFile }?.let { return it.readText() }
     return input.uri?.let(context::readTextFromUri)
 }
 
 private fun compressOrConvertImage(
-    context: android.content.Context,
+    context: Context,
     input: PickedInput,
     target: File,
     format: ExportFormat,
@@ -2126,6 +2451,34 @@ private fun resolveCompressFormat(format: ExportFormat): Bitmap.CompressFormat {
     }
 }
 
+private fun buildCompressPreviewData(
+    context: Context,
+    input: PickedInput,
+    format: ExportFormat,
+    quality: Float
+): CompressPreviewData? {
+    val bitmap = openBitmap(context, input) ?: return null
+    val output = ByteArrayOutputStream()
+    bitmap.compress(resolveCompressFormat(format), (quality * 100).toInt().coerceIn(1, 100), output)
+    val previewBytes = output.toByteArray()
+    output.close()
+    val originalSize = when {
+        input.file != null -> input.file.length().takeIf { it > 0 }
+        input.uri != null -> runCatching {
+            context.contentResolver.openAssetFileDescriptor(input.uri, "r")?.use { fd ->
+                fd.length.takeIf { it > 0 }
+            }
+        }.getOrNull()
+        else -> null
+    }
+    bitmap.recycle()
+    return CompressPreviewData(
+        previewBytes = previewBytes,
+        originalSizeBytes = originalSize,
+        compressedSizeBytes = previewBytes.size
+    )
+}
+
 private fun resolveSectionOutputDirectory(basePath: String, section: ToolsSection): File {
     val child = when (section) {
         ToolsSection.IMAGE -> "图片工具"
@@ -2137,7 +2490,7 @@ private fun resolveSectionOutputDirectory(basePath: String, section: ToolsSectio
     return resolveOutputDirectory(basePath, child)
 }
 
-private fun splitToNineGrid(context: android.content.Context, input: PickedInput, outputDir: File): List<File> {
+private fun splitToNineGrid(context: Context, input: PickedInput, outputDir: File): List<File> {
     val bitmap = openBitmap(context, input) ?: return emptyList()
     val baseName = sanitizeFileName(inputDisplayName(context, input)?.substringBeforeLast('.') ?: "grid")
     val cellWidth = max(1, bitmap.width / 3)
@@ -2158,8 +2511,85 @@ private fun splitToNineGrid(context: android.content.Context, input: PickedInput
     return outputs
 }
 
+private fun stitchImages(
+    context: Context,
+    inputs: List<PickedInput>,
+    outputDir: File,
+    direction: StitchDirection,
+    upscaleSmall: Boolean
+): File? {
+    val bitmaps = inputs.mapNotNull { openBitmap(context, it) }
+    if (bitmaps.size < 2) {
+        bitmaps.forEach { it.recycle() }
+        return null
+    }
+
+    val targetCross = when (direction) {
+        StitchDirection.HORIZONTAL -> {
+            val values = bitmaps.map { it.height }
+            if (upscaleSmall) values.maxOrNull() ?: 0 else values.minOrNull() ?: 0
+        }
+        StitchDirection.VERTICAL -> {
+            val values = bitmaps.map { it.width }
+            if (upscaleSmall) values.maxOrNull() ?: 0 else values.minOrNull() ?: 0
+        }
+    }.coerceAtLeast(1)
+
+    val scaledBitmaps = bitmaps.map { bitmap ->
+        when (direction) {
+            StitchDirection.HORIZONTAL -> {
+                val scale = targetCross.toFloat() / bitmap.height.toFloat()
+                val targetW = max(1, (bitmap.width * scale).roundToInt())
+                val targetH = targetCross
+                if (bitmap.width == targetW && bitmap.height == targetH) bitmap
+                else bitmap.scale(targetW, targetH)
+            }
+            StitchDirection.VERTICAL -> {
+                val scale = targetCross.toFloat() / bitmap.width.toFloat()
+                val targetW = targetCross
+                val targetH = max(1, (bitmap.height * scale).roundToInt())
+                if (bitmap.width == targetW && bitmap.height == targetH) bitmap
+                else bitmap.scale(targetW, targetH)
+            }
+        }
+    }
+
+    val (outputWidth, outputHeight) = when (direction) {
+        StitchDirection.HORIZONTAL -> scaledBitmaps.sumOf { it.width } to targetCross
+        StitchDirection.VERTICAL -> targetCross to scaledBitmaps.sumOf { it.height }
+    }
+
+    val merged = createBitmap(outputWidth, outputHeight)
+    val canvas = Canvas(merged)
+    val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    var cursor = 0f
+    scaledBitmaps.forEach { bmp ->
+        when (direction) {
+            StitchDirection.HORIZONTAL -> {
+                canvas.drawBitmap(bmp, cursor, 0f, paint)
+                cursor += bmp.width
+            }
+            StitchDirection.VERTICAL -> {
+                canvas.drawBitmap(bmp, 0f, cursor, paint)
+                cursor += bmp.height
+            }
+        }
+    }
+
+    outputDir.mkdirs()
+    val target = File(outputDir, "拼图_${direction.label}_${System.currentTimeMillis()}.jpg")
+    FileOutputStream(target).use { merged.compress(Bitmap.CompressFormat.JPEG, 94, it) }
+
+    merged.recycle()
+    scaledBitmaps.forEachIndexed { index, scaled ->
+        if (scaled !== bitmaps[index]) scaled.recycle()
+    }
+    bitmaps.forEach { it.recycle() }
+    return target
+}
+
 private fun cropImageWithPreset(
-    context: android.content.Context,
+    context: Context,
     input: PickedInput,
     outputDir: File,
     preset: String,
@@ -2210,7 +2640,7 @@ private fun cropImageWithPreset(
     return target
 }
 
-private fun readImageSize(context: android.content.Context, input: PickedInput): IntSize? {
+private fun readImageSize(context: Context, input: PickedInput): IntSize? {
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     when {
         input.file != null -> BitmapFactory.decodeFile(input.file.absolutePath, options)
@@ -2257,7 +2687,7 @@ private fun sanitizeNamesInDirectory(directory: File): List<File> {
 
 private val AUDIO_EXTENSIONS = setOf("mp3", "wav", "m4a", "flac", "ogg", "aac")
 
-private fun readAudioInfo(context: android.content.Context, input: PickedInput): AudioInfoItem? {
+private fun readAudioInfo(context: Context, input: PickedInput): AudioInfoItem? {
     val retriever = MediaMetadataRetriever()
     return runCatching {
         input.file?.let { file ->

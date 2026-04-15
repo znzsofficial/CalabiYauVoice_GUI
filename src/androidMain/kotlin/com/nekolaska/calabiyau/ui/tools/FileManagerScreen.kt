@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.tools
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -20,12 +20,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.ui.media.AudioPlayButton
+import com.nekolaska.calabiyau.ui.media.AudioPlayerManager
+import com.nekolaska.calabiyau.ui.shared.ZoomableImage
+import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -139,8 +148,8 @@ fun FileManagerScreen(
     val isPickerMode = directoryPickerConfig != null && (onDirectoryPicked != null || onFilesPicked != null)
     val pickerConfig = if (isPickerMode) directoryPickerConfig else null
     val pickerMode = pickerConfig?.pickMode ?: FileManagerPickerMode.DIRECTORY
-    val pickDirectory = if (pickerMode == FileManagerPickerMode.DIRECTORY && isPickerMode) onDirectoryPicked else null
-    val pickFiles = if (pickerMode == FileManagerPickerMode.FILES && isPickerMode) onFilesPicked else null
+    val pickDirectory = if (pickerMode == FileManagerPickerMode.DIRECTORY) onDirectoryPicked else null
+    val pickFiles = if (pickerMode == FileManagerPickerMode.FILES) onFilesPicked else null
     val canPickFiles = pickerMode == FileManagerPickerMode.FILES && pickFiles != null
 
     Scaffold(
@@ -657,9 +666,9 @@ fun FileManagerScreen(
         )
         val currentFile = galleryImages.getOrNull(pagerState.currentPage)
 
-        androidx.compose.ui.window.Dialog(
+        Dialog(
             onDismissRequest = { showGallery = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Surface(
                 modifier = Modifier
@@ -963,7 +972,7 @@ private fun FileIcon(file: File, size: Int) {
             modifier = Modifier
                 .size(size.dp)
                 .clip(smoothCornerShape(12.dp)),
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            contentScale = ContentScale.Crop
         )
     } else {
         Surface(
@@ -986,7 +995,7 @@ private fun FileIcon(file: File, size: Int) {
 private fun FileActionItem(
     icon: ImageVector,
     label: String,
-    tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit
 ) {
     Surface(
