@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
@@ -27,6 +27,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.WikiUserApi
+import com.nekolaska.calabiyau.ui.SettingsScreen
+import com.nekolaska.calabiyau.ui.download.DownloadHistoryScreen
+import com.nekolaska.calabiyau.ui.download.DownloaderScreen
+import com.nekolaska.calabiyau.ui.media.AudioPlayerManager
+import com.nekolaska.calabiyau.ui.shared.LocalSnackbarHostState
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.ui.tools.FileManagerDirectoryPickerConfig
+import com.nekolaska.calabiyau.ui.tools.FileManagerPickerMode
+import com.nekolaska.calabiyau.ui.tools.FileManagerScreen
+import com.nekolaska.calabiyau.ui.tools.ToolsHomeScreen
+import com.nekolaska.calabiyau.ui.wiki.WIKI_HOME_URL
+import com.nekolaska.calabiyau.ui.wiki.WikiHubPage
+import com.nekolaska.calabiyau.ui.wiki.WikiHubScreen
+import com.nekolaska.calabiyau.ui.wiki.WikiWebViewScreen
+import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel
@@ -237,7 +253,10 @@ fun MainScreen(
                                     pickMode = FileManagerPickerMode.FILES,
                                     allowMultiSelect = allowMultiSelect,
                                     systemPickerLabel = "打开系统选择器",
-                                    onOpenSystemPicker = onOpenSystemPicker
+                                    onOpenSystemPicker = {
+                                        toolFileManagerOverlay = null
+                                        onOpenSystemPicker()
+                                    }
                                 ),
                                 onFilesPicked = onPicked
                             )

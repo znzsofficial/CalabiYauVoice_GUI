@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.media
 
 import android.media.MediaPlayer
 import androidx.compose.foundation.layout.Box
@@ -163,9 +163,9 @@ object AudioPlayerManager {
  */
 @Composable
 fun AudioPlayButton(
+    modifier: Modifier = Modifier,
     source: String,
-    size: Int = 36,
-    modifier: Modifier = Modifier
+    size: Int = 36
 ) {
     val isPlaying by AudioPlayerManager.isPlaying
     val playingSource by AudioPlayerManager.playingSource

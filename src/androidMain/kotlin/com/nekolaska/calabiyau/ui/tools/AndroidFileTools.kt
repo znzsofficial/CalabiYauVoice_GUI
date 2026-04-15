@@ -1,10 +1,12 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.tools
 
 import android.content.Context
 import android.content.Intent
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.nekolaska.calabiyau.data.AppPrefs
@@ -149,7 +151,7 @@ fun getPathFromUri(uri: Uri): String? {
             val volume = split[0]
             val relPath = split[1]
             if (volume.equals("primary", ignoreCase = true)) {
-                "${android.os.Environment.getExternalStorageDirectory().absolutePath}/$relPath"
+                "${Environment.getExternalStorageDirectory().absolutePath}/$relPath"
             } else {
                 "/storage/$volume/$relPath"
             }
@@ -159,7 +161,7 @@ fun getPathFromUri(uri: Uri): String? {
 }
 
 fun Context.queryDisplayName(uri: Uri): String? {
-    return contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+    return contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
         ?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         }

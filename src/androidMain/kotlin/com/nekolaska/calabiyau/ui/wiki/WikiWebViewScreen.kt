@@ -1,16 +1,22 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.wiki
 
 import android.annotation.SuppressLint
 import android.app.DownloadManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
@@ -139,8 +147,8 @@ fun WikiWebViewScreen(
 
     // 文件上传回调
     var fileChooserCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
-    val fileChooserLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    val fileChooserLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         fileChooserCallback?.onReceiveValue(if (uris.isNotEmpty()) uris.toTypedArray() else null)
         fileChooserCallback = null
@@ -208,8 +216,8 @@ fun WikiWebViewScreen(
                                 .weight(1f)
                                 .clip(smoothCornerShape(10.dp))
                                 .clickable {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("URL", currentUrl))
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("URL", currentUrl))
                                     showSnack("已复制链接")
                                 }
                                 .padding(vertical = 1.dp)
@@ -549,7 +557,7 @@ fun WikiWebViewScreen(
                     try {
                         val fileName = URLUtil.guessFileName(url, null, null)
                         val savePath = AppPrefs.savePath
-                        val dir = java.io.File(savePath)
+                        val dir = File(savePath)
                         dir.mkdirs()
                         val request = DownloadManager.Request(url.toUri()).apply {
                             addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
@@ -557,7 +565,7 @@ fun WikiWebViewScreen(
                             setTitle(fileName)
                             setDescription("正在保存图片...")
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                            setDestinationUri(Uri.fromFile(java.io.File(dir, fileName)))
+                            setDestinationUri(Uri.fromFile(File(dir, fileName)))
                         }
                         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                         dm.enqueue(request)
@@ -893,15 +901,15 @@ private fun createWikiWebView(
             fun onBlobData(base64Data: String, mimeType: String, fileName: String) {
                 try {
                     val data = Base64.decode(base64Data, Base64.DEFAULT)
-                    val dir = java.io.File(AppPrefs.savePath)
+                    val dir = File(AppPrefs.savePath)
                     dir.mkdirs()
-                    val file = java.io.File(dir, fileName)
+                    val file = File(dir, fileName)
                     file.writeBytes(data)
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Handler(Looper.getMainLooper()).post {
                         showSnack("已保存: $fileName")
                     }
                 } catch (e: Exception) {
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    Handler(Looper.getMainLooper()).post {
                         showSnack("保存失败: ${e.message}")
                     }
                 }
@@ -944,9 +952,9 @@ private fun createWikiWebView(
                     val commaIdx = url.indexOf(',')
                     if (commaIdx > 0) {
                         val data = Base64.decode(url.substring(commaIdx + 1), Base64.DEFAULT)
-                        val dir = java.io.File(AppPrefs.savePath)
+                        val dir = File(AppPrefs.savePath)
                         dir.mkdirs()
-                        java.io.File(dir, guessedName).writeBytes(data)
+                        File(dir, guessedName).writeBytes(data)
                         showSnack("已保存: $guessedName")
                     }
                 } catch (e: Exception) {
@@ -964,7 +972,7 @@ private fun createWikiWebView(
                     setDescription("正在下载文件...")
                     setTitle(fileName)
                     setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setDestinationUri(Uri.fromFile(java.io.File(AppPrefs.savePath, fileName)))
+                    setDestinationUri(Uri.fromFile(File(AppPrefs.savePath, fileName)))
                 }
                 val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 dm.enqueue(request)
@@ -1063,13 +1071,13 @@ private fun createWikiWebView(
                 super.onReceivedError(view, request, error)
                 // 仅处理主框架的错误（非子资源）
                 if (request?.isForMainFrame == true) {
-                    val errorCode = error?.errorCode ?: WebViewClient.ERROR_UNKNOWN
+                    val errorCode = error?.errorCode ?: ERROR_UNKNOWN
                     // 网络相关错误码
-                    if (errorCode == WebViewClient.ERROR_HOST_LOOKUP ||
-                        errorCode == WebViewClient.ERROR_CONNECT ||
-                        errorCode == WebViewClient.ERROR_TIMEOUT ||
-                        errorCode == WebViewClient.ERROR_IO ||
-                        errorCode == WebViewClient.ERROR_UNKNOWN
+                    if (errorCode == ERROR_HOST_LOOKUP ||
+                        errorCode == ERROR_CONNECT ||
+                        errorCode == ERROR_TIMEOUT ||
+                        errorCode == ERROR_IO ||
+                        errorCode == ERROR_UNKNOWN
                     ) {
                         val failedUrl = request.url?.toString() ?: WIKI_HOME_URL
                         onNetworkError(failedUrl)

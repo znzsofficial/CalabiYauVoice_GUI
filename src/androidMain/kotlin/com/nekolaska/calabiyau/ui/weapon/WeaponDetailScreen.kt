@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.weapon
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +21,16 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponDetailApi
 import com.nekolaska.calabiyau.data.WeaponDetailApi.WeaponDetail
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.InfoChip
+import com.nekolaska.calabiyau.ui.shared.SectionTitle
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.SkeletonCard
+import com.nekolaska.calabiyau.ui.shared.SkeletonChipRow
+import com.nekolaska.calabiyau.ui.shared.SkeletonSectionTitle
+import com.nekolaska.calabiyau.ui.shared.SkeletonStatRow
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  武器详情页 —— 原生客户端版 (MD3 Expressive)
@@ -34,7 +44,10 @@ fun WeaponDetailScreen(
     onOpenWikiUrl: (String) -> Unit,
     onOpenWeaponSkins: ((String) -> Unit)? = null
 ) {
-    val state = rememberLoadState<WeaponDetail?>(null, key = weaponName) { force ->
+    val state = rememberLoadState<WeaponDetail?>(
+        null,
+        key = weaponName
+    ) { force ->
         WeaponDetailApi.fetchWeaponDetail(weaponName, force)
     }
     val wikiUrl = remember(weaponName) {
@@ -195,24 +208,32 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (detail.user.isNotBlank()) {
-                        InfoChip(detail.user, Icons.Outlined.Person,
+                        InfoChip(
+                            detail.user, Icons.Outlined.Person,
                             MaterialTheme.colorScheme.primaryContainer,
-                            MaterialTheme.colorScheme.onPrimaryContainer)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                     if (detail.type.isNotBlank()) {
-                        InfoChip(detail.type, Icons.Outlined.Category,
+                        InfoChip(
+                            detail.type, Icons.Outlined.Category,
                             MaterialTheme.colorScheme.secondaryContainer,
-                            MaterialTheme.colorScheme.onSecondaryContainer)
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
                     if (detail.fireMode.isNotBlank()) {
-                        InfoChip(detail.fireMode, Icons.Outlined.FlashOn,
+                        InfoChip(
+                            detail.fireMode, Icons.Outlined.FlashOn,
                             MaterialTheme.colorScheme.tertiaryContainer,
-                            MaterialTheme.colorScheme.onTertiaryContainer)
+                            MaterialTheme.colorScheme.onTertiaryContainer
+                        )
                     }
                     if (detail.obtainMethod.isNotBlank()) {
-                        InfoChip(detail.obtainMethod, Icons.Outlined.Lock,
+                        InfoChip(
+                            detail.obtainMethod, Icons.Outlined.Lock,
                             MaterialTheme.colorScheme.surfaceContainerHighest,
-                            MaterialTheme.colorScheme.onSurface)
+                            MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             }
@@ -583,7 +604,10 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
             Column(Modifier.padding(20.dp)) {
                 SkeletonSectionTitle()
                 Spacer(Modifier.height(12.dp))
-                ShimmerBox(Modifier.fillMaxWidth().height(32.dp), shape = smoothCornerShape(8.dp))
+                ShimmerBox(
+                    Modifier.fillMaxWidth().height(32.dp),
+                    shape = smoothCornerShape(8.dp)
+                )
                 Spacer(Modifier.height(4.dp))
                 repeat(3) {
                     Spacer(Modifier.height(4.dp))

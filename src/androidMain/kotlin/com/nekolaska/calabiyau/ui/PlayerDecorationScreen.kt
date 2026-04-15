@@ -33,6 +33,13 @@ import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
 import androidx.core.net.toUri
+import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.ShimmerBox
+import com.nekolaska.calabiyau.ui.shared.ZoomableImage
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
+import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
+import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  通用玩家装饰页 —— 封装/聊天气泡/头套/超弦体动作/头像框
@@ -104,36 +111,36 @@ fun PlayerDecorationScreen(
             Column(Modifier.fillMaxSize()) {
                 // Section 切换
                 if (sections.size > 1) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                sections.forEachIndexed { index, section ->
-                                    FilterChip(
-                                        selected = selectedSectionIndex == index,
-                                        onClick = { selectedSectionIndex = index },
-                                        shape = smoothCornerShape(12.dp),
-                                        label = {
-                                            Text(
-                                                section.title,
-                                                style = MaterialTheme.typography.labelMedium,
-                                                maxLines = 1
-                                            )
-                                        },
-                                        leadingIcon = if (selectedSectionIndex == index) {
-                                            {
-                                                Icon(
-                                                    Icons.Outlined.Check, null,
-                                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                                )
-                                            }
-                                        } else null
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        sections.forEachIndexed { index, section ->
+                            FilterChip(
+                                selected = selectedSectionIndex == index,
+                                onClick = { selectedSectionIndex = index },
+                                shape = smoothCornerShape(12.dp),
+                                label = {
+                                    Text(
+                                        section.title,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1
                                     )
-                                }
-                            }
+                                },
+                                leadingIcon = if (selectedSectionIndex == index) {
+                                    {
+                                        Icon(
+                                            Icons.Outlined.Check, null,
+                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                        )
+                                    }
+                                } else null
+                            )
+                        }
+                    }
                 }
 
                 // 网格

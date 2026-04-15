@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.shared
 
 import androidx.compose.foundation.gestures.*
 import androidx.compose.runtime.*

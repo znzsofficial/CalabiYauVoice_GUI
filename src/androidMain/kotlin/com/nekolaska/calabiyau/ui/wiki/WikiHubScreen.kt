@@ -1,4 +1,4 @@
-package com.nekolaska.calabiyau.ui
+package com.nekolaska.calabiyau.ui.wiki
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.nekolaska.calabiyau.data.CharacterListApi
 import com.nekolaska.calabiyau.data.MapListApi
+import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
@@ -42,12 +43,14 @@ fun WikiHubScreen(
     var selectedMapName by rememberSaveable { mutableStateOf("") }
     var selectedMapImage by rememberSaveable { mutableStateOf<String?>(null) }
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
-    val characterState = rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
-        CharacterListApi.fetchAllFactions(force)
-    }
-    val mapState = rememberLoadState(emptyList<MapListApi.GameModeData>()) { force ->
-        MapListApi.fetchAllModes(force)
-    }
+    val characterState =
+        rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
+            CharacterListApi.fetchAllFactions(force)
+        }
+    val mapState =
+        rememberLoadState(emptyList<MapListApi.GameModeData>()) { force ->
+            MapListApi.fetchAllModes(force)
+        }
     val factions = characterState.data
     val isLoadingCharacters = characterState.isLoading
     val gameModes = mapState.data
@@ -125,7 +128,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.CHARACTERS -> {
-            CharacterListScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.character.CharacterListScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenCharacterDetail = { name, portrait ->
                     selectedCharacterName = name
@@ -137,7 +140,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.CHAR_DETAIL -> {
-            CharacterDetailScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.character.CharacterDetailScreen(
                 characterName = selectedCharacterName,
                 portraitUrl = selectedCharacterPortrait,
                 onBack = { navigateBack(WikiHubPage.CHARACTERS) },
@@ -159,7 +162,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.WEAPONS -> {
-            WeaponListScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.weapon.WeaponListScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWeaponDetail = { name ->
                     selectedWeaponName = name
@@ -170,7 +173,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.WEAPON_DETAIL -> {
-            WeaponDetailScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.weapon.WeaponDetailScreen(
                 weaponName = selectedWeaponName,
                 onBack = { navigateBack(WikiHubPage.WEAPONS) },
                 onOpenWikiUrl = onOpenWikiUrl,
@@ -197,7 +200,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.MAP_DETAIL -> {
-            MapDetailScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.MapDetailScreen(
                 mapName = selectedMapName,
                 mapImageUrl = selectedMapImage,
                 onBack = { navigateBack(mapDetailFrom) },
@@ -205,7 +208,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.COSTUMES -> {
-            CostumeFilterScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.character.CostumeFilterScreen(
                 initialCharacter = selectedCostumeCharacter,
                 onBack = {
                     selectedCostumeCharacter = null
@@ -215,7 +218,7 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.WEAPON_SKINS -> {
-            WeaponSkinFilterScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.weapon.WeaponSkinFilterScreen(
                 initialWeapon = selectedWeaponSkinWeapon,
                 onBack = {
                     selectedWeaponSkinWeapon = null
@@ -225,19 +228,19 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.ACTIVITIES -> {
-            ActivityScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.ActivityScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
         WikiHubPage.ANNOUNCEMENTS -> {
-            AnnouncementScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.AnnouncementScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
         WikiHubPage.GAME_MODES -> {
-            GameModeScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.GameModeScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl,
                 onOpenMapDetail = { name, imageUrl ->
@@ -249,97 +252,97 @@ fun WikiHubScreen(
             )
         }
         WikiHubPage.VOTING -> {
-            VotingScreen(onBack = { navigateBack(WikiHubPage.HOME) })
+            _root_ide_package_.com.nekolaska.calabiyau.ui.VotingScreen(onBack = { navigateBack(WikiHubPage.HOME) })
         }
         WikiHubPage.BIO_CARDS -> {
-            BioCardScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.BioCardScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl,
                 initialTab = 0
             )
         }
         WikiHubPage.BIO_MOBILE_CARDS -> {
-            BioCardScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.BioCardScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl,
                 initialTab = 1
             )
         }
         WikiHubPage.NAVIGATION -> {
-            NavigationMenuScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.navigation.NavigationMenuScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) },
                 onOpenWikiUrl = onOpenWikiUrl
             )
         }
         WikiHubPage.WALLPAPERS -> {
-            GalleryScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.GalleryScreen(
                 title = "壁纸",
                 pageName = "壁纸",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.STICKERS -> {
-            GalleryScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.GalleryScreen(
                 title = "表情包",
                 pageName = "表情包",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.COMICS -> {
-            GalleryScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.GalleryScreen(
                 title = "四格漫画",
                 pageName = "官方四格漫画",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.BALANCE_DATA -> {
-            BalanceDataScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.BalanceDataScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.BASEPLATES -> {
-            BaseplateScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.BaseplateScreen(
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.ENCASINGS -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "封装",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.CHAT_BUBBLES -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "聊天气泡",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.HEADGEAR -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "头套",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.STRINGER_ACTIONS -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "超弦体动作",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.MEDALS -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "勋章",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.SPRAYS -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "喷漆",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
         }
         WikiHubPage.AVATAR_FRAMES -> {
-            PlayerDecorationScreen(
+            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                 title = "头像框",
                 onBack = { navigateBack(WikiHubPage.HOME) }
             )
