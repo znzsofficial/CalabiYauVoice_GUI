@@ -230,6 +230,7 @@ fun MainScreen(
                 Box(Modifier.fillMaxSize()) {
                     ToolsHomeScreen(
                         onBack = { currentDestination = DrawerDestination.WIKI_HUB },
+                        backEnabled = toolFileManagerOverlay == null,
                         onOpenFileManager = { path ->
                             toolFileManagerOverlay = ToolFileManagerOverlayState(initialPath = path)
                         },
@@ -270,12 +271,17 @@ fun MainScreen(
                     ) {
                         val overlay = toolFileManagerOverlay
                         if (overlay != null) {
+                            val overlayRootPath = if (overlay.directoryPickerConfig == null && !overlay.initialPath.isNullOrBlank()) {
+                                overlay.initialPath
+                            } else {
+                                com.nekolaska.calabiyau.data.AppPrefs.savePath
+                            }
                             Surface(
                                 modifier = Modifier.fillMaxSize(),
                                 color = MaterialTheme.colorScheme.background
                             ) {
                                 FileManagerScreen(
-                                    rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
+                                    rootPath = overlayRootPath,
                                     initialPath = overlay.initialPath,
                                     onBack = { toolFileManagerOverlay = null },
                                     directoryPickerConfig = overlay.directoryPickerConfig,
