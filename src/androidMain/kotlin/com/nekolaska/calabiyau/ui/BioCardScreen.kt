@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -33,6 +32,7 @@ import com.nekolaska.calabiyau.data.BioCardApi.MobileCard
 import com.nekolaska.calabiyau.data.BioCardApi.PcCard
 import com.nekolaska.calabiyau.data.BioCardApi.SharedDeck
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.LoadingState
 import com.nekolaska.calabiyau.ui.shared.SearchBar
 import com.nekolaska.calabiyau.ui.shared.rememberLoadState
@@ -130,15 +130,13 @@ fun BioCardScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = { state.reload(forceRefresh = true) }) {
+                    FilledTonalIconButton(onClick = { state.reload(forceRefresh = true) }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                     }
-                    IconButton(onClick = {
+                    FilledTonalIconButton(onClick = {
                         val url = when (selectedTab) {
                             BioCardTab.PC -> data.pcWikiUrl
                             BioCardTab.MOBILE -> data.mobileWikiUrl

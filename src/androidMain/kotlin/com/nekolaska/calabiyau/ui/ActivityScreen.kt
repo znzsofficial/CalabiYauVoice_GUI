@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Celebration
 import androidx.compose.material.icons.outlined.EventAvailable
@@ -21,9 +20,9 @@ import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -41,6 +40,7 @@ import com.nekolaska.calabiyau.data.ActivityApi
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
 import com.nekolaska.calabiyau.ui.shared.ShimmerBox
 import com.nekolaska.calabiyau.ui.shared.SkeletonTextLine
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
 
@@ -59,12 +59,10 @@ fun ActivityScreen(
             LargeTopAppBar(
                 title = { Text("活动", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%B4%BB%E5%8A%A8") }) {
+                    FilledTonalIconButton(onClick = { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%B4%BB%E5%8A%A8") }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 },

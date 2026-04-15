@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.FlashOn
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.BalanceDataApi
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.ErrorState
 import com.nekolaska.calabiyau.ui.shared.LoadingState
 import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
@@ -166,12 +166,10 @@ fun BalanceDataScreen(onBack: () -> Unit) {
             TopAppBar(
                 title = { Text("平衡数据") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = {
                             loadSettings(forceRefresh = true)
                         },

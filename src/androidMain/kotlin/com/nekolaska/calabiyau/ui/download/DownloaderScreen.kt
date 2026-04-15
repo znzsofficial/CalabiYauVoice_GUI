@@ -26,6 +26,7 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.capsule.ContinuousCapsule
 import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.DownloadStatusBar
 import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.ui.shared.LogsDialog
@@ -561,15 +562,12 @@ private fun DownloaderTopBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
+                    .padding(start = 0.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 侧栏菜单按钮
-                IconButton(onClick = onOpenDrawer) {
-                    Icon(Icons.Default.Menu, contentDescription = "打开侧栏")
-                }
+                BackNavButton(onClick = onOpenDrawer)
                 Text(
-                    text = "卡拉彼丘",
+                    text = "资源下载",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface

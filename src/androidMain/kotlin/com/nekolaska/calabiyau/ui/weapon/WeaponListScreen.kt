@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.WeaponListApi
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.ShimmerBox
 import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
@@ -49,9 +49,7 @@ fun WeaponListScreen(
             TopAppBar(
                 title = { Text("武器一览", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 }
             )
         }

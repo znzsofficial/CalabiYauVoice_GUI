@@ -6,8 +6,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,10 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.CharacterListApi
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.ShimmerBox
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.ui.shared.*
 
 // ════════════════════════════════════════════════════════
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
@@ -48,9 +43,7 @@ fun CharacterListScreen(
             TopAppBar(
                 title = { Text("超弦体 & 晶源体", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 }
             )
         }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.*
@@ -19,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.GameModeApi
 import com.nekolaska.calabiyau.data.GameModeApi.GameModeDetail
 import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
+import com.nekolaska.calabiyau.ui.shared.BackNavButton
 import com.nekolaska.calabiyau.ui.shared.LoadingState
 import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
@@ -44,12 +44,10 @@ fun GameModeScreen(
             TopAppBar(
                 title = { Text("战斗模式", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    IconButton(onClick = {
+                    FilledTonalIconButton(onClick = {
                         onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%88%98%E6%96%97%E6%A8%A1%E5%BC%8F")
                     }) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")

@@ -88,7 +88,7 @@ class GifHeaderParser {
     /**
      * Main file parser. Reads GIF content blocks.
      */
-    private fun readContents(maxFrames: Int = Int.Companion.MAX_VALUE) {
+    private fun readContents(maxFrames: Int = Int.MAX_VALUE) {
         // Read GIF file content blocks.
         var done = false
         while (!(done || err() || header!!.numFrames > maxFrames)) {
@@ -370,7 +370,7 @@ class GifHeaderParser {
                 if (Log.isLoggable(TAG, Log.DEBUG)) {
                     Log.d(
                         TAG,
-                        "Error Reading Block n: " + n + " count: " + count + " blockSize: " + blockSize, e
+                        "Error Reading Block n: $n count: $count blockSize: $blockSize", e
                     )
                 }
                 header!!.status = GifDecoder.STATUS_FORMAT_ERROR

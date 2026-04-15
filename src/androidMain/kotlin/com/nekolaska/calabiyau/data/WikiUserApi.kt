@@ -38,7 +38,7 @@ object WikiUserApi {
         @SerialName("registrationdate") val registrationDate: String = "",
         val email: String = "",
         @SerialName("realname") val realName: String = "",
-        val anon: kotlinx.serialization.json.JsonElement? = null
+        val anon: JsonElement? = null
     ) {
         /** 匿名用户时 anon 字段会出现 */
         val isAnon: Boolean get() = anon != null
