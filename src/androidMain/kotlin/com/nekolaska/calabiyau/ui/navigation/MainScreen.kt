@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.WikiUserApi
+import com.nekolaska.calabiyau.R
 import com.nekolaska.calabiyau.ui.SettingsScreen
 import com.nekolaska.calabiyau.ui.download.DownloadHistoryScreen
 import com.nekolaska.calabiyau.ui.download.DownloaderScreen
@@ -34,6 +35,14 @@ import com.nekolaska.calabiyau.ui.media.AudioPlayerManager
 import com.nekolaska.calabiyau.ui.shared.LocalSnackbarHostState
 import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
 import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.ui.shared.liquidGlass
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Color
 import com.nekolaska.calabiyau.ui.tools.FileManagerDirectoryPickerConfig
 import com.nekolaska.calabiyau.ui.tools.FileManagerPickerMode
 import com.nekolaska.calabiyau.ui.tools.FileManagerScreen
@@ -134,20 +143,6 @@ fun MainScreen(
         AudioPlayerManager.stop()
     }
 
-    val drawerContent: @Composable () -> Unit = {
-        AppDrawerContent(
-            currentDestination = currentDestination,
-            onDestinationSelected = { dest ->
-                if (dest == DrawerDestination.WIKI) {
-                    wikiEnteredFromHub = false
-                    previousDestination = currentDestination
-                }
-                currentDestination = dest
-                if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
-            }
-        )
-    }
-
     val openDrawer: () -> Unit = {
         if (!useExpandedLayout) coroutineScope.launch { drawerState.open() }
     }
@@ -165,8 +160,10 @@ fun MainScreen(
         AnimatedContent(
             targetState = animKey,
             transitionSpec = {
-                (fadeIn(tween(250)) + scaleIn(tween(250), initialScale = 0.96f))
-                    .togetherWith(fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.96f))
+                val enterTween = tween<Float>(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                val exitTween = tween<Float>(250, easing = androidx.compose.animation.core.FastOutLinearInEasing)
+                (fadeIn(enterTween) + scaleIn(enterTween, initialScale = 0.95f))
+                    .togetherWith(fadeOut(exitTween) + scaleOut(exitTween, targetScale = 0.98f))
             },
             label = "MainPageTransition"
         ) { destination ->
@@ -323,6 +320,26 @@ fun MainScreen(
         }
     }
 
+    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+    val mainLayerBackdrop = rememberLayerBackdrop()
+    val emptyBackdrop = remember { emptyBackdrop() }
+    val backdrop = if (liquidGlassEnabled) mainLayerBackdrop else emptyBackdrop
+
+    val drawerContent: @Composable () -> Unit = {
+        AppDrawerContent(
+            currentDestination = currentDestination,
+            onDestinationSelected = { dest ->
+                if (dest == DrawerDestination.WIKI) {
+                    wikiEnteredFromHub = false
+                    previousDestination = currentDestination
+                }
+                currentDestination = dest
+                if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
+            },
+            backdrop = backdrop
+        )
+    }
+
     // ── 根据屏幕宽度选择布局 ──
     CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
         Surface(color = MaterialTheme.colorScheme.background) {
@@ -330,7 +347,11 @@ fun MainScreen(
                 if (useExpandedLayout) {
                     PermanentNavigationDrawer(
                         drawerContent = drawerContent,
-                        content = { pageContent() }
+                        content = {
+                            Box(modifier = Modifier.fillMaxSize().then(if (liquidGlassEnabled) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
+                                pageContent()
+                            }
+                        }
                     )
                 } else {
                     ModalNavigationDrawer(
@@ -338,7 +359,11 @@ fun MainScreen(
                         gesturesEnabled = currentDestination != DrawerDestination.WIKI
                                 && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
                         drawerContent = drawerContent,
-                        content = { pageContent() }
+                        content = {
+                            Box(modifier = Modifier.fillMaxSize().then(if (liquidGlassEnabled) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
+                                pageContent()
+                            }
+                        }
                     )
                 }
                 SnackbarHost(
@@ -357,7 +382,8 @@ fun MainScreen(
 @Composable
 private fun AppDrawerContent(
     currentDestination: DrawerDestination,
-    onDestinationSelected: (DrawerDestination) -> Unit
+    onDestinationSelected: (DrawerDestination) -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
 ) {
     // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
     val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
@@ -365,11 +391,15 @@ private fun AppDrawerContent(
     var isLoadingUserInfo by remember { mutableStateOf(false) }
     var showUserInfoSheet by remember { mutableStateOf(false) }
     val wikiCoroutineScope = rememberCoroutineScope()
+    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+    val drawerContentShape = smoothCornerShape(28.dp)
 
     ModalDrawerSheet(
-        drawerShape = smoothCornerShape(28.dp),
-        drawerContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.width(300.dp)
+        drawerShape = drawerContentShape,
+        drawerContainerColor = if (liquidGlassEnabled) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier
+            .width(300.dp)
+            .liquidGlass(backdrop = backdrop, shape = { drawerContentShape }, enabled = liquidGlassEnabled)
     ) {
         Column(
             modifier = Modifier
@@ -378,14 +408,31 @@ private fun AppDrawerContent(
         ) {
         Spacer(Modifier.height(16.dp))
 
-        // 标题
-        Text(
-            text = "卡拉彼丘",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp)
-        )
+        // 标题 + 图标
+        Row(
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
+                shape = smoothCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(6.dp)
+                )
+            }
+            Text(
+                text = "卡拉彼丘",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
 
         // 每次侧栏显示时刷新登录状态
         LaunchedEffect(currentDestination) {
@@ -443,6 +490,13 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(8.dp))
 
+        Text(
+            text = "探索",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
+        )
+
         // 1. 首页
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
@@ -486,7 +540,15 @@ private fun AppDrawerContent(
             shape = smoothCornerShape(28.dp)
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp))
+        
+        Text(
+            text = "工具",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
+        )
 
         // 3. 资源下载
         NavigationDrawerItem(
@@ -512,7 +574,7 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(4.dp))
 
-        // 5. 设置
+        // 5. 设置 
         NavigationDrawerItem(
             icon = { Icon(Icons.Outlined.BuildCircle, contentDescription = null) },
             label = { Text("素材工具") },
@@ -522,7 +584,15 @@ private fun AppDrawerContent(
             shape = smoothCornerShape(28.dp)
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp))
+        
+        Text(
+            text = "系统",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
+        )
 
         // 6. 设置
         NavigationDrawerItem(
@@ -611,7 +681,6 @@ private fun WikiUserInfoCard(
 }
 
 // ─────────────────────── Wiki 用户信息底部弹窗 ───────────────────────
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WikiUserInfoBottomSheet(
@@ -970,7 +1039,7 @@ private fun ActivityListContent(
 @Composable
 private fun ActivityItemCard(item: ActivityItem) {
     val bgColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
-    val time = if (item.timestamp.isNotBlank()) WikiUserApi.formatTimestamp(item.timestamp) else ""
+    val time = item.timestamp
 
     Row(
         modifier = Modifier
