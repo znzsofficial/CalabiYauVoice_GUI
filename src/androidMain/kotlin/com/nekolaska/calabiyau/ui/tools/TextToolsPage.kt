@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,7 +43,9 @@ import kotlin.math.roundToLong
 
 private enum class TimelineExportFormat(val label: String, val ext: String) {
     SRT("SRT", "srt"),
-    LRC("LRC", "lrc")
+    LRC("LRC", "lrc"),
+    VTT("VTT", "vtt"),
+    ASS("ASS", "ass")
 }
 
 private data class TimelineClip(
@@ -91,6 +94,7 @@ internal fun TextToolsPage(
     var selectedId by rememberSaveable { mutableLongStateOf(-1L) }
     var nextId by rememberSaveable { mutableLongStateOf(1L) }
     var exportFormat by rememberSaveable { mutableStateOf(TimelineExportFormat.SRT) }
+    var exportFormatExpanded by remember { mutableStateOf(false) }
     var globalShiftMs by rememberSaveable { mutableIntStateOf(0) }
     var snapMs by rememberSaveable { mutableIntStateOf(10) }
     var playheadMs by rememberSaveable { mutableLongStateOf(0L) }
@@ -120,7 +124,7 @@ internal fun TextToolsPage(
     fun undo() {
         if (undoStack.isNotEmpty()) {
             redoStack.add(HistoryState(clips.toList(), selectedId))
-            val state = undoStack.removeLast()
+            val state = undoStack.removeAt(undoStack.lastIndex)
             clips.clear()
             clips.addAll(state.clips)
             selectedId = state.selectedId
@@ -130,7 +134,7 @@ internal fun TextToolsPage(
     fun redo() {
         if (redoStack.isNotEmpty()) {
             undoStack.add(HistoryState(clips.toList(), selectedId))
-            val state = redoStack.removeLast()
+            val state = redoStack.removeAt(redoStack.lastIndex)
             clips.clear()
             clips.addAll(state.clips)
             selectedId = state.selectedId
@@ -229,6 +233,8 @@ internal fun TextToolsPage(
                     val content = when (exportFormat) {
                         TimelineExportFormat.SRT -> toSrt(shifted)
                         TimelineExportFormat.LRC -> toLrc(shifted)
+                        TimelineExportFormat.VTT -> toVtt(shifted)
+                        TimelineExportFormat.ASS -> toAss(shifted)
                     }
                     target.writeText(content)
                     ToolOutput(
@@ -352,32 +358,32 @@ internal fun TextToolsPage(
                         enabled = !isBusy,
                         shape = smoothCornerShape(20.dp)
                     ) { Text("整理") }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(
-                        onClick = { undo() },
-                        enabled = !isBusy && undoStack.isNotEmpty()
-                    ) { Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = "撤销") }
-                    IconButton(
-                        onClick = { redo() },
-                        enabled = !isBusy && redoStack.isNotEmpty()
-                    ) { Icon(Icons.AutoMirrored.Outlined.Redo, contentDescription = "重做") }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("导出格式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TimelineExportFormat.entries.forEach { format ->
-                        val selected = exportFormat == format
+                    Box {
                         FilterChip(
-                            selected = selected,
-                            onClick = { exportFormat = format },
-                            label = { Text(format.label) },
-                            shape = smoothCornerShape(16.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                            )
+                            selected = true,
+                            onClick = { exportFormatExpanded = true },
+                            label = { Text(exportFormat.label) },
+                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                            shape = smoothCornerShape(16.dp)
                         )
+                        DropdownMenu(
+                            expanded = exportFormatExpanded,
+                            onDismissRequest = { exportFormatExpanded = false }
+                        ) {
+                            TimelineExportFormat.entries.forEach { format ->
+                                DropdownMenuItem(
+                                    text = { Text(format.label) },
+                                    onClick = {
+                                        exportFormat = format
+                                        exportFormatExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
                     Spacer(Modifier.weight(1f))
                     FilledTonalButton(onClick = { showExportDialog = true }, enabled = !isBusy, shape = smoothCornerShape(20.dp)) {
@@ -479,14 +485,24 @@ internal fun TextToolsPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("编辑片段", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        IconButton(
-                            onClick = {
-                                saveInternalState()
-                                clips.removeAll { it.id == clip.id }
-                                selectedId = clips.firstOrNull()?.id ?: -1L
+                        Row {
+                            IconButton(
+                                onClick = { undo() },
+                                enabled = !isBusy && undoStack.isNotEmpty()
+                            ) { Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = "撤销") }
+                            IconButton(
+                                onClick = { redo() },
+                                enabled = !isBusy && redoStack.isNotEmpty()
+                            ) { Icon(Icons.AutoMirrored.Outlined.Redo, contentDescription = "重做") }
+                            IconButton(
+                                onClick = {
+                                    saveInternalState()
+                                    clips.removeAll { it.id == clip.id }
+                                    selectedId = clips.firstOrNull()?.id ?: -1L
+                                }
+                            ) {
+                                Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
                             }
-                        ) {
-                            Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
                         }
                     }
 
@@ -694,7 +710,7 @@ private fun TimelineViewport(
                     if (kotlin.math.abs(zoom - 1f) >= 0.001f) {
                         val focusRatio = (centroid.x / size.width).coerceIn(0f, 1f)
                         latestOnZoomViewport(zoom, focusRatio)
-                    } else if (kotlin.math.abs(pan.x) >= 0.5f) {
+                      } else if (kotlin.math.abs(pan.x) >= 0.5f) {
                         val deltaMs = (pan.x / size.width) * latestViewportDurationMs
                         latestOnPanViewport(-deltaMs)
                     }
@@ -839,11 +855,15 @@ private fun parseTimelineFromInput(context: Context, input: PickedInput, startId
     }
 
     val (clips, truncated) = when (ext) {
-        "srt" -> parseSrtStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
+        "srt", "vtt" -> parseSrtStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
         "lrc" -> parseLrcStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
+        "ass", "ssa" -> parseAssStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
         else -> {
             val srtTry = parseSrtStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
-            if (srtTry.first.isNotEmpty()) srtTry else parseLrcStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
+            if (srtTry.first.isNotEmpty()) srtTry else {
+                val lrcTry = parseLrcStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
+                if (lrcTry.first.isNotEmpty()) lrcTry else parseAssStream(openReader() ?: return ParsedTimeline(emptyList(), false), startId)
+            }
         }
     }
     return ParsedTimeline(clips, truncated)
@@ -955,6 +975,43 @@ private fun parseSrtTime(value: String): Long {
     return hh * 3_600_000 + mm * 60_000 + ss * 1_000 + rawMs
 }
 
+private fun parseAssTime(value: String): Long {
+    val parts = value.trim().split(':')
+    if (parts.size != 3) return 0L
+    val h = parts[0].toLongOrNull() ?: 0L
+    val m = parts[1].toLongOrNull() ?: 0L
+    val sParts = parts[2].split('.')
+    val s = sParts[0].toLongOrNull() ?: 0L
+    val cs = sParts.getOrNull(1)?.padEnd(2, '0')?.take(2)?.toLongOrNull() ?: 0L
+    return h * 3_600_000 + m * 60_000 + s * 1_000 + cs * 10
+}
+
+private fun parseAssStream(reader: BufferedReader, startId: Long): Pair<List<TimelineClip>, Boolean> {
+    reader.use {
+        val out = mutableListOf<TimelineClip>()
+        var id = startId
+        var truncated = false
+
+        val eventsRegex = Regex("""^Dialogue:\s*[^,]*,([^,]+),([^,]+),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),(.*)$""")
+
+        it.lineSequence().forEach { line ->
+            val match = eventsRegex.find(line.trim())
+            if (match != null) {
+                if (out.size >= MAX_CLIPS) {
+                    truncated = true
+                    return@forEach
+                }
+                val sMs = parseAssTime(match.groupValues[1])
+                val eMs = parseAssTime(match.groupValues[2])
+                val text = match.groupValues[9].replace("\\N", "\n").replace("\\n", "\n")
+                val cleanText = text.replace(Regex("""\{[^}]*\}"""), "")
+                out += TimelineClip(id++, sMs, max(sMs + MIN_CLIP_MS, eMs), cleanText)
+            }
+        }
+        return out to truncated
+    }
+}
+
 private fun formatSrt(ms: Long): String {
     val safe = max(0L, ms)
     val hh = safe / 3_600_000
@@ -995,5 +1052,51 @@ private fun toLrc(clips: List<TimelineClip>): String = buildString {
         append(lrcTime(c.startMs))
         append("]")
         appendLine(c.text)
+    }
+}
+
+private fun formatAssTime(ms: Long): String {
+    val safe = max(0L, ms)
+    val hh = safe / 3_600_000
+    val mm = (safe % 3_600_000) / 60_000
+    val ss = (safe % 60_000) / 1_000
+    val cs = (safe % 1_000) / 10
+    return "%d:%02d:%02d.%02d".format(hh, mm, ss, cs)
+}
+
+private fun formatVttTime(ms: Long): String {
+    val safe = max(0L, ms)
+    val hh = safe / 3_600_000
+    val mm = (safe % 3_600_000) / 60_000
+    val ss = (safe % 60_000) / 1_000
+    val ms3 = safe % 1_000
+    return "%02d:%02d:%02d.%03d".format(hh, mm, ss, ms3)
+}
+
+private fun toVtt(clips: List<TimelineClip>): String = buildString {
+    appendLine("WEBVTT")
+    appendLine()
+    clips.forEachIndexed { idx, c ->
+        appendLine(idx + 1)
+        appendLine("${formatVttTime(c.startMs)} --> ${formatVttTime(c.endMs)}")
+        appendLine(c.text)
+        appendLine()
+    }
+}
+
+private fun toAss(clips: List<TimelineClip>): String = buildString {
+    appendLine("[Script Info]")
+    appendLine("ScriptType: v4.00+")
+    appendLine("WrapStyle: 0")
+    appendLine()
+    appendLine("[V4+ Styles]")
+    appendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding")
+    appendLine("Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1")
+    appendLine()
+    appendLine("[Events]")
+    appendLine("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
+    clips.forEach { c ->
+        val text = c.text.replace("\n", "\\N")
+        appendLine("Dialogue: 0,${formatAssTime(c.startMs)},${formatAssTime(c.endMs)},Default,,0,0,0,,${text}")
     }
 }
