@@ -86,19 +86,20 @@ fun WikiHubScreen(
         currentPage = page
     }
 
-    val animDuration = 300
+    // 采用 MD3 约定的 Shared Axis (X轴) 过渡：轻量位移配合快速淡入淡出，比大范围拉扯更具现代感
+    val animDuration = 400
     AnimatedContent(
         targetState = currentPage,
         modifier = Modifier.background(MaterialTheme.colorScheme.background),
         transitionSpec = {
             if (isNavigatingBack) {
-                // 返回：从左滑入 + 淡入，旧页面向右滑出 + 淡出
-                (slideInHorizontally(tween(animDuration)) { -it / 4 } + fadeIn(tween(animDuration)))
-                    .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 4 } + fadeOut(tween(animDuration / 2)))
+                // 返回：从左侧轻微滑入 + 淡入，旧页面向右侧轻微滑出 + 快速淡出
+                (slideInHorizontally(tween(animDuration)) { -it / 8 } + fadeIn(tween(animDuration)))
+                    .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 8 } + fadeOut(tween(animDuration / 2)))
             } else {
-                // 前进：从右滑入 + 淡入，旧页面向左滑出 + 淡出
-                (slideInHorizontally(tween(animDuration)) { it / 4 } + fadeIn(tween(animDuration)))
-                    .togetherWith(slideOutHorizontally(tween(animDuration)) { -it / 4 } + fadeOut(tween(animDuration / 2)))
+                // 前进：从右侧轻微滑入 + 淡入，旧页面向左侧轻微滑出 + 快速淡出
+                (slideInHorizontally(tween(animDuration)) { it / 8 } + fadeIn(tween(animDuration)))
+                    .togetherWith(slideOutHorizontally(tween(animDuration)) { -it / 8 } + fadeOut(tween(animDuration / 2)))
             }
         },
         label = "WikiHubPageTransition"
@@ -350,4 +351,3 @@ fun WikiHubScreen(
     }
     } // AnimatedContent
 }
-

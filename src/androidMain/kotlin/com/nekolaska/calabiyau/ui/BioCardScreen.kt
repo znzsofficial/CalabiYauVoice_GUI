@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +52,7 @@ fun BioCardScreen(
     initialTab: Int = 0
 ) {
     val context = LocalContext.current
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val state = rememberLoadState(
         initial = BioCardApi.CardPageData(
             pcCards = emptyList(),
@@ -117,8 +119,10 @@ fun BioCardScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
+                scrollBehavior = scrollBehavior,
                 title = {
                     Text(
                         when (selectedTab) {
@@ -133,17 +137,27 @@ fun BioCardScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = { state.reload(forceRefresh = true) }) {
+                    FilledTonalIconButton(
+                        onClick = { state.reload(forceRefresh = true) },
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                     }
-                    FilledTonalIconButton(onClick = {
-                        val url = when (selectedTab) {
-                            BioCardTab.PC -> data.pcWikiUrl
-                            BioCardTab.MOBILE -> data.mobileWikiUrl
-                            BioCardTab.DECK -> data.deckWikiUrl
-                        }
-                        if (url.isNotBlank()) onOpenWikiUrl(url)
-                    }) {
+                    FilledTonalIconButton(
+                        onClick = {
+                            val url = when (selectedTab) {
+                                BioCardTab.PC -> data.pcWikiUrl
+                                BioCardTab.MOBILE -> data.mobileWikiUrl
+                                BioCardTab.DECK -> data.deckWikiUrl
+                            }
+                            if (url.isNotBlank()) onOpenWikiUrl(url)
+                        },
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
                         Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "打开 Wiki")
                     }
                 }
@@ -333,8 +347,10 @@ private fun PcFilterBar(
     onRarityChange: (Int) -> Unit
 ) {
     FilterCard {
-        DropdownSelector("阵营", factions, selectedFaction, onFactionChange)
-        DropdownSelector("分类", categories, selectedCategory, onCategoryChange)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) { DropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
+            Box(Modifier.weight(1f)) { DropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
+        }
         RarityChips(selectedRarity, onRarityChange)
     }
 }
@@ -352,8 +368,10 @@ private fun MobileFilterBar(
     onRarityChange: (Int) -> Unit
 ) {
     FilterCard {
-        DropdownSelector("阵营", factions, selectedFaction, onFactionChange)
-        DropdownSelector("分类", categories, selectedCategory, onCategoryChange)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) { DropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
+            Box(Modifier.weight(1f)) { DropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
+        }
         RarityChips(selectedRarity, onRarityChange)
     }
 }
@@ -372,7 +390,11 @@ private fun DeckFilterBar(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FilterCard(content: @Composable () -> Unit) {
-    Card(shape = smoothCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Column(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -446,7 +468,14 @@ private fun RarityChips(selectedRarity: Int, onRarityChange: (Int) -> Unit) {
                 leadingIcon = if (selectedRarity == value) {
                     { Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 } else null,
-                shape = smoothCornerShape(12.dp)
+                shape = smoothCornerShape(12.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         }
     }
@@ -841,7 +870,11 @@ private fun ChipSection(title: String, items: List<String>) {
 
 @Composable
 private fun EmptyBioCardState(text: String) {
-    Card(shape = smoothCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Box(modifier = Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) {
             Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

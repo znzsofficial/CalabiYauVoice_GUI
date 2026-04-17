@@ -93,7 +93,12 @@ fun PlayerDecorationScreen(
                 },
                 actions = {
                     if (sections.isNotEmpty()) {
-                        IconButton(onClick = { state.reload(forceRefresh = true) }) {
+                        FilledTonalIconButton(
+                            onClick = { state.reload(forceRefresh = true) },
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
                     }
