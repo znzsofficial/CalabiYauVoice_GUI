@@ -22,6 +22,9 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     private lateinit var appContext: Context
     private var defaultHandler: Thread.UncaughtExceptionHandler? = null
 
+    private fun prefs(context: Context) =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
     fun install(context: Context) {
         appContext = context.applicationContext
         defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -59,11 +62,10 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             }
 
             // 同步写入（commit），确保崩溃时数据不丢失
-            appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit(commit = true) {
-                    putString(KEY_CRASH_LOG, log)
-                        .putLong(KEY_CRASH_TIME, System.currentTimeMillis())
-                }
+            prefs(appContext).edit(commit = true) {
+                putString(KEY_CRASH_LOG, log)
+                putLong(KEY_CRASH_TIME, System.currentTimeMillis())
+            }
 
             // 启动崩溃报告页面
             val intent = Intent(appContext, CrashReportActivity::class.java).apply {
@@ -81,17 +83,30 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
 
     /** 读取上次崩溃日志（读取后清除） */
     fun consumeCrashLog(context: Context): String? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val log = prefs.getString(KEY_CRASH_LOG, null)
-        if (log != null) {
-            prefs.edit {remove(KEY_CRASH_LOG).remove(KEY_CRASH_TIME)}
+        val prefs = prefs(context)
+        val log = prefs.getString(KEY_CRASH_LOG, null)?.takeIf { it.isNotBlank() }
+        if (prefs.contains(KEY_CRASH_LOG) || prefs.contains(KEY_CRASH_TIME)) {
+            prefs.edit(commit = true) {
+                remove(KEY_CRASH_LOG)
+                remove(KEY_CRASH_TIME)
+            }
         }
         return log
     }
 
     /** 检查是否有未读的崩溃日志 */
     fun hasPendingCrashLog(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .contains(KEY_CRASH_LOG)
+        val prefs = prefs(context)
+        val log = prefs.getString(KEY_CRASH_LOG, null)
+        val hasValidLog = !log.isNullOrBlank()
+
+        if (!hasValidLog && (prefs.contains(KEY_CRASH_LOG) || prefs.contains(KEY_CRASH_TIME))) {
+            prefs.edit(commit = true) {
+                remove(KEY_CRASH_LOG)
+                remove(KEY_CRASH_TIME)
+            }
+        }
+
+        return hasValidLog
     }
 }
