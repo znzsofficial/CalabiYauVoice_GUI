@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
@@ -129,7 +130,7 @@ private fun CharacterDetailContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ── 头部：立绘 + 基本信息 ──
@@ -140,27 +141,31 @@ private fun CharacterDetailContent(
         // ── 个性语录 ──
         if (detail.quote.isNotBlank()) {
             item(key = "quote") {
-                QuoteCard(quote = detail.quote)
+                Box(Modifier.padding(horizontal = 16.dp)) { QuoteCard(quote = detail.quote) }
             }
         }
 
         // ── 角色简介 ──
         if (detail.description.isNotBlank() || detail.summary.isNotBlank()) {
             item(key = "description") {
-                DescriptionCard(
-                    avatarUrl = detail.avatarUrl,
-                    summary = detail.summary,
-                    description = detail.description
-                )
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    DescriptionCard(
+                        avatarUrl = detail.avatarUrl,
+                        summary = detail.summary,
+                        description = detail.description
+                    )
+                }
             }
         }
 
         if (detail.positionDuty.isNotBlank()) {
             item(key = "position_detail") {
-                PositionInfoCard(
-                    positionName = detail.positionName.ifBlank { detail.role },
-                    positionDuty = detail.positionDuty
-                )
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    PositionInfoCard(
+                        positionName = detail.positionName.ifBlank { detail.role },
+                        positionDuty = detail.positionDuty
+                    )
+                }
             }
         }
 
@@ -171,24 +176,26 @@ private fun CharacterDetailContent(
             detail.lifeInfo.isNotEmpty()
         ) {
             item(key = "setting_extra") {
-                SettingExtraCard(detail = detail)
+                Box(Modifier.padding(horizontal = 16.dp)) { SettingExtraCard(detail = detail) }
             }
         }
 
         // ── 详细属性 ──
         item(key = "attributes") {
-            AttributesCard(detail = detail)
+            Box(Modifier.padding(horizontal = 16.dp)) { AttributesCard(detail = detail) }
         }
 
         // ── 武器信息 ──
         if (detail.weaponName.isNotBlank()) {
             item(key = "weapon") {
-                WeaponInfoCard(
-                    detail = detail,
-                    onClick = if (onOpenWeaponDetail != null) {
-                        { onOpenWeaponDetail(detail.weaponName) }
-                    } else null
-                )
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    WeaponInfoCard(
+                        detail = detail,
+                        onClick = if (onOpenWeaponDetail != null) {
+                            { onOpenWeaponDetail(detail.weaponName) }
+                        } else null
+                    )
+                }
             }
         }
 
@@ -196,7 +203,7 @@ private fun CharacterDetailContent(
         if (onOpenCostumes != null || onOpenWeaponSkins != null) {
             item(key = "skin_nav") {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (onOpenCostumes != null) {
@@ -226,7 +233,7 @@ private fun CharacterDetailContent(
         // ── 角色技能 ──
         if (detail.skills.isNotEmpty()) {
             item(key = "skills") {
-                SkillsCard(skills = detail.skills)
+                Box(Modifier.padding(horizontal = 16.dp)) { SkillsCard(skills = detail.skills) }
             }
         }
 
@@ -238,46 +245,47 @@ private fun CharacterDetailContent(
         }
         if (personalItems.isNotEmpty()) {
             item(key = "personal") {
-                PersonalInfoCard(items = personalItems)
+                Box(Modifier.padding(horizontal = 16.dp)) { PersonalInfoCard(items = personalItems) }
             }
         }
 
         // ── 角色故事 & 相关剧情 ──
         if (detail.stories.isNotEmpty()) {
             item(key = "stories") {
-                StoriesCard(
-                    stories = detail.stories,
-                    onOpenWikiUrl = onOpenWikiUrl
-                )
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    StoriesCard(
+                        stories = detail.stories,
+                        onOpenWikiUrl = onOpenWikiUrl
+                    )
+                }
             }
         }
 
         // ── 观测语录 ──
         if (detail.observerQuote.isNotBlank()) {
             item(key = "observer_quote") {
-                ObserverQuoteCard(quote = detail.observerQuote)
+                Box(Modifier.padding(horizontal = 16.dp)) { ObserverQuoteCard(quote = detail.observerQuote) }
             }
         }
 
         // ── 更新改动历史 ──
         if (detail.updateHistory.isNotEmpty()) {
             item(key = "update_history") {
-                UpdateHistoryCard(history = detail.updateHistory)
+                Box(Modifier.padding(horizontal = 16.dp)) { UpdateHistoryCard(history = detail.updateHistory) }
             }
         }
 
         // ── 子页面导航 ──
         if (detail.subPages.isNotEmpty()) {
             item(key = "sub_pages") {
-                SubPagesCard(
-                    subPages = detail.subPages,
-                    onOpenWikiUrl = onOpenWikiUrl
-                )
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    SubPagesCard(
+                        subPages = detail.subPages,
+                        onOpenWikiUrl = onOpenWikiUrl
+                    )
+                }
             }
         }
-
-        // 底部留白
-        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
@@ -288,125 +296,120 @@ private fun CharacterDetailContent(
 @Composable
 private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) {
     val headerImage = portraitUrl ?: detail.avatarUrl
-    val cardColor = CardDefaults.cardColors().containerColor
-    Card(
-        shape = smoothCornerShape(24.dp),
+    
+    Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column {
-            // 立绘/头像区域
-            if (headerImage != null) {
+        // 立绘/头像满宽展示
+        if (headerImage != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(if (portraitUrl != null) 400.dp else 240.dp)
+            ) {
+                AsyncImage(
+                    model = headerImage,
+                    contentDescription = detail.name,
+                    contentScale = ContentScale.Crop,
+                    alignment = if (portraitUrl != null) BiasAlignment(0f, -0.6f) else Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                )
+                // 底部轻微渐变衔接背景色
                 Box(
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(if (portraitUrl != null) 320.dp else 200.dp)
-                ) {
-                    AsyncImage(
-                        model = headerImage,
-                        contentDescription = detail.name,
-                        contentScale = ContentScale.Crop,
-                        // 立绘：跳过顶部约15%空白，从偏上位置开始裁剪
-                        alignment = if (portraitUrl != null) BiasAlignment(0f, -0.7f)
-                                    else Alignment.Center,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    // 底部渐变（颜色与 Card 背景一致）
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        cardColor
-                                    )
+                        .height(60.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.background
                                 )
                             )
-                    )
+                        )
+                )
+            }
+        }
+
+        Column(
+            modifier = Modifier.padding(
+                start = 24.dp,
+                end = 24.dp,
+                top = if (headerImage == null) 24.dp else 8.dp,
+                bottom = 8.dp
+            )
+        ) {
+            // 角色名
+            Text(
+                detail.name,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black
+            )
+
+            // 英文名 / 日文名
+            if (detail.englishName.isNotBlank() || detail.japaneseName.isNotBlank()) {
+                val subName = buildString {
+                    if (detail.englishName.isNotBlank()) append(detail.englishName)
+                    if (detail.japaneseName.isNotBlank()) {
+                        if (isNotEmpty()) append(" / ")
+                        append(detail.japaneseName)
+                    }
                 }
+                Text(
+                    subName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontStyle = FontStyle.Italic
+                )
             }
 
-            Column(
-                modifier = Modifier.padding(
-                    start = 20.dp,
-                    end = 20.dp,
-                    top = if (headerImage == null) 20.dp else 0.dp,
-                    bottom = 20.dp
-                )
-            ) {
-                // 角色名
-                Text(
-                    detail.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            Spacer(Modifier.height(16.dp))
 
-                // 英文名 / 日文名
-                if (detail.englishName.isNotBlank() || detail.japaneseName.isNotBlank()) {
-                    val subName = buildString {
-                        if (detail.englishName.isNotBlank()) append(detail.englishName)
-                        if (detail.japaneseName.isNotBlank()) {
-                            if (isNotEmpty()) append(" / ")
-                            append(detail.japaneseName)
-                        }
-                    }
-                    Text(
-                        subName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontStyle = FontStyle.Italic
+            // 标签行
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (detail.faction.isNotBlank()) {
+                    InfoChip(
+                        label = detail.faction,
+                        icon = Icons.Outlined.Shield,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-
-                Spacer(Modifier.height(12.dp))
-
-                // 标签行：阵营 + 定位 + 身份
-                @OptIn(ExperimentalLayoutApi::class)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (detail.faction.isNotBlank()) {
-                        InfoChip(
-                            label = detail.faction,
-                            icon = Icons.Outlined.Shield,
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    if (detail.positionName.isNotBlank()) {
-                        InfoChip(
-                            label = detail.positionName,
-                            icon = Icons.Outlined.WorkOutline,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    } else if (detail.role.isNotBlank()) {
-                        InfoChip(
-                            label = detail.role,
-                            icon = Icons.Outlined.WorkOutline,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                    if (detail.identity.isNotBlank()) {
-                        InfoChip(
-                            label = detail.identity,
-                            icon = Icons.Outlined.Badge,
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    }
-                    if (detail.activeArea.isNotBlank()) {
-                        InfoChip(
-                            label = detail.activeArea,
-                            icon = Icons.Outlined.LocationOn,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                if (detail.positionName.isNotBlank()) {
+                    InfoChip(
+                        label = detail.positionName,
+                        icon = Icons.Outlined.WorkOutline,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                } else if (detail.role.isNotBlank()) {
+                    InfoChip(
+                        label = detail.role,
+                        icon = Icons.Outlined.WorkOutline,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                if (detail.identity.isNotBlank()) {
+                    InfoChip(
+                        label = detail.identity,
+                        icon = Icons.Outlined.Badge,
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+                if (detail.activeArea.isNotBlank()) {
+                    InfoChip(
+                        label = detail.activeArea,
+                        icon = Icons.Outlined.LocationOn,
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }
@@ -1239,46 +1242,50 @@ private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 头部卡片骨架
-        SkeletonCard {
+        // 头部骨架
+        Column(modifier = Modifier.fillMaxWidth()) {
             ShimmerBox(
                 modifier = Modifier.fillMaxWidth().height(320.dp),
-                shape = smoothCornerShape(24.dp)
+                shape = androidx.compose.ui.graphics.RectangleShape
             )
-            Column(Modifier.padding(20.dp)) {
-                ShimmerBox(Modifier.width(120.dp).height(24.dp))
+            Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)) {
+                ShimmerBox(Modifier.width(120.dp).height(32.dp))
                 Spacer(Modifier.height(8.dp))
                 SkeletonTextLine(widthFraction = 0.7f)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 SkeletonChipRow(count = 3)
             }
         }
         // 语录卡片骨架
-        SkeletonCard {
-            Row(Modifier.padding(20.dp)) {
-                ShimmerBox(
-                    Modifier.size(28.dp),
-                    shape = smoothCornerShape(6.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    SkeletonTextLine()
-                    Spacer(Modifier.height(6.dp))
-                    SkeletonTextLine(widthFraction = 0.7f)
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SkeletonCard {
+                Row(Modifier.padding(20.dp)) {
+                    ShimmerBox(
+                        Modifier.size(28.dp),
+                        shape = smoothCornerShape(6.dp)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        SkeletonTextLine()
+                        Spacer(Modifier.height(6.dp))
+                        SkeletonTextLine(widthFraction = 0.7f)
+                    }
                 }
             }
         }
         // 属性卡片骨架
-        SkeletonCard {
-            Column(Modifier.padding(20.dp)) {
-                SkeletonSectionTitle()
-                Spacer(Modifier.height(12.dp))
-                repeat(3) { row ->
-                    if (row > 0) Spacer(Modifier.height(12.dp))
-                    SkeletonStatRow()
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SkeletonCard {
+                Column(Modifier.padding(20.dp)) {
+                    SkeletonSectionTitle()
+                    Spacer(Modifier.height(12.dp))
+                    repeat(3) { row ->
+                        if (row > 0) Spacer(Modifier.height(12.dp))
+                        SkeletonStatRow()
+                    }
                 }
             }
         }
