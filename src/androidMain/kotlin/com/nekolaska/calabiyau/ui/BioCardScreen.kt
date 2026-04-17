@@ -3,14 +3,14 @@ package com.nekolaska.calabiyau.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
@@ -18,13 +18,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -32,14 +32,10 @@ import com.nekolaska.calabiyau.data.BioCardApi
 import com.nekolaska.calabiyau.data.BioCardApi.MobileCard
 import com.nekolaska.calabiyau.data.BioCardApi.PcCard
 import com.nekolaska.calabiyau.data.BioCardApi.SharedDeck
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.LoadingState
-import com.nekolaska.calabiyau.ui.shared.SearchBar
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.data.BioDeckShareApi
+import com.nekolaska.calabiyau.ui.shared.*
+import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
+import data.ApiResult
 import kotlinx.coroutines.launch
 
 private enum class BioCardTab { PC, MOBILE, DECK }
@@ -52,6 +48,7 @@ fun BioCardScreen(
     initialTab: Int = 0
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val state = rememberLoadState(
         initial = BioCardApi.CardPageData(
@@ -67,6 +64,13 @@ fun BioCardScreen(
         BioCardApi.fetchAll(force)
     }
     val showSnack = rememberSnackbarLauncher()
+    var isWikiLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
+    var isSubmittingDeck by remember { mutableStateOf(false) }
+    val deckShareCardState = rememberLoadState(
+        initial = emptyMap<String, List<BioDeckShareApi.DeckCardOption>>()
+    ) { force ->
+        BioDeckShareApi.fetchDeckCardMap(force)
+    }
     var selectedTab by remember(initialTab) {
         mutableStateOf(
             when (initialTab) {
@@ -242,6 +246,46 @@ fun BioCardScreen(
                             factions = deckFactions,
                             selectedFaction = deckFaction,
                             onFactionChange = { deckFaction = it }
+                        )
+                    }
+                }
+                if (selectedTab == BioCardTab.DECK) {
+                    item {
+                        DeckShareComposerCard(
+                            isLoggedIn = isWikiLoggedIn,
+                            isSubmitting = isSubmittingDeck,
+                            cardMap = deckShareCardState.data,
+                            pcCards = data.pcCards,
+                            mobileCards = data.mobileCards,
+                            isLoadingCardMap = deckShareCardState.isLoading,
+                            cardMapError = deckShareCardState.error?.message,
+                            onReloadCardMap = { deckShareCardState.reload(forceRefresh = true) },
+                            onOpenLogin = {
+                                onOpenWikiUrl("https://wiki.biligame.com/wiki/Special:UserLogin?returnto=%E6%99%B6%E6%BA%90%E6%84%9F%E6%9F%93%E5%8D%A1%E7%BB%84%E5%88%86%E4%BA%AB")
+                            },
+                            onRefreshLoginState = { isWikiLoggedIn = hasWikiLoginCookie() },
+                            onSubmit = { payload ->
+                                scope.launch {
+                                    isSubmittingDeck = true
+                                    when (val result = BioDeckShareApi.submitDeck(payload, deckShareCardState.data)) {
+                                        is ApiResult.Success -> {
+                                            showSnack(
+                                                if (result.value.isPending) {
+                                                    "发布成功，已进入审核队列"
+                                                } else {
+                                                    "发布成功"
+                                                }
+                                            )
+                                            state.reload(forceRefresh = true)
+                                        }
+                                        is ApiResult.Error -> {
+                                            showSnack(result.message)
+                                        }
+                                    }
+                                    isWikiLoggedIn = hasWikiLoginCookie()
+                                    isSubmittingDeck = false
+                                }
+                            }
                         )
                     }
                 }
@@ -531,6 +575,402 @@ private fun BioInfoCard(
     }
 }
 
+private const val MAX_PER_RARITY = 20
+private val DECK_RARITY_THRESHOLDS = mapOf(
+    "超弦体" to mapOf("完美" to 10, "卓越" to 15, "精致" to 15),
+    "晶源体" to mapOf("完美" to 8, "卓越" to 11, "精致" to 11)
+)
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun DeckShareComposerCard(
+    isLoggedIn: Boolean,
+    isSubmitting: Boolean,
+    cardMap: Map<String, List<BioDeckShareApi.DeckCardOption>>,
+    pcCards: List<BioCardApi.PcCard>,
+    mobileCards: List<BioCardApi.MobileCard>,
+    isLoadingCardMap: Boolean,
+    cardMapError: String?,
+    onReloadCardMap: () -> Unit,
+    onOpenLogin: () -> Unit,
+    onRefreshLoginState: () -> Unit,
+    onSubmit: (BioDeckShareApi.SubmitDeckPayload) -> Unit
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+    var showCardSelector by remember { mutableStateOf(false) }
+
+    var deckName by remember { mutableStateOf("") }
+    var author by remember { mutableStateOf("") }
+    var intro by remember { mutableStateOf("") }
+    var shareCodeInput by remember { mutableStateOf("") }
+    var statusText by remember { mutableStateOf("") }
+
+    val factionOptions = remember(cardMap) {
+        listOf("超弦体", "晶源体")
+            .filter { cardMap[it]?.isNotEmpty() == true }
+            .ifEmpty { cardMap.keys.sorted() }
+    }
+    var selectedFaction by remember(factionOptions) { mutableStateOf(factionOptions.firstOrNull().orEmpty()) }
+
+    val selectableIds = remember { mutableStateListOf<String>() }
+    val cards = remember(cardMap, selectedFaction) { cardMap[selectedFaction].orEmpty() }
+    val defaultCards = remember(cards) { cards.filter { it.isDefault } }
+    val userSelectableCards = remember(cards) { cards.filter { !it.isDefault } }
+    val cardById = remember(cards) { cards.filter { it.cardId.isNotBlank() }.associateBy { it.cardId } }
+    val indexToCardId = remember(cards) { cards.filter { it.cardId.isNotBlank() && it.index >= 0 }.associate { it.index to it.cardId } }
+
+    val pcCardImages = remember(pcCards) { pcCards.associate { it.name to it.imageUrl } }
+    val mobileCardImages = remember(mobileCards) { mobileCards.associate { it.name to it.imageUrl } }
+
+    LaunchedEffect(selectedFaction) {
+        selectableIds.clear()
+        statusText = ""
+    }
+
+    val mergedSelectedIds = (selectableIds + defaultCards.map { it.cardId }).filter { it.isNotBlank() }.distinct()
+
+    val rarityCounts = remember(mergedSelectedIds, cardById) {
+        mutableMapOf("完美" to 0, "卓越" to 0, "精致" to 0).apply {
+            mergedSelectedIds.forEach { id ->
+                when (normalizeDeckQuality(cardById[id]?.quality.orEmpty())) {
+                    "完美" -> this["完美"] = (this["完美"] ?: 0) + 1
+                    "卓越" -> this["卓越"] = (this["卓越"] ?: 0) + 1
+                    "精致" -> this["精致"] = (this["精致"] ?: 0) + 1
+                }
+            }
+        }
+    }
+
+    val threshold = remember(selectedFaction) { DECK_RARITY_THRESHOLDS[selectedFaction].orEmpty() }
+    val canSubmitByRarity = remember(rarityCounts, threshold) {
+        listOf("完美", "卓越", "精致").all { key ->
+            val count = rarityCounts[key] ?: 0
+            count >= (threshold[key] ?: 0) && count <= MAX_PER_RARITY
+        }
+    }
+
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { isExpanded = !isExpanded },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Outlined.Publish, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(8.dp))
+                Text("卡组发布（Beta）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    imageVector = if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (!isLoggedIn) {
+                        Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("未检测到 Wiki 登录状态", color = MaterialTheme.colorScheme.onErrorContainer)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilledTonalButton(onClick = onOpenLogin, shape = smoothCornerShape(24.dp)) { Text("去登录") }
+                                    OutlinedButton(onClick = onRefreshLoginState, shape = smoothCornerShape(24.dp)) { Text("刷新") }
+                                }
+                            }
+                        }
+                    }
+
+                    if (isLoadingCardMap) {
+                        Text("正在加载卡牌数据…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    if (!cardMapError.isNullOrBlank()) {
+                        Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(cardMapError, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(8.dp))
+                                FilledTonalButton(onClick = onReloadCardMap, shape = smoothCornerShape(24.dp)) { Text("重试") }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = deckName,
+                        onValueChange = { deckName = it },
+                        label = { Text("卡组名称") },
+                        singleLine = true,
+                        shape = smoothCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = author,
+                        onValueChange = { author = it },
+                        label = { Text("分享作者") },
+                        singleLine = true,
+                        shape = smoothCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    DropdownSelector(
+                        label = "阵营",
+                        options = factionOptions.ifEmpty { listOf("") },
+                        selected = selectedFaction,
+                        onSelected = { selectedFaction = it }
+                    )
+
+                    OutlinedTextField(
+                        value = intro,
+                        onValueChange = { intro = it },
+                        label = { Text("卡组介绍") },
+                        shape = smoothCornerShape(16.dp),
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = shareCodeInput,
+                            onValueChange = { shareCodeInput = it },
+                            label = { Text("导入分享码") },
+                            placeholder = { Text("粘贴后点击导入") },
+                            singleLine = true,
+                            shape = smoothCornerShape(16.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledTonalButton(
+                            onClick = {
+                                if (selectedFaction.isBlank()) {
+                                    statusText = "请先选择阵营"
+                                    return@FilledTonalButton
+                                }
+                                runCatching {
+                                    val parsedName = BioDeckShareApi.extractDeckNameFromShareInput(shareCodeInput)
+                                    val (ids, _) = BioDeckShareApi.decodeShareCode(
+                                        rawInput = shareCodeInput,
+                                        expectedFaction = selectedFaction,
+                                        indexToCardId = indexToCardId
+                                    )
+                                    selectableIds.clear()
+                                    selectableIds.addAll(ids.filter { id -> cardById[id]?.isDefault == false }.distinct())
+                                    if (deckName.isBlank() && !parsedName.isNullOrBlank()) deckName = parsedName
+                                    statusText = "已导入 ${selectableIds.size} 张卡牌"
+                                }.onFailure {
+                                    statusText = it.message ?: "导入失败"
+                                }
+                            },
+                            shape = smoothCornerShape(24.dp)
+                        ) { Text("导入") }
+                    }
+
+                    if (defaultCards.isNotEmpty()) {
+                        Text(
+                            text = "默认携带：${defaultCards.joinToString("、") { it.name }}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("稀有度统计（含默认卡）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                            listOf("完美", "卓越", "精致").forEach { key ->
+                                val now = rarityCounts[key] ?: 0
+                                val need = threshold[key] ?: 0
+                                val ok = now >= need && now <= MAX_PER_RARITY
+                                Text(
+                                    "$key：$now / $need（上限$MAX_PER_RARITY）${if (ok) " ✓" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+
+                    Text("自定义卡牌（${mergedSelectedIds.size - defaultCards.size}张）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(
+                        onClick = { showCardSelector = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = smoothCornerShape(16.dp)
+                    ) {
+                        Text("选择卡牌...")
+                    }
+
+                    if (statusText.isNotBlank()) {
+                        Text(statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            if (!isLoggedIn) {
+                                statusText = "请先登录 Wiki"
+                                return@FilledTonalButton
+                            }
+                            if (deckName.isBlank() || selectedFaction.isBlank()) {
+                                statusText = "请填写卡组名称并选择阵营"
+                                return@FilledTonalButton
+                            }
+                            if (!canSubmitByRarity) {
+                                statusText = "稀有度条件不满足，无法发布"
+                                return@FilledTonalButton
+                            }
+                            if (mergedSelectedIds.isEmpty()) {
+                                statusText = "至少需要选择 1 张卡牌"
+                                return@FilledTonalButton
+                            }
+                            onSubmit(
+                                BioDeckShareApi.SubmitDeckPayload(
+                                    deckName = deckName.trim(),
+                                    author = author.trim(),
+                                    intro = intro.trim(),
+                                    faction = selectedFaction,
+                                    selectedCardIds = mergedSelectedIds
+                                )
+                            )
+                        },
+                        enabled = !isSubmitting && !isLoadingCardMap && cardMapError.isNullOrBlank(),
+                        shape = smoothCornerShape(24.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isSubmitting) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("发布中…")
+                        } else {
+                            Text("发布卡组")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCardSelector) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showCardSelector = false },
+            sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "选择卡牌",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                if (userSelectableCards.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("当前阵营无可选卡牌", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(userSelectableCards, key = { it.cardId }) { card ->
+                            val selected = card.cardId in selectableIds
+                            val q = normalizeDeckQuality(card.quality)
+                            val imgUrl = pcCardImages[card.name] ?: mobileCardImages[card.name]
+
+                            val rarityColor = when (q) {
+                                "完美" -> Color(0xFFD4AF37) // Gold-ish
+                                "卓越" -> Color(0xFF9C27B0) // Purple
+                                "精致" -> Color(0xFF2196F3) // Blue
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+
+                            Card(
+                                onClick = {
+                                    if (selected) {
+                                        selectableIds.remove(card.cardId)
+                                    } else {
+                                        val nextCount = (rarityCounts[q] ?: 0) + 1
+                                        if (q in listOf("完美", "卓越", "精致") && nextCount > MAX_PER_RARITY) {
+                                            statusText = "$q 已达到上限（$MAX_PER_RARITY）"
+                                            showCardSelector = false
+                                        } else {
+                                            selectableIds.add(card.cardId)
+                                        }
+                                    }
+                                },
+                                shape = smoothCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                ),
+                                border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AsyncImage(
+                                        model = imgUrl,
+                                        contentDescription = card.name,
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(smoothCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(card.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                        if (q.isNotBlank()) {
+                                            Text(q, style = MaterialTheme.typography.bodySmall, color = rarityColor)
+                                        }
+                                    }
+                                    if (selected) {
+                                        Icon(
+                                            Icons.Outlined.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        item {
+                            Spacer(Modifier.height(80.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun normalizeDeckQuality(raw: String): String = when {
+    raw.contains("完") -> "完美"
+    raw.contains("卓") -> "卓越"
+    raw.contains("精") -> "精致"
+    else -> raw
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PcCardDetailSheet(card: PcCard, onDismiss: () -> Unit) {
@@ -797,38 +1237,6 @@ private fun CardDetailSheet(
 }
 
 @Composable
-private fun CardHeader(
-    imageUrl: String?,
-    title: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        if (!imageUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = title,
-                modifier = Modifier.size(64.dp)
-            )
-        } else {
-            Surface(shape = smoothCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(64.dp)) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                }
-            }
-        }
-        Spacer(Modifier.size(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
 private fun DetailLine(label: String, value: String) {
     if (value.isBlank()) return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -850,7 +1258,7 @@ private fun ChipSection(title: String, items: List<String>) {
                 Surface(
                     shape = smoothCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.75f),
-                    border = androidx.compose.foundation.BorderStroke(
+                    border = BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                     )
@@ -860,7 +1268,7 @@ private fun ChipSection(title: String, items: List<String>) {
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        textAlign = TextAlign.Center
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
