@@ -31,6 +31,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,11 +51,13 @@ fun ActivityScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
 ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<ActivityApi.ActivityEntry>()) { force ->
         ActivityApi.fetchActivities(forceRefresh = force)
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
                 title = { Text("活动", fontWeight = FontWeight.Bold) },
@@ -62,11 +65,16 @@ fun ActivityScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%B4%BB%E5%8A%A8") }) {
+                    FilledTonalIconButton(
+                        onClick = { onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%B4%BB%E5%8A%A8") },
+                        colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 },
-                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+                scrollBehavior = scrollBehavior
             )
         }
     ) { innerPadding ->

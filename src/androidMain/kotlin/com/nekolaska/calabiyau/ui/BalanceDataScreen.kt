@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,15 +56,16 @@ private enum class SortOrder { ASC, DESC }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BalanceDataScreen(onBack: () -> Unit) {
-    val scope = rememberCoroutineScope()
+fun BalanceDataScreen(
+    onBack: () -> Unit
+) {
 
-    // ── 状态 ──
+    // ViewModel-like state
+    var settings by remember { mutableStateOf<BalanceDataApi.BalanceSettings?>(null) }
+    var balanceResult by remember { mutableStateOf<BalanceDataApi.BalanceResult?>(null) }
     var isLoadingSettings by remember { mutableStateOf(true) }
     var isLoadingData by remember { mutableStateOf(false) }
     var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var settings by remember { mutableStateOf<BalanceDataApi.BalanceSettings?>(null) }
-    var balanceResult by remember { mutableStateOf<BalanceDataApi.BalanceResult?>(null) }
 
     // 筛选状态
     var selectedMode by remember { mutableStateOf<BalanceDataApi.FilterOption?>(null) }
@@ -77,6 +79,8 @@ fun BalanceDataScreen(onBack: () -> Unit) {
     // 排序
     var sortField by remember { mutableStateOf(SortField.WIN_RATE) }
     var sortOrder by remember { mutableStateOf(SortOrder.DESC) }
+
+    val scope = rememberCoroutineScope()
 
     // 角色元信息映射 (id → CharacterMeta)
     val characterMap = remember(settings) {
@@ -164,7 +168,7 @@ fun BalanceDataScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("平衡数据") },
+                title = { Text("平衡数据", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
                 },
@@ -173,7 +177,10 @@ fun BalanceDataScreen(onBack: () -> Unit) {
                         onClick = {
                             loadSettings(forceRefresh = true)
                         },
-                        enabled = !isLoadingSettings && !isLoadingData
+                        enabled = !isLoadingSettings && !isLoadingData,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
                     ) {
                         Icon(Icons.Outlined.Refresh, "刷新")
                     }

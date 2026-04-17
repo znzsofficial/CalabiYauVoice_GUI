@@ -7,9 +7,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,16 +31,29 @@ fun AnnouncementScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val state = rememberLoadState(emptyList<AnnouncementApi.Announcement>()) { force ->
         AnnouncementApi.fetchAnnouncements(forceRefresh = force)
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text("公告资讯", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
+                },
+                scrollBehavior = scrollBehavior,
+                actions = {
+                    FilledTonalIconButton(
+                        onClick = { state.reload(forceRefresh = true) },
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                    }
                 }
             )
         }
@@ -80,7 +95,8 @@ private fun AnnouncementCard(
     Card(
         onClick = { onOpenWikiUrl(announcement.wikiUrl) },
         shape = smoothCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(Modifier.padding(16.dp)) {
             // 标题
@@ -147,7 +163,8 @@ private fun AnnouncementSkeleton(modifier: Modifier = Modifier) {
         repeat(5) {
             Card(
                 shape = smoothCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(Modifier.padding(16.dp)) {
                     ShimmerBox(Modifier.fillMaxWidth(0.85f).height(14.dp))
