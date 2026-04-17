@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.ui.weapon
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -11,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -86,7 +88,7 @@ fun WeaponDetailScreen(
             WeaponDetailContent(
                 detail = detail!!,
                 onOpenWikiUrl = onOpenWikiUrl,
-                onOpenWeaponSkins = onOpenWeaponSkins
+                onOpenSkins = onOpenWeaponSkins
             )
         }
     }
@@ -96,54 +98,82 @@ fun WeaponDetailScreen(
 private fun WeaponDetailContent(
     detail: WeaponDetail,
     onOpenWikiUrl: (String) -> Unit,
-    onOpenWeaponSkins: ((String) -> Unit)? = null
+    onOpenSkins: ((String) -> Unit)? = null,
+    onOpenCharacter: ((String) -> Unit)? = null
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ── 头部：武器图片 + 名称 + 类型 ──
         item(key = "header") {
-            WeaponHeaderCard(detail)
+            Box(Modifier.padding(horizontal = 16.dp)) { WeaponHeaderCard(detail) }
         }
 
         // ── 武器介绍 ──
         if (detail.description.isNotBlank()) {
             item(key = "description") {
-                WeaponDescriptionCard(detail.description)
+                Box(Modifier.padding(horizontal = 16.dp)) { WeaponDescriptionCard(detail.description) }
             }
         }
 
-        // ── 武器数据 ──
+        // ── 获取途径 ──
+        if (detail.obtainMethod.isNotBlank()) {
+            item(key = "obtain") {
+                Box(Modifier.padding(horizontal = 16.dp)) { WeaponObtainCard(method = detail.obtainMethod) }
+            }
+        }
+
+        // ── 数据属性 (满级) ──
         item(key = "stats") {
-            WeaponStatsCard(detail)
+            Box(Modifier.padding(horizontal = 16.dp)) { WeaponStatsCard(detail = detail) }
         }
 
-        // ── 伤害表 ──
-        if (detail.damageTable.isNotEmpty()) {
-            item(key = "damage") {
-                WeaponDamageCard(detail)
+        // ── 伤害数据 ──
+        if (detail.baseDamage.isNotBlank() || detail.damageTable.isNotEmpty()) {
+            item("damage_table") {
+                Box(Modifier.padding(horizontal = 16.dp)) { WeaponDamageCard(detail = detail) }
             }
         }
 
-        // ── 冷却时间（战术道具） ──
+        // ── 冷却时间 ──
         if (detail.cooldowns.isNotEmpty()) {
-            item(key = "cooldown") {
-                WeaponCooldownCard(detail.cooldowns)
+            item("cooldowns") {
+                Box(Modifier.padding(horizontal = 16.dp)) { WeaponCooldownCard(cooldowns = detail.cooldowns) }
             }
         }
 
-        // ── 武器外观跳转 ──
-        if (onOpenWeaponSkins != null) {
-            item(key = "skin_nav") {
-                FilledTonalButton(
-                    onClick = { onOpenWeaponSkins(detail.name) },
-                    modifier = Modifier.fillMaxWidth()
+        // ── 外观与角色快捷入口 ──
+        if (onOpenSkins != null || onOpenCharacter != null) {
+            item(key = "shortcuts") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("查看武器外观")
+                    if (onOpenSkins != null) {
+                        FilledTonalButton(
+                            onClick = { onOpenSkins(detail.name) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("查看武器外观")
+                        }
+                    }
+
+                    if (onOpenCharacter != null) {
+                        FilledTonalButton(
+                            onClick = { onOpenCharacter(detail.name) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("查看角色信息")
+                        }
+                    }
                 }
             }
         }
@@ -151,7 +181,7 @@ private fun WeaponDetailContent(
         // ── 子页面导航 ──
         if (detail.subPages.isNotEmpty()) {
             item(key = "sub_pages") {
-                WeaponSubPagesCard(detail.subPages, onOpenWikiUrl)
+                Box(Modifier.padding(horizontal = 16.dp)) { WeaponSubPagesCard(detail.subPages, onOpenWikiUrl) }
             }
         }
 
@@ -195,7 +225,7 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
                 fontWeight = FontWeight.Bold
             )
 
-            // 标签行：使用者 / 类型 / 开火模式 / 获得方式
+            // 标签行
             val hasChips = detail.user.isNotBlank() || detail.type.isNotBlank()
                     || detail.fireMode.isNotBlank() || detail.obtainMethod.isNotBlank()
             if (hasChips) {
@@ -253,6 +283,25 @@ private fun WeaponDescriptionCard(description: String) {
             SectionTitle(Icons.Outlined.Description, "武器介绍")
             Spacer(Modifier.height(10.dp))
             Text(description, style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  武器获取途径
+// ────────────────────────────────────────────
+
+@Composable
+private fun WeaponObtainCard(method: String) {
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            SectionTitle(Icons.Outlined.Inventory2, "获取途径")
+            Spacer(Modifier.height(10.dp))
+            Text(method, style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -482,12 +531,12 @@ private fun WeaponSubPagesCard(
                 Surface(
                     onClick = { onOpenWikiUrl(page.wikiUrl) },
                     shape = smoothCornerShape(12.dp),
-                    color = androidx.compose.ui.graphics.Color.Transparent
+                    color = Color.Transparent
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val icon = when {
@@ -570,50 +619,55 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 头部卡片骨架
-        SkeletonCard {
-            Column(Modifier.padding(20.dp)) {
-                ShimmerBox(
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
-                    shape = smoothCornerShape(12.dp)
-                )
-                Spacer(Modifier.height(12.dp))
-                ShimmerBox(Modifier.width(140.dp).height(24.dp))
-                Spacer(Modifier.height(10.dp))
-                SkeletonChipRow(count = 3)
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SkeletonCard {
+                Column(Modifier.padding(20.dp)) {
+                    ShimmerBox(
+                        modifier = Modifier.fillMaxWidth().height(160.dp),
+                        shape = smoothCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    ShimmerBox(Modifier.width(140.dp).height(24.dp))
+                    Spacer(Modifier.height(10.dp))
+                    SkeletonChipRow(count = 3)
+                }
             }
         }
         // 武器数据卡片骨架
-        SkeletonCard {
-            Column(Modifier.padding(20.dp)) {
-                SkeletonSectionTitle()
-                Spacer(Modifier.height(12.dp))
-                repeat(3) { row ->
-                    if (row > 0) Spacer(Modifier.height(12.dp))
-                    SkeletonStatRow()
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SkeletonCard {
+                Column(Modifier.padding(20.dp)) {
+                    SkeletonSectionTitle()
+                    Spacer(Modifier.height(12.dp))
+                    repeat(3) { row ->
+                        if (row > 0) Spacer(Modifier.height(12.dp))
+                        SkeletonStatRow()
+                    }
                 }
             }
         }
         // 伤害表卡片骨架
-        SkeletonCard {
-            Column(Modifier.padding(20.dp)) {
-                SkeletonSectionTitle()
-                Spacer(Modifier.height(12.dp))
-                ShimmerBox(
-                    Modifier.fillMaxWidth().height(32.dp),
-                    shape = smoothCornerShape(8.dp)
-                )
-                Spacer(Modifier.height(4.dp))
-                repeat(3) {
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SkeletonCard {
+                Column(Modifier.padding(20.dp)) {
+                    SkeletonSectionTitle()
+                    Spacer(Modifier.height(12.dp))
+                    ShimmerBox(
+                        Modifier.fillMaxWidth().height(32.dp),
+                        shape = smoothCornerShape(8.dp)
+                    )
                     Spacer(Modifier.height(4.dp))
-                    ShimmerBox(Modifier.fillMaxWidth().height(28.dp))
+                    repeat(3) {
+                        Spacer(Modifier.height(4.dp))
+                        ShimmerBox(Modifier.fillMaxWidth().height(28.dp))
+                    }
                 }
             }
         }
     }
 }
-
 
