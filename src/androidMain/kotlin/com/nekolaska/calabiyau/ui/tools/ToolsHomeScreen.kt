@@ -5,9 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,7 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
-import androidx.compose.material.icons.automirrored.outlined.FactCheck
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -77,7 +77,6 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -88,10 +87,8 @@ private enum class ToolsSection(
     val icon: ImageVector
 ) {
     IMAGE("图片工具", "压缩、转换、九宫格与裁切入口", Icons.Outlined.Image),
-    TEXT("文本工具", "入口保留，功能整理中", Icons.Outlined.TextFields),
+    TEXT("文本工具", "时间轴编辑与字幕格式转换", Icons.Outlined.TextFields),
     AUDIO("音频工具", "查看音频信息与轻量整理", Icons.Outlined.AudioFile)
-    ,ORGANIZE("文件整理", "入口保留，功能整理中", Icons.Outlined.FolderOpen),
-    SUBMISSION("投稿辅助", "入口保留，功能整理中", Icons.AutoMirrored.Outlined.FactCheck)
 }
 
 private enum class ExportFormat(val label: String, val extension: String) {
@@ -100,28 +97,23 @@ private enum class ExportFormat(val label: String, val extension: String) {
     WEBP("WEBP", "webp")
 }
 
-private enum class ChecklistFormat(val label: String, val extension: String) {
-    TXT("TXT", "txt"),
-    MARKDOWN("Markdown", "md")
-}
-
-private data class ToolOutput(
+internal data class ToolOutput(
     val title: String,
     val message: String,
     val files: List<File> = emptyList(),
     val directory: File? = null
 )
 
-private data class PickedInput(
+internal data class PickedInput(
     val file: File? = null,
     val uri: Uri? = null
 )
 
-private fun List<String>.toPickedFileInputs(): List<PickedInput> = map { path ->
+internal fun List<String>.toPickedFileInputs(): List<PickedInput> = map { path ->
     PickedInput(file = File(path))
 }
 
-private fun List<Uri>.toPickedUriInputs(): List<PickedInput> = map { uri ->
+internal fun List<Uri>.toPickedUriInputs(): List<PickedInput> = map { uri ->
     PickedInput(uri = uri)
 }
 
@@ -173,23 +165,6 @@ private data class CompressPreviewData(
     val previewBytes: ByteArray,
     val originalSizeBytes: Long?,
     val compressedSizeBytes: Int
-)
-
-private data class AudioInfoItem(
-    val name: String,
-    val durationMs: Long,
-    val mimeType: String,
-    val artist: String?,
-    val sampleRate: String?,
-    val bitrate: String?,
-    val size: Long
-)
-
-private data class DirectorySummary(
-    val totalFiles: Int,
-    val totalDirectories: Int,
-    val totalSize: Long,
-    val extensionCounts: List<Pair<String, Int>>
 )
 
 private object DefaultGifBitmapProvider : GifDecoder.BitmapProvider {
@@ -395,7 +370,12 @@ private fun ToolsTopBar(
                         tooltip = { PlainTooltip { Text("查看输出目录") } },
                         state = rememberTooltipState()
                     ) {
-                        FilledIconButton(onClick = onOpenOutputDirectory) {
+                        FilledTonalIconButton(
+                            onClick = onOpenOutputDirectory,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        ) {
                             Icon(Icons.Outlined.FolderOpen, contentDescription = "查看输出目录")
                         }
                     }
@@ -508,7 +488,6 @@ private fun ToolsSectionContent(
                 isBusy = isBusy,
                 onBusyChange = onBusyChange,
                 onResult = onResult,
-                onPickDirectoryFromFileManager = onPickDirectoryFromFileManager,
                 onPickFilesFromFileManager = onPickFilesFromFileManager
             )
             ToolsSection.AUDIO -> AudioToolsPage(
@@ -518,19 +497,6 @@ private fun ToolsSectionContent(
                 onResult = onResult,
                 onPickDirectoryFromFileManager = onPickDirectoryFromFileManager,
                 onPickFilesFromFileManager = onPickFilesFromFileManager
-            )
-            ToolsSection.ORGANIZE -> OrganizeToolsPage(
-                isBusy = isBusy,
-                onBusyChange = onBusyChange,
-                onResult = onResult,
-                onPickDirectoryFromFileManager = onPickDirectoryFromFileManager
-            )
-            ToolsSection.SUBMISSION -> SubmissionToolsPage(
-                outputPath = outputPath,
-                isBusy = isBusy,
-                onBusyChange = onBusyChange,
-                onResult = onResult,
-                onPickDirectoryFromFileManager = onPickDirectoryFromFileManager
             )
         }
 
@@ -563,6 +529,9 @@ private fun ToolsOutputDirectoryCard(
     onOpenDirectory: () -> Unit,
     onOpenInFileManager: () -> Unit
 ) {
+    var pickMenuExpanded by remember { mutableStateOf(false) }
+    var openMenuExpanded by remember { mutableStateOf(false) }
+
     Card(
         shape = smoothCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
@@ -596,62 +565,73 @@ private fun ToolsOutputDirectoryCard(
                     )
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "设置保存位置",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
                     OutlinedButton(
-                        onClick = onPickDirectory,
+                        onClick = { pickMenuExpanded = true },
                         shape = smoothCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Outlined.Folder, contentDescription = null)
                         Spacer(Modifier.size(6.dp))
-                        Text("系统选择")
+                        Text("更改目录")
                     }
-                    OutlinedButton(
-                        onClick = onPickDirectoryInFileManager,
-                        shape = smoothCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
+                    DropdownMenu(
+                        expanded = pickMenuExpanded,
+                        onDismissRequest = { pickMenuExpanded = false }
                     ) {
-                        Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = null)
-                        Spacer(Modifier.size(6.dp))
-                        Text("文件管理")
+                        DropdownMenuItem(
+                            text = { Text("使用系统选择器") },
+                            onClick = {
+                                pickMenuExpanded = false
+                                onPickDirectory()
+                            },
+                            leadingIcon = { Icon(Icons.Outlined.Folder, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("在文件管理中选择") },
+                            onClick = {
+                                pickMenuExpanded = false
+                                onPickDirectoryInFileManager()
+                            },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.DriveFileMove, contentDescription = null) }
+                        )
                     }
                 }
 
-                Text(
-                    text = "查看输出目录",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Box(modifier = Modifier.weight(1f)) {
                     FilledTonalButton(
-                        onClick = onOpenDirectory,
+                        onClick = { openMenuExpanded = true },
                         shape = smoothCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null)
-                        Spacer(Modifier.size(6.dp))
-                        Text("其他应用")
-                    }
-                    FilledTonalButton(
-                        onClick = onOpenInFileManager,
-                        shape = smoothCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = null)
                         Spacer(Modifier.size(6.dp))
-                        Text("文件管理")
+                        Text("打开目录")
+                    }
+                    DropdownMenu(
+                        expanded = openMenuExpanded,
+                        onDismissRequest = { openMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("在其他应用中打开") },
+                            onClick = {
+                                openMenuExpanded = false
+                                onOpenDirectory()
+                            },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("在文件管理中查看") },
+                            onClick = {
+                                openMenuExpanded = false
+                                onOpenInFileManager()
+                            },
+                            leadingIcon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) }
+                        )
                     }
                 }
             }
@@ -698,7 +678,7 @@ private fun ToolsSectionCard(section: ToolsSection, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ToolPageColumn(content: @Composable ColumnScope.() -> Unit) {
+internal fun ToolPageColumn(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -710,19 +690,24 @@ private fun ToolPageColumn(content: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun ToolCard(
+internal fun ToolCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
+    expandedByDefault: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    var expanded by rememberSaveable { mutableStateOf(expandedByDefault) }
+
     Card(
         shape = smoothCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.animateContentSize()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { expanded = !expanded }
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -735,18 +720,26 @@ private fun ToolCard(
                         modifier = Modifier.padding(10.dp)
                     )
                 }
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                Icon(
+                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            content()
+            if (expanded) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                content()
+            }
         }
     }
 }
 
 @Composable
-private fun DirectorySelectionActions(
+internal fun DirectorySelectionActions(
     onPickInFileManager: () -> Unit,
     onPickInSystem: () -> Unit,
     label: String = "选择目录"
@@ -762,7 +755,7 @@ private fun DirectorySelectionActions(
 }
 
 @Composable
-private fun CurrentPathPanel(path: String) {
+internal fun CurrentPathPanel(path: String) {
     Surface(
         shape = smoothCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -785,7 +778,18 @@ private fun ImagePreviewStrip(
     items: List<PickedInput>,
     onPreviewClick: (Int) -> Unit
 ) {
-    if (items.isEmpty()) return
+    if (items.isEmpty()) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            modifier = Modifier.fillMaxWidth().height(88.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("暂未选择素材图片", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        return
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = "预览 ${items.size} 张",
@@ -838,6 +842,7 @@ private fun ImagePreviewBottomSheet(
         sheetState = bottomSheetState,
         onDismissRequest = onDismiss,
         shape = smoothCornerShape(28.dp),
+        sheetGesturesEnabled = false,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
@@ -1368,16 +1373,23 @@ private fun ImageToolsPage(
     var cropRatioH by rememberSaveable { mutableIntStateOf(1) }
     var stitchDirection by rememberSaveable { mutableStateOf(StitchDirection.HORIZONTAL) }
     var stitchUpscaleSmall by rememberSaveable { mutableStateOf(false) }
-    var gifFrameDelayMs by rememberSaveable { mutableIntStateOf(300) }
-    var gifLoopForever by rememberSaveable { mutableStateOf(true) }
+    var gifFps by rememberSaveable { mutableIntStateOf(10) }
+    var gifLoopCount by rememberSaveable { mutableIntStateOf(0) }
+    var gifQuantizeSample by rememberSaveable { mutableIntStateOf(10) }
+    var gifDitherEnabled by rememberSaveable { mutableStateOf(false) }
     var gifComposeScaleMode by rememberSaveable { mutableStateOf(GifComposeScaleMode.FIT_LETTERBOX) }
     var showGifComposeSheet by remember { mutableStateOf(false) }
+    var showStitchSheet by remember { mutableStateOf(false) }
     var compressSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
+    var batchConvertSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
+    var batchConvertFormat by rememberSaveable { mutableStateOf(ExportFormat.WEBP) }
+    var batchConvertQuality by rememberSaveable { mutableFloatStateOf(0.9f) }
     var nineGridSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var cropSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var stitchSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var gifComposeSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var gifDecomposeSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
+    var exifCleanupSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     val cropPreviewStates = remember { mutableStateMapOf<Int, CropPreviewState>() }
     var previewSheetState by remember { mutableStateOf<ImagePreviewSheetState?>(null) }
 
@@ -1429,7 +1441,8 @@ private fun ImageToolsPage(
                     val outputDir = resolveOutputDirectory(outputPath, "图片工具")
                     val created = inputs.mapNotNull { input ->
                         val name = inputDisplayName(context, input)?.substringBeforeLast('.') ?: "image_${System.currentTimeMillis()}"
-                        compressOrConvertImage(context, input, File(outputDir, "${sanitizeFileName(name)}.${exportFormat.extension}"), exportFormat, (imageQuality * 100).toInt())
+                        val target = buildUniqueFile(outputDir, sanitizeFileName(name), exportFormat.extension)
+                        compressOrConvertImage(context, input, target, exportFormat, (imageQuality * 100).toInt())
                     }
                     scanMediaLibrary(context, created)
                     ToolOutput(
@@ -1445,6 +1458,52 @@ private fun ImageToolsPage(
                 compressSources = emptyList()
             }.onFailure {
                 showSnack("图片处理失败：${it.message ?: "未知错误"}")
+            }
+            onBusyChange(false)
+        }
+    }
+
+    fun runBatchConvert(inputs: List<PickedInput>) {
+        if (inputs.isEmpty()) return
+        scope.launch {
+            onBusyChange(true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val outputDir = resolveOutputDirectory(outputPath, "图片工具/批量格式转换")
+                    var success = 0
+                    var failed = 0
+                    val created = mutableListOf<File>()
+                    inputs.forEach { input ->
+                        val name = inputDisplayName(context, input)?.substringBeforeLast('.') ?: "image_${System.currentTimeMillis()}"
+                        val target = buildUniqueFile(outputDir, sanitizeFileName(name), batchConvertFormat.extension)
+                        val result = compressOrConvertImage(
+                            context = context,
+                            input = input,
+                            target = target,
+                            format = batchConvertFormat,
+                            quality = (batchConvertQuality * 100).toInt()
+                        )
+                        if (result != null) {
+                            success++
+                            created += result
+                        } else {
+                            failed++
+                        }
+                    }
+                    scanMediaLibrary(context, created)
+                    ToolOutput(
+                        title = "批量格式转换完成",
+                        message = "成功 $success，失败 $failed，输出到 ${outputDir.name}",
+                        files = created,
+                        directory = outputDir
+                    )
+                }
+            }.onSuccess {
+                onResult(it)
+                showSnack(it.message)
+                batchConvertSources = emptyList()
+            }.onFailure {
+                showSnack("批量格式转换失败：${it.message ?: "未知错误"}")
             }
             onBusyChange(false)
         }
@@ -1556,18 +1615,25 @@ private fun ImageToolsPage(
             runCatching {
                 withContext(Dispatchers.IO) {
                     val outputDir = resolveOutputDirectory(outputPath, "图片工具/GIF合成")
-                    val gif = composeGifFromImages(
+                    val result = composeGifFromImages(
                         context = context,
                         inputs = inputs,
                         outputDir = outputDir,
-                        frameDelayMs = gifFrameDelayMs,
-                        loopForever = gifLoopForever,
+                        fps = gifFps,
+                        loopCount = gifLoopCount,
+                        quantizeSample = gifQuantizeSample,
+                        ditherEnabled = gifDitherEnabled,
                         scaleMode = gifComposeScaleMode
                     ) ?: throw IllegalStateException("GIF 合成失败")
+                    val gif = result.file
                     scanMediaLibrary(context, listOf(gif))
                     ToolOutput(
                         title = "GIF 合成完成",
-                        message = "已导出 ${gif.name}",
+                        message = buildString {
+                            append("已导出 ${gif.name}（写入 ${result.writtenFrames} 帧")
+                            if (result.skippedFrames > 0) append("，跳过 ${result.skippedFrames} 帧")
+                            append("）")
+                        },
                         files = listOf(gif),
                         directory = outputDir
                     )
@@ -1578,6 +1644,54 @@ private fun ImageToolsPage(
                 gifComposeSources = emptyList()
             }.onFailure {
                 showSnack("GIF 合成失败：${it.message ?: "未知错误"}")
+            }
+            onBusyChange(false)
+        }
+    }
+
+    fun runExifCleanup(inputs: List<PickedInput>) {
+        if (inputs.isEmpty()) return
+        scope.launch {
+            onBusyChange(true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val outputDir = resolveOutputDirectory(outputPath, "图片工具/元数据清理")
+                    var success = 0
+                    var failed = 0
+                    val created = mutableListOf<File>()
+                    inputs.forEach { input ->
+                        val sourceName = inputDisplayName(context, input) ?: "image_${System.currentTimeMillis()}.jpg"
+                        val ext = inferImageExtension(context, input, sourceName)
+                        val base = sanitizeFileName(sourceName.substringBeforeLast('.'))
+                        val target = buildUniqueFile(outputDir, "${base}_clean", ext)
+                        val copied = copyInputToFile(context, input, target)
+                        if (!copied) {
+                            failed++
+                        } else {
+                            val cleaned = ExifCleaner.cleanPrivacyFields(target)
+                            if (cleaned) {
+                                success++
+                                created += target
+                            } else {
+                                failed++
+                                runCatching { target.delete() }
+                            }
+                        }
+                    }
+                    scanMediaLibrary(context, created)
+                    ToolOutput(
+                        title = "元数据清理完成",
+                        message = "成功 $success，失败 $failed，原图未覆盖",
+                        files = created,
+                        directory = outputDir
+                    )
+                }
+            }.onSuccess {
+                onResult(it)
+                showSnack(it.message)
+                exifCleanupSources = emptyList()
+            }.onFailure {
+                showSnack("元数据清理失败：${it.message ?: "未知错误"}")
             }
             onBusyChange(false)
         }
@@ -1624,6 +1738,10 @@ private fun ImageToolsPage(
         )
     }
 
+    val pickImagesForBatchConvert = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        batchConvertSources = uris.toPickedUriInputs()
+    }
+
     val pickImagesForNineGrid = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         updatePreviewItems(
             mode = ImagePreviewMode.NINE_GRID,
@@ -1653,7 +1771,70 @@ private fun ImageToolsPage(
         gifDecomposeSources = uris.toPickedUriInputs()
     }
 
+    val pickImagesForExifCleanup = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        exifCleanupSources = uris.toPickedUriInputs()
+    }
+
     ToolPageColumn {
+        ToolCard(
+            title = "批量格式转换",
+            subtitle = "多选图片并批量导出为指定格式",
+            icon = Icons.Outlined.Transform
+        ) {
+            Text("输出格式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ExportFormat.entries.forEach { format ->
+                    AssistChip(
+                        onClick = { batchConvertFormat = format },
+                        shape = smoothCapsuleShape(),
+                        label = { Text(format.label) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (batchConvertFormat == format) MaterialTheme.colorScheme.secondaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    )
+                }
+            }
+            Text(
+                "质量：${(batchConvertQuality * 100).roundToInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Slider(
+                value = batchConvertQuality,
+                onValueChange = { batchConvertQuality = it.coerceIn(0.4f, 1f) },
+                valueRange = 0.4f..1f
+            )
+            FilledTonalButton(
+                onClick = {
+                    onPickFilesFromFileManager(
+                        AppPrefs.savePath,
+                        "选择要转换的图片",
+                        "可在文件管理中多选图片，也可改用系统选择器。",
+                        true,
+                        { pickImagesForBatchConvert.launch("image/*") }
+                    ) { paths ->
+                        batchConvertSources = paths.toPickedFileInputs()
+                    }
+                },
+                enabled = !isBusy,
+                shape = smoothCornerShape(24.dp)
+            ) { Text("选择图片") }
+            if (batchConvertSources.isNotEmpty()) {
+                Text("已选 ${batchConvertSources.size} 张图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ImagePreviewStrip(items = batchConvertSources) { }
+            if (batchConvertSources.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = { runBatchConvert(batchConvertSources) },
+                    enabled = !isBusy,
+                    shape = smoothCornerShape(24.dp)
+                ) {
+                    Text("开始转换")
+                }
+            }
+        }
+
         ToolCard(
             title = "压缩图片",
             subtitle = "调整格式与质量后导出图片",
@@ -1695,113 +1876,26 @@ private fun ImageToolsPage(
         }
 
         ToolCard(
-            title = "九宫格切图",
-            subtitle = "按 3×3 规则切图并导出",
-            icon = Icons.Outlined.ImageSearch
+            title = "按比例裁切",
+            subtitle = "按比例裁切图片并导出",
+            icon = Icons.Outlined.ContentCut
         ) {
-            FilledTonalButton(onClick = {
-                onPickFilesFromFileManager(
-                    AppPrefs.savePath,
-                    "选择要切图的图片",
-                    "可在文件管理中多选图片，也可以使用系统选择器。",
-                    true,
-                    { pickImagesForNineGrid.launch("image/*") }
-                ) { paths ->
-                    updatePreviewItems(
-                        mode = ImagePreviewMode.NINE_GRID,
-                        items = paths.toPickedFileInputs(),
-                        onUpdate = { nineGridSources = it }
-                    )
-                }
-            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
-                Text("选择图片")
-            }
-            if (nineGridSources.isNotEmpty()) {
-                Text("已选 ${nineGridSources.size} 张图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            ImagePreviewStrip(items = nineGridSources) { index ->
-                showPreview(ImagePreviewMode.NINE_GRID, nineGridSources, index)
-            }
-            if (nineGridSources.isNotEmpty()) {
-                FilledTonalButton(onClick = { runNineGrid(nineGridSources) }, enabled = !isBusy, shape = smoothCornerShape(
-                    24.dp
-                )
-                ) {
-                    Text("开始切图")
-                }
-            }
-        }
-
-        ToolCard(
-            title = "图片拼图",
-            subtitle = "多图横向/纵向拼接并导出",
-            icon = Icons.Outlined.ViewAgenda
-        ) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StitchDirection.entries.forEach { direction ->
-                    AssistChip(
-                        onClick = { stitchDirection = direction },
-                        shape = smoothCapsuleShape(),
-                        label = { Text(direction.label) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (stitchDirection == direction) {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHighest
-                            }
-                        )
-                    )
-                }
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("放大小图到统一${if (stitchDirection == StitchDirection.HORIZONTAL) "高度" else "宽度"}")
-                Switch(
-                    checked = stitchUpscaleSmall,
-                    onCheckedChange = { stitchUpscaleSmall = it }
-                )
-            }
-            FilledTonalButton(onClick = {
-                onPickFilesFromFileManager(
-                    AppPrefs.savePath,
-                    "选择要拼图的图片",
-                    "可在文件管理中多选图片，也可以使用系统选择器。",
-                    true,
-                    { pickImagesForStitch.launch("image/*") }
-                ) { paths ->
-                    stitchSources = paths.toPickedFileInputs()
-                }
-            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
-                Text("选择图片")
-            }
-            if (stitchSources.isNotEmpty()) {
-                Text(
-                    "已选 ${stitchSources.size} 张图片",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            ImagePreviewStrip(items = stitchSources) { }
-            if (stitchSources.isNotEmpty()) {
+                Text("裁切比例：$cropPreset", style = MaterialTheme.typography.bodyMedium)
                 FilledTonalButton(
-                    onClick = { runStitch(stitchSources) },
-                    enabled = !isBusy,
-                    shape = smoothCornerShape(24.dp)
+                    onClick = { setCropRatio(cropRatioH, cropRatioW) },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
                 ) {
-                    Text("开始拼图并导出")
+                    Icon(Icons.Outlined.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(4.dp))
+                    Text("交换横纵比", style = MaterialTheme.typography.bodySmall)
                 }
             }
-        }
-
-        ToolCard(
-            title = "按比例裁切",
-            subtitle = "按比例裁切图片并导出",
-            icon = Icons.Outlined.ContentCut
-        ) {
-            Text("裁切比例：$cropPreset", style = MaterialTheme.typography.bodyMedium)
             Text("横向比例：$cropRatioW", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Slider(
                 value = cropRatioW.toFloat(),
@@ -1867,6 +1961,81 @@ private fun ImageToolsPage(
                 )
                 ) {
                     Text("开始裁切并导出")
+                }
+            }
+        }
+
+        ToolCard(
+            title = "图片拼图",
+            subtitle = "多图横向/纵向拼接并导出",
+            icon = Icons.Outlined.ViewAgenda
+        ) {
+            FilledTonalButton(onClick = {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择要拼图的图片",
+                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    true,
+                    { pickImagesForStitch.launch("image/*") }
+                ) { paths ->
+                    stitchSources = paths.toPickedFileInputs()
+                }
+            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                Text("选择图片")
+            }
+            if (stitchSources.isNotEmpty()) {
+                Text(
+                    "已选 ${stitchSources.size} 张图片",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            ImagePreviewStrip(items = stitchSources) { }
+            if (stitchSources.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = { showStitchSheet = true },
+                    enabled = !isBusy,
+                    shape = smoothCornerShape(24.dp)
+                ) {
+                    Text("设置并开始拼图")
+                }
+            }
+        }
+
+        ToolCard(
+            title = "九宫格切图",
+            subtitle = "按 3×3 规则切图并导出",
+            icon = Icons.Outlined.ImageSearch
+        ) {
+            FilledTonalButton(onClick = {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择要切图的图片",
+                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    true,
+                    { pickImagesForNineGrid.launch("image/*") }
+                ) { paths ->
+                    updatePreviewItems(
+                        mode = ImagePreviewMode.NINE_GRID,
+                        items = paths.toPickedFileInputs(),
+                        onUpdate = { nineGridSources = it }
+                    )
+                }
+            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                Text("选择图片")
+            }
+            if (nineGridSources.isNotEmpty()) {
+                Text("已选 ${nineGridSources.size} 张图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ImagePreviewStrip(items = nineGridSources) { index ->
+                showPreview(ImagePreviewMode.NINE_GRID, nineGridSources, index)
+            }
+            if (nineGridSources.isNotEmpty()) {
+                FilledTonalButton(onClick = { runNineGrid(nineGridSources) }, enabled = !isBusy, shape = smoothCornerShape(
+                    24.dp
+                )
+                ) {
+                    Text("开始切图")
                 }
             }
         }
@@ -1945,16 +2114,47 @@ private fun ImageToolsPage(
             }
         }
 
+        ToolCard(
+            title = "EXIF 隐私字段清理",
+            subtitle = "清理图片隐私信息并另存副本",
+            icon = Icons.Outlined.NoPhotography
+        ) {
+            FilledTonalButton(
+                onClick = {
+                    onPickFilesFromFileManager(
+                        AppPrefs.savePath,
+                        "选择要清理元数据的图片",
+                        "可在文件管理中多选图片，也可改用系统选择器。",
+                        true,
+                        { pickImagesForExifCleanup.launch("image/*") }
+                    ) { paths ->
+                        exifCleanupSources = paths.toPickedFileInputs()
+                    }
+                },
+                enabled = !isBusy,
+                shape = smoothCornerShape(24.dp)
+            ) { Text("选择图片") }
+            if (exifCleanupSources.isNotEmpty()) {
+                Text("已选 ${exifCleanupSources.size} 张图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ImagePreviewStrip(items = exifCleanupSources) { }
+            if (exifCleanupSources.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = { runExifCleanup(exifCleanupSources) },
+                    enabled = !isBusy,
+                    shape = smoothCornerShape(24.dp)
+                ) {
+                    Text("开始清理")
+                }
+            }
+        }
+
     }
 
     previewSheetState?.let { sheetState ->
         ImagePreviewBottomSheet(
             state = sheetState,
             onDismiss = { previewSheetState = null },
-            compressQuality = imageQuality,
-            onCompressQualityChange = { imageQuality = it },
-            compressFormat = exportFormat,
-            onCompressFormatChange = { exportFormat = it },
             onConfirm = {
                 when (sheetState.mode) {
                     ImagePreviewMode.COMPRESS -> runCompress(sheetState.items)
@@ -1969,10 +2169,14 @@ private fun ImageToolsPage(
     if (showGifComposeSheet && gifComposeSources.isNotEmpty()) {
         GifComposeBottomSheet(
             items = gifComposeSources,
-            frameDelayMs = gifFrameDelayMs,
-            onFrameDelayChange = { gifFrameDelayMs = it },
-            loopForever = gifLoopForever,
-            onLoopForeverChange = { gifLoopForever = it },
+            fps = gifFps,
+            onFpsChange = { gifFps = it },
+            loopCount = gifLoopCount,
+            onLoopCountChange = { gifLoopCount = it },
+            quantizeSample = gifQuantizeSample,
+            onQuantizeSampleChange = { gifQuantizeSample = it },
+            ditherEnabled = gifDitherEnabled,
+            onDitherEnabledChange = { gifDitherEnabled = it },
             scaleMode = gifComposeScaleMode,
             onScaleModeChange = { gifComposeScaleMode = it },
             onMove = { from, to -> gifComposeSources = gifComposeSources.move(from, to) },
@@ -1984,16 +2188,111 @@ private fun ImageToolsPage(
             isBusy = isBusy
         )
     }
+
+    if (showStitchSheet && stitchSources.isNotEmpty()) {
+        StitchBottomSheet(
+            items = stitchSources,
+            direction = stitchDirection,
+            onDirectionChange = { stitchDirection = it },
+            upscaleSmall = stitchUpscaleSmall,
+            onUpscaleSmallChange = { stitchUpscaleSmall = it },
+            onMove = { from, to -> stitchSources = stitchSources.move(from, to) },
+            onDismiss = { showStitchSheet = false },
+            onConfirm = {
+                runStitch(stitchSources)
+                showStitchSheet = false
+            },
+            isBusy = isBusy
+        )
+    }
+
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StitchBottomSheet(
+    items: List<PickedInput>,
+    direction: StitchDirection,
+    onDirectionChange: (StitchDirection) -> Unit,
+    upscaleSmall: Boolean,
+    onUpscaleSmallChange: (Boolean) -> Unit,
+    onMove: (from: Int, to: Int) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    isBusy: Boolean
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        sheetState = sheetState,
+        onDismissRequest = onDismiss,
+        sheetGesturesEnabled = false,
+        shape = smoothCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("拼图设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StitchDirection.entries.forEach { mode ->
+                    AssistChip(
+                        onClick = { onDirectionChange(mode) },
+                        shape = smoothCapsuleShape(),
+                        label = { Text(mode.label) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (direction == mode) MaterialTheme.colorScheme.secondaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("放大小图到统一${if (direction == StitchDirection.HORIZONTAL) "高度" else "宽度"}")
+                Switch(checked = upscaleSmall, onCheckedChange = onUpscaleSmallChange)
+            }
+
+            GifComposeOrderEditor(
+                items = items,
+                onMove = onMove,
+                tip = "长按拖拽可调整拼图顺序",
+                indexLabel = "张"
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                FilledTonalButton(onClick = onConfirm, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                    Text("开始拼图")
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GifComposeBottomSheet(
     items: List<PickedInput>,
-    frameDelayMs: Int,
-    onFrameDelayChange: (Int) -> Unit,
-    loopForever: Boolean,
-    onLoopForeverChange: (Boolean) -> Unit,
+    fps: Int,
+    onFpsChange: (Int) -> Unit,
+    loopCount: Int,
+    onLoopCountChange: (Int) -> Unit,
+    quantizeSample: Int,
+    onQuantizeSampleChange: (Int) -> Unit,
+    ditherEnabled: Boolean,
+    onDitherEnabledChange: (Boolean) -> Unit,
     scaleMode: GifComposeScaleMode,
     onScaleModeChange: (GifComposeScaleMode) -> Unit,
     onMove: (from: Int, to: Int) -> Unit,
@@ -2005,6 +2304,7 @@ private fun GifComposeBottomSheet(
     ModalBottomSheet(
         sheetState = sheetState,
         onDismissRequest = onDismiss,
+        sheetGesturesEnabled = false,
         shape = smoothCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
@@ -2017,12 +2317,12 @@ private fun GifComposeBottomSheet(
         ) {
             Text("GIF 合成设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-            Text("帧间隔：${frameDelayMs}ms", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("帧率：${fps} fps", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Slider(
-                value = frameDelayMs.toFloat(),
-                onValueChange = { onFrameDelayChange(it.roundToInt().coerceIn(40, 2000)) },
-                valueRange = 40f..2000f,
-                steps = 48
+                value = fps.toFloat(),
+                onValueChange = { onFpsChange(it.roundToInt().coerceIn(1, 60)) },
+                valueRange = 1f..60f,
+                steps = 58
             )
 
             Row(
@@ -2030,8 +2330,30 @@ private fun GifComposeBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("无限循环")
-                Switch(checked = loopForever, onCheckedChange = onLoopForeverChange)
+                Text("循环次数（0 = 无限）：$loopCount")
+            }
+            Slider(
+                value = loopCount.toFloat(),
+                onValueChange = { onLoopCountChange(it.roundToInt().coerceIn(0, 20)) },
+                valueRange = 0f..20f,
+                steps = 19
+            )
+
+            Text("量化采样：$quantizeSample", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Slider(
+                value = quantizeSample.toFloat(),
+                onValueChange = { onQuantizeSampleChange(it.roundToInt().coerceIn(1, 30)) },
+                valueRange = 1f..30f,
+                steps = 28
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("抖动预处理")
+                Switch(checked = ditherEnabled, onCheckedChange = onDitherEnabledChange)
             }
 
             Text("尺寸策略", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2064,294 +2386,6 @@ private fun GifComposeBottomSheet(
     }
 }
 
-@Composable
-private fun TextToolsPage(
-    outputPath: String,
-    isBusy: Boolean,
-    onBusyChange: (Boolean) -> Unit,
-    onResult: (ToolOutput) -> Unit,
-    onPickDirectoryFromFileManager: (
-        initialPath: String?,
-        title: String,
-        description: String,
-        onPicked: (String) -> Unit
-    ) -> Unit,
-    onPickFilesFromFileManager: (
-        initialPath: String?,
-        title: String,
-        description: String,
-        allowMultiSelect: Boolean,
-        onOpenSystemPicker: () -> Unit,
-        onPicked: (List<String>) -> Unit
-    ) -> Unit
-) {
-    ToolPageColumn {
-        ToolCard(
-            title = "文本工具",
-            subtitle = "功能暂时下线，入口保留",
-            icon = Icons.Outlined.TextFields
-        ) {
-            Text(
-                "该页功能已清除，后续会替换为更实用的文本能力。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-    }
-}
-
-@Composable
-private fun AudioToolsPage(
-    outputPath: String,
-    isBusy: Boolean,
-    onBusyChange: (Boolean) -> Unit,
-    onResult: (ToolOutput) -> Unit,
-    onPickDirectoryFromFileManager: (
-        initialPath: String?,
-        title: String,
-        description: String,
-        onPicked: (String) -> Unit
-    ) -> Unit,
-    onPickFilesFromFileManager: (
-        initialPath: String?,
-        title: String,
-        description: String,
-        allowMultiSelect: Boolean,
-        onOpenSystemPicker: () -> Unit,
-        onPicked: (List<String>) -> Unit
-    ) -> Unit
-) {
-    val context = LocalContext.current
-    val showSnack = rememberSnackbarLauncher()
-    val scope = rememberCoroutineScope()
-    val audioInfos = remember { mutableStateListOf<AudioInfoItem>() }
-    var directoryPath by rememberSaveable { mutableStateOf(AppPrefs.savePath) }
-    var prefix by rememberSaveable { mutableStateOf("audio_") }
-
-    fun processAudioInputs(inputs: List<PickedInput>) {
-        if (inputs.isEmpty()) return
-        scope.launch {
-            onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val infos = inputs.mapNotNull { readAudioInfo(context, it) }
-                    audioInfos.clear()
-                    audioInfos.addAll(infos)
-                    ToolOutput(
-                        title = "音频信息已读取",
-                        message = "已分析 ${infos.size} 个音频文件",
-                        directory = resolveOutputDirectory(outputPath, "音频工具")
-                    )
-                }
-            }.onSuccess {
-                onResult(it)
-                showSnack(it.message)
-            }.onFailure {
-                showSnack("读取音频信息失败")
-            }
-            onBusyChange(false)
-        }
-    }
-
-    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        processAudioInputs(uris.toPickedUriInputs())
-    }
-
-    val dirPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        uri?.let { getPathFromUri(it)?.let { path -> directoryPath = path } }
-    }
-
-    ToolPageColumn {
-        ToolCard(
-            title = "查看音频信息",
-            subtitle = "查看音频时长、大小与元数据",
-            icon = Icons.Outlined.Info
-        ) {
-            FilledTonalButton(onClick = {
-                onPickFilesFromFileManager(
-                    directoryPath,
-                    "选择音频文件",
-                    "优先在文件管理中选择音频文件，也可改用系统选择器。",
-                    true,
-                    { audioPicker.launch("audio/*") }
-                ) { paths ->
-                    processAudioInputs(paths.toPickedFileInputs())
-                }
-            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
-                Icon(Icons.Outlined.AudioFile, contentDescription = null)
-                Spacer(Modifier.size(6.dp))
-                Text("导入并分析音频")
-            }
-            if (audioInfos.isNotEmpty()) {
-                FilledTonalButton(
-                    onClick = {
-                        scope.launch {
-                            onBusyChange(true)
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    val outputDir = resolveOutputDirectory(outputPath, "音频工具")
-                                    val report = exportAudioInfoCsv(outputDir, audioInfos)
-                                    ToolOutput(
-                                        title = "音频报告已导出",
-                                        message = "已导出 ${report.name}",
-                                        files = listOf(report),
-                                        directory = outputDir
-                                    )
-                                }
-                            }.onSuccess {
-                                onResult(it)
-                                showSnack(it.message)
-                            }.onFailure {
-                                showSnack("导出音频报告失败：${it.message ?: "未知错误"}")
-                            }
-                            onBusyChange(false)
-                        }
-                    },
-                    enabled = !isBusy,
-                    shape = smoothCornerShape(24.dp)
-                ) {
-                    Icon(Icons.Outlined.SaveAlt, contentDescription = null)
-                    Spacer(Modifier.size(6.dp))
-                    Text("导出CSV报告")
-                }
-            }
-            if (audioInfos.isNotEmpty()) {
-                HorizontalDivider()
-                audioInfos.forEach { item ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(item.name, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "${formatDuration(item.durationMs)} · ${formatFileSize(item.size)} · ${item.mimeType}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            listOfNotNull(item.artist, item.sampleRate?.let { "${it}Hz" }, item.bitrate?.let { "${it}bps" }).joinToString(" · ").ifBlank { "无更多元数据" },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-            }
-        }
-
-        ToolCard(
-            title = "批量重命名音频",
-            subtitle = "按前缀和序号批量重命名音频",
-            icon = Icons.Outlined.Transform
-        ) {
-            OutlinedTextField(
-                value = prefix,
-                onValueChange = { prefix = it },
-                label = { Text("文件名前缀") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = smoothCornerShape(16.dp)
-            )
-            CurrentPathPanel(directoryPath)
-            DirectorySelectionActions(
-                onPickInFileManager = {
-                    onPickDirectoryFromFileManager(
-                        directoryPath,
-                        "选择音频目录",
-                        "在文件管理中浏览并确认目录，或使用系统选择器。"
-                    ) { pickedPath ->
-                        directoryPath = pickedPath
-                    }
-                },
-                onPickInSystem = { dirPicker.launch(null) }
-            )
-            FilledTonalButton(
-                onClick = {
-                    scope.launch {
-                        onBusyChange(true)
-                        runCatching {
-                            withContext(Dispatchers.IO) {
-                                val dir = File(directoryPath)
-                                val renamed = batchRenameByPrefix(dir, prefix) { it.extension.lowercase() in AUDIO_EXTENSIONS }
-                                ToolOutput(
-                                    title = "音频批量重命名完成",
-                                    message = "已处理 ${renamed.size} 个音频文件",
-                                    files = renamed,
-                                    directory = dir
-                                )
-                            }
-                        }.onSuccess {
-                            onResult(it)
-                            showSnack(it.message)
-                        }.onFailure {
-                            showSnack("音频重命名失败")
-                        }
-                        onBusyChange(false)
-                    }
-                },
-                enabled = !isBusy,
-                shape = smoothCornerShape(24.dp)
-            ) {
-                Icon(Icons.Outlined.Transform, contentDescription = null)
-                Spacer(Modifier.size(6.dp))
-                Text("执行音频重命名")
-            }
-        }
-
-    }
-}
-
-@Composable
-private fun OrganizeToolsPage(
-    isBusy: Boolean,
-    onBusyChange: (Boolean) -> Unit,
-    onResult: (ToolOutput) -> Unit,
-    onPickDirectoryFromFileManager: (
-        initialPath: String?,
-        title: String,
-        description: String,
-        onPicked: (String) -> Unit
-    ) -> Unit
-) {
-    ToolPageColumn {
-        ToolCard(
-            title = "文件整理",
-            subtitle = "功能暂时下线，入口保留",
-            icon = Icons.Outlined.FolderOpen
-        ) {
-            Text(
-                "该页功能已清除，后续会替换为更实用的文件整理能力。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun SubmissionToolsPage(
-    outputPath: String,
-    isBusy: Boolean,
-    onBusyChange: (Boolean) -> Unit,
-    onResult: (ToolOutput) -> Unit,
-    onPickDirectoryFromFileManager: (
-        initialPath: String?,
-        title: String,
-        description: String,
-        onPicked: (String) -> Unit
-    ) -> Unit
-) {
-    ToolPageColumn {
-        ToolCard(
-            title = "投稿辅助",
-            subtitle = "功能暂时下线，入口保留",
-            icon = Icons.AutoMirrored.Outlined.FactCheck
-        ) {
-            Text(
-                "该页功能已清除，后续会替换为更实用的投稿辅助能力。",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
 
 private fun openBitmap(context: Context, input: PickedInput): Bitmap? {
     input.file?.let { return BitmapFactory.decodeFile(it.absolutePath) }
@@ -2373,9 +2407,22 @@ private fun readBytesFromInput(context: Context, input: PickedInput): ByteArray?
     }.getOrNull()
 }
 
-private fun readTextFromInput(context: Context, input: PickedInput): String? {
-    input.file?.takeIf { it.isFile }?.let { return it.readText() }
-    return input.uri?.let(context::readTextFromUri)
+private fun copyInputToFile(context: Context, input: PickedInput, target: File): Boolean {
+    target.parentFile?.mkdirs()
+    return runCatching {
+        when {
+            input.file?.isFile == true -> input.file.copyTo(target, overwrite = true)
+            input.uri != null -> {
+                context.contentResolver.openInputStream(input.uri)?.use { inputStream ->
+                    FileOutputStream(target).use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                } ?: return false
+            }
+            else -> return false
+        }
+        true
+    }.getOrElse { false }
 }
 
 private fun compressOrConvertImage(
@@ -2442,8 +2489,6 @@ private fun resolveSectionOutputDirectory(basePath: String, section: ToolsSectio
         ToolsSection.IMAGE -> "图片工具"
         ToolsSection.TEXT -> "文本工具"
         ToolsSection.AUDIO -> "音频工具"
-        ToolsSection.ORGANIZE -> null
-        ToolsSection.SUBMISSION -> "投稿辅助"
     }
     return resolveOutputDirectory(basePath, child)
 }
@@ -2546,44 +2591,127 @@ private fun stitchImages(
     return target
 }
 
+private data class GifComposeResult(
+    val file: File,
+    val writtenFrames: Int,
+    val skippedFrames: Int
+)
+
 private fun composeGifFromImages(
     context: Context,
     inputs: List<PickedInput>,
     outputDir: File,
-    frameDelayMs: Int,
-    loopForever: Boolean,
+    fps: Int,
+    loopCount: Int,
+    quantizeSample: Int,
+    ditherEnabled: Boolean,
     scaleMode: GifComposeScaleMode
-): File? {
-    val bitmaps = inputs.mapNotNull { openBitmap(context, it) }
-    if (bitmaps.isEmpty()) return null
+): GifComposeResult? {
+    if (inputs.isEmpty()) return null
     outputDir.mkdirs()
     val target = buildUniqueFile(outputDir, "gif_compose_${System.currentTimeMillis()}", "gif")
     val encoder = AnimatedGifEncoder()
     return runCatching {
-        val baseWidth = bitmaps.first().width.coerceAtLeast(1)
-        val baseHeight = bitmaps.first().height.coerceAtLeast(1)
+        var writtenFrames = 0
+        var skippedFrames = 0
+        val firstBitmap = openBitmap(context, inputs.first()) ?: throw IllegalStateException("首帧读取失败")
+        val baseWidth = firstBitmap.width.coerceAtLeast(1)
+        val baseHeight = firstBitmap.height.coerceAtLeast(1)
         encoder.setSize(baseWidth, baseHeight)
         val started = encoder.start(target.absolutePath)
         if (!started) throw IllegalStateException("GIF 编码器启动失败")
-        encoder.setDelay(frameDelayMs.coerceIn(20, 5000))
-        if (loopForever) encoder.setRepeat(0)
-        bitmaps.forEach { bitmap ->
-            val frame = normalizeGifFrame(bitmap, baseWidth, baseHeight, scaleMode)
-            val ok = encoder.addFrame(frame)
-            if (frame !== bitmap && !frame.isRecycled) {
-                frame.recycle()
+        encoder.setFrameRate(fps.coerceIn(1, 60).toFloat())
+        encoder.setRepeat(loopCount.coerceAtLeast(0))
+        encoder.setQuality(quantizeSample.coerceIn(1, 30))
+
+        fun writeFrame(bitmap: Bitmap) {
+            val normalized = normalizeGifFrame(bitmap, baseWidth, baseHeight, scaleMode)
+            val prepared = if (ditherEnabled) applyOrderedDither(normalized) else normalized
+            val ok = encoder.addFrame(prepared)
+            if (prepared !== normalized && !prepared.isRecycled) prepared.recycle()
+            if (normalized !== bitmap && !normalized.isRecycled) normalized.recycle()
+            if (!ok) throw IllegalStateException("写入帧失败")
+            writtenFrames++
+        }
+
+        try {
+            writeFrame(firstBitmap)
+        } finally {
+            if (!firstBitmap.isRecycled) firstBitmap.recycle()
+        }
+
+        inputs.drop(1).forEach { input ->
+            val bitmap = openBitmap(context, input)
+            if (bitmap == null) {
+                skippedFrames++
+                return@forEach
             }
-            if (!ok) {
-                throw IllegalStateException("写入帧失败")
+            try {
+                writeFrame(bitmap)
+            } finally {
+                if (!bitmap.isRecycled) bitmap.recycle()
             }
         }
+
+        if (writtenFrames <= 0) throw IllegalStateException("未写入任何帧")
         if (!encoder.finish()) throw IllegalStateException("GIF 结束写入失败")
-        target
-    }.getOrNull().also {
-        bitmaps.forEach { bitmap ->
-            if (!bitmap.isRecycled) bitmap.recycle()
+        GifComposeResult(target, writtenFrames, skippedFrames)
+    }.getOrNull()
+}
+
+private fun inferImageExtension(context: Context, input: PickedInput, sourceName: String): String {
+    val fileExt = input.file?.extension?.lowercase()?.takeIf { it.isNotBlank() }
+    if (fileExt != null) return fileExt
+
+    val mimeExt = input.uri?.let { uri ->
+        context.contentResolver.getType(uri)
+            ?.substringAfter('/')
+            ?.substringBefore(';')
+            ?.lowercase()
+            ?.let { raw ->
+                when (raw) {
+                    "jpeg" -> "jpg"
+                    "heic", "heif", "png", "webp", "bmp", "gif", "jpg" -> raw
+                    else -> MimeTypeMap.getSingleton().getExtensionFromMimeType("image/$raw")?.lowercase()
+                }
+            }
+    }
+    if (!mimeExt.isNullOrBlank()) return mimeExt
+
+    val nameExt = sourceName.substringAfterLast('.', "").lowercase().takeIf { it.isNotBlank() }
+    return nameExt ?: "jpg"
+}
+
+private fun applyOrderedDither(source: Bitmap): Bitmap {
+    val width = source.width
+    val height = source.height
+    val out = createBitmap(width, height)
+    val matrix = arrayOf(
+        intArrayOf(0, 8, 2, 10),
+        intArrayOf(12, 4, 14, 6),
+        intArrayOf(3, 11, 1, 9),
+        intArrayOf(15, 7, 13, 5)
+    )
+    val srcPixels = IntArray(width * height)
+    val outPixels = IntArray(width * height)
+    source.getPixels(srcPixels, 0, width, 0, 0, width, height)
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            val index = y * width + x
+            val color = srcPixels[index]
+            val r = android.graphics.Color.red(color)
+            val g = android.graphics.Color.green(color)
+            val b = android.graphics.Color.blue(color)
+            val a = android.graphics.Color.alpha(color)
+            val threshold = matrix[y and 3][x and 3] - 8
+            val nr = (r + threshold * 2).coerceIn(0, 255)
+            val ng = (g + threshold * 2).coerceIn(0, 255)
+            val nb = (b + threshold * 2).coerceIn(0, 255)
+            outPixels[index] = android.graphics.Color.argb(a, nr, ng, nb)
         }
     }
+    out.setPixels(outPixels, 0, width, 0, 0, width, height)
+    return out
 }
 
 private fun normalizeGifFrame(
@@ -2640,16 +2768,23 @@ private fun <T> List<T>.move(fromIndex: Int, toIndex: Int): List<T> {
 @Composable
 private fun GifComposeOrderEditor(
     items: List<PickedInput>,
-    onMove: (from: Int, to: Int) -> Unit
+    onMove: (from: Int, to: Int) -> Unit,
+    tip: String = "长按拖拽可调整合成顺序",
+    indexLabel: String = "帧"
 ) {
     if (items.size < 2) return
 
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val autoScrollEdgePx = with(density) { 84.dp.toPx() }
+    val swapThresholdPx = with(density) { 10.dp.toPx() }
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var draggingOffsetY by remember { mutableFloatStateOf(0f) }
+    var lastSwapAt by remember { mutableLongStateOf(0L) }
 
     Text(
-        "长按拖拽可调整合成顺序",
+        tip,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -2668,7 +2803,10 @@ private fun GifComposeOrderEditor(
             verticalArrangement = Arrangement.spacedBy(6.dp),
             contentPadding = PaddingValues(8.dp)
         ) {
-            itemsIndexed(items) { index, item ->
+            itemsIndexed(
+                items,
+                key = { _, item -> item.file?.absolutePath ?: item.uri?.toString() ?: item.hashCode() }
+            ) { index, item ->
                 val isDragging = draggingIndex == index
                 Surface(
                     shape = smoothCornerShape(12.dp),
@@ -2696,13 +2834,38 @@ private fun GifComposeOrderEditor(
                                 val from = draggingIndex ?: return@detectDragGesturesAfterLongPress
                                 draggingOffsetY += dragAmount.y
 
+                                val viewportHeight = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+                                if (viewportHeight > 0) {
+                                    val y = change.position.y
+                                    val autoScrollDelta = when {
+                                        y < autoScrollEdgePx -> ((y - autoScrollEdgePx) / autoScrollEdgePx) * 14f
+                                        y > (viewportHeight - autoScrollEdgePx) -> ((y - (viewportHeight - autoScrollEdgePx)) / autoScrollEdgePx) * 14f
+                                        else -> 0f
+                                    }
+                                    if (autoScrollDelta != 0f) {
+                                        scope.launch {
+                                            listState.scrollBy(autoScrollDelta)
+                                        }
+                                        draggingOffsetY += autoScrollDelta
+                                    }
+                                }
+
                                 val currentInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == from }
                                     ?: return@detectDragGesturesAfterLongPress
                                 val currentCenter = currentInfo.offset + (currentInfo.size / 2f) + draggingOffsetY
                                 val targetInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                                    info.index != from && currentCenter in info.offset.toFloat()..(info.offset + info.size).toFloat()
+                                    if (info.index == from) return@firstOrNull false
+                                    val targetCenter = info.offset + (info.size / 2f)
+                                    if (info.index > from) {
+                                        currentCenter > (targetCenter + swapThresholdPx)
+                                    } else {
+                                        currentCenter < (targetCenter - swapThresholdPx)
+                                    }
                                 }
                                 if (targetInfo != null) {
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastSwapAt < 42L) return@detectDragGesturesAfterLongPress
+                                    lastSwapAt = now
                                     onMove(from, targetInfo.index)
                                     draggingIndex = targetInfo.index
                                     draggingOffsetY += (currentInfo.offset - targetInfo.offset)
@@ -2730,7 +2893,7 @@ private fun GifComposeOrderEditor(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "第 ${index + 1} 帧",
+                                text = "第 ${index + 1} ${indexLabel}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -2840,27 +3003,7 @@ private fun readImageSize(context: Context, input: PickedInput): IntSize? {
     return IntSize(options.outWidth, options.outHeight)
 }
 
-private fun cleanTextContent(source: String, collapseBlankLines: Boolean, trimLines: Boolean, normalizeSpaces: Boolean): String {
-    var text = source.replace("\r\n", "\n")
-    text = text.lines().joinToString("\n") { line ->
-        var current = line
-        if (normalizeSpaces) current = current.replace(Regex("[\\t ]+"), " ")
-        if (trimLines) current = current.trim()
-        current
-    }
-    if (collapseBlankLines) {
-        text = text.replace(Regex("\n{3,}"), "\n\n")
-    }
-    return text.trim() + "\n"
-}
-
-private fun isLikelyTextInput(input: PickedInput): Boolean {
-    val ext = input.file?.extension?.lowercase() ?: input.uri?.path?.substringAfterLast('.', "")?.lowercase().orEmpty()
-    if (ext.isBlank()) return true
-    return ext in setOf("txt", "md", "json", "xml", "csv", "log", "yaml", "yml", "ini", "cfg")
-}
-
-private fun buildUniqueFile(directory: File, baseName: String, extension: String): File {
+internal fun buildUniqueFile(directory: File, baseName: String, extension: String): File {
     directory.mkdirs()
     val ext = extension.trimStart('.')
     var candidate = File(directory, "$baseName.$ext")
@@ -2872,7 +3015,7 @@ private fun buildUniqueFile(directory: File, baseName: String, extension: String
     return candidate
 }
 
-private fun sanitizeFileName(name: String): String {
+internal fun sanitizeFileName(name: String): String {
     return name
         .replace(Regex("[\\\\/:*?\"<>|]"), "_")
         .replace(Regex("\\s+"), " ")
@@ -2880,184 +3023,3 @@ private fun sanitizeFileName(name: String): String {
         .ifBlank { "untitled" }
 }
 
-private fun sanitizeNamesInDirectory(directory: File): List<File> {
-    if (!directory.exists() || !directory.isDirectory) return emptyList()
-    val renamed = mutableListOf<File>()
-    directory.listFiles()?.forEach { file ->
-        val target = File(file.parentFile, sanitizeFileName(file.name))
-        if (target.absolutePath != file.absolutePath && !target.exists() && file.renameTo(target)) {
-            renamed += target
-        }
-    }
-    return renamed
-}
-
-private val AUDIO_EXTENSIONS = setOf("mp3", "wav", "m4a", "flac", "ogg", "aac")
-
-private fun readAudioInfo(context: Context, input: PickedInput): AudioInfoItem? {
-    val retriever = MediaMetadataRetriever()
-    return runCatching {
-        input.file?.let { file ->
-            retriever.setDataSource(file.absolutePath)
-        } ?: input.uri?.let { uri ->
-            retriever.setDataSource(context, uri)
-        } ?: return null
-        val name = inputDisplayName(context, input) ?: "audio"
-        val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: "audio/*"
-        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-        val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-        val sampleRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
-        } else {
-            null
-        }
-        val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-        val size = input.file?.length() ?: input.uri?.let { uri ->
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
-                descriptor.statSize
-            } ?: 0L
-        } ?: 0L
-        AudioInfoItem(name, duration, mime, artist, sampleRate, bitrate, size)
-    }.getOrNull().also {
-        runCatching { retriever.release() }
-    }
-}
-
-private fun formatDuration(durationMs: Long): String {
-    val totalSeconds = durationMs / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
-}
-
-private fun exportAudioInfoCsv(outputDir: File, infos: List<AudioInfoItem>): File {
-    val target = buildUniqueFile(outputDir, "audio_info_${System.currentTimeMillis()}", "csv")
-    target.writeText(
-        buildString {
-            appendLine("name,duration,mime,artist,sampleRate,bitrate,size")
-            infos.forEach { info ->
-                appendLine(
-                    listOf(
-                        info.name,
-                        formatDuration(info.durationMs),
-                        info.mimeType,
-                        info.artist.orEmpty(),
-                        info.sampleRate.orEmpty(),
-                        info.bitrate.orEmpty(),
-                        info.size.toString()
-                    ).joinToString(",") { value -> "\"${value.replace("\"", "\"\"")}\"" }
-                )
-            }
-        }
-    )
-    return target
-}
-
-private fun batchRenameByPrefix(directory: File, prefix: String, predicate: (File) -> Boolean): List<File> {
-    if (!directory.exists() || !directory.isDirectory) return emptyList()
-    val files = directory.listFiles()?.filter(predicate)?.sortedBy { it.name.lowercase() } ?: return emptyList()
-    val renamed = mutableListOf<File>()
-    files.forEachIndexed { index, file ->
-        val ext = file.extension.takeIf { it.isNotBlank() }?.let { ".$it" } ?: ""
-        val target = File(directory, "${sanitizeFileName(prefix)}${(index + 1).toString().padStart(3, '0')}$ext")
-        if (target.absolutePath != file.absolutePath && !target.exists() && file.renameTo(target)) {
-            renamed += target
-        }
-    }
-    return renamed
-}
-
-private fun classifyFilesByExtension(directory: File): List<File> {
-    if (!directory.exists() || !directory.isDirectory) return emptyList()
-    val moved = mutableListOf<File>()
-    directory.listFiles()?.filter { it.isFile }?.forEach { file ->
-        val ext = file.extension.lowercase().ifBlank { "others" }
-        val targetDir = File(directory, ext)
-        targetDir.mkdirs()
-        val target = File(targetDir, file.name)
-        if (!target.exists() && file.renameTo(target)) {
-            moved += target
-        }
-    }
-    return moved
-}
-
-private fun previewClassifyByExtension(directory: File): Int {
-    if (!directory.exists() || !directory.isDirectory) return 0
-    return directory.listFiles()?.count { it.isFile } ?: 0
-}
-
-private fun previewBatchRenameByPrefix(directory: File, prefix: String, predicate: (File) -> Boolean): Int {
-    if (!directory.exists() || !directory.isDirectory) return 0
-    val files = directory.listFiles()?.filter(predicate)?.sortedBy { it.name.lowercase() } ?: return 0
-    var count = 0
-    files.forEachIndexed { index, file ->
-        val ext = file.extension.takeIf { it.isNotBlank() }?.let { ".${it}" } ?: ""
-        val target = File(directory, "${sanitizeFileName(prefix)}${(index + 1).toString().padStart(3, '0')}$ext")
-        if (target.absolutePath != file.absolutePath && !target.exists()) {
-            count++
-        }
-    }
-    return count
-}
-
-private fun deleteEmptyDirectories(directory: File): Int {
-    if (!directory.exists() || !directory.isDirectory) return 0
-    var deleted = 0
-    directory.listFiles()?.filter { it.isDirectory }?.forEach { child ->
-        deleted += deleteEmptyDirectories(child)
-        if (child.listFiles().isNullOrEmpty() && child.delete()) {
-            deleted++
-        }
-    }
-    return deleted
-}
-
-private fun scanDirectorySummary(directory: File): DirectorySummary {
-    var files = 0
-    var dirs = 0
-    var totalSize = 0L
-    val extCount = linkedMapOf<String, Int>()
-    directory.walkTopDown().forEach { file ->
-        if (file == directory) return@forEach
-        if (file.isDirectory) {
-            dirs++
-        } else {
-            files++
-            totalSize += file.length()
-            val ext = file.extension.lowercase().ifBlank { "others" }
-            extCount[ext] = (extCount[ext] ?: 0) + 1
-        }
-    }
-    return DirectorySummary(files, dirs, totalSize, extCount.toList().sortedByDescending { it.second })
-}
-
-private fun buildSubmissionReport(directory: File, sizeLimitBytes: Long, namingRegex: String): String {
-    val regex = namingRegex.toRegex()
-    val allFiles = directory.walkTopDown().filter { it.isFile }.toList()
-    val oversized = allFiles.filter { it.length() > sizeLimitBytes }
-    val invalidNames = allFiles.filterNot { regex.matches(it.name) }
-    return buildString {
-        appendLine("目录：${directory.absolutePath}")
-        appendLine("文件总数：${allFiles.size}")
-        appendLine("总体积：${formatFileSize(allFiles.sumOf { it.length() })}")
-        appendLine("超限文件：${oversized.size}")
-        oversized.forEach { appendLine("- 超限: ${it.name} (${formatFileSize(it.length())})") }
-        appendLine("命名不合规：${invalidNames.size}")
-        invalidNames.forEach { appendLine("- 命名: ${it.name}") }
-    }
-}
-
-private fun reportToMarkdown(report: String): String {
-    return buildString {
-        appendLine("# 投稿清单")
-        appendLine()
-        report.lineSequence().forEach { line ->
-            when {
-                line.startsWith("- ") -> appendLine(line)
-                line.contains("：") -> appendLine("- $line")
-                else -> appendLine(line)
-            }
-        }
-    }
-}
