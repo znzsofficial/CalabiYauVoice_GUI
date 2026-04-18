@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.ui.wiki
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -7,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.nekolaska.calabiyau.data.CharacterListApi
@@ -18,7 +20,7 @@ import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 // ════════════════════════════════════════════════════════
 
 /** 子页面枚举 (保留用于兼容上层或原有内部组件) */
-enum class WikiHubPage { HOME, CHARACTERS, CHAR_DETAIL, WEAPONS, WEAPON_DETAIL, MAPS, MAP_DETAIL, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
+enum class WikiHubPage { HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
     NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
 
@@ -79,12 +81,99 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.STRINGER_ACTIONS -> WikiRoute.StringerActions
     WikiHubPage.AVATAR_FRAMES -> WikiRoute.AvatarFrames
     // 以下带参数页面由于是从 WikiHomePage 跳转而来，按理说不会直接触发（通常走具名参数跳转），给出默认保底
-    WikiHubPage.CHAR_DETAIL -> WikiRoute.CharDetail("", null)
-    WikiHubPage.WEAPON_DETAIL -> WikiRoute.WeaponDetail("")
-    WikiHubPage.MAP_DETAIL -> WikiRoute.MapDetail("", null)
     WikiHubPage.COSTUMES -> WikiRoute.Costumes(null)
     WikiHubPage.WEAPON_SKINS -> WikiRoute.WeaponSkins(null)
 }
+
+private const val ROUTE_SEPARATOR = "|"
+
+private fun encodeRoutePart(value: String?): String = Uri.encode(value.orEmpty())
+
+private fun decodeRoutePart(value: String?): String? {
+    if (value.isNullOrEmpty()) return null
+    return Uri.decode(value)
+}
+
+private fun WikiRoute.encode(): String = when (this) {
+    WikiRoute.Home -> "home"
+    WikiRoute.Characters -> "characters"
+    is WikiRoute.CharDetail -> "charDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(portrait)}"
+    WikiRoute.Weapons -> "weapons"
+    is WikiRoute.WeaponDetail -> "weaponDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}"
+    WikiRoute.Maps -> "maps"
+    is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(imageUrl)}"
+    is WikiRoute.Costumes -> "costumes$ROUTE_SEPARATOR${encodeRoutePart(character)}"
+    is WikiRoute.WeaponSkins -> "weaponSkins$ROUTE_SEPARATOR${encodeRoutePart(weapon)}"
+    WikiRoute.Activities -> "activities"
+    WikiRoute.Announcements -> "announcements"
+    WikiRoute.GameModes -> "gameModes"
+    WikiRoute.BalanceData -> "balanceData"
+    WikiRoute.Voting -> "voting"
+    WikiRoute.BioCards -> "bioCards"
+    WikiRoute.BioMobileCards -> "bioMobileCards"
+    WikiRoute.Navigation -> "navigation"
+    WikiRoute.Wallpapers -> "wallpapers"
+    WikiRoute.Stickers -> "stickers"
+    WikiRoute.Comics -> "comics"
+    WikiRoute.Baseplates -> "baseplates"
+    WikiRoute.Encasings -> "encasings"
+    WikiRoute.Medals -> "medals"
+    WikiRoute.Sprays -> "sprays"
+    WikiRoute.ChatBubbles -> "chatBubbles"
+    WikiRoute.Headgear -> "headgear"
+    WikiRoute.StringerActions -> "stringerActions"
+    WikiRoute.AvatarFrames -> "avatarFrames"
+}
+
+private fun decodeRoute(encoded: String): WikiRoute? {
+    val parts = encoded.split(ROUTE_SEPARATOR)
+    return when (parts.firstOrNull()) {
+        "home" -> WikiRoute.Home
+        "characters" -> WikiRoute.Characters
+        "charDetail" -> WikiRoute.CharDetail(
+            name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
+            portrait = decodeRoutePart(parts.getOrNull(2))
+        )
+        "weapons" -> WikiRoute.Weapons
+        "weaponDetail" -> WikiRoute.WeaponDetail(
+            name = decodeRoutePart(parts.getOrNull(1)) ?: return null
+        )
+        "maps" -> WikiRoute.Maps
+        "mapDetail" -> WikiRoute.MapDetail(
+            name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
+            imageUrl = decodeRoutePart(parts.getOrNull(2))
+        )
+        "costumes" -> WikiRoute.Costumes(decodeRoutePart(parts.getOrNull(1)))
+        "weaponSkins" -> WikiRoute.WeaponSkins(decodeRoutePart(parts.getOrNull(1)))
+        "activities" -> WikiRoute.Activities
+        "announcements" -> WikiRoute.Announcements
+        "gameModes" -> WikiRoute.GameModes
+        "balanceData" -> WikiRoute.BalanceData
+        "voting" -> WikiRoute.Voting
+        "bioCards" -> WikiRoute.BioCards
+        "bioMobileCards" -> WikiRoute.BioMobileCards
+        "navigation" -> WikiRoute.Navigation
+        "wallpapers" -> WikiRoute.Wallpapers
+        "stickers" -> WikiRoute.Stickers
+        "comics" -> WikiRoute.Comics
+        "baseplates" -> WikiRoute.Baseplates
+        "encasings" -> WikiRoute.Encasings
+        "medals" -> WikiRoute.Medals
+        "sprays" -> WikiRoute.Sprays
+        "chatBubbles" -> WikiRoute.ChatBubbles
+        "headgear" -> WikiRoute.Headgear
+        "stringerActions" -> WikiRoute.StringerActions
+        "avatarFrames" -> WikiRoute.AvatarFrames
+        else -> null
+    }
+}
+
+private val wikiRouteStackSaver = listSaver<List<WikiRoute>, String>(
+    save = { stack -> stack.map(WikiRoute::encode) },
+    restore = { encodedStack ->
+        encodedStack.mapNotNull(::decodeRoute).ifEmpty { listOf(WikiRoute.Home) }
+    }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,9 +181,12 @@ fun WikiHubScreen(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     isOverlaid: Boolean = false,
-    initialPage: WikiHubPage = WikiHubPage.HOME
+    initialPage: WikiHubPage = WikiHubPage.HOME,
+    resetKey: Int = 0
 ) {
-    var backStack by remember { mutableStateOf(listOf(initialPage.toRoute())) }
+    var backStack by rememberSaveable(resetKey, stateSaver = wikiRouteStackSaver) {
+        mutableStateOf(listOf(initialPage.toRoute()))
+    }
     val currentRoute = backStack.lastOrNull() ?: WikiRoute.Home
 
     val homeListState = rememberLazyListState()
@@ -129,6 +221,7 @@ fun WikiHubScreen(
     }
 
     fun navigateTo(route: WikiRoute) {
+        if (backStack.lastOrNull() == route) return
         isNavigatingBack = false
         backStack = backStack + route
     }
