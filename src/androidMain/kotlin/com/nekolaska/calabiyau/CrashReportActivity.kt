@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
@@ -10,7 +9,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -18,7 +25,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,24 +44,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 
-/**
- * 崩溃报告页面。
- *
- * 显示崩溃日志，提供"复制日志"和"前往反馈"按钮，
- * 方便用户将崩溃信息提交到 GitHub Issue。
- */
 class CrashReportActivity : ComponentActivity() {
+
+    private var crashLog: String = ""
 
     companion object {
         private const val GITHUB_ISSUE_URL =
             "https://github.com/znzsofficial/CalabiYauVoice_GUI/issues/new?labels=bug&title=%5BCrash%5D+"
+        private const val STATE_CRASH_LOG = "state_crash_log"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val crashLog = CrashHandler.consumeCrashLog(this) ?: "未找到崩溃日志"
+        crashLog = savedInstanceState?.getString(STATE_CRASH_LOG)
+            ?: intent.getStringExtra(CrashHandler.EXTRA_CRASH_LOG)
+            ?: CrashHandler.peekCrashLog(this)
+            ?: "未找到崩溃日志"
+
+        if (savedInstanceState == null) {
+            CrashHandler.clearCrashLog(this)
+        }
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -59,6 +79,11 @@ class CrashReportActivity : ComponentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_CRASH_LOG, crashLog)
+        super.onSaveInstanceState(outState)
+    }
+
     private fun copyToClipboard(text: String) {
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("崩溃日志", text))
@@ -66,20 +91,21 @@ class CrashReportActivity : ComponentActivity() {
     }
 
     private fun openGitHubIssue(log: String) {
-        // 先复制到剪贴板，因为 URL 长度有限
         copyToClipboard(log)
         try {
             startActivity(Intent(Intent.ACTION_VIEW, GITHUB_ISSUE_URL.toUri()))
         } catch (_: Exception) {
-            Toast.makeText(this, "无法打开浏览器，日志已复制到剪贴板", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "无法打开浏览器，日志已复制到剪贴板。", Toast.LENGTH_LONG).show()
         }
     }
 
     private fun restartApp() {
-        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
-        if (intent != null) startActivity(intent)
+        if (launchIntent != null) {
+            startActivity(launchIntent)
+        }
         finish()
     }
 }
@@ -98,12 +124,13 @@ private fun CrashReportScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Outlined.BugReport, null,
+                            imageVector = Icons.Outlined.BugReport,
+                            contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(24.dp)
                         )
-                        Spacer(Modifier.width(10.dp))
-                        Text("应用崩溃了", fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.size(10.dp))
+                        Text("应用发生崩溃", fontWeight = FontWeight.Bold)
                     }
                 }
             )
@@ -116,46 +143,57 @@ private fun CrashReportScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Text(
-                "应用遇到了意外错误。你可以复制日志并反馈给开发者。",
+                text = "应用遇到了未预期错误。你可以复制崩溃日志并反馈给开发者。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(12.dp))
 
-            // 操作按钮（复制独占一行，反馈+重启并排）
             FilledTonalButton(
                 onClick = onCopy,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Outlined.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.size(8.dp))
                 Text("复制崩溃日志")
             }
+
             Spacer(Modifier.height(8.dp))
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = onReport,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Outlined.BugReport, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Outlined.BugReport,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.size(6.dp))
                     Text("反馈问题")
                 }
                 OutlinedButton(
                     onClick = onRestart,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Outlined.Refresh, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("重启应用")
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text("重新启动")
                 }
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // 崩溃日志（可选择、可滚动）
             Surface(
-                shape = MaterialTheme.shapes.medium,
                 tonalElevation = 1.dp,
                 modifier = Modifier
                     .fillMaxWidth()
