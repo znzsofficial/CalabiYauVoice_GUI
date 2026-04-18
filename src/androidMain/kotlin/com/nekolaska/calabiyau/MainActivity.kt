@@ -23,15 +23,6 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.palette.graphics.Palette
-import coil3.ImageLoader
-import coil3.SingletonImageLoader
-import coil3.disk.DiskCache
-import coil3.disk.directory
-import coil3.gif.AnimatedImageDecoder
-import coil3.gif.GifDecoder
-import coil3.memory.MemoryCache
-import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import coil3.request.crossfade
 import com.nekolaska.calabiyau.data.AppPrefs
 import com.nekolaska.calabiyau.data.OfflineCache
 import com.nekolaska.calabiyau.data.UpdateApi
@@ -49,13 +40,12 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
 
     private val shortcutTargetState = mutableStateOf<String?>(null)
+    private val shortcutRequestKeyState = mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        CrashHandler.install(this)
-
         if (CrashHandler.hasPendingCrashLog(this)) {
             startActivity(
                 Intent(this, CrashReportActivity::class.java).apply {
@@ -69,35 +59,9 @@ class MainActivity : ComponentActivity() {
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
         OfflineCache.init(this)
-        // 仅冷启动时异步清理过期磁盘缓存，避免配置变更时重复执行
+        // 仅在冷启动时异步清理过期磁盘缓存，避免配置变更时重复执行。
         if (savedInstanceState == null) {
             lifecycleScope.launch(Dispatchers.IO) { OfflineCache.pruneExpired() }
-        }
-
-        // ── 全局 Coil ImageLoader：共享 WikiEngine 的 OkHttp 客户端（UA 轮换 + 403/429/503 重试）──
-        SingletonImageLoader.setSafe { ctx ->
-            ImageLoader.Builder(ctx)
-                .components {
-                    add(OkHttpNetworkFetcherFactory(callFactory = { WikiEngine.client }))
-                    if (Build.VERSION.SDK_INT >= 28) {
-                        add(AnimatedImageDecoder.Factory())
-                    } else {
-                        add(GifDecoder.Factory())
-                    }
-                }
-                .memoryCache {
-                    MemoryCache.Builder()
-                        .maxSizePercent(ctx, 0.25)
-                        .build()
-                }
-                .diskCache {
-                    DiskCache.Builder()
-                        .directory(ctx.cacheDir.resolve("image_cache"))
-                        .maxSizeBytes(128L * 1024 * 1024) // 128 MB
-                        .build()
-                }
-                .crossfade(true)
-                .build()
         }
 
         PortraitRepository.init(
@@ -106,8 +70,9 @@ class MainActivity : ComponentActivity() {
             getAllCharacterNames = { WikiEngine.getAllCharacterNames() }
         )
 
-        // 解析 Shortcut 目标
+        // 解析首次进入时的快捷方式目标。
         shortcutTargetState.value = intent?.getStringExtra("shortcut_target")
+        shortcutRequestKeyState.intValue++
 
         setContent {
             AppTheme {
@@ -115,7 +80,7 @@ class MainActivity : ComponentActivity() {
                 val downloadVM: DownloadViewModel = viewModel()
                 val portraitVM: PortraitViewModel = viewModel()
 
-                // ── 启动时静默检查更新（每天最多一次） ──
+                // 启动时静默检查更新，每天最多一次。
                 val context = LocalContext.current
                 var startupUpdateInfo by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
                 LaunchedEffect(Unit) {
@@ -138,9 +103,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MainScreen(searchVM, downloadVM, portraitVM, shortcutTarget = shortcutTargetState.value)
+                MainScreen(
+                    searchVM,
+                    downloadVM,
+                    portraitVM,
+                    shortcutTarget = shortcutTargetState.value,
+                    shortcutRequestKey = shortcutRequestKeyState.intValue
+                )
 
-                // ── 启动更新提示 ──
+                // 仅在发现新版本时展示启动更新提示。
                 startupUpdateInfo?.let { info ->
                     val curVer = remember {
                         try {
@@ -189,6 +160,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         shortcutTargetState.value = intent.getStringExtra("shortcut_target")
+        shortcutRequestKeyState.intValue++
     }
 }
 
