@@ -69,6 +69,7 @@ private sealed interface MainBackTarget {
     data object CloseDrawer : MainBackTarget
     data object CloseToolOverlay : MainBackTarget
     data object ExitWikiToPrevious : MainBackTarget
+    data object BackToDownloader : MainBackTarget
     data object GoHome : MainBackTarget
 }
 
@@ -84,13 +85,25 @@ enum class DrawerDestination {
     SETTINGS           // 设置
 }
 
+private fun shortcutTargetToDestination(shortcutTarget: String?): DrawerDestination = when (shortcutTarget) {
+    "downloader" -> DrawerDestination.DOWNLOADER
+    "wiki" -> DrawerDestination.WIKI
+    else -> DrawerDestination.WIKI_HUB
+}
+
+private fun shortcutTargetToHubPage(shortcutTarget: String?): WikiHubPage = when (shortcutTarget) {
+    "characters" -> WikiHubPage.CHARACTERS
+    else -> WikiHubPage.HOME
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun MainScreen(
     searchVM: SearchViewModel,
     downloadVM: DownloadViewModel,
     portraitVM: PortraitViewModel,
-    shortcutTarget: String? = null
+    shortcutTarget: String? = null,
+    shortcutRequestKey: Int = 0
 ) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -104,24 +117,58 @@ fun MainScreen(
             else -> DrawerDestination.WIKI_HUB
         }
     }
-    var currentDestination by rememberSaveable { mutableStateOf(initialDestination) }
+    var currentDestination by rememberSaveable {
+        mutableStateOf(initialDestination)
+    }
+    var hubStartPage by rememberSaveable {
+        mutableStateOf(shortcutTargetToHubPage(shortcutTarget))
+    }
+    var hubResetToken by rememberSaveable { mutableIntStateOf(0) }
+    var lastHandledShortcutRequestKey by rememberSaveable { mutableIntStateOf(shortcutRequestKey) }
 
     // ── 自适应布局：平板/折叠屏使用常驻侧栏 ──
     val activity = LocalActivity.current
     val windowSizeClass = activity?.let { calculateWindowSizeClass(it) }
     val useExpandedLayout = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
-    var pendingWikiUrl by rememberSaveable { mutableStateOf<String?>(null) }
-    var fileManagerInitialPath by rememberSaveable { mutableStateOf<String?>(null) }
     var toolFileManagerOverlay by remember { mutableStateOf<ToolFileManagerOverlayState?>(null) }
     // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
     var wikiEnteredFromHub by rememberSaveable { mutableStateOf(false) }
     // 记录进入侧栏 Wiki 前的页面，退出时回到该页面
     var previousDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
 
+    fun normalizePreviousDestination(destination: DrawerDestination): DrawerDestination =
+        if (destination == DrawerDestination.WIKI_HUB_WEBVIEW) DrawerDestination.WIKI_HUB else destination
+
+    fun openWikiHub(page: WikiHubPage = WikiHubPage.HOME, resetStack: Boolean = true) {
+        wikiEnteredFromHub = false
+        hubStartPage = page
+        if (resetStack) hubResetToken++
+        currentDestination = DrawerDestination.WIKI_HUB
+    }
+
+    LaunchedEffect(shortcutTarget, shortcutRequestKey) {
+        val target = shortcutTarget ?: return@LaunchedEffect
+        if (shortcutRequestKey == lastHandledShortcutRequestKey) return@LaunchedEffect
+
+        toolFileManagerOverlay = null
+        when (target) {
+            "characters" -> openWikiHub(page = WikiHubPage.CHARACTERS)
+            "downloader" -> currentDestination = DrawerDestination.DOWNLOADER
+            "wiki" -> {
+                wikiEnteredFromHub = false
+                previousDestination = normalizePreviousDestination(currentDestination)
+                currentDestination = DrawerDestination.WIKI
+            }
+            else -> openWikiHub()
+        }
+        lastHandledShortcutRequestKey = shortcutRequestKey
+    }
+
     val backTarget = when {
         drawerState.isOpen -> MainBackTarget.CloseDrawer
         toolFileManagerOverlay != null -> MainBackTarget.CloseToolOverlay
         currentDestination == DrawerDestination.WIKI && !drawerState.isOpen -> MainBackTarget.ExitWikiToPrevious
+        currentDestination == DrawerDestination.DOWNLOAD_HISTORY && !drawerState.isOpen -> MainBackTarget.BackToDownloader
         currentDestination != DrawerDestination.WIKI_HUB
                 && currentDestination != DrawerDestination.WIKI
                 && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW
@@ -133,7 +180,8 @@ fun MainScreen(
             MainBackTarget.CloseDrawer -> coroutineScope.launch { drawerState.close() }
             MainBackTarget.CloseToolOverlay -> toolFileManagerOverlay = null
             MainBackTarget.ExitWikiToPrevious -> currentDestination = previousDestination
-            MainBackTarget.GoHome -> currentDestination = DrawerDestination.WIKI_HUB
+            MainBackTarget.BackToDownloader -> currentDestination = DrawerDestination.DOWNLOADER
+            MainBackTarget.GoHome -> openWikiHub()
             null -> Unit
         }
     }
@@ -183,22 +231,18 @@ fun MainScreen(
                 WikiWebViewScreen(
                     onExitWiki = if (wikiEnteredFromHub) null
                         else {{ currentDestination = previousDestination }},
-                    initialUrl = pendingWikiUrl ?: WIKI_HOME_URL,
-                    onInitialUrlConsumed = { pendingWikiUrl = null }
+                    initialUrl = WIKI_HOME_URL
                 )
             }
             DrawerDestination.WIKI_HUB -> {
                 // WIKI_HUB_WEBVIEW 也映射到此分支（animKey 合并）
                 // Shortcut "characters" → 直接进入角色列表
-                val hubInitialPage = remember {
-                    if (shortcutTarget == "characters") WikiHubPage.CHARACTERS
-                    else WikiHubPage.HOME
-                }
                 Box {
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
                         isOverlaid = currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW,
-                        initialPage = hubInitialPage,
+                        initialPage = hubStartPage,
+                        resetKey = hubResetToken,
                         onOpenWikiUrl = { url ->
                             hubWebViewUrl = url
                             wikiEnteredFromHub = true
@@ -219,14 +263,13 @@ fun MainScreen(
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
                     rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
-                    initialPath = fileManagerInitialPath,
-                    onBack = { currentDestination = DrawerDestination.WIKI_HUB }
+                    onBack = { openWikiHub() }
                 )
             }
             DrawerDestination.TOOLS -> {
                 Box(Modifier.fillMaxSize()) {
                     ToolsHomeScreen(
-                        onBack = { currentDestination = DrawerDestination.WIKI_HUB },
+                        onBack = { openWikiHub() },
                         backEnabled = toolFileManagerOverlay == null,
                         onOpenFileManager = { path ->
                             toolFileManagerOverlay = ToolFileManagerOverlayState(initialPath = path)
@@ -299,12 +342,12 @@ fun MainScreen(
             DrawerDestination.DOWNLOAD_HISTORY -> {
                 DownloadHistoryScreen(
                     downloadVM = downloadVM,
-                    onBack = { currentDestination = DrawerDestination.WIKI_HUB }
+                    onBack = { currentDestination = DrawerDestination.DOWNLOADER }
                 )
             }
 
             DrawerDestination.SETTINGS -> {
-                SettingsScreen(onBack = { currentDestination = DrawerDestination.WIKI_HUB })
+                SettingsScreen(onBack = { openWikiHub() })
             }
 
             else -> {} // WIKI_HUB_WEBVIEW 已合并到 WIKI_HUB 处理
@@ -331,9 +374,13 @@ fun MainScreen(
             onDestinationSelected = { dest ->
                 if (dest == DrawerDestination.WIKI) {
                     wikiEnteredFromHub = false
-                    previousDestination = currentDestination
+                    previousDestination = normalizePreviousDestination(currentDestination)
                 }
-                currentDestination = dest
+                if (dest == DrawerDestination.WIKI_HUB) {
+                    openWikiHub()
+                } else {
+                    currentDestination = dest
+                }
                 if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
             },
             backdrop = backdrop
