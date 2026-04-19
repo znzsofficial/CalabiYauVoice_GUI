@@ -3,10 +3,13 @@ package com.nekolaska.calabiyau.ui.wiki
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -20,9 +23,11 @@ import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 // ════════════════════════════════════════════════════════
 
 /** 子页面枚举 (保留用于兼容上层或原有内部组件) */
-enum class WikiHubPage { HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
+enum class WikiHubPage {
+    HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES }
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES
+}
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
 sealed interface WikiRoute {
@@ -97,11 +102,21 @@ private fun decodeRoutePart(value: String?): String? {
 private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Home -> "home"
     WikiRoute.Characters -> "characters"
-    is WikiRoute.CharDetail -> "charDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(portrait)}"
+    is WikiRoute.CharDetail -> "charDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
+        encodeRoutePart(
+            portrait
+        )
+    }"
+
     WikiRoute.Weapons -> "weapons"
     is WikiRoute.WeaponDetail -> "weaponDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}"
     WikiRoute.Maps -> "maps"
-    is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(imageUrl)}"
+    is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
+        encodeRoutePart(
+            imageUrl
+        )
+    }"
+
     is WikiRoute.Costumes -> "costumes$ROUTE_SEPARATOR${encodeRoutePart(character)}"
     is WikiRoute.WeaponSkins -> "weaponSkins$ROUTE_SEPARATOR${encodeRoutePart(weapon)}"
     WikiRoute.Activities -> "activities"
@@ -134,15 +149,18 @@ private fun decodeRoute(encoded: String): WikiRoute? {
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
             portrait = decodeRoutePart(parts.getOrNull(2))
         )
+
         "weapons" -> WikiRoute.Weapons
         "weaponDetail" -> WikiRoute.WeaponDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null
         )
+
         "maps" -> WikiRoute.Maps
         "mapDetail" -> WikiRoute.MapDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
             imageUrl = decodeRoutePart(parts.getOrNull(2))
         )
+
         "costumes" -> WikiRoute.Costumes(decodeRoutePart(parts.getOrNull(1)))
         "weaponSkins" -> WikiRoute.WeaponSkins(decodeRoutePart(parts.getOrNull(1)))
         "activities" -> WikiRoute.Activities
@@ -231,239 +249,274 @@ fun WikiHubScreen(
     }
 
     // 采用 MD3 约定的 Shared Axis (X轴) 过渡：轻量位移配合快速淡入淡出，比大范围拉扯更具现代感
-    val animDuration = 400
     AnimatedContent(
         targetState = currentRoute,
         modifier = Modifier.background(MaterialTheme.colorScheme.background),
         transitionSpec = {
+            val duration = 400
             if (isNavigatingBack) {
-                // 返回：从左侧轻微滑入 + 淡入，旧页面向右侧轻微滑出 + 快速淡出
-                (slideInHorizontally(tween(animDuration)) { -it / 8 } + fadeIn(tween(animDuration)))
-                    .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 8 } + fadeOut(tween(animDuration / 2)))
+                // 返回：从左滑入(强调减速) + 淡入，旧页向右滑出(加速) + 淡出
+                (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { -it / 8 } + 
+                    fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
+                    .togetherWith(
+                        slideOutHorizontally(tween(duration / 2, easing = FastOutLinearInEasing)) { it / 8 } + 
+                        fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
+                    )
             } else {
-                // 前进：从右侧轻微滑入 + 淡入，旧页面向左侧轻微滑出 + 快速淡出
-                (slideInHorizontally(tween(animDuration)) { it / 8 } + fadeIn(tween(animDuration)))
-                    .togetherWith(slideOutHorizontally(tween(animDuration)) { -it / 8 } + fadeOut(tween(animDuration / 2)))
+                // 前进：从右滑入(强调减速) + 淡入，旧页向左滑出(加速) + 淡出
+                (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { it / 8 } + 
+                    fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
+                    .togetherWith(
+                        slideOutHorizontally(tween(duration / 2, easing = FastOutLinearInEasing)) { -it / 8 } + 
+                        fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
+                    )
             }
         },
         label = "WikiHubPageTransition"
     ) { route ->
-    when (route) {
-        is WikiRoute.Home -> {
-            WikiHomePage(
-                onOpenDrawer = onOpenDrawer,
-                onOpenWikiUrl = onOpenWikiUrl,
-                listState = homeListState,
-                onNavigateTo = { navigateTo(it.toRoute()) },
-                onOpenCharacterDetail = { name, portrait ->
-                    navigateTo(WikiRoute.CharDetail(name, portrait))
-                },
-                onOpenMapDetail = { name, imageUrl ->
-                    navigateTo(WikiRoute.MapDetail(name, imageUrl))
-                },
-                factions = factions,
-                isLoadingCharacters = isLoadingCharacters,
-                gameModes = gameModes,
-                isLoadingMaps = isLoadingMaps
-            )
+        when (route) {
+            is WikiRoute.Home -> {
+                WikiHomePage(
+                    onOpenDrawer = onOpenDrawer,
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    listState = homeListState,
+                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onOpenCharacterDetail = { name, portrait ->
+                        navigateTo(WikiRoute.CharDetail(name, portrait))
+                    },
+                    onOpenMapDetail = { name, imageUrl ->
+                        navigateTo(WikiRoute.MapDetail(name, imageUrl))
+                    },
+                    factions = factions,
+                    isLoadingCharacters = isLoadingCharacters,
+                    gameModes = gameModes,
+                    isLoadingMaps = isLoadingMaps
+                )
+            }
+
+            is WikiRoute.Characters -> {
+                com.nekolaska.calabiyau.ui.character.CharacterListScreen(
+                    onBack = { popBackStack() },
+                    onOpenCharacterDetail = { name, portrait ->
+                        navigateTo(WikiRoute.CharDetail(name, portrait))
+                    },
+                    initialTab = characterListTab,
+                    onTabChanged = { characterListTab = it }
+                )
+            }
+
+            is WikiRoute.CharDetail -> {
+                com.nekolaska.calabiyau.ui.character.CharacterDetailScreen(
+                    characterName = route.name,
+                    portraitUrl = route.portrait,
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenCostumes = { charName ->
+                        navigateTo(WikiRoute.Costumes(charName))
+                    },
+                    onOpenWeaponSkins = { weaponName ->
+                        navigateTo(WikiRoute.WeaponSkins(weaponName))
+                    },
+                    onOpenWeaponDetail = { weaponName ->
+                        navigateTo(WikiRoute.WeaponDetail(weaponName))
+                    }
+                )
+            }
+
+            is WikiRoute.Weapons -> {
+                com.nekolaska.calabiyau.ui.weapon.WeaponListScreen(
+                    onBack = { popBackStack() },
+                    onOpenWeaponDetail = { name ->
+                        navigateTo(WikiRoute.WeaponDetail(name))
+                    },
+                    initialTab = weaponListTab,
+                    onTabChanged = { weaponListTab = it }
+                )
+            }
+
+            is WikiRoute.WeaponDetail -> {
+                com.nekolaska.calabiyau.ui.weapon.WeaponDetailScreen(
+                    weaponName = route.name,
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenWeaponSkins = { weaponName ->
+                        navigateTo(WikiRoute.WeaponSkins(weaponName))
+                    }
+                )
+            }
+
+            is WikiRoute.Maps -> {
+                MapListFullScreen(
+                    onBack = { popBackStack() },
+                    onOpenMapDetail = { name, imageUrl ->
+                        navigateTo(WikiRoute.MapDetail(name, imageUrl))
+                    },
+                    gameModes = gameModes,
+                    isLoading = isLoadingMaps,
+                    initialTab = mapListTab,
+                    onTabChanged = { mapListTab = it }
+                )
+            }
+
+            is WikiRoute.MapDetail -> {
+                com.nekolaska.calabiyau.ui.MapDetailScreen(
+                    mapName = route.name,
+                    mapImageUrl = route.imageUrl,
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Costumes -> {
+                com.nekolaska.calabiyau.ui.character.CostumeFilterScreen(
+                    initialCharacter = route.character,
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.WeaponSkins -> {
+                com.nekolaska.calabiyau.ui.weapon.WeaponSkinFilterScreen(
+                    initialWeapon = route.weapon,
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Activities -> {
+                com.nekolaska.calabiyau.ui.ActivityScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Announcements -> {
+                com.nekolaska.calabiyau.ui.AnnouncementScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.GameModes -> {
+                com.nekolaska.calabiyau.ui.GameModeScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenMapDetail = { name, imageUrl ->
+                        navigateTo(WikiRoute.MapDetail(name, imageUrl))
+                    }
+                )
+            }
+
+            is WikiRoute.Voting -> {
+                com.nekolaska.calabiyau.ui.VotingScreen(onBack = { popBackStack() })
+            }
+
+            is WikiRoute.BioCards -> {
+                com.nekolaska.calabiyau.ui.BioCardScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    initialTab = 0
+                )
+            }
+
+            is WikiRoute.BioMobileCards -> {
+                // 兼容保留路由：当前无首页直达入口，仅用于未来深链或外部跳转扩展
+                com.nekolaska.calabiyau.ui.BioCardScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    initialTab = 1
+                )
+            }
+
+            is WikiRoute.Navigation -> {
+                com.nekolaska.calabiyau.ui.navigation.NavigationMenuScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Wallpapers -> {
+                com.nekolaska.calabiyau.ui.GalleryScreen(
+                    title = "壁纸",
+                    pageName = "壁纸",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Stickers -> {
+                com.nekolaska.calabiyau.ui.GalleryScreen(
+                    title = "表情包",
+                    pageName = "表情包",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Comics -> {
+                com.nekolaska.calabiyau.ui.GalleryScreen(
+                    title = "四格漫画",
+                    pageName = "官方四格漫画",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.BalanceData -> {
+                com.nekolaska.calabiyau.ui.BalanceDataScreen(
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Baseplates -> {
+                com.nekolaska.calabiyau.ui.BaseplateScreen(
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Encasings -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "封装",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.ChatBubbles -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "聊天气泡",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Headgear -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "头套",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.StringerActions -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "超弦体动作",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Medals -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "勋章",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Sprays -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "喷漆",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.AvatarFrames -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "头像框",
+                    onBack = { popBackStack() }
+                )
+            }
         }
-        is WikiRoute.Characters -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.character.CharacterListScreen(
-                onBack = { popBackStack() },
-                onOpenCharacterDetail = { name, portrait ->
-                    navigateTo(WikiRoute.CharDetail(name, portrait))
-                },
-                initialTab = characterListTab,
-                onTabChanged = { characterListTab = it }
-            )
-        }
-        is WikiRoute.CharDetail -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.character.CharacterDetailScreen(
-                characterName = route.name,
-                portraitUrl = route.portrait,
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl,
-                onOpenCostumes = { charName ->
-                    navigateTo(WikiRoute.Costumes(charName))
-                },
-                onOpenWeaponSkins = { weaponName ->
-                    navigateTo(WikiRoute.WeaponSkins(weaponName))
-                },
-                onOpenWeaponDetail = { weaponName ->
-                    navigateTo(WikiRoute.WeaponDetail(weaponName))
-                }
-            )
-        }
-        is WikiRoute.Weapons -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.weapon.WeaponListScreen(
-                onBack = { popBackStack() },
-                onOpenWeaponDetail = { name ->
-                    navigateTo(WikiRoute.WeaponDetail(name))
-                },
-                initialTab = weaponListTab,
-                onTabChanged = { weaponListTab = it }
-            )
-        }
-        is WikiRoute.WeaponDetail -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.weapon.WeaponDetailScreen(
-                weaponName = route.name,
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl,
-                onOpenWeaponSkins = { weaponName ->
-                    navigateTo(WikiRoute.WeaponSkins(weaponName))
-                }
-            )
-        }
-        is WikiRoute.Maps -> {
-            MapListFullScreen(
-                onBack = { popBackStack() },
-                onOpenMapDetail = { name, imageUrl ->
-                    navigateTo(WikiRoute.MapDetail(name, imageUrl))
-                },
-                gameModes = gameModes,
-                isLoading = isLoadingMaps,
-                initialTab = mapListTab,
-                onTabChanged = { mapListTab = it }
-            )
-        }
-        is WikiRoute.MapDetail -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.MapDetailScreen(
-                mapName = route.name,
-                mapImageUrl = route.imageUrl,
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl
-            )
-        }
-        is WikiRoute.Costumes -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.character.CostumeFilterScreen(
-                initialCharacter = route.character,
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.WeaponSkins -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.weapon.WeaponSkinFilterScreen(
-                initialWeapon = route.weapon,
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Activities -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.ActivityScreen(
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl
-            )
-        }
-        is WikiRoute.Announcements -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.AnnouncementScreen(
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl
-            )
-        }
-        is WikiRoute.GameModes -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.GameModeScreen(
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl,
-                onOpenMapDetail = { name, imageUrl ->
-                    navigateTo(WikiRoute.MapDetail(name, imageUrl))
-                }
-            )
-        }
-        is WikiRoute.Voting -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.VotingScreen(onBack = { popBackStack() })
-        }
-        is WikiRoute.BioCards -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.BioCardScreen(
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl,
-                initialTab = 0
-            )
-        }
-        is WikiRoute.BioMobileCards -> {
-            // 兼容保留路由：当前无首页直达入口，仅用于未来深链或外部跳转扩展
-            _root_ide_package_.com.nekolaska.calabiyau.ui.BioCardScreen(
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl,
-                initialTab = 1
-            )
-        }
-        is WikiRoute.Navigation -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.navigation.NavigationMenuScreen(
-                onBack = { popBackStack() },
-                onOpenWikiUrl = onOpenWikiUrl
-            )
-        }
-        is WikiRoute.Wallpapers -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.GalleryScreen(
-                title = "壁纸",
-                pageName = "壁纸",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Stickers -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.GalleryScreen(
-                title = "表情包",
-                pageName = "表情包",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Comics -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.GalleryScreen(
-                title = "四格漫画",
-                pageName = "官方四格漫画",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.BalanceData -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.BalanceDataScreen(
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Baseplates -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.BaseplateScreen(
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Encasings -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "封装",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.ChatBubbles -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "聊天气泡",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Headgear -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "头套",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.StringerActions -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "超弦体动作",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Medals -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "勋章",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.Sprays -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "喷漆",
-                onBack = { popBackStack() }
-            )
-        }
-        is WikiRoute.AvatarFrames -> {
-            _root_ide_package_.com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
-                title = "头像框",
-                onBack = { popBackStack() }
-            )
-        }
-    }
     } // AnimatedContent
 }
