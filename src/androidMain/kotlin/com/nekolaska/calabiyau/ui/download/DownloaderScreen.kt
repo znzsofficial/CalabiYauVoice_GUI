@@ -18,6 +18,10 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.geometry.Offset
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
@@ -84,6 +88,23 @@ internal fun DownloaderScreen(
     val portraitCatalog by portraitVM.portraitCatalog.collectAsState()
     val isLoadingPortrait by portraitVM.isLoadingPortrait.collectAsState()
     val selectedPortraitCostume by portraitVM.selectedPortraitCostume.collectAsState()
+
+    var isToolbarVisible by remember { mutableStateOf(true) }
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y < -10f) {
+                    isToolbarVisible = false
+                } else if (available.y > 10f) {
+                    isToolbarVisible = true
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     // 连接 SearchViewModel 的日志到 DownloadViewModel
     LaunchedEffect(Unit) {
@@ -264,7 +285,7 @@ internal fun DownloaderScreen(
                     onRetry = { searchVM.performSearch() }
                 )
                 // 内容区
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(nestedScrollConnection)) {
                     when (searchMode) {
                         SearchMode.FILE_SEARCH -> {
                             FileSearchList(
@@ -314,70 +335,39 @@ internal fun DownloaderScreen(
             if (useDockedToolbar) {
                 val surfaceColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
                 val tintColor = MaterialTheme.colorScheme.secondaryContainer
-                Row(
+                AnimatedVisibility(
+                    visible = isToolbarVisible,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(y = (-16).dp)
-                        .zIndex(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .zIndex(1f)
                 ) {
-                    // ── 主工具栏 ──
-                    if (dlBackdrop != null) {
-                        // 液态玻璃模式：用 Row + drawBackdrop 替代 HorizontalFloatingToolbar
-                        Row(
-                            modifier = Modifier
-                                .height(64.dp)
-                                .drawBackdrop(
-                                    backdrop = dlBackdrop,
-                                    shape = { ContinuousCapsule },
-                                    effects = {
-                                        vibrancy()
-                                        blur(4.dp.toPx())
-                                        lens(16.dp.toPx(), 32.dp.toPx())
-                                    },
-                                    onDrawSurface = { drawRect(surfaceColor) }
-                                )
-                                .padding(horizontal = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            val modes = listOf(
-                                Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
-                                Triple(SearchMode.ALL_CATEGORIES, "分类", Icons.Outlined.Category),
-                                Triple(SearchMode.FILE_SEARCH, "文件搜索", Icons.Outlined.FindInPage),
-                                Triple(SearchMode.PORTRAIT, "立绘", Icons.Outlined.Image)
-                            )
-                            modes.forEach { (mode, label, icon) ->
-                                val isSelected = searchMode == mode
-                                val selectedIcon = when (mode) {
-                                    SearchMode.VOICE_ONLY -> Icons.Default.RecordVoiceOver
-                                    SearchMode.ALL_CATEGORIES -> Icons.Default.Category
-                                    SearchMode.FILE_SEARCH -> Icons.Default.FindInPage
-                                    SearchMode.PORTRAIT -> Icons.Default.Image
-                                }
-                                IconButton(
-                                    onClick = {
-                                        searchVM.onSearchModeChange(mode)
-                                        focusManager.clearFocus()
-                                    },
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        if (isSelected) selectedIcon else icon,
-                                        contentDescription = label,
-                                        modifier = Modifier.size(26.dp),
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // ── 主工具栏 ──
+                        if (dlBackdrop != null) {
+                            // 液态玻璃模式：用 Row + drawBackdrop 替代 HorizontalFloatingToolbar
+                            Row(
+                                modifier = Modifier
+                                    .height(64.dp)
+                                    .drawBackdrop(
+                                        backdrop = dlBackdrop,
+                                        shape = { ContinuousCapsule },
+                                        effects = {
+                                            vibrancy()
+                                            blur(4.dp.toPx())
+                                            lens(16.dp.toPx(), 32.dp.toPx())
+                                        },
+                                        onDrawSurface = { drawRect(surfaceColor) }
                                     )
-                                }
-                            }
-                        }
-                    } else {
-                        // 非玻璃模式：使用 HorizontalFloatingToolbar
-                        HorizontalFloatingToolbar(
-                            expanded = true,
-                            content = {
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 val modes = listOf(
                                     Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
                                     Triple(SearchMode.ALL_CATEGORIES, "分类", Icons.Outlined.Category),
@@ -392,13 +382,50 @@ internal fun DownloaderScreen(
                                         SearchMode.FILE_SEARCH -> Icons.Default.FindInPage
                                         SearchMode.PORTRAIT -> Icons.Default.Image
                                     }
-                                    TooltipBox(
-                                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                            TooltipAnchorPosition.Above
-                                        ),
-                                        tooltip = { PlainTooltip { Text(label) } },
-                                        state = rememberTooltipState()
+                                    IconButton(
+                                        onClick = {
+                                            searchVM.onSearchModeChange(mode)
+                                            focusManager.clearFocus()
+                                        },
+                                        modifier = Modifier.size(48.dp)
                                     ) {
+                                        Icon(
+                                            if (isSelected) selectedIcon else icon,
+                                            contentDescription = label,
+                                            modifier = Modifier.size(26.dp),
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // 非玻璃模式：使用有透明度的 Capsule Surface 替代 HorizontalFloatingToolbar
+                            Surface(
+                                shape = ContinuousCapsule,
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.height(64.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    val modes = listOf(
+                                        Triple(SearchMode.VOICE_ONLY, "语音", Icons.Outlined.RecordVoiceOver),
+                                        Triple(SearchMode.ALL_CATEGORIES, "分类", Icons.Outlined.Category),
+                                        Triple(SearchMode.FILE_SEARCH, "文件搜索", Icons.Outlined.FindInPage),
+                                        Triple(SearchMode.PORTRAIT, "立绘", Icons.Outlined.Image)
+                                    )
+                                    modes.forEach { (mode, label, icon) ->
+                                        val isSelected = searchMode == mode
+                                        val selectedIcon = when (mode) {
+                                            SearchMode.VOICE_ONLY -> Icons.Default.RecordVoiceOver
+                                            SearchMode.ALL_CATEGORIES -> Icons.Default.Category
+                                            SearchMode.FILE_SEARCH -> Icons.Default.FindInPage
+                                            SearchMode.PORTRAIT -> Icons.Default.Image
+                                        }
                                         IconButton(
                                             onClick = {
                                                 searchVM.onSearchModeChange(mode)
@@ -417,49 +444,49 @@ internal fun DownloaderScreen(
                                     }
                                 }
                             }
-                        )
-                    }
-
-                    // ── FAB ──
-                    if (dlBackdrop != null) {
-                        // Tinted glass FAB
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .drawBackdrop(
-                                    backdrop = dlBackdrop,
-                                    shape = { ContinuousCapsule },
-                                    effects = {
-                                        vibrancy()
-                                        blur(4.dp.toPx())
-                                        lens(16.dp.toPx(), 32.dp.toPx())
-                                    },
-                                    onDrawSurface = {
-                                        drawRect(tintColor, blendMode = BlendMode.Hue)
-                                        drawRect(tintColor.copy(alpha = 0.75f))
-                                    }
-                                )
-                                .clickable { onOpenFileManager() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Outlined.FolderOpen,
-                                contentDescription = "文件管理",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(24.dp)
-                            )
                         }
-                    } else {
-                        FloatingActionButton(
-                            onClick = onOpenFileManager,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Icon(
-                                Icons.Outlined.FolderOpen,
-                                contentDescription = "文件管理"
-                            )
+
+                        // ── FAB ──
+                        if (dlBackdrop != null) {
+                            // Tinted glass FAB
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .drawBackdrop(
+                                        backdrop = dlBackdrop,
+                                        shape = { ContinuousCapsule },
+                                        effects = {
+                                            vibrancy()
+                                            blur(4.dp.toPx())
+                                            lens(16.dp.toPx(), 32.dp.toPx())
+                                        },
+                                        onDrawSurface = {
+                                            drawRect(tintColor, blendMode = BlendMode.Hue)
+                                            drawRect(tintColor.copy(alpha = 0.75f))
+                                        }
+                                    )
+                                    .clickable { onOpenFileManager() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Outlined.FolderOpen,
+                                    contentDescription = "文件管理",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        } else {
+                            FloatingActionButton(
+                                onClick = onOpenFileManager,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(
+                                    Icons.Outlined.FolderOpen,
+                                    contentDescription = "文件管理"
+                                )
+                            }
                         }
                     }
                 }

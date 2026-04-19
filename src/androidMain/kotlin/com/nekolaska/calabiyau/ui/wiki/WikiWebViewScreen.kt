@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.ui.wiki
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -16,8 +17,10 @@ import android.view.ViewGroup
 import android.webkit.*
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -64,6 +67,111 @@ private val WIKI_DOMAINS = listOf(
 private val BLOCKED_HOSTS = listOf(
     "d.bilibili.com"   // B站 APP 下载页
 )
+
+private fun isAllowedWikiHost(host: String): Boolean {
+    return WIKI_DOMAINS.any { domain ->
+        host.equals(domain, ignoreCase = true) || host.endsWith(".$domain", ignoreCase = true)
+    }
+}
+
+private fun ensureWikiSaveDirectory(): File {
+    return File(AppPrefs.savePath).apply { mkdirs() }
+}
+
+private fun String.isHttpOrHttpsUrl(): Boolean {
+    return startsWith("https://", ignoreCase = true) || startsWith("http://", ignoreCase = true)
+}
+
+private fun isWikiLoginCompletionHost(host: String): Boolean {
+    return host.equals("m.bilibili.com", ignoreCase = true)
+}
+
+private fun handleWikiNavigation(
+    context: Context,
+    url: String,
+    loadInWebView: (String) -> Unit
+): Boolean {
+    val uri = url.toUri()
+    val scheme = uri.scheme.orEmpty()
+    val host = uri.host.orEmpty()
+
+    if (BLOCKED_HOSTS.any { host.equals(it, ignoreCase = true) }) {
+        return true
+    }
+
+    if (url.isHttpOrHttpsUrl()) {
+        loadInWebView(url)
+        return true
+    }
+
+    if (scheme.equals("intent", ignoreCase = true)) {
+        val fallbackUrl = uri.getQueryParameter("browser_fallback_url")
+            ?: Regex("S\\.browser_fallback_url=([^;]+)")
+                .find(url)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.let(Uri::decode)
+
+        if (!fallbackUrl.isNullOrBlank() && fallbackUrl.isHttpOrHttpsUrl()) {
+            loadInWebView(fallbackUrl)
+            return true
+        }
+    }
+
+    return try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        true
+    } catch (_: Exception) {
+        true
+    }
+}
+
+private fun WebChromeClient.FileChooserParams?.normalizedAcceptTypes(): List<String> {
+    return this?.acceptTypes
+        .orEmpty()
+        .flatMap { acceptType ->
+            acceptType.split(',').map { it.trim() }
+        }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .ifEmpty { listOf("*/*") }
+}
+
+private fun buildWikiFileChooserIntent(
+    params: WebChromeClient.FileChooserParams?
+): Intent {
+    val mimeTypes = params.normalizedAcceptTypes()
+    val allowsMultiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
+    val action = Intent.ACTION_OPEN_DOCUMENT
+
+    return Intent(action).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = if (mimeTypes.size == 1) mimeTypes.first() else "*/*"
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowsMultiple)
+        if (mimeTypes.isNotEmpty() && mimeTypes != listOf("*/*")) {
+            putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+        }
+    }
+}
+
+private fun extractChosenUris(result: ActivityResult): Array<Uri>? {
+    val parsedUris = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+    if (!parsedUris.isNullOrEmpty()) {
+        return parsedUris
+    }
+
+    if (result.resultCode != Activity.RESULT_OK) {
+        return null
+    }
+
+    val data = result.data ?: return null
+    val clipData = data.clipData
+    return when {
+        clipData != null -> Array(clipData.itemCount) { index -> clipData.getItemAt(index).uri }
+        data.data != null -> arrayOf(data.data!!)
+        else -> null
+    }
+}
 
 /**
  * 带完整浏览器体验的 Wiki WebView 页面。
@@ -128,18 +236,18 @@ fun WikiWebViewScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
     var textZoomLevel by remember { mutableIntStateOf(100) }
+    var isToolbarVisible by remember { mutableStateOf(true) }
 
     // 网络错误状态
     var hasNetworkError by remember { mutableStateOf(false) }
     var networkErrorUrl by remember { mutableStateOf<String?>(null) }
 
-    // 登录提示 Snackbar
+    // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
     val snackbarScope = rememberCoroutineScope()
     val showSnack: (String) -> Unit = remember(snackbarScope, snackbarHostState) {
         { msg -> snackbarScope.launch { snackbarHostState.showSnackbar(msg) }; }
     }
-    var hasShownLoginHint by remember { mutableStateOf(false) }
 
     // 长按图片保存
     var longPressImageUrl by remember { mutableStateOf<String?>(null) }
@@ -147,9 +255,10 @@ fun WikiWebViewScreen(
     // 文件上传回调
     var fileChooserCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
     val fileChooserLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris ->
-        fileChooserCallback?.onReceiveValue(if (uris.isNotEmpty()) uris.toTypedArray() else null)
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result: ActivityResult ->
+        val uris = extractChosenUris(result)
+        fileChooserCallback?.onReceiveValue(uris)
         fileChooserCallback = null
     }
 
@@ -213,14 +322,16 @@ fun WikiWebViewScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(smoothCornerShape(10.dp))
+                                .clip(smoothCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
                                 .clickable {
                                     val clipboard =
                                         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(ClipData.newPlainText("URL", currentUrl))
-                                    showSnack("已复制链接")
+                                    showSnack("链接已复制")
                                 }
-                                .padding(vertical = 1.dp)
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = pageTitle,
@@ -323,56 +434,14 @@ fun WikiWebViewScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(2.dp),
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
                         )
                     }
                 }
             }
         },
-        bottomBar = if (isSidebarMode) {
-            {
-                WikiBottomToolbar(
-                    canGoBack = canGoBack,
-                    canGoForward = canGoForward,
-                    isLoading = isLoading,
-                    textZoomLevel = textZoomLevel,
-                    showMenu = showMenu,
-                    onShowMenuChange = { showMenu = it },
-                    onGoBack = { webView?.goBack() },
-                    onGoForward = { webView?.goForward() },
-                    onRefresh = { if (isLoading) webView?.stopLoading() else webView?.reload() },
-                    onGoHome = { webView?.loadUrl(WIKI_HOME_URL) },
-                    onZoomIn = {
-                        textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
-                        webView?.settings?.textZoom = textZoomLevel
-                    },
-                    onZoomOut = {
-                        textZoomLevel = (textZoomLevel - 15).coerceAtLeast(50)
-                        webView?.settings?.textZoom = textZoomLevel
-                    },
-                    onResetZoom = {
-                        textZoomLevel = 100
-                        webView?.settings?.textZoom = 100
-                    },
-                    onOpenInBrowser = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
-                    },
-                    onShare = {
-                        val shareIntent = Intent.createChooser(
-                            Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, currentUrl)
-                                putExtra(Intent.EXTRA_TITLE, pageTitle)
-                            },
-                            null
-                        )
-                        context.startActivity(shareIntent)
-                    },
-                )
-            }
-        } else {
-            {}
-        },
+        bottomBar = {},
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
@@ -402,6 +471,7 @@ fun WikiWebViewScreen(
                             onPageStarted = { url ->
                                 currentUrl = url
                                 isLoading = true
+                                isToolbarVisible = true
                                 // about:blank 是网络错误时主动加载的空白页，不应重置错误状态
                                 if (url != "about:blank") {
                                     hasNetworkError = false
@@ -410,9 +480,6 @@ fun WikiWebViewScreen(
                             onPageFinished = { url ->
                                 currentUrl = url
                                 isLoading = false
-                            },
-                            onPassportDetected = {
-                                hasShownLoginHint = true
                             },
                             onNetworkError = { url ->
                                 hasNetworkError = true
@@ -431,11 +498,17 @@ fun WikiWebViewScreen(
                                 canGoBack = back
                                 canGoForward = forward
                             },
-                            onFileChooser = { callback ->
+                            onScrollDirectionChanged = { isUp ->
+                                if (isToolbarVisible != isUp) {
+                                    isToolbarVisible = isUp
+                                }
+                            },
+                            onFileChooser = { callback, params ->
                                 fileChooserCallback?.onReceiveValue(null) // 取消之前的回调
                                 fileChooserCallback = callback
                                 try {
-                                    fileChooserLauncher.launch("*/*")
+                                    val chooserIntent = buildWikiFileChooserIntent(params)
+                                    fileChooserLauncher.launch(chooserIntent)
                                 } catch (_: Exception) {
                                     callback.onReceiveValue(null)
                                     fileChooserCallback = null
@@ -485,23 +558,23 @@ fun WikiWebViewScreen(
                             verticalArrangement = Arrangement.Center
                         ) {
                             Surface(
-                                modifier = Modifier.size(96.dp),
+                                modifier = Modifier.size(108.dp),
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.errorContainer
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         Icons.Outlined.WifiOff,
                                         contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.onErrorContainer
+                                        modifier = Modifier.size(56.dp),
+                                        tint = MaterialTheme.colorScheme.error
                                     )
                                 }
                             }
                             Spacer(Modifier.height(24.dp))
                             Text(
                                 "网络连接失败",
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(Modifier.height(8.dp))
@@ -527,22 +600,56 @@ fun WikiWebViewScreen(
                     }
                 }
             } // content Box
-        } // outer Box
-    }
 
-    // ── 登录后提示回到首页 ──
-    LaunchedEffect(hasShownLoginHint) {
-        if (hasShownLoginHint) {
-            val result = snackbarHostState.showSnackbar(
-                message = "登录完成后，请点击返回 Wiki 首页",
-                actionLabel = "回到首页",
-                duration = SnackbarDuration.Indefinite
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                webView?.loadUrl(WIKI_HOME_URL)
+            // 悬浮式底部工具栏，实现下滑隐藏，上滑出现
+            if (isSidebarMode) {
+                AnimatedVisibility(
+                    visible = isToolbarVisible,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    WikiBottomToolbar(
+                        canGoBack = canGoBack,
+                        canGoForward = canGoForward,
+                        isLoading = isLoading,
+                        textZoomLevel = textZoomLevel,
+                        showMenu = showMenu,
+                        onShowMenuChange = { showMenu = it },
+                        onGoBack = { webView?.goBack() },
+                        onGoForward = { webView?.goForward() },
+                        onRefresh = { if (isLoading) webView?.stopLoading() else webView?.reload() },
+                        onGoHome = { webView?.loadUrl(WIKI_HOME_URL) },
+                        onZoomIn = {
+                            textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
+                            webView?.settings?.textZoom = textZoomLevel
+                        },
+                        onZoomOut = {
+                            textZoomLevel = (textZoomLevel - 15).coerceAtLeast(50)
+                            webView?.settings?.textZoom = textZoomLevel
+                        },
+                        onResetZoom = {
+                            textZoomLevel = 100
+                            webView?.settings?.textZoom = 100
+                        },
+                        onOpenInBrowser = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
+                        },
+                        onShare = {
+                            val shareIntent = Intent.createChooser(
+                                Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, currentUrl)
+                                    putExtra(Intent.EXTRA_TITLE, pageTitle)
+                                },
+                                null
+                            )
+                            context.startActivity(shareIntent)
+                        }
+                    )
+                }
             }
-            hasShownLoginHint = false
-        }
+        } // outer Box
     }
 
     // ── 长按图片保存对话框 ──
@@ -563,15 +670,12 @@ fun WikiWebViewScreen(
             shape = smoothCornerShape(28.dp),
             confirmButton = {
                 FilledTonalButton(onClick = {
-                    val url = imageUrl
                     longPressImageUrl = null
                     try {
-                        val fileName = URLUtil.guessFileName(url, null, null)
-                        val savePath = AppPrefs.savePath
-                        val dir = File(savePath)
-                        dir.mkdirs()
-                        val request = DownloadManager.Request(url.toUri()).apply {
-                            addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
+                        val fileName = URLUtil.guessFileName(imageUrl, null, null)
+                        val dir = ensureWikiSaveDirectory()
+                        val request = DownloadManager.Request(imageUrl.toUri()).apply {
+                            addRequestHeader("Cookie", CookieManager.getInstance().getCookie(imageUrl) ?: "")
                             addRequestHeader("User-Agent", webView?.settings?.userAgentString ?: "")
                             setTitle(fileName)
                             setDescription("正在保存图片...")
@@ -580,9 +684,9 @@ fun WikiWebViewScreen(
                         }
                         val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                         dm.enqueue(request)
-                        showSnack("已保存: $fileName")
+                        showSnack("图片已保存：$fileName")
                     } catch (e: Exception) {
-                        showSnack("保存失败: ${e.message}")
+                        showSnack("图片保存失败：${e.message}")
                     }
                 }) { Text("保存") }
             },
@@ -618,140 +722,144 @@ private fun WikiBottomToolbar(
     onOpenInBrowser: () -> Unit,
     onShare: () -> Unit
 ) {
-    BottomAppBar(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .padding(bottom = 24.dp, start = 16.dp, end = 16.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // 等距分布 5 个按钮
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shadowElevation = 6.dp,
+            modifier = Modifier.height(64.dp)
         ) {
-            // ← 后退
-            IconButton(
-                onClick = onGoBack,
-                enabled = canGoBack,
-                modifier = Modifier.size(34.dp)
+            // 等距分布 5 个按钮
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "后退", modifier = Modifier.size(18.dp))
-            }
-
-            // → 前进
-            IconButton(
-                onClick = onGoForward,
-                enabled = canGoForward,
-                modifier = Modifier.size(34.dp)
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "前进",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // 🏠 首页
-            Surface(
-                onClick = onGoHome,
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(38.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Home, contentDescription = "首页", modifier = Modifier.size(18.dp))
-                }
-            }
-
-            // 🔄 刷新 / ✕ 停止
-            IconButton(onClick = onRefresh, modifier = Modifier.size(34.dp)) {
-                Icon(
-                    if (isLoading) Icons.Default.Close else Icons.Default.Refresh,
-                    contentDescription = if (isLoading) "停止" else "刷新",
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // ⋮ 更多菜单
-            Box {
-                IconButton(onClick = { onShowMenuChange(true) }, modifier = Modifier.size(34.dp)) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(18.dp))
-                }
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { onShowMenuChange(false) },
-                    shape = smoothCornerShape(16.dp)
+                // ← 后退
+                IconButton(
+                    onClick = onGoBack,
+                    enabled = canGoBack,
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    // ── 页面操作 ──
-                    DropdownMenuItem(
-                        text = { Text("在浏览器中打开") },
-                        onClick = {
-                            onOpenInBrowser()
-                            onShowMenuChange(false)
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("分享") },
-                        onClick = {
-                            onShare()
-                            onShowMenuChange(false)
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Share, null, modifier = Modifier.size(20.dp))
-                        }
-                    )
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "后退", modifier = Modifier.size(22.dp))
+                }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                // → 前进
+                IconButton(
+                    onClick = onGoForward,
+                    enabled = canGoForward,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "前进",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
 
-                    // ── 文本缩放 ──
-                    DropdownMenuItem(
-                        text = { Text("放大文字") },
-                        onClick = {
-                            onZoomIn()
-                            onShowMenuChange(false)
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.ZoomIn, null, modifier = Modifier.size(20.dp))
-                        },
-                        trailingIcon = {
-                            Text(
-                                "${textZoomLevel}%",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("缩小文字") },
-                        onClick = {
-                            onZoomOut()
-                            onShowMenuChange(false)
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.ZoomOut, null, modifier = Modifier.size(20.dp))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("重置缩放") },
-                        onClick = {
-                            onResetZoom()
-                            onShowMenuChange(false)
-                        },
-                        enabled = textZoomLevel != 100,
-                        leadingIcon = {
-                            Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(20.dp))
-                        }
-                    )
+                // 🏠 首页 (稍微突出一点的视觉设计)
+                Surface(
+                    onClick = onGoHome,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Home, contentDescription = "首页", modifier = Modifier.size(22.dp))
+                    }
+                }
 
+                // 🔄 刷新 / ✕ 停止
+                IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        if (isLoading) Icons.Default.Close else Icons.Default.Refresh,
+                        contentDescription = if (isLoading) "停止" else "刷新",
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // ⋮ 更多菜单
+                Box {
+                    IconButton(onClick = { onShowMenuChange(true) }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(22.dp))
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { onShowMenuChange(false) },
+                        shape = smoothCornerShape(16.dp)
+                    ) {
+                        // ── 页面操作 ──
+                        DropdownMenuItem(
+                            text = { Text("在浏览器中打开") },
+                            onClick = {
+                                onOpenInBrowser()
+                                onShowMenuChange(false)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("分享") },
+                            onClick = {
+                                onShare()
+                                onShowMenuChange(false)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.Share, null, modifier = Modifier.size(20.dp))
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        // ── 文本缩放 ──
+                        DropdownMenuItem(
+                            text = { Text("放大文字") },
+                            onClick = {
+                                onZoomIn()
+                                onShowMenuChange(false)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.ZoomIn, null, modifier = Modifier.size(20.dp))
+                            },
+                            trailingIcon = {
+                                Text(
+                                    "${textZoomLevel}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("缩小文字") },
+                            onClick = {
+                                onZoomOut()
+                                onShowMenuChange(false)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.ZoomOut, null, modifier = Modifier.size(20.dp))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("重置缩放") },
+                            onClick = {
+                                onResetZoom()
+                                onShowMenuChange(false)
+                            },
+                            enabled = textZoomLevel != 100,
+                            leadingIcon = {
+                                Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(20.dp))
+                            }
+                        )
+
+                    }
                 }
             }
         }
@@ -851,17 +959,27 @@ private fun createWikiWebView(
     onTitleChanged: (String) -> Unit,
     onProgressChanged: (Int) -> Unit,
     onNavigationChanged: (canGoBack: Boolean, canGoForward: Boolean) -> Unit,
+    onScrollDirectionChanged: (isUp: Boolean) -> Unit,
     onNetworkError: (String) -> Unit = {},
     onPassportDetected: () -> Unit = {},
-    onFileChooser: (ValueCallback<Array<Uri>>) -> Boolean,
+    onFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams?) -> Boolean,
     showSnack: (String) -> Unit
 ): WebView {
     // 确保 Cookie 持久化
     val cookieManager = CookieManager.getInstance()
     cookieManager.setAcceptCookie(true)
-    cookieManager.setAcceptThirdPartyCookies(WebView(context), true)
 
-    return WebView(context).apply {
+    return object : WebView(context) {
+        override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+            super.onScrollChanged(l, t, oldl, oldt)
+            val dy = t - oldt
+            if (dy > 10 && t > 0) {
+                onScrollDirectionChanged(false) // 向下滚动，隐藏
+            } else if (dy < -10) {
+                onScrollDirectionChanged(true)  // 向上滚动，显示
+            }
+        }
+    }.apply {
         layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -917,17 +1035,30 @@ private fun createWikiWebView(
             @JavascriptInterface
             fun onBlobData(base64Data: String, mimeType: String, fileName: String) {
                 try {
+                    if (base64Data.isBlank()) {
+                        Handler(Looper.getMainLooper()).post {
+                            showSnack("文件保存失败：无法读取文件内容")
+                        }
+                        return
+                    }
+
                     val data = Base64.decode(base64Data, Base64.DEFAULT)
-                    val dir = File(AppPrefs.savePath)
-                    dir.mkdirs()
+                    if (data.isEmpty()) {
+                        Handler(Looper.getMainLooper()).post {
+                            showSnack("文件保存失败：文件内容为空")
+                        }
+                        return
+                    }
+
+                    val dir = ensureWikiSaveDirectory()
                     val file = File(dir, fileName)
                     file.writeBytes(data)
                     Handler(Looper.getMainLooper()).post {
-                        showSnack("已保存: $fileName")
+                        showSnack("文件已保存：$fileName")
                     }
                 } catch (e: Exception) {
                     Handler(Looper.getMainLooper()).post {
-                        showSnack("保存失败: ${e.message}")
+                        showSnack("文件保存失败：${e.message}")
                     }
                 }
             }
@@ -970,20 +1101,26 @@ private fun createWikiWebView(
                     val guessedName = URLUtil.guessFileName(url, contentDisposition, mimeType)
                     val commaIdx = url.indexOf(',')
                     if (commaIdx > 0) {
-                        val data = Base64.decode(url.substring(commaIdx + 1), Base64.DEFAULT)
-                        val dir = File(AppPrefs.savePath)
-                        dir.mkdirs()
+                        val metadata = url.substring(0, commaIdx)
+                        val rawData = url.substring(commaIdx + 1)
+                        val data = if (metadata.contains(";base64", ignoreCase = true)) {
+                            Base64.decode(rawData, Base64.DEFAULT)
+                        } else {
+                            Uri.decode(rawData).toByteArray()
+                        }
+                        val dir = ensureWikiSaveDirectory()
                         File(dir, guessedName).writeBytes(data)
-                        showSnack("已保存: $guessedName")
+                        showSnack("文件已保存：$guessedName")
                     }
                 } catch (e: Exception) {
-                    showSnack("保存失败: ${e.message}")
+                    showSnack("文件保存失败：${e.message}")
                 }
                 return@setDownloadListener
             }
 
             try {
                 val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                val saveDir = ensureWikiSaveDirectory()
                 val request = DownloadManager.Request(url.toUri()).apply {
                     setMimeType(mimeType ?: "application/octet-stream")
                     addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
@@ -991,17 +1128,17 @@ private fun createWikiWebView(
                     setDescription("正在下载文件...")
                     setTitle(fileName)
                     setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setDestinationUri(Uri.fromFile(File(AppPrefs.savePath, fileName)))
+                    setDestinationUri(Uri.fromFile(File(saveDir, fileName)))
                 }
                 val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                 dm.enqueue(request)
-                showSnack("已加入下载队列: $fileName")
+                showSnack("已加入下载队列：$fileName")
             } catch (_: SecurityException) {
-                showSnack("缺少存储权限，无法下载")
+                showSnack("下载失败：缺少存储权限")
             } catch (_: IllegalArgumentException) {
-                showSnack("无法下载该文件")
+                showSnack("下载失败：无法处理该文件")
             } catch (e: Exception) {
-                showSnack("下载失败: ${e.message}")
+                showSnack("下载失败：${e.message}")
             }
         }
 
@@ -1009,8 +1146,26 @@ private fun createWikiWebView(
         webViewClient = object : WebViewClient() {
             private var passportHintShown = false
 
+            private fun maybeRedirectLoginCompletion(view: WebView?, url: String?): Boolean {
+                val host = url?.toUri()?.host ?: return false
+                if (!passportHintShown || !isWikiLoginCompletionHost(host)) {
+                    return false
+                }
+
+                passportHintShown = false
+                view?.post {
+                    view.loadUrl(WIKI_HOME_URL)
+                }
+                return true
+            }
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+
+                if (maybeRedirectLoginCompletion(view, url)) {
+                    return
+                }
+
                 url?.let {
                     onPageStarted(it)
                     view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
@@ -1026,6 +1181,11 @@ private fun createWikiWebView(
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+
+                if (maybeRedirectLoginCompletion(view, url)) {
+                    return
+                }
+
                 url?.let {
                     onPageFinished(it)
                     view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
@@ -1066,22 +1226,20 @@ private fun createWikiWebView(
                 val url = request?.url?.toString() ?: return false
                 val host = url.toUri().host ?: ""
 
-                // 拦截 B站 APP 下载页等，直接丢弃不加载
-                if (BLOCKED_HOSTS.any { host.equals(it, ignoreCase = true) }) {
+                if (passportHintShown && isWikiLoginCompletionHost(host)) {
+                    view?.loadUrl(WIKI_HOME_URL)
+                    passportHintShown = false
                     return true
                 }
 
-                // Wiki 域名白名单内的链接在 WebView 中打开
-                if (WIKI_DOMAINS.any { host.endsWith(it) }) {
-                    return false // 交给 WebView 处理
+                // 主流程中的网页链接优先留在 WebView，避免登录完成后被外部浏览器接管
+                if (url.isHttpOrHttpsUrl() && isAllowedWikiHost(host)) {
+                    return false
                 }
 
-                // 其他链接用外部浏览器
-                try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                } catch (_: Exception) {
+                return handleWikiNavigation(context, url) { navigatedUrl ->
+                    view?.loadUrl(navigatedUrl)
                 }
-                return true
             }
 
             override fun onReceivedError(
@@ -1126,7 +1284,7 @@ private fun createWikiWebView(
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
-                filePathCallback?.let { return onFileChooser(it) }
+                filePathCallback?.let { return onFileChooser(it, fileChooserParams) }
                 return false
             }
 
@@ -1137,17 +1295,21 @@ private fun createWikiWebView(
                 isUserGesture: Boolean,
                 resultMsg: Message?
             ): Boolean {
+                val parentWebView = view ?: return false
+
                 // 创建临时 WebView 来拦截 URL，避免父 WebView 承载自身弹窗
-                val tempWebView = WebView(view!!.context)
+                val tempWebView = WebView(parentWebView.context)
                 tempWebView.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(
                         v: WebView?,
                         request: WebResourceRequest?
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
-                        view.loadUrl(url)
+                        val handled = handleWikiNavigation(parentWebView.context, url) { navigatedUrl ->
+                            parentWebView.loadUrl(navigatedUrl)
+                        }
                         tempWebView.destroy()
-                        return true
+                        return handled
                     }
                 }
                 val transport = resultMsg?.obj as? WebView.WebViewTransport
@@ -1161,5 +1323,3 @@ private fun createWikiWebView(
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
     }
 }
-
-
