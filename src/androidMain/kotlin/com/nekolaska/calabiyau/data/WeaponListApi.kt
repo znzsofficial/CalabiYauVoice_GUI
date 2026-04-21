@@ -145,7 +145,10 @@ object WeaponListApi {
             }.sortedBy { it.name }
 
             // 批量获取武器图片
-            val weaponsWithImages = fetchWeaponImages(weapons, category)
+            val imageUrls = fetchWeaponImages(weapons, category, forceRefresh)
+            val weaponsWithImages = weapons.map { weapon ->
+                weapon.copy(imageUrl = imageUrls[weapon.name])
+            }
 
             CategoryResult(
                 data = WeaponCategoryData(
@@ -167,51 +170,38 @@ object WeaponListApi {
      */
     private suspend fun fetchWeaponImages(
         weapons: List<WeaponInfo>,
-        category: WeaponCategory
-    ): List<WeaponInfo> = withContext(Dispatchers.IO) {
+        category: WeaponCategory,
+        forceRefresh: Boolean
+    ): Map<String, String> = withContext(Dispatchers.IO) {
         // 构建需要查询的文件标题列表
-        val titleMap = mutableMapOf<String, String>() // fileTitle -> weaponName
+        val titleMap = mutableMapOf<String, String>() // fileName -> weaponName
         weapons.forEach { weapon ->
-            val fileTitle = if (category == WeaponCategory.PRIMARY && weapon.user.isNotBlank()) {
-                "文件:${weapon.user}-weapon.png"
+            val fileName = if (category == WeaponCategory.PRIMARY && weapon.user.isNotBlank()) {
+                "${weapon.user}-weapon.png"
             } else {
-                "文件:武器-${weapon.name}.png"
+                "武器-${weapon.name}.png"
             }
-            titleMap[fileTitle] = weapon.name
+            titleMap[fileName] = weapon.name
         }
 
-        if (titleMap.isEmpty()) return@withContext weapons
+        if (titleMap.isEmpty()) return@withContext emptyMap()
 
-        // 批量查询图片 URL（每次最多 50 个）
-        val imageUrls = mutableMapOf<String, String>() // weaponName -> imageUrl
-        titleMap.entries.chunked(50).forEach { chunk ->
-            val titles = chunk.joinToString("|") { it.key }
-            val encoded = URLEncoder.encode(titles, "UTF-8")
-            val url = "$API?action=query&titles=$encoded&prop=imageinfo&iiprop=url&format=json"
-            val body = WikiEngine.safeGet(url) ?: return@forEach
-
-            val json = SharedJson.parseToJsonElement(body).jsonObject
-            val pages = json["query"]?.jsonObject?.get("pages")?.jsonObject ?: return@forEach
-
-            pages.values.forEach { pageValue ->
-                val pageObj = pageValue.jsonObject
-                val pageTitle = pageObj["title"]?.jsonPrimitive?.content ?: return@forEach
-                val imgUrl = pageObj["imageinfo"]?.jsonArray
-                    ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
-
-                if (imgUrl != null) {
-                    val weaponName = titleMap[pageTitle]
-                    if (weaponName != null) {
-                        imageUrls[weaponName] = imgUrl
-                    }
+        val cacheResult = OfflineCache.fetchWithCache(
+            type = OfflineCache.Type.WEAPON_LIST,
+            key = "category_images_${category.name}",
+            forceRefresh = forceRefresh
+        ) {
+            val urlMap = WikiEngine.fetchImageUrls(titleMap.keys.toList())
+            buildJsonObject {
+                titleMap.forEach { (fileName, weaponName) ->
+                    urlMap[fileName]?.let { put(weaponName, it) }
                 }
-            }
+            }.toString()
         }
 
-        // 合并图片 URL
-        weapons.map { weapon ->
-            weapon.copy(imageUrl = imageUrls[weapon.name])
-        }
+        val cachedJson = cacheResult?.json ?: return@withContext emptyMap()
+        val parsed = SharedJson.parseToJsonElement(cachedJson).jsonObject
+        parsed.mapValues { (_, value) -> value.jsonPrimitive.content }
     }
 
 }
