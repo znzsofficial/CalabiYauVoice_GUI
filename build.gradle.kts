@@ -81,6 +81,7 @@ kotlin {
             implementation("io.coil-kt.coil3:coil-gif:3.4.0")
             implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
             implementation("io.github.kyant0:capsule:2.1.3")
+            implementation("org.jsoup:jsoup:1.21.1")
         }
     }
 }

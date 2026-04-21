@@ -7,13 +7,15 @@ import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import okhttp3.Request
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
  * 画廊 API（Android）。
  *
- * 解析 Wiki 页面的 wikitext，提取分 section 的图片列表，
+ * 解析 Wiki 页面的渲染 HTML，提取分 section 的图片列表，
  * 然后批量获取图片 URL。支持壁纸、表情包、四格漫画等页面。
  */
 object GalleryApi {
@@ -63,33 +65,30 @@ object GalleryApi {
     ): ApiResult<List<GallerySection>> =
         withContext(Dispatchers.IO) {
             try {
-                // 1. 获取 wikitext
+                // 1. 获取渲染 HTML
                 val encoded = URLEncoder.encode(pageName, "UTF-8")
-                val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+                val url = "$API?action=parse&page=$encoded&prop=text&format=json"
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.GALLERY,
                     key = "gallery_$pageName",
                     forceRefresh = forceRefresh
-                ) {
-                    val response = WikiEngine.client.newCall(Request.Builder().url(url).build()).execute()
-                    response.use { if (it.isSuccessful) it.body.string() else null }
-                } ?: return@withContext ApiResult.Error(
+                ) { WikiEngine.safeGet(url) } ?: return@withContext ApiResult.Error(
                     "获取页面失败，且无离线缓存",
                     kind = ErrorKind.NETWORK
                 )
                 val body = result.json
 
                 val root = jsonParser.parseToJsonElement(body).jsonObject
-                val wikitext = root["parse"]?.jsonObject
-                    ?.get("wikitext")?.jsonObject
+                val html = root["parse"]?.jsonObject
+                    ?.get("text")?.jsonObject
                     ?.get("*")?.jsonPrimitive?.content
                     ?: return@withContext ApiResult.Error(
-                        "解析 wikitext 失败",
+                        "解析页面 HTML 失败",
                         kind = ErrorKind.PARSE
                     )
 
-                // 2. 解析 wikitext → sections
-                val rawSections = parseWikitext(wikitext)
+                // 2. 解析 HTML → sections
+                val rawSections = parseHtml(pageName, html)
                 if (rawSections.isEmpty()) {
                     return@withContext ApiResult.Error(
                         "未找到图片内容",
@@ -124,96 +123,131 @@ object GalleryApi {
             }
         }
 
-    // ════════════════════════════════════════════
-    //  Wikitext 解析
-    // ════════════════════════════════════════════
+    private fun parseHtml(pageName: String, html: String): List<Pair<String, List<Pair<String, String>>>> {
+        val document = Jsoup.parse(html)
+        val rootChildren = document.select(".mw-parser-output").firstOrNull()?.children().orEmpty()
+        if (rootChildren.isEmpty()) return emptyList()
 
-    /** 文件名正则：匹配 gallery 标签内的 "文件:xxx.ext" 或 "File:xxx.ext" */
-    private val galleryFileRegex = Regex(
-        """^(?:文件|File):(.+?)(?:\|.*)?$""", RegexOption.IGNORE_CASE
-    )
+        val sections = mutableListOf<Pair<String, List<Pair<String, String>>>>()
+        var currentTitle = pageName
+        var currentElements = mutableListOf<Element>()
 
-    /** 单图正则：匹配 [[文件:xxx.ext|...]] */
-    private val singleImageRegex = Regex(
-        """\[\[(?:文件|File):([^|\]]+?)(?:\|[^\]]*)?]]""", RegexOption.IGNORE_CASE
-    )
+        fun flushSection() {
+            val images = currentElements.flatMap { extractImagesFromElement(it) }
+                .distinctBy { it.first }
+            if (images.isNotEmpty()) {
+                sections += currentTitle to images
+            }
+            currentElements = mutableListOf()
+        }
 
-    /** gallery 标签正则 */
-    private val galleryOpenRegex = Regex("""<gallery[^>]*>""", RegexOption.IGNORE_CASE)
-    private val galleryCloseRegex = Regex("""</gallery>""", RegexOption.IGNORE_CASE)
+        rootChildren.forEach { element ->
+            if (element.tagName().matches(Regex("h[1-6]"))) {
+                flushSection()
+                currentTitle = element.selectFirst("span.mw-headline")?.text()?.trim().orEmpty().ifBlank { pageName }
+            } else {
+                currentElements.add(element)
+            }
+        }
+        flushSection()
 
-    /**
-     * 解析 wikitext，返回 List<Pair<sectionTitle, List<Pair<fileName, caption>>>>
-     *
-     * 支持的结构：
-     * - == 标题 == / === 子标题 ===
-     * - <gallery>...</gallery> 块
-     * - [[文件:xxx.png|...]] 单图
-     * - {{Tabs|tab1=...|tab2=...}} 标签页（展平为同一 section）
-     */
-    private fun parseWikitext(wikitext: String): List<Pair<String, List<Pair<String, String>>>> {
-        val lines = wikitext.lines()
-        val sections = mutableListOf<Pair<String, MutableList<Pair<String, String>>>>()
-        var currentTitle = "默认"
-        var currentFiles = mutableListOf<Pair<String, String>>()
-        var inGallery = false
+        return WikiParseLogger.finishList("GalleryApi.parseHtml", sections, html, "page=$pageName")
+    }
 
-        for (line in lines) {
-            val trimmed = line.trim()
+    private fun extractImagesFromElement(element: Element): List<Pair<String, String>> {
+        return when {
+            element.hasClass("resp-tabs") -> extractRespTabsImages(element)
+            element.hasClass("tab") -> extractTabImages(element)
+            else -> extractPlainImages(element)
+        }
+    }
 
-            // == 标题 == 或 === 子标题 ===
-            val headerMatch = Regex("""^(={2,3})\s*(.+?)\s*\1\s*$""").find(trimmed)
-            if (headerMatch != null) {
-                // 保存上一个 section
-                if (currentFiles.isNotEmpty()) {
-                    sections.add(currentTitle to currentFiles)
-                    currentFiles = mutableListOf()
+    private fun extractRespTabsImages(container: Element): List<Pair<String, String>> {
+        val labels = container.select(".resp-tabs-list .tab-panel").map { it.text().trim() }
+        return container.select(".resp-tabs-container > .resp-tab-content").mapNotNull { pane ->
+            val link = pane.selectFirst("a.image") ?: return@mapNotNull null
+            val fileName = extractFileName(link) ?: return@mapNotNull null
+            val index = pane.elementSiblingIndex()
+            val caption = labels.getOrNull(index)?.takeIf { it.isNotBlank() }
+                ?: defaultCaption(fileName)
+            fileName to caption
+        }
+    }
+
+    private fun extractTabImages(container: Element): List<Pair<String, String>> {
+        val labels = container.select(".tab-nav > li > a").map { it.text().trim() }
+        return container.select(".tab-content > .tab-pane").flatMap { pane ->
+            val paneIndex = pane.elementSiblingIndex()
+            val paneLabel = labels.getOrNull(paneIndex).orEmpty()
+            val galleryBoxes = pane.select("li.gallerybox")
+            when {
+                galleryBoxes.isNotEmpty() -> galleryBoxes.mapNotNull { box ->
+                    val link = box.selectFirst("a.image") ?: return@mapNotNull null
+                    val fileName = extractFileName(link) ?: return@mapNotNull null
+                    val caption = box.selectFirst(".gallerytext")?.text()?.trim().takeUnless { it.isNullOrBlank() }
+                        ?: paneLabel.takeIf { it.isNotBlank() }
+                        ?: defaultCaption(fileName)
+                    fileName to caption
                 }
-                currentTitle = headerMatch.groupValues[2].trim()
-                continue
-            }
-
-            // <gallery> 开始
-            if (galleryOpenRegex.containsMatchIn(trimmed)) {
-                inGallery = true
-                continue
-            }
-
-            // </gallery> 结束
-            if (galleryCloseRegex.containsMatchIn(trimmed)) {
-                inGallery = false
-                continue
-            }
-
-            // gallery 内的文件行
-            if (inGallery) {
-                val match = galleryFileRegex.find(trimmed)
-                if (match != null) {
-                    val fullMatch = trimmed
-                    val fileName = match.groupValues[1].trim()
-                    // caption 在 | 后面
-                    val caption = if (fullMatch.contains('|')) {
-                        fullMatch.substringAfter('|').trim()
+                else -> {
+                    val link = pane.selectFirst("a.image")
+                    val fileName = link?.let(::extractFileName)
+                    if (fileName != null) {
+                        listOf(fileName to (paneLabel.takeIf { it.isNotBlank() } ?: defaultCaption(fileName)))
                     } else {
-                        fileName.substringBeforeLast('.') // 去掉扩展名作为默认 caption
+                        emptyList()
                     }
-                    currentFiles.add(fileName to caption)
                 }
-                continue
             }
+        }
+    }
 
-            // 非 gallery 区域的单图 [[文件:xxx.png|...]]
-            singleImageRegex.findAll(trimmed).forEach { match ->
-                val fileName = match.groupValues[1].trim()
-                currentFiles.add(fileName to fileName.substringBeforeLast('.'))
+    private fun extractPlainImages(element: Element): List<Pair<String, String>> {
+        val galleryBoxes = element.select("li.gallerybox")
+        if (galleryBoxes.isNotEmpty()) {
+            return galleryBoxes.mapNotNull { box ->
+                val link = box.selectFirst("a.image") ?: return@mapNotNull null
+                val fileName = extractFileName(link) ?: return@mapNotNull null
+                val caption = box.selectFirst(".gallerytext")?.text()?.trim().takeUnless { it.isNullOrBlank() }
+                    ?: defaultCaption(fileName)
+                fileName to caption
             }
         }
 
-        // 最后一个 section
-        if (currentFiles.isNotEmpty()) {
-            sections.add(currentTitle to currentFiles)
+        return element.select("> a.image, a.image")
+            .mapNotNull { link ->
+                val fileName = extractFileName(link) ?: return@mapNotNull null
+                fileName to defaultCaption(fileName)
+            }
+    }
+
+    private fun extractFileName(link: Element): String? {
+        val href = link.attr("href")
+        if (href.isNotBlank()) {
+            val pageTitle = extractPageTitleFromHref(href)
+            if (!pageTitle.isNullOrBlank()) {
+                return pageTitle.removePrefix("文件:").removePrefix("File:")
+            }
         }
 
-        return sections
+        return link.selectFirst("img")?.attr("alt")?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    private fun extractPageTitleFromHref(href: String): String? {
+        val encodedPart = when {
+            "/klbq/" in href -> href.substringAfter("/klbq/")
+            href.startsWith("/") -> href.removePrefix("/")
+            else -> href
+        }
+            .substringBefore('#')
+            .substringBefore('?')
+            .takeIf { it.isNotBlank() }
+            ?: return null
+
+        return runCatching { URLDecoder.decode(encodedPart, "UTF-8") }.getOrNull()
+    }
+
+    private fun defaultCaption(fileName: String): String {
+        return fileName.substringBeforeLast('.')
     }
 }
