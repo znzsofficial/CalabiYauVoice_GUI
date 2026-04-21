@@ -26,7 +26,7 @@ import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
 }
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
@@ -59,6 +59,8 @@ sealed interface WikiRoute {
     data object Headgear : WikiRoute
     data object StringerActions : WikiRoute
     data object AvatarFrames : WikiRoute
+    data object RoomAppearances : WikiRoute
+    data object VehicleSkins : WikiRoute
 }
 
 private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
@@ -85,6 +87,8 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.HEADGEAR -> WikiRoute.Headgear
     WikiHubPage.STRINGER_ACTIONS -> WikiRoute.StringerActions
     WikiHubPage.AVATAR_FRAMES -> WikiRoute.AvatarFrames
+    WikiHubPage.ROOM_APPEARANCES -> WikiRoute.RoomAppearances
+    WikiHubPage.VEHICLE_SKINS -> WikiRoute.VehicleSkins
     // 以下带参数页面由于是从 WikiHomePage 跳转而来，按理说不会直接触发（通常走具名参数跳转），给出默认保底
     WikiHubPage.COSTUMES -> WikiRoute.Costumes(null)
     WikiHubPage.WEAPON_SKINS -> WikiRoute.WeaponSkins(null)
@@ -138,6 +142,8 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Headgear -> "headgear"
     WikiRoute.StringerActions -> "stringerActions"
     WikiRoute.AvatarFrames -> "avatarFrames"
+    WikiRoute.RoomAppearances -> "roomAppearances"
+    WikiRoute.VehicleSkins -> "vehicleSkins"
 }
 
 private fun decodeRoute(encoded: String): WikiRoute? {
@@ -182,6 +188,8 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "headgear" -> WikiRoute.Headgear
         "stringerActions" -> WikiRoute.StringerActions
         "avatarFrames" -> WikiRoute.AvatarFrames
+        "roomAppearances" -> WikiRoute.RoomAppearances
+        "vehicleSkins" -> WikiRoute.VehicleSkins
         else -> null
     }
 }
@@ -514,6 +522,20 @@ fun WikiHubScreen(
             is WikiRoute.AvatarFrames -> {
                 com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                     title = "头像框",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.RoomAppearances -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "房间外观",
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.VehicleSkins -> {
+                com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
+                    title = "极限推进模式载具外观",
                     onBack = { popBackStack() }
                 )
             }
