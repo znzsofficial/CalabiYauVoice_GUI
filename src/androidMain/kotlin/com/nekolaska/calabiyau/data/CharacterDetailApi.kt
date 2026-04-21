@@ -12,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import java.net.URLEncoder
 
 /**
@@ -327,21 +328,28 @@ object CharacterDetailApi {
     private fun parsePositionExtras(html: String): Map<String, CharacterExtraInfo> {
         if (html.isBlank()) return emptyMap()
 
+        val document = Jsoup.parse(html)
         val result = mutableMapOf<String, CharacterExtraInfo>()
-        val sectionRegex = Regex(
-            """<h2><span[^>]*></span><span class=\"mw-headline\" id=\"([^\"]+)\">([^<]+)</span>[\s\S]*?(?=<h2>|$)""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val dutyRegex = Regex("""<li><b>定位职责：</b>([\s\S]*?)</li>""")
-        val nameRegex = Regex("""title=\"([^\"]+)\"><span[^>]*>([^<]+)</span></a>""")
+        val rootChildren = document.select(".mw-parser-output").firstOrNull()?.children().orEmpty()
 
-        sectionRegex.findAll(html).forEach { match ->
-            val positionName = cleanHtml(match.groupValues[2])
-            if (positionName !in POSITION_NAMES) return@forEach
-            val block = match.value
-            val duty = cleanHtml(dutyRegex.find(block)?.groupValues?.get(1).orEmpty())
-            nameRegex.findAll(block).forEach { nameMatch ->
-                val displayName = cleanHtml(nameMatch.groupValues[2])
+        rootChildren.forEachIndexed { index, element ->
+            val headline = element.selectFirst("span.mw-headline") ?: return@forEachIndexed
+            if (!element.tagName().matches(Regex("h[1-6]"))) return@forEachIndexed
+
+            val positionName = headline.text().trim()
+            if (positionName !in POSITION_NAMES) return@forEachIndexed
+
+            val blockElements = rootChildren.drop(index + 1).takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            val duty = blockElements
+                .flatMap { it.select("li") }
+                .firstOrNull { it.text().contains("定位职责") }
+                ?.text()
+                ?.substringAfter("定位职责：", "")
+                ?.trim()
+                .orEmpty()
+
+            blockElements.flatMap { it.select("a[title] > span") }.forEach { nameElement ->
+                val displayName = nameElement.text().trim()
                 if (displayName.isBlank() || displayName == positionName || displayName == "编辑") return@forEach
                 val key = normalizeCharacterName(displayName)
                 result[key] = result[key].merge(
@@ -353,57 +361,48 @@ object CharacterDetailApi {
             }
         }
 
-        return result
+        return WikiParseLogger.finishMap("CharacterDetailApi.parsePositionExtras", result, html)
     }
 
     private fun parseSettingExtras(html: String): Map<String, CharacterExtraInfo> {
         if (html.isBlank()) return emptyMap()
 
-        val normalizedHtml = html.replace("\r", "")
-        val markerRegex = Regex(
-            """<a href=\"/klbq/文件:[^\"]+?初始立绘[^\"]*\" class=\"image\">[\s\S]*?</a>[\s\S]*?(?=<a href=\"/klbq/文件:[^\"]+?初始立绘|<div class=\"comment-widget-box\"|$)""",
-            RegexOption.DOT_MATCHES_ALL
-        )
+        val document = Jsoup.parse(html)
+        val result = document.select(".klbq-role-info")
+            .mapNotNull { block -> parseSingleSettingBlock(block) }
+            .toMap()
 
-        return markerRegex.findAll(normalizedHtml).mapNotNull { match ->
-            parseSingleSettingBlock(match.value)
-        }.toMap()
+        return WikiParseLogger.finishMap("CharacterDetailApi.parseSettingExtras", result, html)
     }
 
-    private fun parseSingleSettingBlock(block: String): Pair<String, CharacterExtraInfo>? {
-        val nameLineMatch = Regex(
-            """<p>\s*([^<\n]+?)\s*[A-Za-z][\s\S]*?</p>""",
-            RegexOption.DOT_MATCHES_ALL
-        ).find(block) ?: return null
-
-        val rawName = cleanHtml(nameLineMatch.groupValues[1])
-            .lineSequence()
-            .firstOrNull { it.isNotBlank() }
-            ?.trim()
-            .orEmpty()
-        val name = rawName.takeWhile { !it.isWhitespace() }
+    private fun parseSingleSettingBlock(block: org.jsoup.nodes.Element): Pair<String, CharacterExtraInfo>? {
+        val nameElement = block.selectFirst(".name")
+        val rawName = nameElement?.ownText()?.trim().orEmpty()
+        val fallbackName = nameElement?.text()?.trim().orEmpty().substringBefore(' ')
+        val name = rawName.ifBlank { fallbackName }
         if (name.isBlank()) return null
 
-        val relationLine = Regex(
-            """中文CV：.*?(?=(?:<ul>|</p>))""",
-            RegexOption.DOT_MATCHES_ALL
-        ).find(block)?.value.orEmpty()
-
-        val relations = Regex("""([\u4e00-\u9fa5A-Za-z&]+)：([\s\S]*?)(?=(?:[\u4e00-\u9fa5A-Za-z&]+：)|$)""")
-            .findAll(cleanHtml(relationLine).replace("日文CV：", "\n日文CV：").replace("中文CV：", "\n中文CV："))
-            .mapNotNull { relation ->
-                val label = relation.groupValues[1].trim()
-                val value = relation.groupValues[2].trim().trim('、', '，', ',', ' ')
+        val relations = block.select(".data p span")
+            .flatMap { span ->
+                cleanHtml(span.html())
+                    .lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toList()
+            }
+            .mapNotNull { line ->
+                val separatorIndex = line.indexOf('：')
+                if (separatorIndex <= 0) return@mapNotNull null
+                val label = line.substring(0, separatorIndex).trim()
+                val value = line.substring(separatorIndex + 1).trim().trim('、', '，', ',', ' ')
                 if (label.isBlank() || value.isBlank() || label == "中文CV" || label == "日文CV") null
                 else InfoPair(label, value)
             }
-            .toList()
 
-        val infoRegex = Regex("""<li><b>([^<]+)</b>\s*([^<][\s\S]*?)</li>""", RegexOption.DOT_MATCHES_ALL)
         val infoMap = linkedMapOf<String, String>()
-        infoRegex.findAll(block).forEach { info ->
-            val label = cleanHtml(info.groupValues[1]).removeSuffix("：").trim()
-            val value = cleanHtml(info.groupValues[2]).trim()
+        block.select("dl > div").forEach { item ->
+            val label = item.selectFirst("dt")?.text()?.removeSuffix("：")?.trim().orEmpty()
+            val value = item.selectFirst("dd")?.let { cleanHtml(it.html()) }.orEmpty()
             if (label.isNotBlank() && value.isNotBlank()) {
                 infoMap[label] = value
             }
@@ -748,46 +747,53 @@ object CharacterDetailApi {
     //  更新改动历史解析（从渲染 HTML）
     // ────────────────────────────────────────
 
-    private val UPDATE_DATE_REGEX = Regex(
-        """<div\s+class="alert\s+alert-warning"[^>]*>([^<]+)</div>"""
-    )
-    private val LI_REGEX = Regex("""<li>(.+?)</li>""", RegexOption.DOT_MATCHES_ALL)
-    private val HTML_TAG_REGEX = Regex("""<[^>]+>""")
-
     /**
      * 从渲染后的 HTML 中解析更新改动历史。
      * 结构：`<div class="alert alert-warning">日期</div>` 后跟 `<ul><li>...</li></ul>`
      */
     private fun parseUpdateHistory(html: String): List<UpdateEntry> {
-        // 定位到"更新改动历史"区域
-        val sectionStart = html.indexOf("id=\"更新改动历史\"")
-        if (sectionStart == -1) return emptyList()
-        val sectionHtml = html.substring(sectionStart)
+        val document = Jsoup.parse(html)
+        val headline = document.getElementById("更新改动历史") ?: return emptyList()
+        val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
+        val sectionElements = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
+            .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            .toList()
+        if (sectionElements.isEmpty()) return emptyList()
+
+        val wrapper = Jsoup.parse("<div id='update-history-wrapper'></div>")
+        val container = wrapper.getElementById("update-history-wrapper") ?: return emptyList()
+        sectionElements.forEach { container.appendChild(it.clone()) }
 
         val entries = mutableListOf<UpdateEntry>()
-        val dateMatches = UPDATE_DATE_REGEX.findAll(sectionHtml).toList()
+        var currentDate = ""
+        var currentChanges = mutableListOf<String>()
 
-        for ((i, dateMatch) in dateMatches.withIndex()) {
-            val date = dateMatch.groupValues[1].trim()
-            // 取当前日期到下一个日期之间的内容
-            val contentStart = dateMatch.range.last + 1
-            val contentEnd = if (i + 1 < dateMatches.size) dateMatches[i + 1].range.first
-            else sectionHtml.length
-            val block = sectionHtml.substring(contentStart, contentEnd)
-
-            val changes = LI_REGEX.findAll(block).map { li ->
-                li.groupValues[1]
-                    .replace(HTML_TAG_REGEX, "")
-                    .replace("&amp;", "&")
-                    .replace("&lt;", "<")
-                    .replace("&gt;", ">")
-                    .trim()
-            }.filter { it.isNotBlank() }.toList()
-
-            if (changes.isNotEmpty()) {
-                entries.add(UpdateEntry(date = date, changes = changes))
+        fun flushEntry() {
+            if (currentDate.isNotBlank() && currentChanges.isNotEmpty()) {
+                entries += UpdateEntry(date = currentDate, changes = currentChanges.toList())
             }
+            currentDate = ""
+            currentChanges = mutableListOf()
         }
+
+        container.getAllElements()
+            .drop(1)
+            .forEach { element ->
+                when {
+                    element.tagName() == "div" && element.hasClass("alert") && element.hasClass("alert-warning") -> {
+                        flushEntry()
+                        currentDate = cleanHtml(element.html())
+                    }
+
+                    element.tagName() == "li" && currentDate.isNotBlank() -> {
+                        cleanHtml(element.html())
+                            .takeIf { it.isNotBlank() }
+                            ?.let { currentChanges += it }
+                    }
+                }
+            }
+
+        flushEntry()
         return entries
     }
 

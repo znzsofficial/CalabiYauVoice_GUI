@@ -10,6 +10,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import java.net.URLEncoder
 
 /**
@@ -30,7 +31,7 @@ object MapListApi {
     fun clearMemoryCache() { cachedModes = null }
 
     /** 游戏模式列表（与 Wiki 首页一致） */
-    val GAME_MODES = listOf(
+    val GAME_MODES: List<Pair<String, String>> = listOf(
         "爆破/团队乱斗" to "一般爆破",
         "无限团竞" to "无限团竞",
         "极限推进" to "极限推进",
@@ -147,21 +148,19 @@ object MapListApi {
      */
     private fun parseMapsFromHtml(html: String): List<MapInfo> {
         val results = mutableListOf<MapInfo>()
-        // 匹配 <a href="..." title="地图名"><img ... src="..." srcset="...">
-        val regex = Regex(
-            """<a\s+href="(/klbq/[^"]+)"\s+title="([^"]+)"[^>]*><img[^>]*src="([^"]+)"[^>]*srcset="([^"]*)"[^>]*/?>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
         val seen = mutableSetOf<String>()
-        regex.findAll(html).forEach { match ->
-            val path = match.groupValues[1]
-            val name = decodeHtmlEntities(match.groupValues[2])
-            val defaultSrc = match.groupValues[3]
-            val srcset = match.groupValues[4]
+        val document = Jsoup.parse(html)
+
+        document.select("div.hvr-bounce-out").forEach { card ->
+            val imageLink = card.selectFirst("a[href^=/klbq/]:has(img)") ?: return@forEach
+            val path = imageLink.attr("href")
+            val name = imageLink.attr("title").trim()
+            val image = imageLink.selectFirst("img") ?: return@forEach
+            val defaultSrc = image.attr("src")
+            val srcset = image.attr("srcset")
 
             if (name !in seen) {
                 seen += name
-                // 从 srcset 提取 600px 版本（2x），否则回退到默认 src
                 val imageUrl = extract600pxUrl(srcset) ?: defaultSrc
                 results += MapInfo(
                     name = name,
@@ -170,7 +169,7 @@ object MapListApi {
                 )
             }
         }
-        return results
+        return WikiParseLogger.finishList("MapListApi.parseMapsFromHtml", results, html)
     }
 
     /** 从 srcset 中提取 600px 版本的 URL */
@@ -181,15 +180,6 @@ object MapListApi {
             .firstOrNull { it.contains("600px") || it.endsWith("2x") }
             ?.split(" ")
             ?.firstOrNull()
-    }
-
-    private fun decodeHtmlEntities(text: String): String {
-        return text
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#039;", "'")
     }
 
 }

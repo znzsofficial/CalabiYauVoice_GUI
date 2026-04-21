@@ -11,6 +11,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 /**
@@ -113,12 +115,23 @@ object BioCardApi {
                 val decks = results[2] ?: return@withContext ApiResult.Error("无法获取卡组分享数据", kind = ErrorKind.NETWORK)
                 val mode = results[3] ?: return@withContext ApiResult.Error("无法获取刷新概率数据", kind = ErrorKind.NETWORK)
 
+                val cardIndexMapByFaction = when (val deckCardMapResult = BioDeckShareApi.fetchDeckCardMap(forceRefresh)) {
+                    is ApiResult.Success -> deckCardMapResult.value.mapValues { (_, options) ->
+                        options.mapNotNull { option ->
+                            val cardId = option.cardId.trim()
+                            val index = option.index
+                            if (cardId.isBlank() || index < 0) null else cardId to index
+                        }.toMap()
+                    }
+                    is ApiResult.Error -> emptyMap()
+                }
+
                 val refreshProbabilityMap = parseRefreshProbabilities(mode.json)
 
                 val data = CardPageData(
                     pcCards = parsePcCards(pc.json, refreshProbabilityMap),
                     mobileCards = parseMobileCards(mobile.json),
-                    decks = parseDecks(decks.json),
+                    decks = parseDecks(decks.json, cardIndexMapByFaction),
                     pcWikiUrl = pageUrl(PC_PAGE),
                     mobileWikiUrl = pageUrl(MOBILE_PAGE),
                     deckWikiUrl = pageUrl(DECK_PAGE),
@@ -165,177 +178,172 @@ object BioCardApi {
         html: String,
         refreshProbabilityMap: Map<String, CardRefreshProbability>
     ): List<PcCard> {
-        val rowRegex = Regex(
-            """<tr\s+class=\"divsort\"([^>]*)>([\s\S]*?)</tr>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val cellRegex = Regex("""<t[hd][^>]*>([\s\S]*?)</t[hd]>""", RegexOption.DOT_MATCHES_ALL)
-        val srcRegex = Regex("""<img[^>]*src=\"([^\"]+)\"[^>]*>""")
+        val document = Jsoup.parse(html)
+        val rows = document.select("table#CardSelectTr tr.divsort")
 
-        return rowRegex.findAll(html).mapNotNull { match ->
-            val attrs = match.groupValues[1]
-            val rowHtml = match.groupValues[2]
-            val cells = cellRegex.findAll(rowHtml).map { it.groupValues[1] }.toList()
-            if (cells.size < 7) return@mapNotNull null
+        val cards = rows.mapNotNull { row ->
+            val cells = row.select("> th, > td")
+            if (cells.size < 7) {
+                WikiParseLogger.warnMalformed("BioCardApi.parsePcCards", "expected >=7 cells, actual=${cells.size}", row.outerHtml())
+                return@mapNotNull null
+            }
 
-            val faction = attr(attrs, "data-param1")
-            val rarity = attr(attrs, "data-param2").toIntOrNull() ?: 0
-            val category = attr(attrs, "data-param3")
-            val defaultTag = attr(attrs, "data-param4")
-            val acquireType = attr(attrs, "data-param5")
-            val releaseDate = attr(attrs, "data-param6")
-            val firstCell = cells[0]
-            val name = cleanHtml(firstCell).lineSequence().lastOrNull { it.isNotBlank() }?.trim().orEmpty()
-            val imageUrl = srcRegex.find(firstCell)?.groupValues?.get(1)
-            val maxLevel = cleanHtml(cells[4])
-            val effect = cleanHtml(cells[5])
-            val roles = cleanHtml(cells[6])
+            val nameCell = cells[0]
+            val name = nameCell.selectFirst("big b")?.text()?.trim()
+                .orEmpty()
+                .ifBlank { nameCell.textNodes().joinToString("") { it.text() }.trim() }
+                .ifBlank { "未知卡牌" }
+
+            val roles = cleanHtml(cells[6].html())
                 .split(Regex("[、,/\\n]+"))
                 .map { it.trim() }
                 .filter { it.isNotBlank() && it != "无" }
 
             PcCard(
-                name = name.ifBlank { "未知卡牌" },
-                faction = faction,
-                rarity = rarity,
-                category = category,
-                defaultTag = defaultTag,
-                acquireType = acquireType,
-                releaseDate = releaseDate,
-                maxLevel = maxLevel,
-                effect = effect,
+                name = name,
+                faction = row.attr("data-param1"),
+                rarity = row.attr("data-param2").toIntOrNull() ?: 0,
+                category = row.attr("data-param3"),
+                defaultTag = row.attr("data-param4"),
+                acquireType = row.attr("data-param5"),
+                releaseDate = row.attr("data-param6"),
+                maxLevel = cleanHtml(cells[4].html()),
+                effect = cleanHtml(cells[5].html()),
                 roles = roles,
-                imageUrl = imageUrl,
-                refreshProbability = refreshProbabilityMap[name.ifBlank { "未知卡牌" }]
-            )
-        }.toList()
-    }
-
-    private fun parseRefreshProbabilities(html: String): Map<String, CardRefreshProbability> {
-        val sectionMatch = Regex(
-            """<span[^>]*id=\"卡牌刷新概率表\"[\s\S]*?</h2>([\s\S]*?)<h2""",
-            RegexOption.DOT_MATCHES_ALL
-        ).find(html) ?: return emptyMap()
-
-        val tableHtml = Regex(
-            """<table[^>]*class=\"klbqtable\"[^>]*>([\s\S]*?)</table>""",
-            RegexOption.DOT_MATCHES_ALL
-        ).find(sectionMatch.groupValues[1])?.groupValues?.get(1) ?: return emptyMap()
-
-        val rowRegex = Regex("""<tr[^>]*>([\s\S]*?)</tr>""", RegexOption.DOT_MATCHES_ALL)
-        val cellRegex = Regex("""<t[hd][^>]*>([\s\S]*?)</t[hd]>""", RegexOption.DOT_MATCHES_ALL)
-
-        return rowRegex.findAll(tableHtml)
-            .drop(1)
-            .mapNotNull { row ->
-                val cells = cellRegex.findAll(row.groupValues[1])
-                    .map { cleanHtml(it.groupValues[1]) }
-                    .toList()
-                if (cells.size < 5) return@mapNotNull null
-                val name = cells[0]
-                if (name.isBlank()) return@mapNotNull null
-                name to CardRefreshProbability(
-                    stage1 = cells[1],
-                    stage2 = cells[2],
-                    stage3 = cells[3],
-                    stage4 = cells[4]
-                )
-            }
-            .toMap()
-    }
-
-    private fun parseMobileCards(html: String): List<MobileCard> {
-        val itemRegex = Regex(
-            """<div\s+class=\"divsort gallerygrid-item mobile-card\"([^>]*)>([\s\S]*?)</div>\s*</div>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val srcRegex = Regex("""<img[^>]*src=\"([^\"]+)\"[^>]*>""")
-        val nameRegex = Regex("""mobile-card-name\">([\s\S]*?)</div>""")
-        val fieldRegex = Regex(
-            """card-item-key\">\s*([^<：]+)：</span><span class=\"card-item-value\">([\s\S]*?)</span>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val descRegex = Regex(
-            """mobile-card-desc\">[\s\S]*?card-item-value\">([\s\S]*?)</span>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-
-        return itemRegex.findAll(html).map { match ->
-            val attrs = match.groupValues[1]
-            val body = match.groupValues[2]
-            val values = fieldRegex.findAll(body).associate {
-                cleanHtml(it.groupValues[1]) to cleanHtml(it.groupValues[2])
-            }
-            MobileCard(
-                name = cleanHtml(nameRegex.find(body)?.groupValues?.get(1).orEmpty()).ifBlank { "未知卡牌" },
-                faction = attr(attrs, "data-param1").ifBlank { values["适用阵营"] ?: "" },
-                category = attr(attrs, "data-param2").ifBlank { values["分类"] ?: "" },
-                rarity = attr(attrs, "data-param3").toIntOrNull() ?: 0,
-                maxLevel = values["最大等级"] ?: "",
-                effect = cleanHtml(descRegex.find(body)?.groupValues?.get(1).orEmpty()),
-                imageUrl = srcRegex.find(body)?.groupValues?.get(1)
-            )
-        }.toList()
-    }
-
-    private fun parseDecks(html: String): List<SharedDeck> {
-        data class Marker(val index: Int, val faction: String)
-        val headers = listOf(
-            "超弦体卡组" to html.indexOf("id=\"超弦体卡组\""),
-            "晶源体卡组" to html.indexOf("id=\"晶源体卡组\"")
-        ).filter { it.second >= 0 }.map { Marker(it.second, it.first) }.sortedBy { it.index }
-
-        val tableRegex = Regex("""<table[^>]*class=\"klbqtable\"[^>]*>([\s\S]*?)</table>""", RegexOption.DOT_MATCHES_ALL)
-        val cardNameRegex = Regex(
-            """(?:zombie-card-name|zombie-card-item-name|card-name)\">([\s\S]*?)</""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val titleRegex = Regex(
-            """<th[^>]*colspan=\"2\"[^>]*>([\s\S]*?)</th>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        val fieldRegex = { label: String ->
-            Regex(
-                """<tr[^>]*>\s*<th[^>]*>\s*${Regex.escape(label)}\s*</th>\s*<td[^>]*>([\s\S]*?)</td>\s*</tr>""",
-                RegexOption.DOT_MATCHES_ALL
+                imageUrl = nameCell.selectFirst("img")?.attr("src"),
+                refreshProbability = refreshProbabilityMap[name]
             )
         }
 
-        return tableRegex.findAll(html).mapNotNull { match ->
-            val start = match.range.first
-            val faction = headers.lastOrNull { it.index <= start }?.faction ?: "卡组"
-            val tableHtml = match.groupValues[1]
-            val sanitizedTableHtml = tableHtml
-                .replace(Regex("""<style[^>]*>[\s\S]*?</style>""", RegexOption.DOT_MATCHES_ALL), "")
-                .replace(Regex("""<script[^>]*>[\s\S]*?</script>""", RegexOption.DOT_MATCHES_ALL), "")
-
-            val title = cleanHtml(titleRegex.find(sanitizedTableHtml)?.groupValues?.get(1).orEmpty())
-            val author = cleanHtml(fieldRegex("分享作者").find(sanitizedTableHtml)?.groupValues?.get(1).orEmpty())
-            val shareIdRaw = fieldRegex("分享ID").find(sanitizedTableHtml)?.groupValues?.get(1).orEmpty()
-            val intro = cleanHtml(fieldRegex("介绍").find(sanitizedTableHtml)?.groupValues?.get(1).orEmpty())
-            val shareId = extractShareId(cleanHtml(shareIdRaw))
-
-            val cardNames = cardNameRegex.findAll(sanitizedTableHtml)
-                .map { cleanHtml(it.groupValues[1]) }
-                .filter { it.isNotBlank() }
-                .distinct()
-                .toList()
-
-            if (title.isBlank() && shareId.isBlank() && cardNames.isEmpty()) return@mapNotNull null
-            SharedDeck(
-                faction = faction,
-                title = title.ifBlank { "未命名卡组" },
-                author = author,
-                shareId = shareId,
-                intro = intro,
-                cardNames = cardNames
-            )
-        }.toList()
+        return WikiParseLogger.finishList("BioCardApi.parsePcCards", cards, html, "rows=${rows.size}")
     }
 
-    private fun attr(html: String, name: String): String {
-        val regex = Regex("""$name=\"([^\"]*)\"""")
-        return regex.find(html)?.groupValues?.get(1).orEmpty()
+    private fun parseRefreshProbabilities(html: String): Map<String, CardRefreshProbability> {
+        val document = Jsoup.parse(html)
+        val heading = document.selectFirst("span#卡牌刷新概率表")
+        val table = generateSequence(heading?.parent()) { it.nextElementSibling() }
+            .flatMap { element -> sequenceOf(element).plus(element.select("table.klbqtable")) }
+            .firstOrNull { it.tagName() == "table" && it.hasClass("klbqtable") }
+
+        if (table == null) {
+            WikiParseLogger.warnMalformed("BioCardApi.parseRefreshProbabilities", "missing refresh probability table", html)
+            return emptyMap()
+        }
+
+        val items = table.select("tr").drop(1).mapNotNull { row ->
+            val cells = row.select("> th, > td").map { cleanHtml(it.html()) }
+            if (cells.size < 5) return@mapNotNull null
+            val name = cells[0]
+            if (name.isBlank()) return@mapNotNull null
+            name to CardRefreshProbability(
+                stage1 = cells[1],
+                stage2 = cells[2],
+                stage3 = cells[3],
+                stage4 = cells[4]
+            )
+        }.toMap()
+
+        return WikiParseLogger.finishMap("BioCardApi.parseRefreshProbabilities", items, html)
+    }
+
+    private fun parseMobileCards(html: String): List<MobileCard> {
+        val document = Jsoup.parse(html)
+        val items = document.select(".mobile-card.gallerygrid-item").map { item ->
+            val values = item.select(".mobile-card-item, .mobile-card-item-odd, .mobile-card-desc")
+                .mapNotNull { row ->
+                    val key = row.selectFirst(".card-item-key")?.text()?.removeSuffix("：")?.trim().orEmpty()
+                    val value = row.selectFirst(".card-item-value")?.text()?.trim().orEmpty()
+                    if (key.isBlank() || value.isBlank()) null else key to value
+                }
+                .toMap()
+
+            MobileCard(
+                name = item.selectFirst(".mobile-card-name")?.text()?.trim().orEmpty().ifBlank { "未知卡牌" },
+                faction = item.attr("data-param1").ifBlank { values["适用阵营"] ?: "" },
+                category = item.attr("data-param2").ifBlank { values["分类"] ?: "" },
+                rarity = item.attr("data-param3").toIntOrNull() ?: 0,
+                maxLevel = values["最大等级"] ?: "",
+                effect = values["等级效果描述"] ?: "",
+                imageUrl = item.selectFirst("img")?.attr("src")
+            )
+        }.toList()
+
+        return WikiParseLogger.finishList("BioCardApi.parseMobileCards", items, html)
+    }
+
+    private fun parseDecks(
+        html: String,
+        cardIndexMapByFaction: Map<String, Map<String, Int>>
+    ): List<SharedDeck> {
+        val document = Jsoup.parse(html)
+        val rootChildren = document.select(".mw-parser-output").firstOrNull()?.children().orEmpty()
+        var currentFaction = "卡组"
+        val decks = mutableListOf<SharedDeck>()
+
+        rootChildren.forEach { element ->
+            if (element.tagName().matches(Regex("h[1-6]"))) {
+                val title = element.selectFirst("span.mw-headline")?.text()?.trim().orEmpty()
+                if (title == "超弦体卡组" || title == "晶源体卡组") {
+                    currentFaction = title
+                }
+                return@forEach
+            }
+
+            val tables = when {
+                element.tagName() == "table" && element.hasClass("klbqtable") -> listOf(element)
+                else -> element.select("table.klbqtable")
+            }
+
+            tables.forEach { table ->
+                parseDeckTable(table, currentFaction, cardIndexMapByFaction)?.let { decks += it }
+            }
+        }
+
+        return WikiParseLogger.finishList("BioCardApi.parseDecks", decks, html)
+    }
+
+    private fun parseDeckTable(
+        table: Element,
+        faction: String,
+        cardIndexMapByFaction: Map<String, Map<String, Int>>
+    ): SharedDeck? {
+        val rows = table.select("tr")
+        if (rows.isEmpty()) return null
+
+        val title = rows.firstOrNull()?.selectFirst("th[colspan]")?.text()?.trim().orEmpty()
+        val fieldMap = rows.drop(1)
+            .mapNotNull { row ->
+                val key = row.selectFirst("th")?.text()?.trim().orEmpty()
+                val valueCell = row.selectFirst("td") ?: return@mapNotNull null
+                if (key.isBlank()) null else key to valueCell
+            }
+            .toMap()
+
+        val author = fieldMap["分享作者"]?.text()?.trim().orEmpty()
+        val shareIdCell = fieldMap["分享ID"]
+        val shareIdText = shareIdCell?.text().orEmpty()
+        val shareId = extractShareId(shareIdText).ifBlank {
+            val normalizedFaction = normalizeDeckFaction(faction)
+            val cardIndexMap = cardIndexMapByFaction[normalizedFaction].orEmpty()
+            extractShareIdFromDynamicScript(shareIdCell?.html().orEmpty(), normalizedFaction, cardIndexMap)
+        }
+        val intro = fieldMap["介绍"]?.text()?.trim().orEmpty()
+        val cardNames = fieldMap["卡牌列表"]
+            ?.select(".zombie-card-name, .zombie-card-item-name, .card-name")
+            ?.map { it.text().trim() }
+            ?.filter { it.isNotBlank() }
+            ?.distinct()
+            .orEmpty()
+
+        if (title.isBlank() && shareId.isBlank() && cardNames.isEmpty()) return null
+        return SharedDeck(
+            faction = faction,
+            title = title.ifBlank { "未命名卡组" },
+            author = author,
+            shareId = shareId,
+            intro = intro,
+            cardNames = cardNames
+        )
     }
 
     private fun cleanHtml(raw: String): String {
@@ -366,6 +374,46 @@ object BioCardApi {
             .find(raw)
             ?.value
             .orEmpty()
+    }
+
+    private fun normalizeDeckFaction(raw: String): String {
+        return raw.removeSuffix("卡组").trim()
+    }
+
+    private fun extractShareIdFromDynamicScript(
+        html: String,
+        fallbackFaction: String,
+        cardIndexMap: Map<String, Int>
+    ): String {
+        if (html.isBlank() || cardIndexMap.isEmpty()) return ""
+
+        val cardIdsParam = Regex("""var\s+cardIdsParam\s*=\s*\"([^\"]*)\"""")
+            .find(html)
+            ?.groupValues
+            ?.getOrNull(1)
+            .orEmpty()
+        if (cardIdsParam.isBlank()) return ""
+
+        val factionFromScript = Regex("""var\s+factionParam\s*=\s*\"([^\"]*)\"""")
+            .find(html)
+            ?.groupValues
+            ?.getOrNull(1)
+            .orEmpty()
+            .trim()
+        val faction = if (factionFromScript.isNotBlank()) factionFromScript else fallbackFaction
+        if (faction.isBlank()) return ""
+
+        val cardIndexes = cardIdsParam
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .mapNotNull { cardId -> cardIndexMap[cardId] }
+
+        if (cardIndexes.isEmpty()) return ""
+
+        return runCatching {
+            BioDeckShareApi.encodeShareCode(cardIndexes, faction)
+        }.getOrDefault("")
     }
 
     private fun pageUrl(pageName: String): String {

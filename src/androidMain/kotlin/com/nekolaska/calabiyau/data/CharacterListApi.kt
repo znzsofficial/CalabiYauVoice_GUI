@@ -10,6 +10,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import java.net.URLEncoder
 
 /**
@@ -129,16 +130,14 @@ object CharacterListApi {
      */
     private fun parseCharactersFromHtml(html: String): List<CharacterInfo> {
         val results = mutableListOf<CharacterInfo>()
-        // 匹配 <a href="..." title="角色名"><img ... src="图片URL" ...>
-        val regex = Regex(
-            """<a\s+href="(/klbq/[^"]+)"\s+title="([^"]+)"><img[^>]*src="([^"]+)"[^>]*/?>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
         val seen = mutableSetOf<String>()
-        regex.findAll(html).forEach { match ->
-            val path = match.groupValues[1]
-            val name = decodeHtmlEntities(match.groupValues[2])
-            val imageUrl = match.groupValues[3]
+        val document = Jsoup.parse(html)
+
+        document.select("div.hvr-bounce-out").forEach { card ->
+            val imageLink = card.selectFirst("a[href^=/klbq/]:has(img)") ?: return@forEach
+            val path = imageLink.attr("href")
+            val name = imageLink.attr("title").trim()
+            val imageUrl = imageLink.selectFirst("img")?.attr("src").orEmpty()
             if (name !in seen) {
                 seen += name
                 results += CharacterInfo(
@@ -148,17 +147,7 @@ object CharacterListApi {
                 )
             }
         }
-        return results
-    }
-
-    private fun decodeHtmlEntities(text: String): String {
-        return text
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#039;", "'")
-            .replace("&apos;", "'")
+        return WikiParseLogger.finishList("CharacterListApi.parseCharactersFromHtml", results, html)
     }
 
 }

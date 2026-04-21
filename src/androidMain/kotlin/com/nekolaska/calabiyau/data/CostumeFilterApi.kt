@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import java.net.URLEncoder
 
 /**
@@ -113,55 +114,95 @@ object CostumeFilterApi {
      * ```
      */
     private fun parseCostumeHtml(html: String): List<CostumeInfo> {
-        val costumes = mutableListOf<CostumeInfo>()
+        val blockRegex = Regex(
+            """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
+        )
+        val usedKeys = mutableSetOf<String>()
 
-        // 匹配 data-param 行
-        val paramRegex = Regex(
-            """data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"""")
-
-        // 匹配图片 src 和可选的 srcset
-        val imgSrcRegex = Regex("""<img[^>]*\bsrc="([^"]*)"[^>]*>""")
-        val srcsetRegex = Regex("""\bsrcset="([^"]*?)\s""")
-        // 匹配时装名（img 标签后的 <br/> 后面的文字）
-        val nameRegex = Regex("""/>\s*<br\s*/?\s*>\s*([^<|]+)""")
-
-        val paramMatches = paramRegex.findAll(html).toList()
-
-        for (paramMatch in paramMatches) {
-            val character = paramMatch.groupValues[1]
-            val qualityStr = paramMatch.groupValues[2]
-            val sourcesStr = paramMatch.groupValues[3]
-            val crystalCost = paramMatch.groupValues[4]
-            val baseCost = paramMatch.groupValues[5]
-
-            // 从 paramMatch 位置向后搜索图片和名称
-            val afterParam = html.substring(
-                paramMatch.range.last,
-                minOf(paramMatch.range.last + 2000, html.length)
+        val items = blockRegex.findAll(html).map { match ->
+            val character = match.groupValues[1].trim()
+            val info = parseCostumeDetail(match.groupValues[6], character)
+            val protectedName = uniqueDisplayName(
+                baseName = info.name,
+                ownerName = character,
+                blockHtml = match.groupValues[6],
+                usedKeys = usedKeys
             )
 
-            val imgMatch = imgSrcRegex.find(afterParam)
-            val thumbnailUrl = imgMatch?.groupValues?.get(1)
-            // 尝试从 img 标签中提取 srcset 作为高清图
-            val fullImageUrl = imgMatch?.let { srcsetRegex.find(it.value)?.groupValues?.get(1) }
-            val nameMatch = nameRegex.find(afterParam)
-            val costumeName = nameMatch?.groupValues?.get(1)?.trim() ?: "$character：未知"
-
-            costumes.add(
-                CostumeInfo(
-                    name = costumeName,
-                    character = character,
-                    quality = Quality.fromLevel(qualityStr),
-                    sources = sourcesStr.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                    crystalCost = crystalCost,
-                    baseCost = baseCost,
-                    thumbnailUrl = thumbnailUrl,
-                    fullImageUrl = fullImageUrl
-                )
+            CostumeInfo(
+                name = protectedName,
+                character = character,
+                quality = Quality.fromLevel(match.groupValues[2]),
+                sources = match.groupValues[3].split(",").map { it.trim() }.filter { it.isNotBlank() },
+                crystalCost = match.groupValues[4].trim(),
+                baseCost = match.groupValues[5].trim(),
+                thumbnailUrl = info.thumbnailUrl,
+                fullImageUrl = info.fullImageUrl
             )
+        }.toList()
+
+        return items
+    }
+
+    private fun parseCostumeDetail(blockHtml: String, character: String): ParsedVisualInfo {
+        val document = Jsoup.parse(blockHtml)
+        val imageElement = document.selectFirst("img[alt]")
+        val thumbnailUrl = imageElement?.attr("src")
+        val fullImageUrl = imageElement?.attr("srcset")
+            ?.substringBefore(',')
+            ?.substringBeforeLast(' ')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        val name = Regex("""<br\s*/?>\s*([^\n<|]+)""")
+            .find(blockHtml)
+            ?.groupValues?.get(1)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: "$character：未知"
+
+        return ParsedVisualInfo(name = name, thumbnailUrl = thumbnailUrl, fullImageUrl = fullImageUrl)
+    }
+
+    private data class ParsedVisualInfo(
+        val name: String,
+        val thumbnailUrl: String?,
+        val fullImageUrl: String?
+    )
+
+    private fun uniqueDisplayName(
+        baseName: String,
+        ownerName: String,
+        blockHtml: String,
+        usedKeys: MutableSet<String>
+    ): String {
+        val normalizedBase = baseName.ifBlank { "$ownerName：未知" }
+        val identity = extractIdentitySuffix(blockHtml)
+        var candidate = normalizedBase
+        var key = candidate + ownerName
+
+        if (usedKeys.add(key)) return candidate
+
+        if (identity.isNotBlank()) {
+            candidate = "$normalizedBase#$identity"
+            key = candidate + ownerName
+            if (usedKeys.add(key)) return candidate
         }
 
-        return costumes
+        var index = 2
+        while (true) {
+            candidate = "$normalizedBase#$index"
+            key = candidate + ownerName
+            if (usedKeys.add(key)) return candidate
+            index++
+        }
+    }
+
+    private fun extractIdentitySuffix(blockHtml: String): String {
+        return Regex("""角色时装图鉴\s*(\d+)""")
+            .find(blockHtml)
+            ?.groupValues?.get(1)
+            .orEmpty()
     }
 
 }
