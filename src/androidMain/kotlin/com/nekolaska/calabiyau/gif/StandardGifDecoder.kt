@@ -191,19 +191,9 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         get() {
             val header = this.header
             if (header.numFrames <= 0 || this.currentFrameIndex < 0) {
-                if (Log.isLoggable(TAG, Log.DEBUG)) {
-                    Log.d(
-                        TAG, ("Unable to decode frame"
-                                + ", frameCount=" + header.numFrames
-                                + ", framePointer=" + this.currentFrameIndex)
-                    )
-                }
                 status = GifDecoder.STATUS_FORMAT_ERROR
             }
             if (status == GifDecoder.STATUS_FORMAT_ERROR || status == GifDecoder.STATUS_OPEN_ERROR) {
-                if (Log.isLoggable(TAG, Log.DEBUG)) {
-                    Log.d(TAG, "Unable to decode frame, status=$status")
-                }
                 return null
             }
             status = GifDecoder.STATUS_OK
@@ -222,12 +212,6 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
             // Set the appropriate color table.
             act = if (currentFrame.lct != null) currentFrame.lct else header.gct
             if (act == null) {
-                if (Log.isLoggable(TAG, Log.DEBUG)) {
-                    Log.d(
-                        TAG,
-                        "No valid color table found for frame #" + this.currentFrameIndex
-                    )
-                }
                 // No color table defined.
                 status = GifDecoder.STATUS_FORMAT_ERROR
                 return null

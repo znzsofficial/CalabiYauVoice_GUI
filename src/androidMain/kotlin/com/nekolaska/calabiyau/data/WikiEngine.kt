@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.data
 
+import com.nekolaska.calabiyau.CalabiYauApplication
+import com.nekolaska.calabiyau.CrashContextStore
 import data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -122,12 +124,40 @@ object WikiEngine {
         return try {
             val request = Request.Builder().url(url).build()
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    CalabiYauApplication.instanceOrNull?.let {
+                        CrashContextStore.recordWikiRequest(
+                            it,
+                            "WikiEngine.safeGet",
+                            url,
+                            outcome = "http=${response.code}"
+                        )
+                    }
+                    return null
+                }
                 val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) return null
+                if (!body.trimStart().startsWith("{")) {
+                    CalabiYauApplication.instanceOrNull?.let {
+                        CrashContextStore.recordWikiRequest(
+                            it,
+                            "WikiEngine.safeGet",
+                            url,
+                            outcome = "non-json response"
+                        )
+                    }
+                    return null
+                }
                 body
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            CalabiYauApplication.instanceOrNull?.let {
+                CrashContextStore.recordWikiRequest(
+                    it,
+                    "WikiEngine.safeGet",
+                    url,
+                    outcome = "exception=${e::class.java.simpleName}"
+                )
+            }
             null
         }
     }
