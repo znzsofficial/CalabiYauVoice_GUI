@@ -17,8 +17,15 @@ import java.io.File
 
 class CalabiYauApplication : Application(), SingletonImageLoader.Factory {
 
+    companion object {
+        @Volatile
+        var instanceOrNull: CalabiYauApplication? = null
+            private set
+    }
+
     override fun onCreate() {
         super.onCreate()
+        instanceOrNull = this
         if (isMainProcess()) {
             CrashHandler.install(this)
         }

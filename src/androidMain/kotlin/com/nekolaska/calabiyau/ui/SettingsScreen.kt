@@ -129,143 +129,143 @@ fun SettingsScreen(onBack: () -> Unit) {
             return@AnimatedContent
         }
 
-    val showSnack = rememberSnackbarLauncher()
+        val showSnack = rememberSnackbarLauncher()
 
-    Scaffold(
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledTonalIconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
+        Scaffold(
+            topBar = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "设置",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(settingsScrollState)
-        ) {
-            Spacer(Modifier.height(4.dp))
-
-            // ═══════════════════════════════════
-            //  外观
-            // ═══════════════════════════════════
-            SettingsGroupHeader("外观")
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    var showThemeDialog by remember { mutableStateOf(false) }
-                    val themeName = when (themeMode) {
-                        AppPrefs.THEME_LIGHT -> "浅色"
-                        AppPrefs.THEME_DARK -> "深色"
-                        else -> "跟随系统"
+                    FilledTonalIconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(40.dp),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
                     }
-                    SettingsItem(
-                        icon = Icons.Outlined.Palette,
-                        title = "主题模式",
-                        subtitle = themeName,
-                        onClick = { showThemeDialog = true }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "设置",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
                     )
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.background
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .verticalScroll(settingsScrollState)
+            ) {
+                Spacer(Modifier.height(4.dp))
 
-                    if (showThemeDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showThemeDialog = false },
-                            title = { Text("选择主题") },
-                            text = {
-                                Column {
-                                    listOf(
-                                        AppPrefs.THEME_SYSTEM to "跟随系统",
-                                        AppPrefs.THEME_LIGHT to "浅色模式",
-                                        AppPrefs.THEME_DARK to "深色模式"
-                                    ).forEach { (mode, label) ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(smoothCornerShape(12.dp))
-                                                .clickable {
-                                                    themeMode = mode
-                                                    AppPrefs.themeMode = mode
-                                                    showThemeDialog = false
-                                                }
-                                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            RadioButton(
-                                                selected = themeMode == mode,
-                                                onClick = {
-                                                    themeMode = mode
-                                                    AppPrefs.themeMode = mode
-                                                    showThemeDialog = false
-                                                }
-                                            )
-                                            Spacer(Modifier.width(12.dp))
-                                            Text(label, style = MaterialTheme.typography.bodyLarge)
+                // ═══════════════════════════════════
+                //  外观
+                // ═══════════════════════════════════
+                SettingsGroupHeader("外观")
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column {
+                        var showThemeDialog by remember { mutableStateOf(false) }
+                        val themeName = when (themeMode) {
+                            AppPrefs.THEME_LIGHT -> "浅色"
+                            AppPrefs.THEME_DARK -> "深色"
+                            else -> "跟随系统"
+                        }
+                        SettingsItem(
+                            icon = Icons.Outlined.Palette,
+                            title = "主题模式",
+                            subtitle = themeName,
+                            onClick = { showThemeDialog = true }
+                        )
+
+                        if (showThemeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showThemeDialog = false },
+                                title = { Text("选择主题") },
+                                text = {
+                                    Column {
+                                        listOf(
+                                            AppPrefs.THEME_SYSTEM to "跟随系统",
+                                            AppPrefs.THEME_LIGHT to "浅色模式",
+                                            AppPrefs.THEME_DARK to "深色模式"
+                                        ).forEach { (mode, label) ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(smoothCornerShape(12.dp))
+                                                    .clickable {
+                                                        themeMode = mode
+                                                        AppPrefs.themeMode = mode
+                                                        showThemeDialog = false
+                                                    }
+                                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = themeMode == mode,
+                                                    onClick = {
+                                                        themeMode = mode
+                                                        AppPrefs.themeMode = mode
+                                                        showThemeDialog = false
+                                                    }
+                                                )
+                                                Spacer(Modifier.width(12.dp))
+                                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            shape = smoothCornerShape(28.dp),
-                            confirmButton = {}
+                                },
+                                shape = smoothCornerShape(28.dp),
+                                confirmButton = {}
+                            )
+                        }
+
+                        // 主题色
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        ThemeColorPicker(
+                            currentSeedColor = seedColorInt,
+                            onColorSelected = { argb ->
+                                seedColorInt = argb
+                                AppPrefs.customSeedColor = argb
+                            }
                         )
-                    }
 
-                    // 主题色
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ThemeColorPicker(
-                        currentSeedColor = seedColorInt,
-                        onColorSelected = { argb ->
-                            seedColorInt = argb
-                            AppPrefs.customSeedColor = argb
-                        }
-                    )
+                        // 液态玻璃效果
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        SettingsToggleItem(
+                            icon = Icons.Outlined.BlurOn,
+                            title = "液态玻璃效果",
+                            subtitle = "需 Android 12+",
+                            checked = liquidGlassEnabled,
+                            onCheckedChange = {
+                                liquidGlassEnabled = it
+                                AppPrefs.liquidGlassEnabled = it
+                            }
+                        )
 
-                    // 液态玻璃效果
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingsToggleItem(
-                        icon = Icons.Outlined.BlurOn,
-                        title = "液态玻璃效果",
-                        subtitle = "需 Android 12+",
-                        checked = liquidGlassEnabled,
-                        onCheckedChange = {
-                            liquidGlassEnabled = it
-                            AppPrefs.liquidGlassEnabled = it
-                        }
-                    )
+                        // ── 壁纸管理 ──
+                        var isRefreshing by remember { mutableStateOf(false) }
+                        var isSaving by remember { mutableStateOf(false) }
+                        var wallpaperMessage by remember { mutableStateOf<String?>(null) }
+                        var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
+                        val scope = rememberCoroutineScope()
 
-                    // ── 壁纸管理 ──
-                    var isRefreshing by remember { mutableStateOf(false) }
-                    var isSaving by remember { mutableStateOf(false) }
-                    var wallpaperMessage by remember { mutableStateOf<String?>(null) }
-                    var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
-                    val scope = rememberCoroutineScope()
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                         SettingsToggleItem(
                             icon = Icons.Outlined.Autorenew,
                             title = "自动刷新壁纸",
@@ -282,7 +282,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             icon = Icons.Outlined.Refresh,
                             title = "刷新首页背景图",
                             subtitle = if (isRefreshing) "正在获取新壁纸…"
-                                else wallpaperMessage ?: "随机更换一张 Wiki 壁纸",
+                            else wallpaperMessage ?: "随机更换一张 Wiki 壁纸",
                             onClick = {
                                 if (isRefreshing) return@SettingsItem
                                 isRefreshing = true
@@ -292,7 +292,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         WallpaperApi.fetchRandomWallpaperUrl(forceRefresh = true)
                                     }
                                     wallpaperMessage = if (url != null) "已刷新，返回首页查看"
-                                        else "获取失败，请检查网络"
+                                    else "获取失败，请检查网络"
                                     isRefreshing = false
                                 }
                             }
@@ -303,7 +303,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             icon = Icons.Outlined.SaveAlt,
                             title = "保存当前背景图",
                             subtitle = if (isSaving) "正在保存…"
-                                else "将当前壁纸保存到下载目录",
+                            else "将当前壁纸保存到下载目录",
                             onClick = {
                                 val currentUrl = AppPrefs.wallpaperUrl
                                 if (currentUrl.isNullOrBlank() || isSaving) return@SettingsItem
@@ -333,536 +333,538 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         }
                                     }
                                     wallpaperMessage = if (success) "已保存到 ${AppPrefs.savePath}"
-                                        else "保存失败"
+                                    else "保存失败"
                                     isSaving = false
                                 }
                             }
-                    )
+                        )
+                    }
                 }
-            }
 
-            Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-            // ═══════════════════════════════════
-            //  首页快捷入口
-            // ═══════════════════════════════════
-            SettingsGroupHeader("首页")
+                // ═══════════════════════════════════
+                //  首页快捷入口
+                // ═══════════════════════════════════
+                SettingsGroupHeader("首页")
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    QuickEntryCustomizeSection(
-                        selectedIds = homeQuickEntryIds,
-                        onSelectedIdsChange = {
-                            homeQuickEntryIds = it
-                            AppPrefs.homeQuickEntryIds = it
-                        }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // ═══════════════════════════════════
-            //  下载
-            // ═══════════════════════════════════
-            SettingsGroupHeader("下载")
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    // 保存路径
-                    SettingsItem(
-                        icon = Icons.Outlined.Folder,
-                        title = "保存路径",
-                        subtitle = savePath,
-                        onClick = { dirPicker.launch(null) }
-                    )
-
-                    // 手动输入路径
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    var showPathDialog by remember { mutableStateOf(false) }
-                    SettingsItem(
-                        icon = Icons.Outlined.Edit,
-                        title = "手动设置路径",
-                        subtitle = "手动输入自定义保存路径",
-                        onClick = { showPathDialog = true }
-                    )
-                    if (showPathDialog) {
-                        var tempPath by remember { mutableStateOf(savePath) }
-                        AlertDialog(
-                            onDismissRequest = { showPathDialog = false },
-                            title = { Text("设置保存路径") },
-                            text = {
-                                OutlinedTextField(
-                                    value = tempPath,
-                                    onValueChange = { tempPath = it },
-                                    label = { Text("路径") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = false,
-                                    maxLines = 3,
-                                    shape = smoothCornerShape(16.dp)
-                                )
-                            },
-                            shape = smoothCornerShape(28.dp),
-                            confirmButton = {
-                                FilledTonalButton(onClick = {
-                                    savePath = tempPath
-                                    AppPrefs.savePath = tempPath
-                                    showPathDialog = false
-                                }) { Text("确定") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showPathDialog = false }) { Text("取消") }
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column {
+                        QuickEntryCustomizeSection(
+                            selectedIds = homeQuickEntryIds,
+                            onSelectedIdsChange = {
+                                homeQuickEntryIds = it
+                                AppPrefs.homeQuickEntryIds = it
                             }
                         )
                     }
+                }
 
-                    // 最大并发数
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    var showConcurrencyDialog by remember { mutableStateOf(false) }
-                    SettingsItem(
-                        icon = Icons.Outlined.Speed,
-                        title = "最大并发下载数",
-                        subtitle = "$maxConcurrency 个并发连接",
-                        onClick = { showConcurrencyDialog = true }
-                    )
-                    if (showConcurrencyDialog) {
-                        var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
-                        AlertDialog(
-                            onDismissRequest = { showConcurrencyDialog = false },
-                            title = { Text("最大并发下载数") },
-                            text = {
-                                Column {
-                                    Text(
-                                        "设置同时下载文件的最大数量（1-32）",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
+
+                // ═══════════════════════════════════
+                //  下载
+                // ═══════════════════════════════════
+                SettingsGroupHeader("下载")
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column {
+                        // 保存路径
+                        SettingsItem(
+                            icon = Icons.Outlined.Folder,
+                            title = "保存路径",
+                            subtitle = savePath,
+                            onClick = { dirPicker.launch(null) }
+                        )
+
+                        // 手动输入路径
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        var showPathDialog by remember { mutableStateOf(false) }
+                        SettingsItem(
+                            icon = Icons.Outlined.Edit,
+                            title = "手动设置路径",
+                            subtitle = "手动输入自定义保存路径",
+                            onClick = { showPathDialog = true }
+                        )
+                        if (showPathDialog) {
+                            var tempPath by remember { mutableStateOf(savePath) }
+                            AlertDialog(
+                                onDismissRequest = { showPathDialog = false },
+                                title = { Text("设置保存路径") },
+                                text = {
                                     OutlinedTextField(
-                                        value = tempConcurrency,
-                                        onValueChange = { tempConcurrency = it.filter { c -> c.isDigit() } },
-                                        label = { Text("并发数") },
+                                        value = tempPath,
+                                        onValueChange = { tempPath = it },
+                                        label = { Text("路径") },
                                         modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = false,
+                                        maxLines = 3,
                                         shape = smoothCornerShape(16.dp)
                                     )
-                                }
-                            },
-                            shape = smoothCornerShape(28.dp),
-                            confirmButton = {
-                                FilledTonalButton(onClick = {
-                                    val value = tempConcurrency.toIntOrNull()?.coerceIn(1, 32) ?: 8
-                                    maxConcurrency = value.toString()
-                                    AppPrefs.maxConcurrency = value
-                                    showConcurrencyDialog = false
-                                }) { Text("确定") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showConcurrencyDialog = false }) { Text("取消") }
-                            }
-                        )
-                    }
-
-                    // 底栏样式
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    var showBarStyleDialog by remember { mutableStateOf(false) }
-                    val barStyleName = when (bottomBarStyle) {
-                        AppPrefs.BAR_STYLE_DOCKED_TOOLBAR -> "悬浮工具栏"
-                        else -> "经典导航栏"
-                    }
-                    SettingsItem(
-                        icon = Icons.Outlined.ViewDay,
-                        title = "底栏样式",
-                        subtitle = barStyleName,
-                        onClick = { showBarStyleDialog = true }
-                    )
-                    if (showBarStyleDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showBarStyleDialog = false },
-                            title = { Text("底栏样式") },
-                            text = {
-                                Column {
-                                    listOf(
-                                        AppPrefs.BAR_STYLE_DOCKED_TOOLBAR to "悬浮工具栏",
-                                        AppPrefs.BAR_STYLE_BOTTOM_APP_BAR to "经典导航栏"
-                                    ).forEach { (style, label) ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(smoothCornerShape(12.dp))
-                                                .clickable {
-                                                    bottomBarStyle = style
-                                                    AppPrefs.bottomBarStyle = style
-                                                    showBarStyleDialog = false
-                                                }
-                                                .padding(vertical = 12.dp, horizontal = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            RadioButton(
-                                                selected = bottomBarStyle == style,
-                                                onClick = {
-                                                    bottomBarStyle = style
-                                                    AppPrefs.bottomBarStyle = style
-                                                    showBarStyleDialog = false
-                                                }
-                                            )
-                                            Spacer(Modifier.width(12.dp))
-                                            Text(label, style = MaterialTheme.typography.bodyLarge)
-                                        }
-                                    }
-                                }
-                            },
-                            shape = smoothCornerShape(28.dp),
-                            confirmButton = {}
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // ═══════════════════════════════════
-            //  Wiki
-            // ═══════════════════════════════════
-            SettingsGroupHeader("Wiki")
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    // 缓存策略
-                    val cacheName = when (wikiCacheMode) {
-                        AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存（弱网可用）"
-                        else -> "默认（联网加载）"
-                    }
-                    SettingsItem(
-                        icon = Icons.Outlined.OfflinePin,
-                        title = "Wiki 缓存策略",
-                        subtitle = cacheName,
-                        onClick = {
-                            val newMode = if (wikiCacheMode == AppPrefs.WIKI_CACHE_DEFAULT)
-                                AppPrefs.WIKI_CACHE_OFFLINE_FIRST else AppPrefs.WIKI_CACHE_DEFAULT
-                            wikiCacheMode = newMode
-                            AppPrefs.wikiCacheMode = newMode
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // 桌面模式
-                    SettingsToggleItem(
-                        icon = Icons.Outlined.DesktopWindows,
-                        title = "桌面模式",
-                        subtitle = if (wikiDesktopMode) "使用桌面版 User-Agent" else "使用移动版（默认）",
-                        checked = wikiDesktopMode,
-                        onCheckedChange = {
-                            wikiDesktopMode = it
-                            AppPrefs.wikiDesktopMode = it
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    // 清除 Cookie
-                    var showClearCookieDialog by remember { mutableStateOf(false) }
-                    SettingsItem(
-                        icon = Icons.Outlined.DeleteSweep,
-                        title = "清除登录状态",
-                        subtitle = "清除 Wiki Cookie 并登出",
-                        onClick = { showClearCookieDialog = true }
-                    )
-                    if (showClearCookieDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showClearCookieDialog = false },
-                            title = { Text("清除登录状态") },
-                            text = { Text("确定要清除 Wiki 登录状态吗？\n清除后需要重新登录才能使用投票等功能。") },
-                            shape = smoothCornerShape(28.dp),
-                            confirmButton = {
-                                FilledTonalButton(onClick = {
-                                    android.webkit.CookieManager.getInstance().removeAllCookies(null)
-                                    android.webkit.CookieManager.getInstance().flush()
-                                    showClearCookieDialog = false
-                                }) { Text("确定清除") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showClearCookieDialog = false }) { Text("取消") }
-                            }
-                        )
-                    }
-
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // 存储统计
-            SettingsGroupHeader("存储")
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    StorageStatisticsCard(savePath = savePath)
-
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-                    CacheManagementItem()
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // 关于分组
-            SettingsGroupHeader("关于")
-
-            // ── 检查更新状态 ──
-            val updateScope = rememberCoroutineScope()
-            var isCheckingUpdate by remember { mutableStateOf(false) }
-            var updateSubtitle by remember { mutableStateOf("点击检查新版本") }
-            var updateResult by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
-
-            val currentVersion = remember {
-                try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.0"
-                } catch (_: Exception) { "2.0.0" }
-            }
-
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
-                    SettingsItem(
-                        icon = Icons.Outlined.Info,
-                        title = "关于",
-                        subtitle = "版本信息与版权声明",
-                        onClick = { showAbout = true }
-                    )
-
-                    SettingsItem(
-                        icon = if (isCheckingUpdate) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
-                        title = "检查更新",
-                        subtitle = if (isCheckingUpdate) "正在检查…" else updateSubtitle,
-                        onClick = {
-                            if (isCheckingUpdate) return@SettingsItem
-                            isCheckingUpdate = true
-                            updateSubtitle = "正在检查…"
-                            updateScope.launch {
-                                when (val result = UpdateApi.checkUpdate(currentVersion)) {
-                                    is UpdateApi.Result.NewVersion -> {
-                                        updateSubtitle = "发现新版本: ${result.info.versionName}"
-                                        updateResult = result.info
-                                        AppPrefs.lastUpdateCheck = System.currentTimeMillis()
-                                    }
-                                    is UpdateApi.Result.AlreadyLatest -> {
-                                        updateSubtitle = "已是最新版本 ($currentVersion)"
-                                        AppPrefs.lastUpdateCheck = System.currentTimeMillis()
-                                    }
-                                    is UpdateApi.Result.Error -> {
-                                        updateSubtitle = result.message
-                                    }
-                                }
-                                isCheckingUpdate = false
-                            }
-                        }
-                    )
-
-                    // ── 调试菜单 ──
-                    var showDebugMenu by remember { mutableStateOf(false) }
-                    SettingsItem(
-                        icon = Icons.Outlined.BugReport,
-                        title = "调试信息",
-                        subtitle = "版本 $currentVersion · API ${android.os.Build.VERSION.SDK_INT}",
-                        onClick = { showDebugMenu = true }
-                    )
-                    if (showDebugMenu) {
-                        var showCrashConfirm by remember { mutableStateOf(false) }
-
-                        AlertDialog(
-                            onDismissRequest = { showDebugMenu = false },
-                            icon = { Icon(Icons.Outlined.BugReport, null) },
-                            title = { Text("调试菜单") },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    // 设备信息
-                                    Surface(
-                                        shape = smoothCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            buildString {
-                                                appendLine("版本: $currentVersion (${android.os.Build.VERSION.SDK_INT})")
-                                                appendLine("设备: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-                                                appendLine("系统: Android ${android.os.Build.VERSION.RELEASE}")
-                                                append("保存路径: ${AppPrefs.savePath}")
-                                            },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                            modifier = Modifier.padding(12.dp)
-                                        )
-                                    }
-
-                                    Spacer(Modifier.height(4.dp))
-
-                                    // 开源仓库
-                                    FilledTonalButton(
-                                        onClick = {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW,
-                                                "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri()))
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Outlined.Code, null, Modifier.size(18.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("开源仓库")
-                                    }
-
-                                    // 复制设备信息
-                                    OutlinedButton(
-                                        onClick = {
-                                            val info = buildString {
-                                                appendLine("版本: $currentVersion")
-                                                appendLine("设备: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-                                                appendLine("系统: Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
-                                                append("保存路径: ${AppPrefs.savePath}")
-                                            }
-                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("设备信息", info))
-                                            showSnack("已复制")
-                                        },
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("复制设备信息")
-                                    }
-
-                                    // 触发崩溃测试
-                                    OutlinedButton(
-                                        onClick = { showCrashConfirm = true },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.error
-                                        )
-                                    ) {
-                                        Icon(Icons.Outlined.Warning, null, Modifier.size(18.dp))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("触发测试崩溃")
-                                    }
-                                }
-                            },
-                            shape = smoothCornerShape(28.dp),
-                            confirmButton = {
-                                TextButton(onClick = { showDebugMenu = false }) { Text("关闭") }
-                            }
-                        )
-
-                        if (showCrashConfirm) {
-                            AlertDialog(
-                                onDismissRequest = { showCrashConfirm = false },
-                                icon = { Icon(Icons.Outlined.Warning, null, tint = MaterialTheme.colorScheme.error) },
-                                title = { Text("确认触发崩溃？") },
-                                text = { Text("应用会立即关闭并显示崩溃日志页面。") },
+                                },
                                 shape = smoothCornerShape(28.dp),
                                 confirmButton = {
-                                    FilledTonalButton(
-                                        onClick = { throw RuntimeException("手动触发的测试崩溃 — CrashHandler 功能验证") },
-                                        colors = ButtonDefaults.filledTonalButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                        )
-                                    ) { Text("确认") }
+                                    FilledTonalButton(onClick = {
+                                        savePath = tempPath
+                                        AppPrefs.savePath = tempPath
+                                        showPathDialog = false
+                                    }) { Text("确定") }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { showCrashConfirm = false }) { Text("取消") }
+                                    TextButton(onClick = { showPathDialog = false }) { Text("取消") }
                                 }
+                            )
+                        }
+
+                        // 最大并发数
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        var showConcurrencyDialog by remember { mutableStateOf(false) }
+                        SettingsItem(
+                            icon = Icons.Outlined.Speed,
+                            title = "最大并发下载数",
+                            subtitle = "$maxConcurrency 个并发连接",
+                            onClick = { showConcurrencyDialog = true }
+                        )
+                        if (showConcurrencyDialog) {
+                            var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
+                            AlertDialog(
+                                onDismissRequest = { showConcurrencyDialog = false },
+                                title = { Text("最大并发下载数") },
+                                text = {
+                                    Column {
+                                        Text(
+                                            "设置同时下载文件的最大数量（1-32）",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        OutlinedTextField(
+                                            value = tempConcurrency,
+                                            onValueChange = { tempConcurrency = it.filter { c -> c.isDigit() } },
+                                            label = { Text("并发数") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true,
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            shape = smoothCornerShape(16.dp)
+                                        )
+                                    }
+                                },
+                                shape = smoothCornerShape(28.dp),
+                                confirmButton = {
+                                    FilledTonalButton(onClick = {
+                                        val value = tempConcurrency.toIntOrNull()?.coerceIn(1, 32) ?: 8
+                                        maxConcurrency = value.toString()
+                                        AppPrefs.maxConcurrency = value
+                                        showConcurrencyDialog = false
+                                    }) { Text("确定") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showConcurrencyDialog = false }) { Text("取消") }
+                                }
+                            )
+                        }
+
+                        // 底栏样式
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        var showBarStyleDialog by remember { mutableStateOf(false) }
+                        val barStyleName = when (bottomBarStyle) {
+                            AppPrefs.BAR_STYLE_DOCKED_TOOLBAR -> "悬浮工具栏"
+                            else -> "经典导航栏"
+                        }
+                        SettingsItem(
+                            icon = Icons.Outlined.ViewDay,
+                            title = "底栏样式",
+                            subtitle = barStyleName,
+                            onClick = { showBarStyleDialog = true }
+                        )
+                        if (showBarStyleDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showBarStyleDialog = false },
+                                title = { Text("底栏样式") },
+                                text = {
+                                    Column {
+                                        listOf(
+                                            AppPrefs.BAR_STYLE_DOCKED_TOOLBAR to "悬浮工具栏",
+                                            AppPrefs.BAR_STYLE_BOTTOM_APP_BAR to "经典导航栏"
+                                        ).forEach { (style, label) ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(smoothCornerShape(12.dp))
+                                                    .clickable {
+                                                        bottomBarStyle = style
+                                                        AppPrefs.bottomBarStyle = style
+                                                        showBarStyleDialog = false
+                                                    }
+                                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = bottomBarStyle == style,
+                                                    onClick = {
+                                                        bottomBarStyle = style
+                                                        AppPrefs.bottomBarStyle = style
+                                                        showBarStyleDialog = false
+                                                    }
+                                                )
+                                                Spacer(Modifier.width(12.dp))
+                                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                                            }
+                                        }
+                                    }
+                                },
+                                shape = smoothCornerShape(28.dp),
+                                confirmButton = {}
                             )
                         }
                     }
                 }
-            }
 
-            // ── 新版本对话框 ──
-            updateResult?.let { info ->
-                AlertDialog(
-                    onDismissRequest = { updateResult = null },
-                    title = {
-                        Text("发现新版本 ${info.versionName}")
-                    },
-                    text = {
-                        Column {
-                            Text(
-                                "当前版本: $currentVersion",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(Modifier.height(8.dp))
+
+                // ═══════════════════════════════════
+                //  Wiki
+                // ═══════════════════════════════════
+                SettingsGroupHeader("Wiki")
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column {
+                        // 缓存策略
+                        val cacheName = when (wikiCacheMode) {
+                            AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存（弱网可用）"
+                            else -> "默认（联网加载）"
+                        }
+                        SettingsItem(
+                            icon = Icons.Outlined.OfflinePin,
+                            title = "Wiki 缓存策略",
+                            subtitle = cacheName,
+                            onClick = {
+                                val newMode = if (wikiCacheMode == AppPrefs.WIKI_CACHE_DEFAULT)
+                                    AppPrefs.WIKI_CACHE_OFFLINE_FIRST else AppPrefs.WIKI_CACHE_DEFAULT
+                                wikiCacheMode = newMode
+                                AppPrefs.wikiCacheMode = newMode
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // 桌面模式
+                        SettingsToggleItem(
+                            icon = Icons.Outlined.DesktopWindows,
+                            title = "桌面模式",
+                            subtitle = if (wikiDesktopMode) "使用桌面版 User-Agent" else "使用移动版（默认）",
+                            checked = wikiDesktopMode,
+                            onCheckedChange = {
+                                wikiDesktopMode = it
+                                AppPrefs.wikiDesktopMode = it
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        // 清除 Cookie
+                        var showClearCookieDialog by remember { mutableStateOf(false) }
+                        SettingsItem(
+                            icon = Icons.Outlined.DeleteSweep,
+                            title = "清除登录状态",
+                            subtitle = "清除 Wiki Cookie 并登出",
+                            onClick = { showClearCookieDialog = true }
+                        )
+                        if (showClearCookieDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showClearCookieDialog = false },
+                                title = { Text("清除登录状态") },
+                                text = { Text("确定要清除 Wiki 登录状态吗？\n清除后需要重新登录才能使用投票等功能。") },
+                                shape = smoothCornerShape(28.dp),
+                                confirmButton = {
+                                    FilledTonalButton(onClick = {
+                                        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+                                        android.webkit.CookieManager.getInstance().flush()
+                                        showClearCookieDialog = false
+                                    }) { Text("确定清除") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showClearCookieDialog = false }) { Text("取消") }
+                                }
                             )
-                            Spacer(Modifier.height(12.dp))
-                            if (info.body.isNotBlank()) {
-                                Text(
-                                    "更新日志:",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = smoothCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                ) {
-                                    Text(
-                                        text = info.body.take(1000),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        modifier = Modifier
-                                            .padding(12.dp)
-                                            .verticalScroll(rememberScrollState())
-                                    )
+                        }
+
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // 存储统计
+                SettingsGroupHeader("存储")
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column {
+                        StorageStatisticsCard(savePath = savePath)
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                        CacheManagementItem()
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // 关于分组
+                SettingsGroupHeader("关于")
+
+                // ── 检查更新状态 ──
+                val updateScope = rememberCoroutineScope()
+                var isCheckingUpdate by remember { mutableStateOf(false) }
+                var updateSubtitle by remember { mutableStateOf("点击检查新版本") }
+                var updateResult by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
+
+                val currentVersion = remember {
+                    try {
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.0"
+                    } catch (_: Exception) {
+                        "2.0.0"
+                    }
+                }
+
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column {
+                        SettingsItem(
+                            icon = Icons.Outlined.Info,
+                            title = "关于",
+                            subtitle = "版本信息与版权声明",
+                            onClick = { showAbout = true }
+                        )
+
+                        SettingsItem(
+                            icon = if (isCheckingUpdate) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
+                            title = "检查更新",
+                            subtitle = if (isCheckingUpdate) "正在检查…" else updateSubtitle,
+                            onClick = {
+                                if (isCheckingUpdate) return@SettingsItem
+                                isCheckingUpdate = true
+                                updateSubtitle = "正在检查…"
+                                updateScope.launch {
+                                    when (val result = UpdateApi.checkUpdate(currentVersion)) {
+                                        is UpdateApi.Result.NewVersion -> {
+                                            updateSubtitle = "发现新版本: ${result.info.versionName}"
+                                            updateResult = result.info
+                                            AppPrefs.lastUpdateCheck = System.currentTimeMillis()
+                                        }
+
+                                        is UpdateApi.Result.AlreadyLatest -> {
+                                            updateSubtitle = "已是最新版本 ($currentVersion)"
+                                            AppPrefs.lastUpdateCheck = System.currentTimeMillis()
+                                        }
+
+                                        is UpdateApi.Result.Error -> {
+                                            updateSubtitle = result.message
+                                        }
+                                    }
+                                    isCheckingUpdate = false
                                 }
                             }
-                        }
-                    },
-                    shape = smoothCornerShape(28.dp),
-                    confirmButton = {
-                        FilledTonalButton(onClick = {
-                            updateResult = null
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
-                            )
-                        }) { Text("前往下载") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { updateResult = null }) { Text("稍后再说") }
-                    }
-                )
-            }
+                        )
 
-            Spacer(Modifier.height(32.dp))
+                        // ── 调试菜单 ──
+                        var showDebugMenu by remember { mutableStateOf(false) }
+                        SettingsItem(
+                            icon = Icons.Outlined.BugReport,
+                            title = "调试信息",
+                            subtitle = "版本 $currentVersion · API ${android.os.Build.VERSION.SDK_INT}",
+                            onClick = { showDebugMenu = true }
+                        )
+                        if (showDebugMenu) {
+                            var showCrashConfirm by remember { mutableStateOf(false) }
+
+                            AlertDialog(
+                                onDismissRequest = { showDebugMenu = false },
+                                icon = { Icon(Icons.Outlined.BugReport, null) },
+                                title = { Text("调试菜单") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        // 设备信息
+                                        Surface(
+                                            shape = smoothCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                buildString {
+                                                    appendLine("版本: $currentVersion (${android.os.Build.VERSION.SDK_INT})")
+                                                    appendLine("设备: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                                                    appendLine("系统: Android ${android.os.Build.VERSION.RELEASE}")
+                                                    append("保存路径: ${AppPrefs.savePath}")
+                                                },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                modifier = Modifier.padding(12.dp)
+                                            )
+                                        }
+
+                                        // 复制设备信息
+                                        OutlinedButton(
+                                            onClick = {
+                                                val info = buildString {
+                                                    appendLine("版本: $currentVersion")
+                                                    appendLine("设备: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                                                    appendLine("系统: Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                                                    append("保存路径: ${AppPrefs.savePath}")
+                                                }
+                                                val clipboard =
+                                                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                clipboard.setPrimaryClip(
+                                                    android.content.ClipData.newPlainText(
+                                                        "设备信息",
+                                                        info
+                                                    )
+                                                )
+                                                showSnack("已复制")
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("复制设备信息")
+                                        }
+
+                                        // 触发崩溃测试
+                                        FilledTonalButton(
+                                            onClick = { showCrashConfirm = true },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) {
+                                            Icon(Icons.Outlined.Warning, null, Modifier.size(18.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("触发测试崩溃")
+                                        }
+                                    }
+                                },
+                                shape = smoothCornerShape(28.dp),
+                                confirmButton = {
+                                    TextButton(onClick = { showDebugMenu = false }) { Text("关闭") }
+                                }
+                            )
+
+                            if (showCrashConfirm) {
+                                AlertDialog(
+                                    onDismissRequest = { showCrashConfirm = false },
+                                    icon = {
+                                        Icon(
+                                            Icons.Outlined.Warning,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    },
+                                    title = { Text("确认触发崩溃？") },
+                                    text = { Text("应用会立即关闭并显示崩溃日志页面。") },
+                                    shape = smoothCornerShape(28.dp),
+                                    confirmButton = {
+                                        FilledTonalButton(
+                                            onClick = { throw RuntimeException("手动触发的测试崩溃 — CrashHandler 功能验证") },
+                                            colors = ButtonDefaults.filledTonalButtonColors(
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        ) { Text("确认") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showCrashConfirm = false }) { Text("取消") }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── 新版本对话框 ──
+                updateResult?.let { info ->
+                    AlertDialog(
+                        onDismissRequest = { updateResult = null },
+                        title = {
+                            Text("发现新版本 ${info.versionName}")
+                        },
+                        text = {
+                            Column {
+                                Text(
+                                    "当前版本: $currentVersion",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                if (info.body.isNotBlank()) {
+                                    Text(
+                                        "更新日志:",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = smoothCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        Text(
+                                            text = info.body.take(1000),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier
+                                                .padding(12.dp)
+                                                .verticalScroll(rememberScrollState())
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        shape = smoothCornerShape(28.dp),
+                        confirmButton = {
+                            FilledTonalButton(onClick = {
+                                updateResult = null
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
+                                )
+                            }) { Text("前往下载") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { updateResult = null }) { Text("稍后再说") }
+                        }
+                    )
+                }
+
+                Spacer(Modifier.height(32.dp))
+            }
         }
-    }
     } // AnimatedContent
 }
 
@@ -1168,9 +1170,11 @@ private fun ThemeColorPicker(
         var hue by remember { mutableFloatStateOf(initHsv[0]) }
         var saturation by remember { mutableFloatStateOf(initHsv[1]) }
         var value by remember { mutableFloatStateOf(initHsv[2]) }
-        var showCustomPicker by remember { mutableStateOf(
-            currentSeedColor > 0 && PRESET_COLORS.none { it.first == currentSeedColor }
-        ) }
+        var showCustomPicker by remember {
+            mutableStateOf(
+                currentSeedColor > 0 && PRESET_COLORS.none { it.first == currentSeedColor }
+            )
+        }
 
         val customColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
 
@@ -1190,7 +1194,8 @@ private fun ThemeColorPicker(
                                 val isSelected = argb == currentSeedColor && !showCustomPicker
                                 val displayColor = when (argb) {
                                     AppPrefs.SEED_WALLPAPER -> if (wallpaperSeedArgb != 0) Color(wallpaperSeedArgb)
-                                        else MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.primary
+
                                     0 -> MaterialTheme.colorScheme.primary
                                     else -> Color(argb)
                                 }
@@ -1313,7 +1318,11 @@ private fun ThemeColorPicker(
                             }
 
                             // 色相滑块
-                            Text("色相", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "色相",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Slider(
                                 value = hue,
                                 onValueChange = { hue = it },
@@ -1322,7 +1331,11 @@ private fun ThemeColorPicker(
                             )
 
                             // 饱和度滑块
-                            Text("饱和度", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "饱和度",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Slider(
                                 value = saturation,
                                 onValueChange = { saturation = it },
@@ -1331,7 +1344,11 @@ private fun ThemeColorPicker(
                             )
 
                             // 明度滑块
-                            Text("明度", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "明度",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Slider(
                                 value = value,
                                 onValueChange = { value = it },
@@ -1730,11 +1747,13 @@ private suspend fun clearCache(
             OfflineCache.clearAll()
             OfflineCache.clearMemoryCaches()
         }
+
         CacheCategory.IMAGE -> {
             val loader = coil3.SingletonImageLoader.get(context)
             loader.diskCache?.clear()
             loader.memoryCache?.clear()
         }
+
         CacheCategory.WEBVIEW -> {
             // WebView 必须在主线程调用
             withContext(Dispatchers.Main) {

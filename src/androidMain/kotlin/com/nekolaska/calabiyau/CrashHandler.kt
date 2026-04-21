@@ -21,6 +21,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     private const val PREFS_NAME = "crash_prefs"
     private const val KEY_CRASH_LOG = "crash_log"
     private const val KEY_CRASH_TIME = "crash_time"
+    private const val KEY_CRASH_NON_EMPTY = "crash_non_empty"
 
     const val EXTRA_CRASH_LOG = "extra_crash_log"
 
@@ -55,10 +56,12 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         }
 
         try {
+            CrashContextStore.flush(context)
             val crashLog = buildCrashLog(thread, throwable, context)
             prefs(context).edit(commit = true) {
                 putString(KEY_CRASH_LOG, crashLog)
                 putLong(KEY_CRASH_TIME, System.currentTimeMillis())
+                putBoolean(KEY_CRASH_NON_EMPTY, crashLog.isNotBlank())
             }
 
             val intent = Intent(context, CrashReportActivity::class.java).apply {
@@ -93,6 +96,14 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             appendLine()
             appendLine(throwable.stackTraceToString())
 
+            val crashContext = CrashContextStore.dump(context)
+            if (crashContext.isNotBlank()) {
+                appendLine()
+                appendLine("==== Recent App Context ====")
+                appendLine()
+                appendLine(crashContext)
+            }
+
             var cause = throwable.cause
             while (cause != null) {
                 appendLine()
@@ -125,16 +136,19 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
 
     fun clearCrashLog(context: Context) {
         val prefs = prefs(context)
-        if (!prefs.contains(KEY_CRASH_LOG) && !prefs.contains(KEY_CRASH_TIME)) return
+        if (!prefs.contains(KEY_CRASH_LOG) && !prefs.contains(KEY_CRASH_TIME) && !prefs.contains(KEY_CRASH_NON_EMPTY)) return
         prefs.edit(commit = true) {
             remove(KEY_CRASH_LOG)
             remove(KEY_CRASH_TIME)
+            remove(KEY_CRASH_NON_EMPTY)
         }
+        CrashContextStore.clear(context)
     }
 
     fun hasPendingCrashLog(context: Context): Boolean {
         val prefs = prefs(context)
-        val hasValidLog = !prefs.getString(KEY_CRASH_LOG, null).isNullOrBlank()
+        val hasValidLog = !prefs.getString(KEY_CRASH_LOG, null).isNullOrBlank() &&
+            prefs.getBoolean(KEY_CRASH_NON_EMPTY, false)
 
         if (!hasValidLog && (prefs.contains(KEY_CRASH_LOG) || prefs.contains(KEY_CRASH_TIME))) {
             clearCrashLog(context)

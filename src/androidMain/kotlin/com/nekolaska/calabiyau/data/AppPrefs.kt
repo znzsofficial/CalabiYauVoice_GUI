@@ -194,4 +194,5 @@ object AppPrefs {
         get() = prefs.getString(KEY_TOOLS_OUTPUT_PATH, null)
             ?: File(savePath, "素材工具").absolutePath
         set(value) = prefs.edit { putString(KEY_TOOLS_OUTPUT_PATH, value) }
+
 }

@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.data
 
 import android.content.Context
+import com.nekolaska.calabiyau.CrashContextStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -213,9 +214,29 @@ object OfflineCache {
 
         return try {
             val result = doFetch(type, key, networkFetch)
+            if (result == null && ::appContext.isInitialized) {
+                CrashContextStore.record(
+                    appContext,
+                    "OfflineCache.fetchWithCache",
+                    "null result | type=${type.dir} | key=$key | forceRefresh=$forceRefresh"
+                )
+            } else if (result?.isFromCache == true && ::appContext.isInitialized) {
+                CrashContextStore.record(
+                    appContext,
+                    "OfflineCache.fetchWithCache",
+                    "cache fallback | type=${type.dir} | key=$key | ageMs=${result.ageMs}"
+                )
+            }
             deferred.complete(result)
             result
         } catch (e: Throwable) {
+            if (::appContext.isInitialized) {
+                CrashContextStore.record(
+                    appContext,
+                    "OfflineCache.fetchWithCache",
+                    "exception | type=${type.dir} | key=$key | ${e::class.java.simpleName}: ${e.message.orEmpty().take(120)}"
+                )
+            }
             deferred.completeExceptionally(e)
             throw e
         } finally {

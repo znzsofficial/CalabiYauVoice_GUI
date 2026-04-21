@@ -447,12 +447,6 @@ class AnimatedGifEncoder {
             // Assume images with greater where more than n% of the pixels are transparent actually have
             // transparency. See issue #214.
             hasTransparentPixels = transparentPercentage > MIN_TRANSPARENT_PERCENTAGE
-            if (Log.isLoggable(TAG, Log.DEBUG)) {
-                Log.d(
-                    TAG, ("got pixels for frame with " + transparentPercentage
-                            + "% transparent pixels")
-                )
-            }
         }
 
     /**
