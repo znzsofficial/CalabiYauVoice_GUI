@@ -107,7 +107,18 @@ object WeaponDetailApi {
                     ?.jsonPrimitive?.content
                     .orEmpty()
 
-                val detail = parseWeaponWikitext(weaponName, wikitext, renderedHtml = renderedHtml)
+                val imageUrl = resolveWeaponImageUrl(
+                    weaponName = weaponName,
+                    wikitext = wikitext,
+                    forceRefresh = forceRefresh
+                )
+
+                val detail = parseWeaponWikitext(
+                    weaponName,
+                    wikitext,
+                    renderedHtml = renderedHtml,
+                    resolvedImageUrl = imageUrl
+                )
                     ?: return@withContext ApiResult.Error(
                         "未找到武器信息模板",
                         kind = ErrorKind.NOT_FOUND
@@ -127,7 +138,8 @@ object WeaponDetailApi {
         name: String,
         wikitext: String,
         isTactical: Boolean = false,
-        renderedHtml: String = ""
+        renderedHtml: String = "",
+        resolvedImageUrl: String? = null
     ): WeaponDetail? {
         // 尝试多种模板名：{{武器|...}}、{{武器-近战武器|...}}、{{武器-副武器|...}}、{{武器-战术道具|...}}
         val templateNames = listOf("武器-近战武器", "武器-副武器", "武器-战术道具", "武器")
@@ -173,12 +185,7 @@ object WeaponDetailApi {
 
         // 获取武器图片
         val user = weaponParams["使用者"] ?: ""
-        val explicitImage = weaponParams["武器图片"] ?: ""
-        val imageUrl = when {
-            explicitImage.isNotBlank() -> fetchImageUrl(explicitImage)
-            user.isNotBlank() -> fetchImageUrl("${user}-weapon.png")
-            else -> fetchImageUrl("武器-${name}.png")
-        }
+        val imageUrl = resolvedImageUrl
 
         // 清理 description 中的 wiki 标记
         val rawDesc = weaponParams["介绍"] ?: weaponParams["武器介绍"] ?: ""
@@ -222,6 +229,36 @@ object WeaponDetailApi {
             subPages = subPages,
             cooldowns = cooldowns
         )
+    }
+
+    private suspend fun resolveWeaponImageUrl(
+        weaponName: String,
+        wikitext: String,
+        forceRefresh: Boolean
+    ): String? {
+        val fileName = extractWeaponImageFileName(weaponName, wikitext) ?: return null
+        val cacheResult = OfflineCache.fetchWithCache(
+            type = OfflineCache.Type.WEAPON_DETAIL,
+            key = "image_$weaponName",
+            forceRefresh = forceRefresh
+        ) { fetchImageUrl(fileName) }
+        return cacheResult?.json?.takeIf { it.isNotBlank() }
+    }
+
+    private fun extractWeaponImageFileName(weaponName: String, wikitext: String): String? {
+        val templateNames = listOf("武器-近战武器", "武器-副武器", "武器-战术道具", "武器")
+        for (tpl in templateNames) {
+            val content = extractTemplate(wikitext, tpl) ?: continue
+            val params = parseTemplateParams(content)
+            val explicitImage = params["武器图片"].orEmpty()
+            val user = params["使用者"].orEmpty()
+            return when {
+                explicitImage.isNotBlank() -> explicitImage
+                user.isNotBlank() -> "${user}-weapon.png"
+                else -> "武器-${weaponName}.png"
+            }
+        }
+        return null
     }
 
     private fun parseWeaponDamageFromHtml(html: String): List<DamageRow> {
