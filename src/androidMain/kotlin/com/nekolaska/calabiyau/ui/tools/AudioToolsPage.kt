@@ -127,34 +127,34 @@ internal fun AudioToolsPage(
     }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        analyzeInputs(uris.toPickedUriInputs(), "音频信息已读取") { "已分析 $it 个音频文件" }
+        analyzeInputs(uris.toPickedUriInputs(), "音频信息已读取") { "已分析 $it 个文件" }
     }
 
     ToolPageColumn {
         ToolCard(
             title = "音频信息",
-            subtitle = "查看音频时长、大小、采样率与基础元数据",
+            subtitle = "查看基础信息",
             icon = Icons.Outlined.Info,
             expandedByDefault = true
         ) {
             AudioActionButton(
-                text = "导入并分析音频",
+                text = "导入音频",
                 icon = Icons.Outlined.AudioFile,
                 enabled = !isBusy
             ) {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择音频文件",
-                    "优先在文件管理中选择音频文件，也可改用系统选择器。",
+                    "导入音频文件。",
                     true,
                     { audioPicker.launch("audio/*") }
                 ) { paths ->
-                    analyzeInputs(paths.toPickedFileInputs(), "音频信息已读取") { "已分析 $it 个音频文件" }
+                    analyzeInputs(paths.toPickedFileInputs(), "音频信息已读取") { "已分析 $it 个文件" }
                 }
             }
             if (audioInfos.isNotEmpty()) {
                 AudioActionButton(
-                    text = "导出CSV报告",
+                    text = "导出 CSV",
                     icon = Icons.Outlined.SaveAlt,
                     enabled = !isBusy
                 ) {
@@ -166,7 +166,7 @@ internal fun AudioToolsPage(
                                 val report = exportAudioInfoCsv(outputDir, audioInfos)
                                 ToolOutput(
                                     title = "音频报告已导出",
-                                    message = "已导出 ${report.name}",
+                                    message = report.name,
                                     files = listOf(report),
                                     directory = outputDir
                                 )
@@ -186,27 +186,27 @@ internal fun AudioToolsPage(
 
         ToolCard(
             title = "异常检测",
-            subtitle = "检测损坏文件、空时长、缺少元数据与疑似异常音频",
+            subtitle = "检查异常文件",
             icon = Icons.Outlined.ReportProblem
         ) {
             AnalysisCardBody(
                 icon = Icons.Outlined.ReportProblem,
-                buttonText = "开始检测",
+                buttonText = "检测",
                 enabled = !isBusy,
                 summary = when {
-                    audioInfos.isEmpty() -> "导入音频后可查看异常检测结果。"
-                    audioInfos.none { it.hasIssues } -> "当前分析结果未发现明显异常。"
+                    audioInfos.isEmpty() -> "导入音频后显示结果。"
+                    audioInfos.none { it.hasIssues } -> "未发现明显异常。"
                     else -> "发现 ${audioInfos.count { it.hasIssues }} 个疑似异常音频。"
                 }
             ) {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择音频文件",
-                    "导入要检测的音频文件。",
+                    "导入音频文件。",
                     true,
                     { audioPicker.launch("audio/*") }
                 ) { paths ->
-                    analyzeInputs(paths.toPickedFileInputs(), "异常检测完成") { "已检测 $it 个音频文件" }
+                    analyzeInputs(paths.toPickedFileInputs(), "异常检测完成") { "已检测 $it 个文件" }
                 }
             }
             if (audioInfos.isNotEmpty()) {
@@ -218,16 +218,16 @@ internal fun AudioToolsPage(
         }
 
         ToolCard(
-            title = "静音分析",
-            subtitle = "支持裁剪 WAV 文件头尾静音，其他格式仍为分析模式",
+            title = "静音裁剪（WAV）",
+            subtitle = "分析并裁剪头尾静音",
             icon = Icons.Outlined.SpaceBar
         ) {
             AnalysisCardBody(
                 icon = Icons.Outlined.SpaceBar,
-                buttonText = "分析静音",
+                buttonText = "分析",
                 enabled = !isBusy,
                 summary = if (audioInfos.isEmpty()) {
-                    "支持对未压缩 PCM WAV 做头尾静音裁剪；其他格式当前只做检测提示。"
+                    "导入音频后显示结果。"
                 } else {
                     audioInfos.joinToString("\n") { "${it.name}：${it.silenceHint}" }
                 }
@@ -235,22 +235,22 @@ internal fun AudioToolsPage(
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择音频文件",
-                    "导入要分析静音情况的音频文件。",
+                    "导入音频文件。",
                     true,
                     { audioPicker.launch("audio/*") }
                 ) { paths ->
-                    analyzeInputs(paths.toPickedFileInputs(), "静音分析完成") { "已分析 $it 个音频文件的静音情况" }
+                    analyzeInputs(paths.toPickedFileInputs(), "静音分析完成") { "已分析 $it 个文件" }
                 }
             }
             AudioActionButton(
-                text = "裁剪WAV静音",
+                text = "裁剪 WAV",
                 icon = Icons.Outlined.SpaceBar,
                 enabled = !isBusy
             ) {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择 WAV 文件",
-                    "选择要裁剪头尾静音的 WAV 文件，仅支持未压缩 PCM WAV。",
+                    "选择要裁剪的 WAV 文件。",
                     true,
                     { audioPicker.launch("audio/wav") }
                 ) { paths ->
@@ -318,7 +318,7 @@ internal fun AudioToolsPage(
                 )
             }
             Text(
-                "建议阈值 1.0%~3.0%，最短静音 80~200ms。当前仅裁剪开头和结尾静音。",
+                "阈值建议 1.0%~3.0%，静音 80~200ms。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -341,7 +341,7 @@ internal fun AudioToolsPage(
                 color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
             ) {
                 Text(
-                    text = "处理预览：模式=${trimMode.label}，阈值=${trimThresholdPercent.ifBlank { "1.5" }}%，最短静音=${minimumSilenceMs.ifBlank { "120" }}ms。输出文件将保留原文件并生成新的 WAV。",
+                    text = "模式=${trimMode.label} · 阈值=${trimThresholdPercent.ifBlank { "1.5" }}% · 静音=${minimumSilenceMs.ifBlank { "120" }}ms",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.fillMaxWidth().padding(12.dp)
@@ -350,16 +350,16 @@ internal fun AudioToolsPage(
         }
 
         ToolCard(
-            title = "音量分析 / 标准化",
-            subtitle = "支持 WAV 音量调节与峰值标准化，其它格式仍以分析为主",
+            title = "音量处理（WAV）",
+            subtitle = "调节音量或标准化",
             icon = Icons.Outlined.GraphicEq
         ) {
             AnalysisCardBody(
                 icon = Icons.Outlined.GraphicEq,
-                buttonText = "分析音量",
+                buttonText = "分析",
                 enabled = !isBusy,
                 summary = if (audioInfos.isEmpty()) {
-                    "当前版本只做音量相关分析，不执行真正标准化。"
+                    "导入音频后显示结果。"
                 } else {
                     audioInfos.joinToString("\n") { "${it.name}：${it.volumeHint}" }
                 }
@@ -367,11 +367,11 @@ internal fun AudioToolsPage(
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择音频文件",
-                    "导入要分析音量的音频文件。",
+                    "导入音频文件。",
                     true,
                     { audioPicker.launch("audio/*") }
                 ) { paths ->
-                    analyzeInputs(paths.toPickedFileInputs(), "音量分析完成") { "已分析 $it 个音频文件的音量线索" }
+                    analyzeInputs(paths.toPickedFileInputs(), "音量分析完成") { "已分析 $it 个文件" }
                 }
             }
             FlowRow(
@@ -408,14 +408,14 @@ internal fun AudioToolsPage(
                 )
             }
             AudioActionButton(
-                text = "处理WAV音量",
+                text = "处理 WAV",
                 icon = Icons.Outlined.GraphicEq,
                 enabled = !isBusy
             ) {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择 WAV 文件",
-                    "选择要调整音量或做峰值标准化的 WAV 文件，仅支持未压缩 PCM WAV。",
+                    "选择要处理的 WAV 文件。",
                     true,
                     { audioPicker.launch("audio/wav") }
                 ) { paths ->
@@ -463,7 +463,7 @@ internal fun AudioToolsPage(
                 }
             }
             Text(
-                "调节音量会按百分比放大/缩小；峰值标准化会把峰值拉到目标百分比。",
+                "音量模式按百分比放大；标准化按目标峰值处理。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -473,8 +473,8 @@ internal fun AudioToolsPage(
             ) {
                 Text(
                     text = when (volumeMode) {
-                        WavVolumeMode.GAIN -> "处理预览：按 ${gainPercent.ifBlank { "120" }}% 调整 WAV 音量，超出范围的峰值会被截断保护。"
-                        WavVolumeMode.NORMALIZE -> "处理预览：把 WAV 峰值拉到 ${targetPeakPercent.ifBlank { "90" }}%，不会覆盖原文件。"
+                        WavVolumeMode.GAIN -> "音量 ${gainPercent.ifBlank { "120" }}%"
+                        WavVolumeMode.NORMALIZE -> "目标峰值 ${targetPeakPercent.ifBlank { "90" }}%"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -484,16 +484,16 @@ internal fun AudioToolsPage(
         }
 
         ToolCard(
-            title = "声道分析",
-            subtitle = "识别单声道 / 双声道线索，并支持 WAV 单转双 / 双转单",
+            title = "声道转换（WAV）",
+            subtitle = "查看并转换声道",
             icon = Icons.Outlined.SurroundSound
         ) {
             AnalysisCardBody(
                 icon = Icons.Outlined.SurroundSound,
-                buttonText = "分析声道",
+                buttonText = "分析",
                 enabled = !isBusy,
                 summary = if (audioInfos.isEmpty()) {
-                    "当前版本只做声道识别线索分析，不转换为单声道或双声道。"
+                    "导入音频后显示结果。"
                 } else {
                     audioInfos.joinToString("\n") { "${it.name}：${it.channelHint}" }
                 }
@@ -501,11 +501,11 @@ internal fun AudioToolsPage(
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择音频文件",
-                    "导入要分析声道信息的音频文件。",
+                    "导入音频文件。",
                     true,
                     { audioPicker.launch("audio/*") }
                 ) { paths ->
-                    analyzeInputs(paths.toPickedFileInputs(), "声道分析完成") { "已分析 $it 个音频文件的声道线索" }
+                    analyzeInputs(paths.toPickedFileInputs(), "声道分析完成") { "已分析 $it 个文件" }
                 }
             }
             FlowRow(
@@ -523,14 +523,14 @@ internal fun AudioToolsPage(
                 }
             }
             AudioActionButton(
-                text = "转换WAV声道",
+                text = "转换 WAV",
                 icon = Icons.Outlined.SurroundSound,
                 enabled = !isBusy
             ) {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择 WAV 文件",
-                    "选择要做单转双或双转单的 WAV 文件，仅支持未压缩 PCM WAV。",
+                    "选择要转换的 WAV 文件。",
                     true,
                     { audioPicker.launch("audio/wav") }
                 ) { paths ->
@@ -579,8 +579,8 @@ internal fun AudioToolsPage(
             ) {
                 Text(
                     text = when (channelMode) {
-                        WavChannelMode.MONO_TO_STEREO -> "处理预览：把单声道 WAV 复制为双声道，左右声道内容一致。"
-                        WavChannelMode.STEREO_TO_MONO -> "处理预览：把双声道 WAV 混合为单声道，左右声道取平均。"
+                        WavChannelMode.MONO_TO_STEREO -> "单声道 → 双声道"
+                        WavChannelMode.STEREO_TO_MONO -> "双声道 → 单声道"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -759,22 +759,22 @@ private fun readAudioInfo(context: Context, input: PickedInput): AudioInfoItem? 
         val silenceHint = when {
             duration <= 0L -> "无法判断静音情况"
             size <= 2048L -> "疑似空内容或全静音文件"
-            bitrate?.toLongOrNull()?.let { it < 32000L } == true -> "码率偏低，可能存在长静音或低质量压缩"
-            else -> "未见明显静音异常，但当前仅为轻量推断"
+            bitrate?.toLongOrNull()?.let { it < 32000L } == true -> "疑似长静音"
+            else -> "正常"
         }
         val volumeHint = when {
-            bitrate?.toLongOrNull()?.let { it < 48000L } == true -> "可能音量偏小或压缩较重，建议人工试听"
+            bitrate?.toLongOrNull()?.let { it < 48000L } == true -> "疑似偏小"
             duration <= 0L -> "无法分析音量"
-            else -> "未见明显异常，标准化需专用音频处理后端"
+            else -> "正常"
         }
         val channelHint = when {
-            mime.contains("ogg", ignoreCase = true) -> "当前元数据不足，建议人工确认声道"
+            mime.contains("ogg", ignoreCase = true) -> "元数据不足"
             input.file?.extension?.equals("wav", ignoreCase = true) == true || mime.contains("wav", ignoreCase = true) -> {
                 inspectWavMeta(context, input)?.let { meta ->
                     "${meta.channels} 声道 / ${meta.bitsPerSample}bit / 峰值 ${meta.peakPercent.format1()}%"
                 } ?: "WAV 头信息不可读"
             }
-            else -> "暂缺稳定声道元数据，当前仅提供格式线索"
+            else -> "暂无声道信息"
         }
         val analysisSummary = buildString {
             append("静音：").append(silenceHint)
