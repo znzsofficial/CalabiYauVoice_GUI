@@ -7,20 +7,29 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AudioFile
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.ReportProblem
 import androidx.compose.material.icons.outlined.SaveAlt
-import androidx.compose.material.icons.outlined.Transform
+import androidx.compose.material.icons.outlined.SpaceBar
+import androidx.compose.material.icons.outlined.SurroundSound
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,7 +37,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,10 +58,15 @@ private data class AudioInfoItem(
     val artist: String?,
     val sampleRate: String?,
     val bitrate: String?,
-    val size: Long
-)
-
-private val AUDIO_EXTENSIONS = setOf("mp3", "wav", "m4a", "flac", "ogg", "aac")
+    val size: Long,
+    val issueFlags: List<String>,
+    val silenceHint: String,
+    val volumeHint: String,
+    val channelHint: String,
+    val analysisSummary: String
+) {
+    val hasIssues: Boolean get() = issueFlags.isNotEmpty()
+}
 
 @Composable
 internal fun AudioToolsPage(
@@ -80,10 +93,15 @@ internal fun AudioToolsPage(
     val showSnack = rememberSnackbarLauncher()
     val scope = rememberCoroutineScope()
     val audioInfos = remember { mutableStateListOf<AudioInfoItem>() }
-    var directoryPath by rememberSaveable { mutableStateOf(AppPrefs.savePath) }
-    var prefix by rememberSaveable { mutableStateOf("audio_") }
+    var trimThresholdPercent by remember { mutableStateOf("1.5") }
+    var minimumSilenceMs by remember { mutableStateOf("120") }
+    var trimMode by remember { mutableStateOf(WavTrimMode.BOTH) }
+    var channelMode by remember { mutableStateOf(WavChannelMode.STEREO_TO_MONO) }
+    var volumeMode by remember { mutableStateOf(WavVolumeMode.NORMALIZE) }
+    var gainPercent by remember { mutableStateOf("120") }
+    var targetPeakPercent by remember { mutableStateOf("90") }
 
-    fun processAudioInputs(inputs: List<PickedInput>) {
+    fun analyzeInputs(inputs: List<PickedInput>, successTitle: String, successMessage: (Int) -> String) {
         if (inputs.isEmpty()) return
         scope.launch {
             onBusyChange(true)
@@ -93,8 +111,8 @@ internal fun AudioToolsPage(
                     audioInfos.clear()
                     audioInfos.addAll(infos)
                     ToolOutput(
-                        title = "音频信息已读取",
-                        message = "已分析 ${infos.size} 个音频文件",
+                        title = successTitle,
+                        message = successMessage(infos.size),
                         directory = resolveOutputDirectory(outputPath, "音频工具")
                     )
                 }
@@ -102,152 +120,606 @@ internal fun AudioToolsPage(
                 onResult(it)
                 showSnack(it.message)
             }.onFailure {
-                showSnack("读取音频信息失败")
+                showSnack("音频分析失败：${it.message ?: "未知错误"}")
             }
             onBusyChange(false)
         }
     }
 
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        processAudioInputs(uris.toPickedUriInputs())
-    }
-
-    val dirPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        uri?.let { getPathFromUri(it)?.let { path -> directoryPath = path } }
+        analyzeInputs(uris.toPickedUriInputs(), "音频信息已读取") { "已分析 $it 个音频文件" }
     }
 
     ToolPageColumn {
         ToolCard(
-            title = "查看音频信息",
-            subtitle = "查看音频时长、大小与元数据",
-            icon = Icons.Outlined.Info
+            title = "音频信息",
+            subtitle = "查看音频时长、大小、采样率与基础元数据",
+            icon = Icons.Outlined.Info,
+            expandedByDefault = true
         ) {
-            FilledTonalButton(onClick = {
+            AudioActionButton(
+                text = "导入并分析音频",
+                icon = Icons.Outlined.AudioFile,
+                enabled = !isBusy
+            ) {
                 onPickFilesFromFileManager(
-                    directoryPath,
+                    AppPrefs.savePath,
                     "选择音频文件",
                     "优先在文件管理中选择音频文件，也可改用系统选择器。",
                     true,
                     { audioPicker.launch("audio/*") }
                 ) { paths ->
-                    processAudioInputs(paths.toPickedFileInputs())
+                    analyzeInputs(paths.toPickedFileInputs(), "音频信息已读取") { "已分析 $it 个音频文件" }
                 }
-            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
-                Icon(Icons.Outlined.AudioFile, contentDescription = null)
-                Spacer(Modifier.size(6.dp))
-                Text("导入并分析音频")
             }
             if (audioInfos.isNotEmpty()) {
-                FilledTonalButton(
-                    onClick = {
-                        scope.launch {
-                            onBusyChange(true)
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    val outputDir = resolveOutputDirectory(outputPath, "音频工具")
-                                    val report = exportAudioInfoCsv(outputDir, audioInfos)
-                                    ToolOutput(
-                                        title = "音频报告已导出",
-                                        message = "已导出 ${report.name}",
-                                        files = listOf(report),
-                                        directory = outputDir
-                                    )
-                                }
-                            }.onSuccess {
-                                onResult(it)
-                                showSnack(it.message)
-                            }.onFailure {
-                                showSnack("导出音频报告失败：${it.message ?: "未知错误"}")
-                            }
-                            onBusyChange(false)
-                        }
-                    },
-                    enabled = !isBusy,
-                    shape = smoothCornerShape(24.dp)
+                AudioActionButton(
+                    text = "导出CSV报告",
+                    icon = Icons.Outlined.SaveAlt,
+                    enabled = !isBusy
                 ) {
-                    Icon(Icons.Outlined.SaveAlt, contentDescription = null)
-                    Spacer(Modifier.size(6.dp))
-                    Text("导出CSV报告")
-                }
-            }
-            if (audioInfos.isNotEmpty()) {
-                HorizontalDivider()
-                audioInfos.forEach { item ->
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(item.name, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "${formatDuration(item.durationMs)} · ${formatFileSize(item.size)} · ${item.mimeType}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            listOfNotNull(item.artist, item.sampleRate?.let { "${it}Hz" }, item.bitrate?.let { "${it}bps" }).joinToString(" · ").ifBlank { "无更多元数据" },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                }
-            }
-        }
-
-        ToolCard(
-            title = "批量重命名音频",
-            subtitle = "按前缀和序号批量重命名音频",
-            icon = Icons.Outlined.Transform
-        ) {
-            OutlinedTextField(
-                value = prefix,
-                onValueChange = { prefix = it },
-                label = { Text("文件名前缀") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = smoothCornerShape(16.dp)
-            )
-            CurrentPathPanel(directoryPath)
-            DirectorySelectionActions(
-                onPickInFileManager = {
-                    onPickDirectoryFromFileManager(
-                        directoryPath,
-                        "选择音频目录",
-                        "在文件管理中浏览并确认目录，或使用系统选择器。"
-                    ) { pickedPath ->
-                        directoryPath = pickedPath
-                    }
-                },
-                onPickInSystem = { dirPicker.launch(null) }
-            )
-            FilledTonalButton(
-                onClick = {
                     scope.launch {
                         onBusyChange(true)
                         runCatching {
                             withContext(Dispatchers.IO) {
-                                val dir = File(directoryPath)
-                                val renamed = batchRenameByPrefix(dir, prefix) { it.extension.lowercase() in AUDIO_EXTENSIONS }
+                                val outputDir = resolveOutputDirectory(outputPath, "音频工具")
+                                val report = exportAudioInfoCsv(outputDir, audioInfos)
                                 ToolOutput(
-                                    title = "音频批量重命名完成",
-                                    message = "已处理 ${renamed.size} 个音频文件",
-                                    files = renamed,
-                                    directory = dir
+                                    title = "音频报告已导出",
+                                    message = "已导出 ${report.name}",
+                                    files = listOf(report),
+                                    directory = outputDir
                                 )
                             }
                         }.onSuccess {
                             onResult(it)
                             showSnack(it.message)
                         }.onFailure {
-                            showSnack("音频重命名失败")
+                            showSnack("导出音频报告失败：${it.message ?: "未知错误"}")
                         }
                         onBusyChange(false)
                     }
-                },
-                enabled = !isBusy,
-                shape = smoothCornerShape(24.dp)
-            ) {
-                Icon(Icons.Outlined.Transform, contentDescription = null)
-                Spacer(Modifier.size(6.dp))
-                Text("执行音频重命名")
+                }
+                AudioInfoList(audioInfos)
             }
         }
+
+        ToolCard(
+            title = "异常检测",
+            subtitle = "检测损坏文件、空时长、缺少元数据与疑似异常音频",
+            icon = Icons.Outlined.ReportProblem
+        ) {
+            AnalysisCardBody(
+                icon = Icons.Outlined.ReportProblem,
+                buttonText = "开始检测",
+                enabled = !isBusy,
+                summary = when {
+                    audioInfos.isEmpty() -> "导入音频后可查看异常检测结果。"
+                    audioInfos.none { it.hasIssues } -> "当前分析结果未发现明显异常。"
+                    else -> "发现 ${audioInfos.count { it.hasIssues }} 个疑似异常音频。"
+                }
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择音频文件",
+                    "导入要检测的音频文件。",
+                    true,
+                    { audioPicker.launch("audio/*") }
+                ) { paths ->
+                    analyzeInputs(paths.toPickedFileInputs(), "异常检测完成") { "已检测 $it 个音频文件" }
+                }
+            }
+            if (audioInfos.isNotEmpty()) {
+                HorizontalDivider()
+                audioInfos.filter { it.hasIssues }.ifEmpty { audioInfos.take(3) }.forEach { item ->
+                    AudioIssueRow(item)
+                }
+            }
+        }
+
+        ToolCard(
+            title = "静音分析",
+            subtitle = "支持裁剪 WAV 文件头尾静音，其他格式仍为分析模式",
+            icon = Icons.Outlined.SpaceBar
+        ) {
+            AnalysisCardBody(
+                icon = Icons.Outlined.SpaceBar,
+                buttonText = "分析静音",
+                enabled = !isBusy,
+                summary = if (audioInfos.isEmpty()) {
+                    "支持对未压缩 PCM WAV 做头尾静音裁剪；其他格式当前只做检测提示。"
+                } else {
+                    audioInfos.joinToString("\n") { "${it.name}：${it.silenceHint}" }
+                }
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择音频文件",
+                    "导入要分析静音情况的音频文件。",
+                    true,
+                    { audioPicker.launch("audio/*") }
+                ) { paths ->
+                    analyzeInputs(paths.toPickedFileInputs(), "静音分析完成") { "已分析 $it 个音频文件的静音情况" }
+                }
+            }
+            AudioActionButton(
+                text = "裁剪WAV静音",
+                icon = Icons.Outlined.SpaceBar,
+                enabled = !isBusy
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择 WAV 文件",
+                    "选择要裁剪头尾静音的 WAV 文件，仅支持未压缩 PCM WAV。",
+                    true,
+                    { audioPicker.launch("audio/wav") }
+                ) { paths ->
+                    val inputs = paths.toPickedFileInputs()
+                    if (inputs.isEmpty()) return@onPickFilesFromFileManager
+                    scope.launch {
+                        onBusyChange(true)
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val thresholdRatio = trimThresholdPercent.toDoubleOrNull()?.div(100.0)
+                                    ?.coerceIn(0.001, 0.2) ?: 0.015
+                                val minSilence = minimumSilenceMs.toIntOrNull()?.coerceIn(10, 5000) ?: 120
+                                val outputDir = resolveOutputDirectory(outputPath, "音频工具/WAV静音裁剪")
+                                val results = inputs.mapNotNull {
+                                    trimWavInputSilence(
+                                        context = context,
+                                        input = it,
+                                        outputDir = outputDir,
+                                        thresholdRatio = thresholdRatio,
+                                        minSilenceMs = minSilence,
+                                        trimMode = trimMode
+                                    )
+                                }
+                                val summary = results.take(3).joinToString("；") {
+                                    "${it.sourceName} 去头 ${it.trimmedStartMs}ms / 去尾 ${it.trimmedEndMs}ms"
+                                }
+                                ToolOutput(
+                                    title = "WAV 静音裁剪完成",
+                                    message = if (results.isEmpty()) {
+                                        "没有可裁剪的 WAV 文件"
+                                    } else {
+                                        "已生成 ${results.size} 个裁剪结果${if (summary.isNotBlank()) "：$summary" else ""}"
+                                    },
+                                    files = results.map { it.outputFile },
+                                    directory = outputDir
+                                )
+                            }
+                        }.onSuccess {
+                            onResult(it)
+                            showSnack(it.message)
+                        }.onFailure {
+                            showSnack("WAV 静音裁剪失败：${it.message ?: "未知错误"}")
+                        }
+                        onBusyChange(false)
+                    }
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = trimThresholdPercent,
+                    onValueChange = { trimThresholdPercent = it },
+                    label = { Text("静音阈值 %") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = smoothCornerShape(16.dp)
+                )
+                OutlinedTextField(
+                    value = minimumSilenceMs,
+                    onValueChange = { minimumSilenceMs = it },
+                    label = { Text("最短静音 ms") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = smoothCornerShape(16.dp)
+                )
+            }
+            Text(
+                "建议阈值 1.0%~3.0%，最短静音 80~200ms。当前仅裁剪开头和结尾静音。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                WavTrimMode.entries.forEach { mode ->
+                    AssistChip(
+                        onClick = { trimMode = mode },
+                        label = { Text(mode.label) },
+                        leadingIcon = if (trimMode == mode) {
+                            { Icon(Icons.Outlined.AudioFile, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null
+                    )
+                }
+            }
+            Surface(
+                shape = smoothCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = "处理预览：模式=${trimMode.label}，阈值=${trimThresholdPercent.ifBlank { "1.5" }}%，最短静音=${minimumSilenceMs.ifBlank { "120" }}ms。输出文件将保留原文件并生成新的 WAV。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(12.dp)
+                )
+            }
+        }
+
+        ToolCard(
+            title = "音量分析 / 标准化",
+            subtitle = "支持 WAV 音量调节与峰值标准化，其它格式仍以分析为主",
+            icon = Icons.Outlined.GraphicEq
+        ) {
+            AnalysisCardBody(
+                icon = Icons.Outlined.GraphicEq,
+                buttonText = "分析音量",
+                enabled = !isBusy,
+                summary = if (audioInfos.isEmpty()) {
+                    "当前版本只做音量相关分析，不执行真正标准化。"
+                } else {
+                    audioInfos.joinToString("\n") { "${it.name}：${it.volumeHint}" }
+                }
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择音频文件",
+                    "导入要分析音量的音频文件。",
+                    true,
+                    { audioPicker.launch("audio/*") }
+                ) { paths ->
+                    analyzeInputs(paths.toPickedFileInputs(), "音量分析完成") { "已分析 $it 个音频文件的音量线索" }
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                WavVolumeMode.entries.forEach { mode ->
+                    AssistChip(
+                        onClick = { volumeMode = mode },
+                        label = { Text(mode.label) },
+                        leadingIcon = if (volumeMode == mode) {
+                            { Icon(Icons.Outlined.GraphicEq, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = gainPercent,
+                    onValueChange = { gainPercent = it },
+                    label = { Text("音量 %") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = smoothCornerShape(16.dp)
+                )
+                OutlinedTextField(
+                    value = targetPeakPercent,
+                    onValueChange = { targetPeakPercent = it },
+                    label = { Text("目标峰值 %") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = smoothCornerShape(16.dp)
+                )
+            }
+            AudioActionButton(
+                text = "处理WAV音量",
+                icon = Icons.Outlined.GraphicEq,
+                enabled = !isBusy
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择 WAV 文件",
+                    "选择要调整音量或做峰值标准化的 WAV 文件，仅支持未压缩 PCM WAV。",
+                    true,
+                    { audioPicker.launch("audio/wav") }
+                ) { paths ->
+                    val inputs = paths.toPickedFileInputs()
+                    if (inputs.isEmpty()) return@onPickFilesFromFileManager
+                    scope.launch {
+                        onBusyChange(true)
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val gain = gainPercent.toIntOrNull()?.coerceIn(10, 400) ?: 120
+                                val targetPeak = targetPeakPercent.toIntOrNull()?.coerceIn(10, 100) ?: 90
+                                val outputDir = resolveOutputDirectory(outputPath, "音频工具/WAV音量处理")
+                                val results = inputs.mapNotNull {
+                                    adjustWavVolume(
+                                        context = context,
+                                        input = it,
+                                        outputDir = outputDir,
+                                        mode = volumeMode,
+                                        gainPercent = gain,
+                                        targetPeakPercent = targetPeak
+                                    )
+                                }
+                                val summary = results.take(3).joinToString("；") {
+                                    "${it.sourceName} ${it.sourcePeakPercent.format1()}%→${it.targetPeakPercent.format1()}%"
+                                }
+                                ToolOutput(
+                                    title = "WAV 音量处理完成",
+                                    message = if (results.isEmpty()) {
+                                        "没有可处理的 WAV 文件"
+                                    } else {
+                                        "已生成 ${results.size} 个音量处理结果${if (summary.isNotBlank()) "：$summary" else ""}"
+                                    },
+                                    files = results.map { it.outputFile },
+                                    directory = outputDir
+                                )
+                            }
+                        }.onSuccess {
+                            onResult(it)
+                            showSnack(it.message)
+                        }.onFailure {
+                            showSnack("WAV 音量处理失败：${it.message ?: "未知错误"}")
+                        }
+                        onBusyChange(false)
+                    }
+                }
+            }
+            Text(
+                "调节音量会按百分比放大/缩小；峰值标准化会把峰值拉到目标百分比。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(
+                shape = smoothCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = when (volumeMode) {
+                        WavVolumeMode.GAIN -> "处理预览：按 ${gainPercent.ifBlank { "120" }}% 调整 WAV 音量，超出范围的峰值会被截断保护。"
+                        WavVolumeMode.NORMALIZE -> "处理预览：把 WAV 峰值拉到 ${targetPeakPercent.ifBlank { "90" }}%，不会覆盖原文件。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(12.dp)
+                )
+            }
+        }
+
+        ToolCard(
+            title = "声道分析",
+            subtitle = "识别单声道 / 双声道线索，并支持 WAV 单转双 / 双转单",
+            icon = Icons.Outlined.SurroundSound
+        ) {
+            AnalysisCardBody(
+                icon = Icons.Outlined.SurroundSound,
+                buttonText = "分析声道",
+                enabled = !isBusy,
+                summary = if (audioInfos.isEmpty()) {
+                    "当前版本只做声道识别线索分析，不转换为单声道或双声道。"
+                } else {
+                    audioInfos.joinToString("\n") { "${it.name}：${it.channelHint}" }
+                }
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择音频文件",
+                    "导入要分析声道信息的音频文件。",
+                    true,
+                    { audioPicker.launch("audio/*") }
+                ) { paths ->
+                    analyzeInputs(paths.toPickedFileInputs(), "声道分析完成") { "已分析 $it 个音频文件的声道线索" }
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                WavChannelMode.entries.forEach { mode ->
+                    AssistChip(
+                        onClick = { channelMode = mode },
+                        label = { Text(mode.label) },
+                        leadingIcon = if (channelMode == mode) {
+                            { Icon(Icons.Outlined.SurroundSound, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        } else null
+                    )
+                }
+            }
+            AudioActionButton(
+                text = "转换WAV声道",
+                icon = Icons.Outlined.SurroundSound,
+                enabled = !isBusy
+            ) {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择 WAV 文件",
+                    "选择要做单转双或双转单的 WAV 文件，仅支持未压缩 PCM WAV。",
+                    true,
+                    { audioPicker.launch("audio/wav") }
+                ) { paths ->
+                    val inputs = paths.toPickedFileInputs()
+                    if (inputs.isEmpty()) return@onPickFilesFromFileManager
+                    scope.launch {
+                        onBusyChange(true)
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val outputDir = resolveOutputDirectory(outputPath, "音频工具/WAV声道转换")
+                                val results = inputs.mapNotNull {
+                                    convertWavChannels(
+                                        context = context,
+                                        input = it,
+                                        outputDir = outputDir,
+                                        mode = channelMode
+                                    )
+                                }
+                                val summary = results.take(3).joinToString("；") {
+                                    "${it.sourceName} ${it.sourceChannels}声道→${it.targetChannels}声道"
+                                }
+                                ToolOutput(
+                                    title = "WAV 声道转换完成",
+                                    message = if (results.isEmpty()) {
+                                        "没有可转换的 WAV 文件"
+                                    } else {
+                                        "已生成 ${results.size} 个声道转换结果${if (summary.isNotBlank()) "：$summary" else ""}"
+                                    },
+                                    files = results.map { it.outputFile },
+                                    directory = outputDir
+                                )
+                            }
+                        }.onSuccess {
+                            onResult(it)
+                            showSnack(it.message)
+                        }.onFailure {
+                            showSnack("WAV 声道转换失败：${it.message ?: "未知错误"}")
+                        }
+                        onBusyChange(false)
+                    }
+                }
+            }
+            Surface(
+                shape = smoothCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = when (channelMode) {
+                        WavChannelMode.MONO_TO_STEREO -> "处理预览：把单声道 WAV 复制为双声道，左右声道内容一致。"
+                        WavChannelMode.STEREO_TO_MONO -> "处理预览：把双声道 WAV 混合为单声道，左右声道取平均。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth().padding(12.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.AudioActionButton(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        enabled = enabled,
+        shape = smoothCornerShape(24.dp)
+    ) {
+        Icon(icon, contentDescription = null)
+        Spacer(Modifier.size(6.dp))
+        Text(text)
+    }
+}
+
+@Composable
+private fun ColumnScope.AnalysisCardBody(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    buttonText: String,
+    enabled: Boolean,
+    summary: String,
+    onAnalyze: () -> Unit
+) {
+    AudioActionButton(text = buttonText, icon = icon, enabled = enabled, onClick = onAnalyze)
+    Surface(
+        shape = smoothCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+    ) {
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(12.dp)
+        )
+    }
+}
+
+@Composable
+private fun AudioInfoList(audioInfos: List<AudioInfoItem>) {
+    HorizontalDivider()
+    audioInfos.forEach { item ->
+        Surface(
+            shape = smoothCornerShape(16.dp),
+            color = if (item.hasIssues) {
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row {
+                    Text(item.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    if (item.hasIssues) {
+                        AssistChip(
+                            onClick = {},
+                            enabled = false,
+                            label = { Text("异常") },
+                            leadingIcon = { Icon(Icons.Outlined.ReportProblem, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                        )
+                    }
+                }
+                Text(
+                    "${formatDuration(item.durationMs)} · ${formatFileSize(item.size)} · ${item.mimeType}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    listOfNotNull(
+                        item.artist,
+                        item.sampleRate?.let { "${it}Hz" },
+                        item.bitrate?.let { "${it}bps" }
+                    ).joinToString(" · ").ifBlank { "无更多元数据" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (item.issueFlags.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item.issueFlags.forEach { issue ->
+                            Surface(
+                                shape = smoothCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.errorContainer
+                            ) {
+                                Text(
+                                    issue,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    item.analysisSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    }
+}
+
+@Composable
+private fun AudioIssueRow(item: AudioInfoItem) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+        Text(item.name, fontWeight = FontWeight.SemiBold)
+        Text(
+            item.issueFlags.joinToString(" · ").ifBlank { "未发现异常" },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (item.hasIssues) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            item.analysisSummary,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -259,6 +731,7 @@ private fun readAudioInfo(context: Context, input: PickedInput): AudioInfoItem? 
         } ?: input.uri?.let { uri ->
             retriever.setDataSource(context, uri)
         } ?: return null
+
         val name = input.file?.name ?: input.uri?.let(context::queryDisplayName) ?: "audio"
         val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: "audio/*"
         val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
@@ -274,7 +747,55 @@ private fun readAudioInfo(context: Context, input: PickedInput): AudioInfoItem? 
                 descriptor.statSize
             } ?: 0L
         } ?: 0L
-        AudioInfoItem(name, duration, mime, artist, sampleRate, bitrate, size)
+
+        val issues = mutableListOf<String>()
+        if (duration <= 0L) issues += "时长异常"
+        if (size in 0..1024L) issues += "文件过小"
+        if (mime == "audio/*") issues += "类型未知"
+        if (sampleRate.isNullOrBlank()) issues += "缺少采样率"
+        if (bitrate.isNullOrBlank()) issues += "缺少码率"
+        if (input.file?.extension?.lowercase(Locale.ROOT) == "wav" && bitrate.isNullOrBlank()) issues += "头信息可疑"
+
+        val silenceHint = when {
+            duration <= 0L -> "无法判断静音情况"
+            size <= 2048L -> "疑似空内容或全静音文件"
+            bitrate?.toLongOrNull()?.let { it < 32000L } == true -> "码率偏低，可能存在长静音或低质量压缩"
+            else -> "未见明显静音异常，但当前仅为轻量推断"
+        }
+        val volumeHint = when {
+            bitrate?.toLongOrNull()?.let { it < 48000L } == true -> "可能音量偏小或压缩较重，建议人工试听"
+            duration <= 0L -> "无法分析音量"
+            else -> "未见明显异常，标准化需专用音频处理后端"
+        }
+        val channelHint = when {
+            mime.contains("ogg", ignoreCase = true) -> "当前元数据不足，建议人工确认声道"
+            input.file?.extension?.equals("wav", ignoreCase = true) == true || mime.contains("wav", ignoreCase = true) -> {
+                inspectWavMeta(context, input)?.let { meta ->
+                    "${meta.channels} 声道 / ${meta.bitsPerSample}bit / 峰值 ${meta.peakPercent.format1()}%"
+                } ?: "WAV 头信息不可读"
+            }
+            else -> "暂缺稳定声道元数据，当前仅提供格式线索"
+        }
+        val analysisSummary = buildString {
+            append("静音：").append(silenceHint)
+            append("；音量：").append(volumeHint)
+            append("；声道：").append(channelHint)
+        }
+
+        AudioInfoItem(
+            name = name,
+            durationMs = duration,
+            mimeType = mime,
+            artist = artist,
+            sampleRate = sampleRate,
+            bitrate = bitrate,
+            size = size,
+            issueFlags = issues,
+            silenceHint = silenceHint,
+            volumeHint = volumeHint,
+            channelHint = channelHint,
+            analysisSummary = analysisSummary
+        )
     }.getOrNull().also {
         runCatching { retriever.release() }
     }
@@ -291,7 +812,7 @@ private fun exportAudioInfoCsv(outputDir: File, infos: List<AudioInfoItem>): Fil
     val target = buildUniqueFile(outputDir, "audio_info_${System.currentTimeMillis()}", "csv")
     target.writeText(
         buildString {
-            appendLine("name,duration,mime,artist,sampleRate,bitrate,size")
+            appendLine("name,duration,mime,artist,sampleRate,bitrate,size,issues,silenceHint,volumeHint,channelHint")
             infos.forEach { info ->
                 appendLine(
                     listOf(
@@ -301,7 +822,11 @@ private fun exportAudioInfoCsv(outputDir: File, infos: List<AudioInfoItem>): Fil
                         info.artist.orEmpty(),
                         info.sampleRate.orEmpty(),
                         info.bitrate.orEmpty(),
-                        info.size.toString()
+                        info.size.toString(),
+                        info.issueFlags.joinToString(" | "),
+                        info.silenceHint,
+                        info.volumeHint,
+                        info.channelHint
                     ).joinToString(",") { value -> "\"${value.replace("\"", "\"\"")}\"" }
                 )
             }
@@ -310,16 +835,4 @@ private fun exportAudioInfoCsv(outputDir: File, infos: List<AudioInfoItem>): Fil
     return target
 }
 
-private fun batchRenameByPrefix(directory: File, prefix: String, predicate: (File) -> Boolean): List<File> {
-    if (!directory.exists() || !directory.isDirectory) return emptyList()
-    val files = directory.listFiles()?.filter(predicate)?.sortedBy { it.name.lowercase() } ?: return emptyList()
-    val renamed = mutableListOf<File>()
-    files.forEachIndexed { index, file ->
-        val ext = file.extension.takeIf { it.isNotBlank() }?.let { ".${it}" } ?: ""
-        val target = File(directory, "${sanitizeFileName(prefix)}${(index + 1).toString().padStart(3, '0')}$ext")
-        if (target.absolutePath != file.absolutePath && !target.exists() && file.renameTo(target)) {
-            renamed += target
-        }
-    }
-    return renamed
-}
+private fun Double.format1(): String = String.format(Locale.getDefault(), "%.1f", this)
