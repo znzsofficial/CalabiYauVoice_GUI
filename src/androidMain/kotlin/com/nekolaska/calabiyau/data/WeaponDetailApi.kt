@@ -78,7 +78,7 @@ object WeaponDetailApi {
         withContext(Dispatchers.IO) {
             try {
                 val encoded = URLEncoder.encode(weaponName, "UTF-8")
-                val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+                val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
 
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.WEAPON_DETAIL,
@@ -229,30 +229,142 @@ object WeaponDetailApi {
         val document = Jsoup.parse(html)
         val headline = document.getElementById("武器伤害") ?: return emptyList()
         val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
-        val table = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
+        val sectionElements = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
             .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
-            .firstOrNull { it.tagName() == "table" && it.hasClass("klbqtable") }
-            ?: return emptyList()
+            .toList()
+
+        return sectionElements
+            .filter { it.tagName() == "table" && it.hasClass("klbqtable") }
+            .flatMap { table -> parseDamageTable(table) }
+            .distinctBy { it.distance }
+    }
+
+    private fun parseDamageTable(table: Element): List<DamageRow> {
+        val caption = table.selectFirst("caption")?.text()?.trim().orEmpty()
+        val rows = table.select("tr")
+
+        if (rows.isEmpty()) {
+            return caption
+                .takeIf { it.startsWith("补充：") }
+                ?.removePrefix("补充：")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { listOf(DamageRow("补充", it, "", "")) }
+                ?: emptyList()
+        }
+
+        val hasDistanceHeader = rows.any { row ->
+            row.select("th").any { cell -> cell.text().trim().matches(Regex("\\d+米")) }
+        }
+
+        return if (hasDistanceHeader) {
+            parseDistanceDamageTable(table, caption)
+        } else {
+            parseSimpleDamageTable(table, caption)
+        }
+    }
+
+    private fun parseDistanceDamageTable(table: Element, caption: String): List<DamageRow> {
+        val captionPrefix = when {
+            caption.contains("移动端") -> "移动端"
+            caption.isNotBlank() -> caption
+            else -> ""
+        }
 
         return table.select("tr").mapNotNull { row ->
             val header = row.selectFirst("th")?.text()?.trim().orEmpty()
-            val valueCell = row.selectFirst("td") ?: return@mapNotNull null
-            if (header.isBlank()) return@mapNotNull null
+            val valueCells = row.select("td")
+            if (!header.matches(Regex("\\d+米")) || valueCells.size < 3) return@mapNotNull null
+
+            val distanceLabel = if (captionPrefix.isNotBlank()) "$captionPrefix·$header" else header
+            DamageRow(
+                distance = distanceLabel,
+                head = valueCells.getOrNull(0)?.text()?.trim().orEmpty(),
+                upper = valueCells.getOrNull(1)?.text()?.trim().orEmpty(),
+                lower = valueCells.getOrNull(2)?.text()?.trim().orEmpty()
+            )
+        }
+    }
+
+    private fun parseSimpleDamageTable(table: Element, caption: String): List<DamageRow> {
+        val tablePrefix = caption
+            .removePrefix("射击目标为靶场人形靶")
+            .trim()
+            .ifBlank { caption }
+
+        val parsedRows = table.select("tr").flatMap { row ->
+            val cells = row.select("> th, > td")
+            if (cells.size < 2) return@flatMap emptyList()
+
+            val header = cells.firstOrNull()?.text()?.trim().orEmpty()
+            val valueCell = cells.drop(1).firstOrNull() ?: return@flatMap emptyList()
+            if (header.isBlank()) return@flatMap emptyList()
 
             when {
-                header.matches(Regex("\\d+米")) -> {
-                    val values = valueCell.select("> *")
-                        .map { it.text().trim() }
-                        .filter { it.isNotBlank() }
-                    if (values.size >= 3) DamageRow(header, values[0], values[1], values[2]) else null
+                // 近战武器 / 特殊副武器嵌套列表结构
+                valueCell.select("> dl > dt").isNotEmpty() && valueCell.select("> ul > li").isNotEmpty() -> {
+                    val expandedRows = mutableListOf<DamageRow>()
+                    var currentGroup = ""
+
+                    valueCell.children().forEach { child ->
+                        when {
+                            child.tagName().equals("dl", ignoreCase = true) -> {
+                                currentGroup = child.selectFirst("dt")
+                                    ?.text()
+                                    ?.trim()
+                                    ?.removeSuffix("：")
+                                    .orEmpty()
+                            }
+
+                            child.tagName().equals("ul", ignoreCase = true) -> {
+                                child.select("> li")
+                                    .map { it.text().trim() }
+                                    .filter { it.isNotBlank() }
+                                    .forEach { itemText ->
+                                        val parts = itemText.split('：', ':', limit = 2)
+                                        val actionName = parts.getOrNull(0)?.trim().orEmpty()
+                                        val damageValue = parts.getOrNull(1)?.trim().orEmpty()
+                                        val rowLabel = buildString {
+                                            append(header)
+                                            if (currentGroup.isNotBlank()) append("·").append(currentGroup)
+                                            if (actionName.isNotBlank()) append("·").append(actionName)
+                                        }
+                                        val rowValue = damageValue.ifBlank { itemText }
+                                        if (rowLabel.isNotBlank() && rowValue.isNotBlank()) {
+                                            expandedRows += DamageRow(rowLabel, rowValue, "", "")
+                                        }
+                                    }
+                            }
+                        }
+                    }
+
+                    expandedRows
                 }
 
                 else -> {
                     val text = valueCell.text().trim()
-                    if (text.isBlank()) null else DamageRow(header, text, "", "")
+                    if (text.isBlank()) {
+                        emptyList()
+                    } else {
+                        val label = buildString {
+                            if (tablePrefix.isNotBlank()) append(tablePrefix).append("·")
+                            append(header)
+                        }
+                        listOf(DamageRow(label, text, "", ""))
+                    }
                 }
             }
-        }.distinctBy { it.distance }
+        }
+
+        if (parsedRows.isNotEmpty()) return parsedRows
+
+        return caption
+            .takeIf { it.startsWith("补充：") }
+            ?.removePrefix("补充：")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { listOf(DamageRow("补充", it, "", "")) }
+            ?: emptyList()
     }
 
     /** 提取指定名称的模板内容（处理嵌套大括号）。

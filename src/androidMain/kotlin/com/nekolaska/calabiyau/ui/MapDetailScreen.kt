@@ -9,8 +9,10 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -132,6 +134,13 @@ private fun MapDetailContent(
         if (detail.galleryUrls.isNotEmpty()) {
             item(key = "gallery") {
                 MapGalleryCard(detail.galleryUrls)
+            }
+        }
+
+        // ── 更新改动历史 ──
+        if (detail.updateHistory.isNotEmpty()) {
+            item(key = "update_history") {
+                MapUpdateHistoryCard(detail.updateHistory)
             }
         }
 
@@ -315,6 +324,68 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
                                 .aspectRatio(16f / 9f)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapUpdateHistoryCard(updateHistory: List<MapDetailApi.UpdateEntry>) {
+    var expanded by remember { mutableStateOf(false) }
+    val visibleHistory = if (expanded) updateHistory else updateHistory.take(3)
+
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            SectionTitle(Icons.Outlined.Update, "更新改动历史")
+            Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                visibleHistory.forEach { entry ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = smoothCapsuleShape(),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    ) {
+                        Text(
+                            text = entry.date,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    entry.changes.forEach { change ->
+                        Row(
+                            Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        ) {
+                            Text(
+                                "•",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(end = 6.dp, top = 1.dp)
+                            )
+                            Text(
+                                text = change,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            if (updateHistory.size > 3) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text(if (expanded) "收起" else "查看全部 ${updateHistory.size} 条更新")
                 }
             }
         }
