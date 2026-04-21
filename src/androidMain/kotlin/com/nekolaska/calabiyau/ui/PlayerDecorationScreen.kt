@@ -232,6 +232,18 @@ fun PlayerDecorationScreen(
                             maxLines = 3, overflow = TextOverflow.Ellipsis
                         )
                     }
+                    if (item.specialDescription.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = item.specialDescription,
+                            color = Color.White.copy(alpha = 0.9f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     if (item.source.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
                         Text(
@@ -240,6 +252,55 @@ fun PlayerDecorationScreen(
                             style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center
                         )
+                    }
+                    if (item.extraPreviews.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "附属界面预览",
+                            color = Color.White.copy(alpha = 0.9f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            item.extraPreviews.forEach { preview ->
+                                Column(
+                                    modifier = Modifier.width(132.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = smoothCornerShape(16.dp),
+                                        color = Color.White.copy(alpha = 0.1f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        AsyncImage(
+                                            model = preview.imageUrl,
+                                            contentDescription = preview.label,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(72.dp)
+                                                .padding(8.dp),
+                                            contentScale = ContentScale.Fit
+                                        )
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = preview.label,
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
