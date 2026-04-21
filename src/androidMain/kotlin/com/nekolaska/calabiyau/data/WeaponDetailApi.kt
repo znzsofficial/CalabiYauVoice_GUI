@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 /**
@@ -101,8 +103,11 @@ object WeaponDetailApi {
                         "无法获取页面内容",
                         kind = ErrorKind.PARSE
                     )
+                val renderedHtml = parseObj["text"]?.jsonObject?.get("*")
+                    ?.jsonPrimitive?.content
+                    .orEmpty()
 
-                val detail = parseWeaponWikitext(weaponName, wikitext)
+                val detail = parseWeaponWikitext(weaponName, wikitext, renderedHtml = renderedHtml)
                     ?: return@withContext ApiResult.Error(
                         "未找到武器信息模板",
                         kind = ErrorKind.NOT_FOUND
@@ -118,7 +123,12 @@ object WeaponDetailApi {
             }
         }
 
-    private fun parseWeaponWikitext(name: String, wikitext: String, isTactical: Boolean = false): WeaponDetail? {
+    private fun parseWeaponWikitext(
+        name: String,
+        wikitext: String,
+        isTactical: Boolean = false,
+        renderedHtml: String = ""
+    ): WeaponDetail? {
         // 尝试多种模板名：{{武器|...}}、{{武器-近战武器|...}}、{{武器-副武器|...}}、{{武器-战术道具|...}}
         val templateNames = listOf("武器-近战武器", "武器-副武器", "武器-战术道具", "武器")
         var weaponParams: Map<String, String> = emptyMap()
@@ -153,8 +163,8 @@ object WeaponDetailApi {
                 } else null
             }
         } else {
-            // 副武器/近战武器：从 wiki 表格中解析
-            parseWikiTableDamage(wikitext)
+            // 副武器/近战武器：从渲染 HTML 表格中解析
+            parseWeaponDamageFromHtml(renderedHtml)
         }
 
         // 解析子页面
@@ -214,188 +224,35 @@ object WeaponDetailApi {
         )
     }
 
-    /**
-     * 从 wiki 表格中解析伤害数据（副武器/近战武器）。
-     * 表格格式：
-     * ```
-     * ! 10米
-     * | 21 | 17 | 11
-     * ```
-     */
-    /**
-     * 从 wiki 表格中解析伤害数据（副武器/近战武器）。
-     * 副武器表格格式：`! style="..."|10米\n| 21\n| 17\n| 11`
-     * 近战武器格式不同（文字描述），此方法只处理数值表格。
-     */
-    private fun parseWikiTableDamage(wikitext: String): List<DamageRow> {
-        val rows = mutableListOf<DamageRow>()
+    private fun parseWeaponDamageFromHtml(html: String): List<DamageRow> {
+        if (html.isBlank()) return emptyList()
+        val document = Jsoup.parse(html)
+        val headline = document.getElementById("武器伤害") ?: return emptyList()
+        val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
+        val table = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
+            .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            .firstOrNull { it.tagName() == "table" && it.hasClass("klbqtable") }
+            ?: return emptyList()
 
-        // 格式1：每列一行 "! [style]距离\n| 数值\n| 数值\n| 数值"
-        val format1 = Regex("""!\s*(?:style="[^"]*"\|)?\s*(\d+米)\s*\n\|\s*(\d+)\s*\n\|\s*(\d+)\s*\n\|\s*(\d+)""")
-        format1.findAll(wikitext).forEach { match ->
-            rows.add(DamageRow(match.groupValues[1], match.groupValues[2], match.groupValues[3], match.groupValues[4]))
-        }
+        return table.select("tr").mapNotNull { row ->
+            val header = row.selectFirst("th")?.text()?.trim().orEmpty()
+            val valueCell = row.selectFirst("td") ?: return@mapNotNull null
+            if (header.isBlank()) return@mapNotNull null
 
-        // 格式2：行内多列 "| [style] || 10米 || 15米 || 20米" + "| 头部 || 85 || 49 || 36"
-        if (rows.isEmpty()) {
-            // 提取 ==武器伤害== 区域的第一个 wiki 表格
-            val damageSection = wikitext.substringAfter("==武器伤害==", "")
-            val tableStart = damageSection.indexOf("{|")
-            val tableEnd = damageSection.indexOf("|}", tableStart)
-            if (tableStart in 0..<tableEnd) {
-                val table = damageSection.substring(tableStart, tableEnd + 2)
-                val tableRows = table.split("|-").drop(1) // 跳过表头定义行
-
-                // 找到距离行（包含 "米"）和数据行（头部/上身/上半身/下身/下半身）
-                var distances = emptyList<String>()
-                val bodyParts = mutableListOf<Pair<String, List<String>>>() // (部位名, 数值列表)
-
-                for (row in tableRows) {
-                    val cells = row.split("||").map { cell ->
-                        cell.replace(Regex("""^\s*\|?\s*"""), "")
-                            .replace(Regex("""style="[^"]*"\|"""), "")
-                            .replace(Regex("""\|\}\s*$"""), "")  // 去掉残留的 |}
-                            .trim()
-                    }.filter { it.isNotBlank() && it != "\n" }
-
-                    if (cells.isEmpty()) continue
-
-                    if (cells.any { it.contains("米") }) {
-                        // 距离行
-                        distances = cells.filter { it.matches(Regex("""\d+米""")) }
-                    } else if (cells.size >= 2) {
-                        val label = cells[0]
-                        if (label.contains("头") || label.contains("上") || label.contains("下") || label.contains("身")) {
-                            bodyParts.add(label to cells.drop(1))
-                        }
-                    }
+            when {
+                header.matches(Regex("\\d+米")) -> {
+                    val values = valueCell.select("> *")
+                        .map { it.text().trim() }
+                        .filter { it.isNotBlank() }
+                    if (values.size >= 3) DamageRow(header, values[0], values[1], values[2]) else null
                 }
 
-                // 按距离组装 DamageRow
-                if (distances.isNotEmpty() && bodyParts.isNotEmpty()) {
-                    for (i in distances.indices) {
-                        val head = bodyParts.firstOrNull { it.first.contains("头") }?.second?.getOrNull(i) ?: "-"
-                        val upper = bodyParts.firstOrNull { it.first.contains("上") }?.second?.getOrNull(i) ?: "-"
-                        val lower = bodyParts.firstOrNull { it.first.contains("下") }?.second?.getOrNull(i) ?: "-"
-                        rows.add(DamageRow(distances[i], head, upper, lower))
-                    }
+                else -> {
+                    val text = valueCell.text().trim()
+                    if (text.isBlank()) null else DamageRow(header, text, "", "")
                 }
             }
-        }
-
-        // 格式3：通用 wiki 表格（副武器/近战武器）
-        // 支持两种子格式：
-        //   a) 行内多列：| key || value（焚焰者）— 遍历所有表格，用 |+ 标题作为分组
-        //   b) 换行键值：! key\n| value（忍锋/战镰，value 可含 ; 和 * 列表）
-        if (rows.isEmpty()) {
-            val damageSection = wikitext.substringAfter("==武器伤害==", "")
-            // 手动提取所有表格（处理缺少 |} 的情况：遇到新 {| 视为上一个表格结束）
-            val allTables = extractAllWikiTables(damageSection)
-
-            for (tableText in allTables) {
-                // 提取表格标题（|+ 后面的文字）
-                val captionMatch = Regex("""\|\+\s*(.+)""").find(tableText)
-                val caption = captionMatch?.groupValues?.get(1)?.trim() ?: ""
-
-                // 按 |- 分割行
-                val tableRows = tableText.split("|-").drop(1)
-                for (row in tableRows) {
-                    val trimmed = row.trim()
-                    if (trimmed.isEmpty() || trimmed == "|}") continue
-                    // 跳过嵌套表格开头
-                    if (trimmed.startsWith("{|")) continue
-
-                    // 子格式 a：行内 || 分隔
-                    if (trimmed.contains("||")) {
-                        val cells = trimmed.split("||").map { cell ->
-                            cell.replace(Regex("""^\s*[|!]\s*"""), "")
-                                .replace(Regex("""style="[^"]*"\|"""), "")
-                                .replace(Regex("""\|\}\s*$"""), "")  // 去掉残留的 |}
-                                .trim()
-                        }.filter { it.isNotBlank() }
-                        if (cells.size >= 2) {
-                            // 如果有标题，用 "标题：key" 作为 distance
-                            val key = if (caption.isNotBlank()) "$caption：${cells[0]}" else cells[0]
-                            rows.add(DamageRow(
-                                distance = key,
-                                head = cells.drop(1).joinToString("，"),
-                                upper = "", lower = ""
-                            ))
-                        }
-                        continue
-                    }
-
-                    // 子格式 b：! key\n| value（多行内容）
-                    val headerMatch = Regex("""!\s*(?:style="[^"]*"\|)?\s*(.+)""").find(trimmed)
-                    if (headerMatch != null) {
-                        val key = headerMatch.groupValues[1].trim()
-                        // value 是 ! 行之后、| 开头的所有内容
-                        val valueStart = trimmed.indexOf('\n', headerMatch.range.last)
-                        if (valueStart >= 0) {
-                            val rawValue = trimmed.substring(valueStart + 1)
-                                .replace(Regex("""^\|\s*"""), "")  // 去掉开头的 |
-                                .replace(Regex("""\|?\}\s*$"""), "") // 去掉结尾的 |} 或 }
-                                .replace(Regex("""\|\}"""), "")    // 去掉中间的 |}
-                                .replace(Regex(""";\s*"""), "")     // ; 分组标记
-                                .replace(Regex("""\*\s*"""), "• ") // * → •
-                                .replace(Regex("""\n{2,}"""), "\n")
-                                .trim()
-                            if (rawValue.isNotBlank()) {
-                                rows.add(DamageRow(
-                                    distance = key,
-                                    head = rawValue,
-                                    upper = "", lower = ""
-                                ))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 只取第一组表格（PC端数据），避免重复取移动端数据
-        val seen = mutableSetOf<String>()
-        return rows.filter { seen.add(it.distance) }
-    }
-
-    /**
-     * 从 wikitext 中提取所有 wiki 表格。
-     * 处理缺少 `|}` 结束标记的情况：遇到新的 `{|` 时视为上一个表格结束。
-     */
-    private fun extractAllWikiTables(text: String): List<String> {
-        val tables = mutableListOf<String>()
-        var i = 0
-        while (i < text.length - 1) {
-            if (text[i] == '{' && text[i + 1] == '|') {
-                // 找到表格开始
-                val start = i
-                i += 2
-                var foundEnd = false
-                while (i < text.length - 1) {
-                    if (text[i] == '|' && text[i + 1] == '}') {
-                        // 正常结束
-                        tables.add(text.substring(start, i + 2))
-                        i += 2
-                        foundEnd = true
-                        break
-                    } else if (text[i] == '{' && text[i + 1] == '|') {
-                        // 遇到新表格开始 → 上一个表格缺少 |}，截断
-                        tables.add(text.substring(start, i).trimEnd())
-                        // 不递增 i，让外层循环重新处理这个新表格
-                        foundEnd = true
-                        break
-                    }
-                    i++
-                }
-                if (!foundEnd && i >= text.length - 1) {
-                    // 到达文本末尾仍未找到结束标记
-                    tables.add(text.substring(start).trimEnd())
-                }
-            } else {
-                i++
-            }
-        }
-        return tables
+        }.distinctBy { it.distance }
     }
 
     /** 提取指定名称的模板内容（处理嵌套大括号）。
@@ -509,66 +366,34 @@ object WeaponDetailApi {
     private fun fetchCooldowns(weaponName: String): Map<String, Int> {
         return try {
             val encoded = URLEncoder.encode("战术道具冷却时间表", "UTF-8")
-            val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+            val url = "$API?action=parse&page=$encoded&prop=text&format=json"
             val body = WikiEngine.safeGet(url) ?: return emptyMap()
             val json = SharedJson.parseToJsonElement(body).jsonObject
-            val wikitext = json["parse"]?.jsonObject?.get("wikitext")
+            val html = json["parse"]?.jsonObject?.get("text")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return emptyMap()
-            parseCooldownTable(wikitext, weaponName)
+            parseCooldownTable(html, weaponName)
         } catch (_: Exception) {
             emptyMap()
         }
     }
 
     /**
-     * 解析冷却时间表 wikitext，提取指定道具在各模式下的冷却时间。
-     *
-     * 表格格式：
-     * ```
-     * {| class="klbqtable"
-     * |+ 极限推进模式
-     * |-
-     * ! 道具 !! 冷却时间/秒
-     * |-
-     * | 手雷 || 40
-     * ...
-     * |}
-     * ```
+     * 解析冷却时间表 HTML，提取指定道具在各模式下的冷却时间。
      */
-    private fun parseCooldownTable(wikitext: String, weaponName: String): Map<String, Int> {
+    private fun parseCooldownTable(html: String, weaponName: String): Map<String, Int> {
         val result = mutableMapOf<String, Int>()
-        // 按 {| ... |} 分割出每个表格
-        val tableRegex = Regex("""\{\|[\s\S]*?\|\}""")
-        for (tableMatch in tableRegex.findAll(wikitext)) {
-            val table = tableMatch.value
-            // 提取模式名（|+ 后面的文字）
-            val captionMatch = Regex("""\|\+\s*(.+)""").find(table)
-            val modeName = captionMatch?.groupValues?.get(1)?.trim() ?: continue
+        if (html.isBlank()) return result
+        val document = Jsoup.parse(html)
+        document.select("table.klbqtable").forEach { table ->
+            val modeName = table.selectFirst("caption")?.text()?.trim().orEmpty()
+            if (modeName.isBlank()) return@forEach
 
-            // 按 |- 分割行
-            val rows = table.split("|-").drop(1) // 跳过表头定义
-            for (row in rows) {
-                val trimmed = row.trim()
-                if (trimmed.isEmpty() || trimmed.startsWith("|}") || trimmed.startsWith("!")) continue
-
-                // 解析 "| 道具名 || 冷却秒数" 或 "| 道具名\n| 冷却秒数"
-                val cells = if (trimmed.contains("||")) {
-                    trimmed.split("||").map { it.replace(Regex("""^\s*\|\s*"""), "").trim() }
-                } else {
-                    trimmed.split("\n")
-                        .filter { it.trimStart().startsWith("|") }
-                        .map { it.replace(Regex("""^\s*\|\s*"""), "").trim() }
-                }
-
-                if (cells.size >= 2) {
-                    val itemName = cells[0]
-                        .replace(Regex("""\[\[([^|\]]*\|)?([^\]]+)\]\]"""), "$2") // [[链接|显示名]] → 显示名
-                        .trim()
-                    val cooldownStr = cells[1].trim()
-                    val cooldown = cooldownStr.toIntOrNull()
-                    if (cooldown != null && itemName == weaponName) {
-                        result[modeName] = cooldown
-                    }
+            table.select("tr").drop(1).forEach { row ->
+                val cells = row.select("> th, > td")
+                    .map { it.text().trim() }
+                    .filter { it.isNotBlank() }
+                if (cells.size >= 2 && cells[0] == weaponName) {
+                    cells[1].toIntOrNull()?.let { result[modeName] = it }
                 }
             }
         }

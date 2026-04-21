@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import java.net.URLEncoder
 
 /**
@@ -48,8 +49,9 @@ object WeaponSkinFilterApi {
         val sources: List<String>,  // 获取方式列表
         val crystalCost: String,    // 巴布洛晶核价格
         val baseCost: String,       // 基弦价格
-        val thumbnailUrl: String?,  // 缩略图 URL
-        val fullImageUrl: String?   // 原图 URL
+        val thumbnailUrl: String?,  // 立绘缩略图 URL
+        val fullImageUrl: String?,  // 立绘原图 URL
+        val screenshotUrl: String?  // 游戏截图 URL
     )
 
 
@@ -112,57 +114,123 @@ object WeaponSkinFilterApi {
      * ```
      */
     private fun parseWeaponSkinHtml(html: String): List<WeaponSkinInfo> {
-        val skins = mutableListOf<WeaponSkinInfo>()
-
-        val paramRegex = Regex(
-            """data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)""""
+        val blockRegex = Regex(
+            """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
         )
+        val usedKeys = mutableSetOf<String>()
 
-        val imgSrcRegex = Regex("""<img[^>]*\bsrc="([^"]*)"[^>]*>""")
-        val srcsetRegex = Regex("""\bsrcset="([^"]*?)\s""")
-        val nameRegex = Regex("""/>\s*<br\s*/?\s*>\s*(?:<a[^>]*>([^<]+)</a>)?([^<|]*)""")
-
-        val paramMatches = paramRegex.findAll(html).toList()
-
-        for (paramMatch in paramMatches) {
-            val weapon = paramMatch.groupValues[1]
-            val qualityStr = paramMatch.groupValues[2]
-            val sourcesStr = paramMatch.groupValues[3]
-            val crystalCost = paramMatch.groupValues[4]
-            val baseCost = paramMatch.groupValues[5]
-
-            val afterParam = html.substring(
-                paramMatch.range.last,
-                minOf(paramMatch.range.last + 3000, html.length)
+        val items = blockRegex.findAll(html).map { match ->
+            val weapon = match.groupValues[1].trim()
+            val info = parseWeaponSkinDetail(match.groupValues[6], weapon)
+            val protectedName = uniqueDisplayName(
+                baseName = info.name,
+                ownerName = weapon,
+                blockHtml = match.groupValues[6],
+                usedKeys = usedKeys
             )
 
-            val imgMatch = imgSrcRegex.find(afterParam)
-            val thumbnailUrl = imgMatch?.groupValues?.get(1)
-            val fullImageUrl = imgMatch?.let { srcsetRegex.find(it.value)?.groupValues?.get(1) }
-
-            // 提取外观名
-            val nameMatch = nameRegex.find(afterParam)
-            val rawName = buildString {
-                nameMatch?.groupValues?.get(1)?.let { if (it.isNotBlank()) append(it) }
-                nameMatch?.groupValues?.get(2)?.let { append(it) }
-            }.trim()
-            val skinName = rawName.ifBlank { "$weapon：未知" }
-
-            skins.add(
-                WeaponSkinInfo(
-                    name = skinName,
-                    weapon = weapon,
-                    quality = Quality.fromLevel(qualityStr),
-                    sources = sourcesStr.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                    crystalCost = crystalCost.replace("无", ""),
-                    baseCost = baseCost.replace("无", ""),
-                    thumbnailUrl = thumbnailUrl,
-                    fullImageUrl = fullImageUrl
-                )
+            WeaponSkinInfo(
+                name = protectedName,
+                weapon = weapon,
+                quality = Quality.fromLevel(match.groupValues[2]),
+                sources = match.groupValues[3].split(",").map { it.trim() }.filter { it.isNotBlank() },
+                crystalCost = match.groupValues[4].replace("无", "").trim(),
+                baseCost = match.groupValues[5].replace("无", "").trim(),
+                thumbnailUrl = info.thumbnailUrl,
+                fullImageUrl = info.fullImageUrl,
+                screenshotUrl = info.screenshotUrl
             )
+        }.toList()
+
+        return items
+    }
+
+    private fun parseWeaponSkinDetail(blockHtml: String, weapon: String): ParsedSkinVisualInfo {
+        val document = Jsoup.parse(blockHtml)
+        val previewImage = document.selectFirst("img[alt]")
+        val hiddenLargeImage = document.select("span[style*=display:none] img").firstOrNull()
+
+        val thumbnailUrl = previewImage?.attr("src")
+        val fullImageUrl = previewImage?.attr("srcset")
+            ?.split(',')
+            ?.lastOrNull()
+            ?.substringBeforeLast(' ')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
+
+        val screenshotUrl = hiddenLargeImage?.attr("srcset")
+            ?.split(',')
+            ?.lastOrNull()
+            ?.substringBeforeLast(' ')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
+
+        val name = Regex("""<br\s*/?>\s*(?:<a[^>]*>(.*?)</a>)?\s*[:：]?\s*([^<\n|]+)""", RegexOption.DOT_MATCHES_ALL)
+            .find(blockHtml)
+            ?.let { match ->
+                val weaponLabel = Jsoup.parse(match.groupValues[1]).text().replace(" ", "").trim()
+                val skinLabel = Jsoup.parse(match.groupValues[2]).text().trim()
+                when {
+                    weaponLabel.isNotBlank() && skinLabel.isNotBlank() -> "$weaponLabel：$skinLabel"
+                    skinLabel.isNotBlank() -> if (skinLabel.contains('：') || skinLabel.contains(':')) skinLabel else "$weapon：$skinLabel"
+                    else -> ""
+                }
+            }
+            ?.removePrefix("|")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: "$weapon：未知"
+
+        return ParsedSkinVisualInfo(
+            name = name,
+            thumbnailUrl = thumbnailUrl,
+            fullImageUrl = fullImageUrl,
+            screenshotUrl = screenshotUrl
+        )
+    }
+
+    private data class ParsedSkinVisualInfo(
+        val name: String,
+        val thumbnailUrl: String?,
+        val fullImageUrl: String?,
+        val screenshotUrl: String?
+    )
+
+    private fun uniqueDisplayName(
+        baseName: String,
+        ownerName: String,
+        blockHtml: String,
+        usedKeys: MutableSet<String>
+    ): String {
+        val normalizedBase = baseName.ifBlank { "$ownerName：未知" }
+        val identity = extractIdentitySuffix(blockHtml)
+        var candidate = normalizedBase
+        var key = candidate + ownerName
+
+        if (usedKeys.add(key)) return candidate
+
+        if (identity.isNotBlank()) {
+            candidate = "$normalizedBase#$identity"
+            key = candidate + ownerName
+            if (usedKeys.add(key)) return candidate
         }
 
-        return skins
+        var index = 2
+        while (true) {
+            candidate = "$normalizedBase#$index"
+            key = candidate + ownerName
+            if (usedKeys.add(key)) return candidate
+            index++
+        }
+    }
+
+    private fun extractIdentitySuffix(blockHtml: String): String {
+        return Regex("""武器外观图鉴\s*(\d+)""")
+            .find(blockHtml)
+            ?.groupValues?.get(1)
+            .orEmpty()
     }
 
 }

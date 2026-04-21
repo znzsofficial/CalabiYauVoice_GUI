@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jsoup.Jsoup
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -29,11 +30,6 @@ object ActivityApi {
     private const val PAGE_NAME = "活动"
     private const val PAGE_URL = "https://wiki.biligame.com/klbq/%E6%B4%BB%E5%8A%A8"
 
-    private val rowRegex = Regex("""<tr[^>]*>([\s\S]*?)</tr>""", RegexOption.DOT_MATCHES_ALL)
-    private val cellRegex = Regex("""<t[hd][^>]*>([\s\S]*?)</t[hd]>""", RegexOption.DOT_MATCHES_ALL)
-    private val imageRegex = Regex("""<img[^>]*src="([^"]+)"[^>]*>""")
-    private val linkTitleRegex = Regex("""<a[^>]*title="([^"]+)"[^>]*>""")
-    private val linkHrefRegex = Regex("""<a[^>]*href="([^"]+)"[^>]*>""")
     private val thumbToOriginalRegex = Regex(
         """(https?://[^/]+/images/[^/]+)/thumb/([^/]+/[^/]+/[^/]+)/(?:\d+px-)?[^/?#]+"""
     )
@@ -108,23 +104,27 @@ object ActivityApi {
         }
 
     private fun parseActivities(html: String): List<ParsedActivity> {
-        return rowRegex.findAll(html).mapNotNull { rowMatch ->
-            val cells = cellRegex.findAll(rowMatch.groupValues[1])
-                .map { it.groupValues[1] }
-                .toList()
+        val document = Jsoup.parse(html)
+        val rows = document.select("table.klbqtable tr")
+
+        val parsed = rows.mapNotNull { row ->
+            val cells = row.select("> th, > td")
             if (cells.size < 4) return@mapNotNull null
 
-            val titleCellText = cleanHtml(cells[0])
+            val titleCell = cells[0]
+            val titleCellText = cleanHtml(titleCell.html())
             val title = titleCellText.lineSequence()
                 .map { it.trim() }
                 .firstOrNull { it.isNotBlank() }
                 .orEmpty()
-            val startTime = cleanHtml(cells[1])
-            val endTime = cleanHtml(cells[2])
-            val description = cleanHtml(cells[3])
-            val detailPageTitle = linkTitleRegex.find(cells[0])?.groupValues?.get(1)
-                ?: linkHrefRegex.find(cells[0])?.groupValues?.get(1)?.let(::extractPageTitleFromHref)
-            val wikiUrl = linkHrefRegex.find(cells[0])?.groupValues?.get(1)
+            val startTime = cleanHtml(cells[1].html())
+            val endTime = cleanHtml(cells[2].html())
+            val description = cleanHtml(cells[3].html())
+
+            val detailLink = titleCell.selectFirst("a[title], a[href]")
+            val detailPageTitle = detailLink?.attr("title")?.takeIf { it.isNotBlank() }
+                ?: detailLink?.attr("href")?.let(::extractPageTitleFromHref)
+            val wikiUrl = detailLink?.attr("href")
                 ?.let(::toAbsoluteWikiUrl)
                 ?: PAGE_URL
 
@@ -142,12 +142,14 @@ object ActivityApi {
                     startTime = startTime,
                     endTime = endTime,
                     description = description,
-                    imageUrl = imageRegex.find(cells[0])?.groupValues?.get(1),
+                    imageUrl = titleCell.selectFirst("img")?.attr("src"),
                     wikiUrl = wikiUrl
                 ),
                 detailPageTitle = detailPageTitle
             )
-        }.toList()
+        }
+
+        return WikiParseLogger.finishList("ActivityApi.parseActivities", parsed, html, "rows=${rows.size}")
     }
 
     private suspend fun enrichActivitiesWithHighResImages(
@@ -212,9 +214,9 @@ object ActivityApi {
     }
 
     private fun extractFirstFileTitle(detailHtml: String): String? {
-        return linkHrefRegex.findAll(detailHtml).firstNotNullOfOrNull { match ->
-            val href = match.groupValues[1]
-            val pageTitle = extractPageTitleFromHref(href) ?: return@firstNotNullOfOrNull null
+        val document = Jsoup.parse(detailHtml)
+        return document.select("a[href]").firstNotNullOfOrNull { link ->
+            val pageTitle = extractPageTitleFromHref(link.attr("href")) ?: return@firstNotNullOfOrNull null
             if (pageTitle.startsWith("文件:") || pageTitle.startsWith("File:")) pageTitle else null
         }
     }
