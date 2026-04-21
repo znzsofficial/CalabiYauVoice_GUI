@@ -131,9 +131,23 @@ private fun WeaponDetailContent(
         }
 
         // ── 伤害数据 ──
-        if (detail.baseDamage.isNotBlank() || detail.damageTable.isNotEmpty()) {
+        val distanceRows = detail.damageTable.filter { it.upper.isNotBlank() || it.lower.isNotBlank() }
+        val simpleRows = detail.damageTable.filter { it.upper.isBlank() && it.lower.isBlank() }
+        
+        if (detail.baseDamage.isNotBlank() || distanceRows.isNotEmpty()) {
             item("damage_table") {
-                Box(Modifier.padding(horizontal = 16.dp)) { WeaponDamageCard(detail = detail) }
+                Box(Modifier.padding(horizontal = 16.dp)) { 
+                    WeaponDamageCard(detail, distanceRows) 
+                }
+            }
+        }
+
+        // ── 补充说明 / 其他伤害数据 ──
+        if (simpleRows.isNotEmpty()) {
+            item("damage_tips") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    WeaponSimpleDamageCard(simpleRows)
+                }
             }
         }
 
@@ -368,7 +382,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun WeaponDamageCard(detail: WeaponDetail) {
+private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDetailApi.DamageRow>) {
     Card(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
@@ -407,101 +421,239 @@ private fun WeaponDamageCard(detail: WeaponDetail) {
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            if (distanceRows.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
 
-            // 判断是否为简单伤害表（无部位区分）
-            val isSimpleTable = detail.damageTable.all { it.upper.isBlank() && it.lower.isBlank() }
+                val groupedTables = distanceRows.groupBy { row ->
+                    if (row.distance.startsWith("移动端·")) "移动端" else "PC"
+                }
 
-            if (isSimpleTable) {
-                // 简单伤害表（如焚焰者）：键值对展示
-                detail.damageTable.forEachIndexed { index, row ->
-                    if (index > 0) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                listOf("PC", "移动端").forEach { tableName ->
+                    val rows = groupedTables[tableName].orEmpty()
+                    if (rows.isEmpty()) return@forEach
+
+                    if (tableName == "移动端" && groupedTables["PC"]?.isNotEmpty() == true) {
+                        Spacer(Modifier.height(16.dp))
+                    }
+
+                    Surface(
+                        color = if (tableName == "移动端") {
+                            MaterialTheme.colorScheme.tertiaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        },
+                        shape = smoothCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = tableName,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (tableName == "移动端") {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            },
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
+
+                    Spacer(Modifier.height(8.dp))
+
                     Surface(
                         shape = smoothCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Text("距离", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold)
+                            Text("头部", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                            Text("上肢", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                            Text("下肢", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    rows.forEachIndexed { index, row ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                            )
+                        }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text(normalizeDistanceLabel(row.distance), Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium)
+                            Text(row.head, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.error)
+                            Text(row.upper, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center)
+                            Text(row.lower, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class SimpleDamageDisplayRow(
+    val sectionTitle: String,
+    val groupTitle: String?,
+    val actionTitle: String,
+    val value: String
+)
+
+@Composable
+private fun WeaponSimpleDamageCard(simpleRows: List<WeaponDetailApi.DamageRow>) {
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            SectionTitle(Icons.Outlined.Info, "其他伤害数据 / 补充说明")
+            Spacer(Modifier.height(12.dp))
+
+            val parsedRows = simpleRows.map { row -> parseSimpleDamageRow(row) }
+            var lastSectionTitle: String? = null
+            var lastGroupTitle: String? = null
+
+            parsedRows.forEachIndexed { index, row ->
+                if (row.sectionTitle != lastSectionTitle) {
+                    if (index > 0) Spacer(Modifier.height(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = smoothCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = row.sectionTitle,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    lastSectionTitle = row.sectionTitle
+                    lastGroupTitle = null
+                }
+
+                if (row.groupTitle != null && row.groupTitle != lastGroupTitle) {
+                    Text(
+                        text = row.groupTitle,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+                    )
+                    lastGroupTitle = row.groupTitle
+                }
+
+                Surface(
+                    shape = smoothCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (row.actionTitle == "补充" || row.value.length > 20) {
+                        // 如果是长文本补充说明，改为垂直排列
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Text(
+                                row.actionTitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                row.value,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    } else {
+                        // 短数值普通排列
                         Row(
                             Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                row.distance,
+                                row.actionTitle,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
-                                row.head,
+                                row.value,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Medium
                             )
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
                 }
-            } else {
-                // 标准伤害表：距离/头部/上肢/下肢 四列
-                Surface(
-                    shape = smoothCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        Text("距离", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold)
-                        Text("头部", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center)
-                        Text("上肢", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center)
-                        Text("下肢", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center)
-                    }
-                }
-
                 Spacer(Modifier.height(4.dp))
-
-                detail.damageTable.forEachIndexed { index, row ->
-                    if (index > 0) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                    ) {
-                        Text(row.distance, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium)
-                        Text(row.head, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.error)
-                        Text(row.upper, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center)
-                        Text(row.lower, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
             }
         }
+    }
+}
+
+private fun parseSimpleDamageRow(row: WeaponDetailApi.DamageRow): SimpleDamageDisplayRow {
+    val parts = row.distance.split('·').map { it.trim() }.filter { it.isNotBlank() }
+    return when {
+        parts.size >= 3 -> SimpleDamageDisplayRow(
+            sectionTitle = normalizeSimpleSectionTitle(parts[0]),
+            groupTitle = parts[1],
+            actionTitle = parts.drop(2).joinToString(" · "),
+            value = row.head
+        )
+
+        parts.size == 2 -> SimpleDamageDisplayRow(
+            sectionTitle = normalizeSimpleSectionTitle(parts[0]),
+            groupTitle = null,
+            actionTitle = parts[1],
+            value = row.head
+        )
+
+        else -> SimpleDamageDisplayRow(
+            sectionTitle = "数据",
+            groupTitle = null,
+            actionTitle = row.distance,
+            value = row.head
+        )
+    }
+}
+
+private fun normalizeDistanceLabel(label: String): String {
+    return label.removePrefix("移动端·")
+}
+
+private fun normalizeSimpleSectionTitle(title: String): String {
+    return when {
+        title == "移动端" -> "移动端"
+        title.startsWith("移动端") -> title
+        else -> title
     }
 }
 
