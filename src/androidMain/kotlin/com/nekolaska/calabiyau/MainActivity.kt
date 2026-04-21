@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (CrashHandler.hasPendingCrashLog(this)) {
+        if (!CrashReportActivity.shouldSkipPendingCrash(intent) && CrashHandler.hasPendingCrashLog(this)) {
             startActivity(
                 Intent(this, CrashReportActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)

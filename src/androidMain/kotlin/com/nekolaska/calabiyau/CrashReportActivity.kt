@@ -52,6 +52,10 @@ class CrashReportActivity : ComponentActivity() {
         private const val GITHUB_ISSUE_URL =
             "https://github.com/znzsofficial/CalabiYauVoice_GUI/issues/new?labels=bug&title=%5BCrash%5D+"
         private const val STATE_CRASH_LOG = "state_crash_log"
+        private const val EXTRA_SKIP_PENDING_CRASH = "extra_skip_pending_crash"
+
+        fun shouldSkipPendingCrash(intent: Intent?): Boolean =
+            intent?.getBooleanExtra(EXTRA_SKIP_PENDING_CRASH, false) == true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +69,11 @@ class CrashReportActivity : ComponentActivity() {
 
         if (savedInstanceState == null) {
             CrashHandler.clearCrashLog(this)
+        }
+
+        if (crashLog == "未找到崩溃日志") {
+            finish()
+            return
         }
 
         setContent {
@@ -100,8 +109,10 @@ class CrashReportActivity : ComponentActivity() {
     }
 
     private fun restartApp() {
+        CrashHandler.clearCrashLog(this)
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            putExtra(EXTRA_SKIP_PENDING_CRASH, true)
         }
         if (launchIntent != null) {
             startActivity(launchIntent)

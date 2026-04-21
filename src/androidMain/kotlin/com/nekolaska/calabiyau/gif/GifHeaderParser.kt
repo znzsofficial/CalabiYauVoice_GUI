@@ -320,9 +320,6 @@ class GifHeaderParser {
                 tab[i++] = -0x1000000 or (r shl 16) or (g shl 8) or b
             }
         } catch (e: BufferUnderflowException) {
-            if (Log.isLoggable(TAG, Log.DEBUG)) {
-                Log.d(TAG, "Format Error Reading Color Table", e)
-            }
             header!!.status = GifDecoder.STATUS_FORMAT_ERROR
         }
 
@@ -367,12 +364,6 @@ class GifHeaderParser {
                     n += count
                 }
             } catch (e: Exception) {
-                if (Log.isLoggable(TAG, Log.DEBUG)) {
-                    Log.d(
-                        TAG,
-                        "Error Reading Block n: $n count: $count blockSize: $blockSize", e
-                    )
-                }
                 header!!.status = GifDecoder.STATUS_FORMAT_ERROR
             }
         }
