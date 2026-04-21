@@ -388,7 +388,7 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
             ) {
                 if (skin.thumbnailUrl != null) {
                     AsyncImage(
-                        model = skin.fullImageUrl ?: skin.thumbnailUrl,
+                        model = skin.thumbnailUrl,
                         contentDescription = skin.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -473,6 +473,17 @@ private fun WeaponSkinDetailSheet(
     onDismiss: () -> Unit
 ) {
     val qColor = skin.quality?.let { skinQualityColor(it) } ?: MaterialTheme.colorScheme.outline
+    val displayModes = buildList {
+        if (!skin.fullImageUrl.isNullOrBlank() || !skin.thumbnailUrl.isNullOrBlank()) add("立绘")
+        if (!skin.screenshotUrl.isNullOrBlank()) add("游戏截图")
+    }
+    var selectedMode by remember(skin.name, skin.weapon) {
+        mutableStateOf(if (displayModes.contains("立绘")) "立绘" else displayModes.firstOrNull().orEmpty())
+    }
+    val displayedImage = when (selectedMode) {
+        "游戏截图" -> skin.screenshotUrl ?: skin.fullImageUrl ?: skin.thumbnailUrl
+        else -> skin.fullImageUrl ?: skin.thumbnailUrl ?: skin.screenshotUrl
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -492,12 +503,14 @@ private fun WeaponSkinDetailSheet(
                     .fillMaxWidth()
                     .height(260.dp)
             ) {
-                AsyncImage(
-                    model = skin.fullImageUrl ?: skin.thumbnailUrl,
-                    contentDescription = skin.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                if (displayedImage != null) {
+                    AsyncImage(
+                        model = displayedImage,
+                        contentDescription = skin.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -544,6 +557,20 @@ private fun WeaponSkinDetailSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                if (displayModes.size > 1) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        displayModes.forEach { mode ->
+                            FilterChip(
+                                selected = selectedMode == mode,
+                                onClick = { selectedMode = mode },
+                                label = { Text(mode) },
+                                shape = smoothCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))

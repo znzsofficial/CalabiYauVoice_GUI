@@ -337,6 +337,19 @@ internal fun WikiHomePage(
                 )
             }
 
+            // ── 投票 ──
+            item(key = "voting", contentType = "action_card") {
+                ActionCard(
+                    title = "投票",
+                    subtitle = "查看并参与当前 Wiki 投票",
+                    icon = Icons.Outlined.HowToVote,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.VOTING) },
+                    backdrop = backdrop
+                )
+            }
+
             // ── 游戏延伸 ──
             item(key = "others", contentType = "content_block") {
                 ContentBlockCard(
@@ -377,7 +390,9 @@ internal fun WikiHomePage(
                         "聊天气泡" to "聊天气泡",
                         "头套" to "头套",
                         "超弦体动作" to "超弦体动作",
-                        "头像框" to "头像框"
+                        "头像框" to "头像框",
+                        "房间外观" to "房间外观",
+                        "载具外观" to "极限推进模式载具外观"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
@@ -388,14 +403,16 @@ internal fun WikiHomePage(
                         "聊天气泡" to { onNavigateTo(WikiHubPage.CHAT_BUBBLES) },
                         "头套" to { onNavigateTo(WikiHubPage.HEADGEAR) },
                         "超弦体动作" to { onNavigateTo(WikiHubPage.STRINGER_ACTIONS) },
-                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) }
+                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) },
+                        "房间外观" to { onNavigateTo(WikiHubPage.ROOM_APPEARANCES) },
+                        "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) }
                     ),
                     backdrop = backdrop
                 )
             }
 
-            // ── 时装投票 ──
-            item(key = "voting", contentType = "action_card") {
+            // ── 卡牌 ──
+            item(key = "bio_cards", contentType = "action_card") {
                 ActionCard(
                     title = "卡牌",
                     subtitle = "整合 PC、生化卡牌与卡组分享",
@@ -492,6 +509,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("characters", "角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
     QuickEntry("weapons", "武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
     QuickEntry("maps", "地图", Icons.Outlined.Map, WikiHubPage.MAPS),
+    QuickEntry("voting", "投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
     QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
     QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
     QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
@@ -502,7 +520,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
 )
 internal val defaultQuickEntryIds = listOf(
-    "characters", "weapons", "maps", "costumes", "bio_cards", "activities"
+    "characters", "weapons", "maps", "voting", "costumes", "bio_cards"
 )
 internal val quickEntryById = allQuickEntries.associateBy(QuickEntry::id)
 
