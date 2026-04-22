@@ -29,17 +29,17 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.data.PlayerDecorationApi
 import androidx.core.net.toUri
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.ShimmerBox
-import com.nekolaska.calabiyau.ui.shared.ZoomableImage
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
+import com.nekolaska.calabiyau.core.ui.ZoomableImage
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  基板页 —— 展示所有基板（名片/横幅）

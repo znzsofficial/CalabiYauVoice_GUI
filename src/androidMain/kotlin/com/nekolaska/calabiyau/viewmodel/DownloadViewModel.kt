@@ -6,9 +6,9 @@ import android.webkit.MimeTypeMap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nekolaska.calabiyau.NotificationHelper
-import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.data.NetworkMonitor
-import com.nekolaska.calabiyau.data.WikiEngine
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.network.NetworkMonitor
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.CharacterGroup
 import data.DownloadRecord
 import data.sanitizeFileName

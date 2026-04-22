@@ -1,5 +1,9 @@
 package com.nekolaska.calabiyau.data
 
+import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.wiki.LuaTableParser
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson

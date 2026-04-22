@@ -9,7 +9,7 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
-import com.nekolaska.calabiyau.data.AppPrefs
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import java.io.File
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat

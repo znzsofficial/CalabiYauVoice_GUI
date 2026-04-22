@@ -62,14 +62,14 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.scale
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.gif.AnimatedGifEncoder
-import com.nekolaska.calabiyau.gif.GifDecoder
-import com.nekolaska.calabiyau.gif.StandardGifDecoder
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.media.gif.AnimatedGifEncoder
+import com.nekolaska.calabiyau.core.media.gif.GifDecoder
+import com.nekolaska.calabiyau.core.media.gif.StandardGifDecoder
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -2893,7 +2893,7 @@ private fun GifComposeOrderEditor(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                text = "第 ${index + 1} ${indexLabel}",
+                                text = "第 ${index + 1} $indexLabel",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

@@ -28,13 +28,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.data.BioCardApi
 import com.nekolaska.calabiyau.data.BioCardApi.MobileCard
 import com.nekolaska.calabiyau.data.BioCardApi.PcCard
 import com.nekolaska.calabiyau.data.BioCardApi.SharedDeck
 import com.nekolaska.calabiyau.data.BioDeckShareApi
-import com.nekolaska.calabiyau.ui.shared.*
-import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
+import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
 
@@ -278,6 +285,7 @@ fun BioCardScreen(
                                             )
                                             state.reload(forceRefresh = true)
                                         }
+
                                         is ApiResult.Error -> {
                                             showSnack(result.message)
                                         }
@@ -793,7 +801,7 @@ private fun DeckShareComposerCard(
                             listOf("完美", "卓越", "精致").forEach { key ->
                                 val now = rarityCounts[key] ?: 0
                                 val need = threshold[key] ?: 0
-                                val ok = now >= need && now <= MAX_PER_RARITY
+                                val ok = now in need..MAX_PER_RARITY
                                 Text(
                                     "$key：$now / $need（上限$MAX_PER_RARITY）${if (ok) " ✓" else ""}",
                                     style = MaterialTheme.typography.bodySmall,

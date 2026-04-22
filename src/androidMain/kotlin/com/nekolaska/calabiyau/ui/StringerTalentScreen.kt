@@ -23,7 +23,6 @@ import androidx.compose.material.icons.outlined.PhotoFilter
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,15 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.StringerTalentApi
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.LoadingState
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 @Composable
 fun StringerTalentScreen(
@@ -121,7 +119,7 @@ private fun TalentSectionCard(section: StringerTalentApi.TalentSection) {
                 shape = smoothCornerShape(12.dp),
                 color = androidx.compose.ui.graphics.Color.Transparent
             ) {
-                androidx.compose.foundation.layout.Row(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
@@ -132,7 +130,7 @@ private fun TalentSectionCard(section: StringerTalentApi.TalentSection) {
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    androidx.compose.foundation.layout.Spacer(Modifier.padding(horizontal = 6.dp))
+                    Spacer(Modifier.padding(horizontal = 6.dp))
                     Text(
                         section.title,
                         style = MaterialTheme.typography.titleMedium,

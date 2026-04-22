@@ -2,8 +2,8 @@ package com.nekolaska.calabiyau.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.data.WikiEngine
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.CharacterGroup
 import data.PortraitRepository
 import data.SearchMode

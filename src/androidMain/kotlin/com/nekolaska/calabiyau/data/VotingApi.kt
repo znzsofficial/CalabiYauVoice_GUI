@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.data
 
 import android.webkit.CookieManager
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers

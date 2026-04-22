@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.data
 
+import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson

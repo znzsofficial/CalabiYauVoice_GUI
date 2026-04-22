@@ -31,10 +31,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.ui.shared.EmptyState
-import com.nekolaska.calabiyau.ui.shared.ZoomableImage
-import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.EmptyState
+import com.nekolaska.calabiyau.core.ui.ZoomableImage
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.launch
 import portrait.CharacterPortraitCatalog
 import portrait.PortraitCostume

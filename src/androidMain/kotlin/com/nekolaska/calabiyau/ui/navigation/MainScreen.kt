@@ -26,32 +26,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.data.WikiUserApi
+import com.nekolaska.calabiyau.core.wiki.WikiUserApi
 import com.nekolaska.calabiyau.R
 import com.nekolaska.calabiyau.ui.SettingsScreen
 import com.nekolaska.calabiyau.ui.download.DownloadHistoryScreen
 import com.nekolaska.calabiyau.ui.download.DownloaderScreen
-import com.nekolaska.calabiyau.ui.media.AudioPlayerManager
-import com.nekolaska.calabiyau.ui.shared.LocalSnackbarHostState
-import com.nekolaska.calabiyau.ui.shared.smoothCapsuleShape
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
-import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.ui.shared.liquidGlass
+import com.nekolaska.calabiyau.core.media.AudioPlayerManager
+import com.nekolaska.calabiyau.core.ui.LocalSnackbarHostState
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.ui.tools.FileManagerDirectoryPickerConfig
 import com.nekolaska.calabiyau.ui.tools.FileManagerPickerMode
 import com.nekolaska.calabiyau.ui.tools.FileManagerScreen
 import com.nekolaska.calabiyau.ui.tools.ToolsHomeScreen
-import com.nekolaska.calabiyau.ui.wiki.WIKI_HOME_URL
-import com.nekolaska.calabiyau.ui.wiki.WikiHubPage
-import com.nekolaska.calabiyau.ui.wiki.WikiHubScreen
-import com.nekolaska.calabiyau.ui.wiki.WikiWebViewScreen
-import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
+import com.nekolaska.calabiyau.feature.wiki.hub.WIKI_HOME_URL
+import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubPage
+import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubScreen
+import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
+import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel
 import com.nekolaska.calabiyau.viewmodel.SearchViewModel
@@ -262,7 +263,7 @@ fun MainScreen(
             }
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
-                    rootPath = com.nekolaska.calabiyau.data.AppPrefs.savePath,
+                    rootPath = AppPrefs.savePath,
                     onBack = { openWikiHub() }
                 )
             }
@@ -314,7 +315,7 @@ fun MainScreen(
                             val overlayRootPath = if (overlay.directoryPickerConfig == null && !overlay.initialPath.isNullOrBlank()) {
                                 overlay.initialPath
                             } else {
-                                com.nekolaska.calabiyau.data.AppPrefs.savePath
+                                AppPrefs.savePath
                             }
                             Surface(
                                 modifier = Modifier.fillMaxSize(),

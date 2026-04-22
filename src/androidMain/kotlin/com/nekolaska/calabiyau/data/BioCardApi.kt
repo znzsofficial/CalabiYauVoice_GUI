@@ -1,6 +1,9 @@
 package com.nekolaska.calabiyau.data
 
 import android.text.Html
+import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -400,7 +403,7 @@ object BioCardApi {
             ?.getOrNull(1)
             .orEmpty()
             .trim()
-        val faction = if (factionFromScript.isNotBlank()) factionFromScript else fallbackFaction
+        val faction = factionFromScript.ifBlank { fallbackFaction }
         if (faction.isBlank()) return ""
 
         val cardIndexes = cardIdsParam

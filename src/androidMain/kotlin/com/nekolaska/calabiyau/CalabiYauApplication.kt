@@ -12,7 +12,7 @@ import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
-import com.nekolaska.calabiyau.data.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import java.io.File
 
 class CalabiYauApplication : Application(), SingletonImageLoader.Factory {
