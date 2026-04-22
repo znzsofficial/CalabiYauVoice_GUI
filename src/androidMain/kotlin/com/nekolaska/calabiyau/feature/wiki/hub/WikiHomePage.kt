@@ -56,8 +56,8 @@ import com.nekolaska.calabiyau.core.ui.liquidGlassLight
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
-import com.nekolaska.calabiyau.data.MapListApi
-import com.nekolaska.calabiyau.data.WallpaperApi
+import com.nekolaska.calabiyau.feature.wiki.map.MapListApi
+import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
