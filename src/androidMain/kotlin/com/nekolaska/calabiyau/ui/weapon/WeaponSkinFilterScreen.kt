@@ -97,62 +97,67 @@ fun WeaponSkinFilterScreen(
             modifier = Modifier.padding(innerPadding),
             loading = { mod -> WeaponSkinFilterSkeleton(mod) }
         ) {
-            Column {
-                SearchBar(
-                    keyword = searchQuery,
-                    onKeywordChange = { searchQuery = it },
-                    onSearch = {},
-                    onClear = { searchQuery = "" },
-                    isSearching = false,
-                    placeholder = "搜索外观名称或武器…",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
-                )
+            var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
 
-                // ── 筛选栏 ──
-                WeaponSkinFilterBar(
-                    weapons = weapons,
-                    selectedWeapon = selectedWeapon,
-                    onWeaponSelected = { selectedWeapon = it },
-                    selectedQuality = selectedQuality,
-                    onQualitySelected = { selectedQuality = it }
-                )
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 110.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column {
+                        SearchBar(
+                            keyword = searchQuery,
+                            onKeywordChange = { searchQuery = it },
+                            onSearch = {},
+                            onClear = { searchQuery = "" },
+                            isSearching = false,
+                            placeholder = "搜索外观名称或武器…",
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
 
-                // ── 外观网格 ──
-                if (filteredSkins.isEmpty()) {
-                    Box(
-                        Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    var selectedSkin by remember { mutableStateOf<WeaponSkinInfo?>(null) }
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(filteredSkins, key = { it.name + it.weapon }) { skin ->
-                            WeaponSkinCard(
-                                skin = skin,
-                                onClick = { selectedSkin = skin }
-                            )
-                        }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Spacer(Modifier.height(16.dp))
-                        }
-                    }
-
-                    // ── 外观详情底部弹窗 ──
-                    if (selectedSkin != null) {
-                        WeaponSkinDetailSheet(
-                            skin = selectedSkin!!,
-                            onDismiss = { selectedSkin = null }
+                        // ── 筛选栏 ──
+                        WeaponSkinFilterBar(
+                            weapons = weapons,
+                            selectedWeapon = selectedWeapon,
+                            onWeaponSelected = { selectedWeapon = it },
+                            selectedQuality = selectedQuality,
+                            onQualitySelected = { selectedQuality = it }
                         )
                     }
                 }
+
+                // ── 外观网格 ──
+                if (filteredSkins.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            Modifier.fillMaxWidth().height(300.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    items(filteredSkins, key = { it.name + it.weapon }) { skin ->
+                        WeaponSkinCard(
+                            skin = skin,
+                            onClick = { selectedSkin = skin }
+                        )
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Spacer(Modifier.height(16.dp))
+                    }
+                }
+            }
+
+            // ── 外观详情底部弹窗 ──
+            if (selectedSkin != null) {
+                WeaponSkinDetailSheet(
+                    skin = selectedSkin!!,
+                    onDismiss = { selectedSkin = null }
+                )
             }
         }
     }
@@ -429,9 +434,12 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
             }
 
             // 外观名
-            Column(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     skin.name,
