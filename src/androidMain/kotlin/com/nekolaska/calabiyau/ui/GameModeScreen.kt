@@ -17,11 +17,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.GameModeApi
 import com.nekolaska.calabiyau.data.GameModeApi.GameModeDetail
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.LoadingState
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  战斗模式页 —— 原生客户端版 (MD3 Expressive)

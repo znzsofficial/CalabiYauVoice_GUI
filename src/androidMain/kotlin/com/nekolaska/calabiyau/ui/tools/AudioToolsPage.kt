@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
@@ -42,9 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

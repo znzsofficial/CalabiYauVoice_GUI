@@ -18,8 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import data.DownloadRecord
 import java.text.SimpleDateFormat

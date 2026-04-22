@@ -23,11 +23,11 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.palette.graphics.Palette
-import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.data.OfflineCache
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.data.UpdateApi
-import com.nekolaska.calabiyau.data.WikiEngine
-import com.nekolaska.calabiyau.ui.shared.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.ui.navigation.MainScreen
 import com.nekolaska.calabiyau.viewmodel.DownloadViewModel
 import com.nekolaska.calabiyau.viewmodel.PortraitViewModel

@@ -30,11 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.ui.media.AudioPlayButton
-import com.nekolaska.calabiyau.ui.media.AudioPlayerManager
-import com.nekolaska.calabiyau.ui.shared.ZoomableImage
-import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.media.AudioPlayButton
+import com.nekolaska.calabiyau.core.media.AudioPlayerManager
+import com.nekolaska.calabiyau.core.ui.ZoomableImage
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

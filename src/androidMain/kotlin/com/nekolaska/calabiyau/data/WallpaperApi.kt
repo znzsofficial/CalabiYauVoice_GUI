@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.data
 
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
