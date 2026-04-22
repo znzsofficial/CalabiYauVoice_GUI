@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.data
 
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

@@ -26,11 +26,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.data.NavigationMenuApi
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.LoadingState
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 // ════════════════════════════════════════════════════════
 //  Wiki 导航页 —— 原生客户端版 (MD3 Expressive)

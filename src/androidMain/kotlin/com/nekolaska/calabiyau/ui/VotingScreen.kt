@@ -23,10 +23,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.VotingApi
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.ErrorState
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
-import com.nekolaska.calabiyau.ui.wiki.hasWikiLoginCookie
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.ErrorState
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
 

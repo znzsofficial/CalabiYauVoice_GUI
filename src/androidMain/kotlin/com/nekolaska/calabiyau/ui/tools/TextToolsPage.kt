@@ -29,9 +29,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.data.AppPrefs
-import com.nekolaska.calabiyau.ui.shared.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

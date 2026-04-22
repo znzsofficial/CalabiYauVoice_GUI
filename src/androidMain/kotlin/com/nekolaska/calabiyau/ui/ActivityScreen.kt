@@ -38,12 +38,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.data.ActivityApi
-import com.nekolaska.calabiyau.ui.shared.ApiResourceContent
-import com.nekolaska.calabiyau.ui.shared.ShimmerBox
-import com.nekolaska.calabiyau.ui.shared.SkeletonTextLine
-import com.nekolaska.calabiyau.ui.shared.BackNavButton
-import com.nekolaska.calabiyau.ui.shared.rememberLoadState
-import com.nekolaska.calabiyau.ui.shared.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
+import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

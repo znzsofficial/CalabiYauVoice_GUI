@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.data
 
 import android.webkit.CookieManager
 import android.util.Base64
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -298,7 +299,7 @@ object BioDeckShareApi {
                         val msg = when (code) {
                             "articleexists" -> "同名卡组已存在，请修改卡组名称"
                             "assertuserfailed" -> "登录状态失效，请重新登录"
-                            else -> "发布失败：${if (info.isNotBlank()) info else code}"
+                            else -> "发布失败：${info.ifBlank { code }}"
                         }
                         return@withContext ApiResult.Error(msg, kind = ErrorKind.UNKNOWN)
                     }
