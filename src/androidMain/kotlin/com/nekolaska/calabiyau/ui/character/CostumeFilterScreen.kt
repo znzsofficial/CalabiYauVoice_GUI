@@ -97,62 +97,67 @@ fun CostumeFilterScreen(
             modifier = Modifier.padding(innerPadding),
             loading = { mod -> CostumeFilterSkeleton(mod) }
         ) {
-            Column {
-                SearchBar(
-                    keyword = searchQuery,
-                    onKeywordChange = { searchQuery = it },
-                    onSearch = {},
-                    onClear = { searchQuery = "" },
-                    isSearching = false,
-                    placeholder = "搜索时装名称或角色…",
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
-                )
+            var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
 
-                // ── 筛选栏 ──
-                CostumeFilterBar(
-                    characters = characters,
-                    selectedCharacter = selectedCharacter,
-                    onCharacterSelected = { selectedCharacter = it },
-                    selectedQuality = selectedQuality,
-                    onQualitySelected = { selectedQuality = it }
-                )
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 110.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column {
+                        SearchBar(
+                            keyword = searchQuery,
+                            onKeywordChange = { searchQuery = it },
+                            onSearch = {},
+                            onClear = { searchQuery = "" },
+                            isSearching = false,
+                            placeholder = "搜索时装名称或角色…",
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
 
-                // ── 时装网格 ──
-                if (filteredCostumes.isEmpty()) {
-                    Box(
-                        Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    var selectedCostume by remember { mutableStateOf<CostumeInfo?>(null) }
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 110.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(filteredCostumes, key = { it.name + it.character }) { costume ->
-                            CostumeCard(
-                                costume = costume,
-                                onClick = { selectedCostume = costume }
-                            )
-                        }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Spacer(Modifier.height(16.dp))
-                        }
-                    }
-
-                    // ── 时装详情底部弹窗 ──
-                    if (selectedCostume != null) {
-                        CostumeDetailSheet(
-                            costume = selectedCostume!!,
-                            onDismiss = { selectedCostume = null }
+                        // ── 筛选栏 ──
+                        CostumeFilterBar(
+                            characters = characters,
+                            selectedCharacter = selectedCharacter,
+                            onCharacterSelected = { selectedCharacter = it },
+                            selectedQuality = selectedQuality,
+                            onQualitySelected = { selectedQuality = it }
                         )
                     }
                 }
+
+                // ── 时装网格 ──
+                if (filteredCostumes.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            Modifier.fillMaxWidth().height(300.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    items(filteredCostumes, key = { it.name + it.character }) { costume ->
+                        CostumeCard(
+                            costume = costume,
+                            onClick = { selectedCostume = costume }
+                        )
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Spacer(Modifier.height(16.dp))
+                    }
+                }
+            }
+
+            // ── 时装详情底部弹窗 ──
+            if (selectedCostume != null) {
+                CostumeDetailSheet(
+                    costume = selectedCostume!!,
+                    onDismiss = { selectedCostume = null }
+                )
             }
         }
     }
@@ -429,9 +434,12 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
             }
 
             // 时装名
-            Column(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     costume.name,
