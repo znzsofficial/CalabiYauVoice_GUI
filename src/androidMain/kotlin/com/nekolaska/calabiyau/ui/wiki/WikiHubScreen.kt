@@ -26,7 +26,7 @@ import com.nekolaska.calabiyau.ui.shared.rememberLoadState
 enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
 }
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
@@ -58,6 +58,8 @@ sealed interface WikiRoute {
     data object ChatBubbles : WikiRoute
     data object Headgear : WikiRoute
     data object StringerActions : WikiRoute
+    data object StringerTalents : WikiRoute
+    data object StringerPushCards : WikiRoute
     data object AvatarFrames : WikiRoute
     data object RoomAppearances : WikiRoute
     data object VehicleSkins : WikiRoute
@@ -86,6 +88,8 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.CHAT_BUBBLES -> WikiRoute.ChatBubbles
     WikiHubPage.HEADGEAR -> WikiRoute.Headgear
     WikiHubPage.STRINGER_ACTIONS -> WikiRoute.StringerActions
+    WikiHubPage.STRINGER_TALENTS -> WikiRoute.StringerTalents
+    WikiHubPage.STRINGER_PUSH_CARDS -> WikiRoute.StringerPushCards
     WikiHubPage.AVATAR_FRAMES -> WikiRoute.AvatarFrames
     WikiHubPage.ROOM_APPEARANCES -> WikiRoute.RoomAppearances
     WikiHubPage.VEHICLE_SKINS -> WikiRoute.VehicleSkins
@@ -141,6 +145,8 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.ChatBubbles -> "chatBubbles"
     WikiRoute.Headgear -> "headgear"
     WikiRoute.StringerActions -> "stringerActions"
+    WikiRoute.StringerTalents -> "stringerTalents"
+    WikiRoute.StringerPushCards -> "stringerPushCards"
     WikiRoute.AvatarFrames -> "avatarFrames"
     WikiRoute.RoomAppearances -> "roomAppearances"
     WikiRoute.VehicleSkins -> "vehicleSkins"
@@ -187,6 +193,8 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "chatBubbles" -> WikiRoute.ChatBubbles
         "headgear" -> WikiRoute.Headgear
         "stringerActions" -> WikiRoute.StringerActions
+        "stringerTalents" -> WikiRoute.StringerTalents
+        "stringerPushCards" -> WikiRoute.StringerPushCards
         "avatarFrames" -> WikiRoute.AvatarFrames
         "roomAppearances" -> WikiRoute.RoomAppearances
         "vehicleSkins" -> WikiRoute.VehicleSkins
@@ -502,6 +510,20 @@ fun WikiHubScreen(
                 com.nekolaska.calabiyau.ui.PlayerDecorationScreen(
                     title = "超弦体动作",
                     onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.StringerTalents -> {
+                com.nekolaska.calabiyau.ui.StringerTalentScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.StringerPushCards -> {
+                com.nekolaska.calabiyau.ui.StringerPushCardScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
                 )
             }
 

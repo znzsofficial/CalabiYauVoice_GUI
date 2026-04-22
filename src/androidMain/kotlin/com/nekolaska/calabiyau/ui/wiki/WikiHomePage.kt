@@ -377,6 +377,28 @@ internal fun WikiHomePage(
                 )
             }
 
+            // ── 移动端内容 ──
+            item(key = "mobile_content", contentType = "content_block") {
+                ContentBlockCard(
+                    title = "移动端内容",
+                    icon = Icons.Outlined.PhoneAndroid,
+                    items = listOf(
+                        "头像框" to "头像框",
+                        "载具外观" to "极限推进模式载具外观",
+                        "超弦体天赋" to "超弦体天赋",
+                        "超弦推进卡牌" to "战斗模式/超弦推进"
+                    ),
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) },
+                        "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) },
+                        "超弦体天赋" to { onNavigateTo(WikiHubPage.STRINGER_TALENTS) },
+                        "超弦推进卡牌" to { onNavigateTo(WikiHubPage.STRINGER_PUSH_CARDS) }
+                    ),
+                    backdrop = backdrop
+                )
+            }
+
             // ── 玩家装饰 ──
             item(key = "decorations", contentType = "content_block") {
                 ContentBlockCard(
@@ -390,9 +412,7 @@ internal fun WikiHomePage(
                         "聊天气泡" to "聊天气泡",
                         "头套" to "头套",
                         "超弦体动作" to "超弦体动作",
-                        "头像框" to "头像框",
-                        "房间外观" to "房间外观",
-                        "载具外观" to "极限推进模式载具外观"
+                        "房间外观" to "房间外观"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
@@ -403,9 +423,7 @@ internal fun WikiHomePage(
                         "聊天气泡" to { onNavigateTo(WikiHubPage.CHAT_BUBBLES) },
                         "头套" to { onNavigateTo(WikiHubPage.HEADGEAR) },
                         "超弦体动作" to { onNavigateTo(WikiHubPage.STRINGER_ACTIONS) },
-                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) },
-                        "房间外观" to { onNavigateTo(WikiHubPage.ROOM_APPEARANCES) },
-                        "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) }
+                        "房间外观" to { onNavigateTo(WikiHubPage.ROOM_APPEARANCES) }
                     ),
                     backdrop = backdrop
                 )
@@ -459,7 +477,6 @@ internal fun WikiHomePage(
                         "弦能增幅网络" to "弦能增幅网络",
                         "特别行动" to "特别行动",
                         "赫尔墨斯" to "赫尔墨斯",
-                        "超弦体天赋" to "超弦体天赋",
                         "超弦体定位" to "超弦体定位",
                         "誓约" to "誓约",
                         "印迹" to "印迹",
