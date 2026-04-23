@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
@@ -22,6 +23,10 @@ import java.net.URLEncoder
  * 然后批量获取图片 URL。支持壁纸、表情包、四格漫画等页面。
  */
 object GalleryApi {
+
+    init {
+        MemoryCacheRegistry.register("GalleryApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
