@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.weapon.list
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
@@ -20,6 +21,10 @@ import java.net.URLEncoder
  * 武器图片通过 `文件:使用者名-weapon.png` 命名规则获取。
  */
 object WeaponListApi {
+
+    init {
+        MemoryCacheRegistry.register("WeaponListApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"

@@ -2,19 +2,7 @@ package com.nekolaska.calabiyau.core.cache
 
 import android.content.Context
 import com.nekolaska.calabiyau.CrashContextStore
-import com.nekolaska.calabiyau.feature.wiki.announcement.AnnouncementApi
-import com.nekolaska.calabiyau.feature.wiki.balance.BalanceDataApi
-import com.nekolaska.calabiyau.feature.wiki.bio.BioCardApi
-import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
-import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterApi
-import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryApi
-import com.nekolaska.calabiyau.feature.wiki.game.GameModeApi
-import com.nekolaska.calabiyau.feature.wiki.map.MapListApi
 import com.nekolaska.calabiyau.core.network.NetworkMonitor
-import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationApi
-import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
-import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
-import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -158,18 +146,7 @@ object OfflineCache {
      * 清除所有 API 的内存缓存，与 [clearAll] 配合使用。
      */
     fun clearMemoryCaches() {
-        WeaponListApi.clearMemoryCache()
-        CharacterListApi.clearMemoryCache()
-        MapListApi.clearMemoryCache()
-        CostumeFilterApi.clearMemoryCache()
-        WeaponSkinFilterApi.clearMemoryCache()
-        BioCardApi.clearMemoryCache()
-        AnnouncementApi.clearMemoryCache()
-        GameModeApi.clearMemoryCache()
-        WallpaperApi.clearMemoryCache()
-        BalanceDataApi.clearMemoryCache()
-        GalleryApi.clearMemoryCache()
-        PlayerDecorationApi.clearMemoryCache()
+        MemoryCacheRegistry.clearAll()
     }
 
     /**

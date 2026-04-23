@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.bio
 
 import android.text.Html
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
@@ -29,6 +30,10 @@ import kotlin.text.get
  * - 晶源感染卡组分享
  */
 object BioCardApi {
+
+    init {
+        MemoryCacheRegistry.register("BioCardApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"

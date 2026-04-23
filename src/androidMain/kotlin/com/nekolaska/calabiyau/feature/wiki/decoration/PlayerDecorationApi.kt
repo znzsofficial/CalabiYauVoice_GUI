@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.LuaTableParser
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
@@ -26,6 +27,10 @@ import java.net.URLEncoder
  * 所有页面共享相同的 gallerygrid HTML 结构。
  */
 object PlayerDecorationApi {
+
+    init {
+        MemoryCacheRegistry.register("PlayerDecorationApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 

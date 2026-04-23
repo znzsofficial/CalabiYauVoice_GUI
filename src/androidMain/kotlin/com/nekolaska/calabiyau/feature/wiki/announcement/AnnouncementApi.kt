@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.announcement
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
@@ -18,6 +19,10 @@ import java.net.URLEncoder
  * 包含标题、时间、B站链接和官网链接。
  */
 object AnnouncementApi {
+
+    init {
+        MemoryCacheRegistry.register("AnnouncementApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"

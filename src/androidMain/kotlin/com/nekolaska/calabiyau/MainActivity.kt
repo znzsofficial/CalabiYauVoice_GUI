@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.palette.graphics.Palette
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.cache.AppCacheBootstrap
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.feature.settings.UpdateApi
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
@@ -59,6 +60,7 @@ class MainActivity : ComponentActivity() {
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
         OfflineCache.init(this)
+        AppCacheBootstrap.ensureRegistered()
         // 仅在冷启动时异步清理过期磁盘缓存，避免配置变更时重复执行。
         if (savedInstanceState == null) {
             lifecycleScope.launch(Dispatchers.IO) { OfflineCache.pruneExpired() }

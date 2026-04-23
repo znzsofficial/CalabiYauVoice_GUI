@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
@@ -13,6 +14,10 @@ import java.net.URLEncoder
  * 使用 MediaWiki API 获取壁纸分类下的文件列表，随机选取一张。
  */
 object WallpaperApi {
+
+    init {
+        MemoryCacheRegistry.register("WallpaperApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.balance
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -24,6 +25,10 @@ import java.util.concurrent.TimeUnit
  * 2. POST /api/common/ide              → 平衡数据（胜率/选取率/KD/伤害/评分）
  */
 object BalanceDataApi {
+
+    init {
+        MemoryCacheRegistry.register("BalanceDataApi", ::clearMemoryCache)
+    }
 
     private const val BASE_URL = "https://klbq-prod-www.idreamsky.com"
     private const val CHART_ID = "338985"

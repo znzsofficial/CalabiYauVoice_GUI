@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.character.list
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
@@ -23,6 +24,10 @@ import java.net.URLEncoder
  * 从返回的 HTML 中提取角色名、链接和图片 URL。
  */
 object CharacterListApi {
+
+    init {
+        MemoryCacheRegistry.register("CharacterListApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"

@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.map
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
@@ -23,6 +24,10 @@ import java.net.URLEncoder
  * 从返回的 HTML 中提取地图名、链接和图片 URL。
  */
 object MapListApi {
+
+    init {
+        MemoryCacheRegistry.register("MapListApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
