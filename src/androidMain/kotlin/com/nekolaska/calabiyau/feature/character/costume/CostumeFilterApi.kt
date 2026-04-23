@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.character.costume
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
@@ -20,6 +21,10 @@ import java.net.URLEncoder
  * 从返回的 HTML 中提取时装数据（data-param 属性 + img 标签）。
  */
 object CostumeFilterApi {
+
+    init {
+        MemoryCacheRegistry.register("CostumeFilterApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 

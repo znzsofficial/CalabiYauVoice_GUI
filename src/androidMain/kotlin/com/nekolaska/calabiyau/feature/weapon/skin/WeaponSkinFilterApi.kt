@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.weapon.skin
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
@@ -20,6 +21,10 @@ import java.net.URLEncoder
  * 从返回的 HTML 中提取武器外观数据（data-param 属性 + img 标签）。
  */
 object WeaponSkinFilterApi {
+
+    init {
+        MemoryCacheRegistry.register("WeaponSkinFilterApi", ::clearMemoryCache)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
