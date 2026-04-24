@@ -56,7 +56,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **📁 File Manager** — Browse downloaded files with multi-select mode (long-press), batch delete/share, image gallery preview, and audio playback.
 - **📊 Download History** — Track past downloads with status and file count.
 - **⭐ Favorites** — Bookmark characters for quick access.
-- **📶 Network Detection** — Offline status banner with custom error page in WebView.
+- **💾 Offline Cache** — Disk cache for Wiki resources with offline-first mode, cache pruning, and manual cache clearing.
 - **🎨 Material You** — Dynamic color with wallpaper-based seed color, light/dark/system theme, and liquid glass effects.
 
 ---
@@ -110,9 +110,14 @@ src/
 │   ├── util/            #   Audio conversion, preferences
 │   └── jna/windows/     #   Win32 API bindings
 └── androidMain/         # Android target
-    ├── data/            #   OkHttp client, API clients, preferences
-    ├── viewmodel/       #   SearchVM, DownloadVM, PortraitVM
-    ├── ui/              #   Compose screens & components
+    ├── core/            #   Cache, media, navigation, network, preferences, shared UI
+    ├── feature/         #   Feature-first modules
+    │   ├── character/   #   Character list/detail/costumes
+    │   ├── weapon/      #   Weapon list/detail/skins
+    │   ├── wiki/        #   Hub, maps, gallery, activities, decorations, stringer pages
+    │   ├── download/    #   Search, download, history, portrait viewer
+    │   ├── settings/    #   App settings and update checks
+    │   └── tools/       #   File/audio/text utilities
     └── MainActivity.kt
 ```
 
