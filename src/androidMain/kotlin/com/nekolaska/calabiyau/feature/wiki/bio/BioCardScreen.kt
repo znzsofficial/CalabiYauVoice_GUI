@@ -38,9 +38,15 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.feature.wiki.bio.BioCardApi.MobileCard
-import com.nekolaska.calabiyau.feature.wiki.bio.BioCardApi.PcCard
-import com.nekolaska.calabiyau.feature.wiki.bio.BioCardApi.SharedDeck
+import com.nekolaska.calabiyau.feature.wiki.bio.api.BioCardApi
+import com.nekolaska.calabiyau.feature.wiki.bio.api.BioDeckShareApi
+import com.nekolaska.calabiyau.feature.wiki.bio.model.CardPageData
+import com.nekolaska.calabiyau.feature.wiki.bio.model.CardRefreshProbability
+import com.nekolaska.calabiyau.feature.wiki.bio.model.DeckCardOption
+import com.nekolaska.calabiyau.feature.wiki.bio.model.MobileCard
+import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
+import com.nekolaska.calabiyau.feature.wiki.bio.model.SharedDeck
+import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckPayload
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
@@ -58,7 +64,7 @@ fun BioCardScreen(
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val state = rememberLoadState(
-        initial = BioCardApi.CardPageData(
+        initial = CardPageData(
             pcCards = emptyList(),
             mobileCards = emptyList(),
             decks = emptyList(),
@@ -74,7 +80,7 @@ fun BioCardScreen(
     var isWikiLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
     var isSubmittingDeck by remember { mutableStateOf(false) }
     val deckShareCardState = rememberLoadState(
-        initial = emptyMap<String, List<BioDeckShareApi.DeckCardOption>>()
+        initial = emptyMap<String, List<DeckCardOption>>()
     ) { force ->
         BioDeckShareApi.fetchDeckCardMap(force)
     }
@@ -594,7 +600,7 @@ private val DECK_RARITY_THRESHOLDS = mapOf(
 private fun DeckShareComposerCard(
     isLoggedIn: Boolean,
     isSubmitting: Boolean,
-    cardMap: Map<String, List<BioDeckShareApi.DeckCardOption>>,
+    cardMap: Map<String, List<DeckCardOption>>,
     pcCards: List<PcCard>,
     mobileCards: List<MobileCard>,
     isLoadingCardMap: Boolean,
@@ -602,7 +608,7 @@ private fun DeckShareComposerCard(
     onReloadCardMap: () -> Unit,
     onOpenLogin: () -> Unit,
     onRefreshLoginState: () -> Unit,
-    onSubmit: (BioDeckShareApi.SubmitDeckPayload) -> Unit
+    onSubmit: (SubmitDeckPayload) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var showCardSelector by remember { mutableStateOf(false) }
@@ -843,7 +849,7 @@ private fun DeckShareComposerCard(
                                 return@FilledTonalButton
                             }
                             onSubmit(
-                                BioDeckShareApi.SubmitDeckPayload(
+                                SubmitDeckPayload(
                                     deckName = deckName.trim(),
                                     author = author.trim(),
                                     intro = intro.trim(),
@@ -1006,7 +1012,7 @@ private fun PcCardDetailSheet(card: PcCard, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ProbabilitySection(probability: BioCardApi.CardRefreshProbability) {
+private fun ProbabilitySection(probability: CardRefreshProbability) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             "刷新概率",

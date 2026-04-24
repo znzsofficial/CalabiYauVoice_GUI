@@ -45,6 +45,8 @@ import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.activity.api.ActivityApi
+import com.nekolaska.calabiyau.feature.wiki.activity.model.ActivityEntry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,7 +55,7 @@ fun ActivityScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val state = rememberLoadState(emptyList<ActivityApi.ActivityEntry>()) { force ->
+    val state = rememberLoadState(emptyList<ActivityEntry>()) { force ->
         ActivityApi.fetchActivities(forceRefresh = force)
     }
 
@@ -100,7 +102,7 @@ fun ActivityScreen(
 
 @Composable
 private fun ActivityCard(
-    activity: ActivityApi.ActivityEntry,
+    activity: ActivityEntry,
     onOpenWikiUrl: (String) -> Unit
 ) {
     Card(

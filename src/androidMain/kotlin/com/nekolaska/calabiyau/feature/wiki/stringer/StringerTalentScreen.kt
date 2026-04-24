@@ -49,6 +49,10 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.stringer.api.StringerTalentApi
+import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentItem
+import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentPage
+import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentSection
 
 @Composable
 fun StringerTalentScreen(
@@ -56,7 +60,7 @@ fun StringerTalentScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val state = rememberLoadState(
-        initial = StringerTalentApi.TalentPage(
+        initial = TalentPage(
             title = "超弦体天赋",
             wikiUrl = "",
             sections = emptyList()
@@ -106,7 +110,7 @@ fun StringerTalentScreen(
 }
 
 @Composable
-private fun TalentSectionCard(section: StringerTalentApi.TalentSection) {
+private fun TalentSectionCard(section: TalentSection) {
     var expanded by remember { mutableStateOf(true) }
 
     Card(
@@ -158,7 +162,7 @@ private fun TalentSectionCard(section: StringerTalentApi.TalentSection) {
 }
 
 @Composable
-private fun TalentItemCard(item: StringerTalentApi.TalentItem) {
+private fun TalentItemCard(item: TalentItem) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),

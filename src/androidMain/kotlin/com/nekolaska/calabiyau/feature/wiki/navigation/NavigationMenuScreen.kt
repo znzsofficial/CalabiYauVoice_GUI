@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nekolaska.calabiyau.feature.wiki.navigation.api.NavigationMenuApi
+import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavItem
+import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavSection
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
@@ -55,7 +58,7 @@ fun NavigationMenuScreen(
     embedded: Boolean = false
 ) {
     val state =
-        rememberLoadState(emptyList<NavigationMenuApi.NavSection>()) { force ->
+        rememberLoadState(emptyList<NavSection>()) { force ->
             NavigationMenuApi.fetchNavigationSections(force)
         }
     val sections = state.data
@@ -141,7 +144,7 @@ fun NavigationMenuScreen(
 
 @Composable
 private fun NavSectionCard(
-    section: NavigationMenuApi.NavSection,
+    section: NavSection,
     isExpanded: Boolean,
     onToggle: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
@@ -232,7 +235,7 @@ private fun NavSectionCard(
 
 @Composable
 private fun NavNodeRow(
-    item: NavigationMenuApi.NavItem,
+    item: NavItem,
     level: Int,
     onOpenWikiUrl: (String) -> Unit
 ) {

@@ -39,6 +39,9 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.decoration.api.PlayerDecorationApi
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationItem
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
 import java.io.File
 
 // ════════════════════════════════════════════════════════
@@ -72,15 +75,15 @@ fun PlayerDecorationScreen(
     val showSnack = rememberSnackbarLauncher()
 
     val state = rememberLoadState(
-        initial = emptyList<PlayerDecorationApi.DecorationSection>(),
+        initial = emptyList<DecorationSection>(),
         key = pageName
     ) { force ->
         PlayerDecorationApi.fetch(pageName, force)
     }
     val sections = state.data
     var selectedSectionIndex by remember { mutableIntStateOf(0) }
-    var previewItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
-    var saveTargetItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
+    var previewItem by remember { mutableStateOf<DecorationItem?>(null) }
+    var saveTargetItem by remember { mutableStateOf<DecorationItem?>(null) }
 
     LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
@@ -413,7 +416,7 @@ private fun PlayerDecorationSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 private fun DecorationCard(
-    item: PlayerDecorationApi.DecorationItem,
+    item: DecorationItem,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current

@@ -44,6 +44,9 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.gallery.api.GalleryApi
+import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
+import com.nekolaska.calabiyau.feature.wiki.gallery.model.GallerySection
 import java.io.File
 
 // ════════════════════════════════════════════════════════
@@ -61,7 +64,7 @@ fun GalleryScreen(
     val showSnack = rememberSnackbarLauncher()
 
     val state = rememberLoadState(
-        initial = emptyList<GalleryApi.GallerySection>(),
+        initial = emptyList<GallerySection>(),
         key = pageName
     ) { force ->
         GalleryApi.fetchGallery(pageName, force)
@@ -69,9 +72,9 @@ fun GalleryScreen(
     var selectedSectionIndex by remember { mutableIntStateOf(0) }
 
     // 全屏预览
-    var previewImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
+    var previewImage by remember { mutableStateOf<GalleryImage?>(null) }
     // 长按保存
-    var saveTargetImage by remember { mutableStateOf<GalleryApi.GalleryImage?>(null) }
+    var saveTargetImage by remember { mutableStateOf<GalleryImage?>(null) }
 
     LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
@@ -350,7 +353,7 @@ private fun GallerySkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 private fun GalleryImageCard(
-    image: GalleryApi.GalleryImage,
+    image: GalleryImage,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
