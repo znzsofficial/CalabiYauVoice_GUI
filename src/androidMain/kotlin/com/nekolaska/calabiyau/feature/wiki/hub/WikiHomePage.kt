@@ -82,7 +82,11 @@ internal fun WikiHomePage(
     factions: List<CharacterListApi.FactionData>,
     isLoadingCharacters: Boolean,
     gameModes: List<GameModeData>,
-    isLoadingMaps: Boolean
+    isLoadingMaps: Boolean,
+    selectedHomeFaction: Int,
+    onHomeFactionChanged: (Int) -> Unit,
+    selectedHomeMapMode: Int,
+    onHomeMapModeChanged: (Int) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
@@ -90,17 +94,22 @@ internal fun WikiHomePage(
     // ── 壁纸背景（液态玻璃和普通模式均可显示） ──
     var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
     LaunchedEffect(Unit) {
+        val currentCachedUrl = AppPrefs.wallpaperUrl
+        if (!currentCachedUrl.isNullOrBlank() && wallpaperUrl != currentCachedUrl) {
+            wallpaperUrl = currentCachedUrl
+        }
         val needRefresh = when {
-            wallpaperUrl == null -> true                          // 无缓存，必须获取
+            currentCachedUrl.isNullOrBlank() -> true              // 无缓存，必须获取
             AppPrefs.wallpaperAutoRefresh
                 && !WallpaperApi.hasRefreshedThisSession -> true  // 启动后首次自动刷新
             else -> false                                        // 已刷新过或仅手动模式
         }
         if (needRefresh) {
-            withContext(Dispatchers.IO) {
-                wallpaperUrl = WallpaperApi.fetchRandomWallpaperUrl(
-                    forceRefresh = wallpaperUrl != null
-                )
+            val loadedUrl = withContext(Dispatchers.IO) {
+                WallpaperApi.ensureWallpaperUrl(forceRefresh = !currentCachedUrl.isNullOrBlank())
+            }
+            if (!loadedUrl.isNullOrBlank()) {
+                wallpaperUrl = loadedUrl
             }
         }
     }
@@ -261,6 +270,8 @@ internal fun WikiHomePage(
                 CharacterPreviewSection(
                     factions = factions,
                     isLoading = isLoadingCharacters,
+                    selectedFaction = selectedHomeFaction,
+                    onSelectedFactionChanged = onHomeFactionChanged,
                     onOpenCharacterDetail = onOpenCharacterDetail,
                     onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) },
                     backdrop = backdrop
@@ -285,6 +296,8 @@ internal fun WikiHomePage(
                 MapPreviewSection(
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
+                    selectedMode = selectedHomeMapMode,
+                    onSelectedModeChanged = onHomeMapModeChanged,
                     onOpenMapDetail = onOpenMapDetail,
                     onViewAll = { onNavigateTo(WikiHubPage.MAPS) },
                     backdrop = backdrop
@@ -644,11 +657,12 @@ private fun List<String>.resolveQuickEntries(): List<QuickEntry> {
 private fun CharacterPreviewSection(
     factions: List<CharacterListApi.FactionData>,
     isLoading: Boolean,
+    selectedFaction: Int,
+    onSelectedFactionChanged: (Int) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onViewAll: () -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    var selectedFaction by remember { mutableIntStateOf(0) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
@@ -715,7 +729,7 @@ private fun CharacterPreviewSection(
                     factions.forEachIndexed { index, faction ->
                         SegmentedButton(
                             selected = selectedFaction == index,
-                            onClick = { selectedFaction = index },
+                            onClick = { onSelectedFactionChanged(index) },
                             shape = SegmentedButtonDefaults.itemShape(
                                 index = index,
                                 count = factions.size
@@ -733,7 +747,7 @@ private fun CharacterPreviewSection(
                 Spacer(Modifier.height(14.dp))
 
                 // 角色横向滚动
-                val currentFaction = factions.getOrNull(selectedFaction)
+                val currentFaction = factions.getOrNull(selectedFaction.coerceIn(0, factions.lastIndex))
                 if (currentFaction != null) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -831,11 +845,12 @@ private fun CharacterPortraitCard(
 private fun MapPreviewSection(
     gameModes: List<GameModeData>,
     isLoading: Boolean,
+    selectedMode: Int,
+    onSelectedModeChanged: (Int) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     onViewAll: () -> Unit = {},
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    var selectedMode by remember { mutableIntStateOf(0) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
@@ -904,7 +919,7 @@ private fun MapPreviewSection(
                     gameModes.forEachIndexed { index, mode ->
                         FilterChip(
                             selected = selectedMode == index,
-                            onClick = { selectedMode = index },
+                            onClick = { onSelectedModeChanged(index) },
                             shape = smoothCornerShape(12.dp),
                             label = {
                                 Text(
@@ -920,7 +935,7 @@ private fun MapPreviewSection(
                 Spacer(Modifier.height(12.dp))
 
                 // 地图横向滚动
-                val currentMode = gameModes.getOrNull(selectedMode)
+                val currentMode = gameModes.getOrNull(selectedMode.coerceIn(0, gameModes.lastIndex))
                 if (currentMode != null && currentMode.maps.isNotEmpty()) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),

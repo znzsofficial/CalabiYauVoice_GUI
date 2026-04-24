@@ -37,6 +37,14 @@ object WallpaperApi {
      * 优先使用 AppPrefs 中持久化的 URL，仅在无缓存或强制刷新时重新获取。
      */
     fun fetchRandomWallpaperUrl(forceRefresh: Boolean = false): String? {
+        return ensureWallpaperUrl(forceRefresh)
+    }
+
+    /**
+     * 确保存在可用的壁纸 URL。
+     * 非强制刷新时优先返回持久化缓存；请求失败时不清空旧缓存。
+     */
+    fun ensureWallpaperUrl(forceRefresh: Boolean = false): String? {
         // 非强制刷新时，优先返回持久化缓存
         if (!forceRefresh) {
             val cached = AppPrefs.wallpaperUrl

@@ -481,6 +481,23 @@ private fun CostumeDetailSheet(
     onDismiss: () -> Unit
 ) {
     val qColor = costume.quality?.let { qualityColor(it) } ?: MaterialTheme.colorScheme.outline
+    val displayModes = buildList {
+        if (!costume.fullImageUrl.isNullOrBlank() || !costume.thumbnailUrl.isNullOrBlank()) add("立绘")
+        if (!costume.screenshotUrl.isNullOrBlank()) add("游戏截图")
+    }
+    var selectedMode by remember(costume.name, costume.character) {
+        mutableStateOf(if (displayModes.contains("立绘")) "立绘" else displayModes.firstOrNull().orEmpty())
+    }
+    val displayedImage = when (selectedMode) {
+        "游戏截图" -> costume.screenshotUrl ?: costume.fullImageUrl ?: costume.thumbnailUrl
+        else -> costume.fullImageUrl ?: costume.thumbnailUrl ?: costume.screenshotUrl
+    }
+    val imageContentScale = if (selectedMode == "游戏截图") ContentScale.Fit else ContentScale.Crop
+    val imageBackgroundColor = if (selectedMode == "游戏截图") {
+        MaterialTheme.colorScheme.surfaceContainerHighest
+    } else {
+        Color.Transparent
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -499,13 +516,17 @@ private fun CostumeDetailSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(260.dp)
+                    .background(imageBackgroundColor),
+                contentAlignment = Alignment.Center
             ) {
-                AsyncImage(
-                    model = costume.fullImageUrl ?: costume.thumbnailUrl,
-                    contentDescription = costume.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                if (displayedImage != null) {
+                    AsyncImage(
+                        model = displayedImage,
+                        contentDescription = costume.name,
+                        contentScale = imageContentScale,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
                 // 底部渐变
                 Box(
                     modifier = Modifier
@@ -554,6 +575,20 @@ private fun CostumeDetailSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                if (displayModes.size > 1) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        displayModes.forEach { mode ->
+                            FilterChip(
+                                selected = selectedMode == mode,
+                                onClick = { selectedMode = mode },
+                                label = { Text(mode) },
+                                shape = smoothCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))

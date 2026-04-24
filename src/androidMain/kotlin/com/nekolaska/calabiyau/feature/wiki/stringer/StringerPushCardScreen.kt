@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -133,6 +134,14 @@ fun StringerPushCardScreen(
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
                     FilledTonalIconButton(
+                        onClick = { state.reload(forceRefresh = true) },
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+                    }
+                    FilledTonalIconButton(
                         onClick = { if (page.wikiUrl.isNotBlank()) onOpenWikiUrl(page.wikiUrl) },
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -148,6 +157,7 @@ fun StringerPushCardScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            enablePullToRefresh = false,
             loading = { mod -> LoadingState("正在加载超弦推进卡牌…", mod) }
         ) {
             LazyColumn(
