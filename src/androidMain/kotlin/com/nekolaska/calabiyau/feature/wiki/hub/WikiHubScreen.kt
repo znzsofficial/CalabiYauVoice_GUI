@@ -246,6 +246,8 @@ fun WikiHubScreen(
     val homeListState = rememberLazyListState()
 
     // 内部分页 Tab 状态继续保留，因为它们不随压栈出栈而丢失（或者让它们由各个页面自行接管）
+    var homeFactionTab by rememberSaveable { mutableIntStateOf(0) }
+    var homeMapModeTab by rememberSaveable { mutableIntStateOf(0) }
     var characterListTab by rememberSaveable { mutableIntStateOf(0) }
     var weaponListTab by rememberSaveable { mutableIntStateOf(0) }
     var mapListTab by rememberSaveable { mutableIntStateOf(0) }
@@ -326,7 +328,11 @@ fun WikiHubScreen(
                     factions = factions,
                     isLoadingCharacters = isLoadingCharacters,
                     gameModes = gameModes,
-                    isLoadingMaps = isLoadingMaps
+                    isLoadingMaps = isLoadingMaps,
+                    selectedHomeFaction = homeFactionTab,
+                    onHomeFactionChanged = { homeFactionTab = it },
+                    selectedHomeMapMode = homeMapModeTab,
+                    onHomeMapModeChanged = { homeMapModeTab = it }
                 )
             }
 
