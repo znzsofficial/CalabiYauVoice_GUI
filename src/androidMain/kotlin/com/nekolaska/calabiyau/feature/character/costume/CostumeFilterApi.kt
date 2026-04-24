@@ -57,8 +57,9 @@ object CostumeFilterApi {
         val sources: List<String>,  // 获取方式列表
         val crystalCost: String,    // 巴布洛晶核价格
         val baseCost: String,       // 基弦价格
-        val thumbnailUrl: String?,  // 缩略图 URL（256x256）
-        val fullImageUrl: String?   // 原图 URL
+        val thumbnailUrl: String?,  // 立绘缩略图 URL
+        val fullImageUrl: String?,  // 立绘原图 URL
+        val screenshotUrl: String?  // 游戏截图 URL
     )
 
 
@@ -144,7 +145,8 @@ object CostumeFilterApi {
                 crystalCost = match.groupValues[4].trim(),
                 baseCost = match.groupValues[5].trim(),
                 thumbnailUrl = info.thumbnailUrl,
-                fullImageUrl = info.fullImageUrl
+                fullImageUrl = info.fullImageUrl,
+                screenshotUrl = info.screenshotUrl
             )
         }.toList()
 
@@ -153,13 +155,25 @@ object CostumeFilterApi {
 
     private fun parseCostumeDetail(blockHtml: String, character: String): ParsedVisualInfo {
         val document = Jsoup.parse(blockHtml)
-        val imageElement = document.selectFirst("img[alt]")
-        val thumbnailUrl = imageElement?.attr("src")
-        val fullImageUrl = imageElement?.attr("srcset")
-            ?.substringBefore(',')
+        val previewImage = document.selectFirst("img[alt]")
+        val hiddenLargeImage = document.select("span[style*=display:none] img").firstOrNull()
+
+        val thumbnailUrl = previewImage?.attr("src")
+        val fullImageUrl = previewImage?.attr("srcset")
+            ?.split(',')
+            ?.lastOrNull()
             ?.substringBeforeLast(' ')
             ?.trim()
             ?.takeIf { it.isNotBlank() }
+            ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
+
+        val screenshotUrl = hiddenLargeImage?.attr("srcset")
+            ?.split(',')
+            ?.lastOrNull()
+            ?.substringBeforeLast(' ')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
 
         val name = Regex("""<br\s*/?>\s*([^\n<|]+)""")
             .find(blockHtml)
@@ -168,13 +182,19 @@ object CostumeFilterApi {
             ?.takeIf { it.isNotBlank() }
             ?: "$character：未知"
 
-        return ParsedVisualInfo(name = name, thumbnailUrl = thumbnailUrl, fullImageUrl = fullImageUrl)
+        return ParsedVisualInfo(
+            name = name,
+            thumbnailUrl = thumbnailUrl,
+            fullImageUrl = fullImageUrl,
+            screenshotUrl = screenshotUrl
+        )
     }
 
     private data class ParsedVisualInfo(
         val name: String,
         val thumbnailUrl: String?,
-        val fullImageUrl: String?
+        val fullImageUrl: String?,
+        val screenshotUrl: String?
     )
 
     private fun uniqueDisplayName(

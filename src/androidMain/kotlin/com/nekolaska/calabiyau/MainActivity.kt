@@ -33,6 +33,7 @@ import com.nekolaska.calabiyau.core.navigation.MainScreen
 import com.nekolaska.calabiyau.feature.download.DownloadViewModel
 import com.nekolaska.calabiyau.feature.download.PortraitViewModel
 import com.nekolaska.calabiyau.feature.download.SearchViewModel
+import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import data.PortraitRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,7 +64,10 @@ class MainActivity : ComponentActivity() {
         AppCacheBootstrap.ensureRegistered()
         // 仅在冷启动时异步清理过期磁盘缓存，避免配置变更时重复执行。
         if (savedInstanceState == null) {
-            lifecycleScope.launch(Dispatchers.IO) { OfflineCache.pruneExpired() }
+            lifecycleScope.launch(Dispatchers.IO) {
+                OfflineCache.pruneExpired()
+                WallpaperApi.ensureWallpaperUrl(forceRefresh = false)
+            }
         }
 
         PortraitRepository.init(
