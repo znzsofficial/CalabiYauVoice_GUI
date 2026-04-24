@@ -23,6 +23,8 @@ import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.announcement.api.AnnouncementApi
+import com.nekolaska.calabiyau.feature.wiki.announcement.model.Announcement
 
 // ════════════════════════════════════════════════════════
 //  公告资讯页 —— 原生客户端版 (MD3 Expressive)
@@ -36,7 +38,7 @@ fun AnnouncementScreen(
 ) {
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val state = rememberLoadState(emptyList<AnnouncementApi.Announcement>()) { force ->
+    val state = rememberLoadState(emptyList<Announcement>()) { force ->
         AnnouncementApi.fetchAnnouncements(forceRefresh = force)
     }
 
@@ -92,7 +94,7 @@ fun AnnouncementScreen(
 
 @Composable
 private fun AnnouncementCard(
-    announcement: AnnouncementApi.Announcement,
+    announcement: Announcement,
     onOpenWikiUrl: (String) -> Unit,
     onOpenExternalUrl: (String) -> Unit
 ) {

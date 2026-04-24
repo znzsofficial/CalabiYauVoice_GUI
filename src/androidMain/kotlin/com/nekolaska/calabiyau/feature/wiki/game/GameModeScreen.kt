@@ -16,7 +16,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.feature.wiki.game.GameModeApi.GameModeDetail
+import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
+import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState

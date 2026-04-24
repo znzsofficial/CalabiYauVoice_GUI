@@ -20,7 +20,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.feature.wiki.map.MapDetailApi.MapDetail
+import com.nekolaska.calabiyau.feature.wiki.map.api.MapDetailApi
+import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
+import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LoadingState
@@ -331,7 +333,7 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
 }
 
 @Composable
-private fun MapUpdateHistoryCard(updateHistory: List<MapDetailApi.UpdateEntry>) {
+private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {
     var expanded by remember { mutableStateOf(false) }
     val visibleHistory = if (expanded) updateHistory else updateHistory.take(3)
 

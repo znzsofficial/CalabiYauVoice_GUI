@@ -39,6 +39,9 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.decoration.api.PlayerDecorationApi
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationItem
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
 import java.io.File
 
 // ════════════════════════════════════════════════════════
@@ -64,16 +67,16 @@ fun BaseplateScreen(
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
 
-    val state = rememberLoadState(emptyList<PlayerDecorationApi.DecorationSection>()) { force ->
+    val state = rememberLoadState(emptyList<DecorationSection>()) { force ->
         PlayerDecorationApi.fetch("基板", force)
     }
     val sections = state.data
     var selectedSectionIndex by remember { mutableIntStateOf(0) }
 
     // 全屏预览
-    var previewItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
+    var previewItem by remember { mutableStateOf<DecorationItem?>(null) }
     // 长按保存
-    var saveTargetItem by remember { mutableStateOf<PlayerDecorationApi.DecorationItem?>(null) }
+    var saveTargetItem by remember { mutableStateOf<DecorationItem?>(null) }
 
     LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
@@ -379,7 +382,7 @@ private fun BaseplateSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 private fun BaseplateCard(
-    item: PlayerDecorationApi.DecorationItem,
+    item: DecorationItem,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current

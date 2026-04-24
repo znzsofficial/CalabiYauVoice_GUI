@@ -15,7 +15,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
-import com.nekolaska.calabiyau.feature.wiki.map.MapListApi
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterScreen
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailScreen
@@ -30,6 +29,8 @@ import com.nekolaska.calabiyau.feature.wiki.bio.BioCardScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
 import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
+import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
+import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
@@ -255,7 +256,7 @@ fun WikiHubScreen(
             CharacterListApi.fetchAllFactions(force)
         }
     val mapState =
-        rememberLoadState(emptyList<MapListApi.GameModeData>()) { force ->
+        rememberLoadState(emptyList<GameModeData>()) { force ->
             MapListApi.fetchAllModes(force)
         }
     val factions = characterState.data

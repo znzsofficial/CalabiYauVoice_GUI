@@ -65,6 +65,9 @@ import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.stringer.api.StringerPushCardApi
+import com.nekolaska.calabiyau.feature.wiki.stringer.model.CardPage
+import com.nekolaska.calabiyau.feature.wiki.stringer.model.ModeCard
 import java.text.Collator
 import java.util.Locale
 
@@ -83,7 +86,7 @@ fun StringerPushCardScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val state = rememberLoadState(
-        initial = StringerPushCardApi.CardPage(
+        initial = CardPage(
             title = "超弦推进卡牌",
             summary = "",
             wikiUrl = "",
@@ -98,7 +101,7 @@ fun StringerPushCardScreen(
     var role by remember { mutableStateOf("全部角色") }
     var rarity by remember { mutableIntStateOf(0) }
     var sortOption by remember { mutableStateOf(PushCardSortOption.RARITY_DESC) }
-    var selectedCard by remember { mutableStateOf<StringerPushCardApi.ModeCard?>(null) }
+    var selectedCard by remember { mutableStateOf<ModeCard?>(null) }
 
     val page = state.data
     val categories = remember(page.cards) {
@@ -115,8 +118,8 @@ fun StringerPushCardScreen(
                 (rarity == 0 || it.rarity == rarity)
         }
         when (sortOption) {
-            PushCardSortOption.RARITY_DESC -> filtered.sortedWith(compareByDescending<StringerPushCardApi.ModeCard> { it.rarity }.thenBy { it.name })
-            PushCardSortOption.RARITY_ASC -> filtered.sortedWith(compareBy<StringerPushCardApi.ModeCard> { it.rarity }.thenBy { it.name })
+            PushCardSortOption.RARITY_DESC -> filtered.sortedWith(compareByDescending<ModeCard> { it.rarity }.thenBy { it.name })
+            PushCardSortOption.RARITY_ASC -> filtered.sortedWith(compareBy<ModeCard> { it.rarity }.thenBy { it.name })
             PushCardSortOption.NAME_ASC -> filtered.sortedWith { left, right ->
                 zhNameCollator.compare(left.name, right.name)
             }
@@ -290,7 +293,7 @@ fun StringerPushCardScreen(
 
 @Composable
 private fun ModeCardGridItem(
-    card: StringerPushCardApi.ModeCard,
+    card: ModeCard,
     onClick: () -> Unit
 ) {
     Card(

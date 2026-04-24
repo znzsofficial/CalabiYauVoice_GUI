@@ -31,6 +31,13 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.balance.api.BalanceDataApi
+import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceResult
+import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceSettings
+import com.nekolaska.calabiyau.feature.wiki.balance.model.CharacterMeta
+import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
+import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
+import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
 import data.ApiResult
 import kotlinx.coroutines.launch
 
@@ -59,17 +66,17 @@ fun BalanceDataScreen(
 ) {
 
     // ViewModel-like state
-    var settings by remember { mutableStateOf<BalanceDataApi.BalanceSettings?>(null) }
-    var balanceResult by remember { mutableStateOf<BalanceDataApi.BalanceResult?>(null) }
+    var settings by remember { mutableStateOf<BalanceSettings?>(null) }
+    var balanceResult by remember { mutableStateOf<BalanceResult?>(null) }
     var isLoadingSettings by remember { mutableStateOf(true) }
     var isLoadingData by remember { mutableStateOf(false) }
     var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
 
     // 筛选状态
-    var selectedMode by remember { mutableStateOf<BalanceDataApi.FilterOption?>(null) }
-    var selectedMap by remember { mutableStateOf<BalanceDataApi.FilterOption?>(null) }
-    var selectedSeason by remember { mutableStateOf<BalanceDataApi.FilterOption?>(null) }
-    var selectedRanks by remember { mutableStateOf<List<BalanceDataApi.FilterOption>>(emptyList()) }
+    var selectedMode by remember { mutableStateOf<FilterOption?>(null) }
+    var selectedMap by remember { mutableStateOf<FilterOption?>(null) }
+    var selectedSeason by remember { mutableStateOf<FilterOption?>(null) }
+    var selectedRanks by remember { mutableStateOf<List<FilterOption>>(emptyList()) }
 
     // 显示状态：进攻方 / 防守方
     var showAttackers by remember { mutableStateOf(false) } // false = 防守方(side2), true = 进攻方(side1)
@@ -149,7 +156,7 @@ fun BalanceDataScreen(
     val sortedList = remember(balanceResult, showAttackers, sortField, sortOrder) {
         val list = if (showAttackers) balanceResult?.attackers else balanceResult?.defenders
         list?.filter { it.winRate > 0 }?.let { filtered ->
-            val comparator = compareBy<BalanceDataApi.HeroBalanceData> {
+            val comparator = compareBy<HeroBalanceData> {
                 when (sortField) {
                     SortField.WIN_RATE -> it.winRate
                     SortField.SELECT_RATE -> it.selectRate
@@ -270,15 +277,15 @@ fun BalanceDataScreen(
 
 @Composable
 private fun FilterBar(
-    settings: BalanceDataApi.BalanceSettings,
-    selectedMode: BalanceDataApi.FilterOption?,
-    selectedMap: BalanceDataApi.FilterOption?,
-    selectedSeason: BalanceDataApi.FilterOption?,
-    selectedRanks: List<BalanceDataApi.FilterOption>,
-    onModeChange: (BalanceDataApi.FilterOption) -> Unit,
-    onMapChange: (BalanceDataApi.FilterOption?) -> Unit,
-    onSeasonChange: (BalanceDataApi.FilterOption) -> Unit,
-    onRanksChange: (List<BalanceDataApi.FilterOption>) -> Unit
+    settings: BalanceSettings,
+    selectedMode: FilterOption?,
+    selectedMap: FilterOption?,
+    selectedSeason: FilterOption?,
+    selectedRanks: List<FilterOption>,
+    onModeChange: (FilterOption) -> Unit,
+    onMapChange: (FilterOption?) -> Unit,
+    onSeasonChange: (FilterOption) -> Unit,
+    onRanksChange: (List<FilterOption>) -> Unit
 ) {
     Column(
         Modifier
@@ -384,9 +391,9 @@ private fun FilterBar(
 @Composable
 private fun FilterDropdown(
     label: String,
-    options: List<BalanceDataApi.FilterOption>,
-    selected: BalanceDataApi.FilterOption?,
-    onSelect: (BalanceDataApi.FilterOption) -> Unit,
+    options: List<FilterOption>,
+    selected: FilterOption?,
+    onSelect: (FilterOption) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -530,9 +537,9 @@ private fun SortableHeader(
 
 @Composable
 private fun HeroBalanceList(
-    list: List<BalanceDataApi.HeroBalanceData>,
-    characterMap: Map<Int, BalanceDataApi.CharacterMeta>,
-    positionMap: Map<String, BalanceDataApi.PositionMeta>,
+    list: List<HeroBalanceData>,
+    characterMap: Map<Int, CharacterMeta>,
+    positionMap: Map<String, PositionMeta>,
     sortField: SortField,
     isLoading: Boolean
 ) {
@@ -586,8 +593,8 @@ private fun winRateColor(rate: Double): Color = when {
 @Composable
 private fun HeroRow(
     rank: Int,
-    hero: BalanceDataApi.HeroBalanceData,
-    meta: BalanceDataApi.CharacterMeta?,
+    hero: HeroBalanceData,
+    meta: CharacterMeta?,
     positionName: String,
     highlightField: SortField
 ) {

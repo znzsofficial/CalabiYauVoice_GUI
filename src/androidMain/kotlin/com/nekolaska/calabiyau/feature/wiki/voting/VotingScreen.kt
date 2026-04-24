@@ -25,7 +25,10 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.voting.api.VotingApi
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
+import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
+import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteState
 import data.ApiResult
 import kotlinx.coroutines.launch
 
@@ -40,8 +43,8 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
     var isLoadingData by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var pollConfig by remember { mutableStateOf<VotingApi.PollConfig?>(null) }
-    var voteState by remember { mutableStateOf<VotingApi.VoteState?>(null) }
+    var pollConfig by remember { mutableStateOf<PollConfig?>(null) }
+    var voteState by remember { mutableStateOf<VoteState?>(null) }
     var selectedNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var isLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
     var retryTrigger by remember { mutableIntStateOf(0) }
@@ -238,8 +241,8 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
 
 @Composable
 private fun VotingContent(
-    config: VotingApi.PollConfig,
-    voteState: VotingApi.VoteState?,
+    config: PollConfig,
+    voteState: VoteState?,
     selectedNames: Set<String>,
     isLoadingData: Boolean,
     isLoggedIn: Boolean,
@@ -586,7 +589,7 @@ private fun VotingBottomBar(
 
 /** 检查用户投票选择是否有变更 */
 private fun hasVoteChanges(
-    voteState: VotingApi.VoteState?,
+    voteState: VoteState?,
     selectedNames: Set<String>
 ): Boolean {
     if (voteState == null) return false

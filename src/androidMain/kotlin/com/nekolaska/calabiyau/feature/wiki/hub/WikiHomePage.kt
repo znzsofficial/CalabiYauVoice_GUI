@@ -56,8 +56,9 @@ import com.nekolaska.calabiyau.core.ui.liquidGlassLight
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
-import com.nekolaska.calabiyau.feature.wiki.map.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
+import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
+import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
@@ -80,7 +81,7 @@ internal fun WikiHomePage(
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     factions: List<CharacterListApi.FactionData>,
     isLoadingCharacters: Boolean,
-    gameModes: List<MapListApi.GameModeData>,
+    gameModes: List<GameModeData>,
     isLoadingMaps: Boolean
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -828,7 +829,7 @@ private fun CharacterPortraitCard(
 
 @Composable
 private fun MapPreviewSection(
-    gameModes: List<MapListApi.GameModeData>,
+    gameModes: List<GameModeData>,
     isLoading: Boolean,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     onViewAll: () -> Unit = {},
@@ -968,7 +969,7 @@ private fun MapPreviewSection(
 /** 地图卡片 —— 16:9 图片 + 底部渐变叠加地图名 */
 @Composable
 private fun MapCard(
-    map: MapListApi.MapInfo,
+    map: MapInfo,
     onClick: () -> Unit
 ) {
     val cardShape = smoothCornerShape(16.dp)
@@ -1218,7 +1219,7 @@ private fun ActionCard(
 internal fun MapListFullScreen(
     onBack: () -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
-    gameModes: List<MapListApi.GameModeData>,
+    gameModes: List<GameModeData>,
     isLoading: Boolean,
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null
@@ -1315,7 +1316,7 @@ internal fun MapListFullScreen(
 /** 地图网格卡片 —— 16:9 图片 + 底部渐变叠加地图名 */
 @Composable
 private fun MapGridCard(
-    map: MapListApi.MapInfo,
+    map: MapInfo,
     onClick: () -> Unit
 ) {
     val cardShape = smoothCornerShape(16.dp)
