@@ -644,8 +644,7 @@ private fun WeaponSkinDetailSheet(
                             imageUrl = CRYSTAL_ICON_URL,
                             fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
                             label = "巴布洛晶核",
-                            value = skin.crystalCost,
-                            valueColor = Color(0xFFFFC107)
+                            value = skin.crystalCost
                         )
                     }
 
@@ -659,8 +658,7 @@ private fun WeaponSkinDetailSheet(
                             imageUrl = BASE_ICON_URL,
                             fallbackImageUrl = BASE_ICON_FALLBACK_URL,
                             label = "基弦",
-                            value = skin.baseCost,
-                            valueColor = Color(0xFFE040FB)
+                            value = skin.baseCost
                         )
                     }
 
