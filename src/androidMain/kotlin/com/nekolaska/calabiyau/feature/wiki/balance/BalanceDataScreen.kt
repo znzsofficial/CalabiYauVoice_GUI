@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -84,6 +85,7 @@ fun BalanceDataScreen(
     // 排序
     var sortField by remember { mutableStateOf(SortField.WIN_RATE) }
     var sortOrder by remember { mutableStateOf(SortOrder.DESC) }
+    val listState = rememberLazyListState()
 
     val scope = rememberCoroutineScope()
 
@@ -150,6 +152,10 @@ fun BalanceDataScreen(
         if (settings != null && selectedMode != null && selectedSeason != null) {
             loadBalanceData()
         }
+    }
+
+    LaunchedEffect(sortField, sortOrder, showAttackers) {
+        listState.scrollToItem(0)
     }
 
     // 排序后的列表
@@ -257,6 +263,7 @@ fun BalanceDataScreen(
                             } else {
                                 HeroBalanceList(
                                     list = sortedList,
+                                    listState = listState,
                                     characterMap = characterMap,
                                     positionMap = positionMap,
                                     sortField = sortField,
@@ -538,13 +545,17 @@ private fun SortableHeader(
 @Composable
 private fun HeroBalanceList(
     list: List<HeroBalanceData>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     characterMap: Map<Int, CharacterMeta>,
     positionMap: Map<String, PositionMeta>,
     sortField: SortField,
     isLoading: Boolean
 ) {
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize()
+        ) {
             itemsIndexed(list, key = { _, item -> item.id }) { index, hero ->
                 val meta = characterMap[hero.id]
                 val position = meta?.let { positionMap[it.positionCode] }
