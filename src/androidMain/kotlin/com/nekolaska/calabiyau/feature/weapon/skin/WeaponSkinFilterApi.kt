@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 /**
@@ -56,6 +57,7 @@ object WeaponSkinFilterApi {
         val sources: List<String>,  // 获取方式列表
         val crystalCost: String,    // 巴布洛晶核价格
         val baseCost: String,       // 基弦价格
+        val description: String,    // 外观简介
         val thumbnailUrl: String?,  // 立绘缩略图 URL
         val fullImageUrl: String?,  // 立绘原图 URL
         val screenshotUrl: String?  // 游戏截图 URL
@@ -143,6 +145,7 @@ object WeaponSkinFilterApi {
                 sources = match.groupValues[3].split(",").map { it.trim() }.filter { it.isNotBlank() },
                 crystalCost = match.groupValues[4].replace("无", "").trim(),
                 baseCost = match.groupValues[5].replace("无", "").trim(),
+                description = info.description,
                 thumbnailUrl = info.thumbnailUrl,
                 fullImageUrl = info.fullImageUrl,
                 screenshotUrl = info.screenshotUrl
@@ -189,17 +192,98 @@ object WeaponSkinFilterApi {
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: "$weapon：未知"
+        val description = parseDescription(blockHtml)
 
         return ParsedSkinVisualInfo(
             name = name,
+            description = description,
             thumbnailUrl = thumbnailUrl,
             fullImageUrl = fullImageUrl,
             screenshotUrl = screenshotUrl
         )
     }
 
+    private fun parseDescription(blockHtml: String): String {
+        val columns = splitTableColumns(blockHtml)
+        if (columns.size < 2) return ""
+
+        val firstContentIndex = columns.indexOfFirst { htmlColumnToText(it).isNotBlank() }
+        if (firstContentIndex == -1) return ""
+
+        val lastIndex = columns.lastIndex
+        val lastText = htmlColumnToText(columns[lastIndex])
+        val descriptionIndex = if (lastText.isLikelyRemark() && lastIndex - 1 > firstContentIndex) {
+            lastIndex - 1
+        } else {
+            lastIndex
+        }
+
+        return htmlColumnToText(columns.getOrNull(descriptionIndex).orEmpty())
+            .takeIf { it.isLikelyDescription() }
+            .orEmpty()
+    }
+
+    private fun splitTableColumns(blockHtml: String): List<String> {
+        return Regex("""(?m)^\|\s*""")
+            .split(blockHtml)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+    }
+
+    private fun htmlColumnToText(html: String): String {
+        if (html.isBlank()) return ""
+        val normalizedHtml = html
+            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+        return Jsoup.parse(normalizedHtml)
+            .body()
+            .textWithLineBreaks()
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
+    }
+
+    private fun String.isLikelyDescription(): Boolean {
+        val compact = replace(Regex("""\s+"""), "")
+        if (compact.length < 12) return false
+        if (Regex("""^\d+(晶核|基弦)?$""").matches(compact)) return false
+        if (compact.contains("精致") || compact.contains("卓越") || compact.contains("完美") ||
+            compact.contains("传说") || compact.contains("臻藏")) return false
+        return true
+    }
+
+    private fun String.isLikelyRemark(): Boolean {
+        val compact = replace(Regex("""\s+"""), "")
+        if (compact.isBlank()) return false
+        if (compact.contains('：') || compact.contains(':')) return true
+        return compact.contains("原价") || compact.contains("限时") || compact.contains("特效") ||
+                compact.contains("套装") || compact.contains("兑换") || compact.contains("获得")
+    }
+
+    private fun Element.textWithLineBreaks(): String {
+        val builder = StringBuilder()
+        fun appendNode(element: Element) {
+            element.childNodes().forEach { node ->
+                when (node) {
+                    is org.jsoup.nodes.TextNode -> builder.append(node.text())
+                    is Element -> {
+                        if (node.tagName().equals("br", ignoreCase = true)) {
+                            builder.append('\n')
+                        } else {
+                            appendNode(node)
+                            if (node.tagName().equals("p", ignoreCase = true)) builder.append('\n')
+                        }
+                    }
+                }
+            }
+        }
+        appendNode(this)
+        return builder.toString()
+    }
+
     private data class ParsedSkinVisualInfo(
         val name: String,
+        val description: String,
         val thumbnailUrl: String?,
         val fullImageUrl: String?,
         val screenshotUrl: String?
