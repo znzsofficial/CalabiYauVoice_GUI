@@ -655,8 +655,7 @@ private fun CostumeDetailSheet(
                             imageUrl = CRYSTAL_ICON_URL,
                             fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
                             label = "巴布洛晶核",
-                            value = costume.crystalCost,
-                            valueColor = Color(0xFFFFC107)
+                            value = costume.crystalCost
                         )
                     }
 
@@ -670,8 +669,7 @@ private fun CostumeDetailSheet(
                             imageUrl = BASE_ICON_URL,
                             fallbackImageUrl = BASE_ICON_FALLBACK_URL,
                             label = "基弦",
-                            value = costume.baseCost,
-                            valueColor = Color(0xFFE040FB)
+                            value = costume.baseCost
                         )
                     }
 
