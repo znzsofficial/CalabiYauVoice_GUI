@@ -1,8 +1,11 @@
 package com.nekolaska.calabiyau.feature.weapon.skin
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -24,7 +27,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.verticalScroll
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.WeaponSkinInfo
@@ -596,6 +601,7 @@ private fun WeaponSkinDetailSheet(
                     color = MaterialTheme.colorScheme.surfaceContainer
                 ) {
                     var isDescriptionExpanded by remember { mutableStateOf(false) }
+                    val scrollState = rememberScrollState()
                     Text(
                         text = skin.description,
                         style = MaterialTheme.typography.bodyMedium,
@@ -604,6 +610,8 @@ private fun WeaponSkinDetailSheet(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(max = if (isDescriptionExpanded) 240.dp else Dp.Unspecified)
+                            .then(if (isDescriptionExpanded) Modifier.verticalScroll(scrollState) else Modifier)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
