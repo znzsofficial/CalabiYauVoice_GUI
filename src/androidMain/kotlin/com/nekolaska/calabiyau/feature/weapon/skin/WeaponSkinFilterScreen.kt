@@ -40,6 +40,11 @@ import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 //  武器外观筛选页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
+private const val CRYSTAL_ICON_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E9%81%93%E5%85%B7%E5%9B%BE%E6%A0%87_3.png"
+private const val CRYSTAL_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E5%9B%BE%E6%A0%87-%E5%B0%8F%E5%B7%B4%E5%B8%83%E6%B4%9B%E6%99%B6%E6%A0%B8.png"
+private const val BASE_ICON_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E9%81%93%E5%85%B7%E5%9B%BE%E6%A0%87_6.png"
+private const val BASE_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E5%9B%BE%E6%A0%87-%E5%B0%8F%E5%9F%BA%E5%BC%A6.png"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeaponSkinFilterScreen(
@@ -582,6 +587,35 @@ private fun WeaponSkinDetailSheet(
 
             Spacer(Modifier.height(16.dp))
 
+            if (skin.description.isNotBlank()) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer
+                ) {
+                    var isDescriptionExpanded by remember { mutableStateOf(false) }
+                    Text(
+                        text = skin.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 5,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { isDescriptionExpanded = !isDescriptionExpanded }
+                            .animateContentSize()
+                            .padding(20.dp)
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+            }
+
             // ── 信息卡片 ──
             Surface(
                 modifier = Modifier
@@ -607,7 +641,8 @@ private fun WeaponSkinDetailSheet(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SkinDetailRow(
-                            icon = Icons.Outlined.Diamond,
+                            imageUrl = CRYSTAL_ICON_URL,
+                            fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
                             label = "巴布洛晶核",
                             value = skin.crystalCost,
                             valueColor = Color(0xFFFFC107)
@@ -621,7 +656,8 @@ private fun WeaponSkinDetailSheet(
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                         SkinDetailRow(
-                            icon = Icons.Outlined.Paid,
+                            imageUrl = BASE_ICON_URL,
+                            fallbackImageUrl = BASE_ICON_FALLBACK_URL,
                             label = "基弦",
                             value = skin.baseCost,
                             valueColor = Color(0xFFE040FB)
@@ -649,7 +685,9 @@ private fun WeaponSkinDetailSheet(
 
 @Composable
 private fun SkinDetailRow(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    imageUrl: String? = null,
+    fallbackImageUrl: String? = null,
     label: String,
     value: String,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
@@ -664,11 +702,26 @@ private fun SkinDetailRow(
             color = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    icon, null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (imageUrl != null) {
+                    var useFallback by remember(imageUrl, fallbackImageUrl) { mutableStateOf(false) }
+                    AsyncImage(
+                        model = if (useFallback) fallbackImageUrl ?: imageUrl else imageUrl,
+                        contentDescription = label,
+                        contentScale = ContentScale.Fit,
+                        onError = {
+                            if (!useFallback && !fallbackImageUrl.isNullOrBlank()) {
+                                useFallback = true
+                            }
+                        },
+                        modifier = Modifier.size(22.dp)
+                    )
+                } else if (icon != null) {
+                    Icon(
+                        icon, null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
         Spacer(Modifier.width(14.dp))
