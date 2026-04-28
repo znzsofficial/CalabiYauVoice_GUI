@@ -202,16 +202,13 @@ object CostumeFilterApi {
         val firstContentIndex = columns.indexOfFirst { htmlColumnToText(it).isNotBlank() }
         if (firstContentIndex == -1) return ""
 
-        val lastIndex = columns.lastIndex
-        val lastText = htmlColumnToText(columns[lastIndex])
-        val descriptionIndex = if (lastText.isLikelyRemark() && lastIndex - 1 > firstContentIndex) {
-            lastIndex - 1
-        } else {
-            lastIndex
-        }
-
-        return htmlColumnToText(columns.getOrNull(descriptionIndex).orEmpty())
-            .takeIf { it.isLikelyDescription() }
+        return columns
+            .asSequence()
+            .mapIndexed { index, column -> index to htmlColumnToText(column) }
+            .filter { (index, _) -> index > firstContentIndex }
+            .map { (_, text) -> text }
+            .filter { it.isLikelyDescription() }
+            .lastOrNull()
             .orEmpty()
     }
 
@@ -239,8 +236,14 @@ object CostumeFilterApi {
         val compact = replace(Regex("""\s+"""), "")
         if (compact.length < 12) return false
         if (Regex("""^\d+(晶核|基弦)?$""").matches(compact)) return false
-        if (compact.contains("精致") || compact.contains("卓越") || compact.contains("完美") ||
-            compact.contains("传说") || compact.contains("私服") || compact.contains("初始")) return false
+        if (compact.contains('|')) return false
+        if (Regex("""^\d(初始|精致|卓越|完美|传说|私服)""").containsMatchIn(compact)) return false
+        if (compact.contains("单时装价格") || compact.contains("套装限时价格") || compact.contains("原价") ||
+            compact.contains("飘飞特效") || compact.contains("进阶外观") || compact.contains("定向匣单次抽取价格")) return false
+        if (compact.endsWith("活动兑换") || compact.endsWith("活动奖励") || compact.endsWith("赛季奖励") ||
+            compact.endsWith("活动获得") || compact.endsWith("兑换获得")) return false
+        if (compact.contains("活动商城") || compact.contains("限时商城购买") || compact.contains("签到活动获得") ||
+            compact.contains("获得对应角色时装")) return false
         return true
     }
 
@@ -257,7 +260,7 @@ object CostumeFilterApi {
         fun appendNode(element: Element) {
             element.childNodes().forEach { node ->
                 when (node) {
-                    is org.jsoup.nodes.TextNode -> builder.append(node.text())
+                    is org.jsoup.nodes.TextNode -> builder.append(node.wholeText)
                     is Element -> {
                         if (node.tagName().equals("br", ignoreCase = true)) {
                             builder.append('\n')
