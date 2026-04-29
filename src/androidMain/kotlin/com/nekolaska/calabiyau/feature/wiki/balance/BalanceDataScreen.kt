@@ -85,7 +85,6 @@ fun BalanceDataScreen(
     // 排序
     var sortField by remember { mutableStateOf(SortField.WIN_RATE) }
     var sortOrder by remember { mutableStateOf(SortOrder.DESC) }
-    val listState = rememberLazyListState()
 
     val scope = rememberCoroutineScope()
 
@@ -152,10 +151,6 @@ fun BalanceDataScreen(
         if (settings != null && selectedMode != null && selectedSeason != null) {
             loadBalanceData()
         }
-    }
-
-    LaunchedEffect(sortField, sortOrder, showAttackers) {
-        listState.scrollToItem(0)
     }
 
     // 排序后的列表
@@ -239,7 +234,11 @@ fun BalanceDataScreen(
                             showAttackers = showAttackers,
                             sortField = sortField,
                             sortOrder = sortOrder,
-                            onSideToggle = { showAttackers = it },
+                            onSideToggle = {
+                                if (showAttackers != it) {
+                                    showAttackers = it
+                                }
+                            },
                             onSortChange = { field ->
                                 if (sortField == field) {
                                     sortOrder = if (sortOrder == SortOrder.DESC) SortOrder.ASC else SortOrder.DESC
@@ -263,7 +262,7 @@ fun BalanceDataScreen(
                             } else {
                                 HeroBalanceList(
                                     list = sortedList,
-                                    listState = listState,
+                                    listKey = "$showAttackers-${sortField.name}-${sortOrder.name}",
                                     characterMap = characterMap,
                                     positionMap = positionMap,
                                     sortField = sortField,
@@ -545,12 +544,15 @@ private fun SortableHeader(
 @Composable
 private fun HeroBalanceList(
     list: List<HeroBalanceData>,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listKey: String,
     characterMap: Map<Int, CharacterMeta>,
     positionMap: Map<String, PositionMeta>,
     sortField: SortField,
     isLoading: Boolean
 ) {
+    key(listKey) {
+        val listState = rememberLazyListState()
+
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -585,6 +587,7 @@ private fun HeroBalanceList(
                     .padding(top = 16.dp)
             )
         }
+    }
     }
 }
 
