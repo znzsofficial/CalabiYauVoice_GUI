@@ -64,17 +64,27 @@ object CostumeFilterApi {
         val screenshotUrl: String?  // 游戏截图 URL
     )
 
-
     /**
      * 获取所有时装数据。
      * @param forceRefresh 强制刷新缓存
+     * @param cacheOnly 仅读磁盘缓存，不发起网络请求（用于 stale-while-revalidate 预加载）
      */
-    suspend fun fetchAllCostumes(forceRefresh: Boolean = false): ApiResult<List<CostumeInfo>> =
+    suspend fun fetchAllCostumes(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false
+    ): ApiResult<List<CostumeInfo>> =
         withContext(Dispatchers.IO) {
             try {
                 // 优先返回内存缓存
                 if (!forceRefresh) {
                     cachedCostumes?.let { return@withContext ApiResult.Success(it) }
+                }
+
+                // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
+                if (cacheOnly) {
+                    val entry = OfflineCache.getEntry(OfflineCache.Type.COSTUMES, "all_costumes")
+                        ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
+                    return@withContext parseCostumeResult(entry.json, isOffline = true, cacheAgeMs = entry.ageMs)
                 }
 
                 val text = URLEncoder.encode("{{#invoke:角色|角色时装筛选}}", "UTF-8")
@@ -90,29 +100,30 @@ object CostumeFilterApi {
                     )
                 val body = result.json
 
-                val json = SharedJson.parseToJsonElement(body).jsonObject
-                val html = json["parse"]?.jsonObject?.get("text")
-                    ?.jsonObject?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error(
-                        "无法获取时装数据",
-                        kind = ErrorKind.PARSE
-                    )
-
-                val costumes = parseCostumeHtml(html)
-                if (costumes.isEmpty()) {
-                    ApiResult.Error("未找到时装数据", kind = ErrorKind.NOT_FOUND)
-                } else {
-                    cachedCostumes = costumes
-                    ApiResult.Success(
-                        costumes,
-                        isOffline = result.isFromCache,
-                        cacheAgeMs = result.ageMs
-                    )
-                }
+                parseCostumeResult(body, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
             } catch (e: Exception) {
                 ApiResult.Error("获取时装数据失败: ${e.message}", kind = e.toErrorKind())
             }
         }
+
+    private fun parseCostumeResult(
+        jsonBody: String,
+        isOffline: Boolean,
+        cacheAgeMs: Long
+    ): ApiResult<List<CostumeInfo>> {
+        val json = SharedJson.parseToJsonElement(jsonBody).jsonObject
+        val html = json["parse"]?.jsonObject?.get("text")
+            ?.jsonObject?.get("*")?.jsonPrimitive?.content
+            ?: return ApiResult.Error("无法获取时装数据", kind = ErrorKind.PARSE)
+
+        val costumes = parseCostumeHtml(html)
+        return if (costumes.isEmpty()) {
+            ApiResult.Error("未找到时装数据", kind = ErrorKind.NOT_FOUND)
+        } else {
+            cachedCostumes = costumes
+            ApiResult.Success(costumes, isOffline = isOffline, cacheAgeMs = cacheAgeMs)
+        }
+    }
 
     /**
      * 从 HTML 解析时装数据。

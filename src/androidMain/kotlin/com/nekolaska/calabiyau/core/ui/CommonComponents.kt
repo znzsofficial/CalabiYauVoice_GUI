@@ -721,7 +721,8 @@ fun rememberSnackbarLauncher(): (String) -> Unit {
 class LoadState<T> internal constructor(
     initial: T,
     private val scope: CoroutineScope,
-    private val fetchRef: State<suspend (forceRefresh: Boolean) -> ApiResult<T>>
+    private val fetchRef: State<suspend (forceRefresh: Boolean) -> ApiResult<T>>,
+    private val cachedFetchRef: State<(suspend () -> ApiResult<T>)?> = mutableStateOf(null)
 ) {
     private var activeRequestJob: Job? = null
     private var requestVersion: Long = 0L
@@ -743,6 +744,23 @@ class LoadState<T> internal constructor(
         activeRequestJob = scope.launch {
             isLoading = true
             error = null
+
+            // ── Stale-while-revalidate：先快速返回磁盘缓存 ──
+            val cachedFetch = cachedFetchRef.value
+            if (!forceRefresh && cachedFetch != null) {
+                when (val cached = cachedFetch()) {
+                    is ApiResult.Success -> {
+                        if (currentVersion != requestVersion) return@launch
+                        data = cached.value
+                        isOffline = true
+                        cacheAgeMs = cached.cacheAgeMs
+                        isLoading = false  // 先结束 loading，展示缓存数据
+                    }
+                    is ApiResult.Error -> { /* 缓存不可用，继续走网络 */ }
+                }
+            }
+
+            // ── 网络请求 ──
             when (val result = fetchRef.value(forceRefresh)) {
                 is ApiResult.Success -> {
                     if (currentVersion != requestVersion) return@launch
@@ -752,7 +770,8 @@ class LoadState<T> internal constructor(
                 }
                 is ApiResult.Error -> {
                     if (currentVersion != requestVersion) return@launch
-                    error = result
+                    // 如果已有缓存数据，不覆盖为错误状态
+                    if (isLoading) error = result
                 }
             }
             if (currentVersion == requestVersion) {
@@ -777,9 +796,30 @@ fun <T> rememberLoadState(
     fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
 ): LoadState<T> {
     val scope = rememberCoroutineScope()
-    // 捕获最新的 fetch lambda，避免 remember 固化旧闭包
     val fetchRef = rememberUpdatedState(fetch)
     val state = remember(scope) { LoadState(initial, scope, fetchRef) }
+    LaunchedEffect(key) { state.reload() }
+    return state
+}
+
+/**
+ * 带磁盘缓存预加载的 [rememberLoadState]。
+ *
+ * 首次加载时先通过 [cachedFetch] 快速读取磁盘缓存并展示，
+ * 然后在后台通过 [fetch] 请求网络数据；若网络数据与缓存不同则自动更新 UI。
+ * 下拉刷新（forceRefresh）时跳过缓存预加载，直接走网络。
+ */
+@Composable
+fun <T> rememberLoadState(
+    initial: T,
+    key: Any? = Unit,
+    cachedFetch: suspend () -> ApiResult<T>,
+    fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
+): LoadState<T> {
+    val scope = rememberCoroutineScope()
+    val fetchRef = rememberUpdatedState(fetch)
+    val cachedFetchRef = rememberUpdatedState<(suspend () -> ApiResult<T>)?>(cachedFetch)
+    val state = remember(scope) { LoadState(initial, scope, fetchRef, cachedFetchRef) }
     LaunchedEffect(key) { state.reload() }
     return state
 }
