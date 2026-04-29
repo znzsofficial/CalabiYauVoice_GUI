@@ -39,6 +39,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 data class FileManagerDirectoryPickerConfig(
     val title: String,
@@ -627,7 +629,7 @@ fun FileManagerScreen(
                 FilledTonalButton(
                     onClick = {
                         showBatchDeleteDialog = false
-                        val toDelete = selectedFileObjects.toList()
+                        val toDelete = selectedFileObjects.withoutDescendantsCoveredBySelection()
                         isSelectionMode = false
                         selectedFiles = emptySet()
                         scope.launch {
@@ -1018,28 +1020,97 @@ private fun FileActionItem(
 // ─────────────────────── 工具函数 ───────────────────────
 
 /**
- * 强制删除文件/文件夹：先尝试 Java API，失败后尝试 shell rm 命令。
+ * 强制删除文件/文件夹：先递归放宽权限并自底向上删除，失败后再尝试 shell rm。
  * 公共 Downloads 目录在 Android 11+ 可能无法通过 Java File API 删除。
  */
 private fun forceDelete(file: File): Boolean {
-    // 方式1：Java API
-    val javaSuccess = try {
-        if (file.isDirectory) file.deleteRecursively() else file.delete()
-    } catch (_: Exception) {
-        false
-    }
-    if (javaSuccess && !file.exists()) return true
+    if (!file.exists()) return true
 
-    // 方式2：shell rm 命令（回退方案）
-    return try {
-        val cmd = if (file.isDirectory) "rm -rf" else "rm -f"
-        val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", "$cmd '${file.absolutePath}'"))
-        val exitCode = process.waitFor()
-        exitCode == 0 && !file.exists()
-    } catch (_: Exception) {
-        false
+    makeWritableRecursively(file)
+    if (deleteBottomUp(file, retryWithChmod = false)) return true
+
+    chmodWithShell(file)
+    if (deleteBottomUp(file, retryWithChmod = true)) return true
+
+    return shellRemove(file)
+}
+
+private fun makeWritableRecursively(file: File) {
+    runCatching {
+        if (file.isDirectory) {
+            file.walkTopDown().forEach(::makeWritable)
+        } else {
+            makeWritable(file)
+        }
     }
 }
+
+private fun makeWritable(file: File) {
+    runCatching { file.setWritable(true, false) }
+    if (file.isDirectory) {
+        runCatching { file.setExecutable(true, false) }
+    }
+}
+
+private fun deleteBottomUp(file: File, retryWithChmod: Boolean = false): Boolean {
+    return runCatching {
+        if (file.isDirectory) {
+            file.walkBottomUp()
+                .onEnter { !Files.isSymbolicLink(it.toPath()) }
+                .forEach { target ->
+                    if (Files.isSymbolicLink(target.toPath())) {
+                        target.delete()
+                    } else if (target.exists() && !target.delete()) {
+                        if (retryWithChmod) {
+                            makeWritable(target)
+                            target.delete()
+                        }
+                    }
+                }
+            !file.exists()
+        } else {
+            file.delete() || !file.exists()
+        }
+    }.getOrDefault(false)
+}
+
+private fun chmodWithShell(file: File) {
+    runCatching {
+        val process = ProcessBuilder("chmod", "-R", "u+rwX", file.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        process.inputStream.bufferedReader().readText()
+        if (!process.waitFor(10, TimeUnit.SECONDS)) process.destroyForcibly()
+    }
+}
+
+private fun shellRemove(file: File): Boolean {
+    return runCatching {
+        val process = ProcessBuilder("rm", "-rf", file.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        process.inputStream.bufferedReader().readText()
+        val finished = process.waitFor(10, TimeUnit.SECONDS)
+        if (!finished) process.destroyForcibly()
+        finished && process.exitValue() == 0 && !file.exists()
+    }.getOrDefault(false)
+}
+
+
+private fun List<File>.withoutDescendantsCoveredBySelection(): List<File> {
+    val selectedDirectories = filter { it.isDirectory }
+        .map { it.absoluteFile.normalizePath() }
+        .sortedBy { it.length }
+
+    return filter { file ->
+        val path = file.absoluteFile.normalizePath()
+        selectedDirectories.none { directoryPath ->
+            path != directoryPath && path.startsWith("$directoryPath/")
+        }
+    }
+}
+
+private fun File.normalizePath(): String = absolutePath.replace('\\', '/')
 
 private fun File.isImageFile(): Boolean {
     val ext = extension.lowercase()
