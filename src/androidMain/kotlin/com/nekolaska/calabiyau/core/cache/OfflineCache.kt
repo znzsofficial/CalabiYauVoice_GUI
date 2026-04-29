@@ -13,14 +13,14 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * 离线缓存管理器。
  *
- * 将 API 响应的原始 JSON 缓存到磁盘，离线时可读取。
+ * 将 API 响应的原始内容缓存到磁盘，离线时可读取。
  * 缓存按类型分目录存储，文件名为 key 的 MD5 哈希。
  *
  * 缓存策略：
  * - 有网络时：先请求网络，成功后写入缓存；失败则回退到任意磁盘缓存（即便已过期）
  * - 无网络时：读取磁盘缓存（即便已过期），返回数据 + 离线标记
  * - 缓存有效期：默认 7 天，可按类型自定义。过期条目不会在读取时自动删除，
- *   由 [pruneExpired] 定期清理（见 [MainActivity]）
+ *   由 [pruneExpired] 定期清理（建议挂在应用启动流程中异步执行一次）
  *
  * 请求去重：
  * - 并发调用相同 key 的 `fetchWithCache` 会共享同一次网络请求，
@@ -56,19 +56,24 @@ object OfflineCache {
 
     /** 磁盘缓存读取结果（含年龄与过期标记）。 */
     data class CacheEntry(
-        val json: String,
+        val content: String,
         val ageMs: Long,
         val expired: Boolean
     )
 
     /**
      * [fetchWithCache] 返回结果。
-     * @param json 最终 JSON 字符串（来自网络或磁盘）
+     *
+     * 这里的 [payload] 始终表示缓存中存放的原始网络响应内容。
+     * 页面解析后的 HTML / wikitext 等内容应由各自的 source / api 数据类单独承载，
+     * 不要再复用这个字段表达不同语义。
+     *
+     * @param payload 原始 JSON 响应（来自网络或磁盘）
      * @param isFromCache 是否来自磁盘缓存
      * @param ageMs 缓存年龄（毫秒），仅在 [isFromCache] == true 时有意义
      */
     data class CacheResult(
-        val json: String,
+        val payload: String,
         val isFromCache: Boolean,
         val ageMs: Long
     )
@@ -92,7 +97,7 @@ object OfflineCache {
         val age = System.currentTimeMillis() - file.lastModified()
         try {
             CacheEntry(
-                json = file.readText(),
+                content = file.readText(),
                 ageMs = age,
                 expired = age > type.maxAgeMs
             )
@@ -106,7 +111,7 @@ object OfflineCache {
      * 过期条目不会删除，仅作为 [fetchWithCache] 的离线回退。
      */
     suspend fun get(type: Type, key: String): String? =
-        getEntry(type, key)?.takeIf { !it.expired }?.json
+        getEntry(type, key)?.takeIf { !it.expired }?.content
 
     /**
      * 写入缓存。
@@ -140,6 +145,7 @@ object OfflineCache {
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         cacheDir.deleteRecursively()
         cacheDir.mkdirs()
+        clearMemoryCaches()
     }
 
     /**
@@ -153,6 +159,7 @@ object OfflineCache {
      * 获取缓存总大小（字节）。
      */
     fun totalSize(): Long {
+        if (!::cacheDir.isInitialized) return 0L
         return cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
     }
 
@@ -250,21 +257,35 @@ object OfflineCache {
             // 有网络：先尝试网络请求
             val fresh = try {
                 networkFetch()
-            } catch (_: Exception) {
+            } catch (e: Throwable) {
+                if (::appContext.isInitialized) {
+                    CrashContextStore.record(
+                        appContext,
+                        "OfflineCache.doFetch",
+                        "networkFetch exception | type=${type.dir} | key=$key | ${e::class.java.simpleName}: ${e.message.orEmpty().take(120)}"
+                    )
+                }
                 null
             }
             if (fresh != null) {
                 put(type, key, fresh)
-                return CacheResult(json = fresh, isFromCache = false, ageMs = 0L)
+                return CacheResult(payload = fresh, isFromCache = false, ageMs = 0L)
+            }
+            if (::appContext.isInitialized) {
+                CrashContextStore.record(
+                    appContext,
+                    "OfflineCache.doFetch",
+                        "networkFetch returned null | type=${type.dir} | key=$key | fallback=cache"
+                )
             }
             // 网络失败，回退到任意磁盘缓存（包含过期条目）
             val entry = getEntry(type, key) ?: return null
-            return CacheResult(json = entry.json, isFromCache = true, ageMs = entry.ageMs)
+                    return CacheResult(payload = entry.content, isFromCache = true, ageMs = entry.ageMs)
         }
 
         // 无网络：读任意磁盘缓存（包含过期条目）
         val entry = getEntry(type, key) ?: return null
-        return CacheResult(json = entry.json, isFromCache = true, ageMs = entry.ageMs)
+                return CacheResult(payload = entry.content, isFromCache = true, ageMs = entry.ageMs)
     }
 
     private fun cacheFile(type: Type, key: String): File {

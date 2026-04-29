@@ -27,7 +27,7 @@ object AnnouncementRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val json = SharedJson.parseToJsonElement(result.json).jsonObject
+        val json = SharedJson.parseToJsonElement(result.payload).jsonObject
         val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
         return AnnouncementSourceResult(
             results = results,

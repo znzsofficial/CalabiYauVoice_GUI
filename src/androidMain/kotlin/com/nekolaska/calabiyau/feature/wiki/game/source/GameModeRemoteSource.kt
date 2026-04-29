@@ -17,8 +17,12 @@ object GameModeRemoteSource {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
+    private fun encode(value: String): String {
+        return URLEncoder.encode(value, "UTF-8")
+    }
+
     suspend fun fetchModeMapMappingWikitext(forceRefresh: Boolean): String? {
-        val encoded = URLEncoder.encode("模板:卡拉彼丘", "UTF-8")
+        val encoded = encode("模板:卡拉彼丘")
         val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
         val cacheResult = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.GAME_MODES,
@@ -26,13 +30,13 @@ object GameModeRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val json = SharedJson.parseToJsonElement(cacheResult.json).jsonObject
+        val json = SharedJson.parseToJsonElement(cacheResult.payload).jsonObject
         return json["parse"]?.jsonObject?.get("wikitext")
             ?.jsonObject?.get("*")?.jsonPrimitive?.content
     }
 
     suspend fun fetchModeWikitext(pageName: String, forceRefresh: Boolean): GameModeSourceResult? {
-        val encoded = URLEncoder.encode(pageName, "UTF-8")
+        val encoded = encode(pageName)
         val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
         val cacheResult = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.GAME_MODES,
@@ -40,7 +44,7 @@ object GameModeRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val json = SharedJson.parseToJsonElement(cacheResult.json).jsonObject
+        val json = SharedJson.parseToJsonElement(cacheResult.payload).jsonObject
         val wikitext = json["parse"]?.jsonObject?.get("wikitext")
             ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return null
 

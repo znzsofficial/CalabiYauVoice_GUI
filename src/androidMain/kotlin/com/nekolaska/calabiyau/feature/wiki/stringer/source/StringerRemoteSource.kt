@@ -30,7 +30,7 @@ object StringerRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val root = SharedJson.parseToJsonElement(result.json).jsonObject
+        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
         val html = root["parse"]?.jsonObject
             ?.get("text")?.jsonObject
             ?.get("*")?.jsonPrimitive?.content ?: return null

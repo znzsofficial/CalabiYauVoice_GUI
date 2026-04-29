@@ -68,12 +68,12 @@ object BioCardApi {
                     is ApiResult.Error -> emptyMap()
                 }
 
-                val refreshProbabilityMap = BioCardParsers.parseRefreshProbabilities(mode.json)
+                val refreshProbabilityMap = BioCardParsers.parseRefreshProbabilities(mode.html)
 
                 val data = CardPageData(
-                    pcCards = BioCardParsers.parsePcCards(pc.json, refreshProbabilityMap),
-                    mobileCards = BioCardParsers.parseMobileCards(mobile.json),
-                    decks = BioCardParsers.parseDecks(decks.json, cardIndexMapByFaction),
+                    pcCards = BioCardParsers.parsePcCards(pc.html, refreshProbabilityMap),
+                    mobileCards = BioCardParsers.parseMobileCards(mobile.html),
+                    decks = BioCardParsers.parseDecks(decks.html, cardIndexMapByFaction),
                     pcWikiUrl = BioCardRemoteSource.pageUrl(PC_PAGE),
                     mobileWikiUrl = BioCardRemoteSource.pageUrl(MOBILE_PAGE),
                     deckWikiUrl = BioCardRemoteSource.pageUrl(DECK_PAGE),

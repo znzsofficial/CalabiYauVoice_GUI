@@ -123,7 +123,7 @@ object WeaponListApi {
                 key = "category_${category.name}",
                 forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) } ?: return null
-            val body = cacheResult.json
+            val body = cacheResult.payload
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
@@ -206,7 +206,7 @@ object WeaponListApi {
             }.toString()
         }
 
-        val cachedJson = cacheResult?.json ?: return@withContext emptyMap()
+        val cachedJson = cacheResult?.payload ?: return@withContext emptyMap()
         val parsed = SharedJson.parseToJsonElement(cachedJson).jsonObject
         parsed.mapValues { (_, value) -> value.jsonPrimitive.content }
     }
