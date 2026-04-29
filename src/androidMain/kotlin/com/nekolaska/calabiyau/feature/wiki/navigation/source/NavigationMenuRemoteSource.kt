@@ -25,7 +25,7 @@ object NavigationMenuRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val root = SharedJson.parseToJsonElement(result.json).jsonObject
+        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
         val sidebar = root["query"]
             ?.jsonObject?.get("allmessages")
             ?.jsonArray?.firstOrNull()

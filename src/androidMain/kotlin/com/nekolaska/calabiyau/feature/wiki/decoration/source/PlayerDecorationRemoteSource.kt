@@ -30,7 +30,7 @@ object PlayerDecorationRemoteSource {
             response.use { if (it.isSuccessful) it.body.string() else null }
         } ?: return null
 
-        val root = SharedJson.parseToJsonElement(result.json).jsonObject
+        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
         val html = root["parse"]?.jsonObject
             ?.get("text")?.jsonObject
             ?.get("*")?.jsonPrimitive?.content

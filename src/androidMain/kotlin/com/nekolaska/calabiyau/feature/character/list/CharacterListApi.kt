@@ -106,7 +106,7 @@ object CharacterListApi {
                     "请求 $faction 失败，且无离线缓存",
                     kind = ErrorKind.NETWORK
                 )
-            val body = result.json
+            val body = result.payload
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")

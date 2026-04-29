@@ -35,6 +35,10 @@ object WeaponSkinFilterApi {
 
     fun clearMemoryCache() { cachedSkins = null }
 
+    private fun getCachedSkins(forceRefresh: Boolean): List<WeaponSkinInfo>? {
+        return if (forceRefresh) null else cachedSkins
+    }
+
     /** 品质等级 */
     enum class Quality(val level: Int, val displayName: String) {
         EXQUISITE(2, "精致"),
@@ -74,16 +78,14 @@ object WeaponSkinFilterApi {
     ): ApiResult<List<WeaponSkinInfo>> =
         withContext(Dispatchers.IO) {
             try {
-                // 优先返回内存缓存
-                if (!forceRefresh) {
-                    cachedSkins?.let { return@withContext ApiResult.Success(it) }
-                }
+                // 强刷时必须绕过内存缓存
+                getCachedSkins(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
 
                 // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
                 if (cacheOnly) {
                     val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_SKINS, "all_weapon_skins")
                         ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
-                    return@withContext parseSkinResult(entry.json, isOffline = true, cacheAgeMs = entry.ageMs)
+                    return@withContext parseSkinResult(entry.content, isOffline = true, cacheAgeMs = entry.ageMs)
                 }
 
                 val text = URLEncoder.encode("{{#invoke:武器|武器外观筛选}}", "UTF-8")
@@ -97,7 +99,7 @@ object WeaponSkinFilterApi {
                         "请求失败，且无离线缓存",
                         kind = ErrorKind.NETWORK
                     )
-                val body = result.json
+                val body = result.payload
 
                 parseSkinResult(body, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
             } catch (e: Exception) {
@@ -266,13 +268,6 @@ object WeaponSkinFilterApi {
         return true
     }
 
-    private fun String.isLikelyRemark(): Boolean {
-        val compact = replace(Regex("""\s+"""), "")
-        if (compact.isBlank()) return false
-        if (compact.contains('：') || compact.contains(':')) return true
-        return compact.contains("原价") || compact.contains("限时") || compact.contains("特效") ||
-                compact.contains("套装") || compact.contains("兑换") || compact.contains("获得")
-    }
 
     private fun Element.textWithLineBreaks(): String {
         val builder = StringBuilder()

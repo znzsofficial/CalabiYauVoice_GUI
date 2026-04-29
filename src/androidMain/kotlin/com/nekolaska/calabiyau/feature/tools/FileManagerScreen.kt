@@ -76,12 +76,13 @@ fun FileManagerScreen(
 ) {
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
+    val rootDir = remember(rootPath) { File(rootPath).absoluteFile }
     var currentDir by remember(rootPath, initialPath) {
         mutableStateOf(
             initialPath
                 ?.let(::File)
-                ?.takeIf { it.exists() && it.absolutePath.startsWith(File(rootPath).absolutePath) }
-                ?: File(rootPath)
+                ?.takeIf { it.exists() && it.isWithinRoot(rootDir) }
+                ?: rootDir
         )
     }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -127,14 +128,42 @@ fun FileManagerScreen(
         isLoading = false
     }
 
+    val isPickerMode = directoryPickerConfig != null && (onDirectoryPicked != null || onFilesPicked != null)
+    val pickerConfig = if (isPickerMode) directoryPickerConfig else null
+    val pickerMode = pickerConfig?.pickMode ?: FileManagerPickerMode.DIRECTORY
+    val pickDirectory = if (pickerMode == FileManagerPickerMode.DIRECTORY) onDirectoryPicked else null
+    val pickFiles = if (pickerMode == FileManagerPickerMode.FILES) onFilesPicked else null
+    val canPickFiles = pickerMode == FileManagerPickerMode.FILES && pickFiles != null
+
+    fun clearSelection() {
+        isSelectionMode = false
+        selectedFiles = emptySet()
+    }
+
+    fun toggleSelectedPath(path: String, isSelected: Boolean) {
+        selectedFiles = if (isSelected) selectedFiles - path else selectedFiles + path
+    }
+
+    fun enterSelectionWith(path: String) {
+        isSelectionMode = true
+        selectedFiles = setOf(path)
+    }
+
+    fun toggleAllSelection() {
+        selectedFiles = if (selectedFiles.size == files.size && files.isNotEmpty()) {
+            emptySet()
+        } else {
+            files.map { it.absolutePath }.toSet()
+        }
+    }
+
     // 返回键处理：多选模式下先退出多选，子目录时返回上级，在根目录时退出
-    val isAtRoot = currentDir.absolutePath == File(rootPath).absolutePath
+    val isAtRoot = currentDir.isAtSamePath(rootDir)
     BackHandler(enabled = isSelectionMode) {
         if (directoryPickerConfig?.pickMode == FileManagerPickerMode.FILES && onFilesPicked != null) {
             onBack()
         } else {
-            isSelectionMode = false
-            selectedFiles = emptySet()
+            clearSelection()
         }
     }
     BackHandler(enabled = !isAtRoot && !isSelectionMode) {
@@ -147,12 +176,6 @@ fun FileManagerScreen(
             files.filter { it.absolutePath in selectedFiles }
         }
     }
-    val isPickerMode = directoryPickerConfig != null && (onDirectoryPicked != null || onFilesPicked != null)
-    val pickerConfig = if (isPickerMode) directoryPickerConfig else null
-    val pickerMode = pickerConfig?.pickMode ?: FileManagerPickerMode.DIRECTORY
-    val pickDirectory = if (pickerMode == FileManagerPickerMode.DIRECTORY) onDirectoryPicked else null
-    val pickFiles = if (pickerMode == FileManagerPickerMode.FILES) onFilesPicked else null
-    val canPickFiles = pickerMode == FileManagerPickerMode.FILES && pickFiles != null
 
     Scaffold(
         topBar = {
@@ -172,8 +195,7 @@ fun FileManagerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = {
-                                isSelectionMode = false
-                                selectedFiles = emptySet()
+                                clearSelection()
                             }) {
                                 Icon(Icons.Default.Close, "退出多选")
                             }
@@ -186,8 +208,7 @@ fun FileManagerScreen(
                             // 全选 / 取消全选
                             val allSelected = selectedFiles.size == files.size && files.isNotEmpty()
                             IconButton(onClick = {
-                                selectedFiles = if (allSelected) emptySet()
-                                    else files.map { it.absolutePath }.toSet()
+                                toggleAllSelection()
                             }) {
                                 Icon(
                                     if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
@@ -248,7 +269,7 @@ fun FileManagerScreen(
                                 )
                                 Text(
                                     text = "${files.size} 项" + if (!isAtRoot) " · ${
-                                        currentDir.absolutePath.removePrefix(rootPath).trimStart('/')
+                                        currentDir.relativePathWithin(rootDir).orEmpty()
                                     }" else "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -328,10 +349,7 @@ fun FileManagerScreen(
                                 onClick = {
                                     if (isSelectionMode) {
                                         // 多选模式下：点击切换选中
-                                        selectedFiles = if (isSelected)
-                                            selectedFiles - file.absolutePath
-                                        else
-                                            selectedFiles + file.absolutePath
+                                        toggleSelectedPath(file.absolutePath, isSelected)
                                     } else {
                                         if (file.isDirectory) {
                                             currentDir = file
@@ -339,11 +357,7 @@ fun FileManagerScreen(
                                             showSnack("当前模式仅支持选择目录")
                                         } else if (canPickFiles && file.isFile) {
                                             if (pickerConfig?.allowMultiSelect == true) {
-                                                selectedFiles = if (isSelected) {
-                                                    selectedFiles - file.absolutePath
-                                                } else {
-                                                    selectedFiles + file.absolutePath
-                                                }
+                                                toggleSelectedPath(file.absolutePath, isSelected)
                                                 isSelectionMode = selectedFiles.isNotEmpty()
                                             } else {
                                                 pickFiles.invoke(listOf(file))
@@ -364,24 +378,16 @@ fun FileManagerScreen(
                                     if (canPickFiles && file.isFile) {
                                         if (pickerConfig?.allowMultiSelect == true) {
                                             isSelectionMode = true
-                                            selectedFiles = if (isSelected) {
-                                                selectedFiles - file.absolutePath
-                                            } else {
-                                                selectedFiles + file.absolutePath
-                                            }
+                                            toggleSelectedPath(file.absolutePath, isSelected)
                                         } else {
                                             pickFiles.invoke(listOf(file))
                                         }
                                     } else if (!isSelectionMode) {
                                         // 长按进入多选模式并选中当前项
-                                        isSelectionMode = true
-                                        selectedFiles = setOf(file.absolutePath)
+                                        enterSelectionWith(file.absolutePath)
                                     } else {
                                         // 已在多选模式：切换选中
-                                        selectedFiles = if (isSelected)
-                                            selectedFiles - file.absolutePath
-                                        else
-                                            selectedFiles + file.absolutePath
+                                        toggleSelectedPath(file.absolutePath, isSelected)
                                     }
                                 },
                                 onMoreClick = {
@@ -1111,6 +1117,26 @@ private fun List<File>.withoutDescendantsCoveredBySelection(): List<File> {
 }
 
 private fun File.normalizePath(): String = absolutePath.replace('\\', '/')
+
+private fun File.isAtSamePath(rootDir: File): Boolean =
+    absoluteFile.normalizePath() == rootDir.absoluteFile.normalizePath()
+
+private fun File.isWithinRoot(rootDir: File): Boolean {
+    val rootPath = rootDir.absoluteFile.normalizePath().trimEnd('/')
+    val candidatePath = absoluteFile.normalizePath().trimEnd('/')
+    return candidatePath == rootPath || candidatePath.startsWith("$rootPath/")
+}
+
+private fun File.relativePathWithin(rootDir: File): String? {
+    if (!isWithinRoot(rootDir)) return null
+
+    val rootPath = rootDir.absoluteFile.normalizePath().trimEnd('/')
+    val candidatePath = absoluteFile.normalizePath().trimEnd('/')
+    return candidatePath
+        .removePrefix(rootPath)
+        .trimStart('/')
+        .takeIf { it.isNotBlank() }
+}
 
 private fun File.isImageFile(): Boolean {
     val ext = extension.lowercase()

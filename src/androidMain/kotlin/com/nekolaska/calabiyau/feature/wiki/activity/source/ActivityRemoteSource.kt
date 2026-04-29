@@ -28,7 +28,7 @@ object ActivityRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val root = SharedJson.parseToJsonElement(result.json).jsonObject
+        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
         val html = root["parse"]?.jsonObject?.get("text")
             ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return null
 
@@ -50,7 +50,7 @@ object ActivityRemoteSource {
         ) {
             fetchHighResImageUrlFromDetailPage(title)
         }
-        return result?.json?.takeIf { it.isNotBlank() }
+        return result?.payload?.takeIf { it.isNotBlank() }
     }
 
     private fun fetchHighResImageUrlFromDetailPage(detailPageTitle: String): String? {

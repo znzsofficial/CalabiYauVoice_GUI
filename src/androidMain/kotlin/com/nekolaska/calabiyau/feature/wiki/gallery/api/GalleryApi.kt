@@ -54,7 +54,7 @@ object GalleryApi {
                         "获取页面失败，且无离线缓存",
                         kind = ErrorKind.NETWORK
                     )
-                val html = result.json
+                val html = result.html
 
                 val rawSections = GalleryParsers.parseHtml(pageName, html)
                 if (rawSections.isEmpty()) {

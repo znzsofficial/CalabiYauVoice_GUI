@@ -93,7 +93,7 @@ object WeaponDetailApi {
                         "请求失败，且无离线缓存",
                         kind = ErrorKind.NETWORK
                     )
-                val body = result.json
+                val body = result.payload
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -246,7 +246,7 @@ object WeaponDetailApi {
             key = "image_$weaponName",
             forceRefresh = forceRefresh
         ) { fetchImageUrl(fileName) }
-        return cacheResult?.json?.takeIf { it.isNotBlank() }
+        return cacheResult?.payload?.takeIf { it.isNotBlank() }
     }
 
     private fun extractWeaponImageFileName(weaponName: String, wikitext: String): String? {

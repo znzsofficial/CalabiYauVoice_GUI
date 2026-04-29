@@ -30,7 +30,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 ## ✨ Features
 
-### � Shared (Both Platforms)
+### 🤝 Shared (Both Platforms)
 
 - **🔍 Smart Search** — 4 search modes: voice-only categories, all resource types, file search (namespace 6), and portrait/illustration.
 - **⚡ Concurrent Downloads** — Scan category trees and download files with configurable concurrency.
