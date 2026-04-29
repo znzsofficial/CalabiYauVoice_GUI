@@ -35,7 +35,7 @@ object MapRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val json = SharedJson.parseToJsonElement(result.json).jsonObject
+        val json = SharedJson.parseToJsonElement(result.payload).jsonObject
         val html = json["parse"]
             ?.jsonObject?.get("text")
             ?.jsonObject?.get("*")
@@ -58,7 +58,7 @@ object MapRemoteSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val json = SharedJson.parseToJsonElement(result.json).jsonObject
+        val json = SharedJson.parseToJsonElement(result.payload).jsonObject
         val parseObj = json["parse"]?.jsonObject ?: return null
         val wikitext = parseObj["wikitext"]?.jsonObject?.get("*")
             ?.jsonPrimitive?.content ?: return null

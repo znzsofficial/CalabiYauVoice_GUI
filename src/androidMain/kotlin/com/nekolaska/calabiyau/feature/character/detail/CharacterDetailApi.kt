@@ -88,6 +88,12 @@ object CharacterDetailApi {
         val relations: List<InfoPair> = emptyList()
     )
 
+    private data class AggregatePageSourceResult(
+        val html: String,
+        val isFromCache: Boolean,
+        val ageMs: Long
+    )
+
     /** 更新改动历史条目 */
     data class UpdateEntry(
         val date: String,
@@ -141,7 +147,7 @@ object CharacterDetailApi {
                         "请求失败，且无离线缓存",
                         kind = ErrorKind.NETWORK
                     )
-                val body = result.json
+                val body = result.payload
 
                 val json = SharedJson.parseToJsonElement(body).jsonObject
                 val parseObj = json["parse"]?.jsonObject
@@ -294,8 +300,8 @@ object CharacterDetailApi {
             )
         }
 
-        val positionHtml = results[0]?.json.orEmpty()
-        val settingHtml = results[1]?.json.orEmpty()
+        val positionHtml = results[0]?.html.orEmpty()
+        val settingHtml = results[1]?.html.orEmpty()
 
         val merged = mutableMapOf<String, CharacterExtraInfo>()
         parsePositionExtras(positionHtml).forEach { (name, info) ->
@@ -313,7 +319,7 @@ object CharacterDetailApi {
         pageName: String,
         cacheKey: String,
         forceRefresh: Boolean
-    ): OfflineCache.CacheResult? {
+    ): AggregatePageSourceResult? {
         val encoded = URLEncoder.encode(pageName, "UTF-8")
         val url = "$API?action=parse&page=$encoded&prop=text&format=json"
         val result = OfflineCache.fetchWithCache(
@@ -322,11 +328,15 @@ object CharacterDetailApi {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val root = SharedJson.parseToJsonElement(result.json).jsonObject
+        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
         val html = root["parse"]?.jsonObject?.get("text")
             ?.jsonObject?.get("*")?.jsonPrimitive?.content
             ?: return null
-        return result.copy(json = html)
+        return AggregatePageSourceResult(
+            html = html,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
     }
 
     private fun parsePositionExtras(html: String): Map<String, CharacterExtraInfo> {
@@ -480,8 +490,8 @@ object CharacterDetailApi {
             .replace(Regex("<br\\s*/?>\\n?"), "\n")                       // <br /> → 换行
             .replace(Regex("'''([^']*?)'''"), "$1")                       // '''粗体''' → 纯文本
             .replace(Regex("''([^']*?)''"), "$1")                         // ''斜体'' → 纯文本
-            .replace(Regex("\\[\\[[^|\\]]*?\\|([^\\]]*?)\\]\\]"), "$1")   // [[链接|显示]] → 显示
-            .replace(Regex("\\[\\[([^\\]]*?)\\]\\]"), "$1")              // [[链接]] → 链接
+            .replace(Regex("""\[\[[^|\]]*?\|([^\]]*?)\]\]"""), "$1")   // [[链接|显示]] → 显示
+            .replace(Regex("""\[\[([^\]]*?)\]\]"""), "$1")              // [[链接]] → 链接
             .replace(Regex("<[^>]+>"), "")                                // HTML 标签移除
             .trim()
     }
