@@ -63,17 +63,27 @@ object WeaponSkinFilterApi {
         val screenshotUrl: String?  // 游戏截图 URL
     )
 
-
     /**
      * 获取所有武器外观数据。
      * @param forceRefresh 强制刷新缓存
+     * @param cacheOnly 仅读磁盘缓存，不发起网络请求（用于 stale-while-revalidate 预加载）
      */
-    suspend fun fetchAllWeaponSkins(forceRefresh: Boolean = false): ApiResult<List<WeaponSkinInfo>> =
+    suspend fun fetchAllWeaponSkins(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false
+    ): ApiResult<List<WeaponSkinInfo>> =
         withContext(Dispatchers.IO) {
             try {
                 // 优先返回内存缓存
                 if (!forceRefresh) {
                     cachedSkins?.let { return@withContext ApiResult.Success(it) }
+                }
+
+                // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
+                if (cacheOnly) {
+                    val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_SKINS, "all_weapon_skins")
+                        ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
+                    return@withContext parseSkinResult(entry.json, isOffline = true, cacheAgeMs = entry.ageMs)
                 }
 
                 val text = URLEncoder.encode("{{#invoke:武器|武器外观筛选}}", "UTF-8")
@@ -89,29 +99,30 @@ object WeaponSkinFilterApi {
                     )
                 val body = result.json
 
-                val json = SharedJson.parseToJsonElement(body).jsonObject
-                val html = json["parse"]?.jsonObject?.get("text")
-                    ?.jsonObject?.get("*")?.jsonPrimitive?.content
-                    ?: return@withContext ApiResult.Error(
-                        "无法获取武器外观数据",
-                        kind = ErrorKind.PARSE
-                    )
-
-                val skins = parseWeaponSkinHtml(html)
-                if (skins.isEmpty()) {
-                    ApiResult.Error("未找到武器外观数据", kind = ErrorKind.NOT_FOUND)
-                } else {
-                    cachedSkins = skins
-                    ApiResult.Success(
-                        skins,
-                        isOffline = result.isFromCache,
-                        cacheAgeMs = result.ageMs
-                    )
-                }
+                parseSkinResult(body, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
             } catch (e: Exception) {
                 ApiResult.Error("获取武器外观数据失败: ${e.message}", kind = e.toErrorKind())
             }
         }
+
+    private fun parseSkinResult(
+        jsonBody: String,
+        isOffline: Boolean,
+        cacheAgeMs: Long
+    ): ApiResult<List<WeaponSkinInfo>> {
+        val json = SharedJson.parseToJsonElement(jsonBody).jsonObject
+        val html = json["parse"]?.jsonObject?.get("text")
+            ?.jsonObject?.get("*")?.jsonPrimitive?.content
+            ?: return ApiResult.Error("无法获取武器外观数据", kind = ErrorKind.PARSE)
+
+        val skins = parseWeaponSkinHtml(html)
+        return if (skins.isEmpty()) {
+            ApiResult.Error("未找到武器外观数据", kind = ErrorKind.NOT_FOUND)
+        } else {
+            cachedSkins = skins
+            ApiResult.Success(skins, isOffline = isOffline, cacheAgeMs = cacheAgeMs)
+        }
+    }
 
     /**
      * 从 HTML 解析武器外观数据。

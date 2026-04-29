@@ -56,9 +56,11 @@ fun CostumeFilterScreen(
     initialCharacter: String? = null,
     onBack: () -> Unit
 ) {
-    val state = rememberLoadState(emptyList<CostumeInfo>()) { force ->
-        CostumeFilterApi.fetchAllCostumes(force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<CostumeInfo>(),
+        cachedFetch = { CostumeFilterApi.fetchAllCostumes(cacheOnly = true) },
+        fetch = { force -> CostumeFilterApi.fetchAllCostumes(force) }
+    )
     val allCostumes = state.data
 
     // 筛选状态

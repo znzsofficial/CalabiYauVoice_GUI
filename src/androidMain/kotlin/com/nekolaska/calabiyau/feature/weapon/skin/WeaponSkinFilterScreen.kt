@@ -56,9 +56,11 @@ fun WeaponSkinFilterScreen(
     initialWeapon: String? = null,
     onBack: () -> Unit
 ) {
-    val state = rememberLoadState(emptyList<WeaponSkinInfo>()) { force ->
-        WeaponSkinFilterApi.fetchAllWeaponSkins(force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<WeaponSkinInfo>(),
+        cachedFetch = { WeaponSkinFilterApi.fetchAllWeaponSkins(cacheOnly = true) },
+        fetch = { force -> WeaponSkinFilterApi.fetchAllWeaponSkins(force) }
+    )
     val allSkins = state.data
 
     // 筛选状态
