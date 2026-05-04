@@ -37,26 +37,46 @@ val LocalLiquidGlassEnabled = staticCompositionLocalOf { mutableStateOf(false) }
 private fun isAppInDarkTheme(): Boolean =
     MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
-private data class LiquidGlassTuning(
+/**
+ * 液态玻璃调校覆盖项。
+ *
+ * 未设置的字段会沿用当前主题对应的默认值，因此调用方可以只覆盖需要调整的部分。
+ */
+data class LiquidGlassTuning(
+    val brightness: Float? = null,
+    val contrast: Float? = null,
+    val saturation: Float? = null,
+    val surfaceColor: Color? = null
+)
+
+private data class ResolvedLiquidGlassTuning(
     val brightness: Float,
     val contrast: Float,
     val saturation: Float,
     val surfaceColor: Color
 )
 
+private fun LiquidGlassTuning?.resolveWith(defaultTuning: ResolvedLiquidGlassTuning): ResolvedLiquidGlassTuning =
+    ResolvedLiquidGlassTuning(
+        brightness = this?.brightness ?: defaultTuning.brightness,
+        contrast = this?.contrast ?: defaultTuning.contrast,
+        saturation = this?.saturation ?: defaultTuning.saturation,
+        surfaceColor = this?.surfaceColor ?: defaultTuning.surfaceColor
+    )
+
 @Composable
-private fun rememberLiquidGlassTuning(surfaceAlpha: Float, isLightVariant: Boolean): LiquidGlassTuning {
+private fun rememberLiquidGlassTuning(surfaceAlpha: Float, isLightVariant: Boolean): ResolvedLiquidGlassTuning {
     val isDark = isAppInDarkTheme()
     return remember(isDark, surfaceAlpha, isLightVariant) {
         if (isDark) {
-            LiquidGlassTuning(
+            ResolvedLiquidGlassTuning(
                 brightness = if (isLightVariant) -0.02f else -0.04f,
                 contrast = if (isLightVariant) 1.04f else 1.08f,
                 saturation = if (isLightVariant) 1.10f else 1.16f,
                 surfaceColor = Color.Black.copy(alpha = surfaceAlpha)
             )
         } else {
-            LiquidGlassTuning(
+            ResolvedLiquidGlassTuning(
                 brightness = if (isLightVariant) 0.03f else 0.05f,
                 contrast = if (isLightVariant) 0.98f else 0.96f,
                 saturation = if (isLightVariant) 1.06f else 1.10f,
@@ -100,26 +120,28 @@ fun Modifier.liquidGlass(
     lensHeight: Dp = 16.dp,
     lensAmount: Dp = 24.dp,
     surfaceAlpha: Float = 0.35f,
+    tuning: LiquidGlassTuning? = null,
     enabled: Boolean = LocalLiquidGlassEnabled.current.value
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    val tuning = rememberLiquidGlassTuning(surfaceAlpha = surfaceAlpha, isLightVariant = false)
+    val defaultTuning = rememberLiquidGlassTuning(surfaceAlpha = surfaceAlpha, isLightVariant = false)
+    val appliedTuning = tuning.resolveWith(defaultTuning)
 
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = shape,
         effects = {
             colorControls(
-                brightness = tuning.brightness,
-                contrast = tuning.contrast,
-                saturation = tuning.saturation
+                brightness = appliedTuning.brightness,
+                contrast = appliedTuning.contrast,
+                saturation = appliedTuning.saturation
             )
             blur(blurRadius.toPx())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 lens(lensHeight.toPx(), lensAmount.toPx())
             }
         },
-        onDrawSurface = { drawRect(tuning.surfaceColor) }
+        onDrawSurface = { drawRect(appliedTuning.surfaceColor) }
     )
 }
 

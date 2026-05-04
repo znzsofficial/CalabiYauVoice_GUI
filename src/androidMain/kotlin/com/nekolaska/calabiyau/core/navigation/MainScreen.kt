@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.core.navigation
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.*
@@ -25,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +37,7 @@ import com.nekolaska.calabiyau.feature.download.DownloadHistoryScreen
 import com.nekolaska.calabiyau.feature.download.DownloaderScreen
 import com.nekolaska.calabiyau.core.media.AudioPlayerManager
 import com.nekolaska.calabiyau.core.ui.LocalSnackbarHostState
+import com.nekolaska.calabiyau.core.ui.LiquidGlassTuning
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
@@ -368,9 +371,11 @@ fun MainScreen(
     }
 
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+    val configuration = LocalConfiguration.current
+    val useLiquidGlassDrawer = liquidGlassEnabled && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val mainLayerBackdrop = rememberLayerBackdrop()
     val emptyBackdrop = remember { emptyBackdrop() }
-    val backdrop = if (liquidGlassEnabled) mainLayerBackdrop else emptyBackdrop
+    val drawerBackdrop = if (useLiquidGlassDrawer) mainLayerBackdrop else emptyBackdrop
 
     val drawerContent: @Composable () -> Unit = {
         AppDrawerContent(
@@ -387,7 +392,8 @@ fun MainScreen(
                 }
                 if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
             },
-            backdrop = backdrop
+            backdrop = drawerBackdrop,
+            liquidGlassEnabled = useLiquidGlassDrawer
         )
     }
 
@@ -434,7 +440,8 @@ fun MainScreen(
 private fun AppDrawerContent(
     currentDestination: DrawerDestination,
     onDestinationSelected: (DrawerDestination) -> Unit,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop = emptyBackdrop(),
+    liquidGlassEnabled: Boolean = LocalLiquidGlassEnabled.current.value
 ) {
     // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
     val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
@@ -442,7 +449,6 @@ private fun AppDrawerContent(
     var isLoadingUserInfo by remember { mutableStateOf(false) }
     var showUserInfoSheet by remember { mutableStateOf(false) }
     val wikiCoroutineScope = rememberCoroutineScope()
-    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val drawerContentShape = smoothCornerShape(28.dp)
 
     ModalDrawerSheet(
@@ -450,7 +456,16 @@ private fun AppDrawerContent(
         drawerContainerColor = if (liquidGlassEnabled) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier
             .width(300.dp)
-            .liquidGlass(backdrop = backdrop, shape = { drawerContentShape }, enabled = liquidGlassEnabled)
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { drawerContentShape },
+                blurRadius = 8.dp,
+                tuning = LiquidGlassTuning(
+                    brightness = -0.15f,
+                    contrast = 1.2f
+                ),
+                enabled = liquidGlassEnabled
+            )
     ) {
         Column(
             modifier = Modifier
