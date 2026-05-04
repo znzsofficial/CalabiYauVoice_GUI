@@ -26,6 +26,7 @@ import com.nekolaska.calabiyau.feature.wiki.announcement.AnnouncementScreen
 import com.nekolaska.calabiyau.feature.wiki.balance.BalanceDataScreen
 import com.nekolaska.calabiyau.feature.wiki.decoration.BaseplateScreen
 import com.nekolaska.calabiyau.feature.wiki.bio.BioCardScreen
+import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
 import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
@@ -46,6 +47,7 @@ import com.nekolaska.calabiyau.feature.weapon.list.WeaponListScreen
 enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
+    GAME_HISTORY,
     NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
 }
 
@@ -67,6 +69,7 @@ sealed interface WikiRoute {
     data object Voting : WikiRoute
     data object BioCards : WikiRoute
     data object BioMobileCards : WikiRoute
+    data object GameHistory : WikiRoute
     data object Navigation : WikiRoute
     data object Wallpapers : WikiRoute
     data object Stickers : WikiRoute
@@ -96,6 +99,7 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.VOTING -> WikiRoute.Voting
     WikiHubPage.BIO_CARDS -> WikiRoute.BioCards
     WikiHubPage.BIO_MOBILE_CARDS -> WikiRoute.BioMobileCards
+    WikiHubPage.GAME_HISTORY -> WikiRoute.GameHistory
     WikiHubPage.NAVIGATION -> WikiRoute.Navigation
     WikiHubPage.WALLPAPERS -> WikiRoute.Wallpapers
     WikiHubPage.STICKERS -> WikiRoute.Stickers
@@ -154,6 +158,7 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Voting -> "voting"
     WikiRoute.BioCards -> "bioCards"
     WikiRoute.BioMobileCards -> "bioMobileCards"
+    WikiRoute.GameHistory -> "gameHistory"
     WikiRoute.Navigation -> "navigation"
     WikiRoute.Wallpapers -> "wallpapers"
     WikiRoute.Stickers -> "stickers"
@@ -202,6 +207,7 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "voting" -> WikiRoute.Voting
         "bioCards" -> WikiRoute.BioCards
         "bioMobileCards" -> WikiRoute.BioMobileCards
+        "gameHistory" -> WikiRoute.GameHistory
         "navigation" -> WikiRoute.Navigation
         "wallpapers" -> WikiRoute.Wallpapers
         "stickers" -> WikiRoute.Stickers
@@ -465,6 +471,13 @@ fun WikiHubScreen(
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl,
                     initialTab = 1
+                )
+            }
+
+            is WikiRoute.GameHistory -> {
+                GameHistoryScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
                 )
             }
 
