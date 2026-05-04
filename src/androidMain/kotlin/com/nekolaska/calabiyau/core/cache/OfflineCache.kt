@@ -46,6 +46,7 @@ object OfflineCache {
         WEAPON_SKINS("weapon_skins", 3 * DAY),
         BIO_CARDS("bio_cards", 3 * DAY),
         GALLERY("gallery", 3 * DAY),
+        GAME_HISTORY("game_history", 3 * DAY),
         DECORATIONS("decorations", 3 * DAY),
         NAVIGATION("navigation", 3 * DAY),
         BALANCE_DATA("balance_data", 1 * DAY),
