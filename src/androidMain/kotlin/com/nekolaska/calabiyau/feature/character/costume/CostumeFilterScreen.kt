@@ -40,6 +40,8 @@ import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.character.components.CharacterSelector
+import com.nekolaska.calabiyau.feature.character.components.rememberCharacterSelectorOptions
 
 // ════════════════════════════════════════════════════════
 //  角色时装筛选页 —— 原生客户端版 (MD3 Expressive)
@@ -82,6 +84,7 @@ fun CostumeFilterScreen(
     val characters = remember(allCostumes) {
         allCostumes.map { it.character }.distinct().sorted()
     }
+    val characterOptions = rememberCharacterSelectorOptions(characters)
 
     Scaffold(
         topBar = {
@@ -131,7 +134,7 @@ fun CostumeFilterScreen(
 
                         // ── 筛选栏 ──
                         CostumeFilterBar(
-                            characters = characters,
+                            characterOptions = characterOptions,
                             selectedCharacter = selectedCharacter,
                             onCharacterSelected = { selectedCharacter = it },
                             selectedQuality = selectedQuality,
@@ -271,14 +274,12 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CostumeFilterBar(
-    characters: List<String>,
+    characterOptions: List<com.nekolaska.calabiyau.feature.character.components.CharacterSelectorOption>,
     selectedCharacter: String?,
     onCharacterSelected: (String?) -> Unit,
     selectedQuality: Quality?,
     onQualitySelected: (Quality?) -> Unit
 ) {
-    var characterMenuExpanded by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -288,55 +289,13 @@ private fun CostumeFilterBar(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        ExposedDropdownMenuBox(
-            expanded = characterMenuExpanded,
-            onExpandedChange = { characterMenuExpanded = !characterMenuExpanded }
-        ) {
-            OutlinedTextField(
-                value = selectedCharacter ?: "全部角色",
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                shape = smoothCornerShape(20.dp),
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodyLarge,
-                label = { Text("角色") },
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = characterMenuExpanded)
-                },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = MaterialTheme.colorScheme.outline,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-            ExposedDropdownMenu(
-                expanded = characterMenuExpanded,
-                onDismissRequest = { characterMenuExpanded = false },
-                shape = smoothCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
-                DropdownMenuItem(
-                    text = { Text("全部角色") },
-                    onClick = {
-                        onCharacterSelected(null)
-                        characterMenuExpanded = false
-                    }
-                )
-                characters.forEach { char ->
-                    DropdownMenuItem(
-                        text = { Text(char) },
-                        onClick = {
-                            onCharacterSelected(char)
-                            characterMenuExpanded = false
-                        }
-                    )
-                }
-            }
-        }
+        CharacterSelector(
+            options = characterOptions,
+            selectedName = selectedCharacter,
+            onSelectedNameChange = onCharacterSelected,
+            label = "角色",
+            allLabel = "全部角色"
+        )
 
         // 品质筛选（跳过“初始”品质）
         Text(
@@ -619,7 +578,7 @@ private fun CostumeDetailSheet(
                         text = costume.description,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 5,
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 4,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
