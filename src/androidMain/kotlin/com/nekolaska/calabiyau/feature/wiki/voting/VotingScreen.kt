@@ -100,7 +100,7 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                     },
                     actions = {
                         // 刷新按钮
-                        IconButton(
+                        FilledTonalIconButton(
                             onClick = {
                                 scope.launch {
                                     isLoadingConfig = true
@@ -132,7 +132,10 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                                     isLoadingConfig = false
                                 }
                             },
-                            enabled = !isLoadingConfig && !isLoadingData
+                            enabled = !isLoadingConfig && !isLoadingData,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
                         ) {
                             Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
                         }
