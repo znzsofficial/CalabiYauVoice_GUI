@@ -3,12 +3,14 @@ package com.nekolaska.calabiyau.feature.weapon.skin
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
@@ -57,6 +59,8 @@ object WeaponSkinFilterApi {
     data class WeaponSkinInfo(
         val name: String,           // 外观名（如"独舞：回味时光"）
         val weapon: String,         // 武器名（如"独舞"）
+        val weaponCategory: String, // 武器大类（主武器、副武器、近战武器、战术道具）
+        val weaponType: String,     // 武器类型（自动步枪、霰弹枪等）
         val quality: Quality?,      // 品质
         val sources: List<String>,  // 获取方式列表
         val crystalCost: String,    // 巴布洛晶核价格
@@ -85,9 +89,15 @@ object WeaponSkinFilterApi {
                 if (cacheOnly) {
                     val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_SKINS, "all_weapon_skins")
                         ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
-                    return@withContext parseSkinResult(entry.content, isOffline = true, cacheAgeMs = entry.ageMs)
+                    return@withContext parseSkinResult(
+                        entry.content,
+                        weaponMeta = fetchWeaponMetaMap(forceRefresh = false, cacheOnly = true),
+                        isOffline = true,
+                        cacheAgeMs = entry.ageMs
+                    )
                 }
 
+                val weaponMeta = fetchWeaponMetaMap(forceRefresh, cacheOnly = false)
                 val text = URLEncoder.encode("{{#invoke:武器|武器外观筛选}}", "UTF-8")
                 val url = "$API?action=parse&text=$text&prop=text&format=json"
                 val result = OfflineCache.fetchWithCache(
@@ -101,14 +111,65 @@ object WeaponSkinFilterApi {
                     )
                 val body = result.payload
 
-                parseSkinResult(body, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
+                parseSkinResult(body, weaponMeta, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
             } catch (e: Exception) {
                 ApiResult.Error("获取武器外观数据失败: ${e.message}", kind = e.toErrorKind())
             }
         }
 
+    data class WeaponMeta(
+        val category: String,
+        val type: String
+    )
+
+    private suspend fun fetchWeaponMetaMap(forceRefresh: Boolean, cacheOnly: Boolean): Map<String, WeaponMeta> {
+        if (cacheOnly) return fetchCachedWeaponMetaMap()
+        return when (val result = WeaponListApi.fetchAllCategories(forceRefresh)) {
+            is ApiResult.Success -> result.value
+                .flatMap { categoryData ->
+                    categoryData.weapons.map { weapon ->
+                        weapon.name to WeaponMeta(
+                            category = categoryData.category.displayName,
+                            type = weapon.type
+                        )
+                    }
+                }
+                .toMap()
+            is ApiResult.Error -> emptyMap()
+        }
+    }
+
+    private suspend fun fetchCachedWeaponMetaMap(): Map<String, WeaponMeta> {
+        return WeaponListApi.WeaponCategory.entries
+            .mapNotNull { category ->
+                val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_LIST, "category_${category.name}")
+                    ?: return@mapNotNull null
+                category to entry.content
+            }
+            .flatMap { (category, cachedJson) -> parseWeaponMetaFromAskJson(cachedJson, category) }
+            .toMap()
+    }
+
+    private fun parseWeaponMetaFromAskJson(
+        cachedJson: String,
+        category: WeaponListApi.WeaponCategory
+    ): List<Pair<String, WeaponMeta>> {
+        return runCatching {
+            val root = SharedJson.parseToJsonElement(cachedJson).jsonObject
+            val results = root["query"]?.jsonObject?.get("results")?.jsonObject.orEmpty()
+            results.map { (weaponName, value) ->
+                val type = value.jsonObject["printouts"]?.jsonObject
+                    ?.get("类型")?.jsonArray
+                    ?.firstOrNull()?.jsonPrimitive?.content
+                    .orEmpty()
+                weaponName to WeaponMeta(category.displayName, type)
+            }
+        }.getOrDefault(emptyList())
+    }
+
     private fun parseSkinResult(
         jsonBody: String,
+        weaponMeta: Map<String, WeaponMeta> = emptyMap(),
         isOffline: Boolean,
         cacheAgeMs: Long
     ): ApiResult<List<WeaponSkinInfo>> {
@@ -117,7 +178,7 @@ object WeaponSkinFilterApi {
             ?.jsonObject?.get("*")?.jsonPrimitive?.content
             ?: return ApiResult.Error("无法获取武器外观数据", kind = ErrorKind.PARSE)
 
-        val skins = parseWeaponSkinHtml(html)
+        val skins = parseWeaponSkinHtml(html, weaponMeta)
         return if (skins.isEmpty()) {
             ApiResult.Error("未找到武器外观数据", kind = ErrorKind.NOT_FOUND)
         } else {
@@ -135,7 +196,7 @@ object WeaponSkinFilterApi {
      * | <img ... src="缩略图URL" ... srcset="原图URL 1.5x" .../><br />武器名：外观名
      * ```
      */
-    private fun parseWeaponSkinHtml(html: String): List<WeaponSkinInfo> {
+    private fun parseWeaponSkinHtml(html: String, weaponMeta: Map<String, WeaponMeta>): List<WeaponSkinInfo> {
         val blockRegex = Regex(
             """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
         )
@@ -154,6 +215,8 @@ object WeaponSkinFilterApi {
             WeaponSkinInfo(
                 name = protectedName,
                 weapon = weapon,
+                weaponCategory = weaponMeta[weapon]?.category ?: "其他",
+                weaponType = weaponMeta[weapon]?.type.orEmpty(),
                 quality = Quality.fromLevel(match.groupValues[2]),
                 sources = match.groupValues[3].split(",").map { it.trim() }.filter { it.isNotBlank() },
                 crystalCost = match.groupValues[4].replace("无", "").trim(),

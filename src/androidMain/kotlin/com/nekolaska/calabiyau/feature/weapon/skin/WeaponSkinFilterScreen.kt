@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.verticalScroll
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.feature.weapon.components.WeaponSelector
+import com.nekolaska.calabiyau.feature.weapon.components.WeaponSelectorOption
+import com.nekolaska.calabiyau.feature.weapon.components.buildWeaponSelectorOptions
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.WeaponSkinInfo
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
@@ -65,23 +68,24 @@ fun WeaponSkinFilterScreen(
 
     // 筛选状态
     var selectedWeapon by remember { mutableStateOf(initialWeapon) }
+    var selectedWeaponCategory by remember { mutableStateOf<String?>(null) }
     var selectedQuality by remember { mutableStateOf<Quality?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
     // 筛选后的列表
-    val filteredSkins = remember(allSkins, selectedWeapon, selectedQuality, searchQuery) {
+    val filteredSkins = remember(allSkins, selectedWeapon, selectedWeaponCategory, selectedQuality, searchQuery) {
         allSkins.filter { skin ->
             (selectedWeapon == null || skin.weapon == selectedWeapon) &&
+                    (selectedWeaponCategory == null || skin.weaponCategory == selectedWeaponCategory) &&
                     (selectedQuality == null || skin.quality == selectedQuality) &&
                     (searchQuery.isBlank() || skin.name.contains(searchQuery, ignoreCase = true)
-                            || skin.weapon.contains(searchQuery, ignoreCase = true))
+                            || skin.weapon.contains(searchQuery, ignoreCase = true)
+                            || skin.weaponCategory.contains(searchQuery, ignoreCase = true)
+                            || skin.weaponType.contains(searchQuery, ignoreCase = true))
         }
     }
 
-    // 武器列表（去重）
-    val weapons = remember(allSkins) {
-        allSkins.map { it.weapon }.distinct().sorted()
-    }
+    val weaponOptions = remember(allSkins) { buildWeaponSelectorOptions(allSkins) }
 
     Scaffold(
         topBar = {
@@ -131,9 +135,13 @@ fun WeaponSkinFilterScreen(
 
                         // ── 筛选栏 ──
                         WeaponSkinFilterBar(
-                            weapons = weapons,
+                            weaponOptions = weaponOptions,
+                            selectedWeaponCategory = selectedWeaponCategory,
                             selectedWeapon = selectedWeapon,
-                            onWeaponSelected = { selectedWeapon = it },
+                            onWeaponSelected = { category, weapon ->
+                                selectedWeaponCategory = category
+                                selectedWeapon = weapon
+                            },
                             selectedQuality = selectedQuality,
                             onQualitySelected = { selectedQuality = it }
                         )
@@ -271,14 +279,13 @@ private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeaponSkinFilterBar(
-    weapons: List<String>,
+    weaponOptions: List<WeaponSelectorOption>,
+    selectedWeaponCategory: String?,
     selectedWeapon: String?,
-    onWeaponSelected: (String?) -> Unit,
+    onWeaponSelected: (category: String?, weapon: String?) -> Unit,
     selectedQuality: Quality?,
     onQualitySelected: (Quality?) -> Unit
 ) {
-    var weaponMenuExpanded by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -288,55 +295,14 @@ private fun WeaponSkinFilterBar(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        ExposedDropdownMenuBox(
-            expanded = weaponMenuExpanded,
-            onExpandedChange = { weaponMenuExpanded = !weaponMenuExpanded }
-        ) {
-            OutlinedTextField(
-                value = selectedWeapon ?: "全部武器",
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                shape = smoothCornerShape(20.dp),
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
-                textStyle = MaterialTheme.typography.bodyLarge,
-                label = { Text("武器") },
-                trailingIcon = {
-                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = weaponMenuExpanded)
-                },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(
-                    focusedBorderColor = MaterialTheme.colorScheme.outline,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-            ExposedDropdownMenu(
-                expanded = weaponMenuExpanded,
-                onDismissRequest = { weaponMenuExpanded = false },
-                shape = smoothCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ) {
-                DropdownMenuItem(
-                    text = { Text("全部武器") },
-                    onClick = {
-                        onWeaponSelected(null)
-                        weaponMenuExpanded = false
-                    }
-                )
-                weapons.forEach { weapon ->
-                    DropdownMenuItem(
-                        text = { Text(weapon) },
-                        onClick = {
-                            onWeaponSelected(weapon)
-                            weaponMenuExpanded = false
-                        }
-                    )
-                }
-            }
-        }
+        WeaponSelector(
+            label = "武器",
+            weapons = weaponOptions,
+            selectedCategory = selectedWeaponCategory,
+            selectedWeapon = selectedWeapon,
+            onSelected = onWeaponSelected,
+            allLabel = "全部武器"
+        )
 
         // 品质筛选
         Text(
