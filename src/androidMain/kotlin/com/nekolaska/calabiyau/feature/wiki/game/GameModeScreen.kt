@@ -51,7 +51,9 @@ fun GameModeScreen(
                 actions = {
                     FilledTonalIconButton(onClick = {
                         onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%88%98%E6%96%97%E6%A8%A1%E5%BC%8F")
-                    }) {
+                    }, colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    )) {
                         Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
                     }
                 }
