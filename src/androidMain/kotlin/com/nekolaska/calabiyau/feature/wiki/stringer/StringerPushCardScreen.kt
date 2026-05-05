@@ -66,6 +66,8 @@ import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.character.components.CharacterSelector
+import com.nekolaska.calabiyau.feature.character.components.rememberCharacterSelectorOptions
 import com.nekolaska.calabiyau.feature.wiki.stringer.api.StringerPushCardApi
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.CardPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.ModeCard
@@ -109,8 +111,9 @@ fun StringerPushCardScreen(
         listOf("全部分类") + page.cards.map { it.category }.filter { it.isNotBlank() }.distinct()
     }
     val roles = remember(page.cards) {
-        listOf("全部角色") + page.cards.flatMap { it.roles }.filter { it.isNotBlank() }.distinct()
+        page.cards.flatMap { it.roles }.filter { it.isNotBlank() }.distinct()
     }
+    val roleOptions = rememberCharacterSelectorOptions(roles)
     val filteredCards = remember(page.cards, keyword, category, role, rarity, sortOption) {
         val filtered = page.cards.filter {
             (keyword.isBlank() || it.name.contains(keyword, true) || it.effect.contains(keyword, true) || it.roles.any { role -> role.contains(keyword, true) }) &&
@@ -207,22 +210,16 @@ fun StringerPushCardScreen(
                                 Spacer(Modifier.size(8.dp))
                                 Text("筛选", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             }
-                            DropdownSelector(
-                                label = "分类",
-                                options = categories,
-                                selected = category,
-                                onSelected = { category = it }
-                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Box(Modifier.weight(1f)) {
                                     DropdownSelector(
-                                        label = "适用角色",
-                                        options = roles,
-                                        selected = role,
-                                        onSelected = { role = it }
+                                        label = "分类",
+                                        options = categories,
+                                        selected = category,
+                                        onSelected = { category = it }
                                     )
                                 }
                                 Box(Modifier.weight(1f)) {
@@ -234,6 +231,13 @@ fun StringerPushCardScreen(
                                     )
                                 }
                             }
+                            CharacterSelector(
+                                label = "适用角色",
+                                options = roleOptions,
+                                selectedName = role.takeUnless { it == "全部角色" },
+                                onSelectedNameChange = { role = it ?: "全部角色" },
+                                allLabel = "全部角色"
+                            )
                             RarityChips(selectedRarity = rarity, onRarityChange = { rarity = it })
                         }
                     }
