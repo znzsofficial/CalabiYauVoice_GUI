@@ -29,7 +29,6 @@ object CharacterDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
-    private const val POSITION_PAGE = "超弦体定位"
     private const val SETTING_PAGE = "超弦体设定"
 
     @Volatile
@@ -187,6 +186,47 @@ object CharacterDetailApi {
         }
 
     /**
+     * 直接从各角色页面 `{{超弦体}}` / `{{晶源体}}` 表格模板中批量解析定位。
+     * 不再依赖“超弦体定位”聚合页，避免聚合页结构变动导致所有角色定位串到同一类。
+     */
+    suspend fun fetchCharacterPositions(
+        characterNames: Collection<String>,
+        forceRefresh: Boolean = false
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        coroutineScope {
+            characterNames
+                .filter { it.isNotBlank() }
+                .distinct()
+                .map { characterName ->
+                    async {
+                        runCatching {
+                            val encoded = URLEncoder.encode(characterName, "UTF-8")
+                            val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+                            val result = OfflineCache.fetchWithCache(
+                                type = OfflineCache.Type.CHARACTER_DETAIL,
+                                key = characterName,
+                                forceRefresh = forceRefresh
+                            ) { WikiEngine.safeGet(url) } ?: return@runCatching null
+
+                            val json = SharedJson.parseToJsonElement(result.payload).jsonObject
+                            val wikitext = json["parse"]?.jsonObject
+                                ?.get("wikitext")?.jsonObject
+                                ?.get("*")?.jsonPrimitive?.content
+                                ?: return@runCatching null
+
+                            parseCharacterPositionFromWikitext(wikitext)?.let { position ->
+                                characterName to position
+                            }
+                        }.getOrNull()
+                    }
+                }
+                .awaitAll()
+                .filterNotNull()
+                .toMap()
+        }
+    }
+
+    /**
      * 从 wikitext 解析 `{{超弦体|...}}` 或 `{{晶源体|...}}` 模板参数。
      */
     private fun parseCharacterWikitext(name: String, wikitext: String): CharacterDetail? {
@@ -211,6 +251,7 @@ object CharacterDetailApi {
         val avatarUrl = fetchAvatarUrl(name)
         val skills = parseSkills(name, wikitext, isCrystal)
         val stories = parseStories(wikitext)
+        val position = parseCharacterPositionFromWikitext(wikitext).orEmpty()
 
         // 晶源体的声优字段是合并的 "声优"，需拆分中/日
         val voiceRaw = if (isCrystal) clean(params["声优"]) else ""
@@ -232,7 +273,7 @@ object CharacterDetailApi {
             englishName = clean(params["英文名"]),
             japaneseName = clean(params["日文名"]),
             gender = clean(params["性别"]),
-            role = if (isCrystal) "晶源体" else clean(params["定位"]),
+            role = if (isCrystal) "晶源体" else position.ifBlank { clean(params["定位"]) },
             faction = if (isCrystal) "晶源体" else clean(params["阵营"]),
             summary = clean(params["角色简介"].takeUnless { it.isNullOrBlank() } ?: params["简介"]),
             identity = clean(params["身份"]),
@@ -293,20 +334,9 @@ object CharacterDetailApi {
             cachedExtras?.let { return it }
         }
 
-        val results = coroutineScope {
-            awaitAll(
-                async { fetchAggregatePageHtml(POSITION_PAGE, "character_position", forceRefresh) },
-                async { fetchAggregatePageHtml(SETTING_PAGE, "character_setting", forceRefresh) }
-            )
-        }
-
-        val positionHtml = results[0]?.html.orEmpty()
-        val settingHtml = results[1]?.html.orEmpty()
+        val settingHtml = fetchAggregatePageHtml(SETTING_PAGE, "character_setting", forceRefresh)?.html.orEmpty()
 
         val merged = mutableMapOf<String, CharacterExtraInfo>()
-        parsePositionExtras(positionHtml).forEach { (name, info) ->
-            merged[name] = merged[name].merge(info)
-        }
         parseSettingExtras(settingHtml).forEach { (name, info) ->
             merged[name] = merged[name].merge(info)
         }
@@ -353,7 +383,12 @@ object CharacterDetailApi {
             val positionName = headline.text().trim()
             if (positionName !in POSITION_NAMES) return@forEachIndexed
 
-            val blockElements = rootChildren.drop(index + 1).takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            val blockElements = rootChildren.drop(index + 1).takeWhile { child ->
+                !child.tagName().matches(Regex("h[1-6]")) &&
+                    child.id() != "toc" &&
+                    !child.hasClass("printfooter") &&
+                    !child.hasClass("catlinks")
+            }
             val duty = blockElements
                 .flatMap { it.select("li") }
                 .firstOrNull { it.text().contains("定位职责") }
@@ -362,9 +397,10 @@ object CharacterDetailApi {
                 ?.trim()
                 .orEmpty()
 
-            blockElements.flatMap { it.select("a[title] > span") }.forEach { nameElement ->
-                val displayName = nameElement.text().trim()
+            blockElements.flatMap { it.select("a[title]") }.forEach { linkElement ->
+                val displayName = linkElement.attr("title").trim()
                 if (displayName.isBlank() || displayName == positionName || displayName == "编辑") return@forEach
+                if (displayName.contains(':') || displayName.endsWith(".png", ignoreCase = true)) return@forEach
                 val key = normalizeCharacterName(displayName)
                 result[key] = result[key].merge(
                     CharacterExtraInfo(
@@ -376,6 +412,15 @@ object CharacterDetailApi {
         }
 
         return WikiParseLogger.finishMap("CharacterDetailApi.parsePositionExtras", result, html)
+    }
+
+    private fun parseCharacterPositionFromWikitext(wikitext: String): String? {
+        extractTemplate(wikitext, "超弦体")?.let { templateContent ->
+            val position = clean(parseTemplateParams(templateContent)["定位"])
+            if (position.isNotBlank()) return position
+        }
+        if (extractTemplate(wikitext, "晶源体") != null) return "晶源体"
+        return null
     }
 
     private fun parseSettingExtras(html: String): Map<String, CharacterExtraInfo> {
