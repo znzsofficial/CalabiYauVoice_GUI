@@ -322,7 +322,9 @@ private fun WeaponSkinFilterBar(
                 shape = smoothCornerShape(12.dp),
                 label = { Text("全部品质", maxLines = 1) }
             )
-            Quality.entries.forEach { quality ->
+            Quality.entries
+                .sortedByDescending { it.level }
+                .forEach { quality ->
                 FilterChip(
                     selected = selectedQuality == quality,
                     onClick = {
