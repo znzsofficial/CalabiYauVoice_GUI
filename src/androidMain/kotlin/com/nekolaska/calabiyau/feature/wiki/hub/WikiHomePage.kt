@@ -388,6 +388,7 @@ internal fun WikiHomePage(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
+                        "剧情故事" to { onNavigateTo(WikiHubPage.STORY) },
                         "游戏历史" to { onNavigateTo(WikiHubPage.GAME_HISTORY) },
                         "壁纸" to { onNavigateTo(WikiHubPage.WALLPAPERS) },
                         "表情包" to { onNavigateTo(WikiHubPage.STICKERS) },
