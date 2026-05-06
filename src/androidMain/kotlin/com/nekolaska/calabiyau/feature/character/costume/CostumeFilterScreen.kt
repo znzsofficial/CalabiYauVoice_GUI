@@ -77,6 +77,16 @@ fun CostumeFilterScreen(
                     (selectedQuality == null || costume.quality == selectedQuality) &&
                     (searchQuery.isBlank() || costume.name.contains(searchQuery, ignoreCase = true)
                             || costume.character.contains(searchQuery, ignoreCase = true))
+        }.let { filtered ->
+            if (selectedQuality == null) {
+                filtered.sortedWith(
+                    compareByDescending<CostumeInfo> { it.quality?.level ?: 0 }
+                        .thenBy { it.character }
+                        .thenBy { it.name }
+                )
+            } else {
+                filtered
+            }
         }
     }
 

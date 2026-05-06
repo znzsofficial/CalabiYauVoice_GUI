@@ -82,6 +82,18 @@ fun WeaponSkinFilterScreen(
                             || skin.weapon.contains(searchQuery, ignoreCase = true)
                             || skin.weaponCategory.contains(searchQuery, ignoreCase = true)
                             || skin.weaponType.contains(searchQuery, ignoreCase = true))
+        }.let { filtered ->
+            if (selectedQuality == null) {
+                filtered.sortedWith(
+                    compareByDescending<WeaponSkinInfo> { it.quality?.level ?: 0 }
+                        .thenBy { it.weaponCategory }
+                        .thenBy { it.weaponType }
+                        .thenBy { it.weapon }
+                        .thenBy { it.name }
+                )
+            } else {
+                filtered
+            }
         }
     }
 
