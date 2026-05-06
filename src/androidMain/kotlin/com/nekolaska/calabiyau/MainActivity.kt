@@ -7,9 +7,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -45,8 +54,10 @@ class MainActivity : ComponentActivity() {
     private val shortcutRequestKeyState = mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        var keepSplashOnScreen = true
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
         enableEdgeToEdge()
         if (!CrashReportActivity.shouldSkipPendingCrash(intent) && CrashHandler.hasPendingCrashLog(this)) {
             startActivity(
@@ -82,9 +93,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AppTheme {
+                var showSplashCover by remember { mutableStateOf(true) }
                 val searchVM: SearchViewModel = viewModel()
                 val downloadVM: DownloadViewModel = viewModel()
                 val portraitVM: PortraitViewModel = viewModel()
+
+                LaunchedEffect(Unit) {
+                    // 先让 Compose 中的同色覆盖层接住系统 Splash，再移除系统 Splash。
+                    withFrameNanos { }
+                    keepSplashOnScreen = false
+                    withFrameNanos { }
+                    // 主界面和系统栏都完成至少一帧后，再由 Compose 覆盖层退场。
+                    withFrameNanos { }
+                    showSplashCover = false
+                }
 
                 // 启动时静默检查更新，每天最多一次。
                 val context = LocalContext.current
@@ -109,13 +131,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                MainScreen(
-                    searchVM,
-                    downloadVM,
-                    portraitVM,
-                    shortcutTarget = shortcutTargetState.value,
-                    shortcutRequestKey = shortcutRequestKeyState.intValue
-                )
+                Box(Modifier.fillMaxSize()) {
+                    MainScreen(
+                        searchVM,
+                        downloadVM,
+                        portraitVM,
+                        shortcutTarget = shortcutTargetState.value,
+                        shortcutRequestKey = shortcutRequestKeyState.intValue
+                    )
+
+                    AnimatedVisibility(
+                        visible = showSplashCover,
+                        exit = fadeOut(animationSpec = tween(220)) + scaleOut(targetScale = 0.96f, animationSpec = tween(220))
+                    ) {
+                        SplashCover()
+                    }
+                }
 
                 // 仅在发现新版本时展示启动更新提示。
                 startupUpdateInfo?.let { info ->
@@ -167,6 +198,23 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         shortcutTargetState.value = intent.getStringExtra("shortcut_target")
         shortcutRequestKeyState.intValue++
+    }
+}
+
+@Composable
+private fun SplashCover() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colorResource(R.color.splash_screen_background)),
+        contentAlignment = androidx.compose.ui.Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.splash_logo),
+            contentDescription = null,
+            tint = colorResource(R.color.splash_logo_color),
+            modifier = Modifier.height(96.dp)
+        )
     }
 }
 
