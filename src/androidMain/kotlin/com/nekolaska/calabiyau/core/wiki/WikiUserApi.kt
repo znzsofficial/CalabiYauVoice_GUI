@@ -254,7 +254,7 @@ object WikiUserApi {
             val request = Request.Builder()
                 .url(url)
                 .header("Cookie", cookies)
-                .header("User-Agent", "CalabiYauVoice/1.3 (Android)")
+                .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
                 .build()
 
             WikiEngine.client.newCall(request).execute().use { resp ->
