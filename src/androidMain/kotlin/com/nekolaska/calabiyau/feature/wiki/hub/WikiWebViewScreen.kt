@@ -48,6 +48,7 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.random.Random
 
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
@@ -67,6 +68,40 @@ private val WIKI_DOMAINS = listOf(
 private val BLOCKED_HOSTS = listOf(
     "d.bilibili.com"   // B站 APP 下载页
 )
+
+private val WIKI_MOBILE_USER_AGENTS = listOf(
+    "Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.87 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.87 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 14; SM-S9280) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.87 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 14; 23013RK75C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 13; V2303A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.111 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 13; PGEM10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.6998.136 Mobile Safari/537.36"
+)
+
+private val WIKI_DESKTOP_USER_AGENTS = listOf(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.92 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.115 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.92 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.92 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.115 Safari/537.36"
+)
+
+private fun randomWikiUserAgent(desktopMode: Boolean): String {
+    val pool = if (desktopMode) WIKI_DESKTOP_USER_AGENTS else WIKI_MOBILE_USER_AGENTS
+    return "${pool.random(Random(System.nanoTime()))} CalabiYauVoice/2.0"
+}
+
+private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
+    return buildMap {
+        put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+        put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        put("Upgrade-Insecure-Requests", "1")
+        put("Sec-Fetch-Dest", "document")
+        put("Sec-Fetch-Mode", "navigate")
+        put("Sec-Fetch-Site", "same-origin")
+        referer?.takeIf { it.isHttpOrHttpsUrl() }?.let { put("Referer", it) }
+    }
+}
 
 private fun isAllowedWikiHost(host: String): Boolean {
     return WIKI_DOMAINS.any { domain ->
@@ -403,7 +438,7 @@ fun WikiWebViewScreen(
                                         { webView?.goBack() }
                                     } else null,
                                     onGoHome = if (!useTopBarMode) {
-                                        { webView?.loadUrl(WIKI_HOME_URL) }
+                                        { webView?.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(currentUrl)) }
                                     } else null,
                                     onGoForward = if (canGoForward) {
                                         { webView?.goForward() }
@@ -533,7 +568,7 @@ fun WikiWebViewScreen(
                                     else -> false
                                 }
                             }
-                            wv.loadUrl(initialUrl)
+                            wv.loadUrl(initialUrl, wikiRequestHeaders())
                             onInitialUrlConsumed?.invoke()
                         }
                     },
@@ -589,7 +624,7 @@ fun WikiWebViewScreen(
                                 onClick = {
                                     hasNetworkError = false
                                     val urlToLoad = networkErrorUrl ?: WIKI_HOME_URL
-                                    webView?.loadUrl(urlToLoad)
+                                    webView?.loadUrl(urlToLoad, wikiRequestHeaders(currentUrl))
                                 }
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -618,8 +653,8 @@ fun WikiWebViewScreen(
                         onShowMenuChange = { showMenu = it },
                         onGoBack = { webView?.goBack() },
                         onGoForward = { webView?.goForward() },
-                        onRefresh = { if (isLoading) webView?.stopLoading() else webView?.reload() },
-                        onGoHome = { webView?.loadUrl(WIKI_HOME_URL) },
+                        onRefresh = { if (isLoading) webView?.stopLoading() else webView?.loadUrl(currentUrl, wikiRequestHeaders(currentUrl)) },
+                        onGoHome = { webView?.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(currentUrl)) },
                         onZoomIn = {
                             textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
                             webView?.settings?.textZoom = textZoomLevel
@@ -1011,11 +1046,7 @@ private fun createWikiWebView(
             displayZoomControls = false
 
             // User-Agent
-            userAgentString = if (AppPrefs.wikiDesktopMode) {
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 CalabiYauVoice/1.3"
-            } else {
-                "$userAgentString CalabiYauVoice/1.3"
-            }
+            userAgentString = randomWikiUserAgent(AppPrefs.wikiDesktopMode)
 
             // 支持多窗口（处理 target=_blank）
             setSupportMultipleWindows(true)
@@ -1028,6 +1059,10 @@ private fun createWikiWebView(
 
             // 媒体自动播放
             mediaPlaybackRequiresUserGesture = false
+
+            // 更偏向真实浏览器访问行为，减少被误判的概率
+            loadsImagesAutomatically = true
+            blockNetworkImage = false
         }
 
         // ── Blob 下载桥接 ──
@@ -1154,7 +1189,7 @@ private fun createWikiWebView(
 
                 passportHintShown = false
                 view?.post {
-                    view.loadUrl(WIKI_HOME_URL)
+                    view.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(url))
                 }
                 return true
             }
@@ -1206,6 +1241,10 @@ private fun createWikiWebView(
                     )
                 }
 
+                if (!url.isNullOrBlank() && url.isHttpOrHttpsUrl()) {
+                    view?.settings?.userAgentString = randomWikiUserAgent(AppPrefs.wikiDesktopMode)
+                }
+
                 // 注入 CSS 优化体验（隐藏不必要的广告/侧栏等）
                 view?.evaluateJavascript(
                     """
@@ -1227,7 +1266,7 @@ private fun createWikiWebView(
                 val host = url.toUri().host ?: ""
 
                 if (passportHintShown && isWikiLoginCompletionHost(host)) {
-                    view?.loadUrl(WIKI_HOME_URL)
+                    view?.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(url))
                     passportHintShown = false
                     return true
                 }
@@ -1238,7 +1277,7 @@ private fun createWikiWebView(
                 }
 
                 return handleWikiNavigation(context, url) { navigatedUrl ->
-                    view?.loadUrl(navigatedUrl)
+                    view?.loadUrl(navigatedUrl, wikiRequestHeaders(view.url))
                 }
             }
 
@@ -1306,7 +1345,7 @@ private fun createWikiWebView(
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
                         val handled = handleWikiNavigation(parentWebView.context, url) { navigatedUrl ->
-                            parentWebView.loadUrl(navigatedUrl)
+                            parentWebView.loadUrl(navigatedUrl, wikiRequestHeaders(parentWebView.url))
                         }
                         tempWebView.destroy()
                         return handled
