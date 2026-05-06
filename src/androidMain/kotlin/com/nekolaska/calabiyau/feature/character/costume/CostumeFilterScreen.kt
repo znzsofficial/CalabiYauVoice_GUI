@@ -315,7 +315,10 @@ private fun CostumeFilterBar(
                 shape = smoothCornerShape(12.dp),
                 label = { Text("全部品质", maxLines = 1) }
             )
-            Quality.entries.filter { it != Quality.INITIAL }.forEach { quality ->
+            Quality.entries
+                .filter { it != Quality.INITIAL }
+                .sortedByDescending { it.level }
+                .forEach { quality ->
                 FilterChip(
                     selected = selectedQuality == quality,
                     onClick = {
