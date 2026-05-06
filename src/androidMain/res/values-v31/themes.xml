@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Splash Screen 主题 -->
+    <!-- Android 12+ Splash Screen 主题：启用系统 branding image -->
     <style name="Theme.CalabiYau.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_screen_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding</item>
         <item name="postSplashScreenTheme">@android:style/Theme.Material.Light.NoActionBar</item>
     </style>
 </resources>

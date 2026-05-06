@@ -2,4 +2,8 @@
 <resources>
     <!-- Android 12+ 使用系统主题色作为图标背景 -->
     <color name="ic_launcher_background">@android:color/system_accent1_600</color>
+    <color name="splash_screen_background">#FFFFFF</color>
+    <color name="splash_logo_color">#000000</color>
+    <color name="splash_icon_background">#FFFFFF</color>
+    <color name="splash_branding_color">#000000</color>
 </resources>
