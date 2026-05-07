@@ -23,7 +23,7 @@ object AppPrefs {
     private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
     private const val KEY_WIKI_DESKTOP_MODE = "wiki_desktop_mode"
     private const val KEY_LIQUID_GLASS_ENABLED = "liquid_glass_enabled"
-    private const val KEY_G2_CORNERS_ENABLED = "g2_corners_enabled"
+    //private const val KEY_G2_CORNERS_ENABLED = "g2_corners_enabled"
     private const val KEY_WALLPAPER_URL = "wallpaper_url"
     private const val KEY_WALLPAPER_AUTO_REFRESH = "wallpaper_auto_refresh"
     private const val KEY_WALLPAPER_SEED_COLOR_CACHE = "wallpaper_seed_color_cache"
@@ -31,6 +31,12 @@ object AppPrefs {
     private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
     private const val KEY_HOME_QUICK_ENTRY_IDS = "home_quick_entry_ids"
     private const val KEY_TOOLS_OUTPUT_PATH = "tools_output_path"
+    private const val KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE = "audio_spectrogram_window_size"
+    private const val KEY_AUDIO_SPECTROGRAM_HOP_PERCENT = "audio_spectrogram_hop_percent"
+    private const val KEY_AUDIO_SPECTROGRAM_TIME_BINS = "audio_spectrogram_time_bins"
+    private const val KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS = "audio_spectrogram_frequency_bins"
+    private const val KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ = "audio_spectrogram_cutoff_hz"
+    private const val KEY_AUDIO_SPECTROGRAM_PALETTE = "audio_spectrogram_palette"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -194,5 +200,35 @@ object AppPrefs {
         get() = prefs.getString(KEY_TOOLS_OUTPUT_PATH, null)
             ?: File(savePath, "素材工具").absolutePath
         set(value) = prefs.edit { putString(KEY_TOOLS_OUTPUT_PATH, value) }
+
+    /** 音频工具频谱图 FFT 窗长 */
+    var audioSpectrogramWindowSize: Int
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE, 1024)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE, value.coerceIn(256, 8192)) }
+
+    /** 音频工具频谱图步进比例（百分比） */
+    var audioSpectrogramHopPercent: Int
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_HOP_PERCENT, 25)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_HOP_PERCENT, value.coerceIn(5, 80)) }
+
+    /** 音频工具频谱图时间桶数量 */
+    var audioSpectrogramTimeBins: Int
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, 720)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, value.coerceIn(120, 2000)) }
+
+    /** 音频工具频谱图频率桶数量 */
+    var audioSpectrogramFrequencyBins: Int
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, 256)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, value.coerceIn(64, 1024)) }
+
+    /** 音频工具频谱图截止频率（Hz，0 表示自动使用 Nyquist） */
+    var audioSpectrogramCutoffHz: Int
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ, 0)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ, value.coerceIn(0, 96000)) }
+
+    /** 音频工具频谱图配色方案 */
+    var audioSpectrogramPalette: String
+        get() = prefs.getString(KEY_AUDIO_SPECTROGRAM_PALETTE, "Ocean") ?: "Ocean"
+        set(value) = prefs.edit { putString(KEY_AUDIO_SPECTROGRAM_PALETTE, value) }
 
 }

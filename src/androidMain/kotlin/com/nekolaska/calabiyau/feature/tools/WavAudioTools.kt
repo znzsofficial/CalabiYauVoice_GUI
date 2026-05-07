@@ -1,11 +1,27 @@
 package com.nekolaska.calabiyau.feature.tools
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.media.AudioFormat
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.os.Build
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.math.sqrt
+import kotlin.math.roundToInt
 
 internal enum class WavTrimMode(val label: String) {
     BOTH("裁剪头尾"),
@@ -61,6 +77,110 @@ internal data class WavMeta(
     val bitsPerSample: Int,
     val peakPercent: Double
 )
+
+internal data class AudioMeta(
+    val name: String,
+    val mimeType: String,
+    val durationMs: Long,
+    val artist: String?,
+    val sampleRate: String?,
+    val bitrate: String?,
+    val size: Long
+)
+
+internal data class LoadedAudioAsset(
+    val input: PickedInput,
+    val file: File?,
+    val meta: AudioMeta,
+    val wav: LoadedWavAudio? = null
+)
+
+internal data class LoadedWavAudio(
+    val name: String,
+    val input: PickedInput,
+    val file: File,
+    val data: PcmWavData,
+    val durationMs: Long,
+    val peakPercent: Double,
+    val waveform: List<FloatArray>,
+    val spectrogramBitmap: Bitmap? = null
+)
+
+internal data class SpectrogramRenderConfig(
+    val windowSize: Int = 1024,
+    val hopRatio: Float = 0.25f,
+    val maxTimeBins: Int = 720,
+    val maxFrequencyBins: Int = 256,
+    val cutoffFrequencyHz: Int = 0,
+    val lowColorArgb: Int = 0xFF0F172A.toInt(),
+    val highColorArgb: Int = 0xFF38BDF8.toInt()
+)
+
+internal fun loadWavAudioForPreview(
+    context: Context,
+    input: PickedInput,
+    includeSpectrogram: Boolean = true,
+    spectrogramConfig: SpectrogramRenderConfig = SpectrogramRenderConfig()
+): LoadedWavAudio? {
+    val tempInput = materializeInputToFile(context, input) ?: return null
+    val wav = readPcmWav(tempInput) ?: return null.also {
+        if (input.file == null) runCatching { tempInput.delete() }
+    }
+    if (wav.channels !in 1..2) {
+        if (input.file == null) runCatching { tempInput.delete() }
+        return null
+    }
+
+    val frameCount = wav.pcmData.size / wav.blockAlign
+    val durationMs = frameCount * 1000L / wav.sampleRate
+    return LoadedWavAudio(
+        name = input.file?.name ?: input.uri?.let(context::queryDisplayName) ?: tempInput.name,
+        input = PickedInput(file = tempInput),
+        file = tempInput,
+        data = wav,
+        durationMs = durationMs,
+        peakPercent = calculatePeakPercent(wav),
+        waveform = buildWaveformPreview(wav),
+        spectrogramBitmap = if (includeSpectrogram) buildSpectrogramBitmap(wav, spectrogramConfig) else null
+    )
+}
+
+internal fun loadAudioAssetForPreview(context: Context, input: PickedInput): LoadedAudioAsset? {
+    val meta = inspectAudioMeta(context, input) ?: return null
+    val wav = when {
+        input.file?.extension.equals("wav", ignoreCase = true) == true || meta.mimeType.contains("wav", ignoreCase = true) -> {
+            val preview = loadWavAudioForPreview(context, input, includeSpectrogram = false)
+            preview
+        }
+        isMp3Audio(meta, input) -> {
+            decodeAudioInputToTempWav(context, input, meta.name)?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
+        }
+        else -> null
+    }
+    return LoadedAudioAsset(
+        input = wav?.input ?: input,
+        file = wav?.file ?: input.file,
+        meta = meta,
+        wav = wav
+    )
+}
+
+internal fun loadWavAudioFileForPreview(file: File, includeSpectrogram: Boolean = true): LoadedWavAudio? {
+    val input = PickedInput(file = file)
+    val wav = readPcmWav(file) ?: return null
+    if (wav.channels !in 1..2) return null
+    val frameCount = wav.pcmData.size / wav.blockAlign
+    return LoadedWavAudio(
+        name = file.name,
+        input = input,
+        file = file,
+        data = wav,
+        durationMs = frameCount * 1000L / wav.sampleRate,
+        peakPercent = calculatePeakPercent(wav),
+        waveform = buildWaveformPreview(wav),
+        spectrogramBitmap = if (includeSpectrogram) buildSpectrogramBitmap(wav) else null
+    )
+}
 
 internal fun trimWavInputSilence(
     context: Context,
@@ -149,6 +269,156 @@ private fun materializeInputToFile(context: Context, input: PickedInput): File? 
             if (temp.renameTo(renamed)) renamed else temp
         }
     }.getOrNull()
+}
+
+private fun isMp3Audio(meta: AudioMeta, input: PickedInput): Boolean {
+    val mime = meta.mimeType.lowercase()
+    return mime.contains("mpeg") || mime.contains("mp3") ||
+        input.file?.extension.equals("mp3", ignoreCase = true) ||
+        meta.name.substringAfterLast('.', "").equals("mp3", ignoreCase = true)
+}
+
+private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sourceName: String): File? {
+    val sourceFile = materializeInputToFile(context, input) ?: return null
+    val shouldDeleteSource = input.file == null
+    val extractor = MediaExtractor()
+    var codec: MediaCodec? = null
+    return try {
+        extractor.setDataSource(sourceFile.absolutePath)
+        val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
+            extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+        } ?: return null
+        val inputFormat = extractor.getTrackFormat(trackIndex)
+        val mime = inputFormat.getString(MediaFormat.KEY_MIME) ?: return null
+        extractor.selectTrack(trackIndex)
+
+        val decoder = MediaCodec.createDecoderByType(mime)
+        codec = decoder
+        decoder.configure(inputFormat, null, null, 0)
+        decoder.start()
+
+        val bufferInfo = MediaCodec.BufferInfo()
+        val pcmOutput = ByteArrayOutputStream()
+        var inputDone = false
+        var outputDone = false
+        var outputChannels = inputFormat.safeInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        var outputSampleRate = inputFormat.safeInteger(MediaFormat.KEY_SAMPLE_RATE)
+        var outputEncoding = AudioFormat.ENCODING_PCM_16BIT
+
+        while (!outputDone) {
+            if (!inputDone) {
+                val inputBufferIndex = decoder.dequeueInputBuffer(10_000)
+                if (inputBufferIndex >= 0) {
+                    val inputBuffer = decoder.getInputBuffer(inputBufferIndex)
+                    val sampleSize = inputBuffer?.let { buffer ->
+                        buffer.clear()
+                        extractor.readSampleData(buffer, 0)
+                    } ?: -1
+                    if (sampleSize < 0) {
+                        decoder.queueInputBuffer(inputBufferIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        inputDone = true
+                    } else {
+                        decoder.queueInputBuffer(inputBufferIndex, 0, sampleSize, extractor.sampleTime, 0)
+                        extractor.advance()
+                    }
+                }
+            }
+
+            when (val outputBufferIndex = decoder.dequeueOutputBuffer(bufferInfo, 10_000)) {
+                MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    val outputFormat = decoder.outputFormat
+                    outputChannels = outputFormat.safeInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    outputSampleRate = outputFormat.safeInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    outputEncoding = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                        outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                    } else {
+                        AudioFormat.ENCODING_PCM_16BIT
+                    }
+                    if (outputChannels !in 1..2 || outputSampleRate <= 0 || outputEncoding != AudioFormat.ENCODING_PCM_16BIT) {
+                        return null
+                    }
+                }
+                else -> if (outputBufferIndex >= 0) {
+                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        outputDone = true
+                    }
+                    if (bufferInfo.size > 0) {
+                        if (outputChannels !in 1..2 || outputSampleRate <= 0 || outputEncoding != AudioFormat.ENCODING_PCM_16BIT) {
+                            return null
+                        }
+                        decoder.getOutputBuffer(outputBufferIndex)?.writeBufferRangeTo(pcmOutput, bufferInfo.offset, bufferInfo.size)
+                    }
+                    decoder.releaseOutputBuffer(outputBufferIndex, false)
+                }
+            }
+        }
+
+        val pcmData = pcmOutput.toByteArray()
+        if (pcmData.isEmpty() || outputChannels !in 1..2 || outputSampleRate <= 0) return null
+        val outputFile = buildUniqueFile(context.cacheDir, sanitizeFileName(sourceName.substringBeforeLast('.') + "_decoded"), "wav")
+        writePcmWav(outputFile, pcmData, outputChannels, outputSampleRate, 16)
+        outputFile
+    } catch (_: Exception) {
+        null
+    } finally {
+        runCatching { codec?.stop() }
+        runCatching { codec?.release() }
+        runCatching { extractor.release() }
+        if (shouldDeleteSource) runCatching { sourceFile.delete() }
+    }
+}
+
+private fun MediaFormat.safeInteger(key: String): Int {
+    return if (containsKey(key)) runCatching { getInteger(key) }.getOrDefault(0) else 0
+}
+
+private fun ByteBuffer.writeBufferRangeTo(output: ByteArrayOutputStream, offset: Int, size: Int) {
+    val duplicate = duplicate().order(ByteOrder.LITTLE_ENDIAN)
+    duplicate.position(offset)
+    duplicate.limit(offset + size)
+    val bytes = ByteArray(size)
+    duplicate.get(bytes)
+    output.write(bytes)
+}
+
+internal fun inspectAudioMeta(context: Context, input: PickedInput): AudioMeta? {
+    val retriever = MediaMetadataRetriever()
+    return runCatching {
+        input.file?.let { file ->
+            retriever.setDataSource(file.absolutePath)
+        } ?: input.uri?.let { uri ->
+            retriever.setDataSource(context, uri)
+        } ?: return null
+
+        val name = input.file?.name ?: input.uri?.let(context::queryDisplayName) ?: "audio"
+        val mime = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE) ?: getMimeType(input.file ?: File(name))
+        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+        val sampleRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
+        } else {
+            null
+        }
+        val bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+        val size = input.file?.length() ?: input.uri?.let { uri ->
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+                descriptor.statSize
+            } ?: 0L
+        } ?: 0L
+
+        AudioMeta(
+            name = name,
+            mimeType = mime,
+            durationMs = duration,
+            artist = artist,
+            sampleRate = sampleRate,
+            bitrate = bitrate,
+            size = size
+        )
+    }.getOrNull().also {
+        runCatching { retriever.release() }
+    }
 }
 
 private fun trimPcmWavSilence(
@@ -439,6 +709,189 @@ private fun peakAmplitude(wav: PcmWavData): Double {
 
 private fun calculatePeakPercent(wav: PcmWavData): Double {
     return (peakAmplitude(wav) / maxAmplitude(wav.bitsPerSample) * 100.0).coerceIn(0.0, 100.0)
+}
+
+private fun buildWaveformPreview(wav: PcmWavData, maxPoints: Int = 4800): List<FloatArray> {
+    val frameCount = wav.pcmData.size / wav.blockAlign
+    if (frameCount <= 0) return List(wav.channels) { FloatArray(0) }
+
+    val pointCount = min(maxPoints, frameCount).coerceAtLeast(1)
+    val framesPerPoint = max(1, frameCount / pointCount)
+    val maxAmp = maxAmplitude(wav.bitsPerSample).coerceAtLeast(1.0)
+    return List(wav.channels) { channel ->
+        FloatArray(pointCount) { point ->
+            val startFrame = point * framesPerPoint
+            val endFrame = min(frameCount, if (point == pointCount - 1) frameCount else startFrame + framesPerPoint)
+            var peak = 0.0
+            var frame = startFrame
+            while (frame < endFrame) {
+                peak = max(peak, abs(sampleValue(wav, frame, channel)))
+                frame++
+            }
+            (peak / maxAmp).coerceIn(0.0, 1.0).toFloat()
+        }
+    }
+}
+
+internal fun buildSpectrogramBitmap(
+    wav: PcmWavData,
+    config: SpectrogramRenderConfig = SpectrogramRenderConfig()
+): Bitmap {
+    val frameCount = wav.pcmData.size / wav.blockAlign
+    if (frameCount <= 0) return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+
+    val windowSize = normalizeSpectrogramWindowSize(config.windowSize)
+    val hopRatio = config.hopRatio.coerceIn(0.05f, 1.0f)
+    val maxTimeBins = config.maxTimeBins.coerceAtLeast(1)
+    val maxFrequencyBins = config.maxFrequencyBins.coerceAtLeast(1)
+    val nyquist = (wav.sampleRate / 2.0).coerceAtLeast(1.0)
+    val displayMaxHz = config.cutoffFrequencyHz
+        .takeIf { it > 0 }
+        ?.toDouble()
+        ?.coerceIn(1.0, nyquist)
+        ?: nyquist
+    val rawHop = max(1, (windowSize * hopRatio).toInt())
+    val totalWindows = max(1, 1 + max(0, frameCount - windowSize) / rawHop)
+    val hop = max(1, rawHop * max(1, totalWindows / maxTimeBins))
+    val timeBins = min(maxTimeBins, totalWindows)
+    val fftFrequencyBins = (windowSize / 2).coerceAtLeast(1)
+    val frequencyScaleDenominator = (maxFrequencyBins - 1).coerceAtLeast(1)
+    val window = DoubleArray(windowSize) { index ->
+        0.5 - 0.5 * cos(2.0 * PI * index / (windowSize - 1))
+    }
+    val maxAmp = maxAmplitude(wav.bitsPerSample).coerceAtLeast(1.0)
+
+    val bitmapWidth = timeBins
+    val bitmapHeight = maxFrequencyBins * wav.channels
+    val pixels = IntArray(bitmapWidth * bitmapHeight)
+    val real = DoubleArray(windowSize)
+    val imag = DoubleArray(windowSize)
+
+    for (channel in 0 until wav.channels) {
+        val channelTop = channel * maxFrequencyBins
+        for (timeIndex in 0 until timeBins) {
+            real.fill(0.0)
+            imag.fill(0.0)
+            val startFrame = timeIndex * hop
+            for (i in 0 until windowSize) {
+                real[i] = (sampleValue(wav, startFrame + i, channel) / maxAmp) * window[i]
+            }
+            fft(real, imag)
+            for (pixelRow in 0 until maxFrequencyBins) {
+                val fromBottom = maxFrequencyBins - 1 - pixelRow
+                val freqHz = displayMaxHz * (fromBottom.toDouble() / frequencyScaleDenominator.toDouble())
+                val fftBin = ((freqHz / nyquist) * (fftFrequencyBins - 1)).roundToInt().coerceIn(0, fftFrequencyBins - 1)
+                val magnitude = sqrt(real[fftBin] * real[fftBin] + imag[fftBin] * imag[fftBin])
+                val intensity = (ln(1.0 + magnitude * 32.0) / ln(33.0)).coerceIn(0.0, 1.0).toFloat()
+                val y = channelTop + pixelRow
+                pixels[y * bitmapWidth + timeIndex] = spectrogramColorArgb(intensity, config)
+            }
+        }
+    }
+
+    return Bitmap.createBitmap(pixels, bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
+}
+
+private fun normalizeSpectrogramWindowSize(windowSize: Int): Int {
+    val clamped = windowSize.coerceIn(256, 8192)
+    val lowerPower = Integer.highestOneBit(clamped)
+    return if (lowerPower == clamped) {
+        clamped
+    } else {
+        val upperPower = lowerPower shl 1
+        if (upperPower <= 8192 && upperPower - clamped < clamped - lowerPower) upperPower else lowerPower
+    }
+}
+
+private fun sampleValue(wav: PcmWavData, frameIndex: Int, channel: Int): Double {
+    if (frameIndex < 0 || channel !in 0 until wav.channels) return 0.0
+    val frameCount = wav.pcmData.size / wav.blockAlign
+    if (frameIndex >= frameCount) return 0.0
+    val bytesPerSample = wav.bitsPerSample / 8
+    val offset = frameIndex * wav.blockAlign + channel * bytesPerSample
+    return when (wav.bitsPerSample) {
+        8 -> ((wav.pcmData[offset].toInt() and 0xff) - 128).toDouble()
+        16 -> ((wav.pcmData[offset].toInt() and 0xff) or (wav.pcmData[offset + 1].toInt() shl 8)).toShort().toDouble()
+        24 -> {
+            var value = (wav.pcmData[offset].toInt() and 0xff) or
+                ((wav.pcmData[offset + 1].toInt() and 0xff) shl 8) or
+                (wav.pcmData[offset + 2].toInt() shl 16)
+            if (value and 0x800000 != 0) value = value or -0x1000000
+            value.toDouble()
+        }
+        32 -> ((wav.pcmData[offset].toInt() and 0xff) or
+            ((wav.pcmData[offset + 1].toInt() and 0xff) shl 8) or
+            ((wav.pcmData[offset + 2].toInt() and 0xff) shl 16) or
+            (wav.pcmData[offset + 3].toInt() shl 24)).toDouble()
+        else -> 0.0
+    }
+}
+
+private fun spectrogramColorArgb(value: Float, config: SpectrogramRenderConfig): Int {
+    val v = value.coerceIn(0f, 1f)
+    val low = config.lowColorArgb
+    val high = config.highColorArgb
+    val lowA = (low ushr 24) and 0xff
+    val lowR = (low ushr 16) and 0xff
+    val lowG = (low ushr 8) and 0xff
+    val lowB = low and 0xff
+    val highA = (high ushr 24) and 0xff
+    val highR = (high ushr 16) and 0xff
+    val highG = (high ushr 8) and 0xff
+    val highB = high and 0xff
+    val red = (lowR + (highR - lowR) * v).toInt().coerceIn(0, 255)
+    val green = (lowG + (highG - lowG) * v).toInt().coerceIn(0, 255)
+    val blue = (lowB + (highB - lowB) * v).toInt().coerceIn(0, 255)
+    val alpha = (lowA + (highA - lowA) * v).toInt().coerceIn(0, 255)
+    return (alpha shl 24) or (red shl 16) or (green shl 8) or blue
+}
+
+private fun fft(real: DoubleArray, imag: DoubleArray) {
+    val n = real.size
+    var j = 0
+    for (i in 1 until n) {
+        var bit = n shr 1
+        while (j and bit != 0) {
+            j = j xor bit
+            bit = bit shr 1
+        }
+        j = j xor bit
+        if (i < j) {
+            val tempReal = real[i]
+            real[i] = real[j]
+            real[j] = tempReal
+            val tempImag = imag[i]
+            imag[i] = imag[j]
+            imag[j] = tempImag
+        }
+    }
+
+    var length = 2
+    while (length <= n) {
+        val angle = -2.0 * PI / length
+        val wLengthReal = cos(angle)
+        val wLengthImag = sin(angle)
+        var i = 0
+        while (i < n) {
+            var wReal = 1.0
+            var wImag = 0.0
+            for (k in 0 until length / 2) {
+                val even = i + k
+                val odd = even + length / 2
+                val oddReal = real[odd] * wReal - imag[odd] * wImag
+                val oddImag = real[odd] * wImag + imag[odd] * wReal
+                real[odd] = real[even] - oddReal
+                imag[odd] = imag[even] - oddImag
+                real[even] += oddReal
+                imag[even] += oddImag
+                val nextReal = wReal * wLengthReal - wImag * wLengthImag
+                wImag = wReal * wLengthImag + wImag * wLengthReal
+                wReal = nextReal
+            }
+            i += length
+        }
+        length = length shl 1
+    }
 }
 
 private fun scalePcmData(wav: PcmWavData, multiplier: Double): ByteArray {

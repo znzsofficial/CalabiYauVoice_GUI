@@ -33,11 +33,15 @@ object AudioPlayerManager {
         currentSource == source && playbackToken == token && mediaPlayer === player
 
     fun play(source: String) {
+        playFrom(source, null)
+    }
+
+    fun playFrom(source: String, positionMs: Int?) {
         synchronized(playerLock) {
             val existingPlayer = mediaPlayer
 
             // 同一来源正在播放 → 暂停
-            if (currentSource == source && existingPlayer?.isPlaying == true) {
+            if (currentSource == source && existingPlayer?.isPlaying == true && positionMs == null) {
                 try {
                     existingPlayer.pause()
                     _isPlaying.value = false
@@ -49,7 +53,7 @@ object AudioPlayerManager {
             }
 
             // 同一来源暂停中 → 继续
-            if (currentSource == source && existingPlayer != null) {
+            if (currentSource == source && existingPlayer != null && positionMs == null) {
                 try {
                     existingPlayer.start()
                     _isPlaying.value = true
@@ -74,6 +78,10 @@ object AudioPlayerManager {
                         synchronized(playerLock) {
                             if (!isActivePlayback(source, token, player)) return@setOnPreparedListener
                             try {
+                                if (positionMs != null) {
+                                    val target = positionMs.coerceAtLeast(0).coerceAtMost(player.duration.coerceAtLeast(0))
+                                    player.seekTo(target)
+                                }
                                 player.start()
                                 _isPlaying.value = true
                             } catch (_: Exception) {
@@ -101,6 +109,17 @@ object AudioPlayerManager {
                 if (currentSource == source && playbackToken == token) {
                     releaseLocked()
                 }
+            }
+        }
+    }
+
+    fun seekTo(positionMs: Int) {
+        synchronized(playerLock) {
+            val player = mediaPlayer ?: return
+            try {
+                player.seekTo(positionMs.coerceAtLeast(0).coerceAtMost(player.duration.coerceAtLeast(0)))
+            } catch (_: Exception) {
+                releaseLocked(player)
             }
         }
     }
