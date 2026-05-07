@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -48,6 +49,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Velocity
@@ -725,6 +727,8 @@ internal fun ImageToolsPage(
     var cropPreset by rememberSaveable { mutableStateOf("1:1") }
     var cropRatioW by rememberSaveable { mutableIntStateOf(1) }
     var cropRatioH by rememberSaveable { mutableIntStateOf(1) }
+    var cropRatioWText by rememberSaveable { mutableStateOf("1") }
+    var cropRatioHText by rememberSaveable { mutableStateOf("1") }
     var stitchDirection by rememberSaveable { mutableStateOf(StitchDirection.HORIZONTAL) }
     var stitchUpscaleSmall by rememberSaveable { mutableStateOf(false) }
     var gifFps by rememberSaveable { mutableIntStateOf(10) }
@@ -752,8 +756,21 @@ internal fun ImageToolsPage(
         val safeH = height.coerceIn(1, 20)
         cropRatioW = safeW
         cropRatioH = safeH
+        cropRatioWText = safeW.toString()
+        cropRatioHText = safeH.toString()
         cropPreset = "${safeW}:${safeH}"
         cropPreviewStates.clear()
+    }
+
+    fun updateCropRatioInput(isWidth: Boolean, input: String) {
+        val filtered = input.filter(Char::isDigit).take(2)
+        if (isWidth) cropRatioWText = filtered else cropRatioHText = filtered
+        val value = filtered.toIntOrNull()?.takeIf { it > 0 } ?: return
+        if (isWidth) {
+            setCropRatio(value, cropRatioH)
+        } else {
+            setCropRatio(cropRatioW, value)
+        }
     }
 
     fun showPreview(
@@ -1250,20 +1267,29 @@ internal fun ImageToolsPage(
                     Text("交换横纵比", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            Text("横向比例：$cropRatioW", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(
-                value = cropRatioW.toFloat(),
-                onValueChange = { setCropRatio(it.toInt(), cropRatioH) },
-                valueRange = 1f..20f,
-                steps = 18
-            )
-            Text("纵向比例：$cropRatioH", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(
-                value = cropRatioH.toFloat(),
-                onValueChange = { setCropRatio(cropRatioW, it.toInt()) },
-                valueRange = 1f..20f,
-                steps = 18
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = cropRatioWText,
+                    onValueChange = { updateCropRatioInput(isWidth = true, input = it) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("横向比例") },
+                    supportingText = { Text("1 - 20") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = cropRatioHText,
+                    onValueChange = { updateCropRatioInput(isWidth = false, input = it) },
+                    modifier = Modifier.weight(1f),
+                    label = { Text("纵向比例") },
+                    supportingText = { Text("1 - 20") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CROP_PRESETS.forEach { (label, ratio) ->
                     AssistChip(
