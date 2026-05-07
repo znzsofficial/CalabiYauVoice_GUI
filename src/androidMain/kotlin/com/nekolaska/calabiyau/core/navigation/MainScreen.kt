@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -54,7 +55,6 @@ import com.nekolaska.calabiyau.feature.tools.FileManagerDirectoryPickerConfig
 import com.nekolaska.calabiyau.feature.tools.FileManagerPickerMode
 import com.nekolaska.calabiyau.feature.tools.FileManagerScreen
 import com.nekolaska.calabiyau.feature.tools.ToolsHomeScreen
-import com.nekolaska.calabiyau.feature.wiki.hub.WIKI_HOME_URL
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubPage
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
@@ -140,6 +140,7 @@ fun MainScreen(
     var toolFileManagerOverlay by remember { mutableStateOf<ToolFileManagerOverlayState?>(null) }
     // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
     var wikiEnteredFromHub by rememberSaveable { mutableStateOf(false) }
+    var showWikiLoginHintOnOpen by rememberSaveable { mutableStateOf(false) }
     // 记录进入侧栏 Wiki 前的页面，退出时回到该页面
     var previousDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
 
@@ -163,6 +164,7 @@ fun MainScreen(
             "downloader" -> currentDestination = DrawerDestination.DOWNLOADER
             "wiki" -> {
                 wikiEnteredFromHub = false
+                showWikiLoginHintOnOpen = false
                 previousDestination = normalizePreviousDestination(currentDestination)
                 currentDestination = DrawerDestination.WIKI
             }
@@ -238,7 +240,7 @@ fun MainScreen(
                 WikiWebViewScreen(
                     onExitWiki = if (wikiEnteredFromHub) null
                         else {{ currentDestination = previousDestination }},
-                    initialUrl = WIKI_HOME_URL
+                    showLoginHintOnOpen = showWikiLoginHintOnOpen
                 )
             }
             DrawerDestination.WIKI_HUB -> {
@@ -383,6 +385,7 @@ fun MainScreen(
             onDestinationSelected = { dest ->
                 if (dest == DrawerDestination.WIKI) {
                     wikiEnteredFromHub = false
+                    showWikiLoginHintOnOpen = false
                     previousDestination = normalizePreviousDestination(currentDestination)
                 }
                 if (dest == DrawerDestination.WIKI_HUB) {
@@ -390,6 +393,13 @@ fun MainScreen(
                 } else {
                     currentDestination = dest
                 }
+                if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
+            },
+            onLoginRequested = {
+                wikiEnteredFromHub = false
+                previousDestination = normalizePreviousDestination(currentDestination)
+                currentDestination = DrawerDestination.WIKI
+                showWikiLoginHintOnOpen = true
                 if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
             },
             backdrop = drawerBackdrop,
@@ -428,7 +438,15 @@ fun MainScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars)
-                )
+                ) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        shape = smoothCornerShape(16.dp),
+                        containerColor = MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                        actionColor = MaterialTheme.colorScheme.inversePrimary
+                    )
+                }
             }
         }
     }
@@ -440,6 +458,7 @@ fun MainScreen(
 private fun AppDrawerContent(
     currentDestination: DrawerDestination,
     onDestinationSelected: (DrawerDestination) -> Unit,
+    onLoginRequested: () -> Unit,
     backdrop: Backdrop = emptyBackdrop(),
     liquidGlassEnabled: Boolean = LocalLiquidGlassEnabled.current.value
 ) {
@@ -448,6 +467,7 @@ private fun AppDrawerContent(
     var wikiUserInfo by remember { mutableStateOf<WikiUserApi.UserInfo?>(null) }
     var isLoadingUserInfo by remember { mutableStateOf(false) }
     var showUserInfoSheet by remember { mutableStateOf(false) }
+    var showLoginConfirmDialog by remember { mutableStateOf(false) }
     val wikiCoroutineScope = rememberCoroutineScope()
     val drawerContentShape = smoothCornerShape(28.dp)
 
@@ -528,6 +548,13 @@ private fun AppDrawerContent(
             WikiUserInfoCard(
                 userInfo = wikiUserInfo!!,
                 onClick = { showUserInfoSheet = true },
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .fillMaxWidth()
+            )
+        } else if (!isLoadingUserInfo) {
+            WikiLoginPromptCard(
+                onClick = { showLoginConfirmDialog = true },
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
                     .fillMaxWidth()
@@ -681,9 +708,90 @@ private fun AppDrawerContent(
             onDismiss = { showUserInfoSheet = false }
         )
     }
+
+    if (showLoginConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showLoginConfirmDialog = false },
+            icon = { Icon(Icons.AutoMirrored.Outlined.Login, contentDescription = null) },
+            title = { Text("登录 Wiki") },
+            text = { Text("将打开 Wiki 首页，请点击网页右上角登录按钮完成登录。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLoginConfirmDialog = false
+                        onLoginRequested()
+                    }
+                ) {
+                    Text("打开 Wiki")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLoginConfirmDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
 
 // ─────────────────────── Wiki 用户信息卡片（侧栏摘要） ───────────────────────
+
+@Composable
+private fun WikiLoginPromptCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = smoothCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.PersonOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "未登录",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "点击登录 Wiki 账号",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = "前往登录",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
 
 @Composable
 private fun WikiUserInfoCard(

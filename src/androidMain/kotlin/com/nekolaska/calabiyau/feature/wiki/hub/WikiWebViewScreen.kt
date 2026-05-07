@@ -86,6 +86,8 @@ private val WIKI_DESKTOP_USER_AGENTS = listOf(
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.115 Safari/537.36"
 )
 
+private val WIKI_BOTTOM_TOOLBAR_SNACKBAR_OFFSET = 88.dp
+
 private fun randomWikiUserAgent(desktopMode: Boolean): String {
     val pool = if (desktopMode) WIKI_DESKTOP_USER_AGENTS else WIKI_MOBILE_USER_AGENTS
     return "${pool.random(Random(System.nanoTime()))} CalabiYauVoice/2.0"
@@ -240,6 +242,7 @@ fun WikiWebViewScreen(
     onExitWiki: (() -> Unit)? = null,
     initialUrl: String = WIKI_HOME_URL,
     onInitialUrlConsumed: (() -> Unit)? = null,
+    showLoginHintOnOpen: Boolean = false,
     useTopBarMode: Boolean = false
 ) {
     val context = LocalContext.current
@@ -282,6 +285,26 @@ fun WikiWebViewScreen(
     val snackbarScope = rememberCoroutineScope()
     val showSnack: (String) -> Unit = remember(snackbarScope, snackbarHostState) {
         { msg -> snackbarScope.launch { snackbarHostState.showSnackbar(msg) }; }
+    }
+    val showLoginReturnSnack: () -> Unit = remember(snackbarScope, snackbarHostState) {
+        {
+            snackbarScope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = "登录完成后点击返回 Wiki 首页",
+                    actionLabel = "返回",
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Indefinite
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    webView?.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(currentUrl))
+                }
+            }
+        }
+    }
+    LaunchedEffect(showLoginHintOnOpen) {
+        if (showLoginHintOnOpen) {
+            snackbarHostState.showSnackbar("请点击网页右上角通知按钮完成登录")
+        }
     }
 
     // 长按图片保存
@@ -478,7 +501,15 @@ fun WikiWebViewScreen(
         },
         bottomBar = {},
         snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState) { data ->
+            val snackbarBottomPadding = if (isSidebarMode && isToolbarVisible) {
+                WIKI_BOTTOM_TOOLBAR_SNACKBAR_OFFSET
+            } else {
+                0.dp
+            }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = snackbarBottomPadding)
+            ) { data ->
                 Snackbar(
                     snackbarData = data,
                     shape = smoothCornerShape(16.dp),
@@ -550,6 +581,7 @@ fun WikiWebViewScreen(
                                 }
                                 true
                             },
+                            onPassportDetected = showLoginReturnSnack,
                             showSnack = showSnack
                         ).also { wv ->
                             webView = wv
