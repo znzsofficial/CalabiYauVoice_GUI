@@ -84,16 +84,22 @@ object WikiEngine {
         .writeTimeout(60, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val profile = MOBILE_PROFILES.random()
-            val req = chain.request().newBuilder()
-                .header("User-Agent", profile.userAgent)
-                .header("Accept", profile.accept)
-                .header("Accept-Language", profile.acceptLanguage)
-                .header("Referer", "https://wiki.biligame.com/klbq/")
+            val original = chain.request()
+            val req = original.newBuilder()
+                .apply {
+                    if (original.header("User-Agent") == null) header("User-Agent", profile.userAgent)
+                    if (original.header("Accept") == null) header("Accept", profile.accept)
+                    if (original.header("Accept-Language") == null) header("Accept-Language", profile.acceptLanguage)
+                    if (original.header("Referer") == null) header("Referer", "https://wiki.biligame.com/klbq/")
+                    if (original.header("Sec-Fetch-Dest") == null) header("Sec-Fetch-Dest", "empty")
+                    if (original.header("Sec-Fetch-Mode") == null) header("Sec-Fetch-Mode", "cors")
+                    if (original.header("Sec-Fetch-Site") == null) header("Sec-Fetch-Site", "same-origin")
+                }
                 .apply {
                     if (profile.secChUa != null) {
-                        header("Sec-CH-UA", profile.secChUa)
-                        header("Sec-CH-UA-Mobile", profile.secChUaMobile)
-                        header("Sec-CH-UA-Platform", profile.secChUaPlatform ?: "\"Android\"")
+                        if (original.header("Sec-CH-UA") == null) header("Sec-CH-UA", profile.secChUa)
+                        if (original.header("Sec-CH-UA-Mobile") == null) header("Sec-CH-UA-Mobile", profile.secChUaMobile)
+                        if (original.header("Sec-CH-UA-Platform") == null) header("Sec-CH-UA-Platform", profile.secChUaPlatform ?: "\"Android\"")
                     }
                 }
                 .build()

@@ -227,8 +227,10 @@ private fun extractChosenUris(result: ActivityResult): Array<Uri>? {
  */
 fun hasWikiLoginCookie(): Boolean {
     return try {
-        val cookies = CookieManager.getInstance().getCookie("https://wiki.biligame.com") ?: return false
-        cookies.split(";").any { it.trim().startsWith("DedeUserID=") }
+        val cm = CookieManager.getInstance()
+        val rootCookies = cm.getCookie("https://wiki.biligame.com").orEmpty()
+        val klbqCookies = cm.getCookie("https://wiki.biligame.com/klbq/").orEmpty()
+        "$rootCookies; $klbqCookies".split(";").any { it.trim().startsWith("DedeUserID=") }
     } catch (_: Exception) {
         false
     }
