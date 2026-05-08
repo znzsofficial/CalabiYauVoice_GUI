@@ -86,6 +86,9 @@ object VotingApi {
         try {
             val token = VotingRemoteSource.fetchCsrfToken(cookies)
                 ?: return@withContext ApiResult.Error("获取 CSRF Token 失败")
+            val submitCookies = VotingRemoteSource.getWikiCookies()
+                ?.takeIf { it.isNotBlank() }
+                ?: cookies
 
             val operations = mutableListOf<VoteSubmitOperation>()
 
@@ -114,9 +117,10 @@ object VotingApi {
             }
 
             for (operation in operations) {
-                val statusCode = VotingRemoteSource.submitVoteOperation(cookies, token, operation)
-                if (statusCode !in 200..299) {
-                    return@withContext ApiResult.Error("提交投票失败: HTTP $statusCode")
+                val submitResult = VotingRemoteSource.submitVoteOperation(submitCookies, token, operation)
+                if (!submitResult.success) {
+                    val detail = submitResult.message?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+                    return@withContext ApiResult.Error("提交投票失败: HTTP ${submitResult.statusCode}$detail")
                 }
             }
 

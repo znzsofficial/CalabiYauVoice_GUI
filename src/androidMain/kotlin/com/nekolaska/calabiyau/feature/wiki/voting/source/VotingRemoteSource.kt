@@ -10,10 +10,13 @@ import okhttp3.Request
 import java.net.URLEncoder
 
 data class VoteSubmitOperation(val pollId: String, val answer: String)
+data class VoteSubmitResult(val success: Boolean, val statusCode: Int, val message: String? = null)
 
 object VotingRemoteSource {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
+    private const val VOTE_PAGE_URL = "https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8"
+    private const val WIKI_ROOT_URL = "https://wiki.biligame.com"
 
     fun buildUrl(vararg params: Pair<String, String>): String {
         val query = params.joinToString("&") { (k, v) ->
@@ -93,12 +96,13 @@ object VotingRemoteSource {
             ?.jsonPrimitive?.content
     }
 
-    fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): Int {
+    fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
         val formBody = FormBody.Builder()
             .add("action", "pollsubmitvote")
             .add("poll", operation.pollId)
             .add("answer", operation.answer)
             .add("token", token)
+            .add("format", "json")
             .build()
 
         val request = Request.Builder()
@@ -106,11 +110,35 @@ object VotingRemoteSource {
             .post(formBody)
             .header("Cookie", cookies)
             .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .header("Origin", "https://wiki.biligame.com")
+            .header("Referer", VOTE_PAGE_URL)
+            .header("X-Requested-With", "XMLHttpRequest")
             .build()
 
         return WikiEngine.client.newCall(request).execute().use { resp ->
-            resp.code
+            syncResponseCookies(resp.headers("Set-Cookie"))
+            val body = resp.body.string()
+            val success = resp.isSuccessful && isSubmitBodySuccessful(body)
+            VoteSubmitResult(
+                success = success,
+                statusCode = resp.code,
+                message = if (success) null else body.take(300).ifBlank { resp.message }
+            )
         }
+    }
+
+    private fun isSubmitBodySuccessful(body: String): Boolean {
+        val text = body.trim()
+        if (text.isBlank()) return true
+        if (text.contains("error", ignoreCase = true)) return false
+        if (text.contains("badtoken", ignoreCase = true)) return false
+        if (text.contains("notloggedin", ignoreCase = true)) return false
+        if (text.contains("permissiondenied", ignoreCase = true)) return false
+        if (text.contains("<html", ignoreCase = true)) return false
+        if (text.contains("pollsubmitvote", ignoreCase = true)) return true
+        if (text.contains("success", ignoreCase = true)) return true
+        return text.startsWith("{") || text.startsWith("[")
     }
 
     private fun httpGet(url: String): String? {
@@ -121,9 +149,8 @@ object VotingRemoteSource {
                 .build()
             WikiEngine.client.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) return null
-                val body = resp.body.string()
-                if (!body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) return null
-                body
+                syncResponseCookies(resp.headers("Set-Cookie"))
+                resp.body.string()
             }
         } catch (_: Exception) {
             null
@@ -139,12 +166,23 @@ object VotingRemoteSource {
                 .build()
             WikiEngine.client.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) return null
-                val body = resp.body.string()
-                if (!body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) return null
-                body
+                syncResponseCookies(resp.headers("Set-Cookie"))
+                resp.body.string()
             }
         } catch (_: Exception) {
             null
+        }
+    }
+
+    private fun syncResponseCookies(setCookieHeaders: List<String>) {
+        if (setCookieHeaders.isEmpty()) return
+        runCatching {
+            val cm = CookieManager.getInstance()
+            setCookieHeaders.forEach { setCookie ->
+                cm.setCookie(WIKI_ROOT_URL, setCookie)
+                cm.setCookie("$WIKI_ROOT_URL/klbq/", setCookie)
+            }
+            cm.flush()
         }
     }
 }
