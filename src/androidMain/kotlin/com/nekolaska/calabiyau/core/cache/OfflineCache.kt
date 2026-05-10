@@ -50,6 +50,7 @@ object OfflineCache {
         DECORATIONS("decorations", 3 * DAY),
         NAVIGATION("navigation", 3 * DAY),
         BALANCE_DATA("balance_data", 1 * DAY),
+        MEOW_LANGUAGE("meow_language", 3 * DAY),
     }
 
     private const val HOUR = 3_600_000L
