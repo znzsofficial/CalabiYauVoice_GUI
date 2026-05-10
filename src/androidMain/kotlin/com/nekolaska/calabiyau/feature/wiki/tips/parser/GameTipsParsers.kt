@@ -37,7 +37,6 @@ object GameTipsParsers {
 
                 "p" -> tips += parseParagraph(element)
                 "ul", "ol" -> tips += parseList(element)
-                "table" -> tips += parseTableTips(element)
             }
         }
 
@@ -52,20 +51,6 @@ object GameTipsParsers {
         element.select("li").mapNotNull { li ->
             li.text().normalizeTip().takeIf { it.looksLikeTip() }
         }
-
-    private fun parseTableTips(table: Element): List<String> {
-        val lines = mutableListOf<String>()
-        table.select("tr").forEach { row ->
-            val cells = row.select("td, th")
-            if (cells.isEmpty()) return@forEach
-            val candidates = cells.map { it.text().normalizeTip() }
-                .filter { it.looksLikeTip() }
-            if (candidates.isNotEmpty()) {
-                lines += candidates.maxBy { it.length }
-            }
-        }
-        return lines
-    }
 
     private fun String.normalizeTip(): String = trim()
         .replace(Regex("\\s+"), " ")

@@ -139,11 +139,21 @@ fun MeowLanguageScreen(
                         )
                     }
                 }
-                items(sections, key = { it.title }) { section ->
-                    MeowLanguageSectionCard(
-                        section = section,
-                        onCopyText = { copyMeowText(context, it, showSnack) }
-                    )
+                sections.forEach { section ->
+                    item(key = "section-${section.title}") {
+                        MeowLanguageSectionHeaderCard(section)
+                    }
+                    if (section.intro.isNotEmpty()) {
+                        item(key = "section-${section.title}-intro") {
+                            MeowLanguageIntroCard(section.intro)
+                        }
+                    }
+                    items(section.groups, key = { group -> "${section.title}-${group.title}" }) { group ->
+                        MeowLanguageGroupBlock(
+                            group = group,
+                            onCopyText = { copyMeowText(context, it, showSnack) }
+                        )
+                    }
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
@@ -239,10 +249,7 @@ private fun RandomMeowQuoteCard(
 }
 
 @Composable
-private fun MeowLanguageSectionCard(
-    section: MeowLanguageSection,
-    onCopyText: (String) -> Unit
-) {
+private fun MeowLanguageSectionHeaderCard(section: MeowLanguageSection) {
     Card(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -250,52 +257,62 @@ private fun MeowLanguageSectionCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = smoothCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            if (section.title == "说明") Icons.AutoMirrored.Outlined.Article else Icons.Outlined.Pets,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = section.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    val lineCount = section.groups.sumOf { it.lines.size } + section.intro.size
-                    Text(
-                        text = "$lineCount 条内容",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            Surface(
+                shape = smoothCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(40.dp)
+            ) {
+                androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (section.title == "说明") Icons.AutoMirrored.Outlined.Article else Icons.Outlined.Pets,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = section.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                val lineCount = section.groups.sumOf { it.lines.size } + section.intro.size
+                Text(
+                    text = "$lineCount 条内容",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
 
-            section.intro.forEach { text ->
+@Composable
+private fun MeowLanguageIntroCard(intro: List<String>) {
+    Card(
+        shape = smoothCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            intro.forEach { text ->
                 Text(
                     text = text,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
                 )
-            }
-
-            section.groups.forEach { group ->
-                MeowLanguageGroupBlock(group, onCopyText)
             }
         }
     }
@@ -353,16 +370,22 @@ private fun CopyableMeowText(
     copyText: String = text,
     onCopy: (String) -> Unit
 ) {
-    Text(
-        text = text,
-        modifier = Modifier.combinedClickable(
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
             onClick = {},
             onLongClick = { onCopy(copyText) }
         ),
-        style = style,
-        color = color,
-        lineHeight = lineHeight
-    )
+        color = androidx.compose.ui.graphics.Color.Transparent
+    ) {
+        Text(
+            text = text,
+            style = style,
+            color = color,
+            lineHeight = lineHeight
+        )
+    }
 }
 
 private fun copyMeowText(context: Context, text: String, showSnack: (String) -> Unit) {
