@@ -393,7 +393,8 @@ internal fun WikiHomePage(
                         "壁纸" to { onNavigateTo(WikiHubPage.WALLPAPERS) },
                         "表情包" to { onNavigateTo(WikiHubPage.STICKERS) },
                         "四格漫画" to { onNavigateTo(WikiHubPage.COMICS) },
-                        "喵言喵语" to { onNavigateTo(WikiHubPage.MEOW_LANGUAGE) }
+                        "喵言喵语" to { onNavigateTo(WikiHubPage.MEOW_LANGUAGE) },
+                        "游戏Tips" to { onNavigateTo(WikiHubPage.GAME_TIPS) }
                     ),
                     backdrop = backdrop
                 )
