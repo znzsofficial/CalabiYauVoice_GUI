@@ -33,6 +33,7 @@ import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationScreen
+import com.nekolaska.calabiyau.feature.wiki.meow.MeowLanguageScreen
 import com.nekolaska.calabiyau.feature.wiki.story.StoryScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
@@ -49,7 +50,7 @@ enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
     STORY, GAME_HISTORY,
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
 }
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
@@ -76,6 +77,7 @@ sealed interface WikiRoute {
     data object Wallpapers : WikiRoute
     data object Stickers : WikiRoute
     data object Comics : WikiRoute
+    data object MeowLanguage : WikiRoute
     data object Baseplates : WikiRoute
     data object Encasings : WikiRoute
     data object Medals : WikiRoute
@@ -107,6 +109,7 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.WALLPAPERS -> WikiRoute.Wallpapers
     WikiHubPage.STICKERS -> WikiRoute.Stickers
     WikiHubPage.COMICS -> WikiRoute.Comics
+    WikiHubPage.MEOW_LANGUAGE -> WikiRoute.MeowLanguage
     WikiHubPage.BALANCE_DATA -> WikiRoute.BalanceData
     WikiHubPage.BASEPLATES -> WikiRoute.Baseplates
     WikiHubPage.ENCASINGS -> WikiRoute.Encasings
@@ -167,6 +170,7 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Wallpapers -> "wallpapers"
     WikiRoute.Stickers -> "stickers"
     WikiRoute.Comics -> "comics"
+    WikiRoute.MeowLanguage -> "meowLanguage"
     WikiRoute.Baseplates -> "baseplates"
     WikiRoute.Encasings -> "encasings"
     WikiRoute.Medals -> "medals"
@@ -217,6 +221,7 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "wallpapers" -> WikiRoute.Wallpapers
         "stickers" -> WikiRoute.Stickers
         "comics" -> WikiRoute.Comics
+        "meowLanguage" -> WikiRoute.MeowLanguage
         "baseplates" -> WikiRoute.Baseplates
         "encasings" -> WikiRoute.Encasings
         "medals" -> WikiRoute.Medals
@@ -521,6 +526,13 @@ fun WikiHubScreen(
                     title = "四格漫画",
                     pageName = "官方四格漫画",
                     onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.MeowLanguage -> {
+                MeowLanguageScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
                 )
             }
 
