@@ -36,9 +36,9 @@ object OfflineCache {
         CHARACTER_DETAIL("character_detail", 7 * DAY),
         WEAPON_DETAIL("weapon_detail", 7 * DAY),
         MAP_DETAIL("map_detail", 7 * DAY),
-        CHARACTER_LIST("character_list", 1 * DAY),
-        WEAPON_LIST("weapon_list", 1 * DAY),
-        MAP_LIST("map_list", 1 * DAY),
+        CHARACTER_LIST("character_list", 7 * DAY),
+        WEAPON_LIST("weapon_list", 7 * DAY),
+        MAP_LIST("map_list", 7 * DAY),
         ANNOUNCEMENTS("announcements", 2 * HOUR),
         ACTIVITIES("activities", 2 * HOUR),
         GAME_MODES("game_modes", 3 * DAY),
@@ -52,6 +52,8 @@ object OfflineCache {
         BALANCE_DATA("balance_data", 1 * DAY),
         MEOW_LANGUAGE("meow_language", 3 * DAY),
     }
+
+    private val typeByDir = Type.entries.associateBy { it.dir }
 
     private const val HOUR = 3_600_000L
     private const val DAY = 86_400_000L
@@ -94,7 +96,8 @@ object OfflineCache {
      * 调用方据 [CacheEntry.expired] 判断是否可用。
      */
     suspend fun getEntry(type: Type, key: String): CacheEntry? = withContext(Dispatchers.IO) {
-        val file = cacheFile(type, key)
+        if (!::cacheDir.isInitialized) return@withContext null
+        val file = cacheFile(type, key, createDir = false)
         if (!file.exists()) return@withContext null
         val age = System.currentTimeMillis() - file.lastModified()
         try {
@@ -119,9 +122,8 @@ object OfflineCache {
      * 写入缓存。
      */
     suspend fun put(type: Type, key: String, json: String) = withContext(Dispatchers.IO) {
+        if (!::cacheDir.isInitialized) return@withContext
         try {
-            val dir = File(cacheDir, type.dir)
-            dir.mkdirs()
             cacheFile(type, key).writeText(json)
         } catch (_: Exception) { }
     }
@@ -130,7 +132,8 @@ object OfflineCache {
      * 使单个缓存条目失效（用于 forceRefresh）。
      */
     suspend fun invalidate(type: Type, key: String) = withContext(Dispatchers.IO) {
-        val f = cacheFile(type, key)
+        if (!::cacheDir.isInitialized) return@withContext
+        val f = cacheFile(type, key, createDir = false)
         if (f.exists()) f.delete()
     }
 
@@ -138,6 +141,7 @@ object OfflineCache {
      * 清除指定类型的所有缓存。
      */
     suspend fun clear(type: Type) = withContext(Dispatchers.IO) {
+        if (!::cacheDir.isInitialized) return@withContext
         File(cacheDir, type.dir).deleteRecursively()
     }
 
@@ -145,6 +149,7 @@ object OfflineCache {
      * 清除所有离线缓存。
      */
     suspend fun clearAll() = withContext(Dispatchers.IO) {
+        if (!::cacheDir.isInitialized) return@withContext
         cacheDir.deleteRecursively()
         cacheDir.mkdirs()
         clearMemoryCaches()
@@ -174,7 +179,7 @@ object OfflineCache {
         val now = System.currentTimeMillis()
         cacheDir.walkTopDown().filter { it.isFile }.forEach { file ->
             val dirName = file.parentFile?.name ?: return@forEach
-            val type = Type.entries.firstOrNull { it.dir == dirName } ?: return@forEach
+            val type = typeByDir[dirName] ?: return@forEach
             if (now - file.lastModified() > type.maxAgeMs) {
                 file.delete()
             }
@@ -277,23 +282,26 @@ object OfflineCache {
                 CrashContextStore.record(
                     appContext,
                     "OfflineCache.doFetch",
-                        "networkFetch returned null | type=${type.dir} | key=$key | fallback=cache"
+                    "networkFetch returned null | type=${type.dir} | key=$key | fallback=cache"
                 )
             }
             // 网络失败，回退到任意磁盘缓存（包含过期条目）
-            val entry = getEntry(type, key) ?: return null
-                    return CacheResult(payload = entry.content, isFromCache = true, ageMs = entry.ageMs)
+            return getEntry(type, key)?.toCacheResult()
         }
 
         // 无网络：读任意磁盘缓存（包含过期条目）
-        val entry = getEntry(type, key) ?: return null
-                return CacheResult(payload = entry.content, isFromCache = true, ageMs = entry.ageMs)
+        return getEntry(type, key)?.toCacheResult()
     }
 
-    private fun cacheFile(type: Type, key: String): File {
+    private fun CacheEntry.toCacheResult(): CacheResult =
+        CacheResult(payload = content, isFromCache = true, ageMs = ageMs)
+
+    private fun cacheFile(type: Type, key: String, createDir: Boolean = true): File {
         val hash = MessageDigest.getInstance("MD5")
             .digest(key.toByteArray())
             .joinToString("") { "%02x".format(it) }
-        return File(File(cacheDir, type.dir).also { it.mkdirs() }, "$hash.json")
+        val dir = File(cacheDir, type.dir)
+        if (createDir) dir.mkdirs()
+        return File(dir, "$hash.json")
     }
 }
