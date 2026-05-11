@@ -29,6 +29,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.BioCardScreen
 import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
+import com.nekolaska.calabiyau.feature.wiki.item.ItemCatalogScreen
 import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
@@ -48,7 +49,7 @@ import com.nekolaska.calabiyau.feature.weapon.list.WeaponListScreen
 
 /** 子页面枚举 (保留用于兼容上层或原有内部组件) */
 enum class WikiHubPage {
-    HOME, CHARACTERS, WEAPONS, MAPS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
+    HOME, CHARACTERS, WEAPONS, MAPS, ITEMS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
     STORY, GAME_HISTORY,
     NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS
@@ -63,6 +64,7 @@ sealed interface WikiRoute {
     data class WeaponDetail(val name: String) : WikiRoute
     data object Maps : WikiRoute
     data class MapDetail(val name: String, val imageUrl: String?) : WikiRoute
+    data object Items : WikiRoute
     data class Costumes(val character: String?) : WikiRoute
     data class WeaponSkins(val weapon: String?) : WikiRoute
     data object Activities : WikiRoute
@@ -102,6 +104,7 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.ACTIVITIES -> WikiRoute.Activities
     WikiHubPage.ANNOUNCEMENTS -> WikiRoute.Announcements
     WikiHubPage.GAME_MODES -> WikiRoute.GameModes
+    WikiHubPage.ITEMS -> WikiRoute.Items
     WikiHubPage.VOTING -> WikiRoute.Voting
     WikiHubPage.BIO_CARDS -> WikiRoute.BioCards
     WikiHubPage.BIO_MOBILE_CARDS -> WikiRoute.BioMobileCards
@@ -158,6 +161,7 @@ private fun WikiRoute.encode(): String = when (this) {
         )
     }"
 
+    WikiRoute.Items -> "items"
     is WikiRoute.Costumes -> "costumes$ROUTE_SEPARATOR${encodeRoutePart(character)}"
     is WikiRoute.WeaponSkins -> "weaponSkins$ROUTE_SEPARATOR${encodeRoutePart(weapon)}"
     WikiRoute.Activities -> "activities"
@@ -210,6 +214,7 @@ private fun decodeRoute(encoded: String): WikiRoute? {
             imageUrl = decodeRoutePart(parts.getOrNull(2))
         )
 
+        "items" -> WikiRoute.Items
         "costumes" -> WikiRoute.Costumes(decodeRoutePart(parts.getOrNull(1)))
         "weaponSkins" -> WikiRoute.WeaponSkins(decodeRoutePart(parts.getOrNull(1)))
         "activities" -> WikiRoute.Activities
@@ -433,6 +438,12 @@ fun WikiHubScreen(
             is WikiRoute.Costumes -> {
                 CostumeFilterScreen(
                     initialCharacter = route.character,
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.Items -> {
+                ItemCatalogScreen(
                     onBack = { popBackStack() }
                 )
             }

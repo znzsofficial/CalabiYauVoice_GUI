@@ -330,6 +330,19 @@ internal fun WikiHomePage(
                 )
             }
 
+            // ── 道具图鉴 ──
+            item(key = "items", contentType = "action_card") {
+                ActionCard(
+                    title = "道具图鉴",
+                    subtitle = "浏览功能道具、货币与礼盒礼包",
+                    icon = Icons.Outlined.Inventory2,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.ITEMS) },
+                    backdrop = backdrop
+                )
+            }
+
             // ── 时装筛选 ──
             item(key = "costumes", contentType = "action_card") {
                 ActionCard(
@@ -549,6 +562,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("characters", "角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
     QuickEntry("weapons", "武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
     QuickEntry("maps", "地图", Icons.Outlined.Map, WikiHubPage.MAPS),
+    QuickEntry("items", "道具", Icons.Outlined.Inventory2, WikiHubPage.ITEMS),
     QuickEntry("voting", "投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
     QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
     QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
