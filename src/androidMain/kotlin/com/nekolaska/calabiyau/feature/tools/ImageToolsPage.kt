@@ -725,8 +725,6 @@ internal fun ImageToolsPage(
     var imageQuality by rememberSaveable { mutableFloatStateOf(0.82f) }
     var exportFormat by rememberSaveable { mutableStateOf(ExportFormat.JPG) }
     var cropPreset by rememberSaveable { mutableStateOf("1:1") }
-    var cropRatioW by rememberSaveable { mutableIntStateOf(1) }
-    var cropRatioH by rememberSaveable { mutableIntStateOf(1) }
     var cropRatioWText by rememberSaveable { mutableStateOf("1") }
     var cropRatioHText by rememberSaveable { mutableStateOf("1") }
     var stitchDirection by rememberSaveable { mutableStateOf(StitchDirection.HORIZONTAL) }
@@ -751,25 +749,30 @@ internal fun ImageToolsPage(
     val cropPreviewStates = remember { mutableStateMapOf<Int, CropPreviewState>() }
     var previewSheetState by remember { mutableStateOf<ImagePreviewSheetState?>(null) }
 
-    fun setCropRatio(width: Int, height: Int) {
-        val safeW = width.coerceIn(1, 20)
-        val safeH = height.coerceIn(1, 20)
-        cropRatioW = safeW
-        cropRatioH = safeH
-        cropRatioWText = safeW.toString()
-        cropRatioHText = safeH.toString()
-        cropPreset = "${safeW}:${safeH}"
+    fun isPositiveRatioText(value: String): Boolean =
+        value.isNotBlank() && value.any { it != '0' }
+
+    fun updateCropPresetFromText(width: String, height: String) {
+        if (!isPositiveRatioText(width) || !isPositiveRatioText(height)) return
+        cropPreset = "$width:$height"
         cropPreviewStates.clear()
     }
 
+    fun setCropRatio(width: Int, height: Int) {
+        val safeW = width.coerceAtLeast(1)
+        val safeH = height.coerceAtLeast(1)
+        cropRatioWText = safeW.toString()
+        cropRatioHText = safeH.toString()
+        updateCropPresetFromText(cropRatioWText, cropRatioHText)
+    }
+
     fun updateCropRatioInput(isWidth: Boolean, input: String) {
-        val filtered = input.filter(Char::isDigit).take(2)
+        val filtered = input.filter(Char::isDigit)
         if (isWidth) cropRatioWText = filtered else cropRatioHText = filtered
-        val value = filtered.toIntOrNull()?.takeIf { it > 0 } ?: return
         if (isWidth) {
-            setCropRatio(value, cropRatioH)
+            updateCropPresetFromText(filtered, cropRatioHText)
         } else {
-            setCropRatio(cropRatioW, value)
+            updateCropPresetFromText(cropRatioWText, filtered)
         }
     }
 
@@ -1258,7 +1261,12 @@ internal fun ImageToolsPage(
             ) {
                 Text("裁切比例：$cropPreset", style = MaterialTheme.typography.bodyMedium)
                 FilledTonalButton(
-                    onClick = { setCropRatio(cropRatioH, cropRatioW) },
+                    onClick = {
+                        val oldWidth = cropRatioWText
+                        cropRatioWText = cropRatioHText
+                        cropRatioHText = oldWidth
+                        updateCropPresetFromText(cropRatioWText, cropRatioHText)
+                    },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
@@ -1276,7 +1284,6 @@ internal fun ImageToolsPage(
                     onValueChange = { updateCropRatioInput(isWidth = true, input = it) },
                     modifier = Modifier.weight(1f),
                     label = { Text("横向比例") },
-                    supportingText = { Text("1 - 20") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
@@ -1285,7 +1292,6 @@ internal fun ImageToolsPage(
                     onValueChange = { updateCropRatioInput(isWidth = false, input = it) },
                     modifier = Modifier.weight(1f),
                     label = { Text("纵向比例") },
-                    supportingText = { Text("1 - 20") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
