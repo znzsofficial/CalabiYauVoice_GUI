@@ -6,6 +6,15 @@ import org.jsoup.Jsoup
 
 object ItemCatalogParsers {
 
+    private fun resolveOriginalIconUrl(iconUrl: String?): String? {
+        if (iconUrl.isNullOrBlank()) return null
+        return if ("/thumb/" in iconUrl) {
+            iconUrl.replace("/thumb/", "/").substringBeforeLast("/")
+        } else {
+            iconUrl
+        }
+    }
+
     fun parseItems(html: String): List<ItemInfo> {
         val document = Jsoup.parse(html)
         return document.select("table#CardSelectTr tr.divsort").mapNotNull { row ->
@@ -29,7 +38,9 @@ object ItemCatalogParsers {
                 quality = Quality.fromLevel(qualityCode),
                 qualityName = qualityName,
                 description = descriptionCell.text().trim(),
-                iconUrl = nameCell.selectFirst("a.image img")?.attr("src")?.takeIf { it.isNotBlank() }
+                iconUrl = resolveOriginalIconUrl(
+                    nameCell.selectFirst("a.image img")?.attr("src")?.takeIf { it.isNotBlank() }
+                )
             )
         }
     }
