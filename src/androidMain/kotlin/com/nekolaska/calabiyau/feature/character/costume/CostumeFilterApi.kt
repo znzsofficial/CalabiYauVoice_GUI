@@ -27,6 +27,15 @@ object CostumeFilterApi {
         MemoryCacheRegistry.register("CostumeFilterApi", ::clearMemoryCache)
     }
 
+    private fun resolveOriginalImageUrl(imageUrl: String?): String? {
+        if (imageUrl.isNullOrBlank()) return null
+        return if ("/thumb/" in imageUrl) {
+            imageUrl.replace("/thumb/", "/").substringBeforeLast("/")
+        } else {
+            imageUrl
+        }
+    }
+
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
     /** 内存缓存（进程生命周期内有效，避免重复请求） */
@@ -175,21 +184,25 @@ object CostumeFilterApi {
         val hiddenLargeImage = document.select("span[style*=display:none] img").firstOrNull()
 
         val thumbnailUrl = previewImage?.attr("src")
-        val fullImageUrl = previewImage?.attr("srcset")
-            ?.split(',')
-            ?.lastOrNull()
-            ?.substringBeforeLast(' ')
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
+        val fullImageUrl = resolveOriginalImageUrl(
+            previewImage?.attr("srcset")
+                ?.split(',')
+                ?.lastOrNull()
+                ?.substringBeforeLast(' ')
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
+        )
 
-        val screenshotUrl = hiddenLargeImage?.attr("srcset")
-            ?.split(',')
-            ?.lastOrNull()
-            ?.substringBeforeLast(' ')
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
+        val screenshotUrl = resolveOriginalImageUrl(
+            hiddenLargeImage?.attr("srcset")
+                ?.split(',')
+                ?.lastOrNull()
+                ?.substringBeforeLast(' ')
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
+        )
 
         val name = Regex("""<br\s*/?>\s*([^\n<|]+)""")
             .find(blockHtml)

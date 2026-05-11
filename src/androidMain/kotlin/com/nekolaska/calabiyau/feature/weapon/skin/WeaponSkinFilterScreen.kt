@@ -384,7 +384,7 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
             ) {
                 if (skin.thumbnailUrl != null) {
                     AsyncImage(
-                        model = skin.thumbnailUrl,
+                        model = skin.fullImageUrl ?: skin.thumbnailUrl,
                         contentDescription = skin.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
