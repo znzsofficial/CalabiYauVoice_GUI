@@ -293,6 +293,8 @@ internal fun DownloaderScreen(
                                 onRetry = { searchVM.performSearch() },
                                 onToggle = { searchVM.toggleFileSearchSelection(it) },
                                 onSelectAll = { searchVM.selectAllFileSearchResults() },
+                                onClearSelection = { searchVM.clearFileSearchSelection() },
+                                onInvertSelection = { searchVM.invertFileSearchSelection() },
                                 onDownload = { buildDownloadTask()?.let { downloadVM.startDownload(it) } }
                             )
                         }
@@ -552,6 +554,7 @@ internal fun DownloaderScreen(
             onToggle = { searchVM.toggleDialogFileSelection(it) },
             onSelectAll = { searchVM.selectAllDialogFiles() },
             onClear = { searchVM.clearDialogSelection() },
+            onInvert = { searchVM.invertDialogSelection() },
             onConfirm = { searchVM.confirmFileDialog() },
             onDismiss = { searchVM.closeFileDialog() }
         )

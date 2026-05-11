@@ -292,6 +292,16 @@ class SearchViewModel : ViewModel() {
         _fileSearchSelectedUrls.value = _fileSearchResults.value.map { it.second }.toSet()
     }
 
+    fun clearFileSearchSelection() { _fileSearchSelectedUrls.value = emptySet() }
+
+    fun invertFileSearchSelection() {
+        val current = _fileSearchSelectedUrls.value
+        _fileSearchSelectedUrls.value = _fileSearchResults.value
+            .map { it.second }
+            .filterNot { it in current }
+            .toSet()
+    }
+
     // ── 分类文件选择对话框 ──
 
     fun openFileDialog(cat: String) {
@@ -328,6 +338,14 @@ class SearchViewModel : ViewModel() {
     }
 
     fun clearDialogSelection() { _dialogSelectedUrls.value = emptySet() }
+
+    fun invertDialogSelection() {
+        val current = _dialogSelectedUrls.value
+        _dialogSelectedUrls.value = _dialogFileList.value
+            .map { it.second }
+            .filterNot { it in current }
+            .toSet()
+    }
 
     fun confirmFileDialog() {
         val cat = _dialogCategoryName.value

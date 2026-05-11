@@ -38,6 +38,8 @@ fun FileSearchList(
     onRetry: (() -> Unit)? = null,
     onToggle: (String) -> Unit,
     onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
+    onInvertSelection: () -> Unit,
     onDownload: () -> Unit
 ) {
     // 图片预览弹窗状态
@@ -74,13 +76,24 @@ fun FileSearchList(
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                FilledTonalButton(
-                    onClick = onSelectAll,
-                    shape = smoothCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
-                    Text("全选", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val allSelected = selectedUrls.size == results.size
+                    FilledTonalButton(
+                        onClick = { if (allSelected) onClearSelection() else onSelectAll() },
+                        shape = smoothCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text(if (allSelected) "取消全选" else "全选", style = MaterialTheme.typography.labelMedium)
+                    }
+                    FilledTonalButton(
+                        onClick = onInvertSelection,
+                        shape = smoothCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("反选", style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }
@@ -310,6 +323,7 @@ fun FileSelectionSheet(
     onToggle: (String) -> Unit,
     onSelectAll: () -> Unit,
     onClear: () -> Unit,
+    onInvert: () -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -425,6 +439,16 @@ fun FileSelectionSheet(
                             if (allSelected) Icons.Default.RemoveDone else Icons.Default.DoneAll,
                             null, modifier = Modifier.size(16.dp)
                         )
+                    },
+                    shape = smoothCornerShape(12.dp)
+                )
+
+                FilterChip(
+                    selected = false,
+                    onClick = onInvert,
+                    label = { Text("反选") },
+                    leadingIcon = {
+                        Icon(Icons.Default.SwapHoriz, null, modifier = Modifier.size(16.dp))
                     },
                     shape = smoothCornerShape(12.dp)
                 )
