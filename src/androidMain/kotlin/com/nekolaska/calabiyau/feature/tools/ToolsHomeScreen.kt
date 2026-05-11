@@ -41,7 +41,8 @@ private enum class ToolsSection(
 ) {
     IMAGE("图片工具", "压缩、转换、九宫格与裁切入口", Icons.Outlined.Image),
     TEXT("文本工具", "时间轴编辑与字幕格式转换", Icons.Outlined.TextFields),
-    AUDIO("音频工具", "查看音频信息与轻量整理", Icons.Outlined.AudioFile)
+    AUDIO("音频工具", "查看音频信息与轻量整理", Icons.Outlined.AudioFile),
+    VIDEO("视频工具", "视频缓存合成与轻量处理", Icons.Outlined.VideoFile)
 }
 
 private fun resolveSectionOutputDirectory(basePath: String, section: ToolsSection): File {
@@ -49,6 +50,7 @@ private fun resolveSectionOutputDirectory(basePath: String, section: ToolsSectio
         ToolsSection.IMAGE -> "图片工具"
         ToolsSection.TEXT -> "文本工具"
         ToolsSection.AUDIO -> "音频工具"
+        ToolsSection.VIDEO -> "视频工具"
     }
     return resolveOutputDirectory(basePath, child)
 }
@@ -365,6 +367,13 @@ private fun ToolsSectionContent(
                 onBusyChange = onBusyChange,
                 onResult = onResult,
                 onPickDirectoryFromFileManager = onPickDirectoryFromFileManager,
+                onPickFilesFromFileManager = onPickFilesFromFileManager
+            )
+            ToolsSection.VIDEO -> VideoToolsPage(
+                outputPath = outputPath,
+                isBusy = isBusy,
+                onBusyChange = onBusyChange,
+                onResult = onResult,
                 onPickFilesFromFileManager = onPickFilesFromFileManager
             )
         }
