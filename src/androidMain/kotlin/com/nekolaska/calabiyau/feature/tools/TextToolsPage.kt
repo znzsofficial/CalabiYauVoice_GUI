@@ -48,7 +48,8 @@ private enum class TimelineExportFormat(val label: String, val ext: String) {
     SRT("SRT", "srt"),
     LRC("LRC", "lrc"),
     VTT("VTT", "vtt"),
-    ASS("ASS", "ass")
+    ASS("ASS", "ass"),
+    SSA("SSA", "ssa")
 }
 
 private data class TimelineClip(
@@ -238,6 +239,7 @@ internal fun TextToolsPage(
                         TimelineExportFormat.LRC -> toLrc(shifted)
                         TimelineExportFormat.VTT -> toVtt(shifted)
                         TimelineExportFormat.ASS -> toAss(shifted)
+                        TimelineExportFormat.SSA -> toSsa(shifted)
                     }
                     target.writeText(content)
                     ToolOutput(
@@ -324,8 +326,8 @@ internal fun TextToolsPage(
                         onClick = {
                             onPickFilesFromFileManager(
                                 AppPrefs.savePath,
-                                "选择时间轴文件",
-                                "支持 .lrc / .srt",
+                                "导入时间轴文件",
+                                "支持 SRT/LRC/VTT/ASS/SSA 格式，可在文件管理中选文件，也可改用系统选择器。",
                                 false,
                                 { picker.launch("*/*") }
                             ) { paths ->
@@ -427,7 +429,7 @@ internal fun TextToolsPage(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "拖拽平移 · 双指缩放，选中后可左右滑动调整时间段",
+                        "拖拽平移 · 双指缩放 · 选中后左右滑动调整时间段",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -819,11 +821,6 @@ private fun ExportTimelineDialog(
                     Checkbox(checked = skipEmptyText, onCheckedChange = onSkipEmptyTextChange)
                     Text("忽略空文本片段")
                 }
-                Text(
-                    "后续可扩展：编号重排、文本过滤、批量替换等导出选项。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         },
         confirmButton = {
@@ -1101,5 +1098,21 @@ private fun toAss(clips: List<TimelineClip>): String = buildString {
     clips.forEach { c ->
         val text = c.text.replace("\n", "\\N")
         appendLine("Dialogue: 0,${formatAssTime(c.startMs)},${formatAssTime(c.endMs)},Default,,0,0,0,,${text}")
+    }
+}
+
+private fun toSsa(clips: List<TimelineClip>): String = buildString {
+    appendLine("[Script Info]")
+    appendLine("ScriptType: v4.00")
+    appendLine()
+    appendLine("[V4 Styles]")
+    appendLine("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, TertiaryColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, AlphaLevel, Encoding")
+    appendLine("Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,1,1,0,2,10,10,10,0,1")
+    appendLine()
+    appendLine("[Events]")
+    appendLine("Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text")
+    clips.forEach { c ->
+        val text = c.text.replace("\n", "\\N")
+        appendLine("Dialogue: Marked=0,${formatAssTime(c.startMs)},${formatAssTime(c.endMs)},Default,,0,0,0,,${text}")
     }
 }

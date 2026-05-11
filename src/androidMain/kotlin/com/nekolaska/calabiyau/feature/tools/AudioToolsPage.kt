@@ -351,7 +351,7 @@ internal fun AudioToolsPage(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text("音频预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("WAV/MP3 预览、播放与频谱设置", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("导入 WAV/MP3 预览波形与频谱", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Surface(shape = smoothCornerShape(999.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
                         Text(
@@ -371,7 +371,7 @@ internal fun AudioToolsPage(
                     onPickFilesFromFileManager(
                         AppPrefs.savePath,
                         "选择音频文件",
-                        "导入音频文件；WAV/MP3 会显示波形图和频谱图，输出 WAV。",
+                        "选择 WAV/MP3 音频文件，可在文件管理中选文件，也可改用系统选择器。",
                         false,
                         { audioPicker.launch("audio/*") }
                     ) { paths ->
@@ -513,7 +513,7 @@ internal fun AudioToolsPage(
 
         ToolCard(
             title = "静音裁剪",
-            subtitle = "处理当前导入文件",
+            subtitle = "裁掉音频开头或结尾的静音片段",
             icon = Icons.Outlined.SpaceBar
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -561,7 +561,7 @@ internal fun AudioToolsPage(
 
         ToolCard(
             title = "音量处理",
-            subtitle = "处理当前导入文件",
+            subtitle = "调整音量或按峰值自动标准化",
             icon = Icons.Outlined.GraphicEq
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -609,7 +609,7 @@ internal fun AudioToolsPage(
 
         ToolCard(
             title = "声道转换",
-            subtitle = "处理当前导入文件",
+            subtitle = "在单声道和双声道之间转换",
             icon = Icons.Outlined.SurroundSound
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -651,7 +651,7 @@ internal fun AudioToolsPage(
 
         ToolCard(
             title = "频谱图设置",
-            subtitle = "STFT参数和频谱配色",
+            subtitle = "调整频谱图精度、频率范围和配色",
             icon = Icons.Outlined.GraphicEq
         ) {
             SpectrogramSettingsPanel(
@@ -728,7 +728,7 @@ private fun <T> ModeChips(
 }
 
 @Composable
-private fun ColumnScope.AudioActionButton(
+internal fun ColumnScope.AudioActionButton(
     text: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     enabled: Boolean,
