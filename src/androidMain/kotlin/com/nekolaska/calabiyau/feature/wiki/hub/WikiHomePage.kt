@@ -519,7 +519,9 @@ internal fun WikiHomePage(
                         "赛事系统" to "赛事系统"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
-                    nativePages = emptyMap(),
+                    nativePages = mapOf(
+                        "誓约" to { onNavigateTo(WikiHubPage.OATH) }
+                    ),
                     backdrop = backdrop
                 )
             }

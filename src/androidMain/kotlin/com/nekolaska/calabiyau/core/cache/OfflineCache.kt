@@ -53,6 +53,7 @@ object OfflineCache {
         BALANCE_DATA("balance_data", 1 * DAY),
         MEOW_LANGUAGE("meow_language", 3 * DAY),
         GAME_TIPS("game_tips", 3 * DAY),
+        OATH("oath", 3 * DAY),
     }
 
     private val typeByDir = Type.entries.associateBy { it.dir }
