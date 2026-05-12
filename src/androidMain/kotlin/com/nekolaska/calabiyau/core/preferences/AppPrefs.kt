@@ -18,6 +18,7 @@ object AppPrefs {
     private const val KEY_SEARCH_HISTORY = "search_history"
     private const val KEY_FAVORITE_CHARACTERS = "favorite_characters"
     private const val KEY_WIKI_CACHE_MODE = "wiki_cache_mode"
+    private const val KEY_OFFLINE_CACHE_NEVER_EXPIRE = "offline_cache_never_expire"
     private const val KEY_DOWNLOAD_HISTORY = "download_history"
     private const val KEY_BOTTOM_BAR_STYLE = "bottom_bar_style"
     private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
@@ -130,6 +131,11 @@ object AppPrefs {
     var wikiCacheMode: Int
         get() = prefs.getInt(KEY_WIKI_CACHE_MODE, WIKI_CACHE_DEFAULT)
         set(value) = prefs.edit { putInt(KEY_WIKI_CACHE_MODE, value)}
+
+    /** 离线缓存是否永不过期。开启后启动清理不会删除过期 Wiki 缓存。 */
+    var offlineCacheNeverExpire: Boolean
+        get() = prefs.getBoolean(KEY_OFFLINE_CACHE_NEVER_EXPIRE, false)
+        set(value) = prefs.edit { putBoolean(KEY_OFFLINE_CACHE_NEVER_EXPIRE, value) }
 
     /**
      * 自定义主题种子色（ARGB Int）。
