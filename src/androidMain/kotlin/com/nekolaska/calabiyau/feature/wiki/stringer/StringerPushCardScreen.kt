@@ -370,26 +370,25 @@ private fun ModeCardGridItem(
                 overflow = TextOverflow.Ellipsis,
                 lineHeight = TextUnit(1.4f, TextUnitType.Em)
             )
-            if (card.roles.isNotEmpty()) {
-                Surface(
-                    shape = smoothCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    contentColor = MaterialTheme.colorScheme.primary
+            val hasRoles = card.roles.isNotEmpty()
+            Surface(
+                shape = smoothCornerShape(8.dp),
+                color = if (hasRoles) MaterialTheme.colorScheme.surfaceContainerHighest else Color.Transparent,
+                contentColor = if (hasRoles) MaterialTheme.colorScheme.primary else Color.Transparent
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(Icons.Outlined.Groups, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Text(
-                            card.roles.joinToString("、"),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Icon(Icons.Outlined.Groups, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text(
+                        card.roles.joinToString("、"),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
