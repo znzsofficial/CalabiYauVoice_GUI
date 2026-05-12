@@ -1,19 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.item.parser
 
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.item.model.ItemInfo
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
 import org.jsoup.Jsoup
 
 object ItemCatalogParsers {
-
-    private fun resolveOriginalIconUrl(iconUrl: String?): String? {
-        if (iconUrl.isNullOrBlank()) return null
-        return if ("/thumb/" in iconUrl) {
-            iconUrl.replace("/thumb/", "/").substringBeforeLast("/")
-        } else {
-            iconUrl
-        }
-    }
 
     fun parseItems(html: String): List<ItemInfo> {
         val document = Jsoup.parse(html)
@@ -38,7 +30,7 @@ object ItemCatalogParsers {
                 quality = Quality.fromLevel(qualityCode),
                 qualityName = qualityName,
                 description = descriptionCell.text().trim(),
-                iconUrl = resolveOriginalIconUrl(
+                iconUrl = WikiImageUrls.originalFromThumbnail(
                     nameCell.selectFirst("a.image img")?.attr("src")?.takeIf { it.isNotBlank() }
                 )
             )

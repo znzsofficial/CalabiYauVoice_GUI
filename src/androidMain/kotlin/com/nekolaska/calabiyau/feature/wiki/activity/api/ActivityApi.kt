@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.activity.api
 
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.activity.model.ActivityEntry
 import com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityParsers
 import com.nekolaska.calabiyau.feature.wiki.activity.parser.ParsedActivity
@@ -19,10 +20,6 @@ import kotlinx.coroutines.withContext
  * 解析 Wiki「活动」页面表格，提取活动标题、起止时间、简介与配图。
  */
 object ActivityApi {
-
-    private val thumbToOriginalRegex = Regex(
-        """(https?://[^/]+/images/[^/]+)/thumb/([^/]+/[^/]+/[^/]+)/(?:\d+px-)?[^/?#]+"""
-    )
 
     @Volatile
     private var cachedData: List<ActivityEntry>? = null
@@ -73,7 +70,7 @@ object ActivityApi {
         return coroutineScope {
             parsed.map { item ->
                 async {
-                    val directOriginal = toOriginalFromThumb(item.entry.imageUrl)
+                    val directOriginal = WikiImageUrls.originalFromThumbnail(item.entry.imageUrl)
                     val detailImage = if (directOriginal == null) {
                         item.detailPageTitle?.let { ActivityRemoteSource.resolveHighResImageUrl(it, forceRefresh) }
                     } else {
@@ -85,9 +82,4 @@ object ActivityApi {
         }
     }
 
-    private fun toOriginalFromThumb(url: String?): String? {
-        if (url.isNullOrBlank()) return null
-        val m = thumbToOriginalRegex.find(url) ?: return null
-        return "${m.groupValues[1]}/${m.groupValues[2]}"
-    }
 }
