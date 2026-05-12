@@ -38,9 +38,7 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.feature.character.components.CharacterSelector
-import com.nekolaska.calabiyau.feature.character.components.CharacterSelectorOption
-import com.nekolaska.calabiyau.feature.character.components.rememberCharacterSelectorOptions
+
 import com.nekolaska.calabiyau.feature.wiki.bio.api.BioCardApi
 import com.nekolaska.calabiyau.feature.wiki.bio.api.BioDeckShareApi
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardPageData
@@ -99,7 +97,6 @@ fun BioCardScreen(
     var keyword by remember { mutableStateOf("") }
     var pcFaction by remember { mutableStateOf("全部阵营") }
     var pcCategory by remember { mutableStateOf("全部分类") }
-    var pcRole by remember { mutableStateOf<String?>(null) }
     var pcRarity by remember { mutableIntStateOf(0) }
     var mobileFaction by remember { mutableStateOf("全部阵营") }
     var mobileCategory by remember { mutableStateOf("全部分类") }
@@ -112,18 +109,15 @@ fun BioCardScreen(
     val data = state.data
     val pcFactions = remember(data.pcCards) { listOf("全部阵营") + data.pcCards.map { it.faction }.filter { it.isNotBlank() }.distinct() }
     val pcCategories = remember(data.pcCards) { listOf("全部分类") + data.pcCards.map { it.category }.filter { it.isNotBlank() }.distinct() }
-    val pcRoles = remember(data.pcCards) { data.pcCards.flatMap { it.roles }.filter { it.isNotBlank() }.distinct() }
-    val pcRoleOptions = rememberCharacterSelectorOptions(pcRoles)
     val mobileFactions = remember(data.mobileCards) { listOf("全部阵营") + data.mobileCards.map { it.faction }.filter { it.isNotBlank() }.distinct() }
     val mobileCategories = remember(data.mobileCards) { listOf("全部分类") + data.mobileCards.map { it.category }.filter { it.isNotBlank() }.distinct() }
     val deckFactions = remember(data.decks) { listOf("全部卡组") + data.decks.map { it.faction }.filter { it.isNotBlank() }.distinct() }
 
-    val filteredPc = remember(data.pcCards, keyword, pcFaction, pcCategory, pcRole, pcRarity) {
+    val filteredPc = remember(data.pcCards, keyword, pcFaction, pcCategory, pcRarity) {
         data.pcCards.filter {
             (keyword.isBlank() || it.name.contains(keyword, true) || it.roles.any { role -> role.contains(keyword, true) }) &&
                 (pcFaction == "全部阵营" || it.faction == pcFaction) &&
                 (pcCategory == "全部分类" || it.category == pcCategory) &&
-                (pcRole == null || it.roles.contains(pcRole)) &&
                 (pcRarity == 0 || it.rarity == pcRarity)
         }
     }
@@ -243,14 +237,11 @@ fun BioCardScreen(
                         BioCardTab.PC -> PcFilterBar(
                             factions = pcFactions,
                             categories = pcCategories,
-                            roleOptions = pcRoleOptions,
                             selectedFaction = pcFaction,
                             selectedCategory = pcCategory,
-                            selectedRole = pcRole,
                             selectedRarity = pcRarity,
                             onFactionChange = { pcFaction = it },
                             onCategoryChange = { pcCategory = it },
-                            onRoleChange = { pcRole = it },
                             onRarityChange = { pcRarity = it }
                         )
 
@@ -407,14 +398,11 @@ fun BioCardScreen(
 private fun PcFilterBar(
     factions: List<String>,
     categories: List<String>,
-    roleOptions: List<CharacterSelectorOption>,
     selectedFaction: String,
     selectedCategory: String,
-    selectedRole: String?,
     selectedRarity: Int,
     onFactionChange: (String) -> Unit,
     onCategoryChange: (String) -> Unit,
-    onRoleChange: (String?) -> Unit,
     onRarityChange: (Int) -> Unit
 ) {
     FilterCard {
@@ -422,13 +410,6 @@ private fun PcFilterBar(
             Box(Modifier.weight(1f)) { DropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
             Box(Modifier.weight(1f)) { DropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
         }
-        CharacterSelector(
-            options = roleOptions,
-            selectedName = selectedRole,
-            onSelectedNameChange = onRoleChange,
-            label = "适用角色",
-            allLabel = "全部角色"
-        )
         RarityChips(selectedRarity, onRarityChange)
     }
 }
