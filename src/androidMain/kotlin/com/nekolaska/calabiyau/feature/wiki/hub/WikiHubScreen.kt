@@ -7,9 +7,10 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -260,6 +261,16 @@ private val wikiRouteStackSaver = listSaver<List<WikiRoute>, String>(
     }
 )
 
+private val lazyListStateSaver = listSaver<LazyListState, Int>(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { values ->
+        LazyListState(
+            firstVisibleItemIndex = values.getOrNull(0) ?: 0,
+            firstVisibleItemScrollOffset = values.getOrNull(1) ?: 0
+        )
+    }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiHubScreen(
@@ -274,7 +285,8 @@ fun WikiHubScreen(
     }
     val currentRoute = backStack.lastOrNull() ?: WikiRoute.Home
 
-    val homeListState = rememberLazyListState()
+    val homeListState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
+    val homeTopAppBarState = rememberTopAppBarState()
 
     // 内部分页 Tab 状态继续保留，因为它们不随压栈出栈而丢失（或者让它们由各个页面自行接管）
     var homeFactionTab by rememberSaveable { mutableIntStateOf(0) }
@@ -349,6 +361,7 @@ fun WikiHubScreen(
                     onOpenDrawer = onOpenDrawer,
                     onOpenWikiUrl = onOpenWikiUrl,
                     listState = homeListState,
+                    topAppBarState = homeTopAppBarState,
                     onNavigateTo = { navigateTo(it.toRoute()) },
                     onOpenCharacterDetail = { name, portrait ->
                         navigateTo(WikiRoute.CharDetail(name, portrait))

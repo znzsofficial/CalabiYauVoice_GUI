@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.stringer.api
 
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.CardPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.parser.StringerPushCardParsers
 import com.nekolaska.calabiyau.feature.wiki.stringer.source.StringerRemoteSource
@@ -10,6 +11,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object StringerPushCardApi {
+
+    init {
+        MemoryCacheRegistry.register("StringerPushCardApi", ::clearMemoryCache)
+    }
 
     private const val PAGE_NAME = "战斗模式/超弦推进"
 

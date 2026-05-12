@@ -2,10 +2,17 @@ package com.nekolaska.calabiyau.feature.wiki.gallery.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import data.SharedJson
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import data.WikiResponse
+import data.filePrefixRegex
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withContext
 import java.net.URLEncoder
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 data class GalleryPageSourceResult(
     val html: String,
@@ -18,19 +25,13 @@ object GalleryRemoteSource {
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
     suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): GalleryPageSourceResult? {
-        val encoded = URLEncoder.encode(pageName, "UTF-8")
-        val url = "$API?action=parse&page=$encoded&prop=text&format=json"
-        val result = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.GALLERY,
-            key = "gallery_$pageName",
+        val result = WikiParseSource.fetchHtml(
+            pageName = pageName,
+            cacheType = OfflineCache.Type.GALLERY,
+            cacheKey = "gallery_$pageName",
             forceRefresh = forceRefresh
-        ) { WikiEngine.safeGet(url) } ?: return null
-
-        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
-        val html = root["parse"]?.jsonObject
-            ?.get("text")?.jsonObject
-            ?.get("*")?.jsonPrimitive?.content
-            ?: return null
+        ) ?: return null
+        val html = result.html ?: return null
         return GalleryPageSourceResult(
             html = html,
             isFromCache = result.isFromCache,
@@ -38,7 +39,43 @@ object GalleryRemoteSource {
         )
     }
 
-    suspend fun fetchImageUrls(fileNames: List<String>): Map<String, String> {
-        return WikiEngine.fetchImageUrls(fileNames)
+    suspend fun fetchImageUrls(
+        fileNames: List<String>,
+        forceRefresh: Boolean
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        val distinctNames = fileNames.filter { it.isNotBlank() }.distinct()
+        if (distinctNames.isEmpty()) return@withContext emptyMap()
+
+        val result = ConcurrentHashMap<String, String>()
+        distinctNames.chunked(50).map { chunk ->
+            async {
+                val titlesParam = chunk.joinToString("|") { URLEncoder.encode("文件:$it", "UTF-8") }
+                val url = "$API?action=query&titles=$titlesParam&prop=imageinfo&iiprop=url&format=json"
+                val cacheResult = OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.GALLERY,
+                    key = "gallery_image_urls_${chunk.stableHashKey()}",
+                    forceRefresh = forceRefresh
+                ) { WikiEngine.safeGet(url) } ?: return@async
+
+                try {
+                    val response = SharedJson.decodeFromString<WikiResponse>(cacheResult.payload)
+                    response.query?.pages?.values.orEmpty().forEach { page ->
+                        val imageUrl = page.imageinfo?.firstOrNull()?.url ?: return@forEach
+                        val name = page.title.replace(filePrefixRegex, "")
+                        result[name] = imageUrl
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }.awaitAll()
+
+        result
+    }
+
+    private fun List<String>.stableHashKey(): String {
+        val raw = sorted().joinToString("|")
+        return MessageDigest.getInstance("MD5")
+            .digest(raw.toByteArray())
+            .joinToString("") { "%02x".format(it) }
     }
 }

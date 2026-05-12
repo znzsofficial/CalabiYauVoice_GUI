@@ -1,10 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
-import com.nekolaska.calabiyau.core.wiki.WikiEngine
-import data.SharedJson
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import java.net.URLEncoder
 
 data class BioCardPageSourceResult(
@@ -15,7 +12,6 @@ data class BioCardPageSourceResult(
 
 object BioCardRemoteSource {
 
-    private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
 
     suspend fun fetchPageHtml(
@@ -23,18 +19,13 @@ object BioCardRemoteSource {
         cacheKey: String,
         forceRefresh: Boolean
     ): BioCardPageSourceResult? {
-        val encoded = URLEncoder.encode(pageName, "UTF-8")
-        val url = "$API?action=parse&page=$encoded&prop=text&format=json"
-        val result = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.BIO_CARDS,
-            key = cacheKey,
+        val result = WikiParseSource.fetchHtml(
+            pageName = pageName,
+            cacheType = OfflineCache.Type.BIO_CARDS,
+            cacheKey = cacheKey,
             forceRefresh = forceRefresh
-        ) { WikiEngine.safeGet(url) } ?: return null
-
-        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
-        val html = root["parse"]?.jsonObject?.get("text")
-            ?.jsonObject?.get("*")?.jsonPrimitive?.content
-            ?: return null
+        ) ?: return null
+        val html = result.html ?: return null
         return BioCardPageSourceResult(
             html = html,
             isFromCache = result.isFromCache,

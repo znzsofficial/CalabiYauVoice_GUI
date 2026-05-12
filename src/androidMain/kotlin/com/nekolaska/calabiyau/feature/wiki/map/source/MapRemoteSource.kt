@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.map.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -49,22 +50,14 @@ object MapRemoteSource {
     }
 
     suspend fun fetchMapDetailPayload(mapName: String, forceRefresh: Boolean): MapDetailSourceResult? {
-        val encoded = URLEncoder.encode(mapName, "UTF-8")
-        val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
-
-        val result = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.MAP_DETAIL,
-            key = mapName,
+        val result = WikiParseSource.fetchHtmlAndWikitext(
+            pageName = mapName,
+            cacheType = OfflineCache.Type.MAP_DETAIL,
+            cacheKey = mapName,
             forceRefresh = forceRefresh
-        ) { WikiEngine.safeGet(url) } ?: return null
-
-        val json = SharedJson.parseToJsonElement(result.payload).jsonObject
-        val parseObj = json["parse"]?.jsonObject ?: return null
-        val wikitext = parseObj["wikitext"]?.jsonObject?.get("*")
-            ?.jsonPrimitive?.content ?: return null
-        val html = parseObj["text"]?.jsonObject?.get("*")
-            ?.jsonPrimitive?.content
-            .orEmpty()
+        ) ?: return null
+        val wikitext = result.wikitext ?: return null
+        val html = result.html.orEmpty()
 
         return MapDetailSourceResult(
             wikitext = wikitext,

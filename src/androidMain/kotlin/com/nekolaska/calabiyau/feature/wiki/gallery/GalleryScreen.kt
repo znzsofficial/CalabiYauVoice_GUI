@@ -12,11 +12,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,8 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -38,8 +31,10 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
-import com.nekolaska.calabiyau.core.ui.ZoomableImage
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -87,14 +82,7 @@ fun GalleryScreen(
                 },
                 actions = {
                     if (state.data.isNotEmpty()) {
-                        FilledTonalIconButton(
-                            onClick = { state.reload(forceRefresh = true) },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        ) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                        }
+                        RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
                     }
                 }
             )
@@ -108,37 +96,14 @@ fun GalleryScreen(
             Column(Modifier.fillMaxSize()) {
                 // ── Section 切换 FilterChip ──
                 if (sections.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        sections.forEachIndexed { index, section ->
-                            FilterChip(
-                                selected = selectedSectionIndex == index,
-                                onClick = { selectedSectionIndex = index },
-                                shape = smoothCornerShape(12.dp),
-                                label = {
-                                    Text(
-                                        section.title,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        maxLines = 1
-                                    )
-                                },
-                                leadingIcon = if (selectedSectionIndex == index) {
-                                    {
-                                        Icon(
-                                            Icons.Outlined.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                        )
-                                    }
-                                } else null
-                            )
-                        }
-                    }
+                    HorizontalFilterChips(
+                        items = sections.indices.toList(),
+                        selected = selectedSectionIndex,
+                        label = { index -> sections[index].title },
+                        onSelected = { selectedSectionIndex = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        showCheckIcon = true
+                    )
                 }
 
                 // ── 图片网格 ──
@@ -179,66 +144,24 @@ fun GalleryScreen(
 
     // ── 全屏预览 Dialog（支持缩放 + 长按保存） ──
     previewImage?.let { image ->
-        Dialog(
-            onDismissRequest = { previewImage = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ImagePreviewDialog(
+            model = image.imageUrl,
+            contentDescription = image.caption,
+            onDismiss = { previewImage = null },
+            onSave = { saveTargetImage = image }
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.9f)),
-                contentAlignment = Alignment.Center
-            ) {
-                ZoomableImage(
-                    model = image.imageUrl,
-                    contentDescription = image.caption,
+            if (image.caption.isNotBlank()) {
+                Text(
+                    text = image.caption,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    onClick = { previewImage = null },
-                    onLongPress = { saveTargetImage = image }
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 )
-
-                // 关闭按钮
-                IconButton(
-                    onClick = { previewImage = null },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Outlined.Close, contentDescription = "关闭")
-                }
-
-                // 保存按钮
-                IconButton(
-                    onClick = { saveTargetImage = image },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Outlined.SaveAlt, contentDescription = "保存")
-                }
-
-                // 底部 caption
-                if (image.caption.isNotBlank()) {
-                    Text(
-                        text = image.caption,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.5f))
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
-                }
             }
         }
     }

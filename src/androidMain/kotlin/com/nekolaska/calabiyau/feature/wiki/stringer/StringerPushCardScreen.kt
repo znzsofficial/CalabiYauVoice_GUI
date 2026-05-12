@@ -17,26 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.FilterAlt
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -54,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
@@ -63,7 +50,11 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.QualityFilterChips
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.components.CharacterSelector
@@ -136,23 +127,8 @@ fun StringerPushCardScreen(
                 title = { Text("超弦推进卡牌 ${filteredCards.size}", fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = { state.reload(forceRefresh = true) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                    FilledTonalIconButton(
-                        onClick = { if (page.wikiUrl.isNotBlank()) onOpenWikiUrl(page.wikiUrl) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                        enabled = page.wikiUrl.isNotBlank()
-                    ) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "打开 Wiki")
-                    }
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    OpenWikiActionButton(wikiUrl = page.wikiUrl, onOpenWikiUrl = onOpenWikiUrl)
                 }
             )
         }
@@ -215,7 +191,7 @@ fun StringerPushCardScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Box(Modifier.weight(1f)) {
-                                    DropdownSelector(
+                                    SimpleDropdownSelector(
                                         label = "分类",
                                         options = categories,
                                         selected = category,
@@ -402,7 +378,7 @@ private fun EnumDropdownSelector(
     selected: PushCardSortOption,
     onSelected: (PushCardSortOption) -> Unit
 ) {
-    DropdownSelector(
+    SimpleDropdownSelector(
         label = label,
         options = options.map { it.label },
         selected = selected.label,
@@ -412,66 +388,14 @@ private fun EnumDropdownSelector(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DropdownSelector(
-    label: String,
-    options: List<String>,
-    selected: String,
-    onSelected: (String) -> Unit
-) {
-    var expanded by remember(options, selected) { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
-            shape = smoothCornerShape(16.dp)
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun RarityChips(selectedRarity: Int, onRarityChange: (Int) -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        listOf(0 to "全部品质", 2 to "精致", 3 to "卓越", 4 to "完美").forEach { (value, label) ->
-            FilterChip(
-                selected = selectedRarity == value,
-                onClick = { onRarityChange(value) },
-                label = { Text(label, textAlign = TextAlign.Center) },
-                leadingIcon = if (selectedRarity == value) {
-                    { Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                } else null,
-                shape = smoothCornerShape(12.dp),
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    labelColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    }
+    QualityFilterChips(
+        selectedLevel = selectedRarity.takeIf { it != 0 },
+        levels = listOf(2 to "精致", 3 to "卓越", 4 to "完美"),
+        onSelectedLevelChange = { onRarityChange(it ?: 0) },
+        colorForLevel = { level -> rarityColor(level) }
+    )
 }
 
 private fun rarityLabel(rarity: Int): String = when (rarity) {

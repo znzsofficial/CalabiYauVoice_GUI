@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.source
 
 import android.webkit.CookieManager
+import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
@@ -71,6 +72,18 @@ object BioDeckShareRemoteSource {
         } catch (_: Exception) {
             null
         }
+    }
+
+    suspend fun httpGetWithCache(
+        url: String,
+        cacheKey: String,
+        forceRefresh: Boolean
+    ): String? {
+        return OfflineCache.fetchWithCache(
+            type = OfflineCache.Type.BIO_CARDS,
+            key = cacheKey,
+            forceRefresh = forceRefresh
+        ) { httpGet(url) }?.payload
     }
 
     fun httpGetWithCookies(url: String, cookies: String): String? {

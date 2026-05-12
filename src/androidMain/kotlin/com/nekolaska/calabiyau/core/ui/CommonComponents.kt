@@ -2,9 +2,12 @@ package com.nekolaska.calabiyau.core.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -36,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import coil3.compose.AsyncImage
 import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CoroutineScope
@@ -120,6 +125,262 @@ fun SearchBar(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { onSearch() })
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SimpleDropdownSelector(
+    label: String,
+    options: List<String>,
+    selected: String,
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember(options, selected) { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selected,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
+            shape = smoothCornerShape(16.dp),
+            singleLine = true
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option) },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun <T> HorizontalFilterChips(
+    items: List<T>,
+    selected: T,
+    label: (T) -> String,
+    onSelected: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    showCheckIcon: Boolean = false
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items.forEach { item ->
+            val isSelected = item == selected
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSelected(item) },
+                shape = smoothCornerShape(12.dp),
+                label = { Text(label(item), maxLines = 1) },
+                leadingIcon = if (showCheckIcon && isSelected) {
+                    { Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                } else null
+            )
+        }
+    }
+}
+
+@Composable
+fun QualityFilterChips(
+    selectedLevel: Int?,
+    levels: List<Pair<Int, String>>,
+    onSelectedLevelChange: (Int?) -> Unit,
+    modifier: Modifier = Modifier,
+    allLabel: String = "全部品质",
+    colorForLevel: (@Composable (Int) -> Color)? = null
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedLevel == null,
+            onClick = { onSelectedLevelChange(null) },
+            shape = smoothCornerShape(12.dp),
+            label = { Text(allLabel, maxLines = 1) }
+        )
+        levels.forEach { (level, label) ->
+            FilterChip(
+                selected = selectedLevel == level,
+                onClick = { onSelectedLevelChange(if (selectedLevel == level) null else level) },
+                shape = smoothCornerShape(12.dp),
+                label = { Text(label, maxLines = 1) },
+                colors = colorForLevel?.let { color ->
+                    FilterChipDefaults.filterChipColors(selectedContainerColor = color(level).copy(alpha = 0.2f))
+                } ?: FilterChipDefaults.filterChipColors()
+            )
+        }
+    }
+}
+
+@Composable
+fun RefreshActionButton(
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        enabled = enabled,
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
+    }
+}
+
+@Composable
+fun OpenWikiActionButton(
+    wikiUrl: String,
+    onOpenWikiUrl: (String) -> Unit,
+    contentDescription: String = "打开 Wiki"
+) {
+    FilledTonalIconButton(
+        onClick = { if (wikiUrl.isNotBlank()) onOpenWikiUrl(wikiUrl) },
+        enabled = wikiUrl.isNotBlank(),
+        colors = IconButtonDefaults.filledTonalIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        )
+    ) {
+        Icon(Icons.Outlined.OpenInBrowser, contentDescription = contentDescription)
+    }
+}
+
+@Composable
+fun WikiIconBox(
+    imageUrl: String?,
+    fallbackIcon: ImageVector,
+    modifier: Modifier = Modifier,
+    size: Dp = 56.dp,
+    shape: Shape = smoothCornerShape(16.dp),
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    contentScale: ContentScale = ContentScale.Fit,
+    imagePadding: Dp = 6.dp,
+    contentDescription: String? = null
+) {
+    Surface(shape = shape, color = containerColor, modifier = modifier.size(size)) {
+        Box(contentAlignment = Alignment.Center) {
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = contentDescription,
+                    contentScale = contentScale,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(imagePadding)
+                )
+            } else {
+                Icon(
+                    fallbackIcon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(size * 0.48f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailInfoRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    imageUrl: String? = null,
+    fallbackImageUrl: String? = null,
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    labelWidth: Dp? = null
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        if (icon != null || imageUrl != null || fallbackImageUrl != null) {
+            WikiIconBox(
+                imageUrl = imageUrl ?: fallbackImageUrl,
+                fallbackIcon = icon ?: Icons.Outlined.Info,
+                size = 36.dp,
+                shape = CircleShape,
+                imagePadding = 6.dp
+            )
+            Spacer(Modifier.width(12.dp))
+        }
+        Text(
+            label,
+            modifier = labelWidth?.let { Modifier.width(it) } ?: Modifier.width(96.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            value,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = valueColor
+        )
+    }
+}
+
+@Composable
+fun ImagePreviewDialog(
+    model: Any?,
+    contentDescription: String?,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+    modifier: Modifier = Modifier,
+    bottomContent: (@Composable BoxScope.() -> Unit)? = null
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.9f)),
+            contentAlignment = Alignment.Center
+        ) {
+            ZoomableImage(
+                model = model,
+                contentDescription = contentDescription,
+                modifier = modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                onClick = onDismiss,
+                onLongPress = onSave
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+            ) { Icon(Icons.Outlined.Close, contentDescription = "关闭") }
+            IconButton(
+                onClick = onSave,
+                modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
+                colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+            ) { Icon(Icons.Outlined.SaveAlt, contentDescription = "保存") }
+            bottomContent?.invoke(this)
+        }
+    }
 }
 
 @Composable

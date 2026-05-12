@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.oath
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,22 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.OpenInBrowser
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Stars
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -49,15 +41,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.DetailInfoRow
+import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.WikiIconBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.oath.api.OathApi
@@ -142,23 +137,8 @@ fun OathScreen(
                 title = { Text("誓约", fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = { state.reload(forceRefresh = true) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                    FilledTonalIconButton(
-                        onClick = { page.wikiUrl.takeIf { it.isNotBlank() }?.let(onOpenWikiUrl) },
-                        enabled = page.wikiUrl.isNotBlank(),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "打开 Wiki")
-                    }
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    OpenWikiActionButton(wikiUrl = page.wikiUrl, onOpenWikiUrl = onOpenWikiUrl)
                 }
             )
         }
@@ -279,8 +259,8 @@ private fun OathLevelCard(level: OathLevel) {
                 Spacer(Modifier.width(12.dp))
                 Text(level.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            InfoRow("升级所需好感度", level.requiredFavor)
-            InfoRow("累计所需好感度", level.totalFavor)
+            DetailInfoRow("升级所需好感度", level.requiredFavor, labelWidth = 116.dp)
+            DetailInfoRow("累计所需好感度", level.totalFavor, labelWidth = 116.dp)
         }
     }
 }
@@ -289,7 +269,7 @@ private fun OathLevelCard(level: OathLevel) {
 private fun BirthdayGiftCard(gift: OathBirthdayGift) {
     InfoCard(title = gift.name, subtitle = gift.character, icon = Icons.Outlined.CardGiftcard, imageUrl = gift.imageUrl) {
         Text(gift.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        InfoRow("效果", gift.effect)
+        DetailInfoRow("效果", gift.effect, labelWidth = 116.dp)
     }
 }
 
@@ -334,7 +314,7 @@ private fun BondSectionCard(section: OathBondSection) {
 @Composable
 private fun BondItemView(item: OathBondItem) {
     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        OathIcon(imageUrl = item.imageUrl, fallbackIcon = Icons.Outlined.Stars, size = 52)
+        WikiIconBox(imageUrl = item.imageUrl, fallbackIcon = Icons.Outlined.Stars, size = 52.dp)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(item.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -353,7 +333,7 @@ private fun InfoCard(
     Card(shape = smoothCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OathIcon(imageUrl = imageUrl, fallbackIcon = icon, size = 56)
+                WikiIconBox(imageUrl = imageUrl, fallbackIcon = icon, size = 56.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -362,47 +342,6 @@ private fun InfoCard(
             }
             content()
         }
-    }
-}
-
-@Composable
-private fun OathIcon(
-    imageUrl: String?,
-    fallbackIcon: ImageVector,
-    size: Int
-) {
-    Surface(
-        shape = smoothCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        modifier = Modifier.size(size.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (!imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(6.dp)
-                )
-            } else {
-                Icon(
-                    fallbackIcon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size((size * 0.48f).dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(verticalAlignment = Alignment.Top) {
-        Text(label, modifier = Modifier.width(116.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-        Text(value, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -416,20 +355,22 @@ private fun SectionTitle(title: String, count: Int) {
 
 @Composable
 private fun CharacterChips(characters: List<String>, selectedCharacter: String, onSelectedCharacterChange: (String) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        characters.forEach { character ->
-            FilterChip(selected = selectedCharacter == character, onClick = { onSelectedCharacterChange(character) }, label = { Text(character, maxLines = 1) }, shape = smoothCornerShape(12.dp))
-        }
-    }
+    HorizontalFilterChips(
+        items = characters,
+        selected = selectedCharacter,
+        label = { it },
+        onSelected = onSelectedCharacterChange
+    )
 }
 
 @Composable
 private fun GiftSourceChips(sources: List<String>, selectedSource: String, onSelectedSourceChange: (String) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        sources.forEach { source ->
-            FilterChip(selected = selectedSource == source, onClick = { onSelectedSourceChange(source) }, label = { Text(source, maxLines = 1) }, shape = smoothCornerShape(12.dp))
-        }
-    }
+    HorizontalFilterChips(
+        items = sources,
+        selected = selectedSource,
+        label = { it },
+        onSelected = onSelectedSourceChange
+    )
 }
 
 @Composable

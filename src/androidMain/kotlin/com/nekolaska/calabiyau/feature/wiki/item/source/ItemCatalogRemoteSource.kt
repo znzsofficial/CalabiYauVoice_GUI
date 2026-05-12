@@ -1,7 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.item.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
-import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -15,17 +15,21 @@ data class ItemCatalogSourceResult(
 object ItemCatalogRemoteSource {
 
     private const val PAGE_NAME = "功能道具筛选表"
-    private const val API_URL = "https://wiki.biligame.com/klbq/api.php?action=parse&page=$PAGE_NAME&prop=text&format=json"
     private const val CACHE_KEY = "item_catalog"
 
     suspend fun fetchItems(forceRefresh: Boolean = false): ItemCatalogSourceResult? {
-        val result = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.ITEMS,
-            key = CACHE_KEY,
+        val result = WikiParseSource.fetchHtml(
+            pageName = PAGE_NAME,
+            cacheType = OfflineCache.Type.ITEMS,
+            cacheKey = CACHE_KEY,
             forceRefresh = forceRefresh
-        ) { WikiEngine.safeGet(API_URL) } ?: return null
-
-        return extractResult(result.payload, result.isFromCache, result.ageMs)
+        ) ?: return null
+        val html = result.html ?: return null
+        return ItemCatalogSourceResult(
+            html = html,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
     }
 
     suspend fun loadFromCache(): ItemCatalogSourceResult? {
