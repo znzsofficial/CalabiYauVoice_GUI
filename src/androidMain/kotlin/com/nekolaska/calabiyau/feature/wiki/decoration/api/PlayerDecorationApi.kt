@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration.api
 
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
-import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
 import com.nekolaska.calabiyau.feature.wiki.decoration.parser.PlayerDecorationParsers
 import com.nekolaska.calabiyau.feature.wiki.decoration.source.PlayerDecorationRemoteSource
@@ -130,9 +129,9 @@ object PlayerDecorationApi {
                 )
             }
 
-            val moduleDataMap = fetchModuleData(pageName)
+            val moduleDataMap = fetchModuleData(pageName, forceRefresh)
             val fileNames = PlayerDecorationParsers.extractFileNames(rawSections)
-            val urlMap = WikiEngine.fetchImageUrls(fileNames.toList())
+            val urlMap = PlayerDecorationRemoteSource.fetchImageUrls(fileNames.toList(), forceRefresh)
 
             val sections = PlayerDecorationParsers.mapSections(
                 rawSections = rawSections,
@@ -155,11 +154,14 @@ object PlayerDecorationApi {
         }
     }
 
-    private fun fetchModuleData(pageName: String): Map<Int, PlayerDecorationParsers.DecorationModuleData> {
+    private suspend fun fetchModuleData(
+        pageName: String,
+        forceRefresh: Boolean
+    ): Map<Int, PlayerDecorationParsers.DecorationModuleData> {
         val config = moduleConfigByPage[pageName]?.takeIf { it.enabled } ?: return emptyMap()
 
         return try {
-            val wikitext = PlayerDecorationRemoteSource.fetchModuleWikitext(config.modulePage)
+            val wikitext = PlayerDecorationRemoteSource.fetchModuleWikitext(config.modulePage, forceRefresh)
                 ?: return emptyMap()
             PlayerDecorationParsers.parseModuleData(wikitext)
         } catch (_: Exception) {

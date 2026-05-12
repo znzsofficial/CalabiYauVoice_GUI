@@ -76,6 +76,7 @@ internal fun WikiHomePage(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     listState: LazyListState,
+    topAppBarState: TopAppBarState,
     onNavigateTo: (WikiHubPage) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
@@ -88,7 +89,7 @@ internal fun WikiHomePage(
     selectedHomeMapMode: Int,
     onHomeMapModeChanged: (Int) -> Unit
 ) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
 
     // ── 壁纸背景（液态玻璃和普通模式均可显示） ──

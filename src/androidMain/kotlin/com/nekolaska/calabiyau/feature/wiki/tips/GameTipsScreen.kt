@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.FormatQuote
 import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,6 +52,8 @@ import androidx.compose.ui.unit.sp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -80,23 +81,9 @@ fun GameTipsScreen(
                 title = { Text("游戏Tips", fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = { state.reload(forceRefresh = true) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
                     Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(
-                        onClick = { onOpenWikiUrl(GAME_TIPS_PAGE_URL) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
+                    OpenWikiActionButton(wikiUrl = GAME_TIPS_PAGE_URL, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                     Spacer(Modifier.width(8.dp))
                 },
                 scrollBehavior = scrollBehavior

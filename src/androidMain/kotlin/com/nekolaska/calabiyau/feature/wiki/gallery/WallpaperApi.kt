@@ -1,12 +1,16 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery
 
+import com.nekolaska.calabiyau.CalabiYauApplication
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
+import java.security.MessageDigest
 import java.net.URLEncoder
 
 /**
@@ -20,6 +24,8 @@ object WallpaperApi {
     }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
+    private const val CACHE_DIR = "offline_cache/gallery"
+    private const val WALLPAPER_FILE_LIST_KEY = "wallpaper_file_names"
 
     /** 缓存壁纸文件名列表，避免每次启动都请求 */
     @Volatile
@@ -56,15 +62,15 @@ object WallpaperApi {
             }
             if (fileNames.isEmpty()) return null
             val randomFile = fileNames.random()
-            val url = fetchImageUrl(randomFile)
+            val url = fetchImageUrl(randomFile, forceRefresh)
             // 持久化到 AppPrefs
             if (url != null) {
                 AppPrefs.wallpaperUrl = url
                 hasRefreshedThisSession = true
             }
-            url
+            url ?: AppPrefs.wallpaperUrl
         } catch (_: Exception) {
-            null
+            AppPrefs.wallpaperUrl
         }
     }
 
@@ -73,8 +79,11 @@ object WallpaperApi {
      * 匹配 [[文件:壁纸-xxx.jpg]] 和 <gallery> 中的 文件:壁纸-xxx.jpg 格式。
      */
     private fun fetchWallpaperFileNames(): List<String> {
+        val cacheFile = cacheFile(WALLPAPER_FILE_LIST_KEY)
         val url = "$API?action=parse&page=${URLEncoder.encode("壁纸", "UTF-8")}&prop=wikitext&format=json"
-        val body = WikiEngine.safeGet(url) ?: return emptyList()
+        val body = WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
+            ?: cacheFile?.readTextSafely()
+            ?: return emptyList()
         val json = SharedJson.parseToJsonElement(body).jsonObject
         val wikitext = json["parse"]?.jsonObject
             ?.get("wikitext")?.jsonObject
@@ -105,17 +114,49 @@ object WallpaperApi {
         return fileNames.toList()
     }
 
-    private fun fetchImageUrl(fileName: String): String? {
+    private fun fetchImageUrl(fileName: String, forceRefresh: Boolean): String? {
         return try {
+            val cacheFile = cacheFile("wallpaper_image_url_$fileName")
             val fileTitle = URLEncoder.encode("文件:$fileName", "UTF-8")
             val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
-            val body = WikiEngine.safeGet(url) ?: return null
+            val body = if (forceRefresh) {
+                WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
+            } else {
+                cacheFile?.readTextSafely()
+                    ?: WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
+            } ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
                 ?.let { it as? JsonArray }
                 ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
         } catch (_: Exception) { null }
+    }
+
+    private fun cacheFile(key: String): File? {
+        val context = CalabiYauApplication.instanceOrNull ?: return null
+        val dir = File(context.cacheDir, CACHE_DIR).apply { mkdirs() }
+        val hash = MessageDigest.getInstance("MD5")
+            .digest(key.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(dir, "$hash.json")
+    }
+
+    private fun File.readTextSafely(): String? {
+        return try {
+            if (!exists()) return null
+            readText()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun File.writeTextSafely(value: String) {
+        try {
+            parentFile?.mkdirs()
+            writeText(value)
+        } catch (_: Exception) {
+        }
     }
 
 }

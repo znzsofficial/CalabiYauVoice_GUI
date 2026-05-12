@@ -58,7 +58,11 @@ object BioDeckShareApi {
                     "format" to "json"
                 )
 
-                val body = BioDeckShareRemoteSource.httpGet(url)
+                val body = BioDeckShareRemoteSource.httpGetWithCache(
+                    url = url,
+                    cacheKey = "bio_deck_card_map",
+                    forceRefresh = forceRefresh
+                )
                     ?: return@withContext ApiResult.Error("请求卡牌数据失败", kind = ErrorKind.NETWORK)
 
                 val root = SharedJson.parseToJsonElement(body).jsonObject

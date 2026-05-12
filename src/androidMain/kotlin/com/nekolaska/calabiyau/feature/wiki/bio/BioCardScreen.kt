@@ -33,7 +33,9 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -407,8 +409,8 @@ private fun PcFilterBar(
 ) {
     FilterCard {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) { DropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
-            Box(Modifier.weight(1f)) { DropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
+            Box(Modifier.weight(1f)) { SimpleDropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
+            Box(Modifier.weight(1f)) { SimpleDropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
         }
         RarityChips(selectedRarity, onRarityChange)
     }
@@ -428,8 +430,8 @@ private fun MobileFilterBar(
 ) {
     FilterCard {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) { DropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
-            Box(Modifier.weight(1f)) { DropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
+            Box(Modifier.weight(1f)) { SimpleDropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
+            Box(Modifier.weight(1f)) { SimpleDropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
         }
         RarityChips(selectedRarity, onRarityChange)
     }
@@ -442,7 +444,7 @@ private fun DeckFilterBar(
     onFactionChange: (String) -> Unit
 ) {
     FilterCard {
-        DropdownSelector("卡组", factions, selectedFaction, onFactionChange)
+        SimpleDropdownSelector("卡组", factions, selectedFaction, onFactionChange)
     }
 }
 
@@ -468,76 +470,15 @@ private fun FilterCard(content: @Composable () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DropdownSelector(
-    label: String,
-    options: List<String>,
-    selected: String,
-    onSelected: (String) -> Unit
-) {
-    var expanded by remember(options, selected) { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            value = selected,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(
-                    type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                    enabled = true
-                ),
-            shape = smoothCornerShape(16.dp)
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onSelected(option)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RarityChips(selectedRarity: Int, onRarityChange: (Int) -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        listOf(0 to "全部品质", 2 to "精致", 3 to "卓越", 4 to "完美").forEach { (value, label) ->
-            FilterChip(
-                selected = selectedRarity == value,
-                onClick = { onRarityChange(value) },
-                label = { Text(label) },
-                leadingIcon = if (selectedRarity == value) {
-                    { Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                } else null,
-                shape = smoothCornerShape(12.dp),
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    labelColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    }
+    QualityFilterChips(
+        selectedLevel = selectedRarity.takeIf { it != 0 },
+        levels = listOf(2 to "精致", 3 to "卓越", 4 to "完美"),
+        onSelectedLevelChange = { onRarityChange(it ?: 0) },
+        colorForLevel = ::rarityColor
+    )
 }
 
 @Composable
@@ -743,7 +684,7 @@ private fun DeckShareComposerCard(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    DropdownSelector(
+                    SimpleDropdownSelector(
                         label = "阵营",
                         options = factionOptions.ifEmpty { listOf("") },
                         selected = selectedFaction,

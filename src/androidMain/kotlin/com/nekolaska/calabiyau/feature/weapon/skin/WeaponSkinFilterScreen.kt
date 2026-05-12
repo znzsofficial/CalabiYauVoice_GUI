@@ -38,6 +38,7 @@ import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.WeaponSkinInfo
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
@@ -322,34 +323,12 @@ private fun WeaponSkinFilterBar(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = selectedQuality == null,
-                onClick = { onQualitySelected(null) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("全部品质", maxLines = 1) }
-            )
-            Quality.entries
-                .sortedByDescending { it.level }
-                .forEach { quality ->
-                FilterChip(
-                    selected = selectedQuality == quality,
-                    onClick = {
-                        onQualitySelected(if (selectedQuality == quality) null else quality)
-                    },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text(quality.displayName, maxLines = 1) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = skinQualityColor(quality).copy(alpha = 0.2f)
-                    )
-                )
-            }
-        }
+        QualityFilterChips(
+            selectedLevel = selectedQuality?.level,
+            levels = Quality.entries.sortedByDescending { it.level }.map { it.level to it.displayName },
+            onSelectedLevelChange = { level -> onQualitySelected(level?.let(Quality::fromLevel)) },
+            colorForLevel = { level -> Quality.fromLevel(level)?.let { skinQualityColor(it) } ?: MaterialTheme.colorScheme.primary }
+        )
     }
 }
 

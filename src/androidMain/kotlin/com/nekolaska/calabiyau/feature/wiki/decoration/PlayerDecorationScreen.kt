@@ -24,8 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -33,8 +31,10 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
-import com.nekolaska.calabiyau.core.ui.ZoomableImage
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -96,14 +96,7 @@ fun PlayerDecorationScreen(
                 },
                 actions = {
                     if (sections.isNotEmpty()) {
-                        FilledTonalIconButton(
-                            onClick = { state.reload(forceRefresh = true) },
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        ) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                        }
+                        RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
                     }
                 }
             )
@@ -117,36 +110,14 @@ fun PlayerDecorationScreen(
             Column(Modifier.fillMaxSize()) {
                 // Section 切换
                 if (sections.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        sections.forEachIndexed { index, section ->
-                            FilterChip(
-                                selected = selectedSectionIndex == index,
-                                onClick = { selectedSectionIndex = index },
-                                shape = smoothCornerShape(12.dp),
-                                label = {
-                                    Text(
-                                        section.title,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        maxLines = 1
-                                    )
-                                },
-                                leadingIcon = if (selectedSectionIndex == index) {
-                                    {
-                                        Icon(
-                                            Icons.Outlined.Check, null,
-                                            modifier = Modifier.size(FilterChipDefaults.IconSize)
-                                        )
-                                    }
-                                } else null
-                            )
-                        }
-                    }
+                    HorizontalFilterChips(
+                        items = sections.indices.toList(),
+                        selected = selectedSectionIndex,
+                        label = { index -> sections[index].title },
+                        onSelected = { selectedSectionIndex = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        showCheckIcon = true
+                    )
                 }
 
                 // 网格
@@ -177,40 +148,20 @@ fun PlayerDecorationScreen(
 
     // ── 全屏预览 ──
     previewItem?.let { item ->
-        Dialog(
-            onDismissRequest = { previewItem = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ImagePreviewDialog(
+            model = item.imageUrl.ifEmpty { item.iconUrl },
+            contentDescription = item.name,
+            onDismiss = { previewItem = null },
+            onSave = { saveTargetItem = item }
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                ZoomableImage(
-                    model = item.imageUrl.ifEmpty { item.iconUrl },
-                    contentDescription = item.name,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    onClick = { previewItem = null },
-                    onLongPress = { saveTargetItem = item }
-                )
-                IconButton(
-                    onClick = { previewItem = null },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
-                ) { Icon(Icons.Outlined.Close, contentDescription = "关闭") }
-                IconButton(
-                    onClick = { saveTargetItem = item },
-                    modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
-                ) { Icon(Icons.Outlined.SaveAlt, contentDescription = "保存") }
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -305,7 +256,6 @@ fun PlayerDecorationScreen(
                             }
                         }
                     }
-                }
             }
         }
     }

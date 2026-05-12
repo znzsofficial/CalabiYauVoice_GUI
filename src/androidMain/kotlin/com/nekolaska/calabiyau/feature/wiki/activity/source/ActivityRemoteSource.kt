@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.activity.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import data.SharedJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -20,17 +21,13 @@ object ActivityRemoteSource {
     private const val PAGE_NAME = "活动"
 
     suspend fun fetchActivitiesPage(forceRefresh: Boolean): ActivityPageSourceResult? {
-        val encoded = URLEncoder.encode(PAGE_NAME, "UTF-8")
-        val url = "$API?action=parse&page=$encoded&prop=text&format=json"
-        val result = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.ACTIVITIES,
-            key = "activities",
+        val result = WikiParseSource.fetchHtml(
+            pageName = PAGE_NAME,
+            cacheType = OfflineCache.Type.ACTIVITIES,
+            cacheKey = "activities",
             forceRefresh = forceRefresh
-        ) { WikiEngine.safeGet(url) } ?: return null
-
-        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
-        val html = root["parse"]?.jsonObject?.get("text")
-            ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return null
+        ) ?: return null
+        val html = result.html ?: return null
 
         return ActivityPageSourceResult(
             html = html,
