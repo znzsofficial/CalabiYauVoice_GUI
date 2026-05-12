@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.core.cache
 import android.content.Context
 import com.nekolaska.calabiyau.CrashContextStore
 import com.nekolaska.calabiyau.core.network.NetworkMonitor
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -103,11 +104,12 @@ object OfflineCache {
         val file = cacheFile(type, key, createDir = false)
         if (!file.exists()) return@withContext null
         val age = System.currentTimeMillis() - file.lastModified()
+        val expired = !AppPrefs.offlineCacheNeverExpire && age > type.maxAgeMs
         try {
             CacheEntry(
                 content = file.readText(),
                 ageMs = age,
-                expired = age > type.maxAgeMs
+                expired = expired
             )
         } catch (_: Exception) {
             null
@@ -178,6 +180,7 @@ object OfflineCache {
      * 建议在 App 启动时异步调用一次。
      */
     suspend fun pruneExpired() = withContext(Dispatchers.IO) {
+        if (AppPrefs.offlineCacheNeverExpire) return@withContext
         if (!::cacheDir.isInitialized) return@withContext
         val now = System.currentTimeMillis()
         cacheDir.walkTopDown().filter { it.isFile }.forEach { file ->
