@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.character.costume
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -25,15 +26,6 @@ object CostumeFilterApi {
 
     init {
         MemoryCacheRegistry.register("CostumeFilterApi", ::clearMemoryCache)
-    }
-
-    private fun resolveOriginalImageUrl(imageUrl: String?): String? {
-        if (imageUrl.isNullOrBlank()) return null
-        return if ("/thumb/" in imageUrl) {
-            imageUrl.replace("/thumb/", "/").substringBeforeLast("/")
-        } else {
-            imageUrl
-        }
     }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
@@ -184,7 +176,7 @@ object CostumeFilterApi {
         val hiddenLargeImage = document.select("span[style*=display:none] img").firstOrNull()
 
         val thumbnailUrl = previewImage?.attr("src")
-        val fullImageUrl = resolveOriginalImageUrl(
+        val fullImageUrl = WikiImageUrls.originalFromThumbnail(
             previewImage?.attr("srcset")
                 ?.split(',')
                 ?.lastOrNull()
@@ -194,7 +186,7 @@ object CostumeFilterApi {
                 ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
         )
 
-        val screenshotUrl = resolveOriginalImageUrl(
+        val screenshotUrl = WikiImageUrls.originalFromThumbnail(
             hiddenLargeImage?.attr("srcset")
                 ?.split(',')
                 ?.lastOrNull()
