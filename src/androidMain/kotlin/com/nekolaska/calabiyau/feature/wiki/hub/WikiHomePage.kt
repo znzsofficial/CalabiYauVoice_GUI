@@ -505,6 +505,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("items", "道具", Icons.Outlined.Inventory2, WikiHubPage.ITEMS),
     QuickEntry("voting", "投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
     QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
+    QuickEntry("weapon_skins", "武皮", Icons.Outlined.Palette, WikiHubPage.WEAPON_SKINS),
     QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
     QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
     QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
@@ -514,7 +515,8 @@ internal val allQuickEntries = listOf(
     QuickEntry("collaborations", "联动", Icons.Outlined.Handshake, WikiHubPage.COLLABORATIONS),
     QuickEntry("bgm", "BGM", Icons.Outlined.MusicNote, WikiHubPage.BGM),
     QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiHubPage.BALANCE_DATA),
-    QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAME_MODES),
+    QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAMEPLAY_HUB),
+    QuickEntry("decorations", "装饰", Icons.Outlined.Palette, WikiHubPage.DECORATION_HUB),
     QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiHubPage.WALLPAPERS),
     QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
 )
