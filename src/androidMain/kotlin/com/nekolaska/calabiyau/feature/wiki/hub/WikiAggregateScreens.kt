@@ -15,10 +15,19 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Checkroom
+import androidx.compose.material.icons.outlined.EmojiEmotions
+import androidx.compose.material.icons.outlined.HowToVote
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.MilitaryTech
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -137,6 +146,163 @@ internal fun WikiGameplayHubScreen(
                         "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) },
                         "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) }
                     ),
+                    backdrop = backdrop
+                )
+            }
+            item { Spacer(Modifier.height(4.dp)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun WikiCatalogHubScreen(
+    onBack: () -> Unit,
+    onNavigateTo: (WikiHubPage) -> Unit
+) {
+    AggregatePageScaffold(title = "外观与图鉴", onBack = onBack) { innerPadding, backdrop ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = innerPadding.calculateTopPadding() + 10.dp,
+                end = 16.dp,
+                bottom = 24.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                ActionCard(
+                    title = "道具图鉴",
+                    subtitle = "浏览功能道具、货币与礼盒礼包",
+                    icon = Icons.Outlined.Inventory2,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.ITEMS) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "时装筛选",
+                    subtitle = "浏览全部角色时装与外观",
+                    icon = Icons.Outlined.Checkroom,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.COSTUMES) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "武器外观",
+                    subtitle = "浏览全部武器外观与皮肤",
+                    icon = Icons.Outlined.Palette,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.WEAPON_SKINS) },
+                    backdrop = backdrop
+                )
+            }
+            item { Spacer(Modifier.height(4.dp)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun WikiExtensionHubScreen(
+    onBack: () -> Unit,
+    onNavigateTo: (WikiHubPage) -> Unit,
+    onOpenWikiUrl: (String) -> Unit
+) {
+    AggregatePageScaffold(title = "游戏延伸", onBack = onBack) { innerPadding, backdrop ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                top = innerPadding.calculateTopPadding() + 10.dp,
+                end = 16.dp,
+                bottom = 24.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                ActionCard(
+                    title = "投票",
+                    subtitle = "查看并参与当前 Wiki 投票",
+                    icon = Icons.Outlined.HowToVote,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.VOTING) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ContentBlockCard(
+                    title = "资料与世界观",
+                    icon = Icons.Outlined.MoreHoriz,
+                    items = listOf(
+                        "剧情故事" to "剧情故事",
+                        "游戏历史" to "游戏历史",
+                        "四格漫画" to "官方四格漫画",
+                        "联动" to "联动",
+                        "梗百科" to "梗百科",
+                        "游戏Tips" to "游戏Tips"
+                    ),
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "剧情故事" to { onNavigateTo(WikiHubPage.STORY) },
+                        "游戏历史" to { onNavigateTo(WikiHubPage.GAME_HISTORY) },
+                        "四格漫画" to { onNavigateTo(WikiHubPage.COMICS) },
+                        "联动" to { onNavigateTo(WikiHubPage.COLLABORATIONS) },
+                        "梗百科" to { onNavigateTo(WikiHubPage.MEMES) },
+                        "游戏Tips" to { onNavigateTo(WikiHubPage.GAME_TIPS) }
+                    ),
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "壁纸",
+                    subtitle = "浏览官方壁纸与视觉图",
+                    icon = Icons.Outlined.Wallpaper,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.WALLPAPERS) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "表情包",
+                    subtitle = "查看官方表情包资源",
+                    icon = Icons.Outlined.EmojiEmotions,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.STICKERS) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "喵言喵语",
+                    subtitle = "查看喵言喵语词条内容",
+                    icon = Icons.Outlined.Pets,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.MEOW_LANGUAGE) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "BGM",
+                    subtitle = "浏览原声音乐、专辑与场景曲目",
+                    icon = Icons.Outlined.MusicNote,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.BGM) },
                     backdrop = backdrop
                 )
             }

@@ -58,7 +58,7 @@ enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, ITEMS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
     STORY, GAME_HISTORY, MEMES, COLLABORATIONS, BGM,
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS, OATH, IMPRINTS, GAMEPLAY_HUB, DECORATION_HUB
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS, OATH, IMPRINTS, GAMEPLAY_HUB, DECORATION_HUB, CATALOG_HUB, EXTENSION_HUB
 }
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
@@ -107,6 +107,8 @@ sealed interface WikiRoute {
     data object Imprints : WikiRoute
     data object GameplayHub : WikiRoute
     data object DecorationHub : WikiRoute
+    data object CatalogHub : WikiRoute
+    data object ExtensionHub : WikiRoute
 }
 
 private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
@@ -149,6 +151,8 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.IMPRINTS -> WikiRoute.Imprints
     WikiHubPage.GAMEPLAY_HUB -> WikiRoute.GameplayHub
     WikiHubPage.DECORATION_HUB -> WikiRoute.DecorationHub
+    WikiHubPage.CATALOG_HUB -> WikiRoute.CatalogHub
+    WikiHubPage.EXTENSION_HUB -> WikiRoute.ExtensionHub
     // 以下带参数页面由于是从 WikiHomePage 跳转而来，按理说不会直接触发（通常走具名参数跳转），给出默认保底
     WikiHubPage.COSTUMES -> WikiRoute.Costumes(null)
     WikiHubPage.WEAPON_SKINS -> WikiRoute.WeaponSkins(null)
@@ -218,6 +222,8 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Imprints -> "imprints"
     WikiRoute.GameplayHub -> "gameplayHub"
     WikiRoute.DecorationHub -> "decorationHub"
+    WikiRoute.CatalogHub -> "catalogHub"
+    WikiRoute.ExtensionHub -> "extensionHub"
 }
 
 private fun decodeRoute(encoded: String): WikiRoute? {
@@ -278,6 +284,8 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "imprints" -> WikiRoute.Imprints
         "gameplayHub" -> WikiRoute.GameplayHub
         "decorationHub" -> WikiRoute.DecorationHub
+        "catalogHub" -> WikiRoute.CatalogHub
+        "extensionHub" -> WikiRoute.ExtensionHub
         else -> null
     }
 }
@@ -739,6 +747,21 @@ fun WikiHubScreen(
 
             is WikiRoute.DecorationHub -> {
                 WikiDecorationHubScreen(
+                    onBack = { popBackStack() },
+                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.CatalogHub -> {
+                WikiCatalogHubScreen(
+                    onBack = { popBackStack() },
+                    onNavigateTo = { navigateTo(it.toRoute()) }
+                )
+            }
+
+            is WikiRoute.ExtensionHub -> {
+                WikiExtensionHubScreen(
                     onBack = { popBackStack() },
                     onNavigateTo = { navigateTo(it.toRoute()) },
                     onOpenWikiUrl = onOpenWikiUrl
