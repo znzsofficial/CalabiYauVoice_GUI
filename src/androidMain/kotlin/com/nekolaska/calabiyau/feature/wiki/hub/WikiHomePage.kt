@@ -102,7 +102,7 @@ internal fun WikiHomePage(
         val needRefresh = when {
             currentCachedUrl.isNullOrBlank() -> true              // 无缓存，必须获取
             AppPrefs.wallpaperAutoRefresh
-                && !WallpaperApi.hasRefreshedThisSession -> true  // 启动后首次自动刷新
+                    && !WallpaperApi.hasRefreshedThisSession -> true  // 启动后首次自动刷新
             else -> false                                        // 已刷新过或仅手动模式
         }
         if (needRefresh) {
@@ -249,237 +249,173 @@ internal fun WikiHomePage(
             containerColor = Color.Transparent
         ) { innerPadding ->
             CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-            // ── 快捷入口 ──
-            item(key = "quick_access", contentType = "grid") {
-                QuickAccessGrid(
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    onNavigateTo = onNavigateTo,
-                    backdrop = backdrop
-                )
-            }
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // ── 快捷入口 ──
+                    item(key = "quick_access", contentType = "grid") {
+                        QuickAccessGrid(
+                            onOpenWikiUrl = onOpenWikiUrl,
+                            onNavigateTo = onNavigateTo,
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 超弦体 & 晶源体 ──
-            item(key = "characters", contentType = "preview_section") {
-                CharacterPreviewSection(
-                    factions = factions,
-                    isLoading = isLoadingCharacters,
-                    selectedFaction = selectedHomeFaction,
-                    onSelectedFactionChanged = onHomeFactionChanged,
-                    onOpenCharacterDetail = onOpenCharacterDetail,
-                    onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 超弦体 & 晶源体 ──
+                    item(key = "characters", contentType = "preview_section") {
+                        CharacterPreviewSection(
+                            factions = factions,
+                            isLoading = isLoadingCharacters,
+                            selectedFaction = selectedHomeFaction,
+                            onSelectedFactionChanged = onHomeFactionChanged,
+                            onOpenCharacterDetail = onOpenCharacterDetail,
+                            onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 武器 ──
-            item(key = "weapons", contentType = "action_card") {
-                ActionCard(
-                    title = "武器一览",
-                    subtitle = "查看全部武器数据",
-                    icon = Icons.Outlined.GpsFixed,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.WEAPONS) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 武器 ──
+                    item(key = "weapons", contentType = "action_card") {
+                        ActionCard(
+                            title = "武器一览",
+                            subtitle = "查看全部武器数据",
+                            icon = Icons.Outlined.GpsFixed,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            onClick = { onNavigateTo(WikiHubPage.WEAPONS) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 地图 ──
-            item(key = "maps", contentType = "preview_section") {
-                MapPreviewSection(
-                    gameModes = gameModes,
-                    isLoading = isLoadingMaps,
-                    selectedMode = selectedHomeMapMode,
-                    onSelectedModeChanged = onHomeMapModeChanged,
-                    onOpenMapDetail = onOpenMapDetail,
-                    onViewAll = { onNavigateTo(WikiHubPage.MAPS) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 地图 ──
+                    item(key = "maps", contentType = "preview_section") {
+                        MapPreviewSection(
+                            gameModes = gameModes,
+                            isLoading = isLoadingMaps,
+                            selectedMode = selectedHomeMapMode,
+                            onSelectedModeChanged = onHomeMapModeChanged,
+                            onOpenMapDetail = onOpenMapDetail,
+                            onViewAll = { onNavigateTo(WikiHubPage.MAPS) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 平衡数据 ──
-            item(key = "balance_data", contentType = "action_card") {
-                ActionCard(
-                    title = "平衡数据",
-                    subtitle = "官网角色胜率/选取率/KD等数据",
-                    icon = Icons.Outlined.BarChart,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.BALANCE_DATA) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 平衡数据 ──
+                    item(key = "balance_data", contentType = "action_card") {
+                        ActionCard(
+                            title = "平衡数据",
+                            subtitle = "官网角色胜率/选取率/KD等数据",
+                            icon = Icons.Outlined.BarChart,
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            onClick = { onNavigateTo(WikiHubPage.BALANCE_DATA) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 道具图鉴 ──
-            item(key = "items", contentType = "action_card") {
-                ActionCard(
-                    title = "道具图鉴",
-                    subtitle = "浏览功能道具、货币与礼盒礼包",
-                    icon = Icons.Outlined.Inventory2,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.ITEMS) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 玩法与养成 ──
+                    item(key = "gameplay_hub", contentType = "action_card") {
+                        AggregatePreviewCard(
+                            title = "玩法与养成",
+                            subtitle = "角色培养、玩法系统与移动端内容",
+                            icon = Icons.Outlined.Extension,
+                            onClick = { onNavigateTo(WikiHubPage.GAMEPLAY_HUB) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 时装筛选 ──
-            item(key = "costumes", contentType = "action_card") {
-                ActionCard(
-                    title = "时装筛选",
-                    subtitle = "浏览全部角色时装与外观",
-                    icon = Icons.Outlined.Checkroom,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.COSTUMES) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 外观与图鉴 ──
+                    item(key = "catalog_hub", contentType = "action_card") {
+                        AggregatePreviewCard(
+                            title = "外观与图鉴",
+                            subtitle = "道具图鉴、时装筛选与武器外观",
+                            icon = Icons.Outlined.Inventory2,
+                            onClick = { onNavigateTo(WikiHubPage.CATALOG_HUB) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 武器外观 ──
-            item(key = "weapon_skins", contentType = "action_card") {
-                ActionCard(
-                    title = "武器外观",
-                    subtitle = "浏览全部武器外观与皮肤",
-                    icon = Icons.Outlined.Palette,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.WEAPON_SKINS) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 玩家装饰 ──
+                    item(key = "decorations_hub", contentType = "action_card") {
+                        AggregatePreviewCard(
+                            title = "玩家装饰",
+                            subtitle = "基板、封装、勋章、喷漆等外观装饰",
+                            icon = Icons.Outlined.Palette,
+                            onClick = { onNavigateTo(WikiHubPage.DECORATION_HUB) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 投票 ──
-            item(key = "voting", contentType = "action_card") {
-                ActionCard(
-                    title = "投票",
-                    subtitle = "查看并参与当前 Wiki 投票",
-                    icon = Icons.Outlined.HowToVote,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.VOTING) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 游戏延伸 ──
+                    item(key = "extension_hub", contentType = "action_card") {
+                        AggregatePreviewCard(
+                            title = "游戏延伸",
+                            subtitle = "剧情、历史、BGM、投票与百科内容",
+                            icon = Icons.Outlined.MoreHoriz,
+                            onClick = { onNavigateTo(WikiHubPage.EXTENSION_HUB) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 游戏延伸 ──
-            item(key = "others", contentType = "content_block") {
-                ContentBlockCard(
-                    title = "游戏延伸",
-                    icon = Icons.Outlined.MoreHoriz,
-                    items = listOf(
-                        "剧情故事" to "剧情故事",
-                        "游戏历史" to "游戏历史",
-                        "BGM" to "BGM",
-                        "壁纸" to "壁纸",
-                        "表情包" to "表情包",
-                        "四格漫画" to "官方四格漫画",
-                        "联动" to "联动",
-                        "喵言喵语" to "喵言喵语",
-                        "梗百科" to "梗百科",
-                        "游戏Tips" to "游戏Tips"
-                    ),
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    nativePages = mapOf(
-                        "BGM" to { onNavigateTo(WikiHubPage.BGM) },
-                        "剧情故事" to { onNavigateTo(WikiHubPage.STORY) },
-                        "游戏历史" to { onNavigateTo(WikiHubPage.GAME_HISTORY) },
-                        "壁纸" to { onNavigateTo(WikiHubPage.WALLPAPERS) },
-                        "表情包" to { onNavigateTo(WikiHubPage.STICKERS) },
-                        "四格漫画" to { onNavigateTo(WikiHubPage.COMICS) },
-                        "联动" to { onNavigateTo(WikiHubPage.COLLABORATIONS) },
-                        "喵言喵语" to { onNavigateTo(WikiHubPage.MEOW_LANGUAGE) },
-                        "梗百科" to { onNavigateTo(WikiHubPage.MEMES) },
-                        "游戏Tips" to { onNavigateTo(WikiHubPage.GAME_TIPS) }
-                    ),
-                    backdrop = backdrop
-                )
-            }
+                    // ── 卡牌 ──
+                    item(key = "bio_cards", contentType = "action_card") {
+                        ActionCard(
+                            title = "卡牌",
+                            subtitle = "生化卡牌与卡组分享",
+                            icon = Icons.Outlined.Style,
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            onClick = { onNavigateTo(WikiHubPage.BIO_CARDS) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 玩法与养成 ──
-            item(key = "gameplay_hub", contentType = "action_card") {
-                AggregatePreviewCard(
-                    title = "玩法与养成",
-                    subtitle = "角色培养、玩法系统与移动端内容",
-                    icon = Icons.Outlined.Extension,
-                    onClick = { onNavigateTo(WikiHubPage.GAMEPLAY_HUB) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── 活动页 ──
+                    item(key = "activities", contentType = "action_card") {
+                        ActionCard(
+                            title = "活动",
+                            subtitle = "浏览当前与历史活动时间和内容简介",
+                            icon = Icons.Outlined.Event,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            onClick = { onNavigateTo(WikiHubPage.ACTIVITIES) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 玩家装饰 ──
-            item(key = "decorations_hub", contentType = "action_card") {
-                AggregatePreviewCard(
-                    title = "玩家装饰",
-                    subtitle = "基板、封装、勋章、喷漆等外观装饰",
-                    icon = Icons.Outlined.Palette,
-                    onClick = { onNavigateTo(WikiHubPage.DECORATION_HUB) },
-                    backdrop = backdrop
-                )
-            }
+                    item(key = "announcements", contentType = "action_card") {
+                        ActionCard(
+                            title = "公告资讯",
+                            subtitle = "查看最新游戏公告和更新信息",
+                            icon = Icons.Outlined.Campaign,
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 卡牌 ──
-            item(key = "bio_cards", contentType = "action_card") {
-                ActionCard(
-                    title = "卡牌",
-                    subtitle = "整合 PC、生化卡牌与卡组分享",
-                    icon = Icons.Outlined.Style,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.BIO_CARDS) },
-                    backdrop = backdrop
-                )
-            }
+                    // ── Wiki 导航 ──
+                    item(key = "navigation", contentType = "action_card") {
+                        ActionCard(
+                            title = "完整导航",
+                            subtitle = "浏览 Wiki 全部分类目录",
+                            icon = Icons.Outlined.AccountTree,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            onClick = { onNavigateTo(WikiHubPage.NAVIGATION) },
+                            backdrop = backdrop
+                        )
+                    }
 
-            // ── 活动页 ──
-            item(key = "activities", contentType = "action_card") {
-                ActionCard(
-                    title = "活动",
-                    subtitle = "浏览当前与历史活动时间和内容简介",
-                    icon = Icons.Outlined.Event,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.ACTIVITIES) },
-                    backdrop = backdrop
-                )
-            }
-
-            item(key = "announcements", contentType = "action_card") {
-                ActionCard(
-                    title = "公告资讯",
-                    subtitle = "查看最新游戏公告和更新信息",
-                    icon = Icons.Outlined.Campaign,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) },
-                    backdrop = backdrop
-                )
-            }
-
-            // ── Wiki 导航 ──
-            item(key = "navigation", contentType = "action_card") {
-                ActionCard(
-                    title = "完整导航",
-                    subtitle = "浏览 Wiki 全部分类目录",
-                    icon = Icons.Outlined.AccountTree,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.NAVIGATION) },
-                    backdrop = backdrop
-                )
-            }
-
-            // 底部留白
-            item { Spacer(Modifier.height(24.dp)) }
-            }
+                    // 底部留白
+                    item { Spacer(Modifier.height(24.dp)) }
+                }
             } // CompositionLocalProvider
         } // Scaffold content
     } // 根 Box
@@ -502,10 +438,10 @@ internal val allQuickEntries = listOf(
     QuickEntry("characters", "角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
     QuickEntry("weapons", "武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
     QuickEntry("maps", "地图", Icons.Outlined.Map, WikiHubPage.MAPS),
-    QuickEntry("items", "道具", Icons.Outlined.Inventory2, WikiHubPage.ITEMS),
+    QuickEntry("items", "图鉴", Icons.Outlined.Inventory2, WikiHubPage.ITEMS),
     QuickEntry("voting", "投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
     QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
-    QuickEntry("weapon_skins", "武皮", Icons.Outlined.Palette, WikiHubPage.WEAPON_SKINS),
+    QuickEntry("weapon_skins", "枪皮", Icons.Outlined.Palette, WikiHubPage.WEAPON_SKINS),
     QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
     QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
     QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
@@ -517,6 +453,7 @@ internal val allQuickEntries = listOf(
     QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiHubPage.BALANCE_DATA),
     QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAMEPLAY_HUB),
     QuickEntry("decorations", "装饰", Icons.Outlined.Palette, WikiHubPage.DECORATION_HUB),
+    QuickEntry("extension_hub", "延伸", Icons.Outlined.MoreHoriz, WikiHubPage.EXTENSION_HUB),
     QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiHubPage.WALLPAPERS),
     QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
 )
@@ -647,10 +584,12 @@ private fun CharacterPreviewSection(
             liquidGlass -> CardDefaults.cardColors(
                 containerColor = Color.Transparent, contentColor = onSurface
             )
+
             hasWallpaper -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
                 contentColor = onSurface
             )
+
             else -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -834,10 +773,12 @@ private fun MapPreviewSection(
             liquidGlass -> CardDefaults.cardColors(
                 containerColor = Color.Transparent, contentColor = onSurface
             )
+
             hasWallpaper -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
                 contentColor = onSurface
             )
+
             else -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -1032,10 +973,12 @@ internal fun ContentBlockCard(
             liquidGlass -> CardDefaults.cardColors(
                 containerColor = Color.Transparent, contentColor = onSurface
             )
+
             hasWallpaper -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
                 contentColor = onSurface
             )
+
             else -> CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -1229,6 +1172,7 @@ internal fun MapListFullScreen(
                     }
                 }
             }
+
             gameModes.isEmpty() -> {
                 Box(
                     Modifier.fillMaxSize().padding(innerPadding),
@@ -1237,6 +1181,7 @@ internal fun MapListFullScreen(
                     Text("暂无地图数据", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+
             else -> {
                 Column(Modifier.padding(innerPadding)) {
                     // 模式切换
