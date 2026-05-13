@@ -1,44 +1,14 @@
 package com.nekolaska.calabiyau.feature.wiki.collaboration
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Handshake
-import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Title
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -46,22 +16,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.core.ui.ApiResourceContent
-import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
-import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
-import com.nekolaska.calabiyau.core.ui.LoadingState
-import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
-import com.nekolaska.calabiyau.core.ui.RefreshActionButton
-import com.nekolaska.calabiyau.core.ui.SearchBar
-import com.nekolaska.calabiyau.core.ui.rememberLoadState
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.collaboration.api.CollaborationApi
-import com.nekolaska.calabiyau.feature.wiki.collaboration.model.COLLABORATION_PAGE_URL
-import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationEvent
-import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationPage
-import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationTimelineItem
-import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationTimelineYear
+import com.nekolaska.calabiyau.feature.wiki.collaboration.model.*
 
 private const val FILTER_ALL = "全部"
 private const val FILTER_TIMELINE = "时间轴"
@@ -119,7 +76,7 @@ fun CollaborationScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState("正在加载联动数据…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载联动数据…") }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

@@ -131,8 +131,7 @@ private fun findTrack(extractor: MediaExtractor, mimePrefix: String): Int? {
 
 private fun selectOutputTarget(mime: String, mimePrefix: String): TrackOutputTarget {
     val lowerMime = mime.lowercase()
-    val webmCapable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
-        (lowerMime == "video/x-vnd.on2.vp8" || lowerMime == "video/x-vnd.on2.vp9" || lowerMime == "audio/vorbis" || lowerMime == "audio/opus")
+    val webmCapable = lowerMime == "video/x-vnd.on2.vp8" || lowerMime == "video/x-vnd.on2.vp9" || lowerMime == "audio/vorbis" || lowerMime == "audio/opus"
     return when {
         webmCapable -> TrackOutputTarget("webm", MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM)
         mimePrefix == "audio/" -> TrackOutputTarget("m4a", MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)

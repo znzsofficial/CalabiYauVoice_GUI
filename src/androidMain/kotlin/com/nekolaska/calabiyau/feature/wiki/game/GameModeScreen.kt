@@ -63,7 +63,7 @@ fun GameModeScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState("正在加载模式信息…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载模式信息…") }
         ) { modes ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

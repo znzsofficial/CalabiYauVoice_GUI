@@ -295,9 +295,7 @@ object WeaponSkinFilterApi {
             .asSequence()
             .mapIndexed { index, column -> index to htmlColumnToText(column) }
             .filter { (index, _) -> index > firstContentIndex }
-            .map { (_, text) -> text }
-            .filter { it.isLikelyDescription() }
-            .lastOrNull()
+            .map { (_, text) -> text }.lastOrNull { it.isLikelyDescription() }
             .orEmpty()
     }
 

@@ -188,7 +188,7 @@ fun BioCardScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState("正在加载卡牌数据…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载卡牌数据…") }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

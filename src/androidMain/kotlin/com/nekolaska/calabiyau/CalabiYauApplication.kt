@@ -63,7 +63,7 @@ class CalabiYauApplication : Application(), SingletonImageLoader.Factory {
 
     private fun currentProcessName(): String? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            return Application.getProcessName()
+            return getProcessName()
         }
 
         return runCatching {

@@ -14,7 +14,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
-import kotlin.collections.get
 
 /**
  * 武器详情 API（Android）。

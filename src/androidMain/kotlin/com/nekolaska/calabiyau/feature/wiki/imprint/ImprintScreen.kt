@@ -79,11 +79,13 @@ fun ImprintScreen(
     }
     val levels = remember(page.sections) {
         listOf(ALL_LEVELS) + page.sections
+            .asSequence()
             .flatMap { it.imprints }
             .mapNotNull { it.level }
             .distinct()
             .sorted()
             .map { "等级$it" }
+            .toList()
     }
     val filteredSections = remember(page.sections, keyword, selectedCharacter, selectedLevel) {
         page.sections.mapNotNull { section ->
@@ -115,7 +117,7 @@ fun ImprintScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState("正在加载印迹数据…", mod) }
+            loading = { mod -> LoadingState(mod,"正在加载印迹数据…") }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

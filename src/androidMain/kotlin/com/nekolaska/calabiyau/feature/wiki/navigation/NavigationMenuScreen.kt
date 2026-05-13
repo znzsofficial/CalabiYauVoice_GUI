@@ -106,7 +106,7 @@ fun NavigationMenuScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState("正在加载 Wiki 导航…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载 Wiki 导航…") }
         ) {
             if (sections.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

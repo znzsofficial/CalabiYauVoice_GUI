@@ -152,7 +152,7 @@ object BgmParsers {
     }
 
     private fun matchCover(title: String, context: ParseContext, coverLinks: Map<String, String>): String? {
-        val candidates = listOf(title, context.group, context.section).filterNotNull().map { it.normalizedKey() }
+        val candidates = listOfNotNull(title, context.group, context.section).map { it.normalizedKey() }
         return coverLinks.entries.firstOrNull { entry ->
             val key = entry.key.normalizedKey()
             candidates.any { candidate -> candidate.contains(key) || key.contains(candidate) }
