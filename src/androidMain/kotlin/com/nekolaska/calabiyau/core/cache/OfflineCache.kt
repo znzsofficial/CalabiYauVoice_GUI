@@ -55,6 +55,10 @@ object OfflineCache {
         MEOW_LANGUAGE("meow_language", 3 * DAY),
         GAME_TIPS("game_tips", 3 * DAY),
         OATH("oath", 3 * DAY),
+        IMPRINTS("imprints", 3 * DAY),
+        MEMES("memes", 3 * DAY),
+        COLLABORATIONS("collaborations", 3 * DAY),
+        BGM("bgm", 3 * DAY),
     }
 
     private val typeByDir = Type.entries.associateBy { it.dir }
