@@ -25,17 +25,21 @@ import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterScreen
 import com.nekolaska.calabiyau.feature.wiki.activity.ActivityScreen
 import com.nekolaska.calabiyau.feature.wiki.announcement.AnnouncementScreen
 import com.nekolaska.calabiyau.feature.wiki.balance.BalanceDataScreen
+import com.nekolaska.calabiyau.feature.wiki.bgm.BgmScreen
+import com.nekolaska.calabiyau.feature.wiki.collaboration.CollaborationScreen
 import com.nekolaska.calabiyau.feature.wiki.decoration.BaseplateScreen
 import com.nekolaska.calabiyau.feature.wiki.bio.BioCardScreen
 import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
+import com.nekolaska.calabiyau.feature.wiki.imprint.ImprintScreen
 import com.nekolaska.calabiyau.feature.wiki.item.ItemCatalogScreen
 import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationScreen
 import com.nekolaska.calabiyau.feature.wiki.meow.MeowLanguageScreen
+import com.nekolaska.calabiyau.feature.wiki.meme.MemeScreen
 import com.nekolaska.calabiyau.feature.wiki.story.StoryScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
@@ -53,8 +57,8 @@ import com.nekolaska.calabiyau.feature.weapon.list.WeaponListScreen
 enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, ITEMS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
-    STORY, GAME_HISTORY,
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS, OATH
+    STORY, GAME_HISTORY, MEMES, COLLABORATIONS, BGM,
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS, OATH, IMPRINTS, GAMEPLAY_HUB, DECORATION_HUB
 }
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
@@ -78,6 +82,9 @@ sealed interface WikiRoute {
     data object BioMobileCards : WikiRoute
     data object Story : WikiRoute
     data object GameHistory : WikiRoute
+    data object Memes : WikiRoute
+    data object Collaborations : WikiRoute
+    data object Bgm : WikiRoute
     data object Navigation : WikiRoute
     data object Wallpapers : WikiRoute
     data object Stickers : WikiRoute
@@ -97,6 +104,9 @@ sealed interface WikiRoute {
     data object RoomAppearances : WikiRoute
     data object VehicleSkins : WikiRoute
     data object Oath : WikiRoute
+    data object Imprints : WikiRoute
+    data object GameplayHub : WikiRoute
+    data object DecorationHub : WikiRoute
 }
 
 private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
@@ -113,6 +123,9 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.BIO_MOBILE_CARDS -> WikiRoute.BioMobileCards
     WikiHubPage.STORY -> WikiRoute.Story
     WikiHubPage.GAME_HISTORY -> WikiRoute.GameHistory
+    WikiHubPage.MEMES -> WikiRoute.Memes
+    WikiHubPage.COLLABORATIONS -> WikiRoute.Collaborations
+    WikiHubPage.BGM -> WikiRoute.Bgm
     WikiHubPage.NAVIGATION -> WikiRoute.Navigation
     WikiHubPage.WALLPAPERS -> WikiRoute.Wallpapers
     WikiHubPage.STICKERS -> WikiRoute.Stickers
@@ -133,6 +146,9 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.ROOM_APPEARANCES -> WikiRoute.RoomAppearances
     WikiHubPage.VEHICLE_SKINS -> WikiRoute.VehicleSkins
     WikiHubPage.OATH -> WikiRoute.Oath
+    WikiHubPage.IMPRINTS -> WikiRoute.Imprints
+    WikiHubPage.GAMEPLAY_HUB -> WikiRoute.GameplayHub
+    WikiHubPage.DECORATION_HUB -> WikiRoute.DecorationHub
     // 以下带参数页面由于是从 WikiHomePage 跳转而来，按理说不会直接触发（通常走具名参数跳转），给出默认保底
     WikiHubPage.COSTUMES -> WikiRoute.Costumes(null)
     WikiHubPage.WEAPON_SKINS -> WikiRoute.WeaponSkins(null)
@@ -177,6 +193,9 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.BioMobileCards -> "bioMobileCards"
     WikiRoute.Story -> "story"
     WikiRoute.GameHistory -> "gameHistory"
+    WikiRoute.Memes -> "memes"
+    WikiRoute.Collaborations -> "collaborations"
+    WikiRoute.Bgm -> "bgm"
     WikiRoute.Navigation -> "navigation"
     WikiRoute.Wallpapers -> "wallpapers"
     WikiRoute.Stickers -> "stickers"
@@ -196,6 +215,9 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.RoomAppearances -> "roomAppearances"
     WikiRoute.VehicleSkins -> "vehicleSkins"
     WikiRoute.Oath -> "oath"
+    WikiRoute.Imprints -> "imprints"
+    WikiRoute.GameplayHub -> "gameplayHub"
+    WikiRoute.DecorationHub -> "decorationHub"
 }
 
 private fun decodeRoute(encoded: String): WikiRoute? {
@@ -231,6 +253,9 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "bioMobileCards" -> WikiRoute.BioMobileCards
         "story" -> WikiRoute.Story
         "gameHistory" -> WikiRoute.GameHistory
+        "memes" -> WikiRoute.Memes
+        "collaborations" -> WikiRoute.Collaborations
+        "bgm" -> WikiRoute.Bgm
         "navigation" -> WikiRoute.Navigation
         "wallpapers" -> WikiRoute.Wallpapers
         "stickers" -> WikiRoute.Stickers
@@ -250,6 +275,9 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "roomAppearances" -> WikiRoute.RoomAppearances
         "vehicleSkins" -> WikiRoute.VehicleSkins
         "oath" -> WikiRoute.Oath
+        "imprints" -> WikiRoute.Imprints
+        "gameplayHub" -> WikiRoute.GameplayHub
+        "decorationHub" -> WikiRoute.DecorationHub
         else -> null
     }
 }
@@ -532,6 +560,27 @@ fun WikiHubScreen(
                 )
             }
 
+            is WikiRoute.Memes -> {
+                MemeScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Collaborations -> {
+                CollaborationScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Bgm -> {
+                BgmScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
             is WikiRoute.Navigation -> {
                 NavigationMenuScreen(
                     onBack = { popBackStack() },
@@ -669,6 +718,29 @@ fun WikiHubScreen(
             is WikiRoute.Oath -> {
                 OathScreen(
                     onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Imprints -> {
+                ImprintScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.GameplayHub -> {
+                WikiGameplayHubScreen(
+                    onBack = { popBackStack() },
+                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.DecorationHub -> {
+                WikiDecorationHubScreen(
+                    onBack = { popBackStack() },
+                    onNavigateTo = { navigateTo(it.toRoute()) },
                     onOpenWikiUrl = onOpenWikiUrl
                 )
             }

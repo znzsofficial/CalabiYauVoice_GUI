@@ -305,19 +305,6 @@ internal fun WikiHomePage(
                 )
             }
 
-            // ── 战斗模式 ──
-            item(key = "game_modes", contentType = "action_card") {
-                ActionCard(
-                    title = "战斗模式",
-                    subtitle = "查看所有战斗模式详情",
-                    icon = Icons.Outlined.SportsEsports,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.GAME_MODES) },
-                    backdrop = backdrop
-                )
-            }
-
             // ── 平衡数据 ──
             item(key = "balance_data", contentType = "action_card") {
                 ActionCard(
@@ -402,66 +389,39 @@ internal fun WikiHomePage(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
+                        "BGM" to { onNavigateTo(WikiHubPage.BGM) },
                         "剧情故事" to { onNavigateTo(WikiHubPage.STORY) },
                         "游戏历史" to { onNavigateTo(WikiHubPage.GAME_HISTORY) },
                         "壁纸" to { onNavigateTo(WikiHubPage.WALLPAPERS) },
                         "表情包" to { onNavigateTo(WikiHubPage.STICKERS) },
                         "四格漫画" to { onNavigateTo(WikiHubPage.COMICS) },
+                        "联动" to { onNavigateTo(WikiHubPage.COLLABORATIONS) },
                         "喵言喵语" to { onNavigateTo(WikiHubPage.MEOW_LANGUAGE) },
+                        "梗百科" to { onNavigateTo(WikiHubPage.MEMES) },
                         "游戏Tips" to { onNavigateTo(WikiHubPage.GAME_TIPS) }
                     ),
                     backdrop = backdrop
                 )
             }
 
-            // ── 移动端内容 ──
-            item(key = "mobile_content", contentType = "content_block") {
-                ContentBlockCard(
-                    title = "移动端内容",
-                    icon = Icons.Outlined.PhoneAndroid,
-                    items = listOf(
-                        "头像框" to "头像框",
-                        "载具外观" to "极限推进模式载具外观",
-                        "超弦体天赋" to "超弦体天赋",
-                        "超弦推进卡牌" to "战斗模式/超弦推进"
-                    ),
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    nativePages = mapOf(
-                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) },
-                        "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) },
-                        "超弦体天赋" to { onNavigateTo(WikiHubPage.STRINGER_TALENTS) },
-                        "超弦推进卡牌" to { onNavigateTo(WikiHubPage.STRINGER_PUSH_CARDS) }
-                    ),
+            // ── 玩法与养成 ──
+            item(key = "gameplay_hub", contentType = "action_card") {
+                AggregatePreviewCard(
+                    title = "玩法与养成",
+                    subtitle = "角色培养、玩法系统与移动端内容",
+                    icon = Icons.Outlined.Extension,
+                    onClick = { onNavigateTo(WikiHubPage.GAMEPLAY_HUB) },
                     backdrop = backdrop
                 )
             }
 
             // ── 玩家装饰 ──
-            item(key = "decorations", contentType = "content_block") {
-                ContentBlockCard(
+            item(key = "decorations_hub", contentType = "action_card") {
+                AggregatePreviewCard(
                     title = "玩家装饰",
+                    subtitle = "基板、封装、勋章、喷漆等外观装饰",
                     icon = Icons.Outlined.Palette,
-                    items = listOf(
-                        "基板" to "基板",
-                        "封装" to "封装",
-                        "勋章" to "勋章",
-                        "喷漆" to "喷漆",
-                        "聊天气泡" to "聊天气泡",
-                        "头套" to "头套",
-                        "超弦体动作" to "超弦体动作",
-                        "房间外观" to "房间外观"
-                    ),
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    nativePages = mapOf(
-                        "基板" to { onNavigateTo(WikiHubPage.BASEPLATES) },
-                        "封装" to { onNavigateTo(WikiHubPage.ENCASINGS) },
-                        "勋章" to { onNavigateTo(WikiHubPage.MEDALS) },
-                        "喷漆" to { onNavigateTo(WikiHubPage.SPRAYS) },
-                        "聊天气泡" to { onNavigateTo(WikiHubPage.CHAT_BUBBLES) },
-                        "头套" to { onNavigateTo(WikiHubPage.HEADGEAR) },
-                        "超弦体动作" to { onNavigateTo(WikiHubPage.STRINGER_ACTIONS) },
-                        "房间外观" to { onNavigateTo(WikiHubPage.ROOM_APPEARANCES) }
-                    ),
+                    onClick = { onNavigateTo(WikiHubPage.DECORATION_HUB) },
                     backdrop = backdrop
                 )
             }
@@ -500,29 +460,6 @@ internal fun WikiHomePage(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) },
-                    backdrop = backdrop
-                )
-            }
-
-            // ── 其他玩法 ──
-            item(key = "gameplay", contentType = "content_block") {
-                ContentBlockCard(
-                    title = "其他玩法",
-                    icon = Icons.Outlined.Extension,
-                    items = listOf(
-                        "弦化" to "弦化",
-                        "弦能增幅网络" to "弦能增幅网络",
-                        "特别行动" to "特别行动",
-                        "赫尔墨斯" to "赫尔墨斯",
-                        "超弦体定位" to "超弦体定位",
-                        "誓约" to "誓约",
-                        "印迹" to "印迹",
-                        "赛事系统" to "赛事系统"
-                    ),
-                    onOpenWikiUrl = onOpenWikiUrl,
-                    nativePages = mapOf(
-                        "誓约" to { onNavigateTo(WikiHubPage.OATH) }
-                    ),
                     backdrop = backdrop
                 )
             }
@@ -571,6 +508,11 @@ internal val allQuickEntries = listOf(
     QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
     QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
     QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
+    QuickEntry("oath", "誓约", Icons.Outlined.FavoriteBorder, WikiHubPage.OATH),
+    QuickEntry("imprints", "印迹", Icons.Outlined.MilitaryTech, WikiHubPage.IMPRINTS),
+    QuickEntry("memes", "梗百科", Icons.Outlined.AutoAwesome, WikiHubPage.MEMES),
+    QuickEntry("collaborations", "联动", Icons.Outlined.Handshake, WikiHubPage.COLLABORATIONS),
+    QuickEntry("bgm", "BGM", Icons.Outlined.MusicNote, WikiHubPage.BGM),
     QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiHubPage.BALANCE_DATA),
     QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAME_MODES),
     QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiHubPage.WALLPAPERS),
@@ -1060,7 +1002,7 @@ private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ContentBlockCard(
+internal fun ContentBlockCard(
     title: String,
     icon: ImageVector,
     items: List<Pair<String, String>>,  // displayName to pageName
@@ -1173,7 +1115,7 @@ private fun ContentBlockCard(
 // ────────────────────────────────────────────
 
 @Composable
-private fun ActionCard(
+internal fun ActionCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
