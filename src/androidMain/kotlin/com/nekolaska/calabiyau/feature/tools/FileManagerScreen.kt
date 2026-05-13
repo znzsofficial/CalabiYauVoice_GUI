@@ -731,6 +731,7 @@ fun FileManagerScreen(
                             ZoomableImage(
                                 model = galleryImages[page],
                                 contentDescription = galleryImages[page].name,
+                                loadOriginalSize = true,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clip(smoothCornerShape(16.dp))
