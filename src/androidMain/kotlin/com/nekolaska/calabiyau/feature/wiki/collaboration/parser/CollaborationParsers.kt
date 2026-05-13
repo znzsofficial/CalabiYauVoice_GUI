@@ -56,7 +56,7 @@ object CollaborationParsers {
         val events = mutableListOf<CollaborationEvent>()
         var title: String? = null
         var sectionTitle: String? = null
-        var parts = mutableListOf<Element>()
+        val parts = mutableListOf<Element>()
 
         fun flush() {
             val eventTitle = title.orEmpty()

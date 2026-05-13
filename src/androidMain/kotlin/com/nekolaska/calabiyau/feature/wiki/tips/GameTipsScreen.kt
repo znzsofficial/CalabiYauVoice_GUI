@@ -39,6 +39,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -93,10 +94,10 @@ fun GameTipsScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState("正在加载游戏Tips…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载游戏Tips…") }
         ) { sections ->
             val tips = remember(sections) { sections.flatMap { it.tips } }
-            var tipRefreshKey by remember(sections) { mutableStateOf(0) }
+            var tipRefreshKey by remember(sections) { mutableIntStateOf(0) }
             var randomTip by remember(sections) { mutableStateOf(tips.randomOrNull()) }
 
             LaunchedEffect(tips, tipRefreshKey) {

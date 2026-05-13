@@ -42,6 +42,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -111,14 +112,14 @@ fun MeowLanguageScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState("正在加载喵言喵语…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载喵言喵语…") }
         ) { sections ->
             val quotes = remember(sections) {
                 sections.flatMap { section ->
                     section.groups.flatMap { group -> group.lines }
                 }
             }
-            var quoteRefreshKey by remember(sections) { mutableStateOf(0) }
+            var quoteRefreshKey by remember(sections) { mutableIntStateOf(0) }
             var randomQuote by remember(sections) { mutableStateOf(quotes.randomOrNull()) }
 
             LaunchedEffect(quotes, quoteRefreshKey) {

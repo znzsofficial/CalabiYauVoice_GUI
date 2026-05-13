@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.feature.wiki.gallery
 
 import com.nekolaska.calabiyau.CalabiYauApplication
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
-import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
@@ -10,8 +9,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
-import java.security.MessageDigest
 import java.net.URLEncoder
+import java.security.MessageDigest
 
 /**
  * 从 Wiki 壁纸页面随机抽取一张壁纸 URL。

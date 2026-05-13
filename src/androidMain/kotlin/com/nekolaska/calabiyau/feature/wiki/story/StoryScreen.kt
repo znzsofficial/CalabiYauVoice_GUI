@@ -101,7 +101,7 @@ fun StoryScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState("正在加载剧情故事…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载剧情故事…") }
         ) { sections ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

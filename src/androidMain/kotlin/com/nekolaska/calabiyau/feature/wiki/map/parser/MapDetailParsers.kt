@@ -113,7 +113,7 @@ object MapDetailParsers {
             currentChanges = mutableListOf()
         }
 
-        container.getAllElements()
+        container.allElements
             .drop(1)
             .forEach { element ->
                 when {

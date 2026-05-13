@@ -1,34 +1,23 @@
 package com.nekolaska.calabiyau.feature.wiki.item
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items as lazyItems
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Category
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,16 +25,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.core.ui.ApiResourceContent
-import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.SearchBar
-import com.nekolaska.calabiyau.core.ui.ShimmerBox
-import com.nekolaska.calabiyau.core.ui.rememberLoadState
-import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.item.api.ItemCatalogApi
 import com.nekolaska.calabiyau.feature.wiki.item.model.ItemInfo
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
+import androidx.compose.foundation.lazy.items as lazyItems
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

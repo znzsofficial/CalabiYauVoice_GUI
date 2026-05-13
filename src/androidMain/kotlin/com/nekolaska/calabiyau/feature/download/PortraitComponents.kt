@@ -186,7 +186,17 @@ fun PortraitDetailContent(
         }
 
         val costumes = catalog.costumes
-        val pagerState = rememberPagerState(pageCount = { costumes.size })
+        val selectedIndex = remember(costumes, selectedCostume) {
+            selectedCostume?.let { selected -> costumes.indexOfFirst { it.name == selected.name } }
+                ?.takeIf { it >= 0 } ?: 0
+        }
+        val pagerState = rememberPagerState(initialPage = selectedIndex, pageCount = { costumes.size })
+
+        LaunchedEffect(selectedIndex) {
+            if (selectedIndex != pagerState.currentPage) {
+                pagerState.scrollToPage(selectedIndex)
+            }
+        }
 
         // Sync selected costume with pager
         LaunchedEffect(pagerState.currentPage) {

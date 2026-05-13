@@ -196,7 +196,7 @@ fun BalanceDataScreen(
     ) { padding ->
         when {
             isLoadingSettings && settings == null -> {
-                LoadingState("正在加载平衡数据…", Modifier.padding(padding))
+                LoadingState(Modifier.padding(padding), "正在加载平衡数据…")
             }
             errorResult != null && settings == null -> {
                 ErrorState(

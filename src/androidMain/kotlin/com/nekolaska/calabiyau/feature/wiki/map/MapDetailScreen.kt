@@ -82,7 +82,7 @@ fun MapDetailScreen(
     ) { innerPadding ->
         when {
             isLoading -> {
-                LoadingState("正在加载地图信息…", Modifier.padding(innerPadding))
+                LoadingState(Modifier.padding(innerPadding), "正在加载地图信息…")
             }
             errorMessage != null && detail == null -> {
                 ErrorState(
@@ -95,7 +95,6 @@ fun MapDetailScreen(
                 MapDetailContent(
                     detail = detail!!,
                     previewImageUrl = mapImageUrl,
-                    onOpenWikiUrl = onOpenWikiUrl,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -107,7 +106,6 @@ fun MapDetailScreen(
 private fun MapDetailContent(
     detail: MapDetail,
     previewImageUrl: String?,
-    onOpenWikiUrl: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(

@@ -22,6 +22,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.roundToInt
+import androidx.core.graphics.createBitmap
 
 internal enum class WavTrimMode(val label: String) {
     BOTH("裁剪头尾"),
@@ -148,7 +149,7 @@ internal fun loadWavAudioForPreview(
 internal fun loadAudioAssetForPreview(context: Context, input: PickedInput): LoadedAudioAsset? {
     val meta = inspectAudioMeta(context, input) ?: return null
     val wav = when {
-        input.file?.extension.equals("wav", ignoreCase = true) == true || meta.mimeType.contains("wav", ignoreCase = true) -> {
+        input.file?.extension.equals("wav", ignoreCase = true) || meta.mimeType.contains("wav", ignoreCase = true) -> {
             val preview = loadWavAudioForPreview(context, input, includeSpectrogram = false)
             preview
         }
@@ -330,7 +331,7 @@ private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sour
                     val outputFormat = decoder.outputFormat
                     outputChannels = outputFormat.safeInteger(MediaFormat.KEY_CHANNEL_COUNT)
                     outputSampleRate = outputFormat.safeInteger(MediaFormat.KEY_SAMPLE_RATE)
-                    outputEncoding = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                    outputEncoding = if (outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
                         outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING)
                     } else {
                         AudioFormat.ENCODING_PCM_16BIT
@@ -738,7 +739,7 @@ internal fun buildSpectrogramBitmap(
     config: SpectrogramRenderConfig = SpectrogramRenderConfig()
 ): Bitmap {
     val frameCount = wav.pcmData.size / wav.blockAlign
-    if (frameCount <= 0) return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    if (frameCount <= 0) return createBitmap(1, 1)
 
     val windowSize = normalizeSpectrogramWindowSize(config.windowSize)
     val hopRatio = config.hopRatio.coerceIn(0.05f, 1.0f)

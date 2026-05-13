@@ -137,7 +137,7 @@ fun StringerPushCardScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState("正在加载超弦推进卡牌…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载超弦推进卡牌…") }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

@@ -129,7 +129,7 @@ fun BgmScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState("正在加载 BGM…", mod) }
+            loading = { mod -> LoadingState(mod, "正在加载 BGM…") }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

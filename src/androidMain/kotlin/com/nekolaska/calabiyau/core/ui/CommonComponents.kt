@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.core.ui
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,9 +48,9 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun BackNavButton(
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
-    contentDescription: String = "返回",
-    modifier: Modifier = Modifier
+    contentDescription: String = "返回"
 ) {
     FilledTonalIconButton(
         onClick = onClick,
@@ -72,13 +71,13 @@ fun BackNavButton(
 
 @Composable
 fun SearchBar(
+    modifier: Modifier = Modifier,
     keyword: String,
     onKeywordChange: (String) -> Unit,
     onSearch: () -> Unit,
     onClear: () -> Unit,
     isSearching: Boolean,
-    placeholder: String = "搜索角色名称...",
-    modifier: Modifier = Modifier
+    placeholder: String = "搜索角色名称..."
 ) {
     TextField(
         value = keyword,
@@ -580,9 +579,9 @@ fun EmptyState(
  */
 @Composable
 fun ErrorState(
+    modifier: Modifier = Modifier,
     message: String,
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
     kind: ErrorKind = ErrorKind.UNKNOWN
 ) {
     val icon = when (kind) {
@@ -735,8 +734,8 @@ fun InfoChip(
  */
 @Composable
 fun LoadingState(
-    message: String = "正在加载…",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    message: String = "正在加载…"
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -832,8 +831,8 @@ fun SkeletonStatRow(modifier: Modifier = Modifier) {
 /** 骨架屏标签行（模拟 InfoChip / 标签组）。 */
 @Composable
 fun SkeletonChipRow(
-    count: Int = 3,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    count: Int = 3
 ) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(count) { index ->
