@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.IntSize
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Size
 import kotlin.math.abs
 
 // ════════════════════════════════════════════════════════
@@ -48,6 +49,7 @@ fun ZoomableImage(
     model: Any?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
+    loadOriginalSize: Boolean = false,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null
 ) {
@@ -77,10 +79,11 @@ fun ZoomableImage(
     }
 
     AsyncImage(
-        model = ImageRequest.Builder(context)
-            .data(model)
-            .crossfade(true)
-            .build(),
+        model = ImageRequest.Builder(context).apply {
+            data(model)
+            crossfade(true)
+            if (loadOriginalSize) size(Size.ORIGINAL)
+        }.build(),
         contentDescription = contentDescription,
         contentScale = ContentScale.Fit,
         modifier = modifier
