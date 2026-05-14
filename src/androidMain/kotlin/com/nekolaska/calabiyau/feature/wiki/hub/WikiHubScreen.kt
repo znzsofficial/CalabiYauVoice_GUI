@@ -22,12 +22,12 @@ import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailScreen
 import com.nekolaska.calabiyau.feature.character.list.CharacterListScreen
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailScreen
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterScreen
+import com.nekolaska.calabiyau.feature.wiki.achievement.AchievementScreen
 import com.nekolaska.calabiyau.feature.wiki.activity.ActivityScreen
 import com.nekolaska.calabiyau.feature.wiki.announcement.AnnouncementScreen
 import com.nekolaska.calabiyau.feature.wiki.balance.BalanceDataScreen
 import com.nekolaska.calabiyau.feature.wiki.bgm.BgmScreen
 import com.nekolaska.calabiyau.feature.wiki.collaboration.CollaborationScreen
-import com.nekolaska.calabiyau.feature.wiki.decoration.BaseplateScreen
 import com.nekolaska.calabiyau.feature.wiki.bio.BioCardScreen
 import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
@@ -40,6 +40,7 @@ import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationScreen
 import com.nekolaska.calabiyau.feature.wiki.meow.MeowLanguageScreen
 import com.nekolaska.calabiyau.feature.wiki.meme.MemeScreen
+import com.nekolaska.calabiyau.feature.wiki.playerlevel.PlayerLevelScreen
 import com.nekolaska.calabiyau.feature.wiki.story.StoryScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
@@ -58,7 +59,7 @@ enum class WikiHubPage {
     HOME, CHARACTERS, WEAPONS, MAPS, ITEMS, COSTUMES, WEAPON_SKINS, ACTIVITIES, ANNOUNCEMENTS, GAME_MODES, BALANCE_DATA, VOTING, BIO_CARDS,
     BIO_MOBILE_CARDS, // 兼容保留：当前 WikiHomePage 未提供独立入口（通过 BioCardScreen 内部 Tab 可切换）
     STORY, GAME_HISTORY, MEMES, COLLABORATIONS, BGM,
-    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS, OATH, IMPRINTS, GAMEPLAY_HUB, DECORATION_HUB, CATALOG_HUB, EXTENSION_HUB
+    NAVIGATION, WALLPAPERS, STICKERS, COMICS, MEOW_LANGUAGE, GAME_TIPS, BASEPLATES, ENCASINGS, MEDALS, SPRAYS, CHAT_BUBBLES, HEADGEAR, STRINGER_ACTIONS, STRINGER_TALENTS, STRINGER_PUSH_CARDS, AVATAR_FRAMES, ROOM_APPEARANCES, VEHICLE_SKINS, OATH, IMPRINTS, ACHIEVEMENTS, PLAYER_LEVELS, GAMEPLAY_HUB, DECORATION_HUB, CATALOG_HUB, EXTENSION_HUB
 }
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
@@ -105,6 +106,8 @@ sealed interface WikiRoute {
     data object VehicleSkins : WikiRoute
     data object Oath : WikiRoute
     data object Imprints : WikiRoute
+    data object Achievements : WikiRoute
+    data object PlayerLevels : WikiRoute
     data object GameplayHub : WikiRoute
     data object DecorationHub : WikiRoute
     data object CatalogHub : WikiRoute
@@ -149,6 +152,8 @@ private fun WikiHubPage.toRoute(): WikiRoute = when (this) {
     WikiHubPage.VEHICLE_SKINS -> WikiRoute.VehicleSkins
     WikiHubPage.OATH -> WikiRoute.Oath
     WikiHubPage.IMPRINTS -> WikiRoute.Imprints
+    WikiHubPage.ACHIEVEMENTS -> WikiRoute.Achievements
+    WikiHubPage.PLAYER_LEVELS -> WikiRoute.PlayerLevels
     WikiHubPage.GAMEPLAY_HUB -> WikiRoute.GameplayHub
     WikiHubPage.DECORATION_HUB -> WikiRoute.DecorationHub
     WikiHubPage.CATALOG_HUB -> WikiRoute.CatalogHub
@@ -220,6 +225,8 @@ private fun WikiRoute.encode(): String = when (this) {
     WikiRoute.VehicleSkins -> "vehicleSkins"
     WikiRoute.Oath -> "oath"
     WikiRoute.Imprints -> "imprints"
+    WikiRoute.Achievements -> "achievements"
+    WikiRoute.PlayerLevels -> "playerLevels"
     WikiRoute.GameplayHub -> "gameplayHub"
     WikiRoute.DecorationHub -> "decorationHub"
     WikiRoute.CatalogHub -> "catalogHub"
@@ -282,6 +289,8 @@ private fun decodeRoute(encoded: String): WikiRoute? {
         "vehicleSkins" -> WikiRoute.VehicleSkins
         "oath" -> WikiRoute.Oath
         "imprints" -> WikiRoute.Imprints
+        "achievements" -> WikiRoute.Achievements
+        "playerLevels" -> WikiRoute.PlayerLevels
         "gameplayHub" -> WikiRoute.GameplayHub
         "decorationHub" -> WikiRoute.DecorationHub
         "catalogHub" -> WikiRoute.CatalogHub
@@ -641,7 +650,8 @@ fun WikiHubScreen(
             }
 
             is WikiRoute.Baseplates -> {
-                BaseplateScreen(
+                PlayerDecorationScreen(
+                    title = "基板",
                     onBack = { popBackStack() }
                 )
             }
@@ -732,6 +742,20 @@ fun WikiHubScreen(
 
             is WikiRoute.Imprints -> {
                 ImprintScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.Achievements -> {
+                AchievementScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.PlayerLevels -> {
+                PlayerLevelScreen(
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl
                 )
