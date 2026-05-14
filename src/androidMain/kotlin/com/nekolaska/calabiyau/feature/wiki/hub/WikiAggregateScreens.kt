@@ -59,6 +59,17 @@ internal fun WikiGameplayHubScreen(
                 )
             }
             item {
+                ActionCard(
+                    title = "成就",
+                    subtitle = "查看战斗勋章、荣耀成就与光辉事迹",
+                    icon = Icons.Outlined.EmojiEvents,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    onClick = { onNavigateTo(WikiHubPage.ACHIEVEMENTS) },
+                    backdrop = backdrop
+                )
+            }
+            item {
                 ContentBlockCard(
                     title = "角色培养",
                     icon = Icons.Outlined.FavoriteBorder,
@@ -83,10 +94,14 @@ internal fun WikiGameplayHubScreen(
                         "弦能增幅网络" to "弦能增幅网络",
                         "特别行动" to "特别行动",
                         "赫尔墨斯" to "赫尔墨斯",
+                        "玩家等级" to "玩家等级",
                         "超弦体定位" to "超弦体定位",
                         "赛事系统" to "赛事系统"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "玩家等级" to { onNavigateTo(WikiHubPage.PLAYER_LEVELS) }
+                    ),
                     backdrop = backdrop
                 )
             }
