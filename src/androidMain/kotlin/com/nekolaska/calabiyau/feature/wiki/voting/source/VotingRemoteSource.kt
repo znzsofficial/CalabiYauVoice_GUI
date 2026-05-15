@@ -1,13 +1,12 @@
 package com.nekolaska.calabiyau.feature.wiki.voting.source
 
-import android.webkit.CookieManager
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.Request
-import java.net.URLEncoder
 
 data class VoteSubmitOperation(val pollId: String, val answer: String)
 data class VoteSubmitResult(val success: Boolean, val statusCode: Int, val message: String? = null)
@@ -19,49 +18,15 @@ object VotingRemoteSource {
     private const val WIKI_ROOT_URL = "https://wiki.biligame.com"
 
     fun buildUrl(vararg params: Pair<String, String>): String {
-        val query = params.joinToString("&") { (k, v) ->
-            "${URLEncoder.encode(k, "UTF-8") }=${URLEncoder.encode(v, "UTF-8") }"
-        }
-        return "$API?$query"
+        return WikiAuthHelper.buildUrl(API, *params)
     }
 
     fun getWikiCookies(): String? {
-        return try {
-            val cm = CookieManager.getInstance()
-            val rootCookies = cm.getCookie("https://wiki.biligame.com") ?: ""
-            val klbqCookies = cm.getCookie("https://wiki.biligame.com/klbq/") ?: ""
-            val cookieMap = mutableMapOf<String, String>()
-            ("$rootCookies; $klbqCookies").split(";").forEach { part ->
-                val trimmed = part.trim()
-                val eq = trimmed.indexOf('=')
-                if (eq > 0) {
-                    cookieMap[trimmed.substring(0, eq).trim()] = trimmed.substring(eq + 1).trim()
-                }
-            }
-            if (cookieMap.isEmpty()) return null
-            cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        } catch (_: Exception) {
-            null
-        }
+        return WikiAuthHelper.getWikiCookies()
     }
 
     fun fetchCsrfToken(cookies: String): String? {
-        val url = buildUrl(
-            "action" to "query",
-            "meta" to "tokens",
-            "type" to "csrf",
-            "format" to "json"
-        )
-        val body = httpGetWithCookies(url, cookies) ?: return null
-        return try {
-            val json = SharedJson.parseToJsonElement(body)
-            json.jsonObject["query"]
-                ?.jsonObject?.get("tokens")
-                ?.jsonObject?.get("csrftoken")
-                ?.jsonPrimitive?.content
-        } catch (_: Exception) {
-            null
-        }
+        return WikiAuthHelper.fetchCsrfToken(API, cookies)
     }
 
     fun fetchVotePageHtml(votePage: String): String? {
@@ -71,7 +36,7 @@ object VotingRemoteSource {
             "prop" to "text",
             "format" to "json"
         )
-        val body = httpGet(url) ?: return null
+        val body = WikiAuthHelper.httpGet(url) ?: return null
         val json = SharedJson.parseToJsonElement(body)
         return json.jsonObject["parse"]
             ?.jsonObject?.get("text")
@@ -88,7 +53,7 @@ object VotingRemoteSource {
             "disablelimitreport" to "true",
             "format" to "json"
         )
-        val body = httpGetWithCookies(url, cookies) ?: return null
+        val body = WikiAuthHelper.httpGetWithCookies(url, cookies) ?: return null
         val json = SharedJson.parseToJsonElement(body)
         return json.jsonObject["parse"]
             ?.jsonObject?.get("text")
@@ -117,7 +82,7 @@ object VotingRemoteSource {
             .build()
 
         return WikiEngine.client.newCall(request).execute().use { resp ->
-            syncResponseCookies(resp.headers("Set-Cookie"))
+            WikiAuthHelper.syncResponseCookies(resp.headers("Set-Cookie"))
             val body = resp.body.string()
             val success = resp.isSuccessful && isSubmitBodySuccessful(body)
             VoteSubmitResult(
@@ -141,48 +106,4 @@ object VotingRemoteSource {
         return text.startsWith("{") || text.startsWith("[")
     }
 
-    private fun httpGet(url: String): String? {
-        return try {
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-                .build()
-            WikiEngine.client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                syncResponseCookies(resp.headers("Set-Cookie"))
-                resp.body.string()
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun httpGetWithCookies(url: String, cookies: String): String? {
-        return try {
-            val request = Request.Builder()
-                .url(url)
-                .header("Cookie", cookies)
-                .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-                .build()
-            WikiEngine.client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                syncResponseCookies(resp.headers("Set-Cookie"))
-                resp.body.string()
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun syncResponseCookies(setCookieHeaders: List<String>) {
-        if (setCookieHeaders.isEmpty()) return
-        runCatching {
-            val cm = CookieManager.getInstance()
-            setCookieHeaders.forEach { setCookie ->
-                cm.setCookie(WIKI_ROOT_URL, setCookie)
-                cm.setCookie("$WIKI_ROOT_URL/klbq/", setCookie)
-            }
-            cm.flush()
-        }
-    }
 }
