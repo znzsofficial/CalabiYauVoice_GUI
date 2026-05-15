@@ -1,10 +1,10 @@
 package com.nekolaska.calabiyau.feature.wiki.balance.source
 
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 
 data class BalanceHttpResult(
     val code: Int,
@@ -16,7 +16,7 @@ object BalanceDataRemoteSource {
     private const val BASE_URL = "https://klbq-prod-www.idreamsky.com"
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-    private val client = OkHttpClient.Builder()
+    private val client = WikiEngine.client.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
