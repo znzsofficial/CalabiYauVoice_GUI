@@ -479,6 +479,13 @@ private fun AudioToolsTab(
     var spectrogramZoomPercent by remember { mutableStateOf("180") }
     var spectrogramPalette by remember { mutableStateOf(SpectrogramPaletteOption.Ocean) }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            input?.takeIf { it.isTemporary }?.wavFile?.delete()
+            runCatching { File(outputPath, "音频工具/_preview").takeIf { it.isDirectory }?.deleteRecursively() }
+        }
+    }
+
     fun currentSpectrogramConfig(): DesktopSpectrogramConfig = DesktopSpectrogramConfig(
         windowSize = spectrogramWindowSize.toIntOrNull()?.coerceIn(256, 8192) ?: 1024,
         hopRatio = (spectrogramHopPercent.toIntOrNull()?.coerceIn(5, 100) ?: 25) / 100f,
