@@ -2008,7 +2008,9 @@ private fun composeGifFromImages(
         fun writeFrame(bitmap: Bitmap) {
             val normalized = normalizeGifFrame(bitmap, baseWidth, baseHeight, scaleMode)
             val prepared = if (ditherEnabled) applyOrderedDither(normalized) else normalized
-            val ok = encoder.addFrame(prepared)
+            val framePixels = IntArray(prepared.width * prepared.height)
+            prepared.getPixels(framePixels, 0, prepared.width, 0, 0, prepared.width, prepared.height)
+            val ok = encoder.addFrame(framePixels, prepared.width, prepared.height)
             if (prepared !== normalized && !prepared.isRecycled) prepared.recycle()
             if (normalized !== bitmap && !normalized.isRecycled) normalized.recycle()
             if (!ok) throw IllegalStateException("写入帧失败")

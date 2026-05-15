@@ -327,7 +327,7 @@ internal fun TextToolsPage(
                             onPickFilesFromFileManager(
                                 AppPrefs.savePath,
                                 "导入时间轴文件",
-                                "支持 SRT/LRC/VTT/ASS/SSA 格式，可在文件管理中选文件，也可改用系统选择器。",
+                                "导入时间轴文件，可在文件管理中选文件，也可改用系统选择器。",
                                 false,
                                 { picker.launch("*/*") }
                             ) { paths ->

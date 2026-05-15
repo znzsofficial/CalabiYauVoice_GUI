@@ -13,6 +13,7 @@ private data class PrefsData(
     val categoryHintDismissed: Boolean = false,
     val savePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源",
     val converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted",
+    val assetToolsOutputPath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}素材工具",
     val recentUserLookupIds: List<String> = emptyList(),
     val recentBidLookupValues: List<String> = emptyList(),
     val recentWikiIdLookupValues: List<String> = emptyList()
@@ -48,6 +49,10 @@ object AppPrefs {
     var converterSavePath: String
         get() = data.converterSavePath
         set(value) { data = data.copy(converterSavePath = value); save() }
+
+    var assetToolsOutputPath: String
+        get() = data.assetToolsOutputPath
+        set(value) { data = data.copy(assetToolsOutputPath = value); save() }
 
     var recentBidLookupValues: List<String>
         get() = data.recentBidLookupValues
