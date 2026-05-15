@@ -24,6 +24,8 @@ import kotlin.math.sqrt
 import kotlin.math.roundToInt
 import androidx.core.graphics.createBitmap
 
+private const val MAX_ANDROID_PCM_BYTES = 256L * 1024L * 1024L
+
 internal enum class WavTrimMode(val label: String) {
     BOTH("裁剪头尾"),
     START_ONLY("只裁开头"),
@@ -150,13 +152,14 @@ internal fun loadAudioAssetForPreview(context: Context, input: PickedInput): Loa
     val meta = inspectAudioMeta(context, input) ?: return null
     val wav = when {
         input.file?.extension.equals("wav", ignoreCase = true) || meta.mimeType.contains("wav", ignoreCase = true) -> {
-            val preview = loadWavAudioForPreview(context, input, includeSpectrogram = false)
-            preview
+            loadWavAudioForPreview(context, input, includeSpectrogram = false)
+                ?: decodeAudioInputToTempWav(context, input, meta.name)?.let {
+                    loadWavAudioFileForPreview(it, includeSpectrogram = false)
+                }
         }
-        isMp3Audio(meta, input) -> {
-            decodeAudioInputToTempWav(context, input, meta.name)?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
+        else -> decodeAudioInputToTempWav(context, input, meta.name)?.let {
+            loadWavAudioFileForPreview(it, includeSpectrogram = false)
         }
-        else -> null
     }
     return LoadedAudioAsset(
         input = wav?.input ?: input,
@@ -194,13 +197,15 @@ internal fun trimWavInputSilence(
     val tempInput = materializeInputToFile(context, input) ?: return null
     val shouldDeleteTemp = input.file == null
     return try {
-        trimPcmWavSilence(
-            inputFile = tempInput,
-            outputDir = outputDir,
-            thresholdRatio = thresholdRatio,
-            minSilenceMs = minSilenceMs,
-            trimMode = trimMode
-        )
+        resolvePcmWavInputFile(context, tempInput)?.use { resolved ->
+            trimPcmWavSilence(
+                inputFile = resolved.file,
+                outputDir = outputDir,
+                thresholdRatio = thresholdRatio,
+                minSilenceMs = minSilenceMs,
+                trimMode = trimMode
+            )
+        }
     } finally {
         if (shouldDeleteTemp) runCatching { tempInput.delete() }
     }
@@ -215,7 +220,9 @@ internal fun convertWavChannels(
     val tempInput = materializeInputToFile(context, input) ?: return null
     val shouldDeleteTemp = input.file == null
     return try {
-        convertPcmWavChannels(tempInput, outputDir, mode)
+        resolvePcmWavInputFile(context, tempInput)?.use { resolved ->
+            convertPcmWavChannels(resolved.file, outputDir, mode)
+        }
     } finally {
         if (shouldDeleteTemp) runCatching { tempInput.delete() }
     }
@@ -232,7 +239,9 @@ internal fun adjustWavVolume(
     val tempInput = materializeInputToFile(context, input) ?: return null
     val shouldDeleteTemp = input.file == null
     return try {
-        adjustPcmWavVolume(tempInput, outputDir, mode, gainPercent, targetPeakPercent)
+        resolvePcmWavInputFile(context, tempInput)?.use { resolved ->
+            adjustPcmWavVolume(resolved.file, outputDir, mode, gainPercent, targetPeakPercent)
+        }
     } finally {
         if (shouldDeleteTemp) runCatching { tempInput.delete() }
     }
@@ -242,17 +251,34 @@ internal fun inspectWavMeta(context: Context, input: PickedInput): WavMeta? {
     val tempInput = materializeInputToFile(context, input) ?: return null
     val shouldDeleteTemp = input.file == null
     return try {
-        readPcmWav(tempInput)?.let { wav ->
-            WavMeta(
-                channels = wav.channels,
-                sampleRate = wav.sampleRate,
-                bitsPerSample = wav.bitsPerSample,
-                peakPercent = calculatePeakPercent(wav)
-            )
+        resolvePcmWavInputFile(context, tempInput)?.use { resolved ->
+            readPcmWav(resolved.file)?.let { wav ->
+                WavMeta(
+                    channels = wav.channels,
+                    sampleRate = wav.sampleRate,
+                    bitsPerSample = wav.bitsPerSample,
+                    peakPercent = calculatePeakPercent(wav)
+                )
+            }
         }
     } finally {
         if (shouldDeleteTemp) runCatching { tempInput.delete() }
     }
+}
+
+private data class ResolvedPcmWavInput(
+    val file: File,
+    val shouldDelete: Boolean
+) : AutoCloseable {
+    override fun close() {
+        if (shouldDelete) runCatching { file.delete() }
+    }
+}
+
+private fun resolvePcmWavInputFile(context: Context, inputFile: File): ResolvedPcmWavInput? {
+    readPcmWav(inputFile)?.let { return ResolvedPcmWavInput(inputFile, false) }
+    val decoded = decodeAudioInputToTempWav(context, PickedInput(file = inputFile), inputFile.name) ?: return null
+    return ResolvedPcmWavInput(decoded, true)
 }
 
 private fun materializeInputToFile(context: Context, input: PickedInput): File? {
@@ -270,13 +296,6 @@ private fun materializeInputToFile(context: Context, input: PickedInput): File? 
             if (temp.renameTo(renamed)) renamed else temp
         }
     }.getOrNull()
-}
-
-private fun isMp3Audio(meta: AudioMeta, input: PickedInput): Boolean {
-    val mime = meta.mimeType.lowercase()
-    return mime.contains("mpeg") || mime.contains("mp3") ||
-        input.file?.extension.equals("mp3", ignoreCase = true) ||
-        meta.name.substringAfterLast('.', "").equals("mp3", ignoreCase = true)
 }
 
 private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sourceName: String): File? {
@@ -348,6 +367,7 @@ private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sour
                         if (outputChannels !in 1..2 || outputSampleRate <= 0 || outputEncoding != AudioFormat.ENCODING_PCM_16BIT) {
                             return null
                         }
+                        if (pcmOutput.size().toLong() + bufferInfo.size > MAX_ANDROID_PCM_BYTES) return null
                         decoder.getOutputBuffer(outputBufferIndex)?.writeBufferRangeTo(pcmOutput, bufferInfo.offset, bufferInfo.size)
                     }
                     decoder.releaseOutputBuffer(outputBufferIndex, false)
@@ -509,14 +529,11 @@ private fun convertPcmWavChannels(
         val frameStart = frameIndex * wav.blockAlign
         when (mode) {
             WavChannelMode.MONO_TO_STEREO -> {
-                val sample = wav.pcmData.copyOfRange(frameStart, frameStart + bytesPerSample)
-                output.write(sample)
-                output.write(sample)
+                output.write(wav.pcmData, frameStart, bytesPerSample)
+                output.write(wav.pcmData, frameStart, bytesPerSample)
             }
             WavChannelMode.STEREO_TO_MONO -> {
-                val left = wav.pcmData.copyOfRange(frameStart, frameStart + bytesPerSample)
-                val right = wav.pcmData.copyOfRange(frameStart + bytesPerSample, frameStart + bytesPerSample * 2)
-                output.write(averageSamples(left, right, wav.bitsPerSample))
+                writeAverageSample(output, wav.pcmData, frameStart, frameStart + bytesPerSample, wav.bitsPerSample)
             }
         }
     }
@@ -577,6 +594,7 @@ private fun adjustPcmWavVolume(
 
 private fun readPcmWav(inputFile: File): PcmWavData? {
     RandomAccessFile(inputFile, "r").use { raf ->
+        if (raf.length() < 44) return null
         if (raf.readAscii(4) != "RIFF") return null
         raf.skipBytes(4)
         if (raf.readAscii(4) != "WAVE") return null
@@ -591,7 +609,7 @@ private fun readPcmWav(inputFile: File): PcmWavData? {
 
         while (raf.filePointer + 8 <= raf.length()) {
             val chunkId = raf.readAscii(4)
-            val chunkSize = raf.readLittleInt().toLong() and 0xffffffffL
+            val chunkSize = raf.readLittleUnsignedInt()
             val chunkStart = raf.filePointer
             when (chunkId) {
                 "fmt " -> {
@@ -601,6 +619,13 @@ private fun readPcmWav(inputFile: File): PcmWavData? {
                     raf.skipBytes(4)
                     blockAlign = raf.readLittleShort()
                     bitsPerSample = raf.readLittleShort()
+                    if (audioFormat == 0xFFFE) {
+                        if (chunkSize < 40) return null
+                        raf.readLittleShort()
+                        raf.skipBytes(6)
+                        val subFormat = ByteArray(16).also { raf.readFully(it) }
+                        if (!subFormat.isPcmSubFormatGuid()) return null
+                    }
                 }
                 "data" -> {
                     dataOffset = raf.filePointer
@@ -609,12 +634,16 @@ private fun readPcmWav(inputFile: File): PcmWavData? {
                 }
                 else -> raf.seek(chunkStart + chunkSize)
             }
-            if (chunkSize % 2L == 1L && raf.filePointer < raf.length()) raf.skipBytes(1)
+            val next = chunkStart + chunkSize + (chunkSize and 1L)
+            if (next < chunkStart || next > raf.length()) return null
+            if (raf.filePointer < next) raf.seek(next)
         }
 
-        if (audioFormat != 1 || channels <= 0 || sampleRate <= 0 || bitsPerSample !in setOf(8, 16, 24, 32) || blockAlign <= 0 || dataOffset < 0 || dataSize <= 0) {
+        if ((audioFormat != 1 && audioFormat != 0xFFFE) || channels <= 0 || sampleRate <= 0 || bitsPerSample !in setOf(8, 16, 24, 32) || blockAlign <= 0 || dataOffset < 0 || dataSize <= 0) {
             return null
         }
+        if (dataSize > Int.MAX_VALUE) return null
+        if (dataSize > MAX_ANDROID_PCM_BYTES) return null
 
         raf.seek(dataOffset)
         val data = ByteArray(dataSize.toInt())
@@ -670,34 +699,42 @@ private fun maxAmplitude(bitsPerSample: Int): Double = when (bitsPerSample) {
     else -> 1.0
 }
 
-private fun averageSamples(left: ByteArray, right: ByteArray, bitsPerSample: Int): ByteArray {
-    return when (bitsPerSample) {
-        8 -> byteArrayOf((((left[0].toInt() and 0xff) + (right[0].toInt() and 0xff)) / 2).toByte())
+private fun writeAverageSample(output: ByteArrayOutputStream, data: ByteArray, leftOffset: Int, rightOffset: Int, bitsPerSample: Int) {
+    when (bitsPerSample) {
+        8 -> output.write((((data[leftOffset].toInt() and 0xff) + (data[rightOffset].toInt() and 0xff)) / 2).toByte().toInt())
         16 -> {
-            val l = ((left[0].toInt() and 0xff) or (left[1].toInt() shl 8)).toShort().toInt()
-            val r = ((right[0].toInt() and 0xff) or (right[1].toInt() shl 8)).toShort().toInt()
-            val avg = ((l + r) / 2).toShort().toInt()
-            byteArrayOf((avg and 0xff).toByte(), ((avg shr 8) and 0xff).toByte())
+            val left = ((data[leftOffset].toInt() and 0xff) or ((data[leftOffset + 1].toInt() and 0xff) shl 8)).toShort().toInt()
+            val right = ((data[rightOffset].toInt() and 0xff) or ((data[rightOffset + 1].toInt() and 0xff) shl 8)).toShort().toInt()
+            val avg = ((left + right) / 2).toShort().toInt()
+            output.write(avg and 0xff)
+            output.write((avg shr 8) and 0xff)
         }
         24 -> {
-            fun decode(bytes: ByteArray): Int {
-                var value = (bytes[0].toInt() and 0xff) or ((bytes[1].toInt() and 0xff) shl 8) or (bytes[2].toInt() shl 16)
-                if (value and 0x800000 != 0) value = value or -0x1000000
-                return value
-            }
-            val avg = (decode(left) + decode(right)) / 2
-            byteArrayOf((avg and 0xff).toByte(), ((avg shr 8) and 0xff).toByte(), ((avg shr 16) and 0xff).toByte())
+            val avg = (readSigned24(data, leftOffset) + readSigned24(data, rightOffset)) / 2
+            output.write(avg and 0xff)
+            output.write((avg shr 8) and 0xff)
+            output.write((avg shr 16) and 0xff)
         }
         32 -> {
-            fun decode(bytes: ByteArray): Int {
-                return (bytes[0].toInt() and 0xff) or ((bytes[1].toInt() and 0xff) shl 8) or ((bytes[2].toInt() and 0xff) shl 16) or (bytes[3].toInt() shl 24)
-            }
-            val avg = (decode(left).toLong() + decode(right).toLong()) / 2L
-            byteArrayOf((avg and 0xff).toByte(), ((avg shr 8) and 0xff).toByte(), ((avg shr 16) and 0xff).toByte(), ((avg shr 24) and 0xff).toByte())
+            val left = readSigned32(data, leftOffset)
+            val right = readSigned32(data, rightOffset)
+            val avg = (left.toLong() + right.toLong()) / 2L
+            output.write((avg and 0xff).toInt())
+            output.write(((avg shr 8) and 0xff).toInt())
+            output.write(((avg shr 16) and 0xff).toInt())
+            output.write(((avg shr 24) and 0xff).toInt())
         }
-        else -> left
     }
 }
+
+private fun readSigned24(data: ByteArray, offset: Int): Int {
+    var value = (data[offset].toInt() and 0xff) or ((data[offset + 1].toInt() and 0xff) shl 8) or (data[offset + 2].toInt() shl 16)
+    if (value and 0x800000 != 0) value = value or -0x1000000
+    return value
+}
+
+private fun readSigned32(data: ByteArray, offset: Int): Int =
+    (data[offset].toInt() and 0xff) or ((data[offset + 1].toInt() and 0xff) shl 8) or ((data[offset + 2].toInt() and 0xff) shl 16) or (data[offset + 3].toInt() shl 24)
 
 private fun peakAmplitude(wav: PcmWavData): Double {
     val frameCount = wav.pcmData.size / wav.blockAlign
@@ -950,10 +987,12 @@ private fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRat
     val bytesPerSample = bitsPerSample / 8
     val byteRate = sampleRate * channels * bytesPerSample
     val blockAlign = channels * bytesPerSample
+    val riffSize = 36L + pcmData.size.toLong()
+    require(riffSize <= 0xffffffffL) { "WAV 文件过大，RIFF size 超过 4GB" }
     file.outputStream().use { out ->
         val header = ByteArrayOutputStream()
         header.writeAscii("RIFF")
-        header.writeLittleInt(36 + pcmData.size)
+        header.writeLittleInt(riffSize.toInt())
         header.writeAscii("WAVE")
         header.writeAscii("fmt ")
         header.writeLittleInt(16)
@@ -984,11 +1023,23 @@ private fun RandomAccessFile.readLittleInt(): Int {
     return (b0 and 0xff) or ((b1 and 0xff) shl 8) or ((b2 and 0xff) shl 16) or ((b3 and 0xff) shl 24)
 }
 
+private fun RandomAccessFile.readLittleUnsignedInt(): Long = readLittleInt().toLong() and 0xffffffffL
+
 private fun RandomAccessFile.readLittleShort(): Int {
     val b0 = read()
     val b1 = read()
     return (b0 and 0xff) or ((b1 and 0xff) shl 8)
 }
+
+private fun ByteArray.isPcmSubFormatGuid(): Boolean = contentEquals(
+    byteArrayOf(
+        0x01, 0x00, 0x00, 0x00,
+        0x00, 0x00,
+        0x10, 0x00,
+        0x80.toByte(), 0x00,
+        0x00, 0xAA.toByte(), 0x00, 0x38, 0x9B.toByte(), 0x71
+    )
+)
 
 private fun ByteArrayOutputStream.writeAscii(value: String) {
     write(value.encodeToByteArray())

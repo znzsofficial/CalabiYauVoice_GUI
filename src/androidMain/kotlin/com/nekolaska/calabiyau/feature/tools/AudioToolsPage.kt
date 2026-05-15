@@ -229,7 +229,7 @@ internal fun AudioToolsPage(
 
     fun processCurrent(title: String, block: (PickedInput, File) -> AudioProcessOutcome) {
         val audio = currentAudio?.asset?.wav ?: run {
-            showSnack("请先导入 WAV 或 MP3 文件")
+            showSnack("请先导入音频文件")
             return
         }
         scope.launch {
@@ -304,7 +304,7 @@ internal fun AudioToolsPage(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text("音频预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("导入 WAV/MP3 预览波形与频谱", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("导入音频文件预览波形与频谱", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Surface(shape = smoothCornerShape(999.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
                         Text(
@@ -324,7 +324,7 @@ internal fun AudioToolsPage(
                     onPickFilesFromFileManager(
                         AppPrefs.savePath,
                         "选择音频文件",
-                        "选择 WAV/MP3 音频文件，可在文件管理中选文件，也可改用系统选择器。",
+                        "选择音频文件，可在文件管理中选文件，也可改用系统选择器。",
                         false,
                         { audioPicker.launch("audio/*") }
                     ) { paths ->
@@ -846,7 +846,7 @@ private fun EmptyAudioPreview() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "支持预览 WAV/MP3 的波形图与频谱图\nMP3 的处理结果将默认保存为 WAV 格式",
+                text = "导入音频文件后即可预览波形图与频谱图\n非 WAV 音频的处理结果将默认保存为 WAV 格式",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center

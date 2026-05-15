@@ -191,6 +191,7 @@ fun NewDownloaderContent() {
     var showShortcutsDialog by remember { mutableStateOf(false) }
     var showUserInfoDialog by remember { mutableStateOf(false) }
     var showConverterWindow by remember { mutableStateOf(false) }
+    var showAssetToolsWindow by remember { mutableStateOf(false) }
     var showLogWindow by remember { mutableStateOf(false) }
     var showWikiBrowser by remember { mutableStateOf(false) }
     var showCreatorCenter by remember { mutableStateOf(false) }
@@ -266,6 +267,9 @@ fun NewDownloaderContent() {
     }
     if (showConverterWindow) {
         Mp3ConverterWindow(onCloseRequest = { showConverterWindow = false })
+    }
+    if (showAssetToolsWindow) {
+        AssetToolsWindow(onCloseRequest = { showAssetToolsWindow = false })
     }
     if (showWikiBrowser) {
         WikiBrowserWindow(onCloseRequest = { showWikiBrowser = false })
@@ -531,6 +535,11 @@ fun NewDownloaderContent() {
                         onClick = { showConverterWindow = true },
                         icon = { Icon(Icons.Regular.MusicNote2, contentDescription = null) },
                         text = { Text("音频转换工具") }
+                    )
+                    MenuFlyoutItem(
+                        onClick = { showAssetToolsWindow = true },
+                        icon = { Icon(Icons.Regular.Toolbox, contentDescription = null) },
+                        text = { Text("素材工具") }
                     )
                     MenuFlyoutItem(
                         onClick = { showLogWindow = true },
