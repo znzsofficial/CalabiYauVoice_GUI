@@ -106,6 +106,7 @@ fun OathScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.levels.isEmpty() && it.birthdayGifts.isEmpty() && it.favorGifts.isEmpty() && it.bondSections.isEmpty() },
             enablePullToRefresh = false,
             loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
         ) {

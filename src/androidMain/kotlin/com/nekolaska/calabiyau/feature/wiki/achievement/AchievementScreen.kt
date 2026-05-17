@@ -40,7 +40,6 @@ import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
@@ -110,6 +109,7 @@ fun AchievementScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.sections.isEmpty() },
             enablePullToRefresh = false,
             loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
         ) {
