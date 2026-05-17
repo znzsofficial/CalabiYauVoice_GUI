@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
@@ -115,6 +114,7 @@ fun PlayerLevelScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.levels.isEmpty() && it.rewards.isEmpty() },
             enablePullToRefresh = false,
             loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 0) }
         ) {
