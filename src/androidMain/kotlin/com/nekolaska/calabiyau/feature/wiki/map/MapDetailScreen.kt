@@ -19,6 +19,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapDetailApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
@@ -30,7 +31,6 @@ import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.SectionTitle
-import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import data.ApiResult
 import java.net.URLEncoder
@@ -172,8 +172,9 @@ private fun MapDetailContent(
 @Composable
 private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
     Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = smoothCornerShape(28.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column {
             // 预览图
@@ -186,22 +187,22 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
-                        .clip(smoothCornerShape(24.dp))
+                        .clip(smoothCornerShape(28.dp))
                 )
             }
 
-            Column(Modifier.padding(20.dp)) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     detail.name,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
                 if (detail.description.isNotBlank()) {
-                    Spacer(Modifier.height(10.dp))
                     Text(
                         detail.description,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 24.sp
                     )
                 }
             }
@@ -218,18 +219,17 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
 @Composable
 private fun MapInfoCard(detail: MapDetail) {
     Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = smoothCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.Info, "地图信息")
-            Spacer(Modifier.height(12.dp))
 
             // 支持模式
             if (detail.supportedModes.isNotBlank()) {
                 Text("支持模式", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -238,14 +238,14 @@ private fun MapInfoCard(detail: MapDetail) {
                         val trimmed = mode.trim()
                         if (trimmed.isNotBlank()) {
                             Surface(
-                                shape = smoothCapsuleShape(),
+                                shape = smoothCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
                                 Text(
                                     trimmed,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                                 )
                             }
                         }
@@ -255,12 +255,9 @@ private fun MapInfoCard(detail: MapDetail) {
 
             // 上线平台
             if (detail.platforms.isNotBlank()) {
-                Spacer(Modifier.height(14.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                Spacer(Modifier.height(14.dp))
                 Text("上线平台", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(6.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -269,14 +266,14 @@ private fun MapInfoCard(detail: MapDetail) {
                         val trimmed = platform.trim()
                         if (trimmed.isNotBlank()) {
                             Surface(
-                                shape = smoothCapsuleShape(),
+                                shape = smoothCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.tertiaryContainer
                             ) {
                                 Text(
                                     trimmed,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                                 )
                             }
                         }
@@ -294,21 +291,23 @@ private fun MapInfoCard(detail: MapDetail) {
 @Composable
 private fun MapTerrainCard(terrainMapUrl: String, onPreview: () -> Unit) {
     Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = smoothCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.Layers, "地形图")
-            Spacer(Modifier.height(12.dp))
-            AsyncImage(
-                model = terrainMapUrl,
-                contentDescription = "地形图",
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onPreview)
-                    .clip(smoothCornerShape(16.dp))
-            )
+            Surface(shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                AsyncImage(
+                    model = terrainMapUrl,
+                    contentDescription = "地形图",
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onPreview)
+                        .clip(smoothCornerShape(18.dp))
+                )
+            }
         }
     }
 }
@@ -320,18 +319,18 @@ private fun MapTerrainCard(terrainMapUrl: String, onPreview: () -> Unit) {
 @Composable
 private fun MapGalleryCard(galleryUrls: List<String>, onPreview: (String) -> Unit) {
     Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = smoothCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.PhotoLibrary, "地图概览")
-            Spacer(Modifier.height(12.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(galleryUrls, key = { it }) { url ->
                     Card(
-                        shape = smoothCornerShape(16.dp),
+                        shape = smoothCornerShape(20.dp),
                         onClick = { onPreview(url) },
                         modifier = Modifier.width(280.dp)
                     ) {
@@ -357,54 +356,52 @@ private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {
     val visibleHistory = if (expanded) updateHistory else updateHistory.take(3)
 
     Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = smoothCornerShape(26.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.Update, "更新改动历史")
-            Spacer(Modifier.height(12.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 visibleHistory.forEach { entry ->
+                    Spacer(Modifier.height(6.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
-                        shape = smoothCapsuleShape(),
-                        modifier = Modifier.padding(bottom = 6.dp)
+                        shape = smoothCornerShape(16.dp)
                     ) {
                         Text(
                             text = entry.date,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
 
                     entry.changes.forEach { change ->
-                        Row(
-                            Modifier.padding(start = 4.dp, bottom = 4.dp)
-                        ) {
+                        Row(Modifier.padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.Top) {
                             Text(
                                 "•",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 6.dp, top = 1.dp)
+                                modifier = Modifier.padding(end = 8.dp)
                             )
                             Text(
                                 text = change,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                lineHeight = 20.sp
                             )
                         }
                     }
-
-                    Spacer(Modifier.height(8.dp))
                 }
             }
 
             if (updateHistory.size > 3) {
                 TextButton(
                     onClick = { expanded = !expanded },
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    shape = smoothCornerShape(14.dp)
                 ) {
                     Text(if (expanded) "收起" else "查看全部 ${updateHistory.size} 条更新")
                 }

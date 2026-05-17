@@ -4,15 +4,19 @@ import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.webkit.URLUtil
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -119,8 +123,13 @@ fun GalleryScreen(
                         gridState.scrollToItem(0)
                     }
 
+                    // 表情包用更小的单元格和正方形比例，壁纸/漫画保持宽屏比例
+                    val isStickerPage = pageName.contains("表情包")
+                    val gridMinSize = if (isStickerPage) 120.dp else 160.dp
+                    val imageAspectRatio = if (isStickerPage) 1f / 1f else 16f / 10f
+
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 160.dp),
+                        columns = GridCells.Adaptive(minSize = gridMinSize),
                         state = gridState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -136,6 +145,7 @@ fun GalleryScreen(
                         ) { image ->
                             GalleryImageCard(
                                 image = image,
+                                imageAspectRatio = imageAspectRatio,
                                 onClick = { previewImage = image }
                             )
                         }
@@ -242,32 +252,152 @@ private fun GallerySectionSelector(
     onSelectedIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
     val selectedSection = sections.getOrNull(selectedIndex) ?: return
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier.fillMaxWidth()
+    // ── 触发器 ──
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(smoothCornerShape(24.dp))
+            .clickable { showSheet = true },
+        shape = smoothCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(smoothCornerShape(24.dp))
-                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
-            shape = smoothCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            Surface(
+                shape = smoothCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
+                Icon(
+                    Icons.Outlined.Image,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp).size(22.dp)
+                )
+            }
+
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = selectedSection.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${selectedIndex + 1}/${sections.size}  ·  共 ${selectedSection.images.size} 张",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                shape = smoothCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+            ) {
+                Icon(
+                    Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.padding(4.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+
+    // ── ModalBottomSheet ──
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = smoothCornerShape(28.dp),
+            tonalElevation = 0.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    "选择分区",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 460.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item(key = "__options_grid") {
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            maxItemsInEachRow = 2
+                        ) {
+                            sections.forEachIndexed { index, section ->
+                                GallerySectionGridItem(
+                                    modifier = Modifier.weight(1f),
+                                    section = section,
+                                    index = index,
+                                    totalCount = sections.size,
+                                    selected = index == selectedIndex,
+                                    onClick = {
+                                        onSelectedIndexChange(index)
+                                        showSheet = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GallerySectionGridItem(
+    modifier: Modifier = Modifier,
+    section: GallerySection,
+    index: Int,
+    totalCount: Int,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .clip(smoothCornerShape(20.dp))
+            .clickable(onClick = onClick),
+        shape = smoothCornerShape(20.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+            else MaterialTheme.colorScheme.surfaceContainer,
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+            else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     shape = smoothCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                 ) {
                     Icon(
                         Icons.Outlined.Image,
@@ -275,83 +405,38 @@ private fun GallerySectionSelector(
                         modifier = Modifier.padding(10.dp).size(22.dp)
                     )
                 }
-
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = selectedSection.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "${selectedIndex + 1}/${sections.size}  ·  共 ${selectedSection.images.size} 张",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Surface(
-                    shape = smoothCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ) {
-                    ExposedDropdownMenuDefaults.TrailingIcon(
-                        expanded = expanded,
-                        modifier = Modifier.padding(4.dp)
-                    )
+                Spacer(Modifier.weight(1f))
+                if (selected) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(4.dp)
+                        )
+                    }
                 }
             }
-        }
 
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier
-                .exposedDropdownSize()
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            sections.forEachIndexed { index, section ->
-                val selected = index == selectedIndex
-                DropdownMenuItem(
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = section.title,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "${index + 1}/${sections.size} · ${section.images.size} 张",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    },
-                    leadingIcon = {
-                        Surface(
-                            shape = smoothCornerShape(14.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-                            contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                        ) {
-                            Icon(
-                                imageVector = if (selected) Icons.Default.Check else Icons.Outlined.Image,
-                                contentDescription = null,
-                                modifier = Modifier.padding(7.dp).size(18.dp)
-                            )
-                        }
-                    },
-                    onClick = {
-                        onSelectedIndexChange(index)
-                        expanded = false
-                    },
-                    colors = MenuDefaults.itemColors(
-                        textColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    section.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "${index + 1}/$totalCount · ${section.images.size} 张",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -369,26 +454,23 @@ private fun GallerySkeleton(modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             shape = smoothCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 ShimmerBox(
                     modifier = Modifier.size(42.dp),
                     shape = smoothCornerShape(14.dp)
                 )
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ShimmerBox(Modifier.fillMaxWidth(0.46f).height(18.dp))
-                    Spacer(Modifier.height(8.dp))
                     ShimmerBox(Modifier.fillMaxWidth(0.32f).height(12.dp))
                 }
                 ShimmerBox(
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .size(32.dp),
+                    modifier = Modifier.size(28.dp),
                     shape = smoothCornerShape(12.dp)
                 )
             }
@@ -438,10 +520,12 @@ private fun GallerySkeleton(modifier: Modifier = Modifier) {
 @Composable
 private fun GalleryImageCard(
     image: GalleryImage,
+    imageAspectRatio: Float = 16f / 10f,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
     val cardShape = smoothCornerShape(16.dp)
+    val isSticker = imageAspectRatio == 1f / 1f
 
     Card(
         onClick = onClick,
@@ -457,7 +541,7 @@ private fun GalleryImageCard(
                 contentDescription = image.caption,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 10f)
+                    .aspectRatio(imageAspectRatio)
                     .clip(smoothCornerShape(16.dp)),
                 contentScale = ContentScale.Crop
             )
