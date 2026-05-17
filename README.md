@@ -98,27 +98,49 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 ```text
 src/
-├── commonMain/          # Shared business logic
-│   ├── data/            #   Wiki API core, models, serialization
-│   ├── portrait/        #   Portrait parsing & organization
-│   └── util/            #   File extension utilities
-├── desktopMain/         # Desktop (Windows) target
-│   ├── data/            #   OkHttp client, image loader, cookies
-│   ├── viewmodel/       #   State management
-│   ├── ui/screens/      #   Screen composables
-│   ├── ui/components/   #   Reusable UI components
-│   ├── util/            #   Audio conversion, preferences
-│   └── jna/windows/     #   Win32 API bindings
-└── androidMain/         # Android target
-    ├── core/            #   Cache, media, navigation, network, preferences, shared UI
-    ├── feature/         #   Feature-first modules
-    │   ├── character/   #   Character list/detail/costumes
-    │   ├── weapon/      #   Weapon list/detail/skins
-    │   ├── wiki/        #   Hub, maps, gallery, activities, decorations, stringer pages
-    │   ├── download/    #   Search, download, history, portrait viewer
-    │   ├── settings/    #   App settings and update checks
-    │   └── tools/       #   File/audio/text utilities
-    └── MainActivity.kt
+├── commonMain/                         # Shared business logic
+│   ├── data/                           #   Wiki API core, models, serialization, shared network DTOs
+│   ├── portrait/                       #   Portrait parsing and organization
+│   └── util/                           #   File extension helpers
+├── desktopMain/                        # Desktop (Windows) target
+│   ├── data/                           #   OkHttp client, image loader, cookies, desktop API glue
+│   ├── viewmodel/                      #   Search/download state management
+│   ├── ui/screens/                     #   Desktop screens
+│   ├── ui/components/                  #   Reusable Fluent UI components
+│   ├── util/                           #   Audio conversion, preferences, file helpers
+│   └── jna/windows/                    #   Win32 API bindings and window effects
+└── androidMain/                        # Android target
+    ├── core/
+    │   ├── cache/                      #   Offline cache, cache bootstrap, cache pruning
+    │   ├── media/                      #   Audio playback and media helpers
+    │   ├── navigation/                 #   MainScreen and app-level navigation shell
+    │   ├── network/                    #   Network monitor and HTTP helpers
+    │   ├── preferences/                #   AppPrefs and persisted Android settings
+    │   ├── ui/                         #   Shared Compose UI: common, state, skeleton, preview, feedback
+    │   └── wiki/                       #   Wiki auth, parse source, image URL helpers, parser utilities
+    ├── feature/
+    │   ├── character/                  #   Character list/detail, birthday dialog, costumes, selectors
+    │   ├── weapon/                     #   Weapon list/detail and weapon skin filters
+    │   ├── download/                   #   Resource search, category browse, downloads, history, portraits
+    │   ├── settings/                   #   Settings, about, update checks, storage management
+    │   ├── tools/                      #   Local file manager and desktop asset tooling
+    │   └── wiki/
+    │       ├── hub/                    #   Native Wiki Hub, routes/codecs, aggregate pages, WebView shell
+    │       ├── gallery/                #   Wallpapers, stickers, comics, preview/save flow
+    │       ├── map/                    #   Map list/detail parsing and native detail page
+    │       ├── activity/announcement/  #   Activities and announcements
+    │       ├── achievement/            #   Native achievements page
+    │       ├── playerlevel/            #   Player levels, rewards, frame segments
+    │       ├── oath/imprint/           #   Oath, gifts, bonds, imprints
+    │       ├── bio/                    #   PC/mobile bio cards and deck sharing
+    │       ├── item/decoration/        #   Item catalog and player decorations
+    │       ├── bgm/meow/meme/tips/     #   BGM, meow language, memes, game tips
+    │       ├── story/history/          #   Story and game history pages
+    │       ├── collaboration/voting/   #   Collaborations and native voting
+    │       └── stringer/navigation/    #   Stringer actions/talents/cards and Wiki navigation
+    ├── MainActivity.kt
+    ├── CrashHandler.kt                 # Android crash capture
+    └── NotificationHelper.kt           # Download/status notifications
 ```
 
 ## 🚀 Build and Run
