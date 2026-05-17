@@ -83,9 +83,7 @@ fun GameTipsScreen(
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
                     RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
-                    Spacer(Modifier.width(8.dp))
-                    OpenWikiActionButton(wikiUrl = GAME_TIPS_PAGE_URL, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
-                    Spacer(Modifier.width(8.dp))
+                    OpenWikiActionButton(wikiUrl = GAME_TIPS_PAGE_URL, onOpenWikiUrl = onOpenWikiUrl)
                 },
                 scrollBehavior = scrollBehavior
             )
@@ -137,20 +135,20 @@ private fun RandomGameTipCard(
     onCopy: () -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(26.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Surface(
-                    shape = smoothCornerShape(18.dp),
+                    shape = smoothCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(48.dp)
                 ) {
@@ -166,7 +164,7 @@ private fun RandomGameTipCard(
 
                 Text(
                     text = "随机游戏Tips",
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -196,17 +194,17 @@ private fun RandomGameTipCard(
             }
 
             Surface(
-                shape = smoothCornerShape(18.dp),
+                shape = smoothCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = tip,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.Bold,
-                    lineHeight = 23.sp
+                    lineHeight = 24.sp
                 )
             }
         }
@@ -219,34 +217,34 @@ private fun GameTipsSectionCard(
     onCopyText: (String) -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    shape = smoothCornerShape(14.dp),
+                    shape = smoothCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Outlined.Lightbulb,
                             contentDescription = null,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = section.title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(

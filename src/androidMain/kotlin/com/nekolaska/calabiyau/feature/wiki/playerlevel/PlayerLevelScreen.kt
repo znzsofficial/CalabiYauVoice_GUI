@@ -174,14 +174,14 @@ fun PlayerLevelScreen(
 @Composable
 private fun PlayerLevelOverview(page: PlayerLevelPage) {
     Card(
-        shape = smoothCornerShape(28.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(page.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(page.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
             if (page.intro.isNotBlank()) {
-                Text(page.intro, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(page.intro, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f))
             }
         }
     }
@@ -189,10 +189,26 @@ private fun PlayerLevelOverview(page: PlayerLevelPage) {
 
 @Composable
 private fun SectionHeader(title: String, count: Int, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(21.dp))
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Text("$count 项", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+    ) {
+        Surface(
+            shape = smoothCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.padding(8.dp).size(20.dp)
+            )
+        }
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            Text("$count 项", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -201,11 +217,30 @@ private fun RewardCard(
     reward: PlayerLevelReward,
     onPreviewImage: (String, String) -> Unit
 ) {
-    Card(shape = smoothCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card(
+        shape = smoothCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${reward.level}级", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("${reward.items.size + reward.weapons.size} 项奖励", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Surface(
+                    shape = smoothCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Text(
+                        "${reward.level} 级",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "共 ${reward.items.size + reward.weapons.size} 项奖励",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 reward.items.forEach { item -> RewardItemPill(item, onPreviewImage) }
@@ -220,17 +255,17 @@ private fun RewardItemPill(item: PlayerLevelRewardItem, onPreviewImage: (String,
     Surface(
         shape = smoothCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     ) {
-        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(end = 12.dp, top = 6.dp, bottom = 6.dp, start = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             WikiIconBox(
                 imageUrl = item.iconUrl,
                 fallbackIcon = Icons.Outlined.MilitaryTech,
-                size = 34.dp,
+                size = 36.dp,
                 modifier = item.iconUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
             )
-            Column {
-                Text(item.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(item.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 item.count?.let { Text("x$it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
@@ -245,19 +280,19 @@ private fun LevelSegmentCard(
 ) {
     Surface(
         onClick = onClick,
-        shape = smoothCornerShape(18.dp),
+        shape = smoothCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     ) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             WikiIconBox(
                 imageUrl = segment.frameImageUrl,
                 fallbackIcon = Icons.Outlined.Grade,
-                size = 46.dp,
+                size = 52.dp,
                 modifier = segment.frameImageUrl?.let { Modifier.clickable { onPreviewImage(it, "等级 ${segment.startLevel}-${segment.endLevel}") } } ?: Modifier
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("等级 ${segment.startLevel}-${segment.endLevel}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("等级 ${segment.startLevel} - ${segment.endLevel}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("点击查看每级升级所需经验", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -268,14 +303,15 @@ private fun LevelSegmentCard(
 private fun LevelExpDialog(segment: PlayerLevelSegment, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = smoothCornerShape(32.dp),
         confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
         icon = { Icon(Icons.Outlined.Grade, contentDescription = null) },
-        title = { Text("等级 ${segment.startLevel}-${segment.endLevel}") },
+        title = { Text("等级 ${segment.startLevel} - ${segment.endLevel}") },
         text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 items(segment.entries, key = { "dialog-level-${it.level}" }) { entry ->
-                    Surface(shape = smoothCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Surface(shape = smoothCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("Lv.${entry.level}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(64.dp))
                             Text("升级所需经验", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                             Text(

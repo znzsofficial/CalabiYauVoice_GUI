@@ -47,24 +47,8 @@ fun GameHistoryScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = { state.reload(forceRefresh = true) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(
-                        onClick = { onOpenWikiUrl(GAME_HISTORY_PAGE_URL) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
-                    Spacer(Modifier.width(8.dp))
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    OpenWikiActionButton(wikiUrl = GAME_HISTORY_PAGE_URL, onOpenWikiUrl = onOpenWikiUrl)
                 },
                 scrollBehavior = scrollBehavior
             )
@@ -97,7 +81,7 @@ private fun GameHistorySectionCard(
     section: GameHistorySection,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    val sectionShape = smoothCornerShape(24.dp)
+    val sectionShape = smoothCornerShape(32.dp)
     Card(
         shape = sectionShape,
         modifier = Modifier.fillMaxWidth(),
@@ -105,42 +89,47 @@ private fun GameHistorySectionCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(24.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    if (section.title.contains("编年史") || section.title.contains("体验服") || section.title.contains("移动端")) {
-                        Icons.Outlined.Timeline
-                    } else {
-                        Icons.Outlined.History
-                    },
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(10.dp))
+                Surface(
+                    shape = smoothCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(
+                        if (section.title.contains("编年史") || section.title.contains("体验服") || section.title.contains("移动端")) {
+                            Icons.Outlined.Timeline
+                        } else {
+                            Icons.Outlined.History
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.padding(10.dp).size(24.dp)
+                    )
+                }
+                Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = section.title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     section.description?.takeIf { it.isNotBlank() }?.let { description ->
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = description,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            lineHeight = 18.sp
+                            lineHeight = 20.sp
                         )
                     }
                 }
             }
 
             if (section.entries.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(20.dp))
 
                 val cardEntries = section.entries.filter { it.imageUrl != null }
                 val linkEntries = section.entries.filter { it.imageUrl == null }
@@ -148,12 +137,12 @@ private fun GameHistorySectionCard(
                 if (cardEntries.isNotEmpty()) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         cardEntries.chunked(2).forEach { rowItems ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 rowItems.forEach { entry ->
                                     GameHistoryImageCard(
@@ -172,24 +161,27 @@ private fun GameHistorySectionCard(
 
                 if (linkEntries.isNotEmpty()) {
                     if (cardEntries.isNotEmpty()) {
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(16.dp))
                     }
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         linkEntries.forEach { entry ->
-                            FilledTonalButton(
+                            Surface(
                                 onClick = { onOpenWikiUrl(entry.url) },
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                                shape = smoothCornerShape(12.dp)
+                                shape = smoothCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             ) {
                                 Text(
                                     text = entry.title,
                                     style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                                 )
                             }
                         }
@@ -208,8 +200,8 @@ private fun GameHistoryImageCard(
 ) {
     Card(
         onClick = onClick,
-        shape = smoothCornerShape(12.dp),
-        modifier = modifier.aspectRatio(1.4f),
+        shape = smoothCornerShape(20.dp),
+        modifier = modifier.aspectRatio(1.5f),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
         )
@@ -228,20 +220,20 @@ private fun GameHistoryImageCard(
                     .fillMaxSize()
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.85f))
                         )
                     )
             )
             Text(
                 text = entry.title,
-                style = MaterialTheme.typography.labelLarge,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(12.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
             )
         }
     }

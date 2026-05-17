@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Stars
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.oath.api.OathApi
 import com.nekolaska.calabiyau.feature.wiki.oath.model.*
@@ -205,16 +207,16 @@ fun OathScreen(
 @Composable
 private fun OathOverview(page: OathPage) {
     Card(
-        shape = smoothCornerShape(28.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Text(page.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (page.summary.isNotBlank()) {
-                Text(page.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(page.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, lineHeight = 22.sp)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatPill("等级", page.levels.size.toString(), Modifier.weight(1f))
                 StatPill("礼物", (page.birthdayGifts.size + page.favorGifts.size).toString(), Modifier.weight(1f))
                 StatPill("羁绊", page.bondSections.sumOf { it.items.size }.toString(), Modifier.weight(1f))
@@ -225,8 +227,8 @@ private fun OathOverview(page: OathPage) {
 
 @Composable
 private fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Surface(modifier = modifier, shape = smoothCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -235,13 +237,13 @@ private fun StatPill(label: String, value: String, modifier: Modifier = Modifier
 
 @Composable
 private fun OathLevelCard(level: OathLevel) {
-    Card(shape = smoothCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Card(shape = smoothCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = smoothCornerShape(14.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text("Lv.${level.level}", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
+                Surface(shape = smoothCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text("Lv.${level.level}", modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(14.dp))
                 Text(level.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             DetailInfoRow("升级所需好感度", level.requiredFavor, labelWidth = 116.dp)
@@ -290,8 +292,8 @@ private fun FavorGiftCard(
 
 @Composable
 private fun BondSectionCard(section: OathBondSection, onPreviewImage: (String, String) -> Unit) {
-    Card(shape = smoothCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card(shape = smoothCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(section.character, section.items.size)
             section.items.forEachIndexed { index, item ->
                 BondItemView(item, onPreviewImage)
@@ -303,16 +305,18 @@ private fun BondSectionCard(section: OathBondSection, onPreviewImage: (String, S
 
 @Composable
 private fun BondItemView(item: OathBondItem, onPreviewImage: (String, String) -> Unit) {
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        WikiIconBox(
-            imageUrl = item.imageUrl,
-            fallbackIcon = Icons.Outlined.Stars,
-            size = 52.dp,
-            modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+        Surface(shape = smoothCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+            WikiIconBox(
+                imageUrl = item.imageUrl,
+                fallbackIcon = Icons.Outlined.Stars,
+                size = 56.dp,
+                modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(item.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(item.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 20.sp)
         }
     }
 }
@@ -326,16 +330,18 @@ private fun InfoCard(
     onPreviewImage: (String, String) -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Card(shape = smoothCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card(shape = smoothCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                WikiIconBox(
-                    imageUrl = imageUrl,
-                    fallbackIcon = icon,
-                    size = 56.dp,
-                    modifier = imageUrl?.let { Modifier.clickable { onPreviewImage(it, title) } } ?: Modifier
-                )
-                Spacer(Modifier.width(12.dp))
+                Surface(shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+                    WikiIconBox(
+                        imageUrl = imageUrl,
+                        fallbackIcon = icon,
+                        size = 60.dp,
+                        modifier = imageUrl?.let { Modifier.clickable { onPreviewImage(it, title) } } ?: Modifier
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -350,8 +356,18 @@ private fun InfoCard(
 @Composable
 private fun SectionTitle(title: String, count: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            shape = smoothCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ) {
+            Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.padding(6.dp).size(18.dp))
+        }
+        Spacer(Modifier.width(10.dp))
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        Text("$count 项", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Surface(shape = smoothCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            Text("$count 项", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 

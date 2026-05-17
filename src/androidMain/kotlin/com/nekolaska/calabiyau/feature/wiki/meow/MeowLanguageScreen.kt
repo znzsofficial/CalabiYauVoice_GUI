@@ -24,7 +24,6 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.FormatQuote
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
@@ -56,6 +55,8 @@ import androidx.compose.ui.unit.sp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -86,24 +87,8 @@ fun MeowLanguageScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = { state.reload(forceRefresh = true) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(
-                        onClick = { onOpenWikiUrl(MEOW_LANGUAGE_PAGE_URL) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
-                    Spacer(Modifier.width(8.dp))
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    OpenWikiActionButton(wikiUrl = MEOW_LANGUAGE_PAGE_URL, onOpenWikiUrl = onOpenWikiUrl)
                 },
                 scrollBehavior = scrollBehavior
             )
@@ -169,22 +154,22 @@ private fun RandomMeowQuoteCard(
     onCopy: () -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(26.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Surface(
-                    shape = smoothCornerShape(18.dp),
+                    shape = smoothCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(48.dp)
                 ) {
@@ -201,7 +186,7 @@ private fun RandomMeowQuoteCard(
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = "随机喵言喵语",
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold
                     )
@@ -232,17 +217,17 @@ private fun RandomMeowQuoteCard(
             }
 
             Surface(
-                shape = smoothCornerShape(18.dp),
+                shape = smoothCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = quote,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.Bold,
-                    lineHeight = 23.sp
+                    lineHeight = 24.sp
                 )
             }
         }
@@ -252,41 +237,41 @@ private fun RandomMeowQuoteCard(
 @Composable
 private fun MeowLanguageSectionHeaderCard(section: MeowLanguageSection) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = smoothCornerShape(14.dp),
+                shape = smoothCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
                     Icon(
                         if (section.title == "说明") Icons.AutoMirrored.Outlined.Article else Icons.Outlined.Pets,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = section.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 val lineCount = section.groups.sumOf { it.lines.size } + section.intro.size
                 Text(
                     text = "$lineCount 条内容",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -297,22 +282,22 @@ private fun MeowLanguageSectionHeaderCard(section: MeowLanguageSection) {
 @Composable
 private fun MeowLanguageIntroCard(intro: List<String>) {
     Card(
-        shape = smoothCornerShape(20.dp),
+        shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             intro.forEach { text ->
                 Text(
                     text = text,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
+                    lineHeight = 22.sp
                 )
             }
         }
@@ -325,37 +310,53 @@ private fun MeowLanguageGroupBlock(
     onCopyText: (String) -> Unit
 ) {
     Surface(
-        shape = smoothCornerShape(18.dp),
+        shape = smoothCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Outlined.ChatBubbleOutline,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = smoothCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
                 Text(
                     text = group.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            group.lines.forEach { line ->
-                CopyableMeowText(
-                    text = "• $line",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp,
-                    copyText = line,
-                    onCopy = onCopyText
-                )
+            Surface(
+                shape = smoothCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    group.lines.forEach { line ->
+                        CopyableMeowText(
+                            text = "• $line",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 22.sp,
+                            copyText = line,
+                            onCopy = onCopyText
+                        )
+                    }
+                }
             }
         }
     }

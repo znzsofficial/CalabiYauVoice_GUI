@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
@@ -180,16 +181,16 @@ fun ImprintScreen(
 private fun ImprintOverview(page: ImprintPage) {
     val imprintCount = page.sections.sumOf { it.imprints.size }
     Card(
-        shape = smoothCornerShape(28.dp),
+        shape = smoothCornerShape(32.dp),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Text(page.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (page.notice.isNotBlank()) {
-                Text(page.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(page.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, lineHeight = 22.sp)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatPill("角色", page.sections.size.toString(), Modifier.weight(1f))
                 StatPill("印迹", imprintCount.toString(), Modifier.weight(1f))
                 StatPill("等级", page.sections.flatMap { it.imprints }.mapNotNull { it.level }.distinct().size.toString(), Modifier.weight(1f))
@@ -200,8 +201,8 @@ private fun ImprintOverview(page: ImprintPage) {
 
 @Composable
 private fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Surface(modifier = modifier, shape = smoothCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -210,13 +211,21 @@ private fun StatPill(label: String, value: String, modifier: Modifier = Modifier
 
 @Composable
 private fun ImprintSectionCard(section: ImprintSection, onPreviewImage: (String, String) -> Unit) {
-    Card(shape = smoothCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card(shape = smoothCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = smoothCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp))
+                }
+                Spacer(Modifier.width(12.dp))
                 Text(section.character, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("${section.imprints.size} 项", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Text("${section.imprints.size} 项", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             section.imprints.forEach { item ->
                 ImprintItemCard(item, onPreviewImage)
@@ -228,21 +237,23 @@ private fun ImprintSectionCard(section: ImprintSection, onPreviewImage: (String,
 @Composable
 private fun ImprintItemCard(item: ImprintItem, onPreviewImage: (String, String) -> Unit) {
     Surface(
-        shape = smoothCornerShape(18.dp),
+        shape = smoothCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.Top
         ) {
-            WikiIconBox(
-                imageUrl = item.imageUrl,
-                fallbackIcon = Icons.Outlined.MilitaryTech,
-                size = 58.dp,
-                modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
-            )
+            Surface(shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                WikiIconBox(
+                    imageUrl = item.imageUrl,
+                    fallbackIcon = Icons.Outlined.MilitaryTech,
+                    size = 62.dp,
+                    modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
+                )
+            }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -256,14 +267,22 @@ private fun ImprintItemCard(item: ImprintItem, onPreviewImage: (String, String) 
                     item.level?.let { LevelPill(it) }
                 }
                 if (item.quote.isNotBlank()) {
-                    Text("【${item.quote}】", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(shape = smoothCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Text(
+                            "“${item.quote}”",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 21.sp
+                        )
+                    }
                 }
                 if (item.obtainMethod.isNotBlank()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                        Surface(shape = smoothCornerShape(14.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                             Text(
                                 "获得方式",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -280,10 +299,10 @@ private fun ImprintItemCard(item: ImprintItem, onPreviewImage: (String, String) 
 
 @Composable
 private fun LevelPill(level: Int) {
-    Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
+    Surface(shape = smoothCornerShape(14.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
         Text(
             "Lv.$level",
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onTertiaryContainer
