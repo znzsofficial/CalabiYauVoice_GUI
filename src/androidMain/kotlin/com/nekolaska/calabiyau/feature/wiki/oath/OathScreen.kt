@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.oath
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,6 +54,7 @@ fun OathScreen(
     var keyword by remember { mutableStateOf("") }
     var selectedCharacter by remember { mutableStateOf("全部角色") }
     var selectedGiftSource by remember { mutableStateOf(ALL_GIFT_SOURCES) }
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
 
     val page = state.data
     val characters = remember(page) {
@@ -105,7 +107,7 @@ fun OathScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载誓约数据…") }
+            loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -160,18 +162,42 @@ fun OathScreen(
                         }
                         if (filteredBirthdayGifts.isNotEmpty()) {
                             item { SectionTitle("角色生日专属礼物", filteredBirthdayGifts.size) }
-                            items(filteredBirthdayGifts, key = { "birthday-${it.character}-${it.name}" }) { gift -> BirthdayGiftCard(gift) }
+                            items(filteredBirthdayGifts, key = { "birthday-${it.character}-${it.name}" }) { gift ->
+                                BirthdayGiftCard(
+                                    gift = gift,
+                                    onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
+                                )
+                            }
                         }
                         if (filteredFavorGifts.isNotEmpty()) {
                             item { SectionTitle("礼物好感表", filteredFavorGifts.size) }
-                            items(filteredFavorGifts, key = { "favor-${it.source}-${it.name}" }) { gift -> FavorGiftCard(gift, selectedCharacter) }
+                            items(filteredFavorGifts, key = { "favor-${it.source}-${it.name}" }) { gift ->
+                                FavorGiftCard(
+                                    gift = gift,
+                                    selectedCharacter = selectedCharacter,
+                                    onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
+                                )
+                            }
                         }
                     }
-                    OathTab.BONDS -> items(filteredBondSections, key = { it.character }) { section -> BondSectionCard(section) }
+                    OathTab.BONDS -> items(filteredBondSections, key = { it.character }) { section ->
+                        BondSectionCard(
+                            section = section,
+                            onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
+                        )
+                    }
                 }
                 item { Spacer(Modifier.height(18.dp)) }
             }
         }
+    }
+
+    previewImage?.let { image ->
+        ImagePreviewDialog(
+            model = image.url,
+            contentDescription = image.title,
+            onDismiss = { previewImage = null }
+        )
     }
 }
 
@@ -224,15 +250,19 @@ private fun OathLevelCard(level: OathLevel) {
 }
 
 @Composable
-private fun BirthdayGiftCard(gift: OathBirthdayGift) {
-    InfoCard(title = gift.name, subtitle = gift.character, icon = Icons.Outlined.CardGiftcard, imageUrl = gift.imageUrl) {
+private fun BirthdayGiftCard(gift: OathBirthdayGift, onPreviewImage: (String, String) -> Unit) {
+    InfoCard(title = gift.name, subtitle = gift.character, icon = Icons.Outlined.CardGiftcard, imageUrl = gift.imageUrl, onPreviewImage = onPreviewImage) {
         Text(gift.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         DetailInfoRow("效果", gift.effect, labelWidth = 116.dp)
     }
 }
 
 @Composable
-private fun FavorGiftCard(gift: OathFavorGift, selectedCharacter: String) {
+private fun FavorGiftCard(
+    gift: OathFavorGift,
+    selectedCharacter: String,
+    onPreviewImage: (String, String) -> Unit
+) {
     val maxFavor = remember(gift.favorByCharacter) {
         gift.favorByCharacter.values.mapNotNull { it.toIntOrNull() }.maxOrNull()
     }
@@ -240,7 +270,8 @@ private fun FavorGiftCard(gift: OathFavorGift, selectedCharacter: String) {
         title = gift.name,
         subtitle = listOf(gift.source, gift.rarity).filter { it.isNotBlank() }.joinToString(" · "),
         icon = Icons.Outlined.CardGiftcard,
-        imageUrl = gift.imageUrl
+        imageUrl = gift.imageUrl,
+        onPreviewImage = onPreviewImage
     ) {
         Text(gift.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -257,12 +288,12 @@ private fun FavorGiftCard(gift: OathFavorGift, selectedCharacter: String) {
 }
 
 @Composable
-private fun BondSectionCard(section: OathBondSection) {
+private fun BondSectionCard(section: OathBondSection, onPreviewImage: (String, String) -> Unit) {
     Card(shape = smoothCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionTitle(section.character, section.items.size)
             section.items.forEachIndexed { index, item ->
-                BondItemView(item)
+                BondItemView(item, onPreviewImage)
                 if (index != section.items.lastIndex) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
             }
         }
@@ -270,9 +301,14 @@ private fun BondSectionCard(section: OathBondSection) {
 }
 
 @Composable
-private fun BondItemView(item: OathBondItem) {
+private fun BondItemView(item: OathBondItem, onPreviewImage: (String, String) -> Unit) {
     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        WikiIconBox(imageUrl = item.imageUrl, fallbackIcon = Icons.Outlined.Stars, size = 52.dp)
+        WikiIconBox(
+            imageUrl = item.imageUrl,
+            fallbackIcon = Icons.Outlined.Stars,
+            size = 52.dp,
+            modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
+        )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text(item.description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -286,12 +322,18 @@ private fun InfoCard(
     subtitle: String,
     icon: ImageVector,
     imageUrl: String?,
+    onPreviewImage: (String, String) -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(shape = smoothCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                WikiIconBox(imageUrl = imageUrl, fallbackIcon = icon, size = 56.dp)
+                WikiIconBox(
+                    imageUrl = imageUrl,
+                    fallbackIcon = icon,
+                    size = 56.dp,
+                    modifier = imageUrl?.let { Modifier.clickable { onPreviewImage(it, title) } } ?: Modifier
+                )
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -302,6 +344,7 @@ private fun InfoCard(
         }
     }
 }
+
 
 @Composable
 private fun SectionTitle(title: String, count: Int) {

@@ -120,8 +120,7 @@ fun CollaborationScreen(
         ImagePreviewDialog(
             model = imageUrl,
             contentDescription = "联动图片",
-            onDismiss = { previewImage = null },
-            onSave = {}
+            onDismiss = { previewImage = null }
         )
     }
 }

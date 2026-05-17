@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.achievement
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -38,11 +39,14 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.WikiIconBox
+import com.nekolaska.calabiyau.core.ui.WikiListSkeleton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.achievement.api.AchievementApi
@@ -67,6 +71,7 @@ fun AchievementScreen(
     var keyword by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(ALL_CATEGORIES) }
     var selectedLevel by remember { mutableStateOf(ALL_LEVELS) }
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
 
     val page = state.data
     val categories = remember(page.sections) { listOf(ALL_CATEGORIES) + page.sections.map { it.category } }
@@ -106,7 +111,7 @@ fun AchievementScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载成就数据…") }
+            loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -140,16 +145,30 @@ fun AchievementScreen(
                     )
                 }
                 items(filteredSections, key = { it.category }) { section ->
-                    AchievementSectionCard(section)
+                    AchievementSectionCard(
+                        section = section,
+                        onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
+                    )
                 }
                 item { Spacer(Modifier.height(18.dp)) }
             }
         }
     }
+
+    previewImage?.let { image ->
+        ImagePreviewDialog(
+            model = image.url,
+            contentDescription = image.title,
+            onDismiss = { previewImage = null }
+        )
+    }
 }
 
 @Composable
-private fun AchievementSectionCard(section: AchievementSection) {
+private fun AchievementSectionCard(
+    section: AchievementSection,
+    onPreviewImage: (String, String) -> Unit
+) {
     Card(shape = smoothCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -158,13 +177,13 @@ private fun AchievementSectionCard(section: AchievementSection) {
                 Text(section.category, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Text("${section.achievements.size} 项", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            section.achievements.forEach { item -> AchievementItemCard(item) }
+            section.achievements.forEach { item -> AchievementItemCard(item, onPreviewImage) }
         }
     }
 }
 
 @Composable
-private fun AchievementItemCard(item: AchievementItem) {
+private fun AchievementItemCard(item: AchievementItem, onPreviewImage: (String, String) -> Unit) {
     Surface(
         shape = smoothCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -175,7 +194,12 @@ private fun AchievementItemCard(item: AchievementItem) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            WikiIconBox(imageUrl = item.imageUrl, fallbackIcon = Icons.Outlined.MilitaryTech, size = 58.dp)
+            WikiIconBox(
+                imageUrl = item.imageUrl,
+                fallbackIcon = Icons.Outlined.MilitaryTech,
+                size = 58.dp,
+                modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
+            )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -209,6 +233,7 @@ private fun AchievementItemCard(item: AchievementItem) {
         }
     }
 }
+
 
 @Composable
 private fun LevelPill(level: String) {

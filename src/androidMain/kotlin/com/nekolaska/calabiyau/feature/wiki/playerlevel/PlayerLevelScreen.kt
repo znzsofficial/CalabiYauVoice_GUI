@@ -48,9 +48,11 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.WikiIconBox
+import com.nekolaska.calabiyau.core.ui.WikiListSkeleton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.api.PlayerLevelApi
@@ -79,7 +81,7 @@ fun PlayerLevelScreen(
     }
     var keyword by remember { mutableStateOf("") }
     var selectedSegment by remember { mutableStateOf<PlayerLevelSegment?>(null) }
-    var previewImage by remember { mutableStateOf<PlayerLevelPreviewImage?>(null) }
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
     val page = state.data
     val filteredLevels = remember(page.levels, keyword) {
         page.levels.filter { level ->
@@ -114,7 +116,7 @@ fun PlayerLevelScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载玩家等级数据…") }
+            loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 0) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -137,7 +139,7 @@ fun PlayerLevelScreen(
                     items(filteredRewards, key = { "reward-${it.level}" }) { reward ->
                         RewardCard(
                             reward = reward,
-                            onPreviewImage = { url, title -> previewImage = PlayerLevelPreviewImage(url, title) }
+                            onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
                         )
                     }
                 }
@@ -148,7 +150,7 @@ fun PlayerLevelScreen(
                         LevelSegmentCard(
                             segment = segment,
                             onClick = { selectedSegment = segment },
-                            onPreviewImage = { url, title -> previewImage = PlayerLevelPreviewImage(url, title) }
+                            onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
                         )
                     }
                 }
@@ -164,8 +166,7 @@ fun PlayerLevelScreen(
         ImagePreviewDialog(
             model = image.url,
             contentDescription = image.title,
-            onDismiss = { previewImage = null },
-            onSave = {}
+            onDismiss = { previewImage = null }
         )
     }
 }
@@ -298,10 +299,6 @@ private data class PlayerLevelSegment(
     val entries: List<PlayerLevelEntry>
 )
 
-private data class PlayerLevelPreviewImage(
-    val url: String,
-    val title: String
-)
 
 private fun List<PlayerLevelEntry>.toPlayerLevelSegments(): List<PlayerLevelSegment> {
     val sorted = distinctBy { it.level }.sortedBy { it.level }

@@ -70,7 +70,7 @@ fun PortraitGrid(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(sorted) { name ->
+        items(sorted, key = { it }) { name ->
             val avatarUrl = characterAvatars[name]
             val isFavorite = name in favorites
             Card(
