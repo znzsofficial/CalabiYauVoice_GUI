@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.game
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,11 +12,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
@@ -96,30 +97,36 @@ private fun GameModeCard(
     onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)?
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = smoothCornerShape(28.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             // 标题行（可点击展开/折叠）
             Surface(
                 onClick = onToggle,
-                shape = smoothCornerShape(12.dp),
-                color = Color.Transparent
+                shape = smoothCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        modeIcon(mode.name),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Surface(
+                        shape = smoothCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ) {
+                        Icon(
+                            modeIcon(mode.name),
+                            contentDescription = null,
+                            modifier = Modifier.padding(9.dp).size(22.dp)
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             mode.name,
                             style = MaterialTheme.typography.titleMedium,
@@ -135,48 +142,36 @@ private fun GameModeCard(
                             )
                         }
                     }
-                    Icon(
-                        if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Surface(shape = smoothCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Icon(
+                            if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.padding(6.dp).size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             // 展开内容
             if (isExpanded) {
-                Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                 // 获胜条件
                 if (mode.winCondition.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
                     ModeSectionTitle(Icons.Outlined.EmojiEvents, "获胜条件")
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        mode.winCondition,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    InfoTextPanel(mode.winCondition)
                 }
 
                 // 模式设定
                 if (mode.settings.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
                     ModeSectionTitle(Icons.Outlined.Settings, "模式设定")
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        mode.settings,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    InfoTextPanel(mode.settings)
                 }
 
                 // 可用地图
                 if (mode.maps.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
                     ModeSectionTitle(Icons.Outlined.Map, "可用地图")
-                    Spacer(Modifier.height(8.dp))
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -192,8 +187,8 @@ private fun GameModeCard(
                                         onOpenWikiUrl("https://wiki.biligame.com/klbq/$enc")
                                     }
                                 },
-                                shape = smoothCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                shape = smoothCornerShape(14.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp)
                             ) {
                                 Text(mapName, style = MaterialTheme.typography.labelMedium)
                             }
@@ -202,16 +197,15 @@ private fun GameModeCard(
                 }
 
                 // 查看完整页面
-                Spacer(Modifier.height(12.dp))
                 Surface(
                     onClick = { onOpenWikiUrl(mode.wikiUrl) },
-                    shape = smoothCornerShape(12.dp),
-                    color = Color.Transparent
+                    shape = smoothCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -228,7 +222,7 @@ private fun GameModeCard(
                         )
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
                         )
                     }
                 }
@@ -239,11 +233,37 @@ private fun GameModeCard(
 
 @Composable
 private fun ModeSectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(8.dp))
-        Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Surface(
+            shape = smoothCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ) {
+            Icon(icon, null, Modifier.padding(6.dp).size(17.dp))
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
+private fun InfoTextPanel(text: String) {
+    Surface(
+        shape = smoothCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 22.sp
+        )
     }
 }
 

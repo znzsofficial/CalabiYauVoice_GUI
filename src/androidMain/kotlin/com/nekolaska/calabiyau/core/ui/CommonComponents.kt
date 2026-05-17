@@ -388,9 +388,14 @@ fun DetailInfoRow(
  */
 @Composable
 fun SectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.width(10.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(
+            shape = smoothCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp))
+        }
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
 }

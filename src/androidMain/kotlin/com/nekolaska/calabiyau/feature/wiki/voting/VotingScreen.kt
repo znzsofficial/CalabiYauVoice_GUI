@@ -270,23 +270,29 @@ private fun VotingContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 投票标题
-                Text(
-                    text = "传说时装 & 宿舍时装投票",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Surface(
+                    shape = smoothCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Text(
+                        text = "传说时装 & 宿舍时装投票",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
                 // 提示信息
                 Card(
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
                     ),
-                    shape = smoothCornerShape(12.dp)
+                    shape = smoothCornerShape(18.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         listOf(
                             "本投票不设置结束时间和票数限制",
@@ -295,14 +301,19 @@ private fun VotingContent(
                         ).forEach { hint ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    Icons.Outlined.Info,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                                Surface(
+                                    shape = smoothCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Info,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(4.dp).size(13.dp)
+                                    )
+                                }
                                 Text(
                                     text = hint,
                                     style = MaterialTheme.typography.bodySmall,
@@ -319,18 +330,24 @@ private fun VotingContent(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         ),
-                        shape = smoothCornerShape(12.dp)
+                        shape = smoothCornerShape(18.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                Icons.Outlined.Warning,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            Surface(
+                                shape = smoothCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Warning,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(5.dp).size(16.dp)
+                                )
+                            }
                             Text(
                                 "请先在 Wiki 页面登录后再投票",
                                 style = MaterialTheme.typography.bodyMedium,
@@ -342,22 +359,33 @@ private fun VotingContent(
 
                 // 投票统计
                 if (voteState != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Surface(
+                        shape = smoothCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
-                        Icon(
-                            Icons.Outlined.People,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "累计投票人数：$previewTotal",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = smoothCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ) {
+                                Icon(
+                                    Icons.Outlined.People,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(6.dp).size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = "累计投票人数：$previewTotal",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
 
@@ -432,7 +460,7 @@ private fun CandidateCard(
         onClick = onClick,
         enabled = isLoggedIn,
         modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(12.dp),
+        shape = smoothCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
@@ -441,7 +469,7 @@ private fun CandidateCard(
             color = borderColor
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 2.dp else 0.dp
+            defaultElevation = if (isSelected) 3.dp else 0.dp
         )
     ) {
         Column {
@@ -450,7 +478,7 @@ private fun CandidateCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(3f / 4f)
-                    .clip(smoothCornerShape(12.dp))
+                    .clip(smoothCornerShape(18.dp))
             ) {
                 AsyncImage(
                     model = imageUrl,
@@ -464,16 +492,16 @@ private fun CandidateCard(
                     Surface(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .size(24.dp),
-                        shape = smoothCornerShape(6.dp),
+                            .padding(8.dp)
+                            .size(28.dp),
+                        shape = smoothCornerShape(10.dp),
                         color = MaterialTheme.colorScheme.primary
                     ) {
                         Icon(
                             Icons.Filled.CheckCircle,
                             contentDescription = "已选",
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(2.dp)
+                            modifier = Modifier.padding(3.dp)
                         )
                     }
                 }
@@ -481,9 +509,9 @@ private fun CandidateCard(
 
             // 信息区
             Column(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // 时装名称
                 Text(
@@ -538,20 +566,26 @@ private fun VotingBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 选中数量提示
-            Icon(
-                Icons.Filled.HowToVote,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Surface(
+                shape = smoothCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ) {
+                Icon(
+                    Icons.Filled.HowToVote,
+                    contentDescription = null,
+                    modifier = Modifier.padding(7.dp).size(20.dp)
+                )
+            }
             Text(
                 text = "已选 $selectedCount 项",
                 style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f)
             )
@@ -560,7 +594,7 @@ private fun VotingBottomBar(
             FilledTonalButton(
                 onClick = onSubmit,
                 enabled = hasChanges && !isSubmitting,
-                shape = smoothCornerShape(12.dp)
+                shape = smoothCornerShape(16.dp)
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
