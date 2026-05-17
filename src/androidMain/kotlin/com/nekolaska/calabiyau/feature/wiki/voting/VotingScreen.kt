@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.voting.api.VotingApi
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
@@ -100,7 +101,7 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                     },
                     actions = {
                         // 刷新按钮
-                        FilledTonalIconButton(
+                        RefreshActionButton(
                             onClick = {
                                 scope.launch {
                                     isLoadingConfig = true
@@ -132,13 +133,8 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                                     isLoadingConfig = false
                                 }
                             },
-                            enabled = !isLoadingConfig && !isLoadingData,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            )
-                        ) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                        }
+                            enabled = !isLoadingConfig && !isLoadingData
+                        )
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface

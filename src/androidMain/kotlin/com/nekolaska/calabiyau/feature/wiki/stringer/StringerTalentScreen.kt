@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.PhotoFilter
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Card
@@ -47,6 +46,7 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.stringer.api.StringerTalentApi
@@ -75,17 +75,7 @@ fun StringerTalentScreen(
                 title = { Text("超弦体天赋", fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = {
-                            state.data.wikiUrl.takeIf { it.isNotBlank() }?.let(onOpenWikiUrl)
-                        },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                        enabled = state.data.wikiUrl.isNotBlank()
-                    ) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
+                    OpenWikiActionButton(wikiUrl = state.data.wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                 }
             )
         }

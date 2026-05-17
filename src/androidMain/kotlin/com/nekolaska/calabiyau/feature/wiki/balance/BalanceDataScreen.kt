@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.FlashOn
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -31,6 +30,7 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.balance.api.BalanceDataApi
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceResult
@@ -179,17 +179,10 @@ fun BalanceDataScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = {
-                            loadSettings(forceRefresh = true)
-                        },
-                        enabled = !isLoadingSettings && !isLoadingData,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, "刷新")
-                    }
+                    RefreshActionButton(
+                        onClick = { loadSettings(forceRefresh = true) },
+                        enabled = !isLoadingSettings && !isLoadingData
+                    )
                 }
             )
         }

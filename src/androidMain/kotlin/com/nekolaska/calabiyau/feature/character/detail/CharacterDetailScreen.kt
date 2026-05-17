@@ -34,6 +34,7 @@ import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailApi.Chara
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.InfoChip
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SkeletonCard
@@ -90,9 +91,7 @@ fun CharacterDetailScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = { onOpenWikiUrl(wikiUrl) }) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
+                    OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                 },
                 scrollBehavior = scrollBehavior
             )

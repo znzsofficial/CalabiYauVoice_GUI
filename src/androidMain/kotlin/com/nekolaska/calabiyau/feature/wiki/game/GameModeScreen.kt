@@ -21,6 +21,7 @@ import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import java.net.URLEncoder
@@ -49,13 +50,11 @@ fun GameModeScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = {
-                        onOpenWikiUrl("https://wiki.biligame.com/klbq/%E6%88%98%E6%96%97%E6%A8%A1%E5%BC%8F")
-                    }, colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    )) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
+                    OpenWikiActionButton(
+                        wikiUrl = "https://wiki.biligame.com/klbq/%E6%88%98%E6%96%97%E6%A8%A1%E5%BC%8F",
+                        onOpenWikiUrl = onOpenWikiUrl,
+                        contentDescription = "在浏览器中打开"
+                    )
                 }
             )
         }

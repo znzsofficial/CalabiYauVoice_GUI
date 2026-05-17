@@ -32,6 +32,7 @@ import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavSection
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
@@ -95,9 +96,7 @@ fun NavigationMenuScreen(
                                 )
                             }
                         }
-                        IconButton(onClick = { state.reload(forceRefresh = true) }, enabled = !state.isLoading) {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                        }
+                        RefreshActionButton(onClick = { state.reload(forceRefresh = true) }, enabled = !state.isLoading)
                     }
                 )
             }
