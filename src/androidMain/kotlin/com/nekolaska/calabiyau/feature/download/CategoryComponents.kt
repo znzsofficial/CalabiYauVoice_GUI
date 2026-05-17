@@ -57,7 +57,7 @@ fun CategoryGroupList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(sorted) { group ->
+        items(sorted, key = { it.characterName }) { group ->
             GroupCard(
                 group = group,
                 avatarUrl = characterAvatars[group.characterName],
@@ -258,7 +258,7 @@ fun CategoryDetailContent(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(subCategories) { cat ->
+                items(subCategories, key = { it }) { cat ->
                     val isRoot = cat == group.rootCategory
                     val cleanName = cat.removePrefix("Category:").removePrefix("分类:")
                     val displayName = if (isRoot) "根分类" else cleanName.replace(group.characterName, "").trimStart('/', ' ', '-')

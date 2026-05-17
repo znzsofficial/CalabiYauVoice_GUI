@@ -151,8 +151,7 @@ fun MemeScreen(
         ImagePreviewDialog(
             model = imageUrl,
             contentDescription = previewIssue?.title.orEmpty(),
-            onDismiss = { previewIssue = null },
-            onSave = {}
+            onDismiss = { previewIssue = null }
         )
     }
 }

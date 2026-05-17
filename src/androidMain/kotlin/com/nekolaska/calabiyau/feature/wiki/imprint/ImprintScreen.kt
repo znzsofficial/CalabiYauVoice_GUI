@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.imprint
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -39,11 +40,14 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.WikiIconBox
+import com.nekolaska.calabiyau.core.ui.WikiListSkeleton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.imprint.api.ImprintApi
@@ -72,6 +76,7 @@ fun ImprintScreen(
     var keyword by remember { mutableStateOf("") }
     var selectedCharacter by remember { mutableStateOf(ALL_CHARACTERS) }
     var selectedLevel by remember { mutableStateOf(ALL_LEVELS) }
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
 
     val page = state.data
     val characters = remember(page.sections) {
@@ -117,7 +122,7 @@ fun ImprintScreen(
             state = state,
             modifier = Modifier.padding(innerPadding),
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod,"正在加载印迹数据…") }
+            loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -152,11 +157,22 @@ fun ImprintScreen(
                     )
                 }
                 items(filteredSections, key = { it.character }) { section ->
-                    ImprintSectionCard(section)
+                    ImprintSectionCard(
+                        section = section,
+                        onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
+                    )
                 }
                 item { Spacer(Modifier.height(18.dp)) }
             }
         }
+    }
+
+    previewImage?.let { image ->
+        ImagePreviewDialog(
+            model = image.url,
+            contentDescription = image.title,
+            onDismiss = { previewImage = null }
+        )
     }
 }
 
@@ -193,7 +209,7 @@ private fun StatPill(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun ImprintSectionCard(section: ImprintSection) {
+private fun ImprintSectionCard(section: ImprintSection, onPreviewImage: (String, String) -> Unit) {
     Card(shape = smoothCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -203,14 +219,14 @@ private fun ImprintSectionCard(section: ImprintSection) {
                 Text("${section.imprints.size} 项", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             section.imprints.forEach { item ->
-                ImprintItemCard(item)
+                ImprintItemCard(item, onPreviewImage)
             }
         }
     }
 }
 
 @Composable
-private fun ImprintItemCard(item: ImprintItem) {
+private fun ImprintItemCard(item: ImprintItem, onPreviewImage: (String, String) -> Unit) {
     Surface(
         shape = smoothCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -221,7 +237,12 @@ private fun ImprintItemCard(item: ImprintItem) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            WikiIconBox(imageUrl = item.imageUrl, fallbackIcon = Icons.Outlined.MilitaryTech, size = 58.dp)
+            WikiIconBox(
+                imageUrl = item.imageUrl,
+                fallbackIcon = Icons.Outlined.MilitaryTech,
+                size = 58.dp,
+                modifier = item.imageUrl?.let { Modifier.clickable { onPreviewImage(it, item.name) } } ?: Modifier
+            )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -255,6 +276,7 @@ private fun ImprintItemCard(item: ImprintItem) {
         }
     }
 }
+
 
 @Composable
 private fun LevelPill(level: Int) {

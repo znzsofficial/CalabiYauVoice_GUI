@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.map
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -25,7 +26,9 @@ import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
 import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -108,6 +111,7 @@ private fun MapDetailContent(
     previewImageUrl: String?,
     modifier: Modifier = Modifier
 ) {
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
@@ -126,14 +130,20 @@ private fun MapDetailContent(
         // ── 地形图 ──
         if (detail.terrainMapUrl != null) {
             item(key = "terrain") {
-                MapTerrainCard(detail.terrainMapUrl)
+                MapTerrainCard(
+                    terrainMapUrl = detail.terrainMapUrl,
+                    onPreview = { previewImage = PreviewImage(detail.terrainMapUrl, "${detail.name} 地形图") }
+                )
             }
         }
 
         // ── 地图概览（横向滚动图片） ──
         if (detail.galleryUrls.isNotEmpty()) {
             item(key = "gallery") {
-                MapGalleryCard(detail.galleryUrls)
+                MapGalleryCard(
+                    galleryUrls = detail.galleryUrls,
+                    onPreview = { url -> previewImage = PreviewImage(url, "${detail.name} 地图概览") }
+                )
             }
         }
 
@@ -145,6 +155,14 @@ private fun MapDetailContent(
         }
 
         item { Spacer(Modifier.height(24.dp)) }
+    }
+
+    previewImage?.let { image ->
+        ImagePreviewDialog(
+            model = image.url,
+            contentDescription = image.title,
+            onDismiss = { previewImage = null }
+        )
     }
 }
 
@@ -190,6 +208,7 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
             }
         }
     }
+
 }
 
 // ────────────────────────────────────────────
@@ -274,7 +293,7 @@ private fun MapInfoCard(detail: MapDetail) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun MapTerrainCard(terrainMapUrl: String) {
+private fun MapTerrainCard(terrainMapUrl: String, onPreview: () -> Unit) {
     Card(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
@@ -288,6 +307,7 @@ private fun MapTerrainCard(terrainMapUrl: String) {
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable(onClick = onPreview)
                     .clip(smoothCornerShape(16.dp))
             )
         }
@@ -299,7 +319,7 @@ private fun MapTerrainCard(terrainMapUrl: String) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun MapGalleryCard(galleryUrls: List<String>) {
+private fun MapGalleryCard(galleryUrls: List<String>, onPreview: (String) -> Unit) {
     Card(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
@@ -310,9 +330,10 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(galleryUrls) { url ->
+                items(galleryUrls, key = { it }) { url ->
                     Card(
                         shape = smoothCornerShape(16.dp),
+                        onClick = { onPreview(url) },
                         modifier = Modifier.width(280.dp)
                     ) {
                         AsyncImage(
@@ -329,6 +350,7 @@ private fun MapGalleryCard(galleryUrls: List<String>) {
         }
     }
 }
+
 
 @Composable
 private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {

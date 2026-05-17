@@ -20,12 +20,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.media.AudioPlayButton
 import com.nekolaska.calabiyau.core.ui.EmptyState
-import com.nekolaska.calabiyau.core.ui.ZoomableImage
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 @Composable
@@ -103,7 +101,7 @@ fun FileSearchList(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(results) { (name, url) ->
+            items(results, key = { it.second }) { (name, url) ->
                 FileItem(
                     name = name,
                     url = url,
@@ -145,8 +143,8 @@ fun FileSearchList(
     // 图片预览弹窗
     previewImage?.let { (name, url) ->
         ImagePreviewDialog(
-            title = name,
-            imageUrl = url,
+            model = url,
+            contentDescription = name,
             onDismiss = { previewImage = null }
         )
     }
@@ -245,69 +243,6 @@ fun FileItem(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-fun ImagePreviewDialog(
-    title: String,
-    imageUrl: String,
-    onDismiss: () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            shape = smoothCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 0.dp
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                // Header
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                // Image — 全局 SingletonImageLoader 已注册 AnimatedImageDecoder / GifDecoder，
-                // GIF 与静态图都直接走 ZoomableImage / AsyncImage。
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ZoomableImage(
-                        model = imageUrl,
-                        contentDescription = title,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(smoothCornerShape(16.dp))
-                    )
-                }
             }
         }
     }
@@ -517,7 +452,7 @@ fun FileSelectionSheet(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        items(filteredFiles) { (name, url) ->
+                        items(filteredFiles, key = { it.second }) { (name, url) ->
                             FileItem(
                                 name = name,
                                 url = url,
@@ -551,8 +486,8 @@ fun FileSelectionSheet(
     // 图片预览弹窗
     previewImage?.let { (name, url) ->
         ImagePreviewDialog(
-            title = name,
-            imageUrl = url,
+            model = url,
+            contentDescription = name,
             onDismiss = { previewImage = null }
         )
     }
