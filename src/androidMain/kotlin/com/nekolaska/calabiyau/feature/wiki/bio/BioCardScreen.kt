@@ -33,7 +33,9 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
@@ -157,29 +159,15 @@ fun BioCardScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(
-                        onClick = { state.reload(forceRefresh = true) },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = "刷新")
-                    }
-                    FilledTonalIconButton(
-                        onClick = {
-                            val url = when (selectedTab) {
-                                BioCardTab.PC -> data.pcWikiUrl
-                                BioCardTab.MOBILE -> data.mobileWikiUrl
-                                BioCardTab.DECK -> data.deckWikiUrl
-                            }
-                            if (url.isNotBlank()) onOpenWikiUrl(url)
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    OpenWikiActionButton(
+                        wikiUrl = when (selectedTab) {
+                            BioCardTab.PC -> data.pcWikiUrl
+                            BioCardTab.MOBILE -> data.mobileWikiUrl
+                            BioCardTab.DECK -> data.deckWikiUrl
                         },
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "打开 Wiki")
-                    }
+                        onOpenWikiUrl = onOpenWikiUrl
+                    )
                 }
             )
         }

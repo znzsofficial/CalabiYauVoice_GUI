@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material3.*
@@ -28,6 +27,7 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.LoadingState
+import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -51,6 +51,10 @@ fun MapDetailScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var detail by remember { mutableStateOf<MapDetail?>(null) }
     var retryTrigger by remember { mutableIntStateOf(0) }
+    val wikiUrl = remember(mapName) {
+        val enc = URLEncoder.encode(mapName, "UTF-8").replace("+", "%20")
+        "https://wiki.biligame.com/klbq/$enc"
+    }
 
     LaunchedEffect(mapName, retryTrigger) {
         isLoading = true
@@ -73,12 +77,7 @@ fun MapDetailScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    FilledTonalIconButton(onClick = {
-                        val enc = URLEncoder.encode(mapName, "UTF-8").replace("+", "%20")
-                        onOpenWikiUrl("https://wiki.biligame.com/klbq/$enc")
-                    }) {
-                        Icon(Icons.Outlined.OpenInBrowser, contentDescription = "在浏览器中打开")
-                    }
+                    OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                 }
             )
         }
