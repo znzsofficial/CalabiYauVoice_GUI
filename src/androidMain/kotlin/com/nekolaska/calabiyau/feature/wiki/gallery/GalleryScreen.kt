@@ -11,7 +11,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,13 +33,11 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.gallery.api.GalleryApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
@@ -94,25 +94,28 @@ fun GalleryScreen(
             loading = { mod -> GallerySkeleton(mod) }
         ) { sections ->
             Column(Modifier.fillMaxSize()) {
-                // ── Section 切换 FilterChip ──
+                val safeSelectedSectionIndex = selectedSectionIndex.coerceIn(0, sections.lastIndex)
+                if (safeSelectedSectionIndex != selectedSectionIndex) {
+                    LaunchedEffect(safeSelectedSectionIndex) { selectedSectionIndex = safeSelectedSectionIndex }
+                }
+
+                // ── Section 选择器 ──
                 if (sections.size > 1) {
-                    HorizontalFilterChips(
-                        items = sections.indices.toList(),
-                        selected = selectedSectionIndex,
-                        label = { index -> sections[index].title },
-                        onSelected = { selectedSectionIndex = it },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        showCheckIcon = true
+                    GallerySectionSelector(
+                        sections = sections,
+                        selectedIndex = safeSelectedSectionIndex,
+                        onSelectedIndexChange = { selectedSectionIndex = it },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
 
                 // ── 图片网格 ──
-                val currentSection = sections.getOrNull(selectedSectionIndex)
+                val currentSection = sections.getOrNull(safeSelectedSectionIndex)
                 if (currentSection != null) {
                     val gridState = rememberLazyGridState()
 
                     // section 切换时滚动到顶部
-                    LaunchedEffect(selectedSectionIndex) {
+                    LaunchedEffect(safeSelectedSectionIndex) {
                         gridState.scrollToItem(0)
                     }
 
@@ -151,17 +154,38 @@ fun GalleryScreen(
             onSave = { saveTargetImage = image }
         ) {
             if (image.caption.isNotBlank()) {
-                Text(
-                    text = image.caption,
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = image.caption,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                    if (image.description.isNotBlank()) {
+                        Text(
+                            text = image.description,
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    if (image.obtainMethod.isNotBlank()) {
+                        Text(
+                            text = "获取方式：${image.obtainMethod}",
+                            color = Color.White.copy(alpha = 0.82f),
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }
@@ -210,25 +234,162 @@ fun GalleryScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GallerySectionSelector(
+    sections: List<GallerySection>,
+    selectedIndex: Int,
+    onSelectedIndexChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedSection = sections.getOrNull(selectedIndex) ?: return
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(smoothCornerShape(24.dp))
+                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
+            shape = smoothCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Surface(
+                    shape = smoothCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(
+                        Icons.Outlined.Image,
+                        contentDescription = null,
+                        modifier = Modifier.padding(10.dp).size(22.dp)
+                    )
+                }
+
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = selectedSection.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "${selectedIndex + 1}/${sections.size}  ·  共 ${selectedSection.images.size} 张",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    shape = smoothCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    ExposedDropdownMenuDefaults.TrailingIcon(
+                        expanded = expanded,
+                        modifier = Modifier.padding(4.dp)
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .exposedDropdownSize()
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            sections.forEachIndexed { index, section ->
+                val selected = index == selectedIndex
+                DropdownMenuItem(
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = section.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${index + 1}/${sections.size} · ${section.images.size} 张",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    leadingIcon = {
+                        Surface(
+                            shape = smoothCornerShape(14.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Icon(
+                                imageVector = if (selected) Icons.Default.Check else Icons.Outlined.Image,
+                                contentDescription = null,
+                                modifier = Modifier.padding(7.dp).size(18.dp)
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelectedIndexChange(index)
+                        expanded = false
+                    },
+                    colors = MenuDefaults.itemColors(
+                        textColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun GallerySkeleton(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = smoothCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
         ) {
-            repeat(4) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                ShimmerBox(
+                    modifier = Modifier.size(42.dp),
+                    shape = smoothCornerShape(14.dp)
+                )
+                Column(Modifier.weight(1f)) {
+                    ShimmerBox(Modifier.fillMaxWidth(0.46f).height(18.dp))
+                    Spacer(Modifier.height(8.dp))
+                    ShimmerBox(Modifier.fillMaxWidth(0.32f).height(12.dp))
+                }
                 ShimmerBox(
                     modifier = Modifier
-                        .width(if (it == 0) 76.dp else 64.dp)
-                        .height(32.dp),
-                    shape = smoothCapsuleShape()
+                        .padding(4.dp)
+                        .size(32.dp),
+                    shape = smoothCornerShape(12.dp)
                 )
             }
         }
@@ -301,13 +462,34 @@ private fun GalleryImageCard(
                 contentScale = ContentScale.Crop
             )
             if (image.caption.isNotBlank()) {
-                Text(
-                    text = image.caption,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                )
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = image.caption,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (image.obtainMethod.isNotBlank()) {
+                        Text(
+                            text = "获取方式：${image.obtainMethod}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (image.description.isNotBlank()) {
+                        Text(
+                            text = image.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }

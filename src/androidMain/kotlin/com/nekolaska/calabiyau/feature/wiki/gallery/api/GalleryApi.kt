@@ -64,13 +64,21 @@ object GalleryApi {
                     )
                 }
 
-                val allFileNames = rawSections.flatMap { s -> s.second.map { it.first } }.distinct()
+                val allFileNames = rawSections
+                    .flatMap { s -> s.second.filter { it.directImageUrl.isNullOrBlank() }.map { it.fileName } }
+                    .distinct()
                 val urlMap = GalleryRemoteSource.fetchImageUrls(allFileNames, forceRefresh)
 
                 val sections = rawSections.mapNotNull { (title, files) ->
-                    val images = files.mapNotNull { (fileName, caption) ->
-                        val imageUrl = urlMap[fileName] ?: return@mapNotNull null
-                        GalleryImage(fileName, caption, imageUrl)
+                    val images = files.mapNotNull { image ->
+                        val imageUrl = image.directImageUrl ?: urlMap[image.fileName] ?: return@mapNotNull null
+                        GalleryImage(
+                            fileName = image.fileName,
+                            caption = image.caption,
+                            imageUrl = imageUrl,
+                            description = image.description,
+                            obtainMethod = image.obtainMethod
+                        )
                     }
                     if (images.isEmpty()) null else GallerySection(title, images)
                 }
