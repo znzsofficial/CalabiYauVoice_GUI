@@ -15,6 +15,8 @@ import io.github.composefluent.FluentTheme
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
 import jna.windows.structure.isWindows11OrLater
+import org.jetbrains.skiko.GraphicsApi
+import org.jetbrains.skiko.SkikoProperties
 import ui.components.WindowsWindowFrame
 import ui.components.rememberWindowsWindowFrameState
 import ui.screens.NewDownloaderContent
@@ -45,6 +47,13 @@ fun main() {
         icon = painterResource("icon.png"),
         state = windowState
     ) {
+//        在 Window 内部获取实际使用的渲染 API
+//        LaunchedEffect(Unit) {
+//            val actualApi = SkikoProperties.renderApi
+//            println("实际使用的渲染后端: $actualApi")
+//            println("支持的后端: ${GraphicsApi.entries.joinToString()}")
+//        }
+
         val systemDark = isSystemInDarkTheme()
         val darkMode = remember { mutableStateOf(systemDark) }
         val windowFrameState = rememberWindowsWindowFrameState(window)

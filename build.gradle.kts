@@ -169,7 +169,10 @@ compose.desktop {
         mainClass = "MainKt"
 
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
-
+        jvmArgs += listOf(
+            "-Dskiko.renderApi=OPENGL",
+            //"-Dskiko.verbose=true" // 开启详细日志，方便验证
+        )
         nativeDistributions {
             packageName = "CalabiYauVoice_GUI"
             packageVersion = "2.0.0"
