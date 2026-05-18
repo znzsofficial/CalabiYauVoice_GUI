@@ -2,6 +2,7 @@ package util
 
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.awt.image.BufferedImage
 import kotlin.coroutines.coroutineContext
@@ -110,10 +111,10 @@ fun trimDesktopWavSilence(
     if (mode == DesktopWavTrimMode.END_ONLY) startFrame = 0
     if (mode == DesktopWavTrimMode.START_ONLY) endFrame = frameCount
     if (endFrame <= startFrame) error("裁剪参数过强，未保留有效音频")
-    val out = uniqueFile(outputDir, inputFile.nameWithoutExtension + "_trimmed", "wav")
+    val out = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_trimmed", "wav")
     val from = startFrame * wav.blockAlign
     val to = endFrame * wav.blockAlign
-    writePcmWav(out, wav.pcmData.copyOfRange(from, to), wav.channels, wav.sampleRate, wav.bitsPerSample)
+    writePcmWav(out, wav.pcmData, from, to - from, wav.channels, wav.sampleRate, wav.bitsPerSample)
     return out
 }
 
@@ -123,15 +124,19 @@ fun convertDesktopWavChannels(inputFile: File, outputDir: File, mode: DesktopWav
         DesktopWavChannelMode.MONO_TO_STEREO -> {
             require(wav.channels == 1) { "源文件不是单声道" }
             val bytesPerSample = wav.bitsPerSample / 8
-            ByteArrayOutputStream(wav.pcmData.size * 2).use { out ->
-                var offset = 0
-                while (offset < wav.pcmData.size) {
-                    out.write(wav.pcmData, offset, bytesPerSample)
-                    out.write(wav.pcmData, offset, bytesPerSample)
-                    offset += bytesPerSample
-                }
-                out.toByteArray() to 2
+            val outSize = wav.pcmData.size.toLong() * 2L
+            require(outSize <= MAX_IN_MEMORY_PCM_BYTES) { "声道转换结果过大，当前工具一次性处理上限为 ${MAX_IN_MEMORY_PCM_BYTES / 1024 / 1024}MB" }
+            val out = ByteArray(outSize.toInt())
+            var sourceOffset = 0
+            var targetOffset = 0
+            while (sourceOffset < wav.pcmData.size) {
+                System.arraycopy(wav.pcmData, sourceOffset, out, targetOffset, bytesPerSample)
+                targetOffset += bytesPerSample
+                System.arraycopy(wav.pcmData, sourceOffset, out, targetOffset, bytesPerSample)
+                targetOffset += bytesPerSample
+                sourceOffset += bytesPerSample
             }
+            out to 2
         }
         DesktopWavChannelMode.STEREO_TO_MONO -> {
             require(wav.channels == 2) { "源文件不是双声道" }
@@ -148,7 +153,7 @@ fun convertDesktopWavChannels(inputFile: File, outputDir: File, mode: DesktopWav
             }
         }
     }
-    val out = uniqueFile(outputDir, inputFile.nameWithoutExtension + "_channels", "wav")
+    val out = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_channels", "wav")
     writePcmWav(out, output.first, output.second, wav.sampleRate, wav.bitsPerSample)
     return out
 }
@@ -167,7 +172,7 @@ fun adjustDesktopWavVolume(
         DesktopWavVolumeMode.GAIN -> gainPercent.coerceAtLeast(0) / 100.0
         DesktopWavVolumeMode.NORMALIZE -> if (peak <= 0.0) 1.0 else (targetPeakPercent.coerceIn(1, 100) / 100.0 * maxAmp) / peak
     }
-    val out = uniqueFile(outputDir, inputFile.nameWithoutExtension + "_volume", "wav")
+    val out = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_volume", "wav")
     writePcmWav(out, scalePcmData(wav, multiplier), wav.channels, wav.sampleRate, wav.bitsPerSample)
     return out
 }
@@ -454,12 +459,25 @@ private fun writeSignedLE(out: ByteArrayOutputStream, value: Int, bits: Int) {
 }
 
 private fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRate: Int, bitsPerSample: Int) {
+    writePcmWav(file, pcmData, 0, pcmData.size, channels, sampleRate, bitsPerSample)
+}
+
+private fun writePcmWav(
+    file: File,
+    pcmData: ByteArray,
+    offset: Int,
+    length: Int,
+    channels: Int,
+    sampleRate: Int,
+    bitsPerSample: Int
+) {
     file.parentFile?.mkdirs()
     val byteRate = sampleRate * channels * bitsPerSample / 8
     val blockAlign = channels * bitsPerSample / 8
-    val riffSize = 36L + pcmData.size.toLong()
+    val riffSize = 36L + length.toLong()
     require(riffSize <= 0xFFFF_FFFFL) { "WAV 文件过大，RIFF size 超过 4GB" }
-    ByteArrayOutputStream().use { out ->
+    FileOutputStream(file).use { fileOut ->
+        val out = ByteArrayOutputStream(44)
         out.writeAscii("RIFF")
         out.writeLittleInt(riffSize.toInt())
         out.writeAscii("WAVE")
@@ -472,21 +490,10 @@ private fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRat
         out.writeLittleShort(blockAlign)
         out.writeLittleShort(bitsPerSample)
         out.writeAscii("data")
-        out.writeLittleInt(pcmData.size)
-        out.write(pcmData)
-        file.writeBytes(out.toByteArray())
+        out.writeLittleInt(length)
+        fileOut.write(out.toByteArray())
+        fileOut.write(pcmData, offset, length)
     }
-}
-
-private fun uniqueFile(dir: File, baseName: String, extension: String): File {
-    dir.mkdirs()
-    var candidate = File(dir, "$baseName.$extension")
-    var index = 2
-    while (candidate.exists()) {
-        candidate = File(dir, "$baseName ($index).$extension")
-        index++
-    }
-    return candidate
 }
 
 private fun RandomAccessFile.readAscii(length: Int): String = ByteArray(length).also { readFully(it) }.decodeToString()

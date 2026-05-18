@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.*
 import util.batchConvertAudioToWav
 import util.bitDepthOptionAt
 import util.mergeWavFiles
-import util.BIT_DEPTH_OPTIONS
-import util.BIT_DEPTH_OPTIONS_WITH_DITHER
 import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
@@ -130,9 +128,13 @@ class MainViewModel(
     private val _targetSampleRateIndex = MutableStateFlow(0)
     val targetSampleRateIndex: StateFlow<Int> = _targetSampleRateIndex.asStateFlow()
 
-    /** 目标位深索引（对应 BIT_DEPTH_OPTIONS_WITH_DITHER；默认原位深） */
+    /** 目标位深索引（对应 BIT_DEPTH_OPTIONS；默认原位深） */
     private val _targetBitDepthIndex = MutableStateFlow(DEFAULT_BIT_DEPTH_INDEX)
     val targetBitDepthIndex: StateFlow<Int> = _targetBitDepthIndex.asStateFlow()
+
+    /** 高位深转低位深时是否自动应用抖动 */
+    private val _enableDitherOnDownsample = MutableStateFlow(false)
+    val enableDitherOnDownsample: StateFlow<Boolean> = _enableDitherOnDownsample.asStateFlow()
 
     /** 转换后是否将所有 WAV 合并 */
     private val _mergeWav = MutableStateFlow(false)
@@ -469,6 +471,8 @@ class MainViewModel(
 
     fun onTargetBitDepthIndexChange(index: Int) { _targetBitDepthIndex.value = index }
 
+    fun onEnableDitherOnDownsampleChange(value: Boolean) { _enableDitherOnDownsample.value = value }
+
     fun onMergeWavChange(value: Boolean) { _mergeWav.value = value }
 
     fun onMergeWavMaxCountStrChange(value: String) {
@@ -598,13 +602,12 @@ class MainViewModel(
                         _progressText.value = "正在转换…"
                         val sampleRate = util.SAMPLE_RATE_OPTIONS[_targetSampleRateIndex.value]
                         val bitDepthOption = bitDepthOptionAt(_targetBitDepthIndex.value)
-                        val bitDepth = bitDepthOption.bitDepth
                         batchConvertAudioToWav(
                             dir = targetDir,
                             deleteOriginal = _deleteOriginalMp3.value,
                             targetSampleRate = sampleRate,
-                            targetBitDepth = bitDepth,
-                            enable16BitDither = bitDepthOption.enable16BitDither,
+                            targetBitDepth = bitDepthOption.target,
+                            enableDitherOnDownsample = _enableDitherOnDownsample.value,
                             onLog = { addLog(it) },
                             onProgress = { current, total, name ->
                                 _progress.value = if (total > 0) current.toFloat() / total else 0f

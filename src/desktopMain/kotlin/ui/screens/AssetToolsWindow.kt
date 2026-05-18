@@ -58,15 +58,13 @@ import java.io.File
 import java.io.StringReader
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 import javax.imageio.ImageWriter
-import javax.sound.sampled.AudioFileFormat
-import javax.sound.sampled.AudioFormat
-import javax.sound.sampled.AudioSystem
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 import kotlin.math.max
@@ -83,6 +81,12 @@ private enum class GifComposeScaleMode(val label: String) {
 private enum class TimelineExportFormat(val label: String, val ext: String) { SRT("SRT", "srt"), LRC("LRC", "lrc"), VTT("VTT", "vtt"), ASS("ASS", "ass"), SSA("SSA", "ssa") }
 
 private data class AudioToolInput(val source: File, val wavFile: File, val isTemporary: Boolean, val wavData: PcmWavData)
+
+private val assetAudioDecodeExecutor: ExecutorService by lazy {
+    Executors.newSingleThreadExecutor { task ->
+        Thread(task, "asset-tools-audio-decode").apply { isDaemon = true }
+    }
+}
 
 private enum class SpectrogramPaletteOption(
     val label: String,
@@ -531,7 +535,7 @@ private fun AudioToolsTab(
                     channelMode = if (nextMeta.channels == 1) DesktopWavChannelMode.MONO_TO_STEREO else DesktopWavChannelMode.STEREO_TO_MONO
                     onLog("已读取音频：${file.name}，${nextMeta.channels} 声道 / ${nextMeta.sampleRate} Hz / ${nextMeta.bitsPerSample} bit")
                 }
-                .onFailure { onLog("读取失败：${it.message ?: it::class.simpleName}") }
+                .onFailure { onLog("读取失败：${audioDecodeFailureMessage(it)}") }
             onBusyChange(false)
         }
     }
@@ -794,78 +798,30 @@ private fun prepareAudioInput(file: File, tempDir: File): AudioToolInput {
         }
         tempDir.mkdirs()
         val wav = uniqueOutputFile(tempDir, file.nameWithoutExtension + "_pcm", "wav")
-        runAudioDecodeWithTimeout { decodeAudioToPcmWav(file, wav) }
+        runAudioDecodeWithTimeout { decodeDesktopAudioToPcmWav(file, wav) }
         val wavData = readPcmWav(wav) ?: error("无法解码此 WAV 文件")
         return AudioToolInput(file, wav, true, wavData)
     }
     tempDir.mkdirs()
     val wav = uniqueOutputFile(tempDir, file.nameWithoutExtension + "_pcm", "wav")
-    runAudioDecodeWithTimeout { decodeAudioToPcmWav(file, wav) }
+    runAudioDecodeWithTimeout { decodeDesktopAudioToPcmWav(file, wav) }
     val wavData = readPcmWav(wav) ?: error("仅支持 PCM WAV")
     return AudioToolInput(file, wav, true, wavData)
 }
 
 private fun runAudioDecodeWithTimeout(block: () -> Unit) {
-    val executor = Executors.newSingleThreadExecutor { task ->
-        Thread(task, "asset-tools-audio-decode").apply { isDaemon = true }
-    }
+    val future = assetAudioDecodeExecutor.submit(Callable { block() })
     try {
-        val future = executor.submit(Callable { block() })
-        try {
-            future.get(AUDIO_DECODE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        } catch (_: TimeoutException) {
-            future.cancel(true)
-            error("音频解码超时，请尝试先用音频转换工具转为 WAV")
-        }
-    } finally {
-        executor.shutdownNow()
+        future.get(AUDIO_DECODE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    } catch (_: TimeoutException) {
+        future.cancel(true)
+        error("音频解码超时，请尝试先用音频转换工具转为 WAV")
     }
 }
 
-private fun decodeAudioToPcmWav(source: File, target: File) {
-    val sourceFormat = openAudioInputStream(source).use { input -> input.format }
-    val sampleRate = sourceFormat.sampleRate.takeIf { it.isFinite() && it > 0f } ?: 44100f
-    val channels = sourceFormat.channels.takeIf { it > 0 } ?: 2
-    val bits = sourceFormat.sampleSizeInBits.takeIf { it in setOf(8, 16, 24, 32) } ?: 16
-    val pcmFormat = AudioFormat(
-        AudioFormat.Encoding.PCM_SIGNED,
-        sampleRate,
-        bits,
-        channels,
-        channels * (bits / 8),
-        sampleRate,
-        false
-    )
-    runCatching {
-        writeDecodedPcm(source, pcmFormat, target)
-    }.getOrElse { firstError ->
-        val fallback = AudioFormat(
-            AudioFormat.Encoding.PCM_SIGNED,
-            sampleRate,
-            16,
-            channels,
-            channels * 2,
-            sampleRate,
-            false
-        )
-        runCatching { target.delete() }
-        runCatching {
-            writeDecodedPcm(source, fallback, target)
-        }.getOrElse { throw firstError }
-    }
-}
-
-private fun writeDecodedPcm(source: File, format: AudioFormat, target: File) {
-    openAudioInputStream(source).use { input ->
-        AudioSystem.getAudioInputStream(format, input).use { pcm ->
-            target.parentFile?.mkdirs()
-            AudioSystem.write(pcm, AudioFileFormat.Type.WAVE, target)
-        }
-    }
-}
-
-private fun openAudioInputStream(source: File): javax.sound.sampled.AudioInputStream {
-    return AudioSystem.getAudioInputStream(source)
+private fun audioDecodeFailureMessage(error: Throwable): String {
+    val message = error.message ?: error::class.simpleName.orEmpty()
+    return if (message.contains("音频转换工具")) message else "$message。可尝试先用音频转换工具转为 WAV。"
 }
 
 private fun openDirectory(dir: File?) {

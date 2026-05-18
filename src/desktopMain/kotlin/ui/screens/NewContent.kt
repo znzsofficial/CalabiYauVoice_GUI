@@ -130,6 +130,7 @@ fun NewDownloaderContent() {
     val deleteOriginalMp3 by viewModel.deleteOriginalMp3.collectAsState()
     val targetSampleRateIndex by viewModel.targetSampleRateIndex.collectAsState()
     val targetBitDepthIndex by viewModel.targetBitDepthIndex.collectAsState()
+    val enableDitherOnDownsample by viewModel.enableDitherOnDownsample.collectAsState()
     val mergeWav by viewModel.mergeWav.collectAsState()
     val mergeWavMaxCountStr by viewModel.mergeWavMaxCountStr.collectAsState()
 
@@ -1125,6 +1126,14 @@ fun NewDownloaderContent() {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
+                                val selectedBitDepth = bitDepthOptionAt(targetBitDepthIndex)
+                                Text(
+                                    "输出：${sampleRateLabel(SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex))} / ${selectedBitDepth.label}。合并 WAV 时建议选择固定格式，避免源文件参数不一致。",
+                                    fontSize = 12.sp,
+                                    color = FluentTheme.colors.text.text.secondary,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                                ExpanderItemSeparator()
                                 // 1. 采样率 + 位深
                                 ExpanderItem(
                                     heading = {
@@ -1153,7 +1162,18 @@ fun NewDownloaderContent() {
                                     }
                                 )
                                 ExpanderItemSeparator()
-                                // 2. 删除原 MP3
+                                // 2. 降位深抖动
+                                ExpanderItem(
+                                    heading = { Text("高位深转低位深时启用抖动") },
+                                    trailing = {
+                                        Switcher(
+                                            checked = enableDitherOnDownsample,
+                                            onCheckStateChange = { viewModel.onEnableDitherOnDownsampleChange(it) },
+                                        )
+                                    }
+                                )
+                                ExpanderItemSeparator()
+                                // 3. 删除原 MP3
                                 ExpanderItem(
                                     heading = {
                                         Text(
@@ -1169,7 +1189,7 @@ fun NewDownloaderContent() {
                                     }
                                 )
                                 ExpanderItemSeparator()
-                                // 3. 合并 WAV
+                                // 4. 合并 WAV
                                 ExpanderItem(
                                     heading = { Text("合并导出的 WAV 文件") },
                                     trailing = {
@@ -1197,6 +1217,17 @@ fun NewDownloaderContent() {
                                         }
                                     }
                                 )
+                                if (mergeWav && selectedBitDepth.target == BitDepthTarget.ORIGINAL) {
+                                    ExpanderItemSeparator()
+                                    ExpanderItem(
+                                        heading = {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Icon(Icons.Regular.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = FluentTheme.colors.system.attention)
+                                                Text("合并需要统一位深，请选择 16 bit、24 bit、32 bit int 或 32 bit float。", color = FluentTheme.colors.text.text.secondary)
+                                            }
+                                        }
+                                    )
+                                }
                             }
 
                             Spacer(Modifier.height(16.dp))

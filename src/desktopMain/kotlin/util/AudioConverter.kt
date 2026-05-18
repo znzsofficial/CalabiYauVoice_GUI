@@ -20,24 +20,28 @@ import javax.sound.sampled.AudioSystem
 /** 可选的采样率列表；null 表示"原采样率" */
 val SAMPLE_RATE_OPTIONS: List<Float?> = listOf(null, 44100f, 48000f, 88200f, 96000f, 176400f, 192000f)
 
-/** 可选位深列表；null 表示"原位深" */
-val BIT_DEPTH_OPTIONS: List<Int?> = listOf(null, 16, 24, 32)
+enum class BitDepthTarget(val label: String) {
+    ORIGINAL("原位深"),
+    PCM_16("16 bit"),
+    PCM_24("24 bit"),
+    PCM_32("32 bit int"),
+    FLOAT_32("32 bit float")
+}
 
 data class BitDepthOption(
-    val bitDepth: Int?,
-    val enable16BitDither: Boolean,
+    val target: BitDepthTarget,
     val label: String
 )
 
-val BIT_DEPTH_OPTIONS_WITH_DITHER: List<BitDepthOption> = listOf(
-    BitDepthOption(bitDepth = null, enable16BitDither = false, label = bitDepthLabel(null)),
-    BitDepthOption(bitDepth = 16, enable16BitDither = false, label = bitDepthLabel(16)),
-    BitDepthOption(bitDepth = 16, enable16BitDither = true, label = "16 bit（抖动）"),
-    BitDepthOption(bitDepth = 24, enable16BitDither = false, label = bitDepthLabel(24)),
-    BitDepthOption(bitDepth = 32, enable16BitDither = false, label = bitDepthLabel(32))
+val BIT_DEPTH_OPTIONS: List<BitDepthOption> = listOf(
+    BitDepthOption(target = BitDepthTarget.ORIGINAL, label = BitDepthTarget.ORIGINAL.label),
+    BitDepthOption(target = BitDepthTarget.PCM_16, label = BitDepthTarget.PCM_16.label),
+    BitDepthOption(target = BitDepthTarget.PCM_24, label = BitDepthTarget.PCM_24.label),
+    BitDepthOption(target = BitDepthTarget.PCM_32, label = BitDepthTarget.PCM_32.label),
+    BitDepthOption(target = BitDepthTarget.FLOAT_32, label = BitDepthTarget.FLOAT_32.label)
 )
 
-val BIT_DEPTH_OPTION_LABELS: List<String> = BIT_DEPTH_OPTIONS_WITH_DITHER.map(BitDepthOption::label)
+val BIT_DEPTH_OPTION_LABELS: List<String> = BIT_DEPTH_OPTIONS.map(BitDepthOption::label)
 
 /** 默认位深索引（原位深） */
 const val DEFAULT_BIT_DEPTH_INDEX = 0
@@ -48,9 +52,16 @@ private const val GENERATED_MERGED_TAG = "_merged"
 private const val AUDIO_RATE_TOLERANCE = 0.5f
 
 fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" else "${rate.toInt()} Hz"
-fun bitDepthLabel(bits: Int?): String = when (bits) { null -> "原位深"; 32 -> "浮点 32 bit"; else -> "$bits bit" }
+fun bitDepthLabel(target: BitDepthTarget): String = target.label
 fun bitDepthOptionAt(index: Int): BitDepthOption =
-    BIT_DEPTH_OPTIONS_WITH_DITHER.getOrElse(index) { BIT_DEPTH_OPTIONS_WITH_DITHER[DEFAULT_BIT_DEPTH_INDEX] }
+    BIT_DEPTH_OPTIONS.getOrElse(index) { BIT_DEPTH_OPTIONS[DEFAULT_BIT_DEPTH_INDEX] }
+private fun BitDepthTarget.toLegacyBitDepth(): Int? = when (this) {
+    BitDepthTarget.ORIGINAL -> null
+    BitDepthTarget.PCM_16 -> 16
+    BitDepthTarget.PCM_24 -> 24
+    BitDepthTarget.PCM_32 -> 32
+    BitDepthTarget.FLOAT_32 -> 32
+}
 
 fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.lowercase() in SUPPORTED_AUDIO_SOURCE_EXTENSIONS
 
@@ -60,7 +71,7 @@ fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.
  * @param dir              需要扫描的根目录（递归子目录）
  * @param deleteOriginal   转换成功后是否删除原始音频，默认 true
  * @param targetSampleRate 目标采样率（Hz）；null = 保留原始采样率
- * @param targetBitDepth   目标位深（16 / 24 / 32），默认 16
+ * @param targetBitDepth   目标位深，默认保留原位深；FLOAT_32 表示 32-bit float
  * @param onLog            日志回调
  * @param onProgress       进度回调 (已完成数, 总数, 当前文件名)
  */
@@ -68,12 +79,12 @@ suspend fun batchConvertAudioToWav(
     dir: File,
     deleteOriginal: Boolean = true,
     targetSampleRate: Float? = null,
-    targetBitDepth: Int? = null,
-    enable16BitDither: Boolean = false,
+    targetBitDepth: BitDepthTarget = BitDepthTarget.ORIGINAL,
+    enableDitherOnDownsample: Boolean = false,
     onLog: (String) -> Unit = {},
     onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
 ) = withContext(Dispatchers.IO) {
-    validateTargetFormat(targetSampleRate, targetBitDepth)
+    validateTargetFormat(targetSampleRate)
 
     val sourceFiles = dir.walkTopDown()
         .filter(::isSupportedAudioSource)
@@ -86,7 +97,7 @@ suspend fun batchConvertAudioToWav(
 
     val rateDesc = sampleRateLabel(targetSampleRate)
     val depthDesc = bitDepthLabel(targetBitDepth)
-    val ditherDesc = if (enable16BitDither && targetBitDepth == 16) " / 16-bit 抖动" else ""
+    val ditherDesc = if (enableDitherOnDownsample) " / 降位深抖动" else ""
     onLog("找到 ${sourceFiles.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc$ditherDesc)…")
     var successCount = 0
     var failCount = 0
@@ -98,7 +109,7 @@ suspend fun batchConvertAudioToWav(
         onProgress(index, sourceFiles.size, sourceFile.name)
 
         try {
-            convertAudioToWav(sourceFile, wavFile, targetSampleRate, targetBitDepth, enable16BitDither)
+            convertAudioToWav(sourceFile, wavFile, targetSampleRate, targetBitDepth, enableDitherOnDownsample)
             successCount++
             if (deleteOriginal && !sourceFile.delete()) {
                 onLog("[删除失败] ${sourceFile.name}")
@@ -121,19 +132,19 @@ suspend fun batchConvertAudioToWav(
  * 使用 Java Sound SPI 提供的解码器（通过 SPI 自动注册）。
  *
  * @param targetSampleRate 目标采样率；null = 保留原始
- * @param targetBitDepth   目标位深（16 / 24 / 32），默认 16
+ * @param targetBitDepth   目标位深，默认保留原位深；FLOAT_32 表示 32-bit float
  */
 fun convertAudioToWav(
     sourceFile: File,
     wavFile: File,
     targetSampleRate: Float? = null,
-    targetBitDepth: Int? = null,
-    enable16BitDither: Boolean = false
+    targetBitDepth: BitDepthTarget = BitDepthTarget.ORIGINAL,
+    enableDitherOnDownsample: Boolean = false
 ) {
     require(sourceFile.isFile) { "音频文件不存在：${sourceFile.absolutePath}" }
     require(isSupportedAudioSource(sourceFile)) {
         "不支持的音频格式：${sourceFile.extension.ifBlank { "<none>" }}，仅支持 ${SUPPORTED_AUDIO_SOURCE_EXTENSIONS.joinToString("/")}" }
-    validateTargetFormat(targetSampleRate, targetBitDepth)
+    validateTargetFormat(targetSampleRate)
     wavFile.parentFile?.mkdirs()
 
     // 1. 打开音频输入流（mp3spi/jflac SPI 自动接管）
@@ -144,12 +155,18 @@ fun convertAudioToWav(
         // 需回退到合理默认值；mp3spi 始终将 MP3 解码为 PCM_SIGNED 16-bit。
         val naturalBits = baseFormat.sampleSizeInBits.takeIf { it > 0 } ?: 16
         val naturalRate = baseFormat.sampleRate.takeIf { it.isFinite() && it > 0f } ?: 44100f
-        val channels    = baseFormat.channels.takeIf { it > 0 } ?: 2
+        val channels = baseFormat.channels.takeIf { it > 0 } ?: 2
 
-        val outRate  = targetSampleRate ?: naturalRate
-        val outBits  = targetBitDepth   ?: naturalBits
-        val outFloat = targetBitDepth == 32   // 用户显式选了"浮点 32 bit"
-        val use16BitDither = enable16BitDither && !outFloat && outBits == 16 && naturalBits > outBits
+        val outRate = targetSampleRate ?: naturalRate
+        val outBits = when (targetBitDepth) {
+            BitDepthTarget.ORIGINAL -> naturalBits
+            BitDepthTarget.PCM_16 -> 16
+            BitDepthTarget.PCM_24 -> 24
+            BitDepthTarget.PCM_32 -> 32
+            BitDepthTarget.FLOAT_32 -> 32
+        }
+        val outFloat = targetBitDepth == BitDepthTarget.FLOAT_32
+        val useDither = enableDitherOnDownsample && !outFloat && naturalBits > outBits
 
         // 第一步：将压缩流解码为 PCM_SIGNED LE（固定用源采样率）。
         // mp3spi 只支持 PCM_SIGNED 16-bit 输出，不在此步骤指定目标格式，
@@ -176,29 +193,20 @@ fun convertAudioToWav(
 
                     // 整数位深变换（含可选的采样率转换）：手动位移缩放
                     needsBitDepthChange -> {
-                        val srcStream = if (!sameRate) {
-                            val rsFmt = AudioFormat(
-                                AudioFormat.Encoding.PCM_SIGNED, outRate, naturalBits,
-                                channels, channels * (naturalBits / 8), outRate, false
-                            )
-                            AudioSystem.getAudioInputStream(rsFmt, pcm)
-                        } else pcm
-
                         val targetFmt = AudioFormat(
                             AudioFormat.Encoding.PCM_SIGNED, outRate, outBits,
                             channels, channels * (outBits / 8), outRate, false
                         )
-                        AudioInputStream(
-                            BitDepthConversionInputStream(
-                                source = srcStream,
-                                sourceBits = naturalBits,
-                                targetBits = outBits,
-                                enableDither = use16BitDither
-                            ),
-                            targetFmt,
-                            AudioSystem.NOT_SPECIFIED.toLong() // Resampling/Conversion might change length, safest to use unknown
-                        ).use { scaled ->
-                            AudioSystem.write(scaled, AudioFileFormat.Type.WAVE, tempFile)
+                        if (!sameRate) {
+                            val rsFmt = AudioFormat(
+                                AudioFormat.Encoding.PCM_SIGNED, outRate, naturalBits,
+                                channels, channels * (naturalBits / 8), outRate, false
+                            )
+                            AudioSystem.getAudioInputStream(rsFmt, pcm).use { resampled ->
+                                writeBitDepthConvertedWav(resampled, naturalBits, outBits, useDither, targetFmt, tempFile)
+                            }
+                        } else {
+                            writeBitDepthConvertedWav(pcm, naturalBits, outBits, useDither, targetFmt, tempFile)
                         }
                     }
 
@@ -350,10 +358,29 @@ private fun audioFormatEquals(a: AudioFormat, b: AudioFormat): Boolean =
         approximatelyEquals(a.frameRate, b.frameRate) &&
         a.isBigEndian == b.isBigEndian
 
-private fun validateTargetFormat(targetSampleRate: Float?, targetBitDepth: Int?) {
-    require(targetBitDepth == null || targetBitDepth in BIT_DEPTH_OPTIONS) {
-        "不支持的目标位深：$targetBitDepth，仅支持 ${BIT_DEPTH_OPTIONS.filterNotNull().joinToString("/")}"
+private fun writeBitDepthConvertedWav(
+    source: AudioInputStream,
+    sourceBits: Int,
+    targetBits: Int,
+    enableDither: Boolean,
+    targetFormat: AudioFormat,
+    outputFile: File
+) {
+    AudioInputStream(
+        BitDepthConversionInputStream(
+            source = source,
+            sourceBits = sourceBits,
+            targetBits = targetBits,
+            enableDither = enableDither
+        ),
+        targetFormat,
+        AudioSystem.NOT_SPECIFIED.toLong()
+    ).use { scaled ->
+        AudioSystem.write(scaled, AudioFileFormat.Type.WAVE, outputFile)
     }
+}
+
+private fun validateTargetFormat(targetSampleRate: Float?) {
     require(targetSampleRate == null || (targetSampleRate.isFinite() && targetSampleRate > 0f)) {
         "目标采样率必须为正数：$targetSampleRate"
     }
@@ -448,7 +475,7 @@ private class BitDepthConversionInputStream(
         }
         for (ch in 0 until channels) {
             val sample = readSignedLE(srcFrameBuf, ch * srcBytesPerSample, sourceBits)
-            val converted = if (enableDither && shift > 0 && targetBits == 16) {
+            val converted = if (enableDither && shift > 0) {
                 ditheredDownscale(sample, ch)
             } else if (shift > 0) {
                 sample shr shift // Downscale
