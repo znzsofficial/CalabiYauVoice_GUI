@@ -201,7 +201,10 @@ fun NewDownloaderContent() {
     var isRefreshingUser by remember { mutableStateOf(false) }
     var userQuickActionMessage by remember { mutableStateOf<String?>(null) }
 
-    fun savePortraitAsset(asset: PortraitAsset, baseDir: File = File(savePath.ifBlank { AppPrefs.savePath }, "立绘列表")) {
+    fun savePortraitAsset(
+        asset: PortraitAsset,
+        baseDir: File = File(savePath.ifBlank { AppPrefs.savePath }, "立绘列表")
+    ) {
         coroutineScope.launch {
             try {
                 viewModel.addLog("正在保存立绘图片: ${asset.title}")
@@ -237,6 +240,7 @@ fun NewDownloaderContent() {
                             else -> "当前 Cookie 已失效或未登录"
                         }
                     }
+
                     is WikiUserApi.ApiResult.Error -> {
                         userQuickActionMessage = "刷新失败：${result.message}"
                     }
@@ -331,6 +335,7 @@ fun NewDownloaderContent() {
                                 viewModel.selectAllFileSearchResults()
                                 true
                             }
+
                             SearchMode.PORTRAIT -> false
                             else -> {
                                 viewModel.checkAllCategories()
@@ -345,6 +350,7 @@ fun NewDownloaderContent() {
                                 viewModel.clearFileSearchSelection()
                                 true
                             }
+
                             SearchMode.PORTRAIT -> false
                             else -> {
                                 viewModel.uncheckAllCategories()
@@ -499,7 +505,13 @@ fun NewDownloaderContent() {
                         onClick = { viewModel.uncheckAllCategories() },
                         icon = { Icon(Icons.Regular.CheckboxUnchecked, contentDescription = null) },
                         text = { Text("全不选") },
-                        trailing = { Text("Ctrl+Shift+A", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                        trailing = {
+                            Text(
+                                "Ctrl+Shift+A",
+                                fontSize = 11.sp,
+                                color = FluentTheme.colors.text.text.secondary
+                            )
+                        }
                     )
                     MenuFlyoutSeparator()
                     MenuFlyoutItem(
@@ -636,7 +648,11 @@ fun NewDownloaderContent() {
                 Column(
                     Modifier.padding(12.dp)
                 ) {
-                    Text(if (searchMode == SearchMode.PORTRAIT) "立绘角色" else "搜索列表", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        if (searchMode == SearchMode.PORTRAIT) "立绘角色" else "搜索列表",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
                     Spacer(Modifier.height(12.dp))
                     // 搜索栏
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -930,18 +946,22 @@ fun NewDownloaderContent() {
                                                 size = 48.dp
                                             )
                                         }
+
                                         portraitCostumes.isEmpty() -> {
                                             EmptyPlaceholder(
                                                 icon = Icons.Regular.Person,
                                                 text = "未找到该角色的立绘或正背面预览图"
                                             )
                                         }
+
                                         else -> {
                                             LazyColumn(
                                                 modifier = Modifier.fillMaxSize(),
                                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                                             ) {
-                                                items(count = portraitCostumes.size, key = { portraitCostumes[it].key }) { index ->
+                                                items(
+                                                    count = portraitCostumes.size,
+                                                    key = { portraitCostumes[it].key }) { index ->
                                                     val costume: PortraitCostume = portraitCostumes[index]
                                                     PortraitCostumeCard(
                                                         costume = costume,
@@ -1127,13 +1147,6 @@ fun NewDownloaderContent() {
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 val selectedBitDepth = bitDepthOptionAt(targetBitDepthIndex)
-                                Text(
-                                    "输出：${sampleRateLabel(SAMPLE_RATE_OPTIONS.getOrNull(targetSampleRateIndex))} / ${selectedBitDepth.label}。合并 WAV 时建议选择固定格式，避免源文件参数不一致。",
-                                    fontSize = 12.sp,
-                                    color = FluentTheme.colors.text.text.secondary,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                                ExpanderItemSeparator()
                                 // 1. 采样率 + 位深
                                 ExpanderItem(
                                     heading = {
@@ -1217,17 +1230,6 @@ fun NewDownloaderContent() {
                                         }
                                     }
                                 )
-                                if (mergeWav && selectedBitDepth.target == BitDepthTarget.ORIGINAL) {
-                                    ExpanderItemSeparator()
-                                    ExpanderItem(
-                                        heading = {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Icon(Icons.Regular.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = FluentTheme.colors.system.attention)
-                                                Text("合并需要统一位深，请选择 16 bit、24 bit、32 bit int 或 32 bit float。", color = FluentTheme.colors.text.text.secondary)
-                                            }
-                                        }
-                                    )
-                                }
                             }
 
                             Spacer(Modifier.height(16.dp))
@@ -1236,20 +1238,39 @@ fun NewDownloaderContent() {
                             val isFileSearch = searchMode == SearchMode.FILE_SEARCH
                             val canDownload = if (isFileSearch) fileSearchSelectedUrls.isNotEmpty()
                             else checkedCategories.isNotEmpty()
-                            Button(
-                                onClick = { viewModel.startDownload() },
-                                modifier = Modifier.fillMaxWidth().height(40.dp),
-                                disabled = isDownloading || isScanningTree || !canDownload
-                            ) {
-                                Text(
-                                    when {
-                                        isDownloading -> "正在下载中..."
-                                        isFileSearch -> "开始下载 (${fileSearchSelectedUrls.size} 个文件)"
-                                        else -> "开始下载 (${checkedCategories.size} 个分类)"
-                                    },
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            FlyoutContainer(
+                                flyout = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 240.dp).padding(10.dp)) {
+                                        Text("合并 WAV 前请先选择固定位深。", style = FluentTheme.typography.bodyStrong)
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            Button(onClick = { isFlyoutVisible = false }) { Text("知道了") }
+                                        }
+                                    }
+                                },
+                                content = {
+                                    Button(
+                                        onClick = {
+                                            if (convertAfterDownload && mergeWav && bitDepthOptionAt(targetBitDepthIndex).target == BitDepthTarget.ORIGINAL) {
+                                                isFlyoutVisible = true
+                                                return@Button
+                                            }
+                                            isFlyoutVisible = false
+                                            viewModel.startDownload()
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(40.dp),
+                                        disabled = isDownloading || isScanningTree || !canDownload
+                                    ) {
+                                        Text(
+                                            when {
+                                                isDownloading -> "正在下载中..."
+                                                isFileSearch -> "开始下载 (${fileSearchSelectedUrls.size} 个文件)"
+                                                else -> "开始下载 (${checkedCategories.size} 个分类)"
+                                            },
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -1276,90 +1297,90 @@ private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
             } else false
         }
     ) { _ ->
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(24.dp)
-                    ) {
-                        Text("键盘快捷键", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Spacer(Modifier.height(16.dp))
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(24.dp)
+        ) {
+            Text("键盘快捷键", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Spacer(Modifier.height(16.dp))
 
-                        val shortcuts = listOf(
-                            "Ctrl + F" to "聚焦搜索框",
-                            "Enter" to "执行搜索（搜索框聚焦时）",
-                            "F5" to "重新搜索",
-                            "Ctrl + D" to "开始下载",
-                            "Ctrl + A" to "全选分类 / 全选文件",
-                            "Ctrl + Shift + A" to "取消全选",
-                            "Ctrl + T" to "切换深色 / 浅色主题",
-                            "Ctrl + 1" to "切换至「仅语音」模式",
-                            "Ctrl + 2" to "切换至「立绘列表」模式",
-                            "Ctrl + 3" to "切换至「全部分类」模式",
-                            "Ctrl + 4" to "切换至「文件搜索」模式",
-                            "↑ / ↓" to "在左侧角色列表中上下导航",
-                            "" to "",
-                            "文件列表弹窗：" to "",
-                            "Ctrl + A" to "全选可见文件",
-                            "Ctrl + Shift + A" to "清空选择",
-                            "Enter" to "确认选择",
-                            "Esc" to "关闭弹窗",
+            val shortcuts = listOf(
+                "Ctrl + F" to "聚焦搜索框",
+                "Enter" to "执行搜索（搜索框聚焦时）",
+                "F5" to "重新搜索",
+                "Ctrl + D" to "开始下载",
+                "Ctrl + A" to "全选分类 / 全选文件",
+                "Ctrl + Shift + A" to "取消全选",
+                "Ctrl + T" to "切换深色 / 浅色主题",
+                "Ctrl + 1" to "切换至「仅语音」模式",
+                "Ctrl + 2" to "切换至「立绘列表」模式",
+                "Ctrl + 3" to "切换至「全部分类」模式",
+                "Ctrl + 4" to "切换至「文件搜索」模式",
+                "↑ / ↓" to "在左侧角色列表中上下导航",
+                "" to "",
+                "文件列表弹窗：" to "",
+                "Ctrl + A" to "全选可见文件",
+                "Ctrl + Shift + A" to "清空选择",
+                "Enter" to "确认选择",
+                "Esc" to "关闭弹窗",
+            )
+
+            val listState = rememberLazyListState()
+            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                items(shortcuts) { (key, desc) ->
+                    if (key.isEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                    } else if (desc.isEmpty()) {
+                        // Section header
+                        Text(
+                            key,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            color = FluentTheme.colors.text.text.secondary,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
                         )
-
-                        val listState = rememberLazyListState()
-                        LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                            items(shortcuts) { (key, desc) ->
-                                if (key.isEmpty()) {
-                                    Spacer(Modifier.height(8.dp))
-                                } else if (desc.isEmpty()) {
-                                    // Section header
-                                    Text(
-                                        key,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 12.sp,
-                                        color = FluentTheme.colors.text.text.secondary,
-                                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                    } else {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                Modifier
+                                    .background(
+                                        FluentTheme.colors.control.secondary,
+                                        RoundedCornerShape(4.dp)
                                     )
-                                } else {
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            Modifier
-                                                .background(
-                                                    FluentTheme.colors.control.secondary,
-                                                    RoundedCornerShape(4.dp)
-                                                )
-                                                .border(
-                                                    1.dp,
-                                                    FluentTheme.colors.stroke.card.default,
-                                                    RoundedCornerShape(4.dp)
-                                                )
-                                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                                                .widthIn(min = 160.dp),
-                                            contentAlignment = Alignment.CenterStart
-                                        ) {
-                                            Text(
-                                                key,
-                                                fontSize = 12.sp,
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                        Spacer(Modifier.width(12.dp))
-                                        Text(desc, fontSize = 13.sp)
-                                    }
-                                }
+                                    .border(
+                                        1.dp,
+                                        FluentTheme.colors.stroke.card.default,
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    .widthIn(min = 160.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    key,
+                                    fontSize = 12.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Medium
+                                )
                             }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            Button(onClick = onClose) { Text("关闭") }
+                            Spacer(Modifier.width(12.dp))
+                            Text(desc, fontSize = 13.sp)
                         }
                     }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Button(onClick = onClose) { Text("关闭") }
+            }
+        }
     }
 }
 
@@ -1534,9 +1555,27 @@ private fun PortraitCostumeCard(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        PortraitAssetCard(label = "立绘", asset = costume.illustration, onOpenAsset = onOpenAsset, onSaveAsset = onSaveAsset, onSaveAsAsset = onSaveAsAsset)
-                        PortraitAssetCard(label = "正面预览", asset = costume.frontPreview, onOpenAsset = onOpenAsset, onSaveAsset = onSaveAsset, onSaveAsAsset = onSaveAsAsset)
-                        PortraitAssetCard(label = "背面预览", asset = costume.backPreview, onOpenAsset = onOpenAsset, onSaveAsset = onSaveAsset, onSaveAsAsset = onSaveAsAsset)
+                        PortraitAssetCard(
+                            label = "立绘",
+                            asset = costume.illustration,
+                            onOpenAsset = onOpenAsset,
+                            onSaveAsset = onSaveAsset,
+                            onSaveAsAsset = onSaveAsAsset
+                        )
+                        PortraitAssetCard(
+                            label = "正面预览",
+                            asset = costume.frontPreview,
+                            onOpenAsset = onOpenAsset,
+                            onSaveAsset = onSaveAsset,
+                            onSaveAsAsset = onSaveAsAsset
+                        )
+                        PortraitAssetCard(
+                            label = "背面预览",
+                            asset = costume.backPreview,
+                            onOpenAsset = onOpenAsset,
+                            onSaveAsset = onSaveAsset,
+                            onSaveAsAsset = onSaveAsAsset
+                        )
                     }
 
                     if (costume.extraAssets.isNotEmpty()) {
@@ -1823,7 +1862,10 @@ private fun LoggedInUserQuickPanel(
                 Button(onClick = { openExternalUrl(userPageUrl(user.name)) }, modifier = Modifier.height(28.dp)) {
                     Text("用户页", fontSize = 12.sp)
                 }
-                Button(onClick = { openExternalUrl(userContributionsUrl(user.name)) }, modifier = Modifier.height(28.dp)) {
+                Button(
+                    onClick = { openExternalUrl(userContributionsUrl(user.name)) },
+                    modifier = Modifier.height(28.dp)
+                ) {
                     Text("贡献页", fontSize = 12.sp)
                 }
                 Button(onClick = { openExternalUrl(userUploadsUrl(user.name)) }, modifier = Modifier.height(28.dp)) {

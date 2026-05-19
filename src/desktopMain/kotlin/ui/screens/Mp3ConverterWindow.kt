@@ -102,7 +102,6 @@ fun Mp3ConverterWindow(
     var isConverting by remember { mutableStateOf(false) }
     var logLines by remember { mutableStateOf<List<String>>(emptyList()) }
     var progressText by remember { mutableStateOf("") }
-    var isFlyoutVisible by remember { mutableStateOf(false) }
     var helpTopic by remember { mutableStateOf<ConverterHelpTopic?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -560,19 +559,11 @@ fun Mp3ConverterWindow(
                 // 位于右侧面板最下方，始终保持在视野中
                 FlyoutContainer(
                     flyout = {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.widthIn(max = 280.dp).padding(16.dp)
-                        ) {
-                            Text(
-                                text = "合并分段模式下必须明确指定位深，请在上方的\"位深\"下拉菜单中选择一个指定的位深度。",
-                                style = FluentTheme.typography.bodyStrong
-                            )
-                            Button(
-                                onClick = { isFlyoutVisible = false },
-                                content = { Text("知道了") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.widthIn(max = 240.dp).padding(10.dp)) {
+                            Text("合并 WAV 前请先选择固定位深。", style = FluentTheme.typography.bodyStrong)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                Button(onClick = { isFlyoutVisible = false }) { Text("知道了") }
+                            }
                         }
                     },
                     content = {
@@ -580,13 +571,11 @@ fun Mp3ConverterWindow(
                             onClick = {
                                 val files = mp3Files.toList()
                                 if (files.isEmpty()) return@Button
-                                // 合并分片时必须设置具体位深
                                 if (mergeWav && selectedBitDepthOption.target == BitDepthTarget.ORIGINAL) {
                                     isFlyoutVisible = true
                                     return@Button
                                 }
                                 isFlyoutVisible = false
-                                // 转换到各自所在目录（若设置了保存路径则用保存路径）
                                 val outDir = File(savePath).also { it.mkdirs() }
                                 isConverting = true
                                 logLines = emptyList()
@@ -609,16 +598,8 @@ fun Mp3ConverterWindow(
                                             targetSampleRate = sampleRate,
                                             targetBitDepth = selectedBitDepthOption.target,
                                             enableDitherOnDownsample = enableDitherOnDownsample,
-                                            onLog = { msg ->
-                                                coroutineScope.launch(Dispatchers.Main) {
-                                                    logLines = logLines + msg
-                                                }
-                                            },
-                                            onProgress = { done, total, name ->
-                                                coroutineScope.launch(Dispatchers.Main) {
-                                                    progressText = "$done / $total  $name"
-                                                }
-                                            }
+                                            onLog = { msg -> coroutineScope.launch(Dispatchers.Main) { logLines = logLines + msg } },
+                                            onProgress = { done, total, name -> coroutineScope.launch(Dispatchers.Main) { progressText = "$done / $total  $name" } }
                                         )
 
                                         val convertedOriginalFiles = stagedFiles
@@ -630,11 +611,7 @@ fun Mp3ConverterWindow(
                                                 dir = tempDir,
                                                 maxPerFile = mergeCount,
                                                 deleteOriginal = doDeleteWavAfterMerge,
-                                                onLog = { msg ->
-                                                    coroutineScope.launch(Dispatchers.Main) {
-                                                        logLines = logLines + msg
-                                                    }
-                                                }
+                                                onLog = { msg -> coroutineScope.launch(Dispatchers.Main) { logLines = logLines + msg } }
                                             )
                                         }
 
@@ -643,9 +620,7 @@ fun Mp3ConverterWindow(
                                         if (doDeleteOriginalMp3) {
                                             convertedOriginalFiles.forEach { original ->
                                                 if (!original.delete()) {
-                                                    coroutineScope.launch(Dispatchers.Main) {
-                                                        logLines = logLines + "[删除失败] ${original.absolutePath}"
-                                                    }
+                                                    coroutineScope.launch(Dispatchers.Main) { logLines = logLines + "[删除失败] ${original.absolutePath}" }
                                                 }
                                             }
                                         }
