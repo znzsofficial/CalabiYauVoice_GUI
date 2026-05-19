@@ -29,9 +29,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation("org.jetbrains.compose.foundation:foundation:1.10.3")
-            implementation("org.jetbrains.compose.ui:ui:1.10.3")
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            implementation("org.jetbrains.compose.foundation:foundation:1.11.0")
+            implementation("org.jetbrains.compose.ui:ui:1.11.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
             implementation("com.squareup.okhttp3:okhttp:5.3.2")
             implementation("com.squareup.okio:okio:3.17.0")
@@ -43,8 +43,8 @@ kotlin {
                 exclude(group = "org.jetbrains.compose.material3")
                 exclude(group = "org.jetbrains.compose.material3.adaptive")
             }
-            implementation("org.jetbrains.compose.foundation:foundation-desktop:1.10.3")
-            implementation("org.jetbrains.compose.ui:ui-desktop:1.10.3")
+            implementation("org.jetbrains.compose.foundation:foundation-desktop:1.11.0")
+            implementation("org.jetbrains.compose.ui:ui-desktop:1.11.0")
             implementation("io.github.compose-fluent:fluent:v0.1.0")
             implementation("io.github.compose-fluent:fluent-icons-extended:v0.1.0")
             implementation(fileTree("libs") {
@@ -56,8 +56,8 @@ kotlin {
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
             implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
             implementation("org.jflac:jflac-codec:1.5.2")
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
-            implementation("io.github.kdroidfilter:composewebview:1.0.0-beta-01")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
+            implementation("io.github.kdroidfilter:composewebview:1.0.0-beta-02")
         }
 
         named("desktopTest").dependencies {
@@ -66,22 +66,22 @@ kotlin {
 
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.13.0")
-            implementation("androidx.compose.material3:material3:1.5.0-alpha17")
+            implementation("androidx.compose.material3:material3:1.5.0-alpha19")
             implementation("androidx.compose.material3:material3-window-size-class:1.4.0")
             implementation("androidx.compose.material:material-icons-extended:1.7.8")
-            implementation("androidx.compose.ui:ui-tooling-preview:1.10.6")
+            implementation("androidx.compose.ui:ui-tooling-preview:1.11.1")
             implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
             implementation("androidx.exifinterface:exifinterface:1.4.2")
             implementation("androidx.palette:palette:1.0.0")
             implementation("androidx.core:core-splashscreen:1.2.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
             implementation("io.coil-kt.coil3:coil-compose:3.4.0")
             implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
             implementation("io.coil-kt.coil3:coil-gif:3.4.0")
             implementation("io.github.kyant0:backdrop:2.0.0-alpha03")
             implementation("io.github.kyant0:capsule:2.1.3")
-            implementation("org.jsoup:jsoup:1.21.1")
+            implementation("org.jsoup:jsoup:1.22.2")
         }
     }
 }

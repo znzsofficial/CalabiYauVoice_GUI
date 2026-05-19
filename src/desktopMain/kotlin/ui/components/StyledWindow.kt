@@ -23,8 +23,8 @@ import io.github.composefluent.FluentTheme
 import io.github.composefluent.background.Layer
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
-import util.findSkiaLayer
 import util.getNonWin11BackgroundGradient
+import util.rememberTransparentSkiaLayerReady
 
 /**
  * 统一的子窗口容器，封装了 Backdrop + FluentTheme + WindowsWindowFrame 的重复模板。
@@ -66,14 +66,7 @@ fun StyledWindow(
     ) {
         val darkMode = darkModeState.value
         val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerExists = remember { window.findSkiaLayer() != null }
-
-        // Win11 始终需要透明图层；非Win11有Skia时也可能应用backdrop，统一设置一次
-        if (skiaLayerExists) {
-            LaunchedEffect(Unit) {
-                window.findSkiaLayer()?.transparency = true
-            }
-        }
+        val skiaLayerReady = rememberTransparentSkiaLayerReady(window)
 
         val backgroundBrush = remember(darkMode) {
             getNonWin11BackgroundGradient(darkMode)
@@ -82,10 +75,10 @@ fun StyledWindow(
         FluentTheme(colors = if (darkMode) darkColors() else lightColors(), useAcrylicPopup = true) {
             val currentBackdrop = backdropTypeState.value
             // 只要选了非 null backdrop 且 skia 可用就应用 WindowStyle
-            if (skiaLayerExists && currentBackdrop != null) {
+            if (skiaLayerReady && currentBackdrop != null) {
                 WindowStyle(isDarkTheme = darkMode, backdropType = currentBackdrop)
             }
-            val useBackdropEffect = skiaLayerExists && currentBackdrop != null
+            val useBackdropEffect = skiaLayerReady && currentBackdrop != null
 
             WindowsWindowFrame(
                 title = title,

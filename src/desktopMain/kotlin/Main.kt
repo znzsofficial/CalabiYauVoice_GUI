@@ -20,8 +20,8 @@ import org.jetbrains.skiko.SkikoProperties
 import ui.components.WindowsWindowFrame
 import ui.components.rememberWindowsWindowFrameState
 import ui.screens.NewDownloaderContent
-import util.findSkiaLayer
 import util.getNonWin11BackgroundGradient
+import util.rememberTransparentSkiaLayerReady
 import java.awt.Button
 import java.awt.FlowLayout
 import java.awt.Frame
@@ -57,25 +57,18 @@ fun main() {
         val systemDark = isSystemInDarkTheme()
         val darkMode = remember { mutableStateOf(systemDark) }
         val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerExists = remember { window.findSkiaLayer() != null }
+        val skiaLayerReady = rememberTransparentSkiaLayerReady(window)
         val isWin11 = remember { isWindows11OrLater() }
         // 非Win11但支持 skia：可以应用 Acrylic/Aero/Transparent，null 表示使用渐变背景
-        val canUseNonWin11Backdrop = skiaLayerExists && !isWin11
+        val canUseNonWin11Backdrop = skiaLayerReady && !isWin11
         // Win11 默认 Tabbed；非Win11 默认 null（渐变背景）
         val backdropType = remember { mutableStateOf<WindowBackdrop?>(if (isWin11) WindowBackdrop.Tabbed else null) }
-
-        // Win11 始终需要透明图层；非Win11有Skia时也可能应用backdrop，统一在此设置一次
-        if (skiaLayerExists) {
-            LaunchedEffect(Unit) {
-                window.findSkiaLayer()?.transparency = true
-            }
-        }
 
         val backgroundBrush = remember(darkMode.value) {
             getNonWin11BackgroundGradient(darkMode.value)
         }
 
-        val appState = remember {
+        val appState = remember(canUseNonWin11Backdrop, isWin11) {
             AppState(
                 darkMode = darkMode,
                 backdropType = backdropType,
@@ -86,15 +79,15 @@ fun main() {
         CompositionLocalProvider(LocalAppStore provides appState) {
             FluentTheme(colors = if (darkMode.value) darkColors() else lightColors(), useAcrylicPopup = true) {
                 val currentBackdrop = backdropType.value
-                // skiaLayerExists 已是前提，只要选了非 null backdrop 就应用 WindowStyle
-                if (skiaLayerExists && currentBackdrop != null) {
+                // skiaLayerReady 已是前提，只要选了非 null backdrop 就应用 WindowStyle
+                if (skiaLayerReady && currentBackdrop != null) {
                     WindowStyle(
                         isDarkTheme = darkMode.value,
                         backdropType = currentBackdrop
                     )
                 }
                 // 是否使用任何 Backdrop 效果（非默认渐变）
-                val useBackdropEffect = skiaLayerExists && currentBackdrop != null
+                val useBackdropEffect = skiaLayerReady && currentBackdrop != null
                 WindowsWindowFrame(
                     title = "卡拉彼丘 WiKi 资源下载器",
                     onCloseRequest = ::exitApplication,
