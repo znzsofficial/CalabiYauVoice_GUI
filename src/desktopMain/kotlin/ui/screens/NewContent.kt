@@ -1175,9 +1175,18 @@ fun NewDownloaderContent() {
                                     }
                                 )
                                 ExpanderItemSeparator()
-                                // 2. 降位深抖动
+                                // 2. 降位深音质保护
                                 ExpanderItem(
-                                    heading = { Text("高位深转低位深时启用抖动") },
+                                    heading = {
+                                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Text("降位深时保护细节")
+                                            Text(
+                                                "减少细节损失和量化噪声。",
+                                                fontSize = 12.sp,
+                                                color = FluentTheme.colors.text.text.secondary
+                                            )
+                                        }
+                                    },
                                     trailing = {
                                         Switcher(
                                             checked = enableDitherOnDownsample,

@@ -88,7 +88,6 @@
 -keepnames class javazoom.jl.decoder.** {}
 -keepnames class org.tritonus.** {}
 -keepnames class org.kc7bfi.jflac.** {}
--keepnames class org.jflac.** {}
 
 # ---------- App 数据模型 ----------
 -keepclassmembers class data.** { <fields>; }

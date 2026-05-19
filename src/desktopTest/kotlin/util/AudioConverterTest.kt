@@ -62,14 +62,11 @@ class AudioConverterTest {
     }
 
     @Test
-    fun `batchConvertAudioToWav rejects unsupported target format before scanning`() {
+    fun `batchConvertAudioToWav rejects invalid target sample rate before scanning`() {
         runBlocking<Unit> {
             val dir = Files.createTempDirectory("audio-converter-validate").toFile()
 
             try {
-                expectIllegalArgument {
-                    batchConvertAudioToWav(dir, targetBitDepth = 12)
-                }
                 expectIllegalArgument {
                     batchConvertAudioToWav(dir, targetSampleRate = -1f)
                 }

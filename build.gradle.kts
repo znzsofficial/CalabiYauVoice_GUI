@@ -17,6 +17,7 @@ repositories {
     mavenCentral()
     maven("https://packages.jetbrains.team/maven/p/kpm/public/")
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    maven("https://jitpack.io")
     google()
 }
 
@@ -55,7 +56,7 @@ kotlin {
             implementation("com.formdev:flatlaf:3.7.1")
             implementation("com.squareup.okhttp3:okhttp-urlconnection:5.3.2")
             implementation("com.googlecode.soundlibs:mp3spi:1.9.5.4")
-            implementation("org.jflac:jflac-codec:1.5.2")
+            implementation("com.github.drogatkin:JustFLAC:master-SNAPSHOT")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
             implementation("io.github.kdroidfilter:composewebview:1.0.0-beta-02")
         }

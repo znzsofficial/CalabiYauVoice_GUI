@@ -463,11 +463,18 @@ fun Mp3ConverterWindow(
                                 }
                             }
 
-                            CheckBox(
-                                checked = enableDitherOnDownsample,
-                                label = "高位深转低位深时启用抖动",
-                                onCheckStateChange = { enableDitherOnDownsample = it }
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                CheckBox(
+                                    checked = enableDitherOnDownsample,
+                                    label = "降位深时保护细节",
+                                    onCheckStateChange = { enableDitherOnDownsample = it }
+                                )
+                                Text(
+                                    "减少细节损失和量化噪声。",
+                                    fontSize = 12.sp,
+                                    color = FluentTheme.colors.text.text.secondary
+                                )
+                            }
 
                             Text(
                                 text = buildConverterSummary(
@@ -590,7 +597,13 @@ fun Mp3ConverterWindow(
 
                                     try {
                                         tempDir.mkdirs()
-                                        val stagedFiles = stageDraggedAudioFiles(files, tempDir)
+                                        val stagedFiles = stageDraggedAudioFiles(
+                                            files = files,
+                                            tempDir = tempDir,
+                                            targetSampleRate = sampleRate,
+                                            targetBitDepth = selectedBitDepthOption.target,
+                                            enableDitherOnDownsample = enableDitherOnDownsample
+                                        )
 
                                         batchConvertAudioToWav(
                                             dir = tempDir,
@@ -661,7 +674,13 @@ fun Mp3ConverterWindow(
 }
 
 
-internal fun stageDraggedAudioFiles(files: List<File>, tempDir: File): List<StagedAudioFile> =
+internal fun stageDraggedAudioFiles(
+    files: List<File>,
+    tempDir: File,
+    targetSampleRate: Float? = null,
+    targetBitDepth: BitDepthTarget = BitDepthTarget.ORIGINAL,
+    enableDitherOnDownsample: Boolean = false
+): List<StagedAudioFile> =
     files.mapIndexed { index, source ->
         val folderName = "%03d_%s".format(index + 1, safePathSegment(source.nameWithoutExtension))
         val stagedDirectory = File(tempDir, folderName).also { it.mkdirs() }
@@ -671,7 +690,7 @@ internal fun stageDraggedAudioFiles(files: List<File>, tempDir: File): List<Stag
             originalFile = source,
             stagedDirectory = stagedDirectory,
             stagedSourceFile = stagedSourceFile,
-            stagedWavFile = File(stagedDirectory, source.nameWithoutExtension + ".wav")
+            stagedWavFile = File(stagedDirectory, convertedWavFileName(stagedSourceFile, targetSampleRate, targetBitDepth, enableDitherOnDownsample))
         )
     }
 
@@ -698,7 +717,7 @@ private fun buildConverterSummary(
     deleteOriginal: Boolean
 ): String {
     val format = "输出：${sampleRateLabel(sampleRate)} / ${bitDepth.label}"
-    val dither = if (enableDitherOnDownsample) "降位深时抖动" else "不额外抖动"
+    val dither = if (enableDitherOnDownsample) "降位深时保护细节" else "不额外处理降位深"
     val merge = if (mergeWav) "会合并 WAV" else "逐个导出 WAV"
     val delete = if (deleteOriginal) "转换成功后删除源文件" else "保留源文件"
     return "$format · $dither · $merge · $delete"

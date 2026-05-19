@@ -78,7 +78,7 @@
 | 组件    | 技术                                                                                                                                                |
 |-------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | UI 框架 | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
-| 音频    | `javax.sound.sampled`、`mp3spi`、`jflac-codec`                                                                                                      |
+| 音频    | `javax.sound.sampled`、`mp3spi`、`JustFLAC`                                                                                                         |
 | 图像    | `javax.imageio.ImageIO`（GIF 多帧解码）                                                                                                                 |
 | 原生调用  | JNA 5（Windows API）                                                                                                                                |
 

@@ -3,6 +3,7 @@ package util
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import java.io.BufferedInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -16,6 +17,7 @@ import javax.sound.sampled.AudioFileFormat
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.UnsupportedAudioFileException
 
 /** 可选的采样率列表；null 表示"原采样率" */
 val SAMPLE_RATE_OPTIONS: List<Float?> = listOf(null, 44100f, 48000f, 88200f, 96000f, 176400f, 192000f)
@@ -55,6 +57,75 @@ fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" els
 fun bitDepthLabel(target: BitDepthTarget): String = target.label
 fun bitDepthOptionAt(index: Int): BitDepthOption =
     BIT_DEPTH_OPTIONS.getOrElse(index) { BIT_DEPTH_OPTIONS[DEFAULT_BIT_DEPTH_INDEX] }
+
+fun convertedWavFileName(
+    source: File,
+    targetSampleRate: Float?,
+    targetBitDepth: BitDepthTarget,
+    enableDitherOnDownsample: Boolean
+): String {
+    val output = runCatching { resolveOutputAudioParams(source, targetSampleRate, targetBitDepth, enableDitherOnDownsample) }
+        .getOrElse { e ->
+            if (e is UnsupportedAudioFileException) {
+                fallbackOutputAudioParams(targetSampleRate, targetBitDepth, enableDitherOnDownsample)
+            } else {
+                throw e
+            }
+        }
+    val ratePart = sampleRateFileSuffix(output.sampleRate)
+    val depthPart = bitDepthFileSuffix(output.bitDepth, output.float)
+    val ditherPart = if (output.dither) "dither" else "nodither"
+    return "${source.nameWithoutExtension}_${ratePart}_${depthPart}_${ditherPart}.wav"
+}
+
+private fun fallbackOutputAudioParams(
+    targetSampleRate: Float?,
+    targetBitDepth: BitDepthTarget,
+    enableDitherOnDownsample: Boolean
+): OutputAudioParams {
+    val outBits = when (targetBitDepth) {
+        BitDepthTarget.ORIGINAL -> 16
+        BitDepthTarget.PCM_16 -> 16
+        BitDepthTarget.PCM_24 -> 24
+        BitDepthTarget.PCM_32 -> 32
+        BitDepthTarget.FLOAT_32 -> 32
+    }
+    val outFloat = targetBitDepth == BitDepthTarget.FLOAT_32
+    val useDither = enableDitherOnDownsample && !outFloat && targetBitDepth != BitDepthTarget.ORIGINAL && 16 > outBits
+    return OutputAudioParams(targetSampleRate ?: 44100f, outBits, outFloat, useDither)
+}
+
+private data class OutputAudioParams(
+    val sampleRate: Float,
+    val bitDepth: Int,
+    val float: Boolean,
+    val dither: Boolean
+)
+
+private fun resolveOutputAudioParams(
+    source: File,
+    targetSampleRate: Float?,
+    targetBitDepth: BitDepthTarget,
+    enableDitherOnDownsample: Boolean
+): OutputAudioParams {
+    AudioSystem.getAudioInputStream(source).use { sourceStream ->
+        val baseFormat = sourceStream.format
+        val naturalBits = baseFormat.sampleSizeInBits.takeIf { it > 0 } ?: 16
+        val naturalRate = baseFormat.sampleRate.takeIf { it.isFinite() && it > 0f } ?: 44100f
+        val outRate = targetSampleRate ?: naturalRate
+        val outBits = when (targetBitDepth) {
+            BitDepthTarget.ORIGINAL -> naturalBits
+            BitDepthTarget.PCM_16 -> 16
+            BitDepthTarget.PCM_24 -> 24
+            BitDepthTarget.PCM_32 -> 32
+            BitDepthTarget.FLOAT_32 -> 32
+        }
+        val outFloat = targetBitDepth == BitDepthTarget.FLOAT_32
+        val useDither = enableDitherOnDownsample && !outFloat && naturalBits > outBits
+        return OutputAudioParams(outRate, outBits, outFloat, useDither)
+    }
+}
+
 private fun BitDepthTarget.toLegacyBitDepth(): Int? = when (this) {
     BitDepthTarget.ORIGINAL -> null
     BitDepthTarget.PCM_16 -> 16
@@ -97,7 +168,7 @@ suspend fun batchConvertAudioToWav(
 
     val rateDesc = sampleRateLabel(targetSampleRate)
     val depthDesc = bitDepthLabel(targetBitDepth)
-    val ditherDesc = if (enableDitherOnDownsample) " / 降位深抖动" else ""
+    val ditherDesc = if (enableDitherOnDownsample) " / 降位深音质保护" else ""
     onLog("找到 ${sourceFiles.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc$ditherDesc)…")
     var successCount = 0
     var failCount = 0
@@ -105,7 +176,10 @@ suspend fun batchConvertAudioToWav(
     sourceFiles.forEachIndexed { index, sourceFile ->
         if (!isActive) return@withContext
 
-        val wavFile = File(sourceFile.parentFile ?: dir, sourceFile.nameWithoutExtension + ".wav")
+        val wavFile = File(
+            sourceFile.parentFile ?: dir,
+            convertedWavFileName(sourceFile, targetSampleRate, targetBitDepth, enableDitherOnDownsample)
+        )
         onProgress(index, sourceFiles.size, sourceFile.name)
 
         try {
@@ -147,7 +221,7 @@ fun convertAudioToWav(
     validateTargetFormat(targetSampleRate)
     wavFile.parentFile?.mkdirs()
 
-    // 1. 打开音频输入流（mp3spi/jflac SPI 自动接管）
+    // 1. 打开音频输入流（mp3spi/JustFLAC SPI 自动接管）
     AudioSystem.getAudioInputStream(sourceFile).use { sourceStream ->
         val baseFormat = sourceStream.format
 
@@ -368,7 +442,7 @@ private fun writeBitDepthConvertedWav(
 ) {
     AudioInputStream(
         BitDepthConversionInputStream(
-            source = source,
+            audioSource = source,
             sourceBits = sourceBits,
             targetBits = targetBits,
             enableDither = enableDither
@@ -396,6 +470,14 @@ private fun isGeneratedMergedWav(file: File): Boolean {
     val lowerName = file.name.lowercase()
     return lowerName.endsWith(".wav") && lowerName.contains(GENERATED_MERGED_TAG)
 }
+
+private fun sampleRateFileSuffix(sampleRate: Float): String {
+    val rounded = sampleRate.toInt()
+    return if (abs(sampleRate - rounded) < AUDIO_RATE_TOLERANCE) "${rounded}hz" else "${sampleRate.toString().replace('.', '_')}hz"
+}
+
+private fun bitDepthFileSuffix(bits: Int, float: Boolean): String =
+    if (float) "${bits}bit-float" else "${bits}bit-int"
 
 private fun tempSiblingOf(file: File): File =
     File(file.parentFile ?: File("."), ".${file.name}.tmp")
@@ -429,17 +511,22 @@ private fun replaceFile(tempFile: File, targetFile: File) {
  * 仅适用于两者均为 8 的整数倍的场景。
  */
 private class BitDepthConversionInputStream(
-    private val source: AudioInputStream,
+    audioSource: AudioInputStream,
     private val sourceBits: Int,
     private val targetBits: Int,
     private val enableDither: Boolean = false
 ) : InputStream() {
+    private val source = BufferedInputStream(audioSource, 64 * 1024)
     private val srcBytesPerSample = sourceBits / 8
     private val dstBytesPerSample = targetBits / 8
-    private val channels = source.format.channels
-    private val srcFrameBuf = ByteArray(channels * srcBytesPerSample)
-    private val dstFrameBuf = ByteArray(channels * dstBytesPerSample)
-    private var dstPos = dstFrameBuf.size // 初始设为末尾，触发首次填充
+    private val channels = audioSource.format.channels
+    private val srcFrameSize = channels * srcBytesPerSample
+    private val dstFrameSize = channels * dstBytesPerSample
+    private val batchFrames = 4096
+    private val srcBatchBuf = ByteArray(batchFrames * srcFrameSize)
+    private val dstBatchBuf = ByteArray(batchFrames * dstFrameSize)
+    private var dstBatchPos = 0
+    private var dstBatchLen = 0
     private val previousError = DoubleArray(channels)
     private var rngState = initialNoiseSeed(sourceBits, targetBits, channels)
 
@@ -447,58 +534,158 @@ private class BitDepthConversionInputStream(
     // 降位深: source > target, shift > 0 (右移)
     // 升位深: source < target, shift < 0 (左移 = shift absolute value)
     private val shift = sourceBits - targetBits
+    private val sourcePeak = (1L shl (sourceBits - 1)).toDouble()
+    private val targetPeak = (1L shl (targetBits - 1)).toDouble()
+    private val peakRatio = targetPeak / sourcePeak
+    private val targetMin = if (targetBits == 32) Int.MIN_VALUE else -(1 shl (targetBits - 1))
+    private val targetMax = if (targetBits == 32) Int.MAX_VALUE else (1 shl (targetBits - 1)) - 1
 
     override fun read(): Int {
-        if (dstPos >= dstFrameBuf.size && !nextFrame()) return -1
-        return dstFrameBuf[dstPos++].toInt() and 0xFF
+        if (dstBatchPos >= dstBatchLen && !fillBatch()) return -1
+        return dstBatchBuf[dstBatchPos++].toInt() and 0xFF
     }
 
     override fun read(buf: ByteArray, off: Int, len: Int): Int {
         if (len == 0) return 0
         var written = 0
         while (written < len) {
-            if (dstPos >= dstFrameBuf.size && !nextFrame()) return if (written == 0) -1 else written
-            val toCopy = minOf(len - written, dstFrameBuf.size - dstPos)
-            System.arraycopy(dstFrameBuf, dstPos, buf, off + written, toCopy)
-            dstPos += toCopy
+            if (dstBatchPos >= dstBatchLen && !fillBatch()) return if (written == 0) -1 else written
+            val toCopy = minOf(len - written, dstBatchLen - dstBatchPos)
+            System.arraycopy(dstBatchBuf, dstBatchPos, buf, off + written, toCopy)
+            dstBatchPos += toCopy
             written += toCopy
         }
         return written
     }
 
-    private fun nextFrame(): Boolean {
+    private fun fillBatch(): Boolean {
         var read = 0
-        while (read < srcFrameBuf.size) {
-            val n = source.read(srcFrameBuf, read, srcFrameBuf.size - read)
-            if (n < 0) return false
+        while (read < srcBatchBuf.size) {
+            val n = source.read(srcBatchBuf, read, srcBatchBuf.size - read)
+            if (n <= 0) break
             read += n
         }
-        for (ch in 0 until channels) {
-            val sample = readSignedLE(srcFrameBuf, ch * srcBytesPerSample, sourceBits)
-            val converted = if (enableDither && shift > 0) {
-                ditheredDownscale(sample, ch)
-            } else if (shift > 0) {
-                sample shr shift // Downscale
-            } else {
-                sample shl (-shift) // Upscale
+
+        val framesRead = read / srcFrameSize
+        if (framesRead == 0) return false
+        if (!enableDither && convertFastPath(framesRead)) {
+            // Fast paths are byte-equivalent to the generic arithmetic shift for little-endian PCM.
+        } else {
+            for (frame in 0 until framesRead) {
+                for (ch in 0 until channels) {
+                    val srcOff = frame * srcFrameSize + ch * srcBytesPerSample
+                    val dstOff = frame * dstFrameSize + ch * dstBytesPerSample
+                    val sample = readSignedLE(srcBatchBuf, srcOff, sourceBits)
+                    val converted = if (enableDither && shift > 0) {
+                        ditheredDownscale(sample, ch)
+                    } else if (shift > 0) {
+                        sample shr shift // Downscale
+                    } else {
+                        sample shl (-shift) // Upscale
+                    }
+                    writeSignedLE(dstBatchBuf, dstOff, converted, targetBits)
+                }
             }
-            writeSignedLE(dstFrameBuf, ch * dstBytesPerSample, converted, targetBits)
         }
-        dstPos = 0
+
+        dstBatchPos = 0
+        dstBatchLen = framesRead * dstFrameSize
         return true
     }
 
+    private fun convertFastPath(framesRead: Int): Boolean {
+        when {
+            sourceBits == 16 && targetBits == 24 -> convert16To24(framesRead)
+            sourceBits == 16 && targetBits == 32 -> convert16To32(framesRead)
+            sourceBits == 24 && targetBits == 16 -> convert24To16(framesRead)
+            sourceBits == 24 && targetBits == 32 -> convert24To32(framesRead)
+            sourceBits == 32 && targetBits == 16 -> convert32To16(framesRead)
+            sourceBits == 32 && targetBits == 24 -> convert32To24(framesRead)
+            else -> return false
+        }
+        return true
+    }
+
+    private fun convert16To24(framesRead: Int) {
+        for (frame in 0 until framesRead) {
+            for (ch in 0 until channels) {
+                val srcOff = frame * srcFrameSize + ch * 2
+                val dstOff = frame * dstFrameSize + ch * 3
+                dstBatchBuf[dstOff] = 0
+                dstBatchBuf[dstOff + 1] = srcBatchBuf[srcOff]
+                dstBatchBuf[dstOff + 2] = srcBatchBuf[srcOff + 1]
+            }
+        }
+    }
+
+    private fun convert16To32(framesRead: Int) {
+        for (frame in 0 until framesRead) {
+            for (ch in 0 until channels) {
+                val srcOff = frame * srcFrameSize + ch * 2
+                val dstOff = frame * dstFrameSize + ch * 4
+                dstBatchBuf[dstOff] = 0
+                dstBatchBuf[dstOff + 1] = 0
+                dstBatchBuf[dstOff + 2] = srcBatchBuf[srcOff]
+                dstBatchBuf[dstOff + 3] = srcBatchBuf[srcOff + 1]
+            }
+        }
+    }
+
+    private fun convert24To16(framesRead: Int) {
+        for (frame in 0 until framesRead) {
+            for (ch in 0 until channels) {
+                val srcOff = frame * srcFrameSize + ch * 3
+                val dstOff = frame * dstFrameSize + ch * 2
+                dstBatchBuf[dstOff] = srcBatchBuf[srcOff + 1]
+                dstBatchBuf[dstOff + 1] = srcBatchBuf[srcOff + 2]
+            }
+        }
+    }
+
+    private fun convert24To32(framesRead: Int) {
+        for (frame in 0 until framesRead) {
+            for (ch in 0 until channels) {
+                val srcOff = frame * srcFrameSize + ch * 3
+                val dstOff = frame * dstFrameSize + ch * 4
+                dstBatchBuf[dstOff] = 0
+                dstBatchBuf[dstOff + 1] = srcBatchBuf[srcOff]
+                dstBatchBuf[dstOff + 2] = srcBatchBuf[srcOff + 1]
+                dstBatchBuf[dstOff + 3] = srcBatchBuf[srcOff + 2]
+            }
+        }
+    }
+
+    private fun convert32To16(framesRead: Int) {
+        for (frame in 0 until framesRead) {
+            for (ch in 0 until channels) {
+                val srcOff = frame * srcFrameSize + ch * 4
+                val dstOff = frame * dstFrameSize + ch * 2
+                dstBatchBuf[dstOff] = srcBatchBuf[srcOff + 2]
+                dstBatchBuf[dstOff + 1] = srcBatchBuf[srcOff + 3]
+            }
+        }
+    }
+
+    private fun convert32To24(framesRead: Int) {
+        for (frame in 0 until framesRead) {
+            for (ch in 0 until channels) {
+                val srcOff = frame * srcFrameSize + ch * 4
+                val dstOff = frame * dstFrameSize + ch * 3
+                dstBatchBuf[dstOff] = srcBatchBuf[srcOff + 1]
+                dstBatchBuf[dstOff + 1] = srcBatchBuf[srcOff + 2]
+                dstBatchBuf[dstOff + 2] = srcBatchBuf[srcOff + 3]
+            }
+        }
+    }
+
     private fun ditheredDownscale(sample: Int, channel: Int): Int {
-        val sourcePeak = (1 shl (sourceBits - 1)).toDouble()
-        val targetPeak = (1 shl (targetBits - 1)).toDouble()
-        val normalized = sample.toDouble() / sourcePeak
-        val targetSample = normalized * targetPeak
+        val targetSample = sample.toDouble() * peakRatio
 
         val shaped = targetSample + previousError[channel] * 0.85
         val dither = triangularPdfNoise()
         val quantized = (shaped + dither)
             .roundToInt()
-            .coerceIn(-(targetPeak.toInt()), targetPeak.toInt() - 1)
+            .coerceIn(targetMin, targetMax)
 
         previousError[channel] = (shaped - quantized).coerceIn(-2.0, 2.0)
         return quantized
@@ -507,11 +694,11 @@ private class BitDepthConversionInputStream(
     private fun triangularPdfNoise(): Double = nextUnitNoise() - nextUnitNoise()
 
     private fun nextUnitNoise(): Double {
-        rngState = rngState xor (rngState shl 13)
-        rngState = rngState xor (rngState ushr 7)
-        rngState = rngState xor (rngState shl 17)
-        val mantissa = rngState ushr 11
-        return mantissa.toDouble() / (1L shl 53).toDouble()
+        rngState = rngState xor (rngState ushr 12)
+        rngState = rngState xor (rngState shl 25)
+        rngState = rngState xor (rngState ushr 27)
+        val mantissa = (rngState * 2685821657736338717L) ushr 11
+        return mantissa.toDouble() / UNIT_NOISE_DIVISOR
     }
 
     private fun readSignedLE(b: ByteArray, off: Int, bits: Int): Int {
@@ -531,6 +718,10 @@ private class BitDepthConversionInputStream(
     }
 
     override fun close() = source.close()
+
+    private companion object {
+        private const val UNIT_NOISE_DIVISOR = 9007199254740992.0
+    }
 }
 
 private fun initialNoiseSeed(sourceBits: Int, targetBits: Int, channels: Int): Long {

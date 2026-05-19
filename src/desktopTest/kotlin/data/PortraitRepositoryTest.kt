@@ -3,6 +3,9 @@ package data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import portrait.buildPortraitCatalog
+import portrait.extractPortraitCharacterName
+import portrait.remapPortraitFilesToOfficialNames
 
 class PortraitRepositoryTest {
     @Test
@@ -117,7 +120,7 @@ class PortraitRepositoryTest {
             characterName = "爆裂魔怪",
             files = listOf(
                 "爆裂魔怪立绘.png" to "https://example.com/illust.png",
-                "爆裂魔怪.jpg" to "https://example.com/front.jpg",
+                "爆裂魔怪预览图.jpg" to "https://example.com/front.jpg",
                 "爆裂魔怪背面.jpg" to "https://example.com/back.jpg"
             )
         )
