@@ -97,50 +97,52 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 ## 📂 Project Structure
 
 ```text
-src/
-├── commonMain/                         # Shared business logic
-│   ├── data/                           #   Wiki API core, models, serialization, shared network DTOs
-│   ├── portrait/                       #   Portrait parsing and organization
-│   └── util/                           #   File extension helpers
-├── desktopMain/                        # Desktop (Windows) target
-│   ├── data/                           #   OkHttp client, image loader, cookies, desktop API glue
-│   ├── viewmodel/                      #   Search/download state management
-│   ├── ui/screens/                     #   Desktop screens
-│   ├── ui/components/                  #   Reusable Fluent UI components
-│   ├── util/                           #   Audio conversion, preferences, file helpers
-│   └── jna/windows/                    #   Win32 API bindings and window effects
-└── androidMain/                        # Android target
-    ├── core/
-    │   ├── cache/                      #   Offline cache, cache bootstrap, cache pruning
-    │   ├── media/                      #   Audio playback and media helpers
-    │   ├── navigation/                 #   MainScreen and app-level navigation shell
-    │   ├── network/                    #   Network monitor and HTTP helpers
-    │   ├── preferences/                #   AppPrefs and persisted Android settings
-    │   ├── ui/                         #   Shared Compose UI: common, state, skeleton, preview, feedback
-    │   └── wiki/                       #   Wiki auth, parse source, image URL helpers, parser utilities
-    ├── feature/
-    │   ├── character/                  #   Character list/detail, birthday dialog, costumes, selectors
-    │   ├── weapon/                     #   Weapon list/detail and weapon skin filters
-    │   ├── download/                   #   Resource search, category browse, downloads, history, portraits
-    │   ├── settings/                   #   Settings, about, update checks, storage management
-    │   ├── tools/                      #   Local file manager and desktop asset tooling
-    │   └── wiki/
-    │       ├── hub/                    #   Native Wiki Hub, routes/codecs, aggregate pages, WebView shell
-    │       ├── gallery/                #   Wallpapers, stickers, comics, preview/save flow
-    │       ├── map/                    #   Map list/detail parsing and native detail page
-    │       ├── activity/announcement/  #   Activities and announcements
-    │       ├── achievement/            #   Native achievements page
-    │       ├── playerlevel/            #   Player levels, rewards, frame segments
-    │       ├── oath/imprint/           #   Oath, gifts, bonds, imprints
-    │       ├── bio/                    #   PC/mobile bio cards and deck sharing
-    │       ├── item/decoration/        #   Item catalog and player decorations
-    │       ├── bgm/meow/meme/tips/     #   BGM, meow language, memes, game tips
-    │       ├── story/history/          #   Story and game history pages
-    │       ├── collaboration/voting/   #   Collaborations and native voting
-    │       └── stringer/navigation/    #   Stringer actions/talents/cards and Wiki navigation
-    ├── MainActivity.kt
-    ├── CrashHandler.kt                 # Android crash capture
-    └── NotificationHelper.kt           # Download/status notifications
+.
+├── androidApp/                         # Android application module
+│   ├── build.gradle.kts                #   Android app build, signing, packaging, dependencies
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── kotlin/com/nekolaska/calabiyau/
+│       │   ├── core/                   #   Cache, media, navigation, network, preferences, UI, Wiki helpers
+│       │   ├── feature/                #   Android screens and feature APIs
+│       │   │   ├── character/          #   Character list/detail, costumes, selectors
+│       │   │   ├── weapon/             #   Weapon list/detail and skin filters
+│       │   │   ├── download/           #   Search, category browse, downloads, history, portraits
+│       │   │   ├── settings/           #   Settings, about, update checks, storage management
+│       │   │   ├── tools/              #   Local file manager and Android utility tools
+│       │   │   └── wiki/               #   Native Wiki Hub pages, WebView shell, parsers and sources
+│       │   ├── MainActivity.kt
+│       │   ├── CrashHandler.kt         #   Android crash capture
+│       │   └── NotificationHelper.kt   #   Download/status notifications
+│       └── res/                        #   Android drawables, launcher icons, themes, shortcuts
+├── desktopApp/                         # Desktop application module
+│   ├── build.gradle.kts                #   Compose Desktop app, native distributions, ProGuard
+│   ├── icon.ico
+│   ├── libs/                           #   Desktop-only local JARs
+│   └── src/main/
+│       ├── kotlin/
+│       │   ├── data/                   #   OkHttp client, image loader, cookies, desktop API glue
+│       │   ├── viewmodel/              #   Search/download state management
+│       │   ├── ui/screens/             #   Desktop screens
+│       │   ├── ui/components/          #   Reusable Fluent UI components
+│       │   ├── util/                   #   Audio conversion, preferences, file helpers
+│       │   ├── jna/windows/            #   Win32 API bindings and window effects
+│       │   └── Main.kt                 #   Desktop entry point
+│       └── resources/                  #   Desktop icons and packaged resources
+├── shared/                             # Kotlin Multiplatform shared module
+│   ├── build.gradle.kts
+│   └── src/
+│       ├── commonMain/kotlin/          #   Shared business logic
+│       │   ├── data/                   #   Wiki API core, models, serialization, shared network DTOs
+│       │   ├── portrait/               #   Portrait parsing and organization
+│       │   └── util/                   #   File extension helpers
+│       ├── commonMain/composeResources/#   Shared Compose resources
+│       ├── commonTest/                 #   Common tests
+│       ├── jvmTest/                    #   Desktop/JVM tests
+│       └── androidHostTest/            #   Android host tests
+├── gradle/libs.versions.toml           # Centralized plugin and dependency versions
+├── build.gradle.kts                    # Root plugin aliases
+└── settings.gradle.kts                 # Module includes and repository management
 ```
 
 ## 🚀 Build and Run

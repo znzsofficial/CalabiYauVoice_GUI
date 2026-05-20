@@ -97,50 +97,52 @@
 ## 📂 项目结构
 
 ```text
-src/
-├── commonMain/                         # 共享业务逻辑
-│   ├── data/                           #   Wiki API 核心、数据模型、序列化、共享网络 DTO
-│   ├── portrait/                       #   立绘解析与分类组织
-│   └── util/                           #   文件扩展名工具
-├── desktopMain/                        # 桌面端（Windows）
-│   ├── data/                           #   OkHttp 客户端、图片加载器、Cookie、桌面 API 适配
-│   ├── viewmodel/                      #   搜索/下载状态管理
-│   ├── ui/screens/                     #   桌面端页面
-│   ├── ui/components/                  #   可复用 Fluent UI 组件
-│   ├── util/                           #   音频转换、偏好设置、文件工具
-│   └── jna/windows/                    #   Win32 API 绑定与窗口特效
-└── androidMain/                        # Android 端
-    ├── core/
-    │   ├── cache/                      #   离线缓存、缓存注册、缓存清理
-    │   ├── media/                      #   音频播放与媒体工具
-    │   ├── navigation/                 #   MainScreen 与应用导航外壳
-    │   ├── network/                    #   网络状态监听与 HTTP 工具
-    │   ├── preferences/                #   AppPrefs 与 Android 持久化设置
-    │   ├── ui/                         #   通用 Compose UI：基础组件、状态、骨架、预览、反馈
-    │   └── wiki/                       #   Wiki 鉴权、parse 数据源、图片 URL、解析工具
-    ├── feature/
-    │   ├── character/                  #   角色列表/详情、生日提醒、时装、角色选择器
-    │   ├── weapon/                     #   武器列表/详情与武器外观筛选
-    │   ├── download/                   #   资源搜索、分类浏览、下载、历史记录、立绘查看
-    │   ├── settings/                   #   设置、关于、更新检查、存储管理
-    │   ├── tools/                      #   本地文件管理与桌面资源工具
-    │   └── wiki/
-    │       ├── hub/                    #   原生 Wiki Hub、路由/编码、聚合页、WebView 外壳
-    │       ├── gallery/                #   壁纸、表情包、四格漫画、预览/保存流程
-    │       ├── map/                    #   地图列表/详情解析与原生详情页
-    │       ├── activity/announcement/  #   活动与公告资讯
-    │       ├── achievement/            #   原生成就页
-    │       ├── playerlevel/            #   玩家等级、奖励、等级框分段
-    │       ├── oath/imprint/           #   誓约、礼物、羁绊、印迹
-    │       ├── bio/                    #   PC/移动端生化卡牌与卡组分享
-    │       ├── item/decoration/        #   道具图鉴与玩家装饰
-    │       ├── bgm/meow/meme/tips/     #   BGM、喵言喵语、梗百科、游戏 Tips
-    │       ├── story/history/          #   剧情故事与游戏历史
-    │       ├── collaboration/voting/   #   联动与原生投票
-    │       └── stringer/navigation/    #   超弦体行动/天赋/推进卡牌与 Wiki 导航
-    ├── MainActivity.kt
-    ├── CrashHandler.kt                 # Android 崩溃捕获
-    └── NotificationHelper.kt           # 下载/状态通知
+.
+├── androidApp/                         # Android 应用模块
+│   ├── build.gradle.kts                #   Android 应用构建、签名、打包、依赖
+│   └── src/main/
+│       ├── AndroidManifest.xml
+│       ├── kotlin/com/nekolaska/calabiyau/
+│       │   ├── core/                   #   缓存、媒体、导航、网络、偏好设置、UI、Wiki 工具
+│       │   ├── feature/                #   Android 页面与功能 API
+│       │   │   ├── character/          #   角色列表/详情、时装、角色选择器
+│       │   │   ├── weapon/             #   武器列表/详情与武器外观筛选
+│       │   │   ├── download/           #   资源搜索、分类浏览、下载、历史记录、立绘查看
+│       │   │   ├── settings/           #   设置、关于、更新检查、存储管理
+│       │   │   ├── tools/              #   本地文件管理与 Android 工具
+│       │   │   └── wiki/               #   原生 Wiki Hub 页面、WebView 外壳、解析器和数据源
+│       │   ├── MainActivity.kt
+│       │   ├── CrashHandler.kt         #   Android 崩溃捕获
+│       │   └── NotificationHelper.kt   #   下载/状态通知
+│       └── res/                        #   Android 图片资源、启动图标、主题、快捷方式
+├── desktopApp/                         # 桌面应用模块
+│   ├── build.gradle.kts                #   Compose Desktop 应用、原生分发包、ProGuard
+│   ├── icon.ico
+│   ├── libs/                           #   桌面端专用本地 JAR
+│   └── src/main/
+│       ├── kotlin/
+│       │   ├── data/                   #   OkHttp 客户端、图片加载器、Cookie、桌面 API 适配
+│       │   ├── viewmodel/              #   搜索/下载状态管理
+│       │   ├── ui/screens/             #   桌面端页面
+│       │   ├── ui/components/          #   可复用 Fluent UI 组件
+│       │   ├── util/                   #   音频转换、偏好设置、文件工具
+│       │   ├── jna/windows/            #   Win32 API 绑定与窗口特效
+│       │   └── Main.kt                 #   桌面端入口
+│       └── resources/                  #   桌面图标与打包资源
+├── shared/                             # Kotlin Multiplatform 共享模块
+│   ├── build.gradle.kts
+│   └── src/
+│       ├── commonMain/kotlin/          #   共享业务逻辑
+│       │   ├── data/                   #   Wiki API 核心、数据模型、序列化、共享网络 DTO
+│       │   ├── portrait/               #   立绘解析与分类组织
+│       │   └── util/                   #   文件扩展名工具
+│       ├── commonMain/composeResources/#   共享 Compose 资源
+│       ├── commonTest/                 #   通用测试
+│       ├── jvmTest/                    #   桌面/JVM 测试
+│       └── androidHostTest/            #   Android Host 测试
+├── gradle/libs.versions.toml           # 集中管理插件与依赖版本
+├── build.gradle.kts                    # 根项目插件 alias
+└── settings.gradle.kts                 # 模块 include 与仓库管理
 ```
 
 ## 🚀 构建与运行
