@@ -75,7 +75,6 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/DEPENDENCIES"
             pickFirsts += "META-INF/*"
             pickFirsts += "META-INF/versions/**"
@@ -94,11 +93,6 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
-    }
-
-    lint {
-        disable += "NullSafeMutableLiveData"
-        checkReleaseBuilds = false
     }
 
     compileOptions {
