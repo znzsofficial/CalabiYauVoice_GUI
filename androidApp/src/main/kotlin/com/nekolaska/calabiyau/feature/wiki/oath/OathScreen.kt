@@ -48,9 +48,10 @@ fun OathScreen(
             birthdayGifts = emptyList(),
             favorGifts = emptyList(),
             bondSections = emptyList()
-        )
+        ),
+        cachedFetch = { OathApi.fetch(cacheOnly = true) }
     ) { force ->
-        OathApi.fetch(force)
+        OathApi.fetch(forceRefresh = force, allowMemoryCache = false)
     }
     var selectedTab by remember { mutableStateOf(OathTab.OVERVIEW) }
     var keyword by remember { mutableStateOf("") }

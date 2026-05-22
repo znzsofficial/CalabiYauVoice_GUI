@@ -64,9 +64,10 @@ fun GalleryScreen(
 
     val state = rememberLoadState(
         initial = emptyList<GallerySection>(),
-        key = pageName
+        key = pageName,
+        cachedFetch = { GalleryApi.fetchGallery(pageName, cacheOnly = true) }
     ) { force ->
-        GalleryApi.fetchGallery(pageName, force)
+        GalleryApi.fetchGallery(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
     }
     var selectedSectionIndex by remember { mutableIntStateOf(0) }
 

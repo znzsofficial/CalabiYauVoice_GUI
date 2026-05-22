@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.decoration.api
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
 import com.nekolaska.calabiyau.feature.wiki.decoration.parser.PlayerDecorationParsers
+import com.nekolaska.calabiyau.feature.wiki.decoration.source.DecorationHtmlSourceResult
 import com.nekolaska.calabiyau.feature.wiki.decoration.source.PlayerDecorationRemoteSource
 import data.ApiResult
 import data.ErrorKind
@@ -102,22 +103,48 @@ object PlayerDecorationApi {
      */
     suspend fun fetch(
         pageName: String,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
     ): ApiResult<List<DecorationSection>> {
-        getCachedSections(pageName, forceRefresh)?.let { return ApiResult.Success(it) }
-        return fetchFromNetwork(pageName, forceRefresh).also {
+        if (allowMemoryCache) getCachedSections(pageName, forceRefresh)?.let { return ApiResult.Success(it) }
+        return if (cacheOnly) fetchFromCache(pageName) else fetchFromNetwork(pageName, forceRefresh).also {
             if (it is ApiResult.Success) cacheMap[pageName] = it.value
         }
+    }
+
+    private suspend fun fetchFromCache(pageName: String): ApiResult<List<DecorationSection>> = fetchFromSource(
+        pageName = pageName,
+        forceRefresh = false,
+        cacheOnly = true,
+        loadSource = { PlayerDecorationRemoteSource.loadCachedPageHtml(pageName) },
+        networkErrorMessage = "无离线缓存"
+    ).also {
+        if (it is ApiResult.Success) cacheMap[pageName] = it.value
     }
 
     private suspend fun fetchFromNetwork(
         pageName: String,
         forceRefresh: Boolean
+    ): ApiResult<List<DecorationSection>> = fetchFromSource(
+        pageName = pageName,
+        forceRefresh = forceRefresh,
+        cacheOnly = false,
+        loadSource = { PlayerDecorationRemoteSource.fetchPageHtml(pageName, forceRefresh) },
+        networkErrorMessage = "获取页面失败，且无离线缓存"
+    )
+
+    private suspend fun fetchFromSource(
+        pageName: String,
+        forceRefresh: Boolean,
+        cacheOnly: Boolean,
+        loadSource: suspend () -> DecorationHtmlSourceResult?,
+        networkErrorMessage: String
     ): ApiResult<List<DecorationSection>> = withContext(Dispatchers.IO) {
         try {
-            val sourceResult = PlayerDecorationRemoteSource.fetchPageHtml(pageName, forceRefresh)
+            val sourceResult = loadSource()
                 ?: return@withContext ApiResult.Error(
-                    "获取页面失败，且无离线缓存",
+                    networkErrorMessage,
                     kind = ErrorKind.NETWORK
                 )
 
@@ -129,9 +156,9 @@ object PlayerDecorationApi {
                 )
             }
 
-            val moduleDataMap = fetchModuleData(pageName, forceRefresh)
+            val moduleDataMap = fetchModuleData(pageName, forceRefresh, cacheOnly)
             val fileNames = PlayerDecorationParsers.extractFileNames(rawSections)
-            val urlMap = PlayerDecorationRemoteSource.fetchImageUrls(fileNames.toList(), forceRefresh)
+            val urlMap = PlayerDecorationRemoteSource.fetchImageUrls(fileNames.toList(), forceRefresh, cacheOnly)
 
             val sections = PlayerDecorationParsers.mapSections(
                 rawSections = rawSections,
@@ -156,12 +183,17 @@ object PlayerDecorationApi {
 
     private suspend fun fetchModuleData(
         pageName: String,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        cacheOnly: Boolean
     ): Map<Int, PlayerDecorationParsers.DecorationModuleData> {
         val config = moduleConfigByPage[pageName]?.takeIf { it.enabled } ?: return emptyMap()
 
         return try {
-            val wikitext = PlayerDecorationRemoteSource.fetchModuleWikitext(config.modulePage, forceRefresh)
+            val wikitext = if (cacheOnly) {
+                PlayerDecorationRemoteSource.loadCachedModuleWikitext(config.modulePage)
+            } else {
+                PlayerDecorationRemoteSource.fetchModuleWikitext(config.modulePage, forceRefresh)
+            }
                 ?: return emptyMap()
             PlayerDecorationParsers.parseModuleData(wikitext)
         } catch (_: Exception) {

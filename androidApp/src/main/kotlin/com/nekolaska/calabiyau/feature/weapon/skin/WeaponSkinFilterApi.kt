@@ -79,12 +79,13 @@ object WeaponSkinFilterApi {
      */
     suspend fun fetchAllWeaponSkins(
         forceRefresh: Boolean = false,
-        cacheOnly: Boolean = false
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
     ): ApiResult<List<WeaponSkinInfo>> =
         withContext(Dispatchers.IO) {
             try {
                 // 强刷时必须绕过内存缓存
-                getCachedSkins(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
+                if (allowMemoryCache) getCachedSkins(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
 
                 // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
                 if (cacheOnly) {

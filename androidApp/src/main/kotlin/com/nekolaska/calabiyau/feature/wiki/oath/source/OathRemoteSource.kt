@@ -1,13 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.oath.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
-import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
+import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 
-data class OathSourceResult(
-    val html: String,
-    val isFromCache: Boolean,
-    val ageMs: Long
-)
+typealias OathSourceResult = WikiHtmlPageSourceResult
 
 object OathRemoteSource {
 
@@ -15,18 +13,16 @@ object OathRemoteSource {
     private const val CACHE_KEY = "oath_page"
 
     suspend fun fetchPage(forceRefresh: Boolean = false): OathSourceResult? {
-        val result = WikiParseSource.fetchHtml(
+        return fetchWikiHtmlPage(
             pageName = PAGE_NAME,
             cacheType = OfflineCache.Type.OATH,
             cacheKey = CACHE_KEY,
             forceRefresh = forceRefresh
-        ) ?: return null
-        val html = result.html ?: return null
-
-        return OathSourceResult(
-            html = html,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
         )
     }
+
+    suspend fun loadCachedPage(): OathSourceResult? = loadCachedWikiHtmlPage(
+        cacheType = OfflineCache.Type.OATH,
+        cacheKey = CACHE_KEY
+    )
 }

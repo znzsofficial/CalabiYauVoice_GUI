@@ -23,9 +23,10 @@ object ItemCatalogApi {
 
     suspend fun fetchItems(
         forceRefresh: Boolean = false,
-        cacheOnly: Boolean = false
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
     ): ApiResult<List<ItemInfo>> {
-        if (!forceRefresh) {
+        if (!forceRefresh && allowMemoryCache) {
             cachedData?.let { return ApiResult.Success(it) }
         }
 

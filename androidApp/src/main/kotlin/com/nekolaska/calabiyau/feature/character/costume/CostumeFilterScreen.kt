@@ -62,7 +62,7 @@ fun CostumeFilterScreen(
     val state = rememberLoadState(
         initial = emptyList<CostumeInfo>(),
         cachedFetch = { CostumeFilterApi.fetchAllCostumes(cacheOnly = true) },
-        fetch = { force -> CostumeFilterApi.fetchAllCostumes(force) }
+        fetch = { force -> CostumeFilterApi.fetchAllCostumes(forceRefresh = force, allowMemoryCache = false) }
     )
     val allCostumes = state.data
 

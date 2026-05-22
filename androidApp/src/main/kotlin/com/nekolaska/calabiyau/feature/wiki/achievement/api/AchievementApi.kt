@@ -23,12 +23,33 @@ object AchievementApi {
         cachedPage = null
     }
 
-    suspend fun fetch(forceRefresh: Boolean = false): ApiResult<AchievementPage> {
-        if (!forceRefresh) cachedPage?.let { return ApiResult.Success(it) }
-        return fetchFromNetwork(forceRefresh).also {
+    suspend fun fetch(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
+    ): ApiResult<AchievementPage> {
+        if (!forceRefresh && allowMemoryCache) cachedPage?.let { return ApiResult.Success(it) }
+        return if (cacheOnly) fetchFromCache() else fetchFromNetwork(forceRefresh).also {
             if (it is ApiResult.Success) cachedPage = it.value
         }
     }
+
+    private suspend fun fetchFromCache(): ApiResult<AchievementPage> =
+        withContext(Dispatchers.IO) {
+            try {
+                val result = AchievementRemoteSource.loadCachedPage()
+                    ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
+                val page = AchievementParsers.parseHtml(result.html)
+                if (page.sections.none { it.achievements.isNotEmpty() }) {
+                    ApiResult.Error("未找到成就数据", kind = ErrorKind.NOT_FOUND)
+                } else {
+                    cachedPage = page
+                    ApiResult.Success(page, isOffline = true, cacheAgeMs = result.ageMs)
+                }
+            } catch (e: Exception) {
+                ApiResult.Error("获取成就数据失败: ${e.message}", kind = e.toErrorKind())
+            }
+        }
 
     private suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<AchievementPage> =
         withContext(Dispatchers.IO) {

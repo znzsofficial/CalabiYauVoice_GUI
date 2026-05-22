@@ -69,9 +69,10 @@ fun ImprintScreen(
             notice = "",
             wikiUrl = "",
             sections = emptyList()
-        )
+        ),
+        cachedFetch = { ImprintApi.fetch(cacheOnly = true) }
     ) { force ->
-        ImprintApi.fetch(force)
+        ImprintApi.fetch(forceRefresh = force, allowMemoryCache = false)
     }
     var keyword by remember { mutableStateOf("") }
     var selectedCharacter by remember { mutableStateOf(ALL_CHARACTERS) }

@@ -1,13 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.imprint.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
-import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
+import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 
-data class ImprintSourceResult(
-    val html: String,
-    val isFromCache: Boolean,
-    val ageMs: Long
-)
+typealias ImprintSourceResult = WikiHtmlPageSourceResult
 
 object ImprintRemoteSource {
 
@@ -15,18 +13,16 @@ object ImprintRemoteSource {
     private const val CACHE_KEY = "imprint_page"
 
     suspend fun fetchPage(forceRefresh: Boolean = false): ImprintSourceResult? {
-        val result = WikiParseSource.fetchHtml(
+        return fetchWikiHtmlPage(
             pageName = PAGE_NAME,
             cacheType = OfflineCache.Type.IMPRINTS,
             cacheKey = CACHE_KEY,
             forceRefresh = forceRefresh
-        ) ?: return null
-        val html = result.html ?: return null
-
-        return ImprintSourceResult(
-            html = html,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
         )
     }
+
+    suspend fun loadCachedPage(): ImprintSourceResult? = loadCachedWikiHtmlPage(
+        cacheType = OfflineCache.Type.IMPRINTS,
+        cacheKey = CACHE_KEY
+    )
 }

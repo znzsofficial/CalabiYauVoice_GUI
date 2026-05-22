@@ -68,9 +68,10 @@ fun PlayerDecorationScreen(
 
     val state = rememberLoadState(
         initial = emptyList<DecorationSection>(),
-        key = pageName
+        key = pageName,
+        cachedFetch = { PlayerDecorationApi.fetch(pageName, cacheOnly = true) }
     ) { force ->
-        PlayerDecorationApi.fetch(pageName, force)
+        PlayerDecorationApi.fetch(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
     }
     val sections = state.data
     var selectedSectionIndex by remember { mutableIntStateOf(0) }

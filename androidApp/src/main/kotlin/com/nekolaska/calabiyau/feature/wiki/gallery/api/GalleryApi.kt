@@ -5,6 +5,7 @@ import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GallerySection
 import com.nekolaska.calabiyau.feature.wiki.gallery.parser.GalleryParsers
 import com.nekolaska.calabiyau.feature.wiki.gallery.source.GalleryRemoteSource
+import com.nekolaska.calabiyau.feature.wiki.gallery.source.GalleryPageSourceResult
 import data.ApiResult
 import data.ErrorKind
 import data.toErrorKind
@@ -33,25 +34,52 @@ object GalleryApi {
      */
     suspend fun fetchGallery(
         pageName: String,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
     ): ApiResult<List<GallerySection>> {
-        if (!forceRefresh) {
+        if (!forceRefresh && allowMemoryCache) {
             cache[pageName]?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(pageName, forceRefresh).also {
+        return if (cacheOnly) fetchFromCache(pageName) else fetchFromNetwork(pageName, forceRefresh).also {
             if (it is ApiResult.Success) cache[pageName] = it.value
         }
     }
 
+    private suspend fun fetchFromCache(pageName: String): ApiResult<List<GallerySection>> =
+        fetchFromSource(
+            pageName = pageName,
+            forceRefresh = false,
+            cacheOnly = true,
+            loadSource = { GalleryRemoteSource.loadCachedPageHtml(pageName) },
+            networkErrorMessage = "无离线缓存"
+        ).also {
+            if (it is ApiResult.Success) cache[pageName] = it.value
+        }
+
     private suspend fun fetchFromNetwork(
         pageName: String,
         forceRefresh: Boolean
+    ): ApiResult<List<GallerySection>> = fetchFromSource(
+        pageName = pageName,
+        forceRefresh = forceRefresh,
+        cacheOnly = false,
+        loadSource = { GalleryRemoteSource.fetchPageHtml(pageName, forceRefresh) },
+        networkErrorMessage = "获取页面失败，且无离线缓存"
+    )
+
+    private suspend fun fetchFromSource(
+        pageName: String,
+        forceRefresh: Boolean,
+        cacheOnly: Boolean,
+        loadSource: suspend () -> GalleryPageSourceResult?,
+        networkErrorMessage: String
     ): ApiResult<List<GallerySection>> =
         withContext(Dispatchers.IO) {
             try {
-                val result = GalleryRemoteSource.fetchPageHtml(pageName, forceRefresh)
+                val result = loadSource()
                     ?: return@withContext ApiResult.Error(
-                        "获取页面失败，且无离线缓存",
+                        networkErrorMessage,
                         kind = ErrorKind.NETWORK
                     )
                 val html = result.html
@@ -67,7 +95,7 @@ object GalleryApi {
                 val allFileNames = rawSections
                     .flatMap { s -> s.second.filter { it.directImageUrl.isNullOrBlank() }.map { it.fileName } }
                     .distinct()
-                val urlMap = GalleryRemoteSource.fetchImageUrls(allFileNames, forceRefresh)
+                val urlMap = GalleryRemoteSource.fetchImageUrls(allFileNames, forceRefresh, cacheOnly)
 
                 val sections = rawSections.mapNotNull { (title, files) ->
                     val images = files.mapNotNull { image ->

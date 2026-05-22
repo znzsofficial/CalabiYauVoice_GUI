@@ -65,9 +65,10 @@ fun AchievementScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val state = rememberLoadState(
-        initial = AchievementPage(title = "成就", wikiUrl = ACHIEVEMENT_PAGE_URL, sections = emptyList())
+        initial = AchievementPage(title = "成就", wikiUrl = ACHIEVEMENT_PAGE_URL, sections = emptyList()),
+        cachedFetch = { AchievementApi.fetch(cacheOnly = true) }
     ) { force ->
-        AchievementApi.fetch(force)
+        AchievementApi.fetch(forceRefresh = force, allowMemoryCache = false)
     }
     var keyword by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(ALL_CATEGORIES) }

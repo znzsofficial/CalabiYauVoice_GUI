@@ -223,6 +223,8 @@ class LoadState<T> internal constructor(
         private set
     var isOffline: Boolean by mutableStateOf(false)
         private set
+    var isShowingCachedPrefetch: Boolean by mutableStateOf(false)
+        private set
     var cacheAgeMs: Long by mutableLongStateOf(0L)
         private set
 
@@ -235,6 +237,7 @@ class LoadState<T> internal constructor(
         activeRequestJob = scope.launch {
             isLoading = true
             error = null
+            isShowingCachedPrefetch = false
 
             val cachedFetch = cachedFetchRef.value
             if (!forceRefresh && cachedFetch != null) {
@@ -243,6 +246,7 @@ class LoadState<T> internal constructor(
                         if (currentVersion != requestVersion) return@launch
                         data = cached.value
                         isOffline = true
+                        isShowingCachedPrefetch = true
                         cacheAgeMs = cached.cacheAgeMs
                         isLoading = false
                     }
@@ -255,10 +259,12 @@ class LoadState<T> internal constructor(
                     if (currentVersion != requestVersion) return@launch
                     data = result.value
                     isOffline = result.isOffline
+                    isShowingCachedPrefetch = false
                     cacheAgeMs = result.cacheAgeMs
                 }
                 is ApiResult.Error -> {
                     if (currentVersion != requestVersion) return@launch
+                    isShowingCachedPrefetch = false
                     if (isLoading) error = result
                 }
             }
@@ -335,7 +341,7 @@ fun <T> ApiResourceContent(
         else -> {
             val body: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize()) {
-                    if (state.isOffline) OfflineBanner(ageMs = state.cacheAgeMs)
+                    if (state.isOffline && !state.isShowingCachedPrefetch) OfflineBanner(ageMs = state.cacheAgeMs)
                     content(state.data)
                 }
             }

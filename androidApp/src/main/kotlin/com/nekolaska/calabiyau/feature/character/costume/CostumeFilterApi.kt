@@ -76,12 +76,13 @@ object CostumeFilterApi {
      */
     suspend fun fetchAllCostumes(
         forceRefresh: Boolean = false,
-        cacheOnly: Boolean = false
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
     ): ApiResult<List<CostumeInfo>> =
         withContext(Dispatchers.IO) {
             try {
                 // 强刷时必须绕过内存缓存
-                getCachedCostumes(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
+                if (allowMemoryCache) getCachedCostumes(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
 
                 // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
                 if (cacheOnly) {
