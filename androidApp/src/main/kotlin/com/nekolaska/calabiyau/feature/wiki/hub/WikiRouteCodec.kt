@@ -15,11 +15,21 @@ private fun decodeRoutePart(value: String?): String? {
 internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Home -> "home"
     WikiRoute.Characters -> "characters"
-    is WikiRoute.CharDetail -> "charDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(portrait)}"
+    is WikiRoute.CharDetail -> "charDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
+        encodeRoutePart(
+            portrait
+        )
+    }"
+
     WikiRoute.Weapons -> "weapons"
     is WikiRoute.WeaponDetail -> "weaponDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}"
     WikiRoute.Maps -> "maps"
-    is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(imageUrl)}"
+    is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
+        encodeRoutePart(
+            imageUrl
+        )
+    }"
+
     WikiRoute.Items -> "items"
     is WikiRoute.Costumes -> "costumes$ROUTE_SEPARATOR${encodeRoutePart(character)}"
     is WikiRoute.WeaponSkins -> "weaponSkins$ROUTE_SEPARATOR${encodeRoutePart(weapon)}"
@@ -72,13 +82,18 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
             portrait = decodeRoutePart(parts.getOrNull(2))
         )
+
         "weapons" -> WikiRoute.Weapons
-        "weaponDetail" -> WikiRoute.WeaponDetail(name = decodeRoutePart(parts.getOrNull(1)) ?: return null)
+        "weaponDetail" -> WikiRoute.WeaponDetail(
+            name = decodeRoutePart(parts.getOrNull(1)) ?: return null
+        )
+
         "maps" -> WikiRoute.Maps
         "mapDetail" -> WikiRoute.MapDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
             imageUrl = decodeRoutePart(parts.getOrNull(2))
         )
+
         "items" -> WikiRoute.Items
         "costumes" -> WikiRoute.Costumes(decodeRoutePart(parts.getOrNull(1)))
         "weaponSkins" -> WikiRoute.WeaponSkins(decodeRoutePart(parts.getOrNull(1)))

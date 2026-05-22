@@ -95,7 +95,10 @@ private fun randomWikiUserAgent(desktopMode: Boolean): String {
 
 private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
     return buildMap {
-        put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+        put(
+            "Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+        )
         put("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
         put("Upgrade-Insecure-Requests", "1")
         put("Sec-Fetch-Dest", "document")
@@ -346,7 +349,10 @@ fun WikiWebViewScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = if (isSidebarMode) 10.dp else 4.dp, vertical = 4.dp),
+                            .padding(
+                                horizontal = if (isSidebarMode) 10.dp else 4.dp,
+                                vertical = 4.dp
+                            ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (onExitWiki != null) {
@@ -374,7 +380,11 @@ fun WikiWebViewScreen(
                                 enabled = canGoBack,
                                 modifier = Modifier.size(40.dp)
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "后退", modifier = Modifier.size(20.dp))
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    "后退",
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
 
@@ -383,11 +393,20 @@ fun WikiWebViewScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(smoothCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f))
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerHighest.copy(
+                                        alpha = 0.5f
+                                    )
+                                )
                                 .clickable {
                                     val clipboard =
                                         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("URL", currentUrl))
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "URL",
+                                            currentUrl
+                                        )
+                                    )
                                     showSnack("链接已复制")
                                 }
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -426,7 +445,11 @@ fun WikiWebViewScreen(
                                     onClick = { showMenu = true },
                                     modifier = Modifier.size(40.dp)
                                 ) {
-                                    Icon(Icons.Default.MoreVert, "更多", modifier = Modifier.size(20.dp))
+                                    Icon(
+                                        Icons.Default.MoreVert,
+                                        "更多",
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                                 WikiOverflowMenu(
                                     showMenu = showMenu,
@@ -445,7 +468,12 @@ fun WikiWebViewScreen(
                                         webView?.settings?.textZoom = 100
                                     },
                                     onOpenInBrowser = {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, currentUrl.toUri()))
+                                        context.startActivity(
+                                            Intent(
+                                                Intent.ACTION_VIEW,
+                                                currentUrl.toUri()
+                                            )
+                                        )
                                     },
                                     onShare = {
                                         val shareIntent = Intent.createChooser(
@@ -463,7 +491,12 @@ fun WikiWebViewScreen(
                                         { webView?.goBack() }
                                     } else null,
                                     onGoHome = if (!useTopBarMode) {
-                                        { webView?.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(currentUrl)) }
+                                        {
+                                            webView?.loadUrl(
+                                                WIKI_HOME_URL,
+                                                wikiRequestHeaders(currentUrl)
+                                            )
+                                        }
                                     } else null,
                                     onGoForward = if (canGoForward) {
                                         { webView?.goForward() }
@@ -477,7 +510,11 @@ fun WikiWebViewScreen(
                                     onClick = { webView?.stopLoading() },
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, "停止", modifier = Modifier.size(16.dp))
+                                    Icon(
+                                        Icons.Default.Close,
+                                        "停止",
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
                             }
                         }
@@ -495,7 +532,9 @@ fun WikiWebViewScreen(
                                 .fillMaxWidth()
                                 .height(2.dp),
                             color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(
+                                alpha = 0.5f
+                            )
                         )
                     }
                 }
@@ -661,7 +700,11 @@ fun WikiWebViewScreen(
                                     webView?.loadUrl(urlToLoad, wikiRequestHeaders(currentUrl))
                                 }
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
                                 Spacer(Modifier.width(8.dp))
                                 Text("重新加载")
                             }
@@ -687,8 +730,18 @@ fun WikiWebViewScreen(
                         onShowMenuChange = { showMenu = it },
                         onGoBack = { webView?.goBack() },
                         onGoForward = { webView?.goForward() },
-                        onRefresh = { if (isLoading) webView?.stopLoading() else webView?.loadUrl(currentUrl, wikiRequestHeaders(currentUrl)) },
-                        onGoHome = { webView?.loadUrl(WIKI_HOME_URL, wikiRequestHeaders(currentUrl)) },
+                        onRefresh = {
+                            if (isLoading) webView?.stopLoading() else webView?.loadUrl(
+                                currentUrl,
+                                wikiRequestHeaders(currentUrl)
+                            )
+                        },
+                        onGoHome = {
+                            webView?.loadUrl(
+                                WIKI_HOME_URL,
+                                wikiRequestHeaders(currentUrl)
+                            )
+                        },
                         onZoomIn = {
                             textZoomLevel = (textZoomLevel + 15).coerceAtMost(200)
                             webView?.settings?.textZoom = textZoomLevel
@@ -744,14 +797,18 @@ fun WikiWebViewScreen(
                         val fileName = URLUtil.guessFileName(imageUrl, null, null)
                         val dir = ensureWikiSaveDirectory()
                         val request = DownloadManager.Request(imageUrl.toUri()).apply {
-                            addRequestHeader("Cookie", CookieManager.getInstance().getCookie(imageUrl) ?: "")
+                            addRequestHeader(
+                                "Cookie",
+                                CookieManager.getInstance().getCookie(imageUrl) ?: ""
+                            )
                             addRequestHeader("User-Agent", webView?.settings?.userAgentString ?: "")
                             setTitle(fileName)
                             setDescription("正在保存图片...")
                             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                             setDestinationUri(Uri.fromFile(File(dir, fileName)))
                         }
-                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        val dm =
+                            context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
                         dm.enqueue(request)
                         showSnack("图片已保存：$fileName")
                     } catch (e: Exception) {
@@ -816,7 +873,11 @@ private fun WikiBottomToolbar(
                     enabled = canGoBack,
                     modifier = Modifier.size(40.dp)
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "后退", modifier = Modifier.size(22.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "后退",
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
 
                 // → 前进
@@ -841,7 +902,11 @@ private fun WikiBottomToolbar(
                     modifier = Modifier.size(44.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Home, contentDescription = "首页", modifier = Modifier.size(22.dp))
+                        Icon(
+                            Icons.Default.Home,
+                            contentDescription = "首页",
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
 
@@ -856,8 +921,15 @@ private fun WikiBottomToolbar(
 
                 // ⋮ 更多菜单
                 Box {
-                    IconButton(onClick = { onShowMenuChange(true) }, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "更多", modifier = Modifier.size(22.dp))
+                    IconButton(
+                        onClick = { onShowMenuChange(true) },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "更多",
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                     DropdownMenu(
                         expanded = showMenu,
@@ -872,7 +944,11 @@ private fun WikiBottomToolbar(
                                 onShowMenuChange(false)
                             },
                             leadingIcon = {
-                                Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp))
+                                Icon(
+                                    Icons.Outlined.OpenInBrowser,
+                                    null,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         )
                         DropdownMenuItem(
@@ -924,7 +1000,11 @@ private fun WikiBottomToolbar(
                             },
                             enabled = textZoomLevel != 100,
                             leadingIcon = {
-                                Icon(Icons.Outlined.RestartAlt, null, modifier = Modifier.size(20.dp))
+                                Icon(
+                                    Icons.Outlined.RestartAlt,
+                                    null,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         )
 
@@ -961,14 +1041,26 @@ private fun WikiOverflowMenu(
             DropdownMenuItem(
                 text = { Text("后退") },
                 onClick = { onGoBack(); onDismiss() },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, modifier = Modifier.size(20.dp)) }
+                leadingIcon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             )
         }
         if (onGoForward != null) {
             DropdownMenuItem(
                 text = { Text("前进") },
                 onClick = { onGoForward(); onDismiss() },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null, modifier = Modifier.size(20.dp)) }
+                leadingIcon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             )
         }
         if (onGoHome != null) {
@@ -985,7 +1077,13 @@ private fun WikiOverflowMenu(
         DropdownMenuItem(
             text = { Text("在浏览器中打开") },
             onClick = { onOpenInBrowser(); onDismiss() },
-            leadingIcon = { Icon(Icons.Outlined.OpenInBrowser, null, modifier = Modifier.size(20.dp)) }
+            leadingIcon = {
+                Icon(
+                    Icons.Outlined.OpenInBrowser,
+                    null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         )
         DropdownMenuItem(
             text = { Text("分享") },
@@ -1240,7 +1338,10 @@ private fun createWikiWebView(
                     view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
                 }
                 // 检测进入登录页，弹出提示
-                if (url != null && url.toUri().host.equals("passport.bilibili.com", ignoreCase = true)
+                if (url != null && url.toUri().host.equals(
+                        "passport.bilibili.com",
+                        ignoreCase = true
+                    )
                     && !passportHintShown
                 ) {
                     passportHintShown = true
@@ -1295,7 +1396,10 @@ private fun createWikiWebView(
                 )
             }
 
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
                 val url = request?.url?.toString() ?: return false
                 val host = url.toUri().host ?: ""
 
@@ -1378,9 +1482,13 @@ private fun createWikiWebView(
                         request: WebResourceRequest?
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
-                        val handled = handleWikiNavigation(parentWebView.context, url) { navigatedUrl ->
-                            parentWebView.loadUrl(navigatedUrl, wikiRequestHeaders(parentWebView.url))
-                        }
+                        val handled =
+                            handleWikiNavigation(parentWebView.context, url) { navigatedUrl ->
+                                parentWebView.loadUrl(
+                                    navigatedUrl,
+                                    wikiRequestHeaders(parentWebView.url)
+                                )
+                            }
                         tempWebView.destroy()
                         return handled
                     }

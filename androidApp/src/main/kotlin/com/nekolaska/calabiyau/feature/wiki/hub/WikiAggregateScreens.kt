@@ -11,32 +11,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.*
-import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiGameplayHubScreen(
     onBack: () -> Unit,
     onNavigateTo: (WikiHubPage) -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "玩法与养成", onBack = onBack) { innerPadding, backdrop ->
+    AggregatePageScaffold(title = "玩法与养成", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -134,9 +126,10 @@ internal fun WikiGameplayHubScreen(
 @Composable
 internal fun WikiCatalogHubScreen(
     onBack: () -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit
+    onNavigateTo: (WikiHubPage) -> Unit,
+    backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "外观与图鉴", onBack = onBack) { innerPadding, backdrop ->
+    AggregatePageScaffold(title = "外观与图鉴", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -190,9 +183,10 @@ internal fun WikiCatalogHubScreen(
 internal fun WikiExtensionHubScreen(
     onBack: () -> Unit,
     onNavigateTo: (WikiHubPage) -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "游戏延伸", onBack = onBack) { innerPadding, backdrop ->
+    AggregatePageScaffold(title = "游戏延伸", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -292,9 +286,10 @@ internal fun WikiExtensionHubScreen(
 internal fun WikiDecorationHubScreen(
     onBack: () -> Unit,
     onNavigateTo: (WikiHubPage) -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "玩家装饰", onBack = onBack) { innerPadding, backdrop ->
+    AggregatePageScaffold(title = "玩家装饰", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -371,81 +366,33 @@ internal fun WikiDecorationHubScreen(
 private fun AggregatePageScaffold(
     title: String,
     onBack: () -> Unit,
+    backdrop: Backdrop,
     content: @Composable (PaddingValues, Backdrop) -> Unit
 ) {
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
-    var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
-    LaunchedEffect(Unit) {
-        if (wallpaperUrl.isNullOrBlank()) {
-            val loadedUrl = withContext(Dispatchers.IO) {
-                WallpaperApi.ensureWallpaperUrl(forceRefresh = false)
-            }
-            if (!loadedUrl.isNullOrBlank()) wallpaperUrl = loadedUrl
-        }
-    }
-    val hasWallpaper = wallpaperUrl != null
-    val layerBackdrop = rememberLayerBackdrop()
-    val empty = remember { emptyBackdrop() }
-    val backdrop: Backdrop = if (liquidGlassEnabled) layerBackdrop else empty
+    val hasWallpaper = LocalHasWallpaper.current
     val surfaceColor = MaterialTheme.colorScheme.surface
-    val primaryColor = MaterialTheme.colorScheme.primaryContainer
-    val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor, primaryColor) {
-        Brush.verticalGradient(
-            colors = if (liquidGlassEnabled) listOf(
-                primaryColor.copy(alpha = 0.3f),
-                surfaceColor.copy(alpha = 0.6f),
-                surfaceColor.copy(alpha = 0.85f)
-            ) else listOf(
-                surfaceColor.copy(alpha = 0.15f),
-                surfaceColor.copy(alpha = 0.5f),
-                surfaceColor.copy(alpha = 0.8f)
-            )
-        )
-    }
-
-    Box(Modifier.fillMaxSize()) {
-        if (hasWallpaper) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (liquidGlassEnabled) Modifier.layerBackdrop(layerBackdrop) else Modifier)
-            ) {
-                AsyncImage(
-                    model = wallpaperUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(Modifier.fillMaxSize().background(wallpaperOverlayBrush))
-            }
-        } else {
-            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
-        }
-
-        androidx.compose.runtime.CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text(title, fontWeight = FontWeight.Bold) },
-                        navigationIcon = { BackNavButton(onClick = onBack) },
-                        colors = if (hasWallpaper) {
-                            TopAppBarDefaults.topAppBarColors(
-                                containerColor = Color.Transparent,
-                                scrolledContainerColor = Color.Transparent
-                            )
-                        } else {
-                            TopAppBarDefaults.topAppBarColors()
-                        },
-                        modifier = if (hasWallpaper) Modifier.drawBehind {
-                            drawRect(surfaceColor.copy(alpha = 0.52f))
-                        } else Modifier
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title, fontWeight = FontWeight.Bold) },
+                navigationIcon = { BackNavButton(onClick = onBack) },
+                colors = if (hasWallpaper) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent
                     )
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
                 },
-                containerColor = Color.Transparent
-            ) { innerPadding ->
-                content(innerPadding, backdrop)
-            }
-        }
+                modifier = if (hasWallpaper) Modifier.drawBehind {
+                    drawRect(surfaceColor.copy(alpha = 0.52f))
+                } else Modifier
+            )
+        },
+        containerColor = Color.Transparent
+    ) { innerPadding ->
+        content(innerPadding, backdrop)
     }
 }
 
@@ -481,34 +428,50 @@ internal fun AggregatePreviewCard(
             )
     ) {
         androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxSize().height(88.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .height(88.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-                Surface(
-                    shape = capsuleShape,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    modifier = Modifier.padding(start = 18.dp).height(48.dp)
+            Surface(
+                shape = capsuleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                modifier = Modifier
+                    .padding(start = 18.dp)
+                    .height(48.dp)
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .height(48.dp)
+                        .padding(horizontal = 12.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.height(48.dp).padding(horizontal = 12.dp)) {
-                        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    }
+                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 }
-                Column(Modifier.weight(1f).padding(start = 14.dp, end = 8.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = contentColor)
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(end = 16.dp)
+            }
+            Column(Modifier
+                .weight(1f)
+                .padding(start = 14.dp, end = 8.dp)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor
                 )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 16.dp)
+            )
         }
     }
 }

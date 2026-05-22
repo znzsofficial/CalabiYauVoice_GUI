@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -13,9 +14,17 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterScreen
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailScreen
 import com.nekolaska.calabiyau.feature.character.list.CharacterListScreen
@@ -47,7 +56,10 @@ import com.nekolaska.calabiyau.feature.wiki.tips.GameTipsScreen
 import com.nekolaska.calabiyau.feature.wiki.voting.VotingScreen
 import com.nekolaska.calabiyau.feature.wiki.navigation.NavigationMenuScreen
 import com.nekolaska.calabiyau.feature.wiki.oath.OathScreen
+import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.weapon.list.WeaponListScreen
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
@@ -62,6 +74,60 @@ private val lazyListStateSaver = listSaver<LazyListState, Int>(
         )
     }
 )
+
+@Composable
+private fun WikiHubWallpaperBackground(
+    wallpaperUrl: String?,
+    liquidGlassEnabled: Boolean,
+    backdrop: LayerBackdrop,
+) {
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val primaryColor = MaterialTheme.colorScheme.primaryContainer
+    val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor, primaryColor) {
+        Brush.verticalGradient(
+            colors = if (liquidGlassEnabled) listOf(
+                primaryColor.copy(alpha = 0.3f),
+                surfaceColor.copy(alpha = 0.6f),
+                surfaceColor.copy(alpha = 0.85f)
+            ) else listOf(
+                surfaceColor.copy(alpha = 0.15f),
+                surfaceColor.copy(alpha = 0.5f),
+                surfaceColor.copy(alpha = 0.8f)
+            )
+        )
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        if (wallpaperUrl != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (liquidGlassEnabled) Modifier.layerBackdrop(backdrop)
+                        else Modifier
+                    )
+            ) {
+                AsyncImage(
+                    model = wallpaperUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(wallpaperOverlayBrush)
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +167,28 @@ fun WikiHubScreen(
     val gameModes = mapState.data
     val isLoadingMaps = mapState.isLoading
 
+    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+    var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
+    val hubBackdrop = rememberLayerBackdrop()
+    LaunchedEffect(Unit) {
+        val currentCachedUrl = AppPrefs.wallpaperUrl
+        if (!currentCachedUrl.isNullOrBlank() && wallpaperUrl != currentCachedUrl) {
+            wallpaperUrl = currentCachedUrl
+        }
+        val needRefresh = when {
+            currentCachedUrl.isNullOrBlank() -> true
+            AppPrefs.wallpaperAutoRefresh && !WallpaperApi.hasRefreshedThisSession -> true
+            else -> false
+        }
+        if (needRefresh) {
+            val loadedUrl = WallpaperApi.ensureWallpaperUrl(forceRefresh = !currentCachedUrl.isNullOrBlank())
+            if (!loadedUrl.isNullOrBlank()) {
+                wallpaperUrl = loadedUrl
+            }
+        }
+    }
+    val hasWallpaper = wallpaperUrl != null
+
     // ── 导航方向追踪（用于过渡动画） ──
     var isNavigatingBack by remember { mutableStateOf(false) }
 
@@ -122,38 +210,57 @@ fun WikiHubScreen(
     }
 
     // 采用 MD3 约定的 Shared Axis (X轴) 过渡：轻量位移配合快速淡入淡出，比大范围拉扯更具现代感
-    AnimatedContent(
-        targetState = currentRoute,
-        modifier = Modifier.background(MaterialTheme.colorScheme.background),
-        transitionSpec = {
-            val duration = 400
-            if (isNavigatingBack) {
-                // 返回：从左滑入(强调减速) + 淡入，旧页向右滑出(加速) + 淡出
-                (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { -it / 8 } + 
-                    fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
-                    .togetherWith(
-                        slideOutHorizontally(tween(duration / 2, easing = FastOutLinearInEasing)) { it / 8 } + 
-                        fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
-                    )
-            } else {
-                // 前进：从右滑入(强调减速) + 淡入，旧页向左滑出(加速) + 淡出
-                (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { it / 8 } + 
-                    fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
-                    .togetherWith(
-                        slideOutHorizontally(tween(duration / 2, easing = FastOutLinearInEasing)) { -it / 8 } + 
-                        fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
-                    )
-            }
-        },
-        label = "WikiHubPageTransition"
-    ) { route ->
-        when (route) {
+    Box(Modifier.fillMaxSize()) {
+        WikiHubWallpaperBackground(
+            wallpaperUrl = wallpaperUrl,
+            liquidGlassEnabled = liquidGlassEnabled,
+            backdrop = hubBackdrop
+        )
+
+        androidx.compose.runtime.CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
+            AnimatedContent(
+                targetState = currentRoute,
+                modifier = Modifier.fillMaxSize(),
+                transitionSpec = {
+                    val duration = 400
+                    if (isNavigatingBack) {
+                        // 返回：从左滑入(强调减速) + 淡入，旧页向右滑出(加速) + 淡出
+                        (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { -it / 8 } +
+                                fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    tween(
+                                        duration / 2,
+                                        easing = FastOutLinearInEasing
+                                    )
+                                ) { it / 8 } +
+                                        fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
+                            )
+                    } else {
+                        // 前进：从右滑入(强调减速) + 淡入，旧页向左滑出(加速) + 淡出
+                        (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { it / 8 } +
+                                fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    tween(
+                                        duration / 2,
+                                        easing = FastOutLinearInEasing
+                                    )
+                                ) { -it / 8 } +
+                                        fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
+                            )
+                    }
+                },
+                label = "WikiHubPageTransition"
+            ) { route ->
+            when (route) {
             is WikiRoute.Home -> {
                 WikiHomePage(
                     onOpenDrawer = onOpenDrawer,
                     onOpenWikiUrl = onOpenWikiUrl,
                     listState = homeListState,
                     topAppBarState = homeTopAppBarState,
+                    wallpaperUrl = wallpaperUrl,
                     onNavigateTo = { navigateTo(it.toRoute()) },
                     onOpenCharacterDetail = { name, portrait ->
                         navigateTo(WikiRoute.CharDetail(name, portrait))
@@ -168,7 +275,8 @@ fun WikiHubScreen(
                     selectedHomeFaction = homeFactionTab,
                     onHomeFactionChanged = { homeFactionTab = it },
                     selectedHomeMapMode = homeMapModeTab,
-                    onHomeMapModeChanged = { homeMapModeTab = it }
+                    onHomeMapModeChanged = { homeMapModeTab = it },
+                    backdrop = hubBackdrop
                 )
             }
 
@@ -512,7 +620,8 @@ fun WikiHubScreen(
                 WikiGameplayHubScreen(
                     onBack = { popBackStack() },
                     onNavigateTo = { navigateTo(it.toRoute()) },
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    backdrop = hubBackdrop
                 )
             }
 
@@ -520,14 +629,16 @@ fun WikiHubScreen(
                 WikiDecorationHubScreen(
                     onBack = { popBackStack() },
                     onNavigateTo = { navigateTo(it.toRoute()) },
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    backdrop = hubBackdrop
                 )
             }
 
             is WikiRoute.CatalogHub -> {
                 WikiCatalogHubScreen(
                     onBack = { popBackStack() },
-                    onNavigateTo = { navigateTo(it.toRoute()) }
+                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    backdrop = hubBackdrop
                 )
             }
 
@@ -535,9 +646,12 @@ fun WikiHubScreen(
                 WikiExtensionHubScreen(
                     onBack = { popBackStack() },
                     onNavigateTo = { navigateTo(it.toRoute()) },
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    backdrop = hubBackdrop
                 )
             }
         }
-    } // AnimatedContent
+            }
+        }
+    }
 }

@@ -1,10 +1,28 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -18,9 +36,56 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.AccountTree
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.Checkroom
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.GpsFixed
+import androidx.compose.material.icons.outlined.Handshake
+import androidx.compose.material.icons.outlined.HowToVote
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.MilitaryTech
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,7 +110,6 @@ import coil3.size.Size
 import coil3.toBitmap
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.nekolaska.calabiyau.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
@@ -56,7 +120,6 @@ import com.nekolaska.calabiyau.core.ui.liquidGlassLight
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
-import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +140,7 @@ internal fun WikiHomePage(
     onOpenWikiUrl: (String) -> Unit,
     listState: LazyListState,
     topAppBarState: TopAppBarState,
+    wallpaperUrl: String?,
     onNavigateTo: (WikiHubPage) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
@@ -87,34 +151,12 @@ internal fun WikiHomePage(
     selectedHomeFaction: Int,
     onHomeFactionChanged: (Int) -> Unit,
     selectedHomeMapMode: Int,
-    onHomeMapModeChanged: (Int) -> Unit
+    onHomeMapModeChanged: (Int) -> Unit,
+    backdrop: Backdrop
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
-
-    // ── 壁纸背景（液态玻璃和普通模式均可显示） ──
-    var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
-    LaunchedEffect(Unit) {
-        val currentCachedUrl = AppPrefs.wallpaperUrl
-        if (!currentCachedUrl.isNullOrBlank() && wallpaperUrl != currentCachedUrl) {
-            wallpaperUrl = currentCachedUrl
-        }
-        val needRefresh = when {
-            currentCachedUrl.isNullOrBlank() -> true              // 无缓存，必须获取
-            AppPrefs.wallpaperAutoRefresh
-                    && !WallpaperApi.hasRefreshedThisSession -> true  // 启动后首次自动刷新
-            else -> false                                        // 已刷新过或仅手动模式
-        }
-        if (needRefresh) {
-            val loadedUrl = withContext(Dispatchers.IO) {
-                WallpaperApi.ensureWallpaperUrl(forceRefresh = !currentCachedUrl.isNullOrBlank())
-            }
-            if (!loadedUrl.isNullOrBlank()) {
-                wallpaperUrl = loadedUrl
-            }
-        }
-    }
-    val hasWallpaper = wallpaperUrl != null
+    val hasWallpaper = LocalHasWallpaper.current
 
     // ── 壁纸刷新后重新提取主题色 ──
     //
@@ -152,112 +194,51 @@ internal fun WikiHomePage(
         }
     }
 
-    // ── Backdrop：始终 remember，避免分支切换时重建 ──
-    val layerBackdrop = rememberLayerBackdrop()
-    val empty = remember { emptyBackdrop() }
-    val backdrop: Backdrop = if (liquidGlassEnabled) layerBackdrop else empty
-
     val surfaceColor = MaterialTheme.colorScheme.surface
-    val primaryColor = MaterialTheme.colorScheme.primaryContainer
-
-    // ── 壁纸渐变叠加（remember 避免每帧重建 Brush） ──
-    val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor, primaryColor) {
-        Brush.verticalGradient(
-            colors = if (liquidGlassEnabled) listOf(
-                primaryColor.copy(alpha = 0.3f),
-                surfaceColor.copy(alpha = 0.6f),
-                surfaceColor.copy(alpha = 0.85f)
-            ) else listOf(
-                surfaceColor.copy(alpha = 0.15f),
-                surfaceColor.copy(alpha = 0.5f),
-                surfaceColor.copy(alpha = 0.8f)
-            )
-        )
-    }
 
     // ── TopBar 滚动折叠比例（0 = 完全展开，1 = 完全折叠） ──
     val collapsedFraction by remember {
         derivedStateOf { scrollBehavior.state.collapsedFraction }
     }
 
-    // ── 根 Box：把壁纸层放在 Scaffold 外面，确保一定覆盖整个窗口 ──
-    //
-    // 如果把壁纸放在 Scaffold 的 content lambda 里，渐变会受 Scaffold 内部布局影响，
-    // 可能不会延伸到 TopAppBar 背后的区域，导致顶栏看起来比下方列表亮一截。
-    // 在 Scaffold 外层的 Box 里渲染壁纸则不存在这个问题——Scaffold 整体透明，
-    // 所有内容都叠在壁纸之上。
-    Box(Modifier.fillMaxSize()) {
-        // ── 壁纸背景层（根层，一定覆盖整屏） ──
-        if (hasWallpaper) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        if (liquidGlassEnabled) Modifier.layerBackdrop(layerBackdrop)
-                        else Modifier
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = { Text("卡拉彼丘 Wiki") },
+                navigationIcon = {
+                    IconButton(onClick = onOpenDrawer) {
+                        Icon(Icons.Outlined.Menu, contentDescription = "菜单")
+                    }
+                },
+                scrollBehavior = scrollBehavior,
+                colors = if (hasWallpaper) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent
                     )
-            ) {
-                AsyncImage(
-                    model = wallpaperUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(wallpaperOverlayBrush)
-                )
-            }
-        } else {
-            // 无壁纸时用主题背景填底，保持与原行为一致
-            Box(
+                } else {
+                    TopAppBarDefaults.topAppBarColors()
+                },
+                modifier = if (hasWallpaper) {
+                    Modifier.drawBehind {
+                        drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
+                    }
+                } else Modifier
+            )
+        },
+        containerColor = Color.Transparent
+    ) { innerPadding ->
+        CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
+            LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            )
-        }
-
-        Scaffold(
-            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-            topBar = {
-                LargeTopAppBar(
-                    title = { Text("卡拉彼丘 Wiki") },
-                    navigationIcon = {
-                        IconButton(onClick = onOpenDrawer) {
-                            Icon(Icons.Outlined.Menu, contentDescription = "菜单")
-                        }
-                    },
-                    scrollBehavior = scrollBehavior,
-                    colors = if (hasWallpaper) {
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            scrolledContainerColor = Color.Transparent
-                        )
-                    } else {
-                        TopAppBarDefaults.topAppBarColors()
-                    },
-                    modifier = if (hasWallpaper) {
-                        // 展开时顶栏完全透明（壁纸渐变已有平台期，顶栏与下方内容区 tint 一致）；
-                        // 滚动折叠时逐渐叠加 surface 遮罩，收起后变成正常的 surface 顶栏。
-                        Modifier.drawBehind {
-                            drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
-                        }
-                    } else Modifier
-                )
-            },
-            containerColor = Color.Transparent
-        ) { innerPadding ->
-            CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // ── 快捷入口 ──
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ── 快捷入口 ──
                     item(key = "quick_access", contentType = "grid") {
                         QuickAccessGrid(
                             onOpenWikiUrl = onOpenWikiUrl,
@@ -415,10 +396,9 @@ internal fun WikiHomePage(
 
                     // 底部留白
                     item { Spacer(Modifier.height(24.dp)) }
-                }
-            } // CompositionLocalProvider
-        } // Scaffold content
-    } // 根 Box
+            }
+        }
+    }
 }
 
 // ────────────────────────────────────────────
