@@ -67,11 +67,11 @@
 
 | 组件    | 技术                           |
 |-------|------------------------------|
-| 语言    | Kotlin 2.3.10                |
+| 语言    | Kotlin 2.3.21                |
 | 异步    | Kotlin Coroutines            |
 | 网络    | OkHttp 5                     |
 | 序列化   | kotlinx.serialization        |
-| UI 基础 | Compose Multiplatform 1.10.3 |
+| UI 基础 | Compose Multiplatform 1.11.0 |
 
 ### 桌面端
 

@@ -67,11 +67,11 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 | Component     | Technology                   |
 |---------------|------------------------------|
-| Language      | Kotlin 2.3.10                |
+| Language      | Kotlin 2.3.21                |
 | Async         | Kotlin Coroutines            |
 | Network       | OkHttp 5                     |
 | Serialization | kotlinx.serialization        |
-| UI Foundation | Compose Multiplatform 1.10.3 |
+| UI Foundation | Compose Multiplatform 1.11.0 |
 
 ### Desktop
 
