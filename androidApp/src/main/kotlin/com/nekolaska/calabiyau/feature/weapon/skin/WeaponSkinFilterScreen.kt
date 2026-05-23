@@ -62,6 +62,7 @@ fun WeaponSkinFilterScreen(
 ) {
     val state = rememberLoadState(
         initial = emptyList<WeaponSkinInfo>(),
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { WeaponSkinFilterApi.fetchAllWeaponSkins(cacheOnly = true) },
         fetch = { force -> WeaponSkinFilterApi.fetchAllWeaponSkins(forceRefresh = force, allowMemoryCache = false) }
     )

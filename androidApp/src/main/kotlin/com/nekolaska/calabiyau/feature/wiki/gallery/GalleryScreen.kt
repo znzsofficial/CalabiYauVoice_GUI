@@ -65,6 +65,7 @@ fun GalleryScreen(
     val state = rememberLoadState(
         initial = emptyList<GallerySection>(),
         key = pageName,
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { GalleryApi.fetchGallery(pageName, cacheOnly = true) }
     ) { force ->
         GalleryApi.fetchGallery(pageName = pageName, forceRefresh = force, allowMemoryCache = false)

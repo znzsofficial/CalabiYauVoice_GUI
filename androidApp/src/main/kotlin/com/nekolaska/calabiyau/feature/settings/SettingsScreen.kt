@@ -95,6 +95,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             AppPrefs.homeQuickEntryIds.takeIf { it.isNotEmpty() } ?: defaultQuickEntryIds
         )
     }
+    var showQuickEntrySheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -377,15 +378,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                     shape = smoothCornerShape(24.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    Column {
-                        QuickEntryCustomizeSection(
-                            selectedIds = homeQuickEntryIds,
-                            onSelectedIdsChange = {
-                                homeQuickEntryIds = it
-                                AppPrefs.homeQuickEntryIds = it
-                            }
-                        )
-                    }
+                    SettingsItem(
+                        icon = Icons.Outlined.SpaceDashboard,
+                        title = "顶部六按钮",
+                        subtitle = homeQuickEntryIds
+                            .mapNotNull(quickEntryById::get)
+                            .joinToString(" · ") { it.label }
+                            .ifBlank { "使用默认快捷入口" },
+                        onClick = { showQuickEntrySheet = true }
+                    )
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -884,6 +885,26 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
     } // AnimatedContent
+
+    if (showQuickEntrySheet) {
+        val sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+        )
+        ModalBottomSheet(
+            onDismissRequest = { showQuickEntrySheet = false },
+            sheetState = sheetState
+        ) {
+            QuickEntryCustomizeSheet(
+                selectedIds = homeQuickEntryIds,
+                onSelectedIdsChange = {
+                    homeQuickEntryIds = it
+                    AppPrefs.homeQuickEntryIds = it
+                },
+                onClose = { showQuickEntrySheet = false }
+            )
+        }
+    }
 }
 
 @Composable
@@ -1004,16 +1025,22 @@ private fun SettingsToggleItem(
 }
 
 @Composable
-private fun QuickEntryCustomizeSection(
+private fun QuickEntryCustomizeSheet(
     selectedIds: List<String>,
-    onSelectedIdsChange: (List<String>) -> Unit
+    onSelectedIdsChange: (List<String>) -> Unit,
+    onClose: () -> Unit
 ) {
     val selectedEntries = remember(selectedIds) { selectedIds.mapNotNull(quickEntryById::get) }
     val remainingEntries = remember(selectedIds) {
         allQuickEntries.filterNot { candidate -> selectedIds.contains(candidate.id) }
     }
 
-    Column(Modifier.padding(20.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 24.dp)
+    ) {
         Text(
             "顶部六按钮自定义",
             style = MaterialTheme.typography.bodyLarge,
@@ -1083,6 +1110,11 @@ private fun QuickEntryCustomizeSection(
         Spacer(Modifier.height(16.dp))
         TextButton(onClick = { onSelectedIdsChange(defaultQuickEntryIds) }) {
             Text("恢复默认六按钮")
+        }
+
+        Spacer(Modifier.height(4.dp))
+        TextButton(onClick = onClose) {
+            Text("完成")
         }
     }
 }

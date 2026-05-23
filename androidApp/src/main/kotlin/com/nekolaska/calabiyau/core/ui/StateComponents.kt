@@ -47,6 +47,8 @@ import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════
@@ -211,7 +213,8 @@ class LoadState<T> internal constructor(
     initial: T,
     private val scope: CoroutineScope,
     private val fetchRef: State<suspend (forceRefresh: Boolean) -> ApiResult<T>>,
-    private val cachedFetchRef: State<(suspend () -> ApiResult<T>)?> = mutableStateOf(null)
+    private val cachedFetchRef: State<(suspend () -> ApiResult<T>)?> = mutableStateOf(null),
+    private val cachedPrefetchDelayMs: Long = 0L
 ) {
     private var activeRequestJob: Job? = null
     private var requestVersion: Long = 0L
@@ -240,21 +243,25 @@ class LoadState<T> internal constructor(
             isShowingCachedPrefetch = false
 
             val cachedFetch = cachedFetchRef.value
+            val networkFetch = async { fetchRef.value(forceRefresh) }
             if (!forceRefresh && cachedFetch != null) {
                 when (val cached = cachedFetch()) {
                     is ApiResult.Success -> {
+                        if (cachedPrefetchDelayMs > 0L) delay(cachedPrefetchDelayMs)
                         if (currentVersion != requestVersion) return@launch
-                        data = cached.value
-                        isOffline = true
-                        isShowingCachedPrefetch = true
-                        cacheAgeMs = cached.cacheAgeMs
-                        isLoading = false
+                        if (!networkFetch.isCompleted) {
+                            data = cached.value
+                            isOffline = true
+                            isShowingCachedPrefetch = true
+                            cacheAgeMs = cached.cacheAgeMs
+                            isLoading = false
+                        }
                     }
                     is ApiResult.Error -> {}
                 }
             }
 
-            when (val result = fetchRef.value(forceRefresh)) {
+            when (val result = networkFetch.await()) {
                 is ApiResult.Success -> {
                     if (currentVersion != requestVersion) return@launch
                     data = result.value
@@ -299,13 +306,14 @@ fun <T> rememberLoadState(
 fun <T> rememberLoadState(
     initial: T,
     key: Any? = Unit,
+    cachedPrefetchDelayMs: Long = 0L,
     cachedFetch: suspend () -> ApiResult<T>,
     fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
 ): LoadState<T> {
     val scope = rememberCoroutineScope()
     val fetchRef = rememberUpdatedState(fetch)
     val cachedFetchRef = rememberUpdatedState<(suspend () -> ApiResult<T>)?>(cachedFetch)
-    val state = remember(scope) { LoadState(initial, scope, fetchRef, cachedFetchRef) }
+    val state = remember(scope) { LoadState(initial, scope, fetchRef, cachedFetchRef, cachedPrefetchDelayMs) }
     LaunchedEffect(key) { state.reload() }
     return state
 }

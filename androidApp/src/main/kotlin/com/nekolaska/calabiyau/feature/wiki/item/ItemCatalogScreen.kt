@@ -36,6 +36,7 @@ import androidx.compose.foundation.lazy.items as lazyItems
 fun ItemCatalogScreen(onBack: () -> Unit) {
     val state = rememberLoadState(
         initial = emptyList<ItemInfo>(),
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { ItemCatalogApi.fetchItems(cacheOnly = true) },
         fetch = { force -> ItemCatalogApi.fetchItems(forceRefresh = force, allowMemoryCache = false) }
     )

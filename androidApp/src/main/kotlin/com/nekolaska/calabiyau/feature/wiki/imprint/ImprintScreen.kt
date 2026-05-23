@@ -70,6 +70,7 @@ fun ImprintScreen(
             wikiUrl = "",
             sections = emptyList()
         ),
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { ImprintApi.fetch(cacheOnly = true) }
     ) { force ->
         ImprintApi.fetch(forceRefresh = force, allowMemoryCache = false)

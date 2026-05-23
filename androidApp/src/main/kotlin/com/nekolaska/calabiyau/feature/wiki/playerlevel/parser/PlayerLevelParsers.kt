@@ -141,13 +141,16 @@ object PlayerLevelParsers {
     }
 
     private fun parseItems(container: Element): List<PlayerLevelRewardItem> {
-        return container.select("span.items-icon").mapNotNull { icon ->
-            val name = icon.selectFirst("span.items-icon-text")?.cleanText().orEmpty()
+        return container.select("span.items-icon, span.item-icon").mapNotNull { icon ->
+            val name = icon.selectFirst("span.items-icon-text, span.item-icon__text")?.cleanText().orEmpty()
             if (name.isBlank()) return@mapNotNull null
-            val imgBox = icon.selectFirst("span.items-icon-img")
+            val imgBox = icon.selectFirst("span.items-icon-img, span.item-icon__img")
             val image = imgBox?.selectFirst("img")
             val quality = icon.classNames().firstOrNull { it.startsWith("items-quality-") }
                 ?.removePrefix("items-quality-")
+                ?.toIntOrNull()
+                ?: icon.classNames().firstOrNull { it.startsWith("item-icon--quality-") }
+                ?.removePrefix("item-icon--quality-")
                 ?.toIntOrNull()
             PlayerLevelRewardItem(
                 name = name,

@@ -61,6 +61,7 @@ fun CostumeFilterScreen(
 ) {
     val state = rememberLoadState(
         initial = emptyList<CostumeInfo>(),
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { CostumeFilterApi.fetchAllCostumes(cacheOnly = true) },
         fetch = { force -> CostumeFilterApi.fetchAllCostumes(forceRefresh = force, allowMemoryCache = false) }
     )

@@ -49,6 +49,7 @@ fun OathScreen(
             favorGifts = emptyList(),
             bondSections = emptyList()
         ),
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { OathApi.fetch(cacheOnly = true) }
     ) { force ->
         OathApi.fetch(forceRefresh = force, allowMemoryCache = false)

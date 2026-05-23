@@ -69,6 +69,7 @@ fun PlayerDecorationScreen(
     val state = rememberLoadState(
         initial = emptyList<DecorationSection>(),
         key = pageName,
+        cachedPrefetchDelayMs = 300L,
         cachedFetch = { PlayerDecorationApi.fetch(pageName, cacheOnly = true) }
     ) { force ->
         PlayerDecorationApi.fetch(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
