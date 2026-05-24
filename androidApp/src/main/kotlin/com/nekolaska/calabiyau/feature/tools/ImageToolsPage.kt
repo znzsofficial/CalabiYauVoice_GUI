@@ -71,6 +71,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -117,6 +118,28 @@ private enum class GifComposeScaleMode(val label: String) {
     FIT_LETTERBOX("等比黑边"),
     CENTER_CROP("等比填充")
 }
+
+private data class UpscalePreviewData(
+    val previewBytes: ByteArray,
+    val outputWidth: Int,
+    val outputHeight: Int
+)
+
+private data class UpscalePreset(
+    val label: String,
+    val hardEdgeMix: Float,
+    val sharpenAmount: Float
+)
+
+private const val MinUpscaleFactor = 1.25f
+private const val MaxUpscaleFactor = 4f
+
+private val UpscalePresets = listOf(
+    UpscalePreset("平滑", hardEdgeMix = 0f, sharpenAmount = 0.1f),
+    UpscalePreset("均衡", hardEdgeMix = 0.25f, sharpenAmount = 0.25f),
+    UpscalePreset("清晰", hardEdgeMix = 0.45f, sharpenAmount = 0.35f),
+    UpscalePreset("硬边", hardEdgeMix = 0.75f, sharpenAmount = 0.25f)
+)
 
 private val CROP_PRESETS = listOf(
     "1:1" to (1 to 1),
@@ -233,30 +256,41 @@ private fun ImagePreviewBottomSheet(
     )
     val currentItem = state.items.getOrNull(currentIndex)
     val confirmLabel = when (state.mode) {
-        ImagePreviewMode.COMPRESS -> "导出压缩图片"
-        ImagePreviewMode.NINE_GRID -> "确认切图"
-        ImagePreviewMode.CROP -> "确认裁切"
+        ImagePreviewMode.COMPRESS -> "导出图片"
+        ImagePreviewMode.NINE_GRID -> "分割并保存"
+        ImagePreviewMode.CROP -> "裁切并保存"
     }
     ModalBottomSheet(
         sheetState = bottomSheetState,
         onDismissRequest = onDismiss,
         shape = smoothCornerShape(28.dp),
         sheetGesturesEnabled = false,
+        dragHandle = null,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 24.dp)
         ) {
-            Text("处理前预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("预览", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = "取消")
+                }
+            }
             Column(
                 modifier = Modifier
                     .weight(1f, fill = false)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 currentItem?.let { item ->
                     when (state.mode) {
@@ -276,7 +310,7 @@ private fun ImagePreviewBottomSheet(
                                 )
                             }
                             Text(
-                                "输出质量：${(compressQuality * 100).toInt()}%",
+                                "画质：${(compressQuality * 100).toInt()}%",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Slider(
@@ -337,7 +371,7 @@ private fun ImagePreviewBottomSheet(
                                         .height(previewHeight)
                                 )
                                 Text(
-                                    text = "双击可快速放大/还原，拖动可微调构图。",
+                                    text = "双击缩放，拖动调整",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -373,7 +407,9 @@ private fun ImagePreviewBottomSheet(
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
                 TextButton(onClick = onDismiss) { Text("取消") }
@@ -737,14 +773,19 @@ internal fun ImageToolsPage(
     var gifQuantizeSample by rememberSaveable { mutableIntStateOf(10) }
     var gifDitherEnabled by rememberSaveable { mutableStateOf(false) }
     var gifComposeScaleMode by rememberSaveable { mutableStateOf(GifComposeScaleMode.FIT_LETTERBOX) }
+    var upscaleFactor by rememberSaveable { mutableFloatStateOf(2f) }
+    var upscaleHardEdgeMix by rememberSaveable { mutableFloatStateOf(0.25f) }
+    var upscaleSharpenAmount by rememberSaveable { mutableFloatStateOf(0.25f) }
     var showGifComposeSheet by remember { mutableStateOf(false) }
     var showStitchSheet by remember { mutableStateOf(false) }
+    var showUpscaleSheet by remember { mutableStateOf(false) }
     var compressSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var batchConvertSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var batchConvertFormat by rememberSaveable { mutableStateOf(ExportFormat.WEBP) }
     var batchConvertQuality by rememberSaveable { mutableFloatStateOf(0.9f) }
     var nineGridSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var cropSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
+    var upscaleSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var stitchSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var gifComposeSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
     var gifDecomposeSources by remember { mutableStateOf<List<PickedInput>>(emptyList()) }
@@ -804,7 +845,7 @@ internal fun ImageToolsPage(
         preset: String = cropPreset
     ) {
         onUpdate(items)
-        if (items.size == 1) {
+        if (items.isNotEmpty()) {
             showPreview(mode, items, preset = preset)
         }
     }
@@ -941,6 +982,44 @@ internal fun ImageToolsPage(
                 cropPreviewStates.clear()
             }.onFailure {
                 showSnack("比例裁切失败")
+            }
+            onBusyChange(false)
+        }
+    }
+
+    fun runUpscale(inputs: List<PickedInput>) {
+        if (inputs.isEmpty()) return
+        scope.launch {
+            onBusyChange(true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val outputDir = resolveOutputDirectory(outputPath, "图片工具/插值放大")
+                    val created = inputs.mapNotNull { input ->
+                        val name = inputDisplayName(context, input)?.substringBeforeLast('.') ?: "image_${System.currentTimeMillis()}"
+                        val target = buildUniqueFile(outputDir, "${sanitizeFileName(name)}_${upscaleFactorLabel(upscaleFactor)}", "png")
+                        upscaleImage(
+                            context = context,
+                            input = input,
+                            target = target,
+                            factor = upscaleFactor,
+                            hardEdgeMix = upscaleHardEdgeMix,
+                            sharpenAmount = upscaleSharpenAmount
+                        )
+                    }
+                    scanMediaLibrary(context, created)
+                    ToolOutput(
+                        title = "插值放大完成",
+                        message = "已导出 ${created.size} 张 ${upscaleFactorLabel(upscaleFactor)} 图片",
+                        files = created,
+                        directory = outputDir
+                    )
+                }
+            }.onSuccess {
+                onResult(it)
+                showSnack(it.message)
+                upscaleSources = emptyList()
+            }.onFailure {
+                showSnack("插值放大失败：${it.message ?: "未知错误"}")
             }
             onBusyChange(false)
         }
@@ -1134,6 +1213,10 @@ internal fun ImageToolsPage(
             onUpdate = { cropSources = it },
             preset = cropPreset
         )
+    }
+
+    val pickImagesForUpscale = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        upscaleSources = uris.toPickedUriInputs()
     }
 
     val pickImagesForStitch = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -1355,6 +1438,38 @@ internal fun ImageToolsPage(
         }
 
         ToolCard(
+            title = "插值放大",
+            subtitle = "放大图片并搭配锐化增强",
+            icon = Icons.Outlined.AutoFixHigh
+        ) {
+            FilledTonalButton(onClick = {
+                onPickFilesFromFileManager(
+                    AppPrefs.savePath,
+                    "选择要放大的图片",
+                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    true,
+                    { pickImagesForUpscale.launch("image/*") }
+                ) { paths ->
+                    upscaleSources = paths.toPickedFileInputs()
+                    if (upscaleSources.isNotEmpty()) {
+                        showUpscaleSheet = true
+                    }
+                }
+            }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                Text("选择图片")
+            }
+            if (upscaleSources.isNotEmpty()) {
+                Text("已选 ${upscaleSources.size} 张图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ImagePreviewStrip(items = upscaleSources) { showUpscaleSheet = true }
+            if (upscaleSources.isNotEmpty()) {
+                FilledTonalButton(onClick = { showUpscaleSheet = true }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                    Text("预览处理")
+                }
+            }
+        }
+
+        ToolCard(
             title = "图片拼图",
             subtitle = "多图横向/纵向拼接并导出",
             icon = Icons.Outlined.ViewAgenda
@@ -1368,6 +1483,9 @@ internal fun ImageToolsPage(
                     { pickImagesForStitch.launch("image/*") }
                 ) { paths ->
                     stitchSources = paths.toPickedFileInputs()
+                    if (stitchSources.isNotEmpty()) {
+                        showStitchSheet = true
+                    }
                 }
             }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
                 Text("选择图片")
@@ -1379,7 +1497,7 @@ internal fun ImageToolsPage(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            ImagePreviewStrip(items = stitchSources) { }
+            ImagePreviewStrip(items = stitchSources) { showStitchSheet = true }
             if (stitchSources.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = { showStitchSheet = true },
@@ -1443,6 +1561,9 @@ internal fun ImageToolsPage(
                     { pickImagesForGifCompose.launch("image/*") }
                 ) { paths ->
                     gifComposeSources = paths.toPickedFileInputs()
+                    if (gifComposeSources.isNotEmpty()) {
+                        showGifComposeSheet = true
+                    }
                 }
             }, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
                 Text("选择图片")
@@ -1455,7 +1576,7 @@ internal fun ImageToolsPage(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            ImagePreviewStrip(items = gifComposeSources) { }
+            ImagePreviewStrip(items = gifComposeSources) { showGifComposeSheet = true }
             if (gifComposeSources.isNotEmpty()) {
                 FilledTonalButton(
                     onClick = { showGifComposeSheet = true },
@@ -1582,6 +1703,24 @@ internal fun ImageToolsPage(
         )
     }
 
+    if (showUpscaleSheet && upscaleSources.isNotEmpty()) {
+        UpscaleBottomSheet(
+            items = upscaleSources,
+            factor = upscaleFactor,
+            onFactorChange = { upscaleFactor = it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor) },
+            hardEdgeMix = upscaleHardEdgeMix,
+            onHardEdgeMixChange = { upscaleHardEdgeMix = it },
+            sharpenAmount = upscaleSharpenAmount,
+            onSharpenAmountChange = { upscaleSharpenAmount = it },
+            onDismiss = { showUpscaleSheet = false },
+            onConfirm = {
+                runUpscale(upscaleSources)
+                showUpscaleSheet = false
+            },
+            isBusy = isBusy
+        )
+    }
+
     if (showStitchSheet && stitchSources.isNotEmpty()) {
         StitchBottomSheet(
             items = stitchSources,
@@ -1599,6 +1738,177 @@ internal fun ImageToolsPage(
         )
     }
 
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UpscaleBottomSheet(
+    items: List<PickedInput>,
+    factor: Float,
+    onFactorChange: (Float) -> Unit,
+    hardEdgeMix: Float,
+    onHardEdgeMixChange: (Float) -> Unit,
+    sharpenAmount: Float,
+    onSharpenAmountChange: (Float) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    isBusy: Boolean
+) {
+    val context = LocalContext.current
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+    )
+    var currentIndex by remember(items) { mutableIntStateOf(0) }
+    val currentItem = items.getOrNull(currentIndex)
+    val preview by produceState<UpscalePreviewData?>(initialValue = null, currentItem, factor, hardEdgeMix, sharpenAmount) {
+        value = null
+        delay(180)
+        value = currentItem?.let { item ->
+            withContext(Dispatchers.IO) {
+                buildUpscalePreviewData(
+                    context = context,
+                    input = item,
+                    factor = factor,
+                    hardEdgeMix = hardEdgeMix,
+                    sharpenAmount = sharpenAmount
+                )
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        sheetState = sheetState,
+        onDismissRequest = onDismiss,
+        sheetGesturesEnabled = false,
+        dragHandle = null,
+        shape = smoothCornerShape(28.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("插值放大预览", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = "取消")
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+            Surface(
+                shape = smoothCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                modifier = Modifier.fillMaxWidth().height(320.dp)
+            ) {
+                when (val data = preview) {
+                    null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(strokeWidth = 2.dp) }
+                    else -> AsyncImage(
+                        model = data.previewBytes,
+                        contentDescription = "放大预览",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            currentItem?.let { item ->
+                Text(
+                    inputDisplayName(context, item) ?: "未命名图片",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            preview?.let { data ->
+                Text(
+                    "输出尺寸 ${data.outputWidth} × ${data.outputHeight} · ${upscaleFactorLabel(factor)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (items.size > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = { currentIndex = (currentIndex - 1).coerceAtLeast(0) },
+                        enabled = currentIndex > 0,
+                        shape = smoothCornerShape(20.dp)
+                    ) { Text("上一张") }
+                    Text("${currentIndex + 1} / ${items.size}")
+                    OutlinedButton(
+                        onClick = { currentIndex = (currentIndex + 1).coerceAtMost(items.lastIndex) },
+                        enabled = currentIndex < items.lastIndex,
+                        shape = smoothCornerShape(20.dp)
+                    ) { Text("下一张") }
+                }
+            }
+
+            Text("放大倍率：${upscaleFactorLabel(factor)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Slider(
+                value = factor,
+                onValueChange = { onFactorChange(it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)) },
+                valueRange = MinUpscaleFactor..MaxUpscaleFactor,
+                steps = 10
+            )
+
+            Text("增强风格", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                UpscalePresets.forEach { preset ->
+                    val selected = isCloseToPreset(
+                        hardEdgeMix = hardEdgeMix,
+                        sharpenAmount = sharpenAmount,
+                        preset = preset
+                    )
+                    AssistChip(
+                        onClick = {
+                            onHardEdgeMixChange(preset.hardEdgeMix)
+                            onSharpenAmountChange(preset.sharpenAmount)
+                        },
+                        shape = smoothCapsuleShape(),
+                        label = { Text(preset.label) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                    )
+                }
+            }
+            Text("锐利度保留：${(hardEdgeMix * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Slider(value = hardEdgeMix, onValueChange = { onHardEdgeMixChange(it.coerceIn(0f, 1f)) }, valueRange = 0f..1f)
+            Text("锐化强度：${(sharpenAmount * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Slider(value = sharpenAmount, onValueChange = { onSharpenAmountChange(it.coerceIn(0f, 1f)) }, valueRange = 0f..1f)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            ) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                FilledTonalButton(onClick = onConfirm, enabled = !isBusy, shape = smoothCornerShape(24.dp)) {
+                    Text("保存到本地")
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1622,18 +1932,34 @@ private fun StitchBottomSheet(
         sheetState = sheetState,
         onDismissRequest = onDismiss,
         sheetGesturesEnabled = false,
+        dragHandle = null,
         shape = smoothCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 24.dp)
         ) {
-            Text("拼图设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("拼图设置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = "取消")
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StitchDirection.entries.forEach { mode ->
                     AssistChip(
@@ -1653,19 +1979,21 @@ private fun StitchBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("放大小图到统一${if (direction == StitchDirection.HORIZONTAL) "高度" else "宽度"}")
+                Text("小图等比例放大填补缝隙")
                 Switch(checked = upscaleSmall, onCheckedChange = onUpscaleSmallChange)
             }
 
             GifComposeOrderEditor(
                 items = items,
                 onMove = onMove,
-                tip = "长按拖拽可调整拼图顺序",
+                tip = "拖动调整拼图顺序",
                 indexLabel = "张"
             )
-
+            }
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
                 TextButton(onClick = onDismiss) { Text("取消") }
@@ -1704,18 +2032,34 @@ private fun GifComposeBottomSheet(
         sheetState = sheetState,
         onDismissRequest = onDismiss,
         sheetGesturesEnabled = false,
+        dragHandle = null,
         shape = smoothCornerShape(28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 24.dp)
         ) {
-            Text("GIF 合成设置", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("GIF 合成设置", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = "取消")
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             Text("帧率：${fps} fps", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Slider(
                 value = fps.toFloat(),
@@ -1738,7 +2082,7 @@ private fun GifComposeBottomSheet(
                 steps = 19
             )
 
-            Text("量化采样：$quantizeSample", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("色彩采样：$quantizeSample", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Slider(
                 value = quantizeSample.toFloat(),
                 onValueChange = { onQuantizeSampleChange(it.roundToInt().coerceIn(1, 30)) },
@@ -1751,11 +2095,11 @@ private fun GifComposeBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("抖动预处理")
+                Text("平滑色彩过渡 (Dither)")
                 Switch(checked = ditherEnabled, onCheckedChange = onDitherEnabledChange)
             }
 
-            Text("尺寸策略", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("画面适配方式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 GifComposeScaleMode.entries.forEach { mode ->
                     AssistChip(
@@ -1771,9 +2115,11 @@ private fun GifComposeBottomSheet(
             }
 
             GifComposeOrderEditor(items = items, onMove = onMove)
-
+            }
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp, bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
                 TextButton(onClick = onDismiss) { Text("取消") }
@@ -1838,6 +2184,236 @@ private fun compressOrConvertImage(
     }
     bitmap.recycle()
     return target
+}
+
+private fun upscaleImage(
+    context: Context,
+    input: PickedInput,
+    target: File,
+    factor: Float,
+    hardEdgeMix: Float,
+    sharpenAmount: Float
+): File? {
+    val source = openBitmap(context, input) ?: return null
+    val scaled = upscaleBitmap(source, factor, hardEdgeMix, sharpenAmount)
+    target.parentFile?.mkdirs()
+    FileOutputStream(target).use { out -> scaled.compress(Bitmap.CompressFormat.PNG, 100, out) }
+    scaled.recycle()
+    source.recycle()
+    return target
+}
+
+private fun buildUpscalePreviewData(
+    context: Context,
+    input: PickedInput,
+    factor: Float,
+    hardEdgeMix: Float,
+    sharpenAmount: Float
+): UpscalePreviewData? {
+    val source = openBitmap(context, input) ?: return null
+    val maxPreviewSide = 1200
+    val sourceMaxSide = max(source.width, source.height)
+    val previewSource = if (sourceMaxSide > maxPreviewSide) {
+        val scale = maxPreviewSide.toFloat() / sourceMaxSide.toFloat()
+        source.scale(max(1, (source.width * scale).roundToInt()), max(1, (source.height * scale).roundToInt()))
+    } else source
+    val output = upscaleBitmap(previewSource, factor, hardEdgeMix, sharpenAmount)
+    val bytes = ByteArrayOutputStream().use { stream ->
+        output.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        stream.toByteArray()
+    }
+    val outputWidth = upscaleTargetSize(source.width, factor)
+    val outputHeight = upscaleTargetSize(source.height, factor)
+    output.recycle()
+    if (previewSource !== source) previewSource.recycle()
+    source.recycle()
+    return UpscalePreviewData(bytes, outputWidth, outputHeight)
+}
+
+private fun upscaleBitmap(
+    source: Bitmap,
+    factor: Float,
+    hardEdgeMix: Float,
+    sharpenAmount: Float
+): Bitmap {
+    val safeFactor = factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)
+    val targetWidth = upscaleTargetSize(source.width, safeFactor)
+    val targetHeight = upscaleTargetSize(source.height, safeFactor)
+    val scaled = fastFilteredScale(source, targetWidth, targetHeight)
+    val mixed = if (hardEdgeMix > 0f) blendWithHardEdge(source, scaled, safeFactor, hardEdgeMix) else scaled
+    val output = if (sharpenAmount > 0f) sharpenBitmap(mixed, sharpenAmount) else mixed
+    if (output !== mixed) mixed.recycle()
+    if (mixed !== scaled) scaled.recycle()
+    return output
+}
+
+private fun upscaleTargetSize(size: Int, factor: Float): Int = max(1, (size * factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)).roundToInt())
+
+private fun upscaleFactorLabel(factor: Float): String {
+    val rounded = (factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor) * 10f).roundToInt() / 10f
+    val text = if (rounded % 1f == 0f) rounded.roundToInt().toString() else "%.1f".format(rounded)
+    return "${text}×"
+}
+
+private fun isCloseToPreset(hardEdgeMix: Float, sharpenAmount: Float, preset: UpscalePreset): Boolean {
+    return abs(hardEdgeMix - preset.hardEdgeMix) < 0.01f && abs(sharpenAmount - preset.sharpenAmount) < 0.01f
+}
+
+private fun fastFilteredScale(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
+    val out = createBitmap(targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(out)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
+    canvas.drawBitmap(source, null, android.graphics.Rect(0, 0, out.width, out.height), paint)
+    return out
+}
+
+private fun blendWithHardEdge(source: Bitmap, base: Bitmap, factor: Float, amount: Float): Bitmap {
+    val width = base.width
+    val height = base.height
+    val hard = source.scale(width, height, filter = false)
+    val hardPixels = IntArray(width * height)
+    val basePixels = IntArray(width * height)
+    val output = IntArray(width * height)
+    hard.getPixels(hardPixels, 0, width, 0, 0, width, height)
+    base.getPixels(basePixels, 0, width, 0, 0, width, height)
+    basePixels.copyInto(output)
+
+    val yBuffer = FloatArray(width * height)
+    val aBuffer = IntArray(width * height)
+    hardPixels.forEachIndexed { index, color ->
+        val r = android.graphics.Color.red(color)
+        val g = android.graphics.Color.green(color)
+        val b = android.graphics.Color.blue(color)
+        yBuffer[index] = 0.299f * r + 0.587f * g + 0.114f * b
+        aBuffer[index] = android.graphics.Color.alpha(color)
+    }
+
+    val directions = arrayOf(
+        1 to -1,
+        1 to 0,
+        1 to 1,
+        0 to 1,
+        -1 to 1,
+        -1 to 0,
+        -1 to -1,
+        0 to -1
+    )
+    val baseThreshold = 12f
+    val safeFactor = max(2, factor.roundToInt())
+    val safeAmount = amount.coerceIn(0f, 1f)
+
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            if (x % safeFactor != 0 || y % safeFactor != 0) continue
+            val index = y * width + x
+            val adaptiveThreshold = baseThreshold + localStdDev(yBuffer, x, y, width, height, radius = 1) * 0.4f
+            directions.forEach { (dx, dy) ->
+                val nx = x + dx * safeFactor
+                val ny = y + dy * safeFactor
+                if (nx !in 0 until width || ny !in 0 until height) return@forEach
+                val neighborIndex = ny * width + nx
+                val yDiff = abs(yBuffer[index] - yBuffer[neighborIndex])
+                val aDiff = abs(aBuffer[index] - aBuffer[neighborIndex]).toFloat()
+                val diff = max(yDiff, aDiff * 0.6f)
+                if (diff <= adaptiveThreshold) return@forEach
+                val c1 = hardPixels[index]
+                val c2 = hardPixels[neighborIndex]
+                for (step in 1 until safeFactor) {
+                    val t = step.toFloat() / safeFactor.toFloat()
+                    val px = x + dx * step
+                    val py = y + dy * step
+                    if (px in 0 until width && py in 0 until height) {
+                        val outIndex = py * width + px
+                        val edgeColor = mixColor(c1, c2, t * 0.45f)
+                        output[outIndex] = mixColor(basePixels[outIndex], edgeColor, safeAmount)
+                    }
+                }
+            }
+        }
+    }
+
+    hard.recycle()
+    val result = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    result.setPixels(output, 0, width, 0, 0, width, height)
+    return result
+}
+
+private fun localStdDev(
+    buffer: FloatArray,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    radius: Int
+): Float {
+    var sum = 0f
+    var sumSq = 0f
+    var count = 0
+    for (ky in -radius..radius) {
+        for (kx in -radius..radius) {
+            val px = x + kx
+            val py = y + ky
+            if (px in 0 until width && py in 0 until height) {
+                val value = buffer[py * width + px]
+                sum += value
+                sumSq += value * value
+                count++
+            }
+        }
+    }
+    if (count == 0) return 0f
+    val mean = sum / count
+    val variance = sumSq / count - mean * mean
+    return kotlin.math.sqrt(max(0f, variance))
+}
+
+private fun mixColor(c1: Int, c2: Int, t: Float): Int {
+    val safeT = t.coerceIn(0f, 1f)
+    fun channel(extract: (Int) -> Int): Int {
+        return (extract(c1) * (1f - safeT) + extract(c2) * safeT).roundToInt().coerceIn(0, 255)
+    }
+    return android.graphics.Color.argb(
+        channel(android.graphics.Color::alpha),
+        channel(android.graphics.Color::red),
+        channel(android.graphics.Color::green),
+        channel(android.graphics.Color::blue)
+    )
+}
+
+private fun sharpenBitmap(source: Bitmap, amount: Float): Bitmap {
+    val width = source.width
+    val height = source.height
+    val out = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val srcPixels = IntArray(width * height)
+    val outPixels = IntArray(width * height)
+    source.getPixels(srcPixels, 0, width, 0, 0, width, height)
+    val safeAmount = amount.coerceIn(0f, 1f)
+    for (y in 0 until height) {
+        for (x in 0 until width) {
+            val center = srcPixels[y * width + x]
+            if (x == 0 || y == 0 || x == width - 1 || y == height - 1) {
+                outPixels[y * width + x] = center
+                continue
+            }
+            val left = srcPixels[y * width + x - 1]
+            val right = srcPixels[y * width + x + 1]
+            val top = srcPixels[(y - 1) * width + x]
+            val bottom = srcPixels[(y + 1) * width + x]
+            fun channel(extract: (Int) -> Int): Int {
+                val sharp = extract(center) * 5 - extract(left) - extract(right) - extract(top) - extract(bottom)
+                val mixed = extract(center) * (1f - safeAmount) + sharp * safeAmount
+                return mixed.roundToInt().coerceIn(0, 255)
+            }
+            outPixels[y * width + x] = android.graphics.Color.argb(
+                android.graphics.Color.alpha(center),
+                channel(android.graphics.Color::red),
+                channel(android.graphics.Color::green),
+                channel(android.graphics.Color::blue)
+            )
+        }
+    }
+    out.setPixels(outPixels, 0, width, 0, 0, width, height)
+    return out
 }
 
 private fun resolveCompressFormat(format: ExportFormat): Bitmap.CompressFormat {
@@ -2161,7 +2737,7 @@ private fun <T> List<T>.move(fromIndex: Int, toIndex: Int): List<T> {
 private fun GifComposeOrderEditor(
     items: List<PickedInput>,
     onMove: (from: Int, to: Int) -> Unit,
-    tip: String = "长按拖拽可调整合成顺序",
+    tip: String = "拖动调整顺序",
     indexLabel: String = "帧"
 ) {
     if (items.size < 2) return
