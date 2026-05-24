@@ -617,7 +617,8 @@ private fun CharacterPreviewSection(
                             shape = SegmentedButtonDefaults.itemShape(
                                 index = index,
                                 count = factions.size
-                            )
+                            ),
+                            icon = {}
                         ) {
                             Text(
                                 faction.faction,
