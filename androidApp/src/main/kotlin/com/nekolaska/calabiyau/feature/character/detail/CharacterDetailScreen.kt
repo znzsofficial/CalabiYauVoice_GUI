@@ -47,6 +47,9 @@ import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import java.net.URLEncoder
 
+private val CharacterHeaderPortraitHeight = 440.dp
+private val CharacterHeaderAvatarHeight = 240.dp
+
 // ════════════════════════════════════════════════════════
 //  角色详情页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
@@ -295,7 +298,8 @@ private fun CharacterDetailContent(
 
 @Composable
 private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) {
-    val headerImage = portraitUrl ?: detail.avatarUrl
+    val headerImage = detail.portraitUrl ?: portraitUrl ?: detail.avatarUrl
+    val hasPortrait = detail.portraitUrl != null || portraitUrl != null
     
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -305,13 +309,13 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (portraitUrl != null) 400.dp else 240.dp)
+                    .height(if (hasPortrait) CharacterHeaderPortraitHeight else CharacterHeaderAvatarHeight)
             ) {
                 AsyncImage(
                     model = headerImage,
                     contentDescription = detail.name,
                     contentScale = ContentScale.Crop,
-                    alignment = if (portraitUrl != null) BiasAlignment(0f, -0.6f) else Alignment.Center,
+                    alignment = if (hasPortrait) BiasAlignment(0f, -0.85f) else Alignment.Center,
                     modifier = Modifier.fillMaxSize()
                 )
                 // 底部轻微渐变衔接背景色
@@ -1248,7 +1252,7 @@ private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
         // 头部骨架
         Column(modifier = Modifier.fillMaxWidth()) {
             ShimmerBox(
-                modifier = Modifier.fillMaxWidth().height(320.dp),
+                modifier = Modifier.fillMaxWidth().height(CharacterHeaderPortraitHeight),
                 shape = RectangleShape
             )
             Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)) {

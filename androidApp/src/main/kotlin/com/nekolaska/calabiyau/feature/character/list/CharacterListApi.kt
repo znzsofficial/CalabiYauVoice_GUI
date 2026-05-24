@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.character.list
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import data.ApiResult
 import data.ErrorKind
@@ -145,7 +146,9 @@ object CharacterListApi {
             val imageLink = card.selectFirst("a[href^=/klbq/]:has(img)") ?: return@forEach
             val path = imageLink.attr("href")
             val name = imageLink.attr("title").trim()
-            val imageUrl = imageLink.selectFirst("img")?.attr("src").orEmpty()
+            val imageUrl = WikiImageUrls.originalFromThumbnail(
+                imageLink.selectFirst("img")?.attr("src")
+            ).orEmpty()
             if (name !in seen) {
                 seen += name
                 results += CharacterInfo(

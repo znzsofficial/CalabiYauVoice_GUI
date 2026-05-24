@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.character.detail
 import android.text.Html
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import data.ApiResult
 import data.ErrorKind
@@ -61,6 +62,7 @@ object CharacterDetailApi {
         val description: String,
         val observerQuote: String,
         val avatarUrl: String?,
+        val portraitUrl: String? = null,
         val subPages: List<SubPage>,
         val skills: List<SkillInfo>,
         val stories: List<StoryEntry>,
@@ -158,7 +160,7 @@ object CharacterDetailApi {
                         kind = ErrorKind.PARSE
                     )
 
-                val detail = parseCharacterWikitext(characterName, wikitext)
+                val baseDetail = parseCharacterWikitext(characterName, wikitext)
                     ?: return@withContext ApiResult.Error(
                         "未找到角色信息模板",
                         kind = ErrorKind.NOT_FOUND
@@ -174,6 +176,9 @@ object CharacterDetailApi {
                     ?.jsonObject?.get("*")
                     ?.jsonPrimitive?.content
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
+                val detail = baseDetail.copy(
+                    portraitUrl = html?.let { parseFirstCostumePortraitUrl(characterName, it) }
+                )
 
                 ApiResult.Success(
                     mergeExtraInfo(detail, extraInfo).copy(updateHistory = history),
@@ -294,6 +299,7 @@ object CharacterDetailApi {
             description = clean(params["简介"]),
             observerQuote = clean(params["观测语录"]),
             avatarUrl = avatarUrl,
+            portraitUrl = null,
             subPages = subPages,
             skills = skills,
             stories = stories
@@ -800,6 +806,17 @@ object CharacterDetailApi {
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun parseFirstCostumePortraitUrl(characterName: String, html: String): String? {
+        val fileNamePattern = Regex(
+            """^${Regex.escape(characterName)}-[^|\]\n{}]+立绘\.(?:png|jpg|jpeg|webp)$""",
+            RegexOption.IGNORE_CASE
+        )
+        val image = Jsoup.parse(html).select("img[src][alt]")
+            .firstOrNull { img -> fileNamePattern.matches(img.attr("alt").trim()) }
+            ?: return null
+        return WikiImageUrls.originalFromThumbnail(image.attr("src"))
     }
 
     // ────────────────────────────────────────
