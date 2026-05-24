@@ -384,7 +384,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         subtitle = homeQuickEntryIds
                             .mapNotNull(quickEntryById::get)
                             .joinToString(" · ") { it.label }
-                            .ifBlank { "使用默认快捷入口" },
+                            .ifBlank { "默认" },
                         onClick = { showQuickEntrySheet = true }
                     )
                 }
@@ -417,8 +417,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                         var showPathDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.Edit,
-                            title = "手动设置路径",
-                            subtitle = "手动输入自定义保存路径",
+                            title = "手动填写",
+                            subtitle = "直接输入自定义保存路径",
                             onClick = { showPathDialog = true }
                         )
                         if (showPathDialog) {
@@ -457,7 +457,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         SettingsItem(
                             icon = Icons.Outlined.Speed,
                             title = "最大并发下载数",
-                            subtitle = "$maxConcurrency 个并发连接",
+                            subtitle = "当前 $maxConcurrency 个连接并发",
                             onClick = { showConcurrencyDialog = true }
                         )
                         if (showConcurrencyDialog) {
@@ -525,13 +525,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .clip(smoothCornerShape(12.dp))
+                                                    .clip(smoothCornerShape(16.dp))
                                                     .clickable {
                                                         bottomBarStyle = style
                                                         AppPrefs.bottomBarStyle = style
                                                         showBarStyleDialog = false
                                                     }
-                                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                                    .padding(vertical = 12.dp, horizontal = 12.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 RadioButton(

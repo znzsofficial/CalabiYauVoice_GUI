@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AudioFile
 import androidx.compose.material.icons.outlined.VideoFile
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -275,7 +276,7 @@ internal fun VideoToolsPage(
                             }
                         }
                     }
-                    Button(
+                    FilledTonalButton(
                         onClick = { runFrameExport() },
                         enabled = !isBusy,
                         modifier = Modifier.fillMaxWidth(),
@@ -283,7 +284,7 @@ internal fun VideoToolsPage(
                     ) {
                         Icon(Icons.Outlined.Image, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
-                        Text("导出当前画面 PNG")
+                        Text("导出当前画面")
                     }
                 }
             }
@@ -338,7 +339,7 @@ internal fun VideoToolsPage(
 
                 Spacer(Modifier.size(4.dp))
                 AudioActionButton(
-                    text = "合成为 MP4",
+                    text = "开始合成",
                     icon = Icons.Outlined.VideoFile,
                     enabled = !isBusy && biliVideoInput != null && biliAudioInput != null,
                     onClick = { runBilibiliMux() }
@@ -372,7 +373,7 @@ internal fun VideoToolsPage(
                     }
                 }
                 AudioActionButton(
-                    text = "拆分音视频",
+                    text = "开始拆分",
                     icon = Icons.Outlined.VideoFile,
                     enabled = !isBusy && splitInput != null,
                     onClick = { runMediaSplit() }

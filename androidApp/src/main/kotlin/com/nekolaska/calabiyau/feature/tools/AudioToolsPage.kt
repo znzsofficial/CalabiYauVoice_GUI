@@ -477,7 +477,7 @@ internal fun AudioToolsPage(
                     OutlinedTextField(
                         value = trimThresholdPercent,
                         onValueChange = { trimThresholdPercent = it },
-                        label = { Text("静音阈值 %") },
+                        label = { Text("静音阈值 (%)") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = smoothCornerShape(16.dp)
@@ -485,14 +485,14 @@ internal fun AudioToolsPage(
                     OutlinedTextField(
                         value = minimumSilenceMs,
                         onValueChange = { minimumSilenceMs = it },
-                        label = { Text("最短静音 ms") },
+                        label = { Text("最短静音 (ms)") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = smoothCornerShape(16.dp)
                     )
                 }
                 ModeChips(WavTrimMode.entries, trimMode, { trimMode = it }, Icons.Outlined.SpaceBar) { it.label }
-                AudioActionButton("裁剪当前音频", Icons.Outlined.SpaceBar, !isBusy && currentAudio?.asset?.wav != null) {
+                AudioActionButton("开始裁剪", Icons.Outlined.SpaceBar, !isBusy && currentAudio?.asset?.wav != null) {
                     processCurrent("音频工具/WAV静音裁剪") { input, outputDir ->
                         val thresholdRatio = trimThresholdPercent.toDoubleOrNull()?.div(100.0)?.coerceIn(0.001, 0.2) ?: 0.015
                         val minSilence = minimumSilenceMs.toIntOrNull()?.coerceIn(10, 5000) ?: 120
@@ -526,7 +526,7 @@ internal fun AudioToolsPage(
                     OutlinedTextField(
                         value = gainPercent,
                         onValueChange = { gainPercent = it },
-                        label = { Text("音量 %") },
+                        label = { Text("音量 (%)") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = smoothCornerShape(16.dp)
@@ -534,13 +534,13 @@ internal fun AudioToolsPage(
                     OutlinedTextField(
                         value = targetPeakPercent,
                         onValueChange = { targetPeakPercent = it },
-                        label = { Text("目标峰值 %") },
+                        label = { Text("目标峰值 (%)") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         shape = smoothCornerShape(16.dp)
                     )
                 }
-                AudioActionButton("处理当前音频", Icons.Outlined.GraphicEq, !isBusy && currentAudio?.asset?.wav != null) {
+                AudioActionButton("开始处理", Icons.Outlined.GraphicEq, !isBusy && currentAudio?.asset?.wav != null) {
                     processCurrent("音频工具/WAV音量处理") { input, outputDir ->
                         val gain = gainPercent.toIntOrNull()?.coerceIn(10, 400) ?: 120
                         val targetPeak = targetPeakPercent.toIntOrNull()?.coerceIn(10, 100) ?: 90
@@ -584,7 +584,7 @@ internal fun AudioToolsPage(
                         )
                     }
                 }
-                AudioActionButton("转换当前音频", Icons.Outlined.SurroundSound, !isBusy && currentAudio?.asset?.wav != null) {
+                AudioActionButton("开始转换", Icons.Outlined.SurroundSound, !isBusy && currentAudio?.asset?.wav != null) {
                     processCurrent("音频工具/WAV声道转换") { input, outputDir ->
                         val result = convertWavChannels(context, input, outputDir, channelMode)
                         val preview = result?.outputFile?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
@@ -687,7 +687,7 @@ internal fun ColumnScope.AudioActionButton(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    Button(
+    FilledTonalButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
@@ -745,7 +745,7 @@ private fun SpectrogramSettingsPanel(
                 OutlinedTextField(
                     value = hopPercent,
                     onValueChange = onHopPercentChange,
-                    label = { Text("步进 %") },
+                    label = { Text("步进 (%)") },
                     modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     shape = smoothCornerShape(16.dp)
