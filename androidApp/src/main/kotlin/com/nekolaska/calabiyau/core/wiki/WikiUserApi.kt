@@ -10,9 +10,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import okhttp3.Request
 import java.net.URLEncoder
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Android 端 MediaWiki 用户信息 API。
@@ -281,9 +281,11 @@ object WikiUserApi {
     fun formatTimestamp(ts: String): String {
         if (ts.isBlank()) return "-"
         return try {
-            val inst = Instant.parse(ts)
-            val zdt = inst.atZone(ZoneId.systemDefault())
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(zdt)
+            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            formatter.format(parser.parse(ts) ?: return ts.take(16).replace("T", " "))
         } catch (_: Exception) {
             ts.take(16).replace("T", " ")
         }

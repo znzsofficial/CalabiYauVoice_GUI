@@ -8,7 +8,6 @@ import com.nekolaska.calabiyau.feature.wiki.achievement.model.AchievementSection
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 
 object AchievementParsers {
 
@@ -60,7 +59,7 @@ object AchievementParsers {
         val imageUrl = image?.attr("src")?.takeIf { it.isNotBlank() }?.let(WikiImageUrls::originalFromThumbnail)
         val fileHref = item.selectFirst(".thumb a.image")?.attr("href").orEmpty()
         val fileName = fileHref.substringAfterLast(':', "").takeIf { it.isNotBlank() }
-            ?.let { URLDecoder.decode(it, StandardCharsets.UTF_8) }
+            ?.let { URLDecoder.decode(it, "UTF-8") }
 
         return AchievementItem(
             category = category,

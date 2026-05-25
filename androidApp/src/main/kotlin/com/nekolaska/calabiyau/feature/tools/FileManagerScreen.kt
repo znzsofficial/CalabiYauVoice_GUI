@@ -39,8 +39,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.nio.file.Files
-import java.util.concurrent.TimeUnit
 
 data class FileManagerDirectoryPickerConfig(
     val title: String,
@@ -1063,9 +1061,9 @@ private fun deleteBottomUp(file: File, retryWithChmod: Boolean = false): Boolean
     return runCatching {
         if (file.isDirectory) {
             file.walkBottomUp()
-                .onEnter { !Files.isSymbolicLink(it.toPath()) }
+                .onEnter { !it.isLikelySymbolicLink() }
                 .forEach { target ->
-                    if (Files.isSymbolicLink(target.toPath())) {
+                    if (target.isLikelySymbolicLink()) {
                         target.delete()
                     } else if (target.exists() && !target.delete()) {
                         if (retryWithChmod) {
@@ -1081,13 +1079,17 @@ private fun deleteBottomUp(file: File, retryWithChmod: Boolean = false): Boolean
     }.getOrDefault(false)
 }
 
+private fun File.isLikelySymbolicLink(): Boolean {
+    return runCatching { absoluteFile != canonicalFile }.getOrDefault(false)
+}
+
 private fun chmodWithShell(file: File) {
     runCatching {
         val process = ProcessBuilder("chmod", "-R", "u+rwX", file.absolutePath)
             .redirectErrorStream(true)
             .start()
         process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(10, TimeUnit.SECONDS)) process.destroyForcibly()
+        waitForProcess(process, timeoutMillis = 10_000L)
     }
 }
 
@@ -1097,10 +1099,19 @@ private fun shellRemove(file: File): Boolean {
             .redirectErrorStream(true)
             .start()
         process.inputStream.bufferedReader().readText()
-        val finished = process.waitFor(10, TimeUnit.SECONDS)
-        if (!finished) process.destroyForcibly()
+        val finished = waitForProcess(process, timeoutMillis = 10_000L)
         finished && process.exitValue() == 0 && !file.exists()
     }.getOrDefault(false)
+}
+
+private fun waitForProcess(process: Process, timeoutMillis: Long): Boolean {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    while (System.currentTimeMillis() < deadline) {
+        runCatching { process.exitValue() }.onSuccess { return true }
+        Thread.sleep(50L)
+    }
+    process.destroy()
+    return false
 }
 
 

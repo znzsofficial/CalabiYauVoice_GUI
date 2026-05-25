@@ -25,6 +25,8 @@ object NotificationHelper {
 
     /** 初始化通知渠道（Android 8.0+） */
     fun createChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
         val channel = NotificationChannel(
             CHANNEL_ID,
             CHANNEL_NAME,

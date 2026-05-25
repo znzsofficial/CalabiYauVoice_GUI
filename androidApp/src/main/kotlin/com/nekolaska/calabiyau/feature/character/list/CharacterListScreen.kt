@@ -24,7 +24,7 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import java.time.LocalDate
+import java.util.Calendar
 
 // ════════════════════════════════════════════════════════
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
@@ -105,13 +105,15 @@ fun CharacterListScreen(
 
 @Composable
 private fun BirthdayDialog(onDismiss: () -> Unit) {
-    val today = remember { LocalDate.now() }
+    val today = remember {
+        Calendar.getInstance().let { Today(it.get(Calendar.MONTH) + 1, it.get(Calendar.DAY_OF_MONTH)) }
+    }
     val thisMonthBirthdays = remember(today) {
-        CharacterBirthdays.entries.filter { it.month == today.monthValue }
+        CharacterBirthdays.entries.filter { it.month == today.month }
     }
     val nearest = remember(today, thisMonthBirthdays) {
         thisMonthBirthdays
-            .map { it to it.day - today.dayOfMonth }
+            .map { it to it.day - today.day }
             .filter { it.second >= 0 }
             .minByOrNull { it.second }
     }
@@ -122,7 +124,7 @@ private fun BirthdayDialog(onDismiss: () -> Unit) {
             TextButton(onClick = onDismiss) { Text("关闭") }
         },
         icon = { Icon(Icons.Outlined.Cake, contentDescription = null) },
-        title = { Text("${today.monthValue}月角色生日") },
+        title = { Text("${today.month}月角色生日") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 BirthdayAlert(nearest)
@@ -164,8 +166,8 @@ private fun BirthdayAlert(nearest: Pair<CharacterBirthday, Int>?) {
 }
 
 @Composable
-private fun BirthdayRow(birthday: CharacterBirthday, today: LocalDate) {
-    val diff = birthday.day - today.dayOfMonth
+private fun BirthdayRow(birthday: CharacterBirthday, today: Today) {
+    val diff = birthday.day - today.day
     val status = when {
         diff < 0 -> "已过"
         diff == 0 -> "今天"
@@ -182,6 +184,8 @@ private fun BirthdayRow(birthday: CharacterBirthday, today: LocalDate) {
         Text("${birthday.dateText} ($status)", style = MaterialTheme.typography.bodySmall, color = color)
     }
 }
+
+private data class Today(val month: Int, val day: Int)
 
 private data class CharacterBirthday(
     val name: String,

@@ -5,7 +5,6 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import android.os.Build
 import java.io.File
 import java.nio.ByteBuffer
 
@@ -195,11 +194,16 @@ private fun copySamples(extractor: MediaExtractor, muxer: MediaMuxer, outputTrac
         buffer.clear()
         val size = extractor.readSampleData(buffer, 0)
         if (size < 0) break
+        val flags = if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
+            MediaCodec.BUFFER_FLAG_KEY_FRAME
+        } else {
+            0
+        }
         info.set(
             0,
             size,
             extractor.sampleTime.coerceAtLeast(0L),
-            extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC
+            flags
         )
         muxer.writeSampleData(outputTrack, buffer, info)
         sampleCount++
