@@ -9,6 +9,8 @@
 
 基于 Kotlin Multiplatform 构建的[卡拉彼丘](https://wiki.biligame.com/klbq/) Wiki 资源浏览与下载工具，支持桌面端和 Android 端。
 
+[![下载 Android APK](https://img.shields.io/badge/下载-Android%20APK-3DDC84?logo=android&logoColor=white)](https://calabiyauwiki.pages.dev/)
+
 [English](README.md)
 
 <br>

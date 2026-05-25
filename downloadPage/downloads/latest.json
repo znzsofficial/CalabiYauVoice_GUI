@@ -1,0 +1,12 @@
+{
+  "versionName": "2.0.1",
+  "versionCode": 21,
+  "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
+  "releaseUrl": "/",
+  "changelog": [
+    "修复 Android 低版本系统上的兼容性问题",
+    "优化角色生日、通知、文件管理等功能的稳定性",
+    "修复部分资源和媒体处理相关的 lint 问题"
+  ],
+  "publishedAt": "2026-05-25"
+}

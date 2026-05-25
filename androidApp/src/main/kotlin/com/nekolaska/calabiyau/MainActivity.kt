@@ -116,10 +116,17 @@ class MainActivity : ComponentActivity() {
                     val lastCheck = AppPrefs.lastUpdateCheck
                     val oneDayMs = 24 * 60 * 60 * 1000L
                     if (now - lastCheck < oneDayMs) return@LaunchedEffect
-                    val currentVersion = try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: return@LaunchedEffect
+                    val packageInfo = try {
+                        context.packageManager.getPackageInfo(context.packageName, 0)
                     } catch (_: Exception) { return@LaunchedEffect }
-                    when (val result = UpdateApi.checkUpdate(currentVersion)) {
+                    val currentVersion = packageInfo.versionName ?: return@LaunchedEffect
+                    @Suppress("DEPRECATION")
+                    val currentVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        packageInfo.longVersionCode
+                    } else {
+                        packageInfo.versionCode.toLong()
+                    }
+                    when (val result = UpdateApi.checkUpdate(currentVersion, currentVersionCode)) {
                         is UpdateApi.Result.NewVersion -> {
                             startupUpdateInfo = result.info
                             AppPrefs.lastUpdateCheck = now

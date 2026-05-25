@@ -70,6 +70,8 @@ private enum class SettingsPage {
     STORAGE
 }
 
+private const val SHOW_SETTINGS_DEBUG_ITEM = false
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -663,9 +665,22 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.0"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.1"
                     } catch (_: Exception) {
-                        "2.0.0"
+                        "2.0.1"
+                    }
+                }
+                val currentVersionCode = remember {
+                    try {
+                        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                        @Suppress("DEPRECATION")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            packageInfo.longVersionCode
+                        } else {
+                            packageInfo.versionCode.toLong()
+                        }
+                    } catch (_: Exception) {
+                        0L
                     }
                 }
 
@@ -693,7 +708,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 isCheckingUpdate = true
                                 updateSubtitle = "正在检查…"
                                 updateScope.launch {
-                                    when (val result = UpdateApi.checkUpdate(currentVersion)) {
+                                    when (val result = UpdateApi.checkUpdate(currentVersion, currentVersionCode)) {
                                         is UpdateApi.Result.NewVersion -> {
                                             updateSubtitle = "发现新版本: ${result.info.versionName}"
                                             updateResult = result.info
@@ -714,116 +729,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
 
-                        // ── 调试菜单 ──
-                        var showDebugMenu by remember { mutableStateOf(false) }
-                        SettingsItem(
-                            icon = Icons.Outlined.BugReport,
-                            title = "调试信息",
-                            subtitle = "版本 $currentVersion · API ${Build.VERSION.SDK_INT}",
-                            onClick = { showDebugMenu = true }
-                        )
-                        if (showDebugMenu) {
-                            var showCrashConfirm by remember { mutableStateOf(false) }
-
-                            AlertDialog(
-                                onDismissRequest = { showDebugMenu = false },
-                                icon = { Icon(Icons.Outlined.BugReport, null) },
-                                title = { Text("调试菜单") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        // 设备信息
-                                        Surface(
-                                            shape = smoothCornerShape(12.dp),
-                                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                buildString {
-                                                    appendLine("版本: $currentVersion (${Build.VERSION.SDK_INT})")
-                                                    appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
-                                                    appendLine("系统: Android ${Build.VERSION.RELEASE}")
-                                                    append("保存路径: ${AppPrefs.savePath}")
-                                                },
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontFamily = FontFamily.Monospace,
-                                                modifier = Modifier.padding(12.dp)
-                                            )
-                                        }
-
-                                        // 复制设备信息
-                                        OutlinedButton(
-                                            onClick = {
-                                                val info = buildString {
-                                                    appendLine("版本: $currentVersion")
-                                                    appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
-                                                    appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-                                                    append("保存路径: ${AppPrefs.savePath}")
-                                                }
-                                                val clipboard =
-                                                    context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                                clipboard.setPrimaryClip(
-                                                    ClipData.newPlainText(
-                                                        "设备信息",
-                                                        info
-                                                    )
-                                                )
-                                                showSnack("已复制")
-                                            },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("复制设备信息")
-                                        }
-
-                                        // 触发崩溃测试
-                                        FilledTonalButton(
-                                            onClick = { showCrashConfirm = true },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = ButtonDefaults.filledTonalButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        ) {
-                                            Icon(Icons.Outlined.Warning, null, Modifier.size(18.dp))
-                                            Spacer(Modifier.width(8.dp))
-                                            Text("触发测试崩溃")
-                                        }
-                                    }
-                                },
-                                shape = smoothCornerShape(28.dp),
-                                confirmButton = {
-                                    TextButton(onClick = { showDebugMenu = false }) { Text("关闭") }
-                                }
+                        if (SHOW_SETTINGS_DEBUG_ITEM) {
+                            SettingsDebugItem(
+                                currentVersion = currentVersion,
+                                context = context,
+                                showSnack = showSnack
                             )
-
-                            if (showCrashConfirm) {
-                                AlertDialog(
-                                    onDismissRequest = { showCrashConfirm = false },
-                                    icon = {
-                                        Icon(
-                                            Icons.Outlined.Warning,
-                                            null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    title = { Text("确认触发崩溃？") },
-                                    text = { Text("应用会立即关闭并显示崩溃日志页面。") },
-                                    shape = smoothCornerShape(28.dp),
-                                    confirmButton = {
-                                        FilledTonalButton(
-                                            onClick = { throw RuntimeException("手动触发的测试崩溃 — CrashHandler 功能验证") },
-                                            colors = ButtonDefaults.filledTonalButtonColors(
-                                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                            )
-                                        ) { Text("确认") }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { showCrashConfirm = false }) { Text("取消") }
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -967,6 +878,115 @@ private fun SettingsItem(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsDebugItem(
+    currentVersion: String,
+    context: Context,
+    showSnack: (String) -> Unit
+) {
+    var showDebugMenu by remember { mutableStateOf(false) }
+    SettingsItem(
+        icon = Icons.Outlined.BugReport,
+        title = "调试信息",
+        subtitle = "版本 $currentVersion · API ${Build.VERSION.SDK_INT}",
+        onClick = { showDebugMenu = true }
+    )
+
+    if (!showDebugMenu) return
+
+    var showCrashConfirm by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { showDebugMenu = false },
+        icon = { Icon(Icons.Outlined.BugReport, null) },
+        title = { Text("调试菜单") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Surface(
+                    shape = smoothCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        buildString {
+                            appendLine("版本: $currentVersion (${Build.VERSION.SDK_INT})")
+                            appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
+                            appendLine("系统: Android ${Build.VERSION.RELEASE}")
+                            append("保存路径: ${AppPrefs.savePath}")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val info = buildString {
+                            appendLine("版本: $currentVersion")
+                            appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
+                            appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                            append("保存路径: ${AppPrefs.savePath}")
+                        }
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("设备信息", info))
+                        showSnack("已复制")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("复制设备信息")
+                }
+
+                FilledTonalButton(
+                    onClick = { showCrashConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Icon(Icons.Outlined.Warning, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("触发测试崩溃")
+                }
+            }
+        },
+        shape = smoothCornerShape(28.dp),
+        confirmButton = {
+            TextButton(onClick = { showDebugMenu = false }) { Text("关闭") }
+        }
+    )
+
+    if (showCrashConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCrashConfirm = false },
+            icon = {
+                Icon(
+                    Icons.Outlined.Warning,
+                    null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("确认触发崩溃？") },
+            text = { Text("应用会立即关闭并显示崩溃日志页面。") },
+            shape = smoothCornerShape(28.dp),
+            confirmButton = {
+                FilledTonalButton(
+                    onClick = { throw RuntimeException("手动触发的测试崩溃 - CrashHandler 功能验证") },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) { Text("确认") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCrashConfirm = false }) { Text("取消") }
+            }
         )
     }
 }

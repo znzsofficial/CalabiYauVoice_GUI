@@ -1,0 +1,16 @@
+/downloads/latest.json
+  Content-Type: application/json
+  Cache-Control: no-cache
+
+/downloads/*.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment
+  Cache-Control: public, max-age=3600
+
+/*.html
+  Content-Type: text/html; charset=utf-8
+  Cache-Control: no-cache
+
+/*.css
+  Content-Type: text/css; charset=utf-8
+  Cache-Control: public, max-age=3600

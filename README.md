@@ -9,6 +9,8 @@
 
 A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource browser & downloader, built with Compose for Desktop and Android.
 
+[![Download Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?logo=android&logoColor=white)](https://calabiyauwiki.pages.dev/)
+
 [简体中文](README_ZH_CN.md)
 
 <br>

@@ -9,22 +9,25 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
 /**
- * 检查更新 API — 基于 GitHub Releases。
+ * 检查更新 API — 基于 Cloudflare Pages 上的 latest.json。
  *
- * 请求 `https://api.github.com/repos/znzsofficial/CalabiYauVoice_GUI/releases/latest`
- * 解析 tag_name（版本号）、body（更新日志）、html_url（Release 页面链接）。
+ * 请求 `https://calabiyauwiki.pages.dev/downloads/latest.json`
+ * 解析 versionName、versionCode、changelog、apkUrl。
  */
 object UpdateApi {
 
     private const val API_URL =
-        "https://api.github.com/repos/znzsofficial/CalabiYauVoice_GUI/releases/latest"
+        "https://calabiyauwiki.pages.dev/downloads/latest.json"
+
+    private const val BASE_URL = "https://calabiyauwiki.pages.dev"
 
     /** 更新信息 */
     data class UpdateInfo(
         val tagName: String,        // e.g. "v2.1.0"
         val versionName: String,    // e.g. "2.1.0"（去掉 v 前缀）
+        val versionCode: Long,
         val body: String,           // Release notes (Markdown)
-        val htmlUrl: String,        // Release 页面 URL
+        val htmlUrl: String,        // 下载页或 APK URL
         val apkUrl: String?         // APK 直链（如果有 .apk asset）
     )
 
@@ -42,42 +45,46 @@ object UpdateApi {
 
     /**
      * 检查是否有新版本。
-     * @param currentVersion 当前版本号（如 "2.0.0"）
+     * @param currentVersionName 当前版本名（如 "2.0.0"），仅用于旧 JSON 兜底比较。
+     * @param currentVersionCode 当前 versionCode，优先用于更新判断。
      */
-    suspend fun checkUpdate(currentVersion: String): Result = withContext(Dispatchers.IO) {
+    suspend fun checkUpdate(
+        currentVersionName: String,
+        currentVersionCode: Long
+    ): Result = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder()
                 .url(API_URL)
-                .header("Accept", "application/vnd.github+json")
+                .header("Accept", "application/json")
                 .build()
             val response = client.newCall(request).execute()
             val body = response.use {
                 if (it.isSuccessful) it.body.string() else null
-            } ?: return@withContext Result.Error("无法连接 GitHub")
+            } ?: return@withContext Result.Error("无法连接更新服务器")
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
-            val tagName = json["tag_name"]?.jsonPrimitive?.content
+            val remoteVersion = json["versionName"]?.jsonPrimitive?.contentOrNull
+                ?: json["version"]?.jsonPrimitive?.contentOrNull
                 ?: return@withContext Result.Error("解析失败")
-            val releaseBody = json["body"]?.jsonPrimitive?.content ?: ""
-            val htmlUrl = json["html_url"]?.jsonPrimitive?.content
-                ?: "https://github.com/znzsofficial/CalabiYauVoice_GUI/releases"
+            val remoteVersionCode = json["versionCode"]?.jsonPrimitive?.longOrNull
+            val changelog = parseChangelog(json)
+            val apkUrl = json["apkUrl"]?.jsonPrimitive?.contentOrNull
+                ?.let(::resolveUrl)
+                ?: "$BASE_URL/downloads/CalabiYauVoice-latest.apk"
+            val releaseUrl = json["releaseUrl"]?.jsonPrimitive?.contentOrNull
+                ?.let(::resolveUrl)
+                ?: apkUrl
 
-            // 尝试从 assets 中找 .apk 文件
-            val apkUrl = json["assets"]?.jsonArray?.firstOrNull { asset ->
-                asset.jsonObject["name"]?.jsonPrimitive?.content
-                    ?.endsWith(".apk", ignoreCase = true) == true
-            }?.jsonObject?.get("browser_download_url")?.jsonPrimitive?.content
-
-            val remoteVersion = tagName.removePrefix("v").removePrefix("V")
             val info = UpdateInfo(
-                tagName = tagName,
-                versionName = remoteVersion,
-                body = releaseBody,
-                htmlUrl = htmlUrl,
+                tagName = "v${remoteVersion.removePrefix("v").removePrefix("V")}",
+                versionName = remoteVersion.removePrefix("v").removePrefix("V"),
+                versionCode = remoteVersionCode ?: 0L,
+                body = changelog,
+                htmlUrl = releaseUrl,
                 apkUrl = apkUrl
             )
 
-            if (isNewer(remoteVersion, currentVersion)) {
+            if (remoteVersionCode?.let { it > currentVersionCode } ?: isNewer(info.versionName, currentVersionName)) {
                 Result.NewVersion(info)
             } else {
                 Result.AlreadyLatest
@@ -85,6 +92,24 @@ object UpdateApi {
         } catch (e: Exception) {
             Result.Error("检查失败: ${e.javaClass.simpleName}")
         }
+    }
+
+    private fun parseChangelog(json: JsonObject): String {
+        val element = json["changelog"] ?: json["body"] ?: return ""
+        return when (element) {
+            is JsonArray -> element.joinToString("\n") { item ->
+                "• ${item.jsonPrimitive.contentOrNull.orEmpty()}"
+            }
+
+            is JsonPrimitive -> element.contentOrNull.orEmpty()
+            else -> ""
+        }
+    }
+
+    private fun resolveUrl(url: String): String = when {
+        url.startsWith("http://") || url.startsWith("https://") -> url
+        url.startsWith("/") -> BASE_URL + url
+        else -> "$BASE_URL/$url"
     }
 
     /**
