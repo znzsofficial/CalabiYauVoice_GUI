@@ -43,7 +43,7 @@ compose.desktop {
         )
         nativeDistributions {
             packageName = "CalabiYauVoice_GUI"
-            packageVersion = "2.0.0"
+            packageVersion = "2.0.1"
             description = "CalabiYau Wiki Voice Downloader GUI"
             copyright = "Apache License, Version 2.0"
             vendor = "NekoLaska"
