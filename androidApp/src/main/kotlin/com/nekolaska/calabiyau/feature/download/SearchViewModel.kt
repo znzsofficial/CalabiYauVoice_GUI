@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 搜索 & 分类树相关状态。
@@ -130,7 +131,7 @@ class SearchViewModel : ViewModel() {
             _searchKeyword
                 .drop(1)  // 跳过初始 "角色" 值（已由 init 中的 performSearch() 处理）
                 .distinctUntilChanged()
-                .debounce(300)
+                .debounce(300.milliseconds)
                 .collect { kw ->
                     if (_searchMode.value == SearchMode.FILE_SEARCH) return@collect
                     if (kw == cachedKeywords[_searchMode.value]) return@collect

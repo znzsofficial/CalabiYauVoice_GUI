@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Android 端音频播放器管理器（单例），基于 MediaPlayer。
@@ -199,7 +200,7 @@ fun AudioPlayButton(
         }
         while (true) {
             progress = AudioPlayerManager.getProgress()
-            delay(200)
+            delay(200.milliseconds)
         }
     }
 

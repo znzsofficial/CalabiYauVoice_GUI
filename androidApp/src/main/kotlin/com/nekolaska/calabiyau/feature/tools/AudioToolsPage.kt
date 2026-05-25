@@ -49,6 +49,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.*
 import kotlin.math.*
+import kotlin.time.Duration.Companion.milliseconds
 
 private data class AudioProcessOutcome(
     val output: ToolOutput,
@@ -269,7 +270,7 @@ internal fun AudioToolsPage(
             if (playingSource == source && isAudioPlaying) {
                 playheadMs = AudioPlayerManager.getCurrentPosition().toLong()
             }
-            delay(120)
+            delay(120.milliseconds)
         }
     }
 

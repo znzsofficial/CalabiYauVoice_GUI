@@ -75,6 +75,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 private enum class ExportFormat(val label: String, val extension: String) {
     JPG("JPG", "jpg"),
@@ -431,7 +432,7 @@ private fun CompressRealtimePreview(
     val context = LocalContext.current
     val previewData by produceState<CompressPreviewData?>(initialValue = null, item, quality, format) {
         value = null
-        delay(120)
+        delay(120.milliseconds)
         value = withContext(Dispatchers.IO) {
             buildCompressPreviewData(context, item, format, quality)
         }
@@ -1763,7 +1764,7 @@ private fun UpscaleBottomSheet(
     val currentItem = items.getOrNull(currentIndex)
     val preview by produceState<UpscalePreviewData?>(initialValue = null, currentItem, factor, hardEdgeMix, sharpenAmount) {
         value = null
-        delay(180)
+        delay(180.milliseconds)
         value = currentItem?.let { item ->
             withContext(Dispatchers.IO) {
                 buildUpscalePreviewData(

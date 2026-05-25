@@ -50,6 +50,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 // ════════════════════════════════════════════════════════
 //  Empty / error / loading states
@@ -247,7 +248,7 @@ class LoadState<T> internal constructor(
             if (!forceRefresh && cachedFetch != null) {
                 when (val cached = cachedFetch()) {
                     is ApiResult.Success -> {
-                        if (cachedPrefetchDelayMs > 0L) delay(cachedPrefetchDelayMs)
+                        if (cachedPrefetchDelayMs > 0L) delay(cachedPrefetchDelayMs.milliseconds)
                         if (currentVersion != requestVersion) return@launch
                         if (!networkFetch.isCompleted) {
                             data = cached.value

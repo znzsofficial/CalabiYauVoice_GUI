@@ -50,11 +50,11 @@ data class PreviewImage(
  */
 @Composable
 fun ImagePreviewDialog(
+    modifier: Modifier = Modifier,
     model: Any?,
     contentDescription: String?,
     onDismiss: () -> Unit,
     onSave: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
     bottomContent: (@Composable BoxScope.() -> Unit)? = null
 ) {
     val context = LocalContext.current
