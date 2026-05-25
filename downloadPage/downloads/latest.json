@@ -2,6 +2,7 @@
   "versionName": "2.0.1",
   "versionCode": 21,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
+  "apkSize": 3219242,
   "releaseUrl": "/",
   "changelog": [
     "修复 Android 低版本系统上的兼容性问题",

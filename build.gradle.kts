@@ -62,6 +62,7 @@ abstract class PrepareDownloadPageReleaseTask : DefaultTask() {
             val updatedJson = oldJson
                 .replace(Regex("\"versionName\"\\s*:\\s*\"[^\"]*\""), "\"versionName\": \"$versionName\"")
                 .replace(Regex("\"versionCode\"\\s*:\\s*\\d+"), "\"versionCode\": $versionCode")
+                .replace(Regex("\"apkSize\"\\s*:\\s*\\d+"), "\"apkSize\": ${targetApk.length()}")
                 .replace(Regex("\"publishedAt\"\\s*:\\s*\"[^\"]*\""), "\"publishedAt\": \"${java.time.LocalDate.now()}\"")
             latestJson.writeText(updatedJson)
         }
