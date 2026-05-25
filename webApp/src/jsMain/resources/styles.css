@@ -1,0 +1,14 @@
+@font-face {
+    font-family: "Noto Sans CJK SC";
+    src: url("composeResources/calabiyauvoice_gui.webapp.generated.resources/font/noto_sans_cjk_sc_regular.otf") format("opentype");
+    font-display: block;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: "Noto Sans CJK SC", sans-serif;
+}

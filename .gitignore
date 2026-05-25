@@ -5,6 +5,7 @@ build/
 !**/src/test/**/build/
 .claude
 .github
+.wrangler/
 
 ### IntelliJ IDEA ###
 .idea
@@ -52,3 +53,5 @@ local.properties
 *.jks
 *.p12
 *.keystore
+*.apk
+!downloadPage/downloads/.gitkeep

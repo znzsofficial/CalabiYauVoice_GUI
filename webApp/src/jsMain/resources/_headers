@@ -1,0 +1,26 @@
+/*.wasm
+  Content-Type: application/wasm
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/composeResources/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/downloads/latest.json
+  Content-Type: application/json
+  Cache-Control: no-cache
+
+/download.html
+  Content-Type: text/html; charset=utf-8
+  Cache-Control: no-cache
+
+/download.css
+  Content-Type: text/css; charset=utf-8
+  Cache-Control: public, max-age=3600
+
+/downloads/*.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment
+  Cache-Control: public, max-age=3600
