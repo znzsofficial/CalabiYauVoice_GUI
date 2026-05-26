@@ -1,6 +1,7 @@
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
@@ -24,7 +25,7 @@ abstract class WebDistTask : DefaultTask() {
     @get:InputFile
     abstract val latestJsonFile: RegularFileProperty
 
-    @get:OutputDirectory
+    @get:InputDirectory
     abstract val apkOutputDirectory: DirectoryProperty
 
     @get:OutputDirectory
@@ -102,17 +103,17 @@ tasks.register<Exec>("webPush") {
     )
 }
 
+val webDistTask = tasks.named("webDist")
+val webPushTask = tasks.named("webPush")
+
+webPushTask.configure {
+    mustRunAfter(webDistTask)
+}
+
 tasks.register("webDeploy") {
     group = "distribution"
     description = "Prepares download page release and deploys it to Cloudflare Pages."
 
-    val prepareTask = tasks.named("webDist")
-    val deployTask = tasks.named("webPush")
-
-    dependsOn(prepareTask)
-    dependsOn(deployTask)
-
-    deployTask.configure {
-        mustRunAfter(prepareTask)
-    }
+    dependsOn(webDistTask)
+    dependsOn(webPushTask)
 }
