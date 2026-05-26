@@ -72,8 +72,10 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -124,6 +126,7 @@ private enum class UpscaleAlgorithm(val label: String, val description: String) 
     NEAREST("最近邻", "像素边缘最硬，适合像素风或图标"),
     FILTERED("平滑插值", "系统双线性过滤，适合照片和常规图片"),
     BICUBIC("双三次", "更高质量的自定义重采样，细节和渐变更自然但较慢"),
+    LANCZOS3("Lanczos3", "锐利高质量重采样，细节更清晰但可能出现轻微光边"),
     STEPPED("分步平滑", "多次渐进缩放，边缘更稳但速度较慢")
 }
 
@@ -2293,6 +2296,7 @@ private fun scaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int, alg
         UpscaleAlgorithm.NEAREST -> source.scale(targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), filter = false)
         UpscaleAlgorithm.FILTERED -> fastFilteredScale(source, targetWidth, targetHeight)
         UpscaleAlgorithm.BICUBIC -> bicubicScale(source, targetWidth, targetHeight)
+        UpscaleAlgorithm.LANCZOS3 -> lanczosScale(source, targetWidth, targetHeight)
         UpscaleAlgorithm.STEPPED -> steppedFilteredScale(source, targetWidth, targetHeight)
     }
 }
@@ -2412,6 +2416,75 @@ private fun bicubicScale(source: Bitmap, targetWidth: Int, targetHeight: Int): B
     }
 
     return Bitmap.createBitmap(outPixels, outWidth, outHeight, Bitmap.Config.ARGB_8888)
+}
+
+private fun lanczosScale(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
+    val srcWidth = source.width
+    val srcHeight = source.height
+    val outWidth = targetWidth.coerceAtLeast(1)
+    val outHeight = targetHeight.coerceAtLeast(1)
+    val srcPixels = IntArray(srcWidth * srcHeight)
+    val outPixels = IntArray(outWidth * outHeight)
+    source.getPixels(srcPixels, 0, srcWidth, 0, 0, srcWidth, srcHeight)
+
+    fun pixel(x: Int, y: Int): Int {
+        val safeX = x.coerceIn(0, srcWidth - 1)
+        val safeY = y.coerceIn(0, srcHeight - 1)
+        return srcPixels[safeY * srcWidth + safeX]
+    }
+
+    val radius = 3
+    for (y in 0 until outHeight) {
+        val srcY = (y + 0.5f) * srcHeight / outHeight - 0.5f
+        val yStart = floor(srcY).toInt() - radius + 1
+        for (x in 0 until outWidth) {
+            val srcX = (x + 0.5f) * srcWidth / outWidth - 0.5f
+            val xStart = floor(srcX).toInt() - radius + 1
+            var weightSum = 0f
+            var a = 0f
+            var r = 0f
+            var g = 0f
+            var b = 0f
+
+            for (sampleY in yStart until yStart + radius * 2) {
+                val wy = lanczosWeight(srcY - sampleY, radius)
+                if (wy == 0f) continue
+                for (sampleX in xStart until xStart + radius * 2) {
+                    val wx = lanczosWeight(srcX - sampleX, radius)
+                    val weight = wx * wy
+                    if (weight == 0f) continue
+                    val color = pixel(sampleX, sampleY)
+                    weightSum += weight
+                    a += android.graphics.Color.alpha(color) * weight
+                    r += android.graphics.Color.red(color) * weight
+                    g += android.graphics.Color.green(color) * weight
+                    b += android.graphics.Color.blue(color) * weight
+                }
+            }
+
+            val normalized = if (weightSum == 0f) 1f else weightSum
+            outPixels[y * outWidth + x] = android.graphics.Color.argb(
+                (a / normalized).roundToInt().coerceIn(0, 255),
+                (r / normalized).roundToInt().coerceIn(0, 255),
+                (g / normalized).roundToInt().coerceIn(0, 255),
+                (b / normalized).roundToInt().coerceIn(0, 255)
+            )
+        }
+    }
+
+    return Bitmap.createBitmap(outPixels, outWidth, outHeight, Bitmap.Config.ARGB_8888)
+}
+
+private fun lanczosWeight(distance: Float, radius: Int): Float {
+    val x = abs(distance)
+    if (x < 1e-4f) return 1f
+    if (x >= radius) return 0f
+    return sinc(x) * sinc(x / radius)
+}
+
+private fun sinc(x: Float): Float {
+    val value = Math.PI.toFloat() * x
+    return sin(value) / value
 }
 
 private fun cubicInterpolate(v0: Float, v1: Float, v2: Float, v3: Float, t: Float): Float {
