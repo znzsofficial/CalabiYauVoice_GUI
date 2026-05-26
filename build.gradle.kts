@@ -17,7 +17,7 @@ plugins {
     alias(libs.plugins.kotlinSerialization) apply false
 }
 
-abstract class PrepareDownloadPageReleaseTask : DefaultTask() {
+abstract class WebDistTask : DefaultTask() {
     @get:InputFile
     abstract val androidBuildFile: RegularFileProperty
 
@@ -72,7 +72,7 @@ abstract class PrepareDownloadPageReleaseTask : DefaultTask() {
     }
 }
 
-tasks.register<PrepareDownloadPageReleaseTask>("prepareDownloadPageRelease") {
+tasks.register<WebDistTask>("webDist") {
     group = "distribution"
     description = "Assembles Android release APK and copies it to downloadPage/downloads."
 
@@ -83,11 +83,9 @@ tasks.register<PrepareDownloadPageReleaseTask>("prepareDownloadPageRelease") {
     downloadsDirectory.set(layout.projectDirectory.dir("downloadPage/downloads"))
 }
 
-tasks.register<Exec>("deployDownloadPage") {
+tasks.register<Exec>("webPush") {
     group = "distribution"
-    description = "Prepares download page release and deploys it to Cloudflare Pages."
-
-    dependsOn("prepareDownloadPageRelease")
+    description = "Deploys the existing downloadPage folder to Cloudflare Pages without building."
 
     val npxCommand = if (System.getProperty("os.name").lowercase().contains("windows")) "npx.cmd" else "npx"
 
@@ -102,4 +100,19 @@ tasks.register<Exec>("deployDownloadPage") {
         "calabiyauwiki",
         "--branch=main"
     )
+}
+
+tasks.register("webDeploy") {
+    group = "distribution"
+    description = "Prepares download page release and deploys it to Cloudflare Pages."
+
+    val prepareTask = tasks.named("webDist")
+    val deployTask = tasks.named("webPush")
+
+    dependsOn(prepareTask)
+    dependsOn(deployTask)
+
+    deployTask.configure {
+        mustRunAfter(prepareTask)
+    }
 }

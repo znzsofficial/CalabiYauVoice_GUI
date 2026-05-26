@@ -12,26 +12,26 @@
     --secondary-foreground: oklch(0.21 0 0);
     --muted: oklch(0.96 0 0);
     --muted-foreground: oklch(0.55 0 0);
-    --accent: oklch(0.96 0 0);
+    --accent: oklch(0.94 0 0);
     --accent-foreground: oklch(0.21 0 0);
     --ring: oklch(0.55 0 0);
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --background: oklch(0.145 0 0);
+        --background: oklch(0.12 0 0);
         --foreground: oklch(0.985 0 0);
-        --card: oklch(0.17 0 0);
+        --card: oklch(0.15 0 0);
         --card-foreground: oklch(0.985 0 0);
-        --border: oklch(0.269 0 0);
-        --input: oklch(0.269 0 0);
+        --border: oklch(0.25 0 0);
+        --input: oklch(0.25 0 0);
         --primary: oklch(0.985 0 0);
         --primary-foreground: oklch(0.145 0 0);
-        --secondary: oklch(0.269 0 0);
+        --secondary: oklch(0.22 0 0);
         --secondary-foreground: oklch(0.985 0 0);
-        --muted: oklch(0.269 0 0);
-        --muted-foreground: oklch(0.708 0 0);
-        --accent: oklch(0.269 0 0);
+        --muted: oklch(0.22 0 0);
+        --muted-foreground: oklch(0.65 0 0);
+        --accent: oklch(0.25 0 0);
         --accent-foreground: oklch(0.985 0 0);
         --ring: oklch(0.55 0 0);
     }
@@ -57,8 +57,8 @@ body {
     font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
     background-color: var(--background);
     background-image: 
-        radial-gradient(at 0% 0%, color-mix(in srgb, var(--primary) 5%, transparent) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, color-mix(in srgb, var(--primary) 5%, transparent) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, color-mix(in srgb, var(--foreground) 3%, transparent) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, color-mix(in srgb, var(--foreground) 2%, transparent) 0px, transparent 50%);
     background-attachment: fixed;
     color: var(--foreground);
     line-height: 1.5;
@@ -179,14 +179,41 @@ img {
     }
 }
 
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .card {
     border-radius: var(--radius);
     border: 1px solid var(--border);
     background-color: var(--card);
     color: var(--card-foreground);
     padding: 16px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+    animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
+
+.card iconify-icon {
+    transition: transform 0.3s ease;
+}
+
+.card:hover iconify-icon[icon^="lucide:"] {
+    transform: rotate(8deg) scale(1.1);
+}
+
+.col-left .card:nth-child(1) { animation-delay: 0.1s; }
+.col-left .card:nth-child(2) { animation-delay: 0.2s; }
+.col-left .card:nth-child(3) { animation-delay: 0.3s; }
+.col-right .card:nth-child(1) { animation-delay: 0.25s; }
+.col-right .card:nth-child(2) { animation-delay: 0.35s; }
+.col-right .card:nth-child(3) { animation-delay: 0.45s; }
 
 .card:hover {
     border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
@@ -362,6 +389,16 @@ ul.changelog-list {
     gap: 12px;
 }
 
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+    animation: pulse 1.8s ease-in-out infinite;
+    display: inline-block;
+}
+
 .resource-link {
     display: flex;
     align-items: center;
@@ -372,12 +409,17 @@ ul.changelog-list {
     color: var(--foreground);
     text-decoration: none;
     background-color: var(--card);
-    transition: background-color 0.15s, transform 0.1s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .resource-link:hover {
     background-color: var(--accent);
-    transform: translateY(-1px);
+    transform: translateX(4px);
+    border-color: color-mix(in srgb, var(--border) 40%, var(--foreground));
+}
+
+.resource-link:hover .resource-icon {
+    transform: scale(1.1) rotate(-5deg);
 }
 
 .resource-icon {
@@ -390,6 +432,7 @@ ul.changelog-list {
     border-radius: calc(var(--radius) - 2px);
     background-color: var(--secondary);
     color: var(--secondary-foreground);
+    transition: transform 0.2s ease;
 }
 
 .resource-link strong,

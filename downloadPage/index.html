@@ -38,21 +38,21 @@
                                         <iconify-icon icon="lucide:tag"></iconify-icon>
                                         最新版本
                                     </span>
-                                    <strong class="info-value version-value" id="versionName">正在读取...</strong>
+                                    <strong class="info-value version-value loading-pulse" id="versionName">正在读取...</strong>
                                 </div>
                                 <div class="info-item">
                                     <span class="info-label">
                                         <iconify-icon icon="lucide:calendar"></iconify-icon>
                                         发布时间
                                     </span>
-                                    <strong class="info-value" id="publishedAt">-</strong>
+                                    <strong class="info-value loading-pulse" id="publishedAt">-</strong>
                                 </div>
                                 <div class="info-item">
                                     <span class="info-label">
                                         <iconify-icon icon="lucide:hard-drive-download"></iconify-icon>
                                         文件大小
                                     </span>
-                                    <strong class="info-value" id="apkSize">正在测量...</strong>
+                                    <strong class="info-value loading-pulse" id="apkSize">正在测量...</strong>
                                 </div>
                             </div>
                             
@@ -75,18 +75,8 @@
                         </div>
                         <div class="card-body">
                             <div class="notice-content text-muted">
-                                <p>卡丘 Wiki 助手是面向《卡拉彼丘》玩家的社区工具客户端，整合 Wiki 浏览、角色资料、语音与美术资源检索，以及本地下载管理等常用功能。</p>
-                                <p>项目由玩家社区维护，基于 Compose Multiplatform 构建，并在 GitHub 开源。如果你在使用中遇到问题，或希望参与改进，欢迎前往仓库反馈与贡献。</p>
-                                <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
-                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI" target="_blank" rel="noopener noreferrer">
-                                        <iconify-icon icon="lucide:github" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>
-                                        GitHub 仓库
-                                    </a>
-                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI/issues" target="_blank" rel="noopener noreferrer">
-                                        <iconify-icon icon="lucide:message-circle-warning" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>
-                                        反馈问题
-                                    </a>
-                                </div>
+                                <p>卡丘 Wiki 助手 (CalabiYauVoice) 是面向《卡拉彼丘》玩家的社区工具客户端，整合了 Wiki 浏览、角色资料、高清语音与美术资源检索，以及高效的本地缓存管理等常用功能。</p>
+                                <p>项目由玩家社区自发维护，基于 Compose Multiplatform 构建，力求在不同平台上提供一致且流畅的使用体验。我们始终坚持开源与非营利原则，如果你在查阅资料或使用过程中遇到问题，欢迎提交反馈参与共建。</p>
                             </div>
                         </div>
                     </section>
@@ -102,17 +92,19 @@
                             <div class="link-grid">
                                 <a class="resource-link" href="https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5" target="_blank" rel="noopener noreferrer">
                                     <span class="resource-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></span>
-                                    <span>
+                                    <span style="flex: 1;">
                                         <strong>卡拉彼丘 Wiki 首页</strong>
                                         <small>查看角色、武器、活动、素材与社区整理资料。</small>
                                     </span>
+                                    <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
                                 </a>
-                                <a class="resource-link" href="https://klbqsem.idreamsky.com/" target="_blank" rel="noopener noreferrer">
+                                <a class="resource-link" href="https://klbq.idreamsky.com/?nav=home" target="_blank" rel="noopener noreferrer">
                                     <span class="resource-icon"><iconify-icon icon="lucide:globe"></iconify-icon></span>
-                                    <span>
+                                    <span style="flex: 1;">
                                         <strong>卡拉彼丘官网</strong>
                                         <small>前往游戏官网，了解最新公告、活动和官方信息。</small>
                                     </span>
+                                    <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
                                 </a>
                             </div>
                         </div>
@@ -131,6 +123,31 @@
                             <ul id="changelogList" class="changelog-list text-muted">
                                 <li>正在读取最新更新日志...</li>
                             </ul>
+                        </div>
+                    </section>
+
+                    <section class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <iconify-icon icon="lucide:github"></iconify-icon>
+                                开源社区
+                            </div>
+                            <span class="badge">Apache 2.0</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="notice-content text-muted">
+                                <p>项目完全开放源代码，所有代码和资源透明可查。我们坚持自由软件精神，致力于建设一个互助、友好的玩家社区环境。</p>
+                                <div style="margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI" target="_blank" rel="noopener noreferrer">
+                                        <iconify-icon icon="lucide:code-2" style="margin-right: 6px;"></iconify-icon>
+                                        GitHub 仓库
+                                    </a>
+                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI/issues" target="_blank" rel="noopener noreferrer">
+                                        <iconify-icon icon="lucide:message-square-plus" style="margin-right: 6px;"></iconify-icon>
+                                        反馈问题
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
@@ -176,9 +193,10 @@
                 ? changelog
                 : String(changelog || "暂无更新日志").split("\n");
 
-            items.filter(Boolean).forEach((item) => {
+            items.filter(Boolean).forEach((item, index) => {
                 const li = document.createElement("li");
                 li.textContent = String(item).replace(/^[-*•]\s*/, "");
+                li.style.animation = `fadeInUp 0.5s ease backwards ${index * 0.05}s`;
                 list.appendChild(li);
             });
         }
@@ -201,10 +219,9 @@
 
             if (Number.isFinite(knownSize) && knownSize > 0) {
                 apkSize.textContent = formatFileSize(knownSize);
+                apkSize.classList.remove("loading-pulse");
                 return;
             }
-
-            apkSize.textContent = "正在测量...";
 
             try {
                 const response = await fetch(apkUrl, { method: "HEAD", cache: "no-store" });
@@ -214,6 +231,8 @@
                 apkSize.textContent = formatFileSize(contentLength);
             } catch (error) {
                 apkSize.textContent = "未知";
+            } finally {
+                apkSize.classList.remove("loading-pulse");
             }
         }
 
@@ -232,14 +251,18 @@
                 const apkUrl = resolveUrl(info.apkUrl);
 
                 versionName.textContent = info.versionName || info.version || "未知版本";
+                versionName.classList.remove("loading-pulse");
                 publishedAt.textContent = info.publishedAt || "未标注";
+                publishedAt.classList.remove("loading-pulse");
                 downloadButton.href = apkUrl;
                 statusText.textContent = "版本信息已更新，点击按钮下载最新 APK。";
                 setChangelog(info.changelog || info.body);
                 measureApkSize(apkUrl, Number(info.apkSize));
             } catch (error) {
                 versionName.textContent = "最新版本";
+                versionName.classList.remove("loading-pulse");
                 publishedAt.textContent = "读取失败";
+                publishedAt.classList.remove("loading-pulse");
                 apkSize.textContent = "未知";
                 downloadButton.href = fallbackApk;
                 statusText.textContent = "暂时无法读取 latest.json，已切换到默认 APK 下载地址。";
