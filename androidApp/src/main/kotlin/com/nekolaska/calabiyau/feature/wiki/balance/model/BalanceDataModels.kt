@@ -40,8 +40,15 @@ data class HeroBalanceData(
     val score: Double
 )
 
+/** 对比赛季的同侧数据 */
+data class CompareSideData(
+    val attackers: Map<Int, HeroBalanceData>,
+    val defenders: Map<Int, HeroBalanceData>
+)
+
 /** 平衡数据结果（进攻方/防守方） */
 data class BalanceResult(
     val attackers: List<HeroBalanceData>,
-    val defenders: List<HeroBalanceData>
+    val defenders: List<HeroBalanceData>,
+    val compareData: CompareSideData? = null
 )

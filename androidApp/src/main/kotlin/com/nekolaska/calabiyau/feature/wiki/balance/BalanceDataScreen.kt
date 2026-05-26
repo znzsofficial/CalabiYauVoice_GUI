@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
@@ -40,6 +41,7 @@ import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
 import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
 import data.ApiResult
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════
@@ -77,6 +79,7 @@ fun BalanceDataScreen(
     var selectedMode by remember { mutableStateOf<FilterOption?>(null) }
     var selectedMap by remember { mutableStateOf<FilterOption?>(null) }
     var selectedSeason by remember { mutableStateOf<FilterOption?>(null) }
+    var selectedSeason2 by remember { mutableStateOf<FilterOption?>(null) }
     var selectedRanks by remember { mutableStateOf<List<FilterOption>>(emptyList()) }
 
     // 显示状态：进攻方 / 防守方
@@ -109,6 +112,7 @@ fun BalanceDataScreen(
                     selectedMode = s.modes.find { it.name == "排位爆破" } ?: s.modes.firstOrNull()
                     selectedMap = null // null 表示全选
                     selectedSeason = s.seasons.firstOrNull()
+                    selectedSeason2 = null
                     selectedRanks = emptyList() // 空表示全选
                 }
                 is ApiResult.Error -> errorResult = result
@@ -131,7 +135,8 @@ fun BalanceDataScreen(
                 modeCode = mode.code,
                 mapCode = mapCode,
                 rankCodes = rankCodes,
-                season1Code = season.code
+                season1Code = season.code,
+                season2Code = selectedSeason2?.code ?: "0"
             )) {
                 is ApiResult.Success -> {
                     balanceResult = result.value
@@ -147,7 +152,7 @@ fun BalanceDataScreen(
     LaunchedEffect(Unit) { loadSettings() }
 
     // 设置变化时自动刷新数据
-    LaunchedEffect(selectedMode, selectedMap, selectedSeason, selectedRanks) {
+    LaunchedEffect(selectedMode, selectedMap, selectedSeason, selectedSeason2, selectedRanks) {
         if (settings != null && selectedMode != null && selectedSeason != null) {
             loadBalanceData()
         }
@@ -215,10 +220,12 @@ fun BalanceDataScreen(
                             selectedMode = selectedMode,
                             selectedMap = selectedMap,
                             selectedSeason = selectedSeason,
+                            selectedSeason2 = selectedSeason2,
                             selectedRanks = selectedRanks,
                             onModeChange = { selectedMode = it },
                             onMapChange = { selectedMap = it },
                             onSeasonChange = { selectedSeason = it },
+                            onSeason2Change = { selectedSeason2 = it },
                             onRanksChange = { selectedRanks = it }
                         )
 
@@ -253,12 +260,18 @@ fun BalanceDataScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             } else {
+                                val compareMap = if (showAttackers) {
+                                    balanceResult?.compareData?.attackers
+                                } else {
+                                    balanceResult?.compareData?.defenders
+                                }
                                 HeroBalanceList(
                                     list = sortedList,
-                                    listKey = "$showAttackers-${sortField.name}-${sortOrder.name}",
+                                    listKey = "$showAttackers-${sortField.name}-${sortOrder.name}-${selectedSeason2?.code.orEmpty()}",
                                     characterMap = characterMap,
                                     positionMap = positionMap,
                                     sortField = sortField,
+                                    compareMap = compareMap,
                                     isLoading = isLoadingData
                                 )
                             }
@@ -280,10 +293,12 @@ private fun FilterBar(
     selectedMode: FilterOption?,
     selectedMap: FilterOption?,
     selectedSeason: FilterOption?,
+    selectedSeason2: FilterOption?,
     selectedRanks: List<FilterOption>,
     onModeChange: (FilterOption) -> Unit,
     onMapChange: (FilterOption?) -> Unit,
     onSeasonChange: (FilterOption) -> Unit,
+    onSeason2Change: (FilterOption?) -> Unit,
     onRanksChange: (List<FilterOption>) -> Unit
 ) {
     Column(
@@ -309,6 +324,28 @@ private fun FilterBar(
                 selected = selectedSeason,
                 onSelect = onSeasonChange,
                 modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        FilterDropdown(
+            label = "对比赛季",
+            options = settings.seasons,
+            selected = selectedSeason2,
+            onSelect = onSeason2Change,
+            onClearSelection = { onSeason2Change(null) },
+            clearLabel = "不对比",
+            placeholderText = "不对比",
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (selectedSeason2 != null) {
+            Text(
+                text = "正在对比：${selectedSeason?.name.orEmpty()} → ${selectedSeason2.name}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
             )
         }
 
@@ -393,6 +430,9 @@ private fun FilterDropdown(
     options: List<FilterOption>,
     selected: FilterOption?,
     onSelect: (FilterOption) -> Unit,
+    onClearSelection: (() -> Unit)? = null,
+    clearLabel: String? = null,
+    placeholderText: String? = null,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -407,6 +447,7 @@ private fun FilterDropdown(
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
+            placeholder = placeholderText?.let { { Text(it) } },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
@@ -418,6 +459,16 @@ private fun FilterDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
+            if (onClearSelection != null && clearLabel != null) {
+                DropdownMenuItem(
+                    text = { Text(clearLabel) },
+                    onClick = {
+                        onClearSelection()
+                        expanded = false
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                )
+            }
             options.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option.name) },
@@ -541,6 +592,7 @@ private fun HeroBalanceList(
     characterMap: Map<Int, CharacterMeta>,
     positionMap: Map<String, PositionMeta>,
     sortField: SortField,
+    compareMap: Map<Int, HeroBalanceData>?,
     isLoading: Boolean
 ) {
     key(listKey) {
@@ -554,10 +606,12 @@ private fun HeroBalanceList(
             itemsIndexed(list, key = { _, item -> item.id }) { index, hero ->
                 val meta = characterMap[hero.id]
                 val position = meta?.let { positionMap[it.positionCode] }
+                val compareHero = compareMap?.get(hero.id)
 
                 HeroRow(
                     rank = index + 1,
                     hero = hero,
+                    compareHero = compareHero,
                     meta = meta,
                     positionName = position?.name ?: "",
                     highlightField = sortField
@@ -588,19 +642,12 @@ private fun HeroBalanceList(
 //  单行角色数据
 // ────────────────────────────────────────────
 
-/** 胜率颜色：高于 50% 偏绿，低于 50% 偏红 */
-private fun winRateColor(rate: Double): Color = when {
-    rate >= 52.0 -> Color(0xFF4CAF50)
-    rate >= 50.0 -> Color(0xFF8BC34A)
-    rate >= 48.0 -> Color(0xFFFF9800)
-    else -> Color(0xFFF44336)
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HeroRow(
     rank: Int,
     hero: HeroBalanceData,
+    compareHero: HeroBalanceData?,
     meta: CharacterMeta?,
     positionName: String,
     highlightField: SortField
@@ -677,29 +724,37 @@ private fun HeroRow(
 
         // 5 列数据
         DataCell(
-            value = "%.1f%%".format(hero.winRate),
+            field = SortField.WIN_RATE,
+            current = hero.winRate,
+            compare = compareHero?.winRate,
             isHighlight = highlightField == SortField.WIN_RATE,
-            color = winRateColor(hero.winRate),
             modifier = Modifier.weight(1f)
         )
         DataCell(
-            value = "%.1f%%".format(hero.selectRate),
+            field = SortField.SELECT_RATE,
+            current = hero.selectRate,
+            compare = compareHero?.selectRate,
             isHighlight = highlightField == SortField.SELECT_RATE,
             modifier = Modifier.weight(1f)
         )
         DataCell(
-            value = "%.2f".format(hero.kd),
+            field = SortField.KD,
+            current = hero.kd,
+            compare = compareHero?.kd,
             isHighlight = highlightField == SortField.KD,
-            color = if (hero.kd >= 1.0) Color(0xFF4CAF50) else Color(0xFFF44336),
             modifier = Modifier.weight(1f)
         )
         DataCell(
-            value = "%.0f".format(hero.damageAve),
+            field = SortField.DAMAGE,
+            current = hero.damageAve,
+            compare = compareHero?.damageAve,
             isHighlight = highlightField == SortField.DAMAGE,
             modifier = Modifier.weight(1f)
         )
         DataCell(
-            value = "%.0f".format(hero.score),
+            field = SortField.SCORE,
+            current = hero.score,
+            compare = compareHero?.score,
             isHighlight = highlightField == SortField.SCORE,
             modifier = Modifier.weight(1f)
         )
@@ -709,18 +764,77 @@ private fun HeroRow(
 @Composable
 private fun DataCell(
     modifier: Modifier = Modifier,
-    value: String,
+    field: SortField,
+    current: Double,
+    compare: Double?,
     isHighlight: Boolean,
-    color: Color? = null
 ) {
-    Text(
-        text = value,
-        style = MaterialTheme.typography.bodySmall,
-        fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.Normal,
-        color = color ?: if (isHighlight) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurface,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        modifier = modifier
-    )
+    val currentText = field.formatValue(current)
+    val compareText = compare?.let { field.formatValue(it) }
+    val changeColor = compare?.let { if (current >= it) Color(0xFF4CAF50) else Color(0xFFF44336) }
+    val hasBigChange = compare?.let { field.isBigChange(current, it) } == true
+    val mainColor = when {
+        changeColor != null && hasBigChange -> changeColor
+        isHighlight -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val compareColor = MaterialTheme.colorScheme.onSurfaceVariant
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = currentText,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.Normal,
+                color = mainColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+            if (compare != null) {
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    text = if (current >= compare) "▲" else "▼",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = changeColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+        if (compareText != null) {
+            Text(
+                text = compareText,
+                style = MaterialTheme.typography.labelSmall,
+                color = compareColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+private fun SortField.formatValue(value: Double): String = when (this) {
+    SortField.WIN_RATE, SortField.SELECT_RATE -> "%.1f%%".format(value)
+    SortField.KD -> "%.2f".format(value)
+    SortField.DAMAGE, SortField.SCORE -> "%.0f".format(value)
+}
+
+private fun SortField.compareThresholdPercent(): Double = when (this) {
+    SortField.WIN_RATE -> 15.0
+    SortField.SELECT_RATE -> 25.0
+    SortField.KD -> 20.0
+    SortField.DAMAGE -> 20.0
+    SortField.SCORE -> 18.0
+}
+
+private fun SortField.isBigChange(current: Double, compare: Double): Boolean {
+    if (compare == 0.0) return current != 0.0
+    val pctDiff = abs((current - compare) / compare) * 100
+    return pctDiff >= compareThresholdPercent()
 }

@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.balance.parser
 
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceResult
+import com.nekolaska.calabiyau.feature.wiki.balance.model.CompareSideData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceSettings
 import com.nekolaska.calabiyau.feature.wiki.balance.model.CharacterMeta
 import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
@@ -8,6 +9,8 @@ import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
 import data.SharedJson
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -109,9 +112,8 @@ object BalanceDataParsers {
 
         val data1 = jData["data1"]!!.jsonObject
 
-        fun parseHeroList(arr: JsonArray): List<HeroBalanceData> = arr.map { elem ->
-            val obj = elem.jsonObject
-            HeroBalanceData(
+        fun parseHero(obj: JsonObject): HeroBalanceData {
+            return HeroBalanceData(
                 id = obj["id"]!!.jsonPrimitive.int,
                 heroName = obj["heroName"]!!.jsonPrimitive.content,
                 winRate = obj["winRate"]?.jsonPrimitive?.doubleOrNull ?: 0.0,
@@ -122,9 +124,29 @@ object BalanceDataParsers {
             )
         }
 
+        fun parseHeroList(arr: JsonArray): List<HeroBalanceData> = arr.map { elem ->
+            parseHero(elem.jsonObject)
+        }
+
+        fun parseHeroMap(elem: JsonElement): Map<Int, HeroBalanceData> = when (elem) {
+            is JsonArray -> parseHeroList(elem).associateBy { it.id }
+            is JsonObject -> elem.entries.associate { (key, value) ->
+                val hero = parseHero(value.jsonObject)
+                (key.toIntOrNull() ?: hero.id) to hero
+            }
+            else -> emptyMap()
+        }
+
         val side1 = data1["side1"]?.jsonArray?.let { parseHeroList(it) } ?: emptyList()
         val side2 = data1["side2"]?.jsonArray?.let { parseHeroList(it) } ?: emptyList()
+        val compareData = when (val data2 = jData["data2"]) {
+            is JsonObject -> CompareSideData(
+                attackers = data2["side1"]?.let { parseHeroMap(it) } ?: emptyMap(),
+                defenders = data2["side2"]?.let { parseHeroMap(it) } ?: emptyMap()
+            )
+            else -> null
+        }
 
-        return BalanceResult(attackers = side1, defenders = side2)
+        return BalanceResult(attackers = side1, defenders = side2, compareData = compareData)
     }
 }
