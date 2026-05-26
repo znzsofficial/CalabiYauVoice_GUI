@@ -126,7 +126,7 @@ private enum class UpscaleAlgorithm(val label: String, val description: String) 
     NEAREST("最近邻", "像素边缘最硬，适合像素风或图标"),
     FILTERED("平滑插值", "系统双线性过滤，适合照片和常规图片"),
     BICUBIC("双三次", "更高质量的自定义重采样，细节和渐变更自然但较慢"),
-    LANCZOS3("Lanczos3", "锐利高质量重采样，细节更清晰但可能出现轻微光边"),
+    LANCZOS3("锐利高质量", "Lanczos3重采样，细节更清晰但可能出现轻微光边"),
     STEPPED("分步平滑", "多次渐进缩放，边缘更稳但速度较慢")
 }
 
