@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -24,6 +25,7 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.hub.LocalHasWallpaper
 import java.util.Calendar
 
 // ════════════════════════════════════════════════════════
@@ -41,11 +43,14 @@ fun CharacterListScreen(
     val state =
         rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
             CharacterListApi.fetchAllFactions(force)
-        }
+    }
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     var showBirthdayDialog by remember { mutableStateOf(false) }
+    val hasWallpaper = LocalHasWallpaper.current
+    val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
 
     Scaffold(
+        containerColor = if (hasWallpaper) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("超弦体 & 晶源体", fontWeight = FontWeight.Bold) },
@@ -56,7 +61,13 @@ fun CharacterListScreen(
                     IconButton(onClick = { showBirthdayDialog = true }) {
                         Icon(Icons.Outlined.Cake, contentDescription = "角色生日")
                     }
-                }
+                },
+                colors = if (hasWallpaper) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = translucentSurface,
+                        scrolledContainerColor = translucentSurface
+                    )
+                } else TopAppBarDefaults.topAppBarColors()
             )
         }
     ) { innerPadding ->
@@ -67,22 +78,24 @@ fun CharacterListScreen(
         ) { factions ->
             // 阵营 Tab
             if (factions.size > 1) {
-                PrimaryTabRow(selectedTabIndex = selectedTab) {
-                    factions.forEachIndexed { index, faction ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = {
-                                selectedTab = index
-                                onTabChanged?.invoke(index)
-                            },
-                            text = {
-                                Text(
-                                    faction.faction,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        )
+                Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
+                    PrimaryTabRow(selectedTabIndex = selectedTab, containerColor = Color.Transparent) {
+                        factions.forEachIndexed { index, faction ->
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = {
+                                    selectedTab = index
+                                    onTabChanged?.invoke(index)
+                                },
+                                text = {
+                                    Text(
+                                        faction.faction,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -256,12 +269,13 @@ private fun CharacterCard(
     character: CharacterListApi.CharacterInfo,
     onClick: () -> Unit
 ) {
+    val hasWallpaper = LocalHasWallpaper.current
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = smoothCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
         ),
         border = BorderStroke(
             width = 1.dp,
@@ -303,6 +317,7 @@ private fun CharacterCard(
 
 @Composable
 private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
+    val hasWallpaper = LocalHasWallpaper.current
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 100.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
@@ -315,7 +330,7 @@ private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
             Card(
                 shape = smoothCornerShape(12.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
                 )
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

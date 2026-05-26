@@ -1128,14 +1128,23 @@ internal fun MapListFullScreen(
     onTabChanged: ((Int) -> Unit)? = null
 ) {
     var selectedMode by remember { mutableIntStateOf(initialTab) }
+    val hasWallpaper = LocalHasWallpaper.current
+    val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
 
     Scaffold(
+        containerColor = if (hasWallpaper) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("地图一览", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
-                }
+                },
+                colors = if (hasWallpaper) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = translucentSurface,
+                        scrolledContainerColor = translucentSurface
+                    )
+                } else TopAppBarDefaults.topAppBarColors()
             )
         }
     ) { innerPadding ->
@@ -1165,23 +1174,25 @@ internal fun MapListFullScreen(
             else -> {
                 Column(Modifier.padding(innerPadding)) {
                     // 模式切换
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        gameModes.forEachIndexed { index, mode ->
-                            FilterChip(
-                                selected = selectedMode == index,
-                                onClick = {
-                                    selectedMode = index
-                                    onTabChanged?.invoke(index)
-                                },
-                                shape = smoothCornerShape(12.dp),
-                                label = { Text(mode.displayName, maxLines = 1) }
-                            )
+                    Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            gameModes.forEachIndexed { index, mode ->
+                                FilterChip(
+                                    selected = selectedMode == index,
+                                    onClick = {
+                                        selectedMode = index
+                                        onTabChanged?.invoke(index)
+                                    },
+                                    shape = smoothCornerShape(12.dp),
+                                    label = { Text(mode.displayName, maxLines = 1) }
+                                )
+                            }
                         }
                     }
 
@@ -1225,8 +1236,9 @@ private fun MapGridCard(
     onClick: () -> Unit
 ) {
     val cardShape = smoothCornerShape(16.dp)
+    val hasWallpaper = LocalHasWallpaper.current
     val cardColors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
     )
     Card(
         onClick = onClick,

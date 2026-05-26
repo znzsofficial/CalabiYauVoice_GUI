@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,6 +25,7 @@ import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.hub.LocalHasWallpaper
 
 // ════════════════════════════════════════════════════════
 //  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
@@ -40,16 +42,25 @@ fun WeaponListScreen(
     val state =
         rememberLoadState(emptyList<WeaponListApi.WeaponCategoryData>()) { force ->
             WeaponListApi.fetchAllCategories(force)
-        }
+    }
     var selectedTab by remember { mutableIntStateOf(initialTab) }
+    val hasWallpaper = LocalHasWallpaper.current
+    val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
 
     Scaffold(
+        containerColor = if (hasWallpaper) Color.Transparent else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("武器一览", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
-                }
+                },
+                colors = if (hasWallpaper) {
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = translucentSurface,
+                        scrolledContainerColor = translucentSurface
+                    )
+                } else TopAppBarDefaults.topAppBarColors()
             )
         }
     ) { innerPadding ->
@@ -60,22 +71,24 @@ fun WeaponListScreen(
         ) { categories ->
             // 分类 Tab
             if (categories.size > 1) {
-                PrimaryTabRow(selectedTabIndex = selectedTab) {
-                    categories.forEachIndexed { index, cat ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = {
-                                selectedTab = index
-                                onTabChanged?.invoke(index)
-                            },
-                            text = {
-                                Text(
-                                    cat.category.displayName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        )
+                Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
+                    PrimaryTabRow(selectedTabIndex = selectedTab, containerColor = Color.Transparent) {
+                        categories.forEachIndexed { index, cat ->
+                            Tab(
+                                selected = selectedTab == index,
+                                onClick = {
+                                    selectedTab = index
+                                    onTabChanged?.invoke(index)
+                                },
+                                text = {
+                                    Text(
+                                        cat.category.displayName,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -122,12 +135,13 @@ private fun WeaponCard(
     weapon: WeaponListApi.WeaponInfo,
     onClick: () -> Unit
 ) {
+    val hasWallpaper = LocalHasWallpaper.current
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = smoothCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
         ),
         border = BorderStroke(
             width = 1.dp,
@@ -225,6 +239,7 @@ private fun WeaponCard(
 
 @Composable
 private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
+    val hasWallpaper = LocalHasWallpaper.current
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 140.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
@@ -238,7 +253,7 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = smoothCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
                 ),
                 border = BorderStroke(
                     width = 1.dp,
