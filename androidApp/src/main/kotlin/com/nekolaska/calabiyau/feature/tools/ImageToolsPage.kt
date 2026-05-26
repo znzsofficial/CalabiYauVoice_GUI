@@ -120,27 +120,22 @@ private enum class GifComposeScaleMode(val label: String) {
     CENTER_CROP("等比填充")
 }
 
+private enum class UpscaleAlgorithm(val label: String, val description: String) {
+    NEAREST("最近邻", "像素边缘最硬，适合像素风或图标"),
+    FILTERED("平滑插值", "系统双线性过滤，适合照片和常规图片"),
+    BICUBIC("双三次", "更高质量的自定义重采样，细节和渐变更自然但较慢"),
+    STEPPED("分步平滑", "多次渐进缩放，边缘更稳但速度较慢")
+}
+
 private data class UpscalePreviewData(
     val previewBytes: ByteArray,
     val outputWidth: Int,
     val outputHeight: Int
 )
 
-private data class UpscalePreset(
-    val label: String,
-    val hardEdgeMix: Float,
-    val sharpenAmount: Float
-)
-
 private const val MinUpscaleFactor = 1.25f
 private const val MaxUpscaleFactor = 4f
-
-private val UpscalePresets = listOf(
-    UpscalePreset("平滑", hardEdgeMix = 0f, sharpenAmount = 0.1f),
-    UpscalePreset("均衡", hardEdgeMix = 0.25f, sharpenAmount = 0.25f),
-    UpscalePreset("清晰", hardEdgeMix = 0.45f, sharpenAmount = 0.35f),
-    UpscalePreset("硬边", hardEdgeMix = 0.75f, sharpenAmount = 0.25f)
-)
+private const val MaxUpscalePreviewOutputSide = 1400
 
 private val CROP_PRESETS = listOf(
     "1:1" to (1 to 1),
@@ -775,6 +770,7 @@ internal fun ImageToolsPage(
     var gifDitherEnabled by rememberSaveable { mutableStateOf(false) }
     var gifComposeScaleMode by rememberSaveable { mutableStateOf(GifComposeScaleMode.FIT_LETTERBOX) }
     var upscaleFactor by rememberSaveable { mutableFloatStateOf(2f) }
+    var upscaleAlgorithm by rememberSaveable { mutableStateOf(UpscaleAlgorithm.FILTERED) }
     var upscaleHardEdgeMix by rememberSaveable { mutableFloatStateOf(0.25f) }
     var upscaleSharpenAmount by rememberSaveable { mutableFloatStateOf(0.25f) }
     var showGifComposeSheet by remember { mutableStateOf(false) }
@@ -1003,6 +999,7 @@ internal fun ImageToolsPage(
                             input = input,
                             target = target,
                             factor = upscaleFactor,
+                            algorithm = upscaleAlgorithm,
                             hardEdgeMix = upscaleHardEdgeMix,
                             sharpenAmount = upscaleSharpenAmount
                         )
@@ -1709,6 +1706,8 @@ internal fun ImageToolsPage(
             items = upscaleSources,
             factor = upscaleFactor,
             onFactorChange = { upscaleFactor = it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor) },
+            algorithm = upscaleAlgorithm,
+            onAlgorithmChange = { upscaleAlgorithm = it },
             hardEdgeMix = upscaleHardEdgeMix,
             onHardEdgeMixChange = { upscaleHardEdgeMix = it },
             sharpenAmount = upscaleSharpenAmount,
@@ -1747,6 +1746,8 @@ private fun UpscaleBottomSheet(
     items: List<PickedInput>,
     factor: Float,
     onFactorChange: (Float) -> Unit,
+    algorithm: UpscaleAlgorithm,
+    onAlgorithmChange: (UpscaleAlgorithm) -> Unit,
     hardEdgeMix: Float,
     onHardEdgeMixChange: (Float) -> Unit,
     sharpenAmount: Float,
@@ -1762,7 +1763,7 @@ private fun UpscaleBottomSheet(
     )
     var currentIndex by remember(items) { mutableIntStateOf(0) }
     val currentItem = items.getOrNull(currentIndex)
-    val preview by produceState<UpscalePreviewData?>(initialValue = null, currentItem, factor, hardEdgeMix, sharpenAmount) {
+    val preview by produceState<UpscalePreviewData?>(initialValue = null, currentItem, factor, algorithm, hardEdgeMix, sharpenAmount) {
         value = null
         delay(180.milliseconds)
         value = currentItem?.let { item ->
@@ -1771,6 +1772,7 @@ private fun UpscaleBottomSheet(
                     context = context,
                     input = item,
                     factor = factor,
+                    algorithm = algorithm,
                     hardEdgeMix = hardEdgeMix,
                     sharpenAmount = sharpenAmount
                 )
@@ -1863,39 +1865,73 @@ private fun UpscaleBottomSheet(
                 }
             }
 
-            Text("放大倍率：${upscaleFactorLabel(factor)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(
-                value = factor,
-                onValueChange = { onFactorChange(it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)) },
-                valueRange = MinUpscaleFactor..MaxUpscaleFactor,
-                steps = 10
-            )
+            Surface(
+                shape = smoothCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("放大设置", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text("选择算法后可微调边缘与锐化", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Surface(shape = smoothCapsuleShape(), color = MaterialTheme.colorScheme.primaryContainer) {
+                            Text(
+                                upscaleFactorLabel(factor),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
 
-            Text("增强风格", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                UpscalePresets.forEach { preset ->
-                    val selected = isCloseToPreset(
-                        hardEdgeMix = hardEdgeMix,
-                        sharpenAmount = sharpenAmount,
-                        preset = preset
+                    Slider(
+                        value = factor,
+                        onValueChange = { onFactorChange(it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)) },
+                        valueRange = MinUpscaleFactor..MaxUpscaleFactor,
+                        steps = 10
                     )
-                    AssistChip(
-                        onClick = {
-                            onHardEdgeMixChange(preset.hardEdgeMix)
-                            onSharpenAmountChange(preset.sharpenAmount)
-                        },
-                        shape = smoothCapsuleShape(),
-                        label = { Text(preset.label) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-                        )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("放大算法", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            UpscaleAlgorithm.entries.forEach { option ->
+                                FilterChip(
+                                    selected = algorithm == option,
+                                    onClick = { onAlgorithmChange(option) },
+                                    label = { Text(option.label) },
+                                    shape = smoothCapsuleShape()
+                                )
+                            }
+                        }
+                        Text(algorithm.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+
+                    UpscaleSliderRow(
+                        label = "边缘保留",
+                        valueText = "${(hardEdgeMix * 100).roundToInt()}%",
+                        value = hardEdgeMix,
+                        onValueChange = { onHardEdgeMixChange(it.coerceIn(0f, 1f)) }
+                    )
+                    UpscaleSliderRow(
+                        label = "锐化强度",
+                        valueText = "${(sharpenAmount * 100).roundToInt()}%",
+                        value = sharpenAmount,
+                        onValueChange = { onSharpenAmountChange(it.coerceIn(0f, 1f)) }
                     )
                 }
             }
-            Text("锐利度保留：${(hardEdgeMix * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(value = hardEdgeMix, onValueChange = { onHardEdgeMixChange(it.coerceIn(0f, 1f)) }, valueRange = 0f..1f)
-            Text("锐化强度：${(sharpenAmount * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Slider(value = sharpenAmount, onValueChange = { onSharpenAmountChange(it.coerceIn(0f, 1f)) }, valueRange = 0f..1f)
             }
             Row(
                 modifier = Modifier
@@ -2192,11 +2228,12 @@ private fun upscaleImage(
     input: PickedInput,
     target: File,
     factor: Float,
+    algorithm: UpscaleAlgorithm,
     hardEdgeMix: Float,
     sharpenAmount: Float
 ): File? {
     val source = openBitmap(context, input) ?: return null
-    val scaled = upscaleBitmap(source, factor, hardEdgeMix, sharpenAmount)
+    val scaled = upscaleBitmap(source, factor, algorithm, hardEdgeMix, sharpenAmount)
     target.parentFile?.mkdirs()
     FileOutputStream(target).use { out -> scaled.compress(Bitmap.CompressFormat.PNG, 100, out) }
     scaled.recycle()
@@ -2208,17 +2245,19 @@ private fun buildUpscalePreviewData(
     context: Context,
     input: PickedInput,
     factor: Float,
+    algorithm: UpscaleAlgorithm,
     hardEdgeMix: Float,
     sharpenAmount: Float
 ): UpscalePreviewData? {
     val source = openBitmap(context, input) ?: return null
-    val maxPreviewSide = 1200
+    val safeFactor = factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)
+    val maxPreviewSide = max(1, (MaxUpscalePreviewOutputSide / safeFactor).roundToInt())
     val sourceMaxSide = max(source.width, source.height)
     val previewSource = if (sourceMaxSide > maxPreviewSide) {
         val scale = maxPreviewSide.toFloat() / sourceMaxSide.toFloat()
         source.scale(max(1, (source.width * scale).roundToInt()), max(1, (source.height * scale).roundToInt()))
     } else source
-    val output = upscaleBitmap(previewSource, factor, hardEdgeMix, sharpenAmount)
+    val output = upscaleBitmap(previewSource, safeFactor, algorithm, hardEdgeMix, sharpenAmount)
     val bytes = ByteArrayOutputStream().use { stream ->
         output.compress(Bitmap.CompressFormat.PNG, 100, stream)
         stream.toByteArray()
@@ -2234,18 +2273,28 @@ private fun buildUpscalePreviewData(
 private fun upscaleBitmap(
     source: Bitmap,
     factor: Float,
+    algorithm: UpscaleAlgorithm,
     hardEdgeMix: Float,
     sharpenAmount: Float
 ): Bitmap {
     val safeFactor = factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)
     val targetWidth = upscaleTargetSize(source.width, safeFactor)
     val targetHeight = upscaleTargetSize(source.height, safeFactor)
-    val scaled = fastFilteredScale(source, targetWidth, targetHeight)
+    val scaled = scaleBitmap(source, targetWidth, targetHeight, algorithm)
     val mixed = if (hardEdgeMix > 0f) blendWithHardEdge(source, scaled, safeFactor, hardEdgeMix) else scaled
     val output = if (sharpenAmount > 0f) sharpenBitmap(mixed, sharpenAmount) else mixed
     if (output !== mixed) mixed.recycle()
     if (mixed !== scaled) scaled.recycle()
     return output
+}
+
+private fun scaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int, algorithm: UpscaleAlgorithm): Bitmap {
+    return when (algorithm) {
+        UpscaleAlgorithm.NEAREST -> source.scale(targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), filter = false)
+        UpscaleAlgorithm.FILTERED -> fastFilteredScale(source, targetWidth, targetHeight)
+        UpscaleAlgorithm.BICUBIC -> bicubicScale(source, targetWidth, targetHeight)
+        UpscaleAlgorithm.STEPPED -> steppedFilteredScale(source, targetWidth, targetHeight)
+    }
 }
 
 private fun upscaleTargetSize(size: Int, factor: Float): Int = max(1, (size * factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)).roundToInt())
@@ -2256,8 +2305,24 @@ private fun upscaleFactorLabel(factor: Float): String {
     return "${text}×"
 }
 
-private fun isCloseToPreset(hardEdgeMix: Float, sharpenAmount: Float, preset: UpscalePreset): Boolean {
-    return abs(hardEdgeMix - preset.hardEdgeMix) < 0.01f && abs(sharpenAmount - preset.sharpenAmount) < 0.01f
+@Composable
+private fun UpscaleSliderRow(
+    label: String,
+    valueText: String,
+    value: Float,
+    onValueChange: (Float) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(valueText, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        }
+        Slider(value = value, onValueChange = onValueChange, valueRange = 0f..1f)
+    }
 }
 
 private fun fastFilteredScale(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
@@ -2266,6 +2331,94 @@ private fun fastFilteredScale(source: Bitmap, targetWidth: Int, targetHeight: In
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
     canvas.drawBitmap(source, null, android.graphics.Rect(0, 0, out.width, out.height), paint)
     return out
+}
+
+private fun steppedFilteredScale(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
+    var current = source
+    var currentWidth = source.width
+    var currentHeight = source.height
+    val finalWidth = targetWidth.coerceAtLeast(1)
+    val finalHeight = targetHeight.coerceAtLeast(1)
+
+    while (currentWidth * 2 < finalWidth || currentHeight * 2 < finalHeight) {
+        currentWidth = min(finalWidth, currentWidth * 2)
+        currentHeight = min(finalHeight, currentHeight * 2)
+        val next = fastFilteredScale(current, currentWidth, currentHeight)
+        if (current !== source && !current.isRecycled) current.recycle()
+        current = next
+    }
+
+    if (currentWidth == finalWidth && currentHeight == finalHeight && current !== source) return current
+    val out = fastFilteredScale(current, finalWidth, finalHeight)
+    if (current !== source && !current.isRecycled) current.recycle()
+    return out
+}
+
+private fun bicubicScale(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
+    val srcWidth = source.width
+    val srcHeight = source.height
+    val outWidth = targetWidth.coerceAtLeast(1)
+    val outHeight = targetHeight.coerceAtLeast(1)
+    val srcPixels = IntArray(srcWidth * srcHeight)
+    val outPixels = IntArray(outWidth * outHeight)
+    source.getPixels(srcPixels, 0, srcWidth, 0, 0, srcWidth, srcHeight)
+
+    fun pixel(x: Int, y: Int): Int {
+        val safeX = x.coerceIn(0, srcWidth - 1)
+        val safeY = y.coerceIn(0, srcHeight - 1)
+        return srcPixels[safeY * srcWidth + safeX]
+    }
+
+    for (y in 0 until outHeight) {
+        val srcY = (y + 0.5f) * srcHeight / outHeight - 0.5f
+        val yBase = kotlin.math.floor(srcY).toInt()
+        val yT = srcY - yBase
+        for (x in 0 until outWidth) {
+            val srcX = (x + 0.5f) * srcWidth / outWidth - 0.5f
+            val xBase = kotlin.math.floor(srcX).toInt()
+            val xT = srcX - xBase
+
+            val samplesA = FloatArray(4)
+            val samplesR = FloatArray(4)
+            val samplesG = FloatArray(4)
+            val samplesB = FloatArray(4)
+            for (row in -1..2) {
+                val a = FloatArray(4)
+                val r = FloatArray(4)
+                val g = FloatArray(4)
+                val b = FloatArray(4)
+                for (col in -1..2) {
+                    val color = pixel(xBase + col, yBase + row)
+                    val index = col + 1
+                    a[index] = android.graphics.Color.alpha(color).toFloat()
+                    r[index] = android.graphics.Color.red(color).toFloat()
+                    g[index] = android.graphics.Color.green(color).toFloat()
+                    b[index] = android.graphics.Color.blue(color).toFloat()
+                }
+                val rowIndex = row + 1
+                samplesA[rowIndex] = cubicInterpolate(a[0], a[1], a[2], a[3], xT)
+                samplesR[rowIndex] = cubicInterpolate(r[0], r[1], r[2], r[3], xT)
+                samplesG[rowIndex] = cubicInterpolate(g[0], g[1], g[2], g[3], xT)
+                samplesB[rowIndex] = cubicInterpolate(b[0], b[1], b[2], b[3], xT)
+            }
+
+            outPixels[y * outWidth + x] = android.graphics.Color.argb(
+                cubicInterpolate(samplesA[0], samplesA[1], samplesA[2], samplesA[3], yT).roundToInt().coerceIn(0, 255),
+                cubicInterpolate(samplesR[0], samplesR[1], samplesR[2], samplesR[3], yT).roundToInt().coerceIn(0, 255),
+                cubicInterpolate(samplesG[0], samplesG[1], samplesG[2], samplesG[3], yT).roundToInt().coerceIn(0, 255),
+                cubicInterpolate(samplesB[0], samplesB[1], samplesB[2], samplesB[3], yT).roundToInt().coerceIn(0, 255)
+            )
+        }
+    }
+
+    return Bitmap.createBitmap(outPixels, outWidth, outHeight, Bitmap.Config.ARGB_8888)
+}
+
+private fun cubicInterpolate(v0: Float, v1: Float, v2: Float, v3: Float, t: Float): Float {
+    val a0 = -0.5f * v0 + 1.5f * v1 - 1.5f * v2 + 0.5f * v3
+    val a1 = v0 - 2.5f * v1 + 2f * v2 - 0.5f * v3
+    val a2 = -0.5f * v0 + 0.5f * v2
+    return ((a0 * t + a1) * t + a2) * t + v1
 }
 
 private fun blendWithHardEdge(source: Bitmap, base: Bitmap, factor: Float, amount: Float): Bitmap {
