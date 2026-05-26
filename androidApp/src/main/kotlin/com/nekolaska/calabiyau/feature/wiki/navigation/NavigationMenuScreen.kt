@@ -61,16 +61,9 @@ fun NavigationMenuScreen(
     val state =
         rememberLoadState(emptyList<NavSection>()) { force ->
             NavigationMenuApi.fetchNavigationSections(force)
-        }
+    }
     val sections = state.data
     var expandedSections by remember { mutableStateOf<Set<String>>(emptySet()) }
-
-    // 默认展开所有分区（首次成功加载后）
-    LaunchedEffect(sections) {
-        if (expandedSections.isEmpty() && sections.isNotEmpty()) {
-            expandedSections = sections.map { it.title }.toSet()
-        }
-    }
 
     Scaffold(
         topBar = {

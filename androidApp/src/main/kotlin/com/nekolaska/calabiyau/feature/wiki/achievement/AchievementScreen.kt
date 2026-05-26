@@ -46,8 +46,8 @@ import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.WikiIconBox
-import com.nekolaska.calabiyau.core.ui.WikiListSkeleton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.achievement.api.AchievementApi
@@ -115,7 +115,7 @@ fun AchievementScreen(
             modifier = Modifier.padding(innerPadding),
             isDataEmpty = { it.sections.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
+            loading = { mod -> AchievementSkeleton(modifier = mod) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -165,6 +165,72 @@ fun AchievementScreen(
             contentDescription = image.title,
             onDismiss = { previewImage = null }
         )
+    }
+}
+
+@Composable
+private fun AchievementSkeleton(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        userScrollEnabled = false
+    ) {
+        item { ShimmerBox(Modifier.fillMaxWidth().height(52.dp), shape = smoothCornerShape(28.dp)) }
+        item { SkeletonChipRow(widths = listOf(88.dp, 76.dp, 92.dp, 70.dp)) }
+        item { SkeletonChipRow(widths = listOf(72.dp, 64.dp, 64.dp)) }
+        items(2) { AchievementSectionSkeleton() }
+    }
+}
+
+@Composable
+private fun AchievementSectionSkeleton() {
+    Card(shape = smoothCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShimmerBox(Modifier.size(36.dp), shape = smoothCornerShape(14.dp))
+                Spacer(Modifier.width(12.dp))
+                ShimmerBox(Modifier.weight(1f).height(20.dp))
+                Spacer(Modifier.width(12.dp))
+                ShimmerBox(Modifier.width(46.dp).height(28.dp), shape = smoothCornerShape(12.dp))
+            }
+            repeat(2) { AchievementItemSkeleton() }
+        }
+    }
+}
+
+@Composable
+private fun AchievementItemSkeleton() {
+    Surface(
+        shape = smoothCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            ShimmerBox(Modifier.size(62.dp), shape = smoothCornerShape(18.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShimmerBox(Modifier.weight(1f).height(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    ShimmerBox(Modifier.width(48.dp).height(26.dp), shape = smoothCornerShape(14.dp))
+                }
+                ShimmerBox(Modifier.fillMaxWidth().height(42.dp), shape = smoothCornerShape(16.dp))
+                ShimmerBox(Modifier.fillMaxWidth(0.82f).height(18.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkeletonChipRow(widths: List<androidx.compose.ui.unit.Dp>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        widths.forEach { width ->
+            ShimmerBox(Modifier.width(width).height(32.dp), shape = smoothCornerShape(16.dp))
+        }
     }
 }
 

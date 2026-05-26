@@ -54,7 +54,7 @@ fun OathScreen(
     ) { force ->
         OathApi.fetch(forceRefresh = force, allowMemoryCache = false)
     }
-    var selectedTab by remember { mutableStateOf(OathTab.OVERVIEW) }
+    var selectedTab by remember { mutableStateOf(OathTab.GIFTS) }
     var keyword by remember { mutableStateOf("") }
     var selectedCharacter by remember { mutableStateOf("全部角色") }
     var selectedGiftSource by remember { mutableStateOf(ALL_GIFT_SOURCES) }

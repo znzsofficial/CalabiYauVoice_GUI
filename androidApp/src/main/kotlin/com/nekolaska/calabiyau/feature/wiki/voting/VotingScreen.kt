@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -453,6 +454,7 @@ private fun CandidateCard(
     isLoggedIn: Boolean,
     onClick: () -> Unit
 ) {
+    val displayName = remember(name) { splitCandidateDisplayName(name) }
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary
     else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
 
@@ -513,18 +515,35 @@ private fun CandidateCard(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // 时装名称
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // 时装名称：称号固定放到第二行，避免不同卡片高度跳动。
+                Column(
+                    modifier = Modifier.fillMaxWidth().height(38.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = displayName.name,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = displayName.title.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (displayName.title == null) Color.Transparent
+                        else if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 // 投票信息
                 if (votes != null) {
@@ -547,6 +566,20 @@ private fun CandidateCard(
             }
         }
     }
+}
+
+private data class CandidateDisplayName(
+    val name: String,
+    val title: String?
+)
+
+private fun splitCandidateDisplayName(rawName: String): CandidateDisplayName {
+    val trimmed = rawName.trim()
+    val match = Regex("^(.*?)\\s*(?:【([^】]+)】|\\[([^]]+)])\\s*$").matchEntire(trimmed)
+        ?: return CandidateDisplayName(trimmed, null)
+    val name = match.groupValues[1].trim().ifBlank { trimmed }
+    val title = match.groupValues[2].ifBlank { match.groupValues[3] }.trim()
+    return CandidateDisplayName(name, title.ifBlank { null })
 }
 
 // ─────────────────────── 底部提交栏 ───────────────────────

@@ -46,8 +46,8 @@ import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.WikiIconBox
-import com.nekolaska.calabiyau.core.ui.WikiListSkeleton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.imprint.api.ImprintApi
@@ -125,14 +125,13 @@ fun ImprintScreen(
             modifier = Modifier.padding(innerPadding),
             isDataEmpty = { it.sections.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> WikiListSkeleton(modifier = mod, chipRows = 2) }
+            loading = { mod -> ImprintSkeleton(modifier = mod) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item { ImprintOverview(page) }
                 item {
                     SearchBar(
                         keyword = keyword,
@@ -180,33 +179,67 @@ fun ImprintScreen(
 }
 
 @Composable
-private fun ImprintOverview(page: ImprintPage) {
-    val imprintCount = page.sections.sumOf { it.imprints.size }
-    Card(
-        shape = smoothCornerShape(32.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+private fun ImprintSkeleton(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        userScrollEnabled = false
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text(page.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            if (page.notice.isNotBlank()) {
-                Text(page.notice, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer, lineHeight = 22.sp)
+        item { ShimmerBox(Modifier.fillMaxWidth().height(52.dp), shape = smoothCornerShape(28.dp)) }
+        item { ImprintSkeletonChipRow(widths = listOf(88.dp, 72.dp, 76.dp, 64.dp)) }
+        item { ImprintSkeletonChipRow(widths = listOf(72.dp, 64.dp, 64.dp, 64.dp)) }
+        items(2) { ImprintSectionSkeleton() }
+    }
+}
+
+@Composable
+private fun ImprintSectionSkeleton() {
+    Card(shape = smoothCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShimmerBox(Modifier.size(36.dp), shape = smoothCornerShape(14.dp))
+                Spacer(Modifier.width(12.dp))
+                ShimmerBox(Modifier.weight(1f).height(20.dp))
+                Spacer(Modifier.width(12.dp))
+                ShimmerBox(Modifier.width(46.dp).height(28.dp), shape = smoothCornerShape(12.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatPill("角色", page.sections.size.toString(), Modifier.weight(1f))
-                StatPill("印迹", imprintCount.toString(), Modifier.weight(1f))
-                StatPill("等级", page.sections.flatMap { it.imprints }.mapNotNull { it.level }.distinct().size.toString(), Modifier.weight(1f))
+            repeat(2) { ImprintItemSkeleton() }
+        }
+    }
+}
+
+@Composable
+private fun ImprintItemSkeleton() {
+    Surface(
+        shape = smoothCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            ShimmerBox(Modifier.size(62.dp), shape = smoothCornerShape(18.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ShimmerBox(Modifier.weight(1f).height(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    ShimmerBox(Modifier.width(48.dp).height(26.dp), shape = smoothCornerShape(14.dp))
+                }
+                ShimmerBox(Modifier.fillMaxWidth().height(42.dp), shape = smoothCornerShape(16.dp))
+                ShimmerBox(Modifier.fillMaxWidth(0.82f).height(18.dp))
             }
         }
     }
 }
 
 @Composable
-private fun StatPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = smoothCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f)) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun ImprintSkeletonChipRow(widths: List<androidx.compose.ui.unit.Dp>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        widths.forEach { width ->
+            ShimmerBox(Modifier.width(width).height(32.dp), shape = smoothCornerShape(16.dp))
         }
     }
 }

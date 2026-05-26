@@ -781,8 +781,8 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
                         shape = smoothCornerShape(12.dp)
                     )
                     Spacer(Modifier.height(12.dp))
-                    ShimmerBox(Modifier.width(140.dp).height(24.dp))
-                    Spacer(Modifier.height(10.dp))
+                    ShimmerBox(Modifier.width(140.dp).height(36.dp))
+                    Spacer(Modifier.height(8.dp))
                     SkeletonChipRow(count = 3)
                 }
             }
