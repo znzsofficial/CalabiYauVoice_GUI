@@ -69,6 +69,35 @@
                     <section class="card shadow-sm">
                         <div class="card-header">
                             <div class="card-title">
+                                <iconify-icon icon="lucide:history"></iconify-icon>
+                                更新日志
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <ul id="changelogList" class="changelog-list text-muted">
+                                <li>正在读取最新更新日志...</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <iconify-icon icon="lucide:shield-alert"></iconify-icon>
+                                安装提示
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="notice-content text-muted">
+                                <p>Android 可能会提示“未知来源应用”。如果你信任此应用，请在系统提示中允许本次安装。</p>
+                                <p>下载文件由本站 Cloudflare Pages 托管。若下载没有开始，请长按下载按钮或复制链接到浏览器打开。</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="card-title">
                                 <iconify-icon icon="lucide:info"></iconify-icon>
                                 关于项目
                             </div>
@@ -77,6 +106,54 @@
                             <div class="notice-content text-muted">
                                 <p>卡丘 Wiki 助手 (CalabiYauVoice) 是面向《卡拉彼丘》玩家的社区工具客户端，整合了 Wiki 浏览、角色资料、高清语音与美术资源检索，以及高效的本地缓存管理等常用功能。</p>
                                 <p>项目由玩家社区自发维护，基于 Compose Multiplatform 构建，力求在不同平台上提供一致且流畅的使用体验。我们始终坚持开源与非营利原则，如果你在查阅资料或使用过程中遇到问题，欢迎提交反馈参与共建。</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="col-right">
+                    <section class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <iconify-icon icon="lucide:github"></iconify-icon>
+                                开源社区
+                            </div>
+                            <span class="badge">Apache 2.0</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="notice-content text-muted">
+                                <p>项目完全开放源代码，所有代码和资源透明可查。我们坚持自由软件精神，致力于建设一个互助、友好的玩家社区环境。</p>
+                                <div style="margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI" target="_blank" rel="noopener noreferrer">
+                                        <iconify-icon icon="lucide:code-2" style="margin-right: 6px;"></iconify-icon>
+                                        GitHub 仓库
+                                    </a>
+                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI/issues" target="_blank" rel="noopener noreferrer">
+                                        <iconify-icon icon="lucide:message-square-plus" style="margin-right: 6px;"></iconify-icon>
+                                        反馈问题
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <iconify-icon icon="lucide:bar-chart-3"></iconify-icon>
+                                平衡数据
+                            </div>
+                            <span class="badge">官网接口</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="notice-content text-muted">
+                                <p>查看角色胜率、选取率、K/D 等赛季数据，支持按模式、地图、段位与赛季筛选。</p>
+                            </div>
+                            <div style="margin-top: 12px;">
+                                <button class="btn primary w-full" id="openBalanceBtn">
+                                    <iconify-icon icon="lucide:bar-chart-3" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>
+                                    查看平衡数据
+                                </button>
                             </div>
                         </div>
                     </section>
@@ -110,62 +187,6 @@
                         </div>
                     </section>
                 </div>
-                
-                <div class="col-right">
-                    <section class="card shadow-sm">
-                        <div class="card-header">
-                            <div class="card-title">
-                                <iconify-icon icon="lucide:history"></iconify-icon>
-                                更新日志
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <ul id="changelogList" class="changelog-list text-muted">
-                                <li>正在读取最新更新日志...</li>
-                            </ul>
-                        </div>
-                    </section>
-
-                    <section class="card shadow-sm">
-                        <div class="card-header">
-                            <div class="card-title">
-                                <iconify-icon icon="lucide:github"></iconify-icon>
-                                开源社区
-                            </div>
-                            <span class="badge">Apache 2.0</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="notice-content text-muted">
-                                <p>项目完全开放源代码，所有代码和资源透明可查。我们坚持自由软件精神，致力于建设一个互助、友好的玩家社区环境。</p>
-                                <div style="margin-top: 16px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI" target="_blank" rel="noopener noreferrer">
-                                        <iconify-icon icon="lucide:code-2" style="margin-right: 6px;"></iconify-icon>
-                                        GitHub 仓库
-                                    </a>
-                                    <a class="btn outline" href="https://github.com/znzsofficial/CalabiYauVoice_GUI/issues" target="_blank" rel="noopener noreferrer">
-                                        <iconify-icon icon="lucide:message-square-plus" style="margin-right: 6px;"></iconify-icon>
-                                        反馈问题
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="card shadow-sm">
-                        <div class="card-header">
-                            <div class="card-title">
-                                <iconify-icon icon="lucide:shield-alert"></iconify-icon>
-                                安装提示
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="notice-content text-muted">
-                                <p>Android 可能会提示“未知来源应用”。如果你信任此应用，请在系统提示中允许本次安装。</p>
-                                <p>下载文件由本站 Cloudflare Pages 托管。若下载没有开始，请长按下载按钮或复制链接到浏览器打开。</p>
-                            </div>
-                        </div>
-                    </section>
-                </div>
             </div>
         </main>
 
@@ -174,6 +195,58 @@
             <p>本项目为玩家社区工具，非《卡拉彼丘》官方应用；游戏名称、商标与素材版权归其各自权利方所有。</p>
         </footer>
     </div>
+
+    <!-- 平衡数据对话框 -->
+    <dialog class="balance-dialog" id="balanceDialog">
+        <div class="balance-dialog-inner">
+            <div class="balance-dialog-header">
+                <h2 class="balance-dialog-title">
+                    <iconify-icon icon="lucide:bar-chart-3"></iconify-icon>
+                    平衡数据
+                </h2>
+                <button class="btn outline balance-close-btn" id="closeBalanceBtn" aria-label="关闭">
+                    <iconify-icon icon="lucide:x"></iconify-icon>
+                </button>
+            </div>
+            <div class="balance-dialog-body">
+                <!-- 筛选区 -->
+                <div class="balance-filters">
+                    <div class="filter-row">
+                        <label class="filter-label">模式</label>
+                        <div class="custom-select" id="balanceMode"></div>
+                    </div>
+                    <div class="filter-row">
+                        <label class="filter-label">赛季</label>
+                        <div class="custom-select" id="balanceSeason"></div>
+                    </div>
+                    <div class="filter-row">
+                        <label class="filter-label">对比</label>
+                        <div class="custom-select" id="balanceSeason2"></div>
+                    </div>
+                    <div class="filter-row">
+                        <label class="filter-label">地图</label>
+                        <div class="chip-group" id="balanceMapChips">
+                            <span class="text-muted" style="font-size: 0.8125rem;">加载中…</span>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <label class="filter-label">段位</label>
+                        <div class="chip-group" id="balanceRankChips">
+                            <span class="text-muted" style="font-size: 0.8125rem;">加载中…</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 结果区 -->
+                <div class="balance-result-area" id="balanceResultArea">
+                    <div class="balance-placeholder text-muted">
+                        <div class="balance-placeholder-icon"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon></div>
+                        <p>正在加载设置…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </dialog>
 
     <script>
         const fallbackApk = "/downloads/CalabiYauVoice-latest.apk";
@@ -272,6 +345,530 @@
         }
 
         loadLatestInfo();
+
+        // ══════════════════════════════════════
+        //  平衡数据对话框
+        // ══════════════════════════════════════
+        (() => {
+            const CHART_ID = "338985";
+            const IDE_TOKEN = "b7FM3m";
+
+            // DOM
+            const dialog       = document.getElementById("balanceDialog");
+            const openBtn      = document.getElementById("openBalanceBtn");
+            const closeBtn     = document.getElementById("closeBalanceBtn");
+            const mapChips     = document.getElementById("balanceMapChips");
+            const rankChips    = document.getElementById("balanceRankChips");
+            const resultArea   = document.getElementById("balanceResultArea");
+
+            // 自定义下拉组件
+            class CustomSelect {
+                constructor(el, { placeholder = "请选择", onChange } = {}) {
+                    this.el = el;
+                    this.placeholder = placeholder;
+                    this.onChange = onChange;
+                    this.options = [];
+                    this.value = null;
+                    this._open = false;
+                    el.classList.add("cs");
+                    el.innerHTML = `<div class="cs-trigger"><span class="cs-value">${placeholder}</span><svg class="cs-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div><div class="cs-menu"></div>`;
+                    this.trigger = el.querySelector(".cs-trigger");
+                    this.valueEl = el.querySelector(".cs-value");
+                    this.menu = el.querySelector(".cs-menu");
+                    this.trigger.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
+                    this._onDocClick = (e) => { if (!el.contains(e.target)) this.close(); };
+                    this._onKey = (e) => { if (e.key === "Escape") this.close(); };
+                }
+                setOptions(opts, selectedCode) {
+                    this.options = opts;
+                    const found = opts.find(o => o.code === selectedCode);
+                    this.value = found || null;
+                    this.valueEl.textContent = this.value ? this.value.name : this.placeholder;
+                    this.valueEl.classList.toggle("cs-placeholder", !this.value);
+                    this.menu.innerHTML = opts.map(o =>
+                        `<div class="cs-option${this.value && this.value.code === o.code ? ' selected' : ''}" data-code="${o.code}">${o.name}</div>`
+                    ).join("");
+                    this.menu.querySelectorAll(".cs-option").forEach(opt => {
+                        opt.addEventListener("click", (e) => {
+                            e.stopPropagation();
+                            const code = opt.dataset.code;
+                            this.value = this.options.find(o => o.code === code) || null;
+                            this.valueEl.textContent = this.value ? this.value.name : this.placeholder;
+                            this.valueEl.classList.toggle("cs-placeholder", !this.value);
+                            this.menu.querySelectorAll(".cs-option").forEach(o => o.classList.toggle("selected", o.dataset.code === code));
+                            this.close();
+                            if (this.onChange) this.onChange(this.value);
+                        });
+                    });
+                }
+                setValue(code) {
+                    this.value = this.options.find(o => o.code === code) || null;
+                    this.valueEl.textContent = this.value ? this.value.name : this.placeholder;
+                    this.valueEl.classList.toggle("cs-placeholder", !this.value);
+                    this.menu.querySelectorAll(".cs-option").forEach(o => o.classList.toggle("selected", this.value && o.dataset.code === code));
+                }
+                open() {
+                    if (this._open) return;
+                    this._open = true;
+                    this.el.classList.add("open");
+                    document.addEventListener("click", this._onDocClick, true);
+                    document.addEventListener("keydown", this._onKey);
+                    // 定位菜单
+                    requestAnimationFrame(() => {
+                        const rect = this.trigger.getBoundingClientRect();
+                        const menuH = this.menu.offsetHeight;
+                        const below = rect.bottom + menuH + 4 < window.innerHeight;
+                        this.menu.style.top = below ? "calc(100% + 4px)" : "";
+                        this.menu.style.bottom = below ? "" : "calc(100% + 4px)";
+                    });
+                }
+                close() {
+                    if (!this._open) return;
+                    this._open = false;
+                    this.el.classList.remove("open");
+                    document.removeEventListener("click", this._onDocClick, true);
+                    document.removeEventListener("keydown", this._onKey);
+                }
+                toggle() { this._open ? this.close() : this.open(); }
+            }
+
+            // State
+            let settings       = null;
+            let balanceResult  = null;
+            let characterMap   = {};  // heroId -> { name, imageUrl, position_code }
+            let positionMap    = {};  // positionCode -> { name, imageUrl }
+            let selectedMode   = null;
+            let selectedMap    = null;   // null = 全选
+            let selectedSeason = null;
+            let selectedSeason2 = null;  // null = 无对比
+            let compareData    = null;   // data2 from API, keyed by hero ID
+            let selectedRanks  = new Set();
+            let showAttackers  = false;  // false = 防守方
+            let sortField      = "winRate";
+            let sortDesc       = true;
+            let isLoading      = false;
+
+            const SORT_LABELS = {
+                winRate:    "胜率",
+                selectRate: "选取率",
+                kd:         "KD",
+                damageAve:  "场均伤害",
+                score:      "场均得分",
+            };
+
+            // ── 打开 / 关闭 ──
+            openBtn.addEventListener("click", () => {
+                dialog.showModal();
+                if (!settings && !isLoading) loadSettings();
+            });
+
+            closeBtn.addEventListener("click", () => dialog.close());
+
+            dialog.addEventListener("click", (e) => {
+                if (e.target === dialog) dialog.close();
+            });
+
+            dialog.addEventListener("cancel", (e) => {
+                e.preventDefault();
+                dialog.close();
+            });
+
+            dialog.addEventListener("close", () => {
+                modeDD.close();
+                seasonDD.close();
+                season2DD.close();
+            });
+
+            // ── 加载设置 ──
+            async function loadSettings() {
+                isLoading = true;
+                resultArea.innerHTML = placeholderHTML("正在连接官网接口…");
+
+                try {
+                    const resp = await fetch(`/api/balance/settings`, {
+                        cache: "no-store"
+                    });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+                    const json = await resp.json();
+                    if (json.code !== 0) {
+                        throw new Error(json.msg || "接口返回异常");
+                    }
+
+                    settings = parseSettings(json.data.value);
+                    characterMap = {};
+                    settings.characters.forEach(c => {
+                        const id = parseInt(c.character_code || c.code, 10);
+                        if (!isNaN(id)) characterMap[id] = c;
+                    });
+                    positionMap = {};
+                    settings.positions.forEach(p => {
+                        positionMap[p.position_code || p.code] = p;
+                    });
+                    applyDefaults();
+                    populateFilters();
+                    await loadBalanceData();
+                } catch (err) {
+                    const msg = err.name === "TypeError"
+                        ? "无法连接到官网接口，请检查网络或使用客户端查看。"
+                        : err.message;
+                    resultArea.innerHTML = errorHTML(msg);
+                } finally {
+                }
+            }
+
+            // ── 解析设置 ──
+            function parseSettings(value) {
+                const setting  = value.setting;
+                const roleList = value.role_list;
+
+                function parseOptions(arr) {
+                    return arr.map(item => JSON.parse(item.content));
+                }
+
+                return {
+                    modes:    parseOptions(setting.mode),
+                    maps:     parseOptions(setting.map),
+                    ranks:    parseOptions(setting.rank),
+                    seasons:  parseOptions(setting.season),
+                    positions: roleList.position.map(item => JSON.parse(item.content)),
+                    characters: roleList.role_list.map(item => JSON.parse(item.content)),
+                };
+            }
+
+            // ── 默认值 ──
+            function applyDefaults() {
+                selectedMode   = settings.modes.find(m => m.name === "排位爆破") || settings.modes[0] || null;
+                selectedMap    = null;
+                selectedSeason = settings.seasons[0] || null;
+                selectedRanks  = new Set();
+                showAttackers  = false;
+                selectedSeason2 = null;
+                compareData    = null;
+                sortField      = "winRate";
+                sortDesc       = true;
+            }
+
+            // ── 填充筛选器 ──
+            function populateFilters() {
+                modeDD.setOptions(settings.modes, selectedMode?.code);
+                seasonDD.setOptions(settings.seasons, selectedSeason?.code);
+                populateSeason2();
+
+                renderChips(mapChips, settings.maps, selectedMap ? [selectedMap.code] : [], true);
+                renderChips(rankChips, settings.ranks, [...selectedRanks], false);
+            }
+
+            function populateSeason2() {
+                const currentCode = selectedSeason ? selectedSeason.code : null;
+                const options = [{ code: "", name: "无" }, ...settings.seasons.filter(s => s.code !== currentCode)];
+                if (selectedSeason2 && selectedSeason2.code === currentCode) selectedSeason2 = null;
+                season2DD.setOptions(options, selectedSeason2 ? selectedSeason2.code : "");
+            }
+
+            // 创建下拉实例
+            const modeDD = new CustomSelect(document.getElementById("balanceMode"), {
+                placeholder: "选择模式",
+                onChange(opt) { selectedMode = opt; loadBalanceData(); }
+            });
+            const seasonDD = new CustomSelect(document.getElementById("balanceSeason"), {
+                placeholder: "选择赛季",
+                onChange(opt) { selectedSeason = opt; populateSeason2(); loadBalanceData(); }
+            });
+            const season2DD = new CustomSelect(document.getElementById("balanceSeason2"), {
+                placeholder: "无",
+                onChange(opt) { selectedSeason2 = opt && opt.code ? opt : null; loadBalanceData(); }
+            });
+
+            function renderChips(container, options, activeCodes, singleSelect) {
+                container.innerHTML = "";
+                options.forEach(opt => {
+                    const chip = document.createElement("button");
+                    chip.className = "chip" + (activeCodes.includes(opt.code) ? " active" : "");
+                    chip.textContent = opt.name;
+                    chip.dataset.code = opt.code;
+                    chip.addEventListener("click", () => {
+                        if (singleSelect) {
+                            if (selectedMap && selectedMap.code === opt.code) {
+                                selectedMap = null;
+                            } else {
+                                selectedMap = opt;
+                            }
+                            renderChips(container, options, selectedMap ? [selectedMap.code] : [], true);
+                        } else {
+                            if (selectedRanks.has(opt.code)) {
+                                selectedRanks.delete(opt.code);
+                            } else {
+                                selectedRanks.add(opt.code);
+                            }
+                            renderChips(container, options, [...selectedRanks], false);
+                        }
+                        loadBalanceData();
+                    });
+                    container.appendChild(chip);
+                });
+            }
+
+            // ── 加载平衡数据 ──
+            async function loadBalanceData() {
+                if (!selectedMode || !selectedSeason) return;
+
+                resultArea.innerHTML = placeholderHTML("正在查询平衡数据…");
+
+                const rankCodes = selectedRanks.size > 0
+                    ? [...selectedRanks]
+                    : ["-255"];
+                const mapCode = selectedMap ? selectedMap.code : "-255";
+
+                const payload = {
+                    iChartId:   CHART_ID,
+                    iSubChartId: CHART_ID,
+                    sIdeToken:  IDE_TOKEN,
+                    mode:       selectedMode.code,
+                    map:        mapCode,
+                    rank:       rankCodes,
+                    season1:    selectedSeason.code,
+                    season2:    selectedSeason2 ? selectedSeason2.code : "0",
+                };
+
+                try {
+                    const resp = await fetch(`/api/balance/data`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json; charset=utf-8" },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+                    const json = await resp.json();
+                    const jData = json.jData;
+                    if (!jData || jData.iRet !== "0") {
+                        throw new Error(jData?.sMsg || "查询失败");
+                    }
+
+                    balanceResult = {
+                        attackers: (jData.data1?.side1 || []).map(parseHero),
+                        defenders: (jData.data1?.side2 || []).map(parseHero),
+                    };
+
+                    // 解析对比赛季数据 (data2)
+                    compareData = null;
+                    if (jData.data2 && selectedSeason2) {
+                        const d2 = jData.data2;
+                        compareData = {
+                            attackers: d2.side1 || {},
+                            defenders: d2.side2 || {},
+                        };
+                    }
+
+                    renderResult();
+                } catch (err) {
+                    const msg = err.name === "TypeError"
+                        ? "无法连接到官网接口，请检查网络或使用客户端查看。"
+                        : err.message;
+                    resultArea.innerHTML = errorHTML(msg);
+                }
+            }
+
+            function parseHero(obj) {
+                return {
+                    id:        obj.id,
+                    heroName:  obj.heroName,
+                    winRate:   obj.winRate   ?? 0,
+                    selectRate: obj.selectRate ?? 0,
+                    kd:        obj.kd        ?? 0,
+                    damageAve: obj.damageAve ?? 0,
+                    score:     obj.score     ?? 0,
+                };
+            }
+
+            // ── 渲染结果 ──
+            function renderResult() {
+                if (!balanceResult) return;
+
+                const currentList = getSortedList();
+                const side = showAttackers ? "attackers" : "defenders";
+                const cmpSide = compareData ? compareData[side] : null;
+                const hasCmp = !!cmpSide;
+
+                function heroCells(hero) {
+                    const id = String(hero.id);
+                    const cmp = cmpSide ? cmpSide[id] : null;
+                    const fields = [
+                        { v: hero.winRate, fmt: "%" },
+                        { v: hero.selectRate, fmt: "%" },
+                        { v: hero.kd, fmt: "kd" },
+                        { v: hero.damageAve, fmt: "num" },
+                        { v: hero.score, fmt: "num" },
+                    ];
+                    if (!hasCmp || !cmp) {
+                        return fields.map(f => {
+                            const txt = f.fmt === "%" ? f.v.toFixed(1) + "%" : f.fmt === "kd" ? f.v.toFixed(2) : Math.round(f.v).toLocaleString();
+                            return `<td class="col-num">${txt}</td>`;
+                        }).join("");
+                    }
+                    const cmpFields = [
+                        { v: cmp.winRate ?? 0, fmt: "%" },
+                        { v: cmp.selectRate ?? 0, fmt: "%" },
+                        { v: cmp.kd ?? 0, fmt: "kd" },
+                        { v: cmp.damageAve ?? 0, fmt: "num" },
+                        { v: cmp.score ?? 0, fmt: "num" },
+                    ];
+                    // 大幅变动阈值（百分比）
+                    const bigThresholds = [15, 25, 20, 20, 18];
+
+                    return fields.map((f, idx) => {
+                        const txt = f.fmt === "%" ? f.v.toFixed(1) + "%" : f.fmt === "kd" ? f.v.toFixed(2) : Math.round(f.v).toLocaleString();
+                        const cv = cmpFields[idx].v;
+                        const diff = f.v - cv;
+                        const base = cv || 1;
+                        const pctDiff = Math.abs(diff / base) * 100;
+                        const isBig = pctDiff >= bigThresholds[idx];
+                        const direction = diff > 0 ? "up" : diff < 0 ? "down" : "";
+
+                        let arrow = "";
+                        let mainClass = "cell-main";
+                        if (direction === "up") {
+                            arrow = `<span class="cmp-arrow up">▲</span>`;
+                            if (isBig) mainClass += " cmp-up";
+                        } else if (direction === "down") {
+                            arrow = `<span class="cmp-arrow down">▼</span>`;
+                            if (isBig) mainClass += " cmp-down";
+                        }
+
+                        const sub = cmpFields[idx].fmt === "%" ? cv.toFixed(1) + "%" : cmpFields[idx].fmt === "kd" ? cv.toFixed(2) : Math.round(cv).toLocaleString();
+                        return `<td class="col-num"><div class="cell-cmp"><span class="${mainClass}">${txt}${arrow}</span><span class="cell-sub">${sub}</span></div></td>`;
+                    }).join("");
+                }
+
+                const cmpLabel = hasCmp ? `<div class="cmp-season-label"><span class="cmp-tag current">${esc(selectedSeason.name)}</span><span class="cmp-tag compare">${esc(selectedSeason2.name)}</span></div>` : "";
+
+                resultArea.innerHTML = `
+                    <div class="side-tabs">
+                        <button class="side-tab ${!showAttackers ? 'active' : ''}" data-side="defenders">
+                            <iconify-icon icon="lucide:shield" style="font-size:14px;"></iconify-icon>
+                            防守方
+                        </button>
+                        <button class="side-tab ${showAttackers ? 'active' : ''}" data-side="attackers">
+                            <iconify-icon icon="lucide:zap" style="font-size:14px;"></iconify-icon>
+                            进攻方
+                        </button>
+                    </div>
+                    ${cmpLabel}
+                    <div class="balance-table-wrap">
+                        <table class="balance-table ${hasCmp ? 'has-compare' : ''}">
+                            <thead>
+                                <tr>
+                                    <th class="col-rank">#</th>
+                                    <th>角色</th>
+                                    ${Object.entries(SORT_LABELS).map(([key, label]) => `
+                                        <th class="sortable col-num ${sortField === key ? 'sorted' : ''}" data-field="${key}">
+                                            ${label}<span class="sort-arrow">${sortField === key ? (sortDesc ? '▼' : '▲') : '↕'}</span>
+                                        </th>
+                                    `).join("")}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${currentList.length > 0 ? currentList.map((hero, i) => {
+                                    const meta = characterMap[hero.id];
+                                    const imgUrl = meta && (meta.character_image || meta.imageUrl);
+                                    const initial = esc(hero.heroName.charAt(0));
+                                    const imgHTML = imgUrl
+                                        ? `<img class="hero-avatar" src="${esc(imgUrl)}" alt="" loading="lazy" data-initial="${initial}">`
+                                        : `<span class="hero-avatar-fallback">${initial}</span>`;
+                                    const posCode = meta && (meta.position_code || meta.positionCode);
+                                    const pos = posCode && positionMap[posCode];
+                                    const posName = pos && (pos.position_name || pos.name) || "";
+                                    return `
+                                    <tr>
+                                        <td class="col-rank">${i + 1}</td>
+                                        <td class="col-name">
+                                            <span class="hero-cell">
+                                                ${imgHTML}
+                                                <span class="hero-info">
+                                                    <span class="hero-name">${esc(hero.heroName)}</span>
+                                                    ${posName ? `<span class="hero-pos">${esc(posName)}</span>` : ""}
+                                                </span>
+                                            </span>
+                                        </td>
+                                        ${heroCells(hero)}
+                                    </tr>`;
+                                }).join("") : `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted-foreground);">暂无数据</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                // 标签页切换
+                resultArea.querySelectorAll(".side-tab").forEach(tab => {
+                    tab.addEventListener("click", () => {
+                        showAttackers = tab.dataset.side === "attackers";
+                        renderResult();
+                    });
+                });
+
+                // 表头排序
+                resultArea.querySelectorAll("th.sortable").forEach(th => {
+                    th.addEventListener("click", () => {
+                        const field = th.dataset.field;
+                        if (sortField === field) {
+                            sortDesc = !sortDesc;
+                        } else {
+                            sortField = field;
+                            sortDesc  = true;
+                        }
+                        renderResult();
+                    });
+                });
+            }
+
+            function getSortedList() {
+                const side = showAttackers ? "attackers" : "defenders";
+                const list = (balanceResult?.[side] || []).filter(h => h.winRate > 0);
+
+                return list.sort((a, b) => {
+                    const va = a[sortField];
+                    const vb = b[sortField];
+                    return sortDesc ? vb - va : va - vb;
+                });
+            }
+
+            // ── 工具函数 ──
+            function placeholderHTML(msg) {
+                return `
+                    <div class="balance-placeholder text-muted">
+                        <div class="balance-placeholder-icon"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon></div>
+                        <p>${esc(msg)}</p>
+                    </div>`;
+            }
+
+            function errorHTML(msg) {
+                return `
+                    <div class="balance-error">
+                        <iconify-icon icon="lucide:alert-circle"></iconify-icon>
+                        <p>${esc(msg)}</p>
+                        <button class="btn outline" onclick="document.getElementById('openBalanceBtn').click()">
+                            <iconify-icon icon="lucide:refresh-cw" style="margin-right:4px;font-size:0.9em;"></iconify-icon>
+                            重试
+                        </button>
+                    </div>`;
+            }
+
+            function esc(str) {
+                const d = document.createElement("div");
+                d.textContent = str;
+                return d.innerHTML;
+            }
+
+            // 全局头像加载失败处理
+            resultArea.addEventListener("error", (e) => {
+                if (e.target.tagName === "IMG" && e.target.classList.contains("hero-avatar")) {
+                    const span = document.createElement("span");
+                    span.className = "hero-avatar-fallback";
+                    span.textContent = e.target.dataset.initial || "?";
+                    e.target.replaceWith(span);
+                }
+            }, true);
+        })();
     </script>
 </body>
 </html>
