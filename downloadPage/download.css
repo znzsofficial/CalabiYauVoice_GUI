@@ -1208,3 +1208,89 @@ td .cmp-arrow.down {
         gap: 6px;
     }
 }
+
+/* ══════════════════════════════════════
+   创作者中心提示对话框
+   ══════════════════════════════════════ */
+
+.creator-dialog {
+    border: none;
+    border-radius: var(--radius);
+    background-color: var(--card);
+    color: var(--card-foreground);
+    padding: 0;
+    max-width: 400px;
+    width: calc(100% - 32px);
+    box-shadow: 0 24px 48px -12px color-mix(in srgb, var(--foreground) 25%, transparent);
+    text-align: center;
+}
+
+.creator-dialog::backdrop {
+    background-color: color-mix(in srgb, var(--background) 60%, transparent);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.creator-dialog[open] {
+    animation: dialogIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.creator-dialog[open]::backdrop {
+    animation: backdropIn 0.25s ease;
+}
+
+.creator-dialog-inner {
+    position: relative;
+    padding: 32px 24px 24px;
+}
+
+.creator-dialog-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    color: var(--muted-foreground);
+}
+
+.creator-dialog-title {
+    margin: 0 0 8px;
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.creator-dialog-desc {
+    margin: 0 0 20px;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+}
+
+.creator-dialog-desc strong {
+    color: var(--foreground);
+}
+
+.creator-dialog-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.creator-dialog-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: calc(var(--radius) - 2px);
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.creator-dialog-close:hover {
+    background-color: var(--accent);
+    color: var(--foreground);
+}

@@ -203,7 +203,7 @@
                                     </span>
                                     <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
                                 </a>
-                                <a class="resource-link" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer">
+                                <a class="resource-link" id="creatorLink" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer">
                                     <span class="resource-icon"><iconify-icon icon="lucide:palette"></iconify-icon></span>
                                     <span style="flex: 1;">
                                         <strong>创作者中心</strong>
@@ -273,6 +273,28 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </dialog>
+
+    <dialog class="creator-dialog" id="creatorDialog">
+        <div class="creator-dialog-inner">
+            <div class="creator-dialog-icon">
+                <iconify-icon icon="lucide:monitor-smartphone"></iconify-icon>
+            </div>
+            <h3 class="creator-dialog-title">访问提示</h3>
+            <p class="creator-dialog-desc">电脑端创作者中心<strong>无法提交稿件</strong>，建议使用访问移动端反代页面以获得完整功能。</p>
+            <div class="creator-dialog-actions">
+                <a class="btn primary" id="creatorProxyBtn" href="https://creator.nekolaska.vip/" target="_blank" rel="noopener noreferrer">
+                    <iconify-icon icon="lucide:smartphone" style="margin-right: 6px;"></iconify-icon>
+                    访问移动端反代
+                </a>
+                <a class="btn outline" id="creatorOriginalBtn" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer">
+                    仍然访问原站
+                </a>
+            </div>
+            <button class="creator-dialog-close" id="creatorDialogClose" aria-label="关闭">
+                <iconify-icon icon="lucide:x"></iconify-icon>
+            </button>
         </div>
     </dialog>
 
@@ -415,6 +437,27 @@
                 prompt("请手动复制链接：", url);
             }
         });
+
+        (() => {
+            const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+            if (isMobile) return;
+
+            const dialog = document.getElementById("creatorDialog");
+            const link = document.getElementById("creatorLink");
+
+            link.addEventListener("click", (e) => {
+                e.preventDefault();
+                dialog.showModal();
+            });
+
+            document.getElementById("creatorDialogClose").addEventListener("click", () => dialog.close());
+            document.getElementById("creatorOriginalBtn").addEventListener("click", () => dialog.close());
+            document.getElementById("creatorProxyBtn").addEventListener("click", () => dialog.close());
+
+            dialog.addEventListener("click", (e) => {
+                if (e.target === dialog) dialog.close();
+            });
+        })();
 
         // ══════════════════════════════════════
         //  平衡数据对话框
