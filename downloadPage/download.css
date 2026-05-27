@@ -48,6 +48,25 @@
     height: 0;
 }
 
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 8px;
+    z-index: 999;
+    padding: 8px 16px;
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: top 0.15s;
+}
+
+.skip-link:focus {
+    top: 8px;
+}
+
 html, body {
     height: 100%;
     margin: 0;
@@ -419,6 +438,11 @@ ul.changelog-list {
     border-color: color-mix(in srgb, var(--border) 40%, var(--foreground));
 }
 
+.resource-link:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
 .resource-link:hover .resource-icon {
     transform: scale(1.1) rotate(-5deg);
 }
@@ -451,6 +475,22 @@ ul.changelog-list {
     margin-top: 12px;
     font-size: 0.75rem;
     text-align: center;
+}
+
+.download-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.copy-btn {
+    width: 2.25rem;
+    height: auto;
+    padding: 0;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* ══════════════════════════════════════
@@ -592,6 +632,12 @@ ul.changelog-list {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
 }
 
+.cs-trigger:focus-visible {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
 .cs-value {
     font-size: 0.8125rem;
     font-weight: 500;
@@ -682,6 +728,11 @@ ul.changelog-list {
     background-color: color-mix(in srgb, var(--primary) 90%, black);
 }
 
+.cs-option.highlighted {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+}
+
 .chip-group {
     display: flex;
     flex-wrap: wrap;
@@ -716,6 +767,11 @@ ul.changelog-list {
     background-color: var(--primary);
     color: var(--primary-foreground);
     border-color: var(--primary);
+}
+
+.chip:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
 }
 
 /* 结果区 */
@@ -798,6 +854,11 @@ ul.changelog-list {
     border-bottom-color: var(--foreground);
 }
 
+.side-tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+}
+
 /* 数据表格 */
 .balance-table-wrap {
     overflow-x: auto;
@@ -836,6 +897,12 @@ ul.changelog-list {
 }
 
 .balance-table th.sortable:hover {
+    color: var(--foreground);
+}
+
+.balance-table th.sortable:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
     color: var(--foreground);
 }
 

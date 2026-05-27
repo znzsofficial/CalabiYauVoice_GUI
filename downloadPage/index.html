@@ -4,11 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>卡丘 Wiki 助手下载</title>
+    <meta name="description" content="卡丘 Wiki 助手 (CalabiYauVoice) APK 下载 — 面向《卡拉彼丘》玩家的社区工具客户端，整合 Wiki 浏览、角色资料与高清语音检索。">
+    <meta property="og:title" content="卡丘 Wiki 助手下载">
+    <meta property="og:description" content="面向《卡拉彼丘》玩家的社区工具客户端">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="icon.svg">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="download.css">
-    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://code.iconify.design" crossorigin>
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
+    <a class="skip-link" href="#main-content">跳转到主要内容</a>
     <div class="layout-wrapper">
         <header class="header">
             <div class="header-content">
@@ -20,7 +27,7 @@
             </div>
         </header>
 
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <div class="grid-layout">
                 <div class="col-left">
                     <section class="card shadow-sm">
@@ -56,11 +63,14 @@
                                 </div>
                             </div>
                             
-                            <div style="margin-top: 16px;">
-                                <a id="downloadButton" class="btn primary w-full" href="/downloads/CalabiYauVoice-latest.apk" download>
+                            <div class="download-row" style="margin-top: 16px;">
+                                <a id="downloadButton" class="btn primary" href="/downloads/CalabiYauVoice-latest.apk" download style="flex: 1;">
                                     <iconify-icon icon="lucide:download" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>
                                     下载 APK
                                 </a>
+                                <button class="btn outline copy-btn" id="copyLinkBtn" title="复制下载链接" aria-label="复制下载链接">
+                                    <iconify-icon icon="lucide:copy"></iconify-icon>
+                                </button>
                             </div>
                             <p id="statusText" class="status-hint">如果版本信息加载失败，下载按钮仍会使用默认 APK 地址。</p>
                         </div>
@@ -75,12 +85,14 @@
                         </div>
                         <div class="card-body">
                             <ul id="changelogList" class="changelog-list text-muted">
-                                <li>正在读取最新更新日志...</li>
+                                <li><span class="skeleton-line" style="width: 80%;"></span></li>
+                                <li><span class="skeleton-line" style="width: 65%;"></span></li>
+                                <li><span class="skeleton-line" style="width: 70%;"></span></li>
                             </ul>
                         </div>
                     </section>
 
-                    <section class="card shadow-sm">
+                    <section class="card shadow-sm" id="installTipCard">
                         <div class="card-header">
                             <div class="card-title">
                                 <iconify-icon icon="lucide:shield-alert"></iconify-icon>
@@ -89,7 +101,7 @@
                         </div>
                         <div class="card-body">
                             <div class="notice-content text-muted">
-                                <p>Android 可能会提示“未知来源应用”。如果你信任此应用，请在系统提示中允许本次安装。</p>
+                                <p>Android 可能会提示"未知来源应用"。如果你信任此应用，请在系统提示中允许本次安装。</p>
                                 <p>下载文件由本站 Cloudflare Pages 托管。若下载没有开始，请长按下载按钮或复制链接到浏览器打开。</p>
                             </div>
                         </div>
@@ -183,6 +195,22 @@
                                     </span>
                                     <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
                                 </a>
+                                <a class="resource-link" href="https://kc37ot2vpp.feishu.cn/docx/VWj6dYH37oGEOoxv0xYcU7mcnBh" target="_blank" rel="noopener noreferrer">
+                                    <span class="resource-icon"><iconify-icon icon="lucide:image"></iconify-icon></span>
+                                    <span style="flex: 1;">
+                                        <strong>官方素材库</strong>
+                                        <small>官方提供的高清美术素材与资源文档。</small>
+                                    </span>
+                                    <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+                                </a>
+                                <a class="resource-link" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer">
+                                    <span class="resource-icon"><iconify-icon icon="lucide:palette"></iconify-icon></span>
+                                    <span style="flex: 1;">
+                                        <strong>创作者中心</strong>
+                                        <small>官方创作者服务平台，获取创作资源与支持。</small>
+                                    </span>
+                                    <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+                                </a>
                             </div>
                         </div>
                     </section>
@@ -251,11 +279,28 @@
     <script>
         const fallbackApk = "/downloads/CalabiYauVoice-latest.apk";
 
+        const _escEl = document.createElement("div");
+        function esc(str) {
+            _escEl.textContent = str;
+            return _escEl.innerHTML;
+        }
+
         function resolveUrl(url) {
             if (!url) return fallbackApk;
             if (url.startsWith("http://") || url.startsWith("https://")) return url;
             if (url.startsWith("/")) return url;
             return `/${url}`;
+        }
+
+        async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const resp = await fetch(url, { ...options, signal: controller.signal });
+                return resp;
+            } finally {
+                clearTimeout(timer);
+            }
         }
 
         function setChangelog(changelog) {
@@ -266,10 +311,13 @@
                 ? changelog
                 : String(changelog || "暂无更新日志").split("\n");
 
-            items.filter(Boolean).forEach((item, index) => {
+            const filtered = items.filter(Boolean);
+            filtered.forEach((item, index) => {
                 const li = document.createElement("li");
                 li.textContent = String(item).replace(/^[-*•]\s*/, "");
-                li.style.animation = `fadeInUp 0.5s ease backwards ${index * 0.05}s`;
+                if (index < 10) {
+                    li.style.animation = `fadeInUp 0.5s ease backwards ${index * 0.05}s`;
+                }
                 list.appendChild(li);
             });
         }
@@ -297,13 +345,13 @@
             }
 
             try {
-                const response = await fetch(apkUrl, { method: "HEAD", cache: "no-store" });
+                const response = await fetchWithTimeout(apkUrl, { method: "HEAD", cache: "no-store" }, 8000);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const contentLength = Number(response.headers.get("content-length"));
                 apkSize.textContent = formatFileSize(contentLength);
             } catch (error) {
-                apkSize.textContent = "未知";
+                apkSize.textContent = error.name === "AbortError" ? "测量超时" : "未知";
             } finally {
                 apkSize.classList.remove("loading-pulse");
             }
@@ -317,7 +365,7 @@
             const statusText = document.getElementById("statusText");
 
             try {
-                const response = await fetch("/downloads/latest.json", { cache: "no-store" });
+                const response = await fetchWithTimeout("/downloads/latest.json", { cache: "no-store" }, 8000);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 const info = await response.json();
@@ -334,17 +382,39 @@
             } catch (error) {
                 versionName.textContent = "最新版本";
                 versionName.classList.remove("loading-pulse");
-                publishedAt.textContent = "读取失败";
+                publishedAt.textContent = error.name === "AbortError" ? "加载超时" : "读取失败";
                 publishedAt.classList.remove("loading-pulse");
                 apkSize.textContent = "未知";
                 downloadButton.href = fallbackApk;
-                statusText.textContent = "暂时无法读取 latest.json，已切换到默认 APK 下载地址。";
+                statusText.textContent = error.name === "AbortError"
+                    ? "读取 latest.json 超时，已切换到默认 APK 下载地址。"
+                    : "暂时无法读取 latest.json，已切换到默认 APK 下载地址。";
                 setChangelog(["无法读取在线更新日志，请稍后刷新页面重试。"]);
                 measureApkSize(fallbackApk);
             }
         }
 
         loadLatestInfo();
+
+        document.getElementById("copyLinkBtn").addEventListener("click", async function() {
+            const btn = this;
+            const icon = btn.querySelector("iconify-icon");
+            const url = new URL(document.getElementById("downloadButton").href, location.origin).href;
+            try {
+                await navigator.clipboard.writeText(url);
+                const oldIcon = icon.getAttribute("icon");
+                icon.setAttribute("icon", "lucide:check");
+                btn.title = "已复制";
+                btn.setAttribute("aria-label", "已复制");
+                setTimeout(() => {
+                    icon.setAttribute("icon", oldIcon);
+                    btn.title = "复制下载链接";
+                    btn.setAttribute("aria-label", "复制下载链接");
+                }, 1500);
+            } catch {
+                prompt("请手动复制链接：", url);
+            }
+        });
 
         // ══════════════════════════════════════
         //  平衡数据对话框
@@ -370,14 +440,15 @@
                     this.options = [];
                     this.value = null;
                     this._open = false;
+                    this._highlightIdx = -1;
                     el.classList.add("cs");
-                    el.innerHTML = `<div class="cs-trigger"><span class="cs-value">${placeholder}</span><svg class="cs-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div><div class="cs-menu"></div>`;
+                    el.innerHTML = `<div class="cs-trigger" role="combobox" aria-expanded="false" aria-haspopup="listbox" tabindex="0"><span class="cs-value">${placeholder}</span><svg class="cs-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div><div class="cs-menu" role="listbox"></div>`;
                     this.trigger = el.querySelector(".cs-trigger");
                     this.valueEl = el.querySelector(".cs-value");
                     this.menu = el.querySelector(".cs-menu");
                     this.trigger.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
+                    this.trigger.addEventListener("keydown", (e) => this._onKeyDown(e));
                     this._onDocClick = (e) => { if (!el.contains(e.target)) this.close(); };
-                    this._onKey = (e) => { if (e.key === "Escape") this.close(); };
                 }
                 setOptions(opts, selectedCode) {
                     this.options = opts;
@@ -385,8 +456,8 @@
                     this.value = found || null;
                     this.valueEl.textContent = this.value ? this.value.name : this.placeholder;
                     this.valueEl.classList.toggle("cs-placeholder", !this.value);
-                    this.menu.innerHTML = opts.map(o =>
-                        `<div class="cs-option${this.value && this.value.code === o.code ? ' selected' : ''}" data-code="${o.code}">${o.name}</div>`
+                    this.menu.innerHTML = opts.map((o, i) =>
+                        `<div class="cs-option${this.value && this.value.code === o.code ? ' selected' : ''}" data-code="${o.code}" data-idx="${i}" role="option" aria-selected="${this.value && this.value.code === o.code}">${o.name}</div>`
                     ).join("");
                     this.menu.querySelectorAll(".cs-option").forEach(opt => {
                         opt.addEventListener("click", (e) => {
@@ -395,8 +466,13 @@
                             this.value = this.options.find(o => o.code === code) || null;
                             this.valueEl.textContent = this.value ? this.value.name : this.placeholder;
                             this.valueEl.classList.toggle("cs-placeholder", !this.value);
-                            this.menu.querySelectorAll(".cs-option").forEach(o => o.classList.toggle("selected", o.dataset.code === code));
+                            this.menu.querySelectorAll(".cs-option").forEach(o => {
+                                const sel = o.dataset.code === code;
+                                o.classList.toggle("selected", sel);
+                                o.setAttribute("aria-selected", sel);
+                            });
                             this.close();
+                            this.trigger.focus();
                             if (this.onChange) this.onChange(this.value);
                         });
                     });
@@ -405,15 +481,54 @@
                     this.value = this.options.find(o => o.code === code) || null;
                     this.valueEl.textContent = this.value ? this.value.name : this.placeholder;
                     this.valueEl.classList.toggle("cs-placeholder", !this.value);
-                    this.menu.querySelectorAll(".cs-option").forEach(o => o.classList.toggle("selected", this.value && o.dataset.code === code));
+                    this.menu.querySelectorAll(".cs-option").forEach(o => {
+                        const sel = this.value && o.dataset.code === code;
+                        o.classList.toggle("selected", sel);
+                        o.setAttribute("aria-selected", sel);
+                    });
+                }
+                _onKeyDown(e) {
+                    if (!this._open) {
+                        if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            this.open();
+                            this._highlightIdx = this.value ? this.options.findIndex(o => o.code === this.value.code) : 0;
+                            this._updateHighlight();
+                        }
+                        return;
+                    }
+                    const opts = this.menu.querySelectorAll(".cs-option");
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        this._highlightIdx = Math.min(this._highlightIdx + 1, opts.length - 1);
+                        this._updateHighlight();
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        this._highlightIdx = Math.max(this._highlightIdx - 1, 0);
+                        this._updateHighlight();
+                    } else if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (this._highlightIdx >= 0 && opts[this._highlightIdx]) {
+                            opts[this._highlightIdx].click();
+                        }
+                    } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        this.close();
+                    }
+                }
+                _updateHighlight() {
+                    const opts = this.menu.querySelectorAll(".cs-option");
+                    opts.forEach((o, i) => o.classList.toggle("highlighted", i === this._highlightIdx));
+                    if (opts[this._highlightIdx]) {
+                        opts[this._highlightIdx].scrollIntoView({ block: "nearest" });
+                    }
                 }
                 open() {
                     if (this._open) return;
                     this._open = true;
                     this.el.classList.add("open");
+                    this.trigger.setAttribute("aria-expanded", "true");
                     document.addEventListener("click", this._onDocClick, true);
-                    document.addEventListener("keydown", this._onKey);
-                    // 定位菜单
                     requestAnimationFrame(() => {
                         const rect = this.trigger.getBoundingClientRect();
                         const menuH = this.menu.offsetHeight;
@@ -425,9 +540,11 @@
                 close() {
                     if (!this._open) return;
                     this._open = false;
+                    this._highlightIdx = -1;
                     this.el.classList.remove("open");
+                    this.trigger.setAttribute("aria-expanded", "false");
+                    this.menu.querySelectorAll(".cs-option").forEach(o => o.classList.remove("highlighted"));
                     document.removeEventListener("click", this._onDocClick, true);
-                    document.removeEventListener("keydown", this._onKey);
                 }
                 toggle() { this._open ? this.close() : this.open(); }
             }
@@ -468,11 +585,6 @@
                 if (e.target === dialog) dialog.close();
             });
 
-            dialog.addEventListener("cancel", (e) => {
-                e.preventDefault();
-                dialog.close();
-            });
-
             dialog.addEventListener("close", () => {
                 modeDD.close();
                 seasonDD.close();
@@ -485,9 +597,9 @@
                 resultArea.innerHTML = placeholderHTML("正在连接官网接口…");
 
                 try {
-                    const resp = await fetch(`/api/balance/settings`, {
+                    const resp = await fetchWithTimeout(`/api/balance/settings`, {
                         cache: "no-store"
-                    });
+                    }, 10000);
                     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
                     const json = await resp.json();
@@ -509,11 +621,14 @@
                     populateFilters();
                     await loadBalanceData();
                 } catch (err) {
-                    const msg = err.name === "TypeError"
-                        ? "无法连接到官网接口，请检查网络或使用客户端查看。"
-                        : err.message;
+                    const msg = err.name === "AbortError"
+                        ? "连接官网接口超时，请检查网络或使用客户端查看。"
+                        : err.name === "TypeError"
+                            ? "无法连接到官网接口，请检查网络或使用客户端查看。"
+                            : err.message;
                     resultArea.innerHTML = errorHTML(msg);
                 } finally {
+                    isLoading = false;
                 }
             }
 
@@ -632,11 +747,11 @@
                 };
 
                 try {
-                    const resp = await fetch(`/api/balance/data`, {
+                    const resp = await fetchWithTimeout(`/api/balance/data`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json; charset=utf-8" },
                         body: JSON.stringify(payload),
-                    });
+                    }, 10000);
                     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
                     const json = await resp.json();
@@ -662,9 +777,11 @@
 
                     renderResult();
                 } catch (err) {
-                    const msg = err.name === "TypeError"
-                        ? "无法连接到官网接口，请检查网络或使用客户端查看。"
-                        : err.message;
+                    const msg = err.name === "AbortError"
+                        ? "查询官网接口超时，请检查网络或使用客户端查看。"
+                        : err.name === "TypeError"
+                            ? "无法连接到官网接口，请检查网络或使用客户端查看。"
+                            : err.message;
                     resultArea.innerHTML = errorHTML(msg);
                 }
             }
@@ -743,12 +860,12 @@
                 const cmpLabel = hasCmp ? `<div class="cmp-season-label"><span class="cmp-tag current">${esc(selectedSeason.name)}</span><span class="cmp-tag compare">${esc(selectedSeason2.name)}</span></div>` : "";
 
                 resultArea.innerHTML = `
-                    <div class="side-tabs">
-                        <button class="side-tab ${!showAttackers ? 'active' : ''}" data-side="defenders">
+                    <div class="side-tabs" role="tablist" aria-label="攻防方切换">
+                        <button class="side-tab ${!showAttackers ? 'active' : ''}" role="tab" aria-selected="${!showAttackers}" data-side="defenders">
                             <iconify-icon icon="lucide:shield" style="font-size:14px;"></iconify-icon>
                             防守方
                         </button>
-                        <button class="side-tab ${showAttackers ? 'active' : ''}" data-side="attackers">
+                        <button class="side-tab ${showAttackers ? 'active' : ''}" role="tab" aria-selected="${showAttackers}" data-side="attackers">
                             <iconify-icon icon="lucide:zap" style="font-size:14px;"></iconify-icon>
                             进攻方
                         </button>
@@ -851,12 +968,6 @@
                             重试
                         </button>
                     </div>`;
-            }
-
-            function esc(str) {
-                const d = document.createElement("div");
-                d.textContent = str;
-                return d.innerHTML;
             }
 
             // 全局头像加载失败处理
