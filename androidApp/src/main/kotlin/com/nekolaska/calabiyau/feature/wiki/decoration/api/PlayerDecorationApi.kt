@@ -78,10 +78,10 @@ object PlayerDecorationApi {
         "封装" to DecorationModuleConfig("模块:玩家装饰/FrameData"),
         "聊天气泡" to DecorationModuleConfig("模块:玩家装饰/ChatBubblesData"),
         "喷漆" to DecorationModuleConfig("模块:玩家装饰/DecalData"),
-        "头套" to DecorationModuleConfig("模块:玩家装饰/MascotHeadData"),
-        "超弦体动作" to DecorationModuleConfig("模块:玩家装饰/RoleActionData"),
+        "头套" to DecorationModuleConfig("模块:玩家装饰/MascotHeadData", enabled = true),
+        "超弦体动作" to DecorationModuleConfig("模块:玩家装饰/RoleActionData", enabled = true),
         "房间外观" to DecorationModuleConfig("模块:玩家装饰/ChangeBgData", enabled = true),
-        "头像框" to DecorationModuleConfig("模块:玩家装饰移动端/HeadFrameData"),
+        "头像框" to DecorationModuleConfig("模块:玩家装饰移动端/HeadFrameData", enabled = true),
         "极限推进模式载具外观" to DecorationModuleConfig("模块:玩家装饰移动端/VehicleSkinData", enabled = true),
         "勋章" to DecorationModuleConfig("模块:玩家装饰/BadgeData"),
         "登场特效" to DecorationModuleConfig("模块:玩家装饰/LoginFXData")
