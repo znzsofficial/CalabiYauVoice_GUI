@@ -152,6 +152,27 @@
                     <section class="card shadow-sm">
                         <div class="card-header">
                             <div class="card-title">
+                                <iconify-icon icon="lucide:search"></iconify-icon>
+                                Wiki 搜索
+                            </div>
+                            <span class="badge">MediaWiki</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="notice-content text-muted">
+                                <p>搜索卡拉彼丘 Wiki 的角色、武器、地图等资料，支持实时搜索建议与命名空间筛选。</p>
+                            </div>
+                            <div style="margin-top: 12px;">
+                                <a class="btn primary w-full" href="search/">
+                                    <iconify-icon icon="lucide:search" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>
+                                    打开 Wiki 搜索
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card shadow-sm">
+                        <div class="card-header">
+                            <div class="card-title">
                                 <iconify-icon icon="lucide:bar-chart-3"></iconify-icon>
                                 平衡数据
                             </div>
@@ -319,7 +340,21 @@
             const timer = setTimeout(() => controller.abort(), timeoutMs);
             try {
                 const resp = await fetch(url, { ...options, signal: controller.signal });
+                if (!resp.ok) {
+                    throw new Error(`服务器返回 ${resp.status} (${resp.statusText || "错误"})`);
+                }
                 return resp;
+            } catch (err) {
+                if (err.name === "AbortError") {
+                    throw err;
+                }
+                if (err.message.includes("fetch") || err.message.includes("Network") || err.message.includes("Load failed")) {
+                    if (!navigator.onLine) {
+                        throw new Error("网络已断开，请检查网络连接");
+                    }
+                    throw new Error("无法连接到服务器，可能是网络问题或服务器暂时不可用");
+                }
+                throw err;
             } finally {
                 clearTimeout(timer);
             }
@@ -666,9 +701,7 @@
                 } catch (err) {
                     const msg = err.name === "AbortError"
                         ? "连接官网接口超时，请检查网络或使用客户端查看。"
-                        : err.name === "TypeError"
-                            ? "无法连接到官网接口，请检查网络或使用客户端查看。"
-                            : err.message;
+                        : err.message || "加载失败，请稍后重试";
                     resultArea.innerHTML = errorHTML(msg);
                 } finally {
                     isLoading = false;
@@ -822,9 +855,7 @@
                 } catch (err) {
                     const msg = err.name === "AbortError"
                         ? "查询官网接口超时，请检查网络或使用客户端查看。"
-                        : err.name === "TypeError"
-                            ? "无法连接到官网接口，请检查网络或使用客户端查看。"
-                            : err.message;
+                        : err.message || "查询失败，请稍后重试";
                     resultArea.innerHTML = errorHTML(msg);
                 }
             }
