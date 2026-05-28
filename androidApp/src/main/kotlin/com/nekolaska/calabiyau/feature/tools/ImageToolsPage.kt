@@ -4,7 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.HardwareRenderer
 import android.graphics.Paint
+import android.graphics.PixelFormat
+import android.graphics.RenderNode
+import android.media.ImageReader
 import android.net.Uri
 import android.os.Build
 import android.webkit.MimeTypeMap
@@ -71,6 +75,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
@@ -2293,8 +2298,10 @@ private fun upscaleBitmap(
 
 private fun scaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int, algorithm: UpscaleAlgorithm): Bitmap {
     return when (algorithm) {
-        UpscaleAlgorithm.NEAREST -> source.scale(targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), filter = false)
-        UpscaleAlgorithm.FILTERED -> fastFilteredScale(source, targetWidth, targetHeight)
+        UpscaleAlgorithm.NEAREST -> gpuScaleBitmap(source, targetWidth, targetHeight, filter = false)
+            ?: source.scale(targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), filter = false)
+        UpscaleAlgorithm.FILTERED -> gpuScaleBitmap(source, targetWidth, targetHeight, filter = true)
+            ?: fastFilteredScale(source, targetWidth, targetHeight)
         UpscaleAlgorithm.BICUBIC -> bicubicScale(source, targetWidth, targetHeight)
         UpscaleAlgorithm.LANCZOS3 -> lanczosScale(source, targetWidth, targetHeight)
         UpscaleAlgorithm.STEPPED -> steppedFilteredScale(source, targetWidth, targetHeight)
@@ -2335,6 +2342,59 @@ private fun fastFilteredScale(source: Bitmap, targetWidth: Int, targetHeight: In
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
     canvas.drawBitmap(source, null, android.graphics.Rect(0, 0, out.width, out.height), paint)
     return out
+}
+
+private fun gpuScaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int, filter: Boolean): Bitmap? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+    val outWidth = targetWidth.coerceAtLeast(1)
+    val outHeight = targetHeight.coerceAtLeast(1)
+    return runCatching {
+        ImageReader.newInstance(outWidth, outHeight, PixelFormat.RGBA_8888, 1).use { reader ->
+            val renderer = HardwareRenderer()
+            val renderNode = RenderNode("image-upscale")
+            renderNode.setPosition(0, 0, outWidth, outHeight)
+            val canvas = renderNode.beginRecording(outWidth, outHeight)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG).apply {
+                isFilterBitmap = filter
+            }
+            canvas.drawBitmap(source, null, android.graphics.Rect(0, 0, outWidth, outHeight), paint)
+            renderNode.endRecording()
+            renderer.setSurface(reader.surface)
+            renderer.setContentRoot(renderNode)
+            renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
+            renderer.destroy()
+            reader.acquireNextImage()?.use { image ->
+                val plane = image.planes.firstOrNull() ?: return@use null
+                val buffer = plane.buffer
+                val rowStride = plane.rowStride
+                val pixelStride = plane.pixelStride
+                val rowBytes = outWidth * 4
+                val pixels = ByteArray(rowBytes * outHeight)
+                for (y in 0 until outHeight) {
+                    buffer.position(y * rowStride)
+                    if (pixelStride == 4) {
+                        buffer.get(pixels, y * rowBytes, rowBytes)
+                    } else {
+                        copyPixelsWithStride(buffer, pixels, y * rowBytes, outWidth, pixelStride)
+                    }
+                }
+                val output = createBitmap(outWidth, outHeight, Bitmap.Config.ARGB_8888)
+                output.copyPixelsFromBuffer(ByteBuffer.wrap(pixels))
+                output
+            }
+        }
+    }.getOrNull()
+}
+
+private fun copyPixelsWithStride(buffer: ByteBuffer, output: ByteArray, outputOffset: Int, width: Int, pixelStride: Int) {
+    for (x in 0 until width) {
+        val sourceOffset = buffer.position() + x * pixelStride
+        val targetOffset = outputOffset + x * 4
+        output[targetOffset] = buffer.get(sourceOffset)
+        output[targetOffset + 1] = buffer.get(sourceOffset + 1)
+        output[targetOffset + 2] = buffer.get(sourceOffset + 2)
+        output[targetOffset + 3] = buffer.get(sourceOffset + 3)
+    }
 }
 
 private fun steppedFilteredScale(source: Bitmap, targetWidth: Int, targetHeight: Int): Bitmap {
