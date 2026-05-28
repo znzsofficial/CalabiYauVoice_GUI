@@ -561,12 +561,14 @@ ul.changelog-list {
     pointer-events: none;
 }
 
-.creator-tooltip-wrap:hover .creator-tooltip,
-.creator-tooltip-wrap:focus-within .creator-tooltip {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-    pointer-events: auto;
+@media (hover: hover) and (pointer: fine) {
+    .creator-tooltip-wrap:hover .creator-tooltip,
+    .creator-tooltip-wrap:focus-within .creator-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
 }
 
 .creator-tooltip-inner {

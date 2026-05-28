@@ -569,8 +569,6 @@
 
 <svelte:window on:keydown={(event) => event.key === 'Escape' && lightboxOpen && closeLightbox()} />
 
-<a class="skip-link" href="#results">跳转到搜索结果</a>
-
 <header class="header">
   <div class="header-content">
     <a href="/" class="header-back" aria-label="返回下载页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></a>

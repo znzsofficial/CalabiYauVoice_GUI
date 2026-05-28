@@ -72,25 +72,6 @@ body {
     flex-direction: column;
 }
 
-.skip-link {
-    position: absolute;
-    top: -100%;
-    left: 8px;
-    z-index: 999;
-    padding: 8px 16px;
-    background-color: var(--primary);
-    color: var(--primary-foreground);
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: top 0.15s;
-}
-
-.skip-link:focus {
-    top: 8px;
-}
-
 .btn {
     display: inline-flex;
     align-items: center;
