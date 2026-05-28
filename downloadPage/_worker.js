@@ -1,4 +1,5 @@
 const UPSTREAM = "https://klbq-prod-www.idreamsky.com";
+const ALLOWED_IMAGE_HOSTS = new Set(["wiki.biligame.com", "patchwiki.biligame.com"]);
 
 export default {
   async fetch(request, env) {
@@ -23,6 +24,10 @@ export default {
     // POST /api/balance/data → 平衡数据查询
     if (url.pathname === "/api/balance/data") {
       return proxy(`${UPSTREAM}/api/common/ide`, request);
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/image-download") {
+      return proxyImageDownload(url);
     }
 
     // 其余请求走静态资源
@@ -51,5 +56,26 @@ async function proxy(target, original) {
   return new Response(resp.body, {
     status: resp.status,
     headers: respHeaders,
+  });
+}
+
+async function proxyImageDownload(url) {
+  const rawTarget = url.searchParams.get("url");
+  const target = rawTarget ? new URL(rawTarget) : null;
+
+  if (!target || !ALLOWED_IMAGE_HOSTS.has(target.hostname)) {
+    return Response.json({ error: "Unsupported image URL" }, { status: 400 });
+  }
+
+  const resp = await fetch(target, {
+    headers: { Accept: "image/*,*/*;q=0.8" },
+  });
+  const headers = new Headers(resp.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Cache-Control", "public, max-age=86400");
+
+  return new Response(resp.body, {
+    status: resp.status,
+    headers,
   });
 }

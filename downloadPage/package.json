@@ -1,0 +1,19 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "latest",
+    "@types/node": "latest",
+    "esbuild": "latest",
+    "svelte-check": "latest",
+    "svelte": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}

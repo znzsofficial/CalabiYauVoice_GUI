@@ -1,5 +1,7 @@
 .gradle
 build/
+node_modules/
+downloadPage/dist/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
