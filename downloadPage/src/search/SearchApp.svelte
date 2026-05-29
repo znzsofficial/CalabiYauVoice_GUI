@@ -5,7 +5,7 @@
   type Status = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
   type SortValue = 'relevance' | 'last_edit_desc' | 'last_edit_asc' | 'create_timestamp_desc' | 'incoming_links_desc';
   type NamespaceOption = { id: number; name: string };
-  type Suggestion = { title: string; desc: string; url: string };
+  type Suggestion = { title: string; desc: string; url: string; ns: number; pageid?: number };
   type ResultImage = { thumb: string; full: string; size?: number };
   type WikiSearchItem = {
     title: string;
@@ -36,7 +36,11 @@
     revisions?: Array<{ slots?: { main?: { '*': string } } }>;
     categories?: Array<{ title: string }>;
   };
-  type OpenSearchResponse = [string, string[], string[], string[]];
+  type PrefixSearchResponse = {
+    query?: {
+      prefixsearch?: Array<{ title: string; ns: number; pageid?: number }>;
+    };
+  };
   type SearchResponse = {
     errors?: Array<{ code?: string; info?: string }>;
     query?: {
@@ -99,8 +103,12 @@
   let searchModeLabel = '内容';
   let modeOpen = false;
   let suggestions: Suggestion[] = [];
+  let suggestionsLoading = false;
+  let suggestionsReady = false;
+  let suggestionsOpen = false;
   let suggestIdx = -1;
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let suggestionRequestId = 0;
   let status: Status = 'idle';
   let errorMessage = '';
   let results: SearchResult[] = [];
@@ -121,6 +129,7 @@
   $: nsList = nsExpanded ? NS_EXTENDED : NS_PRIMARY;
   $: totalPages = Math.ceil(totalHits / PAGE_SIZE);
   $: pages = paginationPages(currentPage, totalPages);
+  $: showSuggestDropdown = suggestionsOpen && !!query.trim() && (suggestionsLoading || suggestionsReady || suggestions.length > 0);
 
   onMount(() => {
     const urlQ = new URLSearchParams(location.search).get('q');
@@ -186,12 +195,20 @@
   function handleInput(): void {
     query = inputValue;
     clearTimeout(searchTimer);
+    suggestionsReady = false;
+    suggestionsOpen = true;
     if (!query.trim()) {
       suggestions = [];
       suggestIdx = -1;
+      suggestionsLoading = false;
       return;
     }
     searchTimer = setTimeout(fetchSuggestions, DEBOUNCE_MS);
+  }
+
+  function handleInputFocus(): void {
+    suggestionsOpen = true;
+    if (inputValue.trim() && suggestions.length === 0 && !suggestionsLoading) fetchSuggestions();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -216,12 +233,14 @@
       event.preventDefault();
       query = inputValue;
       suggestions = [];
+      suggestionsOpen = false;
       currentPage = 1;
       doSearch();
     }
     if (event.key === 'Escape') {
       if (suggestions.length > 0) {
         suggestions = [];
+        suggestionsOpen = false;
         inputValue = query;
       } else if (query) {
         clearSearch();
@@ -233,6 +252,9 @@
     inputValue = '';
     query = '';
     suggestions = [];
+    suggestionsOpen = false;
+    suggestionsReady = false;
+    suggestionsLoading = false;
     status = 'idle';
     totalHits = 0;
     results = [];
@@ -240,15 +262,39 @@
   }
 
   async function fetchSuggestions(): Promise<void> {
+    const requestId = ++suggestionRequestId;
+    suggestionsLoading = true;
     try {
-      const params = new URLSearchParams({ action: 'opensearch', search: getSearchQuery(), limit: String(SUGGEST_LIMIT), namespace: getActiveNSParam() || '0', format: 'json' });
+      const params = new URLSearchParams({ action: 'query', list: 'prefixsearch', pssearch: getSearchQuery(), pslimit: String(SUGGEST_LIMIT), psnamespace: getActiveNSParam() || '0', format: 'json', origin: '*' });
       const resp = await fetchWithTimeout(`${API}?${params}`, 5000);
-      const data = await resp.json() as OpenSearchResponse;
-      suggestions = (data[1] || []).map((title: string, index: number) => ({ title, desc: data[2]?.[index] || '', url: data[3]?.[index] || '' }));
+      const data = await resp.json() as PrefixSearchResponse;
+      if (requestId !== suggestionRequestId) return;
+      suggestions = (data.query?.prefixsearch || []).map(item => ({
+        title: item.title,
+        desc: nsNameMap[item.ns] || '页面',
+        url: WIKI_BASE + encodeURIComponent(item.title.replace(/ /g, '_')),
+        ns: item.ns,
+        pageid: item.pageid
+      }));
       suggestIdx = -1;
     } catch {
+      if (requestId !== suggestionRequestId) return;
       suggestions = [];
+    } finally {
+      if (requestId === suggestionRequestId) {
+        suggestionsLoading = false;
+        suggestionsReady = true;
+      }
     }
+  }
+
+  function selectSuggestion(suggestion: Suggestion): void {
+    inputValue = suggestion.title;
+    query = suggestion.title;
+    suggestions = [];
+    suggestionsOpen = false;
+    currentPage = 1;
+    doSearch();
   }
 
   async function doSearch(): Promise<void> {
@@ -257,6 +303,7 @@
     errorMessage = '';
     resultSuggestion = '';
     suggestions = [];
+    suggestionsOpen = false;
 
     try {
       const params = new URLSearchParams({
@@ -513,7 +560,7 @@
     const safeText = esc(text);
     const words = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').split(/\s+/).filter(Boolean);
     if (words.length === 0) return safeText;
-    return safeText.replace(new RegExp(`(${words.join('|')})`, 'gi'), '<mark>$1</mark>');
+    return safeText.replace(new RegExp(`(${words.join('|')})`, 'gi'), '<mark class="match-mark">$1</mark>');
   }
 
   function esc(value: unknown): string {
@@ -565,6 +612,10 @@
   function resultSnippet(result: SearchResult): string {
     return result.snippet || '';
   }
+
+  function suggestionPath(title: string): string {
+    return `/${title.replace(/ /g, '_')}`;
+  }
 </script>
 
 <svelte:window on:keydown={(event) => event.key === 'Escape' && lightboxOpen && closeLightbox()} />
@@ -588,17 +639,23 @@
           {/each}
         </div>
       </div>
-      <input bind:value={inputValue} on:input={handleInput} on:keydown={handleKeydown} type="text" class="search-input" placeholder="搜索角色、武器、地图、技能…" autocomplete="off">
+      <input bind:value={inputValue} on:input={handleInput} on:focus={handleInputFocus} on:keydown={handleKeydown} type="text" class="search-input" placeholder="搜索角色、武器、地图、技能…" autocomplete="off">
       {#if inputValue}<button class="search-clear" aria-label="清空搜索" on:click={clearSearch}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
     </div>
-    {#if suggestions.length > 0}
+    {#if showSuggestDropdown}
       <div class="suggest-dropdown" role="listbox">
-        {#each suggestions as suggestion, index}
-          <button class:highlighted={suggestIdx === index} class="suggest-item" type="button" role="option" aria-selected={suggestIdx === index} on:mouseenter={() => suggestIdx = index} on:click={() => { inputValue = suggestion.title; query = suggestion.title; suggestions = []; currentPage = 1; doSearch(); }}>
-            <svg class="suggest-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span class="suggest-text"><span class="suggest-title">{@html highlightMatch(suggestion.title, query)}</span>{#if suggestion.desc}<span class="suggest-desc">{truncate(suggestion.desc, 60)}</span>{/if}</span>
-          </button>
-        {/each}
+        {#if suggestionsLoading}
+          <div class="suggest-state"><span class="suggest-spinner"></span><span>正在查找建议…</span></div>
+        {:else if suggestions.length > 0}
+          {#each suggestions as suggestion, index}
+            <button class:highlighted={suggestIdx === index} class="suggest-item" type="button" role="option" aria-selected={suggestIdx === index} on:mouseenter={() => suggestIdx = index} on:click={() => selectSuggestion(suggestion)}>
+              <svg class="suggest-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <span class="suggest-text"><span class="suggest-title">{@html highlightMatch(suggestion.title, query)}</span><span class="suggest-meta"><span class="suggest-ns">{suggestion.desc}</span><span>{suggestionPath(suggestion.title)}</span>{#if suggestion.pageid}<span>#{suggestion.pageid}</span>{/if}</span></span>
+            </button>
+          {/each}
+        {:else}
+          <div class="suggest-state">暂无实时建议，按 Enter 搜索</div>
+        {/if}
       </div>
     {/if}
   </div>
