@@ -11,9 +11,12 @@
     "@sveltejs/vite-plugin-svelte": "latest",
     "@types/node": "latest",
     "esbuild": "latest",
-    "svelte-check": "latest",
     "svelte": "latest",
+    "svelte-check": "latest",
     "typescript": "latest",
     "vite": "latest"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
   }
 }

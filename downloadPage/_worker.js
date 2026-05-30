@@ -26,8 +26,8 @@ export default {
       return proxy(`${UPSTREAM}/api/common/ide`, request);
     }
 
-    if (request.method === "GET" && url.pathname === "/api/image-download") {
-      return proxyImageDownload(url);
+    if (request.method === "GET" && (url.pathname === "/api/image-download" || url.pathname === "/api/file-download")) {
+      return proxyFileDownload(url);
     }
 
     // 其余请求走静态资源
@@ -59,7 +59,7 @@ async function proxy(target, original) {
   });
 }
 
-async function proxyImageDownload(url) {
+async function proxyFileDownload(url) {
   const rawTarget = url.searchParams.get("url");
   const target = rawTarget ? new URL(rawTarget) : null;
 
@@ -67,9 +67,7 @@ async function proxyImageDownload(url) {
     return Response.json({ error: "Unsupported image URL" }, { status: 400 });
   }
 
-  const resp = await fetch(target, {
-    headers: { Accept: "image/*,*/*;q=0.8" },
-  });
+  const resp = await fetch(target, { headers: { Accept: "*/*" } });
   const headers = new Headers(resp.headers);
   headers.set("Access-Control-Allow-Origin", "*");
   headers.set("Cache-Control", "public, max-age=86400");

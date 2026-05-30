@@ -37,8 +37,8 @@ async function handleBalanceApiProxy(
     return;
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/image-download') {
-    await handleImageDownloadProxy(url, res);
+  if (req.method === 'GET' && (url.pathname === '/api/image-download' || url.pathname === '/api/file-download')) {
+    await handleFileDownloadProxy(url, res);
     return;
   }
 
@@ -77,7 +77,7 @@ async function handleBalanceApiProxy(
   }
 }
 
-async function handleImageDownloadProxy(url: URL, res: ServerResponse): Promise<void> {
+async function handleFileDownloadProxy(url: URL, res: ServerResponse): Promise<void> {
   const rawTarget = url.searchParams.get('url');
   const target = rawTarget ? new URL(rawTarget) : null;
 
@@ -89,7 +89,7 @@ async function handleImageDownloadProxy(url: URL, res: ServerResponse): Promise<
   }
 
   try {
-    const response = await fetch(target, { headers: { accept: 'image/*,*/*;q=0.8' } });
+    const response = await fetch(target, { headers: { accept: '*/*' } });
     if (!response.ok) {
       throw new Error(`Image request failed: ${response.status}`);
     }
@@ -102,7 +102,7 @@ async function handleImageDownloadProxy(url: URL, res: ServerResponse): Promise<
   } catch (error) {
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Image proxy failed' }));
+    res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'File proxy failed' }));
   }
 }
 
