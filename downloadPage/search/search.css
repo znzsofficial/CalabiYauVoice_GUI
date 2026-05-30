@@ -1231,11 +1231,12 @@ body {
     user-select: none;
     -webkit-user-drag: none;
     transform-origin: center center;
+    will-change: transform;
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lightbox-container.dragging .lightbox-img,
-.lightbox-container.pinch .lightbox-img {
+.lightbox-container.pinching .lightbox-img {
     transition: none;
 }
 

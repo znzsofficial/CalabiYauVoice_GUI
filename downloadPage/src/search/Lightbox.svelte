@@ -7,27 +7,52 @@
   } = $props();
 
   let loaded = $state(false);
-  let scale = $state(1);
-  let translateX = $state(0);
-  let translateY = $state(0);
+  let zoomed = $state(false);
+  let pinching = $state(false);
+
+  // Bypass Svelte reactivity for high-frequency transform updates
+  let imgEl: HTMLImageElement | undefined;
+  let scale = 1;
+  let translateX = 0;
+  let translateY = 0;
   let dragging = $state(false);
-  let dragStartX = $state(0);
-  let dragStartY = $state(0);
-  let startTranslateX = $state(0);
-  let startTranslateY = $state(0);
-  let pointers = $state(new Map<number, { x: number; y: number }>());
-  let pinchStartDistance = $state(0);
-  let pinchStartScale = $state(1);
-  let pinchCenterX = $state(0);
-  let pinchCenterY = $state(0);
-  let pinchStartTranslateX = $state(0);
-  let pinchStartTranslateY = $state(0);
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let startTranslateX = 0;
+  let startTranslateY = 0;
+  let pointers = new Map<number, { x: number; y: number }>();
+  let pinchStartDistance = 0;
+  let pinchStartScale = 1;
+  let pinchCenterX = 0;
+  let pinchCenterY = 0;
+  let pinchStartTranslateX = 0;
+  let pinchStartTranslateY = 0;
+  let rafId = 0;
+  let pendingTransform = false;
+
+  function applyTransform(): void {
+    if (!imgEl) return;
+    imgEl.style.transform = `translate(${translateX}px,${translateY}px) scale(${scale})`;
+    pendingTransform = false;
+  }
+
+  function scheduleTransform(): void {
+    if (pendingTransform) return;
+    pendingTransform = true;
+    rafId = requestAnimationFrame(applyTransform);
+  }
+
+  function syncZoomedState(): void {
+    zoomed = scale > 1.05;
+  }
 
   function resetTransform(): void {
     scale = 1;
     translateX = 0;
     translateY = 0;
     pointers = new Map();
+    syncZoomedState();
+    if (imgEl) imgEl.style.transform = '';
   }
 
   function toggleZoom(): void {
@@ -38,6 +63,8 @@
     scale = 2.5;
     translateX = 0;
     translateY = 0;
+    syncZoomedState();
+    if (imgEl) imgEl.style.transform = `translate(0px,0px) scale(2.5)`;
   }
 
   function handleWheel(event: WheelEvent): void {
@@ -52,10 +79,12 @@
     const ratio = nextScale / oldScale;
     translateX *= ratio;
     translateY *= ratio;
+    syncZoomedState();
+    scheduleTransform();
   }
 
   function startDrag(event: PointerEvent): void {
-    pointers = new Map(pointers).set(event.pointerId, { x: event.clientX, y: event.clientY });
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     (event.currentTarget as Element | null)?.setPointerCapture?.(event.pointerId);
 
     if (pointers.size === 1) {
@@ -77,12 +106,13 @@
       pinchStartTranslateX = translateX;
       pinchStartTranslateY = translateY;
       dragging = false;
+      pinching = true;
     }
   }
 
   function moveDrag(event: PointerEvent): void {
     if (!pointers.has(event.pointerId)) return;
-    pointers = new Map(pointers).set(event.pointerId, { x: event.clientX, y: event.clientY });
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (pointers.size >= 2) {
       const points = [...pointers.values()];
@@ -93,35 +123,42 @@
       scale = nextScale;
       translateX = pinchStartTranslateX + (pinchCenterX - window.innerWidth / 2) * (1 - ratio);
       translateY = pinchStartTranslateY + (pinchCenterY - window.innerHeight / 2) * (1 - ratio);
+      syncZoomedState();
+      scheduleTransform();
       return;
     }
 
     if (!dragging) return;
     translateX = startTranslateX + event.clientX - dragStartX;
     translateY = startTranslateY + event.clientY - dragStartY;
+    scheduleTransform();
   }
 
   function endDrag(event: PointerEvent): void {
-    pointers = new Map(pointers);
     pointers.delete(event.pointerId);
     dragging = false;
     if (pointers.size < 2) {
       pinchStartDistance = 0;
       pinchStartScale = scale;
+      pinching = false;
     }
   }
 
   function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
     return Math.hypot(b.x - a.x, b.y - a.y);
   }
+
+  $effect(() => {
+    return () => cancelAnimationFrame(rafId);
+  });
 </script>
 
 <svelte:window onkeydown={(event) => event.key === 'Escape' && onClose()} />
 
 <div class="lightbox open">
   <button class="lightbox-backdrop" aria-label="关闭" onclick={onClose}></button>
-  <button class:zoomed={scale > 1.05} class:dragging class="lightbox-container" type="button" ondblclick={toggleZoom} onwheel={handleWheel} onpointerdown={startDrag} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag}>
-    <img class="lightbox-img" {src} alt="" style={`transform: translate(${translateX}px, ${translateY}px) scale(${scale})`} onload={() => loaded = true}>
+    <button class:zoomed class:dragging class:pinching class="lightbox-container" type="button" ondblclick={toggleZoom} onwheel={handleWheel} onpointerdown={startDrag} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag}>
+    <img bind:this={imgEl} class="lightbox-img" {src} alt="" onload={() => loaded = true}>
     {#if !loaded}<div class="lightbox-loading"><div class="lightbox-spinner"></div></div>{/if}
   </button>
   <button class="lightbox-action lightbox-download" type="button" aria-label="下载图片" title="下载图片" disabled={downloading} onclick={(e) => { e.stopPropagation(); onDownload(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
