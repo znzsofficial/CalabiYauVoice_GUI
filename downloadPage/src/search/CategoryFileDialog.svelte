@@ -13,14 +13,28 @@
     onPreview?: (url: string) => void;
   } = $props();
 
-  let audioPlayer: HTMLAudioElement | null = null;
   let activeAudioUrl = $state('');
   let audioPlaying = $state(false);
   let audioCurrentTime = $state(0);
   let audioDuration = $state(0);
+  let audioPlayer: HTMLAudioElement | null = null;
+  const audioHandlers = {
+    timeupdate: () => { audioCurrentTime = audioPlayer?.currentTime || 0; },
+    durationchange: () => { audioDuration = Number.isFinite(audioPlayer?.duration || 0) ? audioPlayer?.duration || 0 : 0; },
+    ended: () => { audioPlaying = false; },
+    pause: () => { audioPlaying = false; },
+    play: () => { audioPlaying = true; },
+  } as const;
 
   $effect(() => {
-    return () => stopAudioPreview();
+    return () => {
+      if (audioPlayer) {
+        for (const [event, handler] of Object.entries(audioHandlers)) audioPlayer.removeEventListener(event, handler as EventListener);
+        audioPlayer.pause();
+        audioPlayer.src = '';
+        audioPlayer = null;
+      }
+    };
   });
 
   function isAudioFile(url: string, mime?: string): boolean {
@@ -37,11 +51,7 @@
     if (audioPlayer) return audioPlayer;
     audioPlayer = new Audio();
     audioPlayer.preload = 'metadata';
-    audioPlayer.addEventListener('timeupdate', () => audioCurrentTime = audioPlayer?.currentTime || 0);
-    audioPlayer.addEventListener('durationchange', () => audioDuration = Number.isFinite(audioPlayer?.duration || 0) ? audioPlayer?.duration || 0 : 0);
-    audioPlayer.addEventListener('ended', () => audioPlaying = false);
-    audioPlayer.addEventListener('pause', () => audioPlaying = false);
-    audioPlayer.addEventListener('play', () => audioPlaying = true);
+    for (const [event, handler] of Object.entries(audioHandlers)) audioPlayer.addEventListener(event, handler as EventListener);
     return audioPlayer;
   }
 
@@ -101,7 +111,7 @@
       {:else if files.length === 0}
         <div class="suggest-state">分类内没有可显示文件</div>
       {:else}
-        {#each files as file}
+        {#each files as file (file.url)}
           <div class="category-file-item">
             {#if isImageFile(file.url, file.mime)}
               <button class="category-file-preview" type="button" onclick={() => onPreview(file.url)}><img src={file.url} alt="" loading="lazy"></button>

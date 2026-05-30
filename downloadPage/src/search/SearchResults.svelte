@@ -15,6 +15,7 @@
     dateStr: string;
     pageSizeKB: string;
     fileSize: string;
+    wordCountStr: string;
     delay: string;
     snippet?: string;
     wordcount?: number;
@@ -64,6 +65,40 @@
   function resultSnippet(result: SearchResult): string {
     return result.snippet || '';
   }
+  function handleToggleFileClick(e: MouseEvent): void {
+    e.preventDefault(); e.stopPropagation();
+    const title = (e.currentTarget as HTMLElement).dataset.title;
+    if (title) onToggleFile(title);
+  }
+  function handleToggleFileKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); const title = (e.currentTarget as HTMLElement).dataset.title; if (title) onToggleFile(title); }
+  }
+  function handleToggleCategoryClick(e: MouseEvent): void {
+    e.preventDefault(); e.stopPropagation();
+    const title = (e.currentTarget as HTMLElement).dataset.title;
+    if (title) onToggleCategory(title);
+  }
+  function handleToggleCategoryKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); const title = (e.currentTarget as HTMLElement).dataset.title; if (title) onToggleCategory(title); }
+  }
+  function handleLightboxClick(e: MouseEvent, image: { thumb: string; full: string }): void {
+    e.preventDefault(); e.stopPropagation(); onOpenLightbox(imageFull(image));
+  }
+  function handleToggleCategoryExpanded(e: MouseEvent): void {
+    e.preventDefault(); e.stopPropagation();
+    const title = (e.currentTarget as HTMLElement).dataset.title;
+    if (title) onToggleCategoryExpanded(title);
+  }
+  function handleOpenCategoryFiles(e: MouseEvent): void {
+    e.preventDefault(); e.stopPropagation();
+    const title = (e.currentTarget as HTMLElement).dataset.title;
+    if (title) onOpenCategoryFiles(title);
+  }
+  function handleSubcatClick(e: MouseEvent): void {
+    e.preventDefault(); e.stopPropagation();
+    const subcat = (e.currentTarget as HTMLElement).dataset.subcat;
+    if (subcat) onToggleCategory(subcat);
+  }
 </script>
 
 <div class="results" id="results">
@@ -76,39 +111,39 @@
   {:else if status === 'error'}
     <div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div><p>{errorMessage}</p><button class="btn outline" style="margin-top: 12px;" onclick={onRetry}>重试</button></div>
   {:else}
-    {#each results as result}
+    {#each results as result (result.title)}
       <a class="result-card" href={result.url} target="_blank" rel="noopener noreferrer" style={`animation-delay: ${result.delay}`}>
         {#if fileSelectionEnabled && result.file}
-          <div class="checkbox-container result-select" role="checkbox" aria-checked={selectedFiles.has(result.title)} aria-label={`选择 ${result.title}`} tabindex="0" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFile(result.title); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggleFile(result.title); } }}>
+          <div class="checkbox-container result-select" role="checkbox" aria-checked={selectedFiles.has(result.title)} aria-label={`选择 ${result.title}`} tabindex="0" data-title={result.title} onclick={handleToggleFileClick} onkeydown={handleToggleFileKeydown}>
             <input type="checkbox" checked={selectedFiles.has(result.title)} tabindex="-1" />
             <span class="checkmark"></span>
           </div>
         {/if}
         {#if categorySelectionEnabled && result.ns === 14}
-          <div class="checkbox-container result-select" role="checkbox" aria-checked={selectedCategoryResults.has(result.title)} aria-label={`选择分类 ${result.title}`} tabindex="0" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleCategory(result.title); }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggleCategory(result.title); } }}>
+          <div class="checkbox-container result-select" role="checkbox" aria-checked={selectedCategoryResults.has(result.title)} aria-label={`选择分类 ${result.title}`} tabindex="0" data-title={result.title} onclick={handleToggleCategoryClick} onkeydown={handleToggleCategoryKeydown}>
             <input type="checkbox" checked={selectedCategoryResults.has(result.title)} tabindex="-1" />
             <span class="checkmark"></span>
           </div>
         {/if}
-        {#if result.image}<button type="button" class="result-thumb" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenLightbox(imageFull(result.image)); }}><img src={result.image.thumb} alt="" loading="lazy"></button>{/if}
+        {#if result.image}<button type="button" class="result-thumb" onclick={(e) => handleLightboxClick(e, result.image!)}><img src={result.image.thumb} alt="" loading="lazy"></button>{/if}
         <div class="result-body">
           <div class="result-title-row">{#if result.nsName}<span class="result-ns">{result.nsName}</span>{/if}<h3 class="result-title">{@html highlightMatch(result.title, query)}</h3></div>
           {#if result.redirecttitle}<div class="result-redirect">重定向自：<span>{@html highlightMatch(result.redirecttitle, query)}</span></div>{/if}
           {#if result.sectiontitle}<span class="result-section">§ {result.sectiontitle}</span>{/if}
           {#if !categorySearchActive}
             <p class="result-snippet">{@html cleanSnippet(resultSnippet(result))}</p>
-            <div class="result-meta-row"><span title="最后编辑">{result.dateStr}</span>{#if result.wordcount}<span title="字数">{result.wordcount.toLocaleString()} 字</span>{/if}{#if result.fileSize}<span title="文件大小">{result.fileSize}</span>{:else if result.pageSizeKB}<span title="页面大小">{result.pageSizeKB}</span>{/if}</div>
+            <div class="result-meta-row"><span title="最后编辑">{result.dateStr}</span>{#if result.wordCountStr}<span title="字数">{result.wordCountStr} 字</span>{/if}{#if result.fileSize}<span title="文件大小">{result.fileSize}</span>{:else if result.pageSizeKB}<span title="页面大小">{result.pageSizeKB}</span>{/if}</div>
           {/if}
           {#if categorySearchActive && result.ns === 14}
             <div class="category-result-actions">
               {#if categorySubcats[result.title]?.length > 0}
-                <button class="category-action-btn" class:active={expandedCategories.has(result.title)} type="button" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleCategoryExpanded(result.title); }}>
+                <button class="category-action-btn" class:active={expandedCategories.has(result.title)} type="button" data-title={result.title} onclick={handleToggleCategoryExpanded}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={expandedCategories.has(result.title) ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'}/></svg>
                   <span>{expandedCategories.has(result.title) ? '收起' : '子分类'}</span>
                   <small>{categorySubcats[result.title].length}</small>
                 </button>
               {/if}
-              <button class="category-action-btn" type="button" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenCategoryFiles(result.title); }}>
+              <button class="category-action-btn" type="button" data-title={result.title} onclick={handleOpenCategoryFiles}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
                 <span>查看文件</span>
               </button>
@@ -121,8 +156,8 @@
                   <span class="subcategory-error">{categorySubcatErrors[result.title]}</span>
                 {:else if categorySubcats[result.title]?.length > 0}
                   <div class="subcategory-chips">
-                    {#each categorySubcats[result.title] as subcat}
-                      <button class:checked={selectedCategoryResults.has(subcat)} class="subcategory-chip" type="button" onclick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleCategory(subcat); }}>
+                    {#each categorySubcats[result.title] as subcat (subcat)}
+                      <button class:checked={selectedCategoryResults.has(subcat)} class="subcategory-chip" type="button" data-subcat={subcat} onclick={handleSubcatClick}>
                         <span>{categoryDisplayName(subcat)}</span>
                         {#if selectedCategoryResults.has(subcat)}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>{/if}
                       </button>

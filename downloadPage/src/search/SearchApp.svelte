@@ -24,6 +24,7 @@
     dateStr: string;
     pageSizeKB: string;
     fileSize: string;
+    wordCountStr: string;
     delay: string;
   };
 
@@ -65,7 +66,7 @@
   let suggestionsOpen = $state(false);
   let suggestIdx = $state(-1);
   let savedQuery = $state('');
-  let searchTimer: ReturnType<typeof setTimeout> | undefined = $state();
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let suggestionRequestId = $state(0);
   let status = $state('idle' as Status);
   let errorMessage = $state('');
@@ -103,6 +104,8 @@
   let categoryResults = $derived(results.filter(result => result.ns === 14));
   let selectedCategoryResultItems = $derived(categoryResults.filter(result => selectedCategoryResults.has(result.title)));
   let categorySelectionEnabled = $derived(categorySearchActive && categoryResults.length > 0);
+  let totalHitsStr = $derived(totalHits.toLocaleString());
+  let categoryResultsCountStr = $derived(categoryResults.length.toLocaleString());
 
   onMount(() => {
     const urlQ = new URLSearchParams(location.search).get('q');
@@ -380,6 +383,7 @@
       dateStr: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
       pageSizeKB: item.size ? formatFileSize(item.size) : '',
       fileSize: file?.size ? formatFileSize(file.size) : '',
+      wordCountStr: item.wordcount ? item.wordcount.toLocaleString() : '',
       delay: `${index * 0.03}s`
     };
   }
@@ -658,7 +662,7 @@
         {#if suggestionsLoading}
           <div class="suggest-state"><span class="suggest-spinner"></span><span>正在查找建议…</span></div>
         {:else if suggestions.length > 0}
-          {#each suggestions as suggestion, index}
+          {#each suggestions as suggestion, index (suggestion.title)}
             <button class:highlighted={suggestIdx === index} class="suggest-item" type="button" role="option" aria-selected={suggestIdx === index} onmouseenter={() => suggestIdx = index} onclick={() => selectSuggestion(suggestion)}>
               <svg class="suggest-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <span class="suggest-text"><span class="suggest-title">{@html highlightMatch(suggestion.title, query)}</span><span class="suggest-meta"><span class="suggest-ns">{suggestion.desc}</span><span>{suggestionPath(suggestion.title)}</span>{#if suggestion.pageid}<span>#{suggestion.pageid}</span>{/if}</span></span>
@@ -676,9 +680,9 @@
   {#if status === 'ready'}
     <div class="result-meta">
       {#if categorySearchActive}
-        找到 <strong>{categoryResults.length.toLocaleString()}</strong> 个分类
+        找到 <strong>{categoryResultsCountStr}</strong> 个分类
       {:else}
-        找到 <strong>{totalHits.toLocaleString()}</strong> 条结果
+        找到 <strong>{totalHitsStr}</strong> 条结果
       {/if}
       {#if resultSuggestion && !categorySearchActive}
         · 你是不是要搜：<button class="suggestion-link" onclick={() => { inputValue = resultSuggestion; query = resultSuggestion; currentPage = 1; doSearch(); }}>{resultSuggestion}</button>
