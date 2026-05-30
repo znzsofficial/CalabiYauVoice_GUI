@@ -724,15 +724,21 @@ body {
     flex-shrink: 0;
     width: 64px;
     height: 64px;
+    padding: 0;
+    border: 1px solid var(--border);
     border-radius: calc(var(--radius) - 2px);
     overflow: hidden;
     background-color: var(--muted);
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+    outline: none;
 }
 
 .result-thumb:hover {
-    opacity: 0.85;
+    transform: scale(1.08);
+    border-color: var(--muted-foreground);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
 }
 
 .result-thumb img {

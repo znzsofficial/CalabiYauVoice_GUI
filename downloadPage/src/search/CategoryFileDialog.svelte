@@ -157,7 +157,7 @@
   .category-file-list { overflow: auto; padding: 10px; }
   .category-file-item { gap: 12px; padding: 10px 12px; border-radius: 8px; color: inherit; }
   .category-file-item:hover { background: var(--accent); }
-  .category-file-preview { width: 48px; height: 48px; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--muted); flex: 0 0 auto; cursor: pointer; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+  .category-file-preview { width: 48px; height: 48px; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--muted); flex: 0 0 auto; cursor: pointer; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; appearance: none; outline: none; }
   .category-file-preview:hover { transform: scale(1.08); border-color: var(--muted-foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
   .category-file-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .category-audio-ring { position: relative; width: 48px; height: 48px; border: 0; border-radius: 999px; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; cursor: pointer; }

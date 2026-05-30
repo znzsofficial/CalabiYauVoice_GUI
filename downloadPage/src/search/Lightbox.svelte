@@ -169,7 +169,7 @@
   .lightbox-download { right: 68px; }
   .lightbox-close { right: 16px; }
   .lightbox-action { position: absolute; z-index: 2; }
-  button.lightbox-backdrop, button.lightbox-container { border: 0; background: transparent; color: inherit; font: inherit; padding: 0; position: absolute; }
+  button.lightbox-backdrop, button.lightbox-container { border: 0; background: transparent; color: inherit; font: inherit; padding: 0; position: absolute; appearance: none; outline: none; }
   button.lightbox-backdrop { inset: 0; z-index: 0; }
   button.lightbox-container { inset: 0; z-index: 1; touch-action: none; user-select: none; }
   .lightbox.open { background-color: transparent; }
