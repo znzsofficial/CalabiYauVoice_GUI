@@ -64,6 +64,7 @@
   let suggestionsReady = $state(false);
   let suggestionsOpen = $state(false);
   let suggestIdx = $state(-1);
+  let savedQuery = $state('');
   let searchTimer: ReturnType<typeof setTimeout> | undefined = $state();
   let suggestionRequestId = $state(0);
   let status = $state('idle' as Status);
@@ -110,6 +111,8 @@
       query = urlQ;
       doSearch();
     }
+    document.addEventListener('click', handleDocumentClick);
+    return () => document.removeEventListener('click', handleDocumentClick);
   });
 
   function setProfile(value: ProfileValue): void {
@@ -193,6 +196,7 @@
 
   function handleInput(): void {
     query = inputValue;
+    savedQuery = inputValue;
     if (categorySearchActive) {
       selectedCategoryResults = new Set();
       expandedCategories = new Set();
@@ -212,13 +216,14 @@
   }
 
   function handleInputFocus(): void {
-    suggestionsOpen = true;
-    if (inputValue.trim() && suggestions.length === 0 && !suggestionsLoading) fetchSuggestions();
+    if (suggestions.length > 0 || suggestionsLoading) suggestionsOpen = true;
+    else if (inputValue.trim() && status === 'idle') fetchSuggestions();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
     if (suggestions.length > 0 && event.key === 'ArrowDown') {
       event.preventDefault();
+      if (suggestIdx === -1) savedQuery = inputValue;
       suggestIdx = Math.min(suggestIdx + 1, suggestions.length - 1);
       inputValue = suggestions[suggestIdx].title;
       return;
@@ -227,7 +232,7 @@
       event.preventDefault();
       if (suggestIdx <= 0) {
         suggestIdx = -1;
-        inputValue = query;
+        inputValue = savedQuery;
       } else {
         suggestIdx -= 1;
         inputValue = suggestions[suggestIdx].title;
@@ -237,27 +242,45 @@
     if (event.key === 'Enter') {
       event.preventDefault();
       query = inputValue;
-      suggestions = [];
-      suggestionsOpen = false;
+      closeSuggestions();
       currentPage = 1;
       doSearch();
     }
     if (event.key === 'Escape') {
-      if (suggestions.length > 0) {
-        suggestions = [];
-        suggestionsOpen = false;
-        inputValue = query;
+      if (suggestionsOpen) {
+        closeSuggestions();
+        inputValue = savedQuery || query;
       } else if (query) {
         clearSearch();
       }
     }
+    if (event.key === 'Tab') {
+      closeSuggestions();
+    }
+  }
+
+  function closeSuggestions(): void {
+    suggestions = [];
+    suggestionsOpen = false;
+    suggestIdx = -1;
+    savedQuery = '';
+  }
+
+  function handleDocumentClick(event: MouseEvent): void {
+    if (!suggestionsOpen) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('.search-box')) return;
+    closeSuggestions();
+  }
+
+  function handleSuggestMousedown(event: MouseEvent): void {
+    event.preventDefault();
   }
 
   function clearSearch(): void {
     inputValue = '';
     query = '';
-    suggestions = [];
-    suggestionsOpen = false;
+    closeSuggestions();
     suggestionsReady = false;
     suggestionsLoading = false;
     status = 'idle';
@@ -293,8 +316,7 @@
   function selectSuggestion(suggestion: Suggestion): void {
     inputValue = suggestion.title;
     query = suggestion.title;
-    suggestions = [];
-    suggestionsOpen = false;
+    closeSuggestions();
     currentPage = 1;
     doSearch();
   }
@@ -632,7 +654,7 @@
       {#if inputValue}<button class="search-clear" aria-label="清空搜索" onclick={clearSearch}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
     </div>
     {#if showSuggestDropdown}
-      <div class="suggest-dropdown" role="listbox">
+      <div class="suggest-dropdown" role="listbox" tabindex="-1" onmousedown={handleSuggestMousedown}>
         {#if suggestionsLoading}
           <div class="suggest-state"><span class="suggest-spinner"></span><span>正在查找建议…</span></div>
         {:else if suggestions.length > 0}
