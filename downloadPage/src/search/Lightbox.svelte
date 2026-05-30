@@ -1,0 +1,143 @@
+<script lang="ts">
+  let { src = '', downloading = false, onClose = () => {}, onDownload = () => {} }: {
+    src?: string;
+    downloading?: boolean;
+    onClose?: () => void;
+    onDownload?: () => void;
+  } = $props();
+
+  let loaded = $state(false);
+  let scale = $state(1);
+  let translateX = $state(0);
+  let translateY = $state(0);
+  let dragging = $state(false);
+  let dragStartX = $state(0);
+  let dragStartY = $state(0);
+  let startTranslateX = $state(0);
+  let startTranslateY = $state(0);
+  let pointers = $state(new Map<number, { x: number; y: number }>());
+  let pinchStartDistance = $state(0);
+  let pinchStartScale = $state(1);
+  let pinchCenterX = $state(0);
+  let pinchCenterY = $state(0);
+  let pinchStartTranslateX = $state(0);
+  let pinchStartTranslateY = $state(0);
+
+  function resetTransform(): void {
+    scale = 1;
+    translateX = 0;
+    translateY = 0;
+    pointers = new Map();
+  }
+
+  function toggleZoom(): void {
+    if (scale > 1.05) {
+      resetTransform();
+      return;
+    }
+    scale = 2.5;
+    translateX = 0;
+    translateY = 0;
+  }
+
+  function handleWheel(event: WheelEvent): void {
+    event.preventDefault();
+    const oldScale = scale;
+    const nextScale = Math.max(0.5, Math.min(15, scale * (event.deltaY > 0 ? 0.92 : 1.08)));
+    scale = nextScale;
+    if (nextScale <= 1.05) {
+      resetTransform();
+      return;
+    }
+    const ratio = nextScale / oldScale;
+    translateX *= ratio;
+    translateY *= ratio;
+  }
+
+  function startDrag(event: PointerEvent): void {
+    pointers = new Map(pointers).set(event.pointerId, { x: event.clientX, y: event.clientY });
+    (event.currentTarget as Element | null)?.setPointerCapture?.(event.pointerId);
+
+    if (pointers.size === 1) {
+      if (scale <= 1.05) return;
+      dragging = true;
+      dragStartX = event.clientX;
+      dragStartY = event.clientY;
+      startTranslateX = translateX;
+      startTranslateY = translateY;
+      return;
+    }
+
+    if (pointers.size === 2) {
+      const points = [...pointers.values()];
+      pinchStartDistance = distanceBetween(points[0], points[1]);
+      pinchStartScale = scale;
+      pinchCenterX = (points[0].x + points[1].x) / 2;
+      pinchCenterY = (points[0].y + points[1].y) / 2;
+      pinchStartTranslateX = translateX;
+      pinchStartTranslateY = translateY;
+      dragging = false;
+    }
+  }
+
+  function moveDrag(event: PointerEvent): void {
+    if (!pointers.has(event.pointerId)) return;
+    pointers = new Map(pointers).set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (pointers.size >= 2) {
+      const points = [...pointers.values()];
+      const nextDistance = distanceBetween(points[0], points[1]);
+      if (pinchStartDistance <= 0) return;
+      const nextScale = Math.max(0.5, Math.min(15, pinchStartScale * (nextDistance / pinchStartDistance)));
+      const ratio = nextScale / pinchStartScale;
+      scale = nextScale;
+      translateX = pinchStartTranslateX + (pinchCenterX - window.innerWidth / 2) * (1 - ratio);
+      translateY = pinchStartTranslateY + (pinchCenterY - window.innerHeight / 2) * (1 - ratio);
+      return;
+    }
+
+    if (!dragging) return;
+    translateX = startTranslateX + event.clientX - dragStartX;
+    translateY = startTranslateY + event.clientY - dragStartY;
+  }
+
+  function endDrag(event: PointerEvent): void {
+    pointers = new Map(pointers);
+    pointers.delete(event.pointerId);
+    dragging = false;
+    if (pointers.size < 2) {
+      pinchStartDistance = 0;
+      pinchStartScale = scale;
+    }
+  }
+
+  function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  }
+</script>
+
+<svelte:window onkeydown={(event) => event.key === 'Escape' && onClose()} />
+
+<div class="lightbox open">
+  <button class="lightbox-backdrop" aria-label="关闭" onclick={onClose}></button>
+  <button class:zoomed={scale > 1.05} class:dragging class="lightbox-container" type="button" ondblclick={toggleZoom} onwheel={handleWheel} onpointerdown={startDrag} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag}>
+    <img class="lightbox-img" {src} alt="" style={`transform: translate(${translateX}px, ${translateY}px) scale(${scale})`} onload={() => loaded = true}>
+    {#if !loaded}<div class="lightbox-loading"><div class="lightbox-spinner"></div></div>{/if}
+  </button>
+  <button class="lightbox-action lightbox-download" type="button" aria-label="下载图片" title="下载图片" disabled={downloading} onclick={(e) => { e.stopPropagation(); onDownload(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
+  <button class="lightbox-action lightbox-close" aria-label="关闭" onclick={onClose}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+</div>
+
+<style>
+  .lightbox-download { right: 68px; }
+  .lightbox-close { right: 16px; }
+  .lightbox-action { position: absolute; z-index: 2; }
+  button.lightbox-backdrop, button.lightbox-container { border: 0; background: transparent; color: inherit; font: inherit; padding: 0; position: absolute; }
+  button.lightbox-backdrop { inset: 0; z-index: 0; }
+  button.lightbox-container { inset: 0; z-index: 1; touch-action: none; user-select: none; }
+  .lightbox.open { background-color: transparent; }
+  @media (max-width: 640px) {
+    .lightbox-download { right: 60px; }
+    .lightbox-close { right: 12px; }
+  }
+</style>
