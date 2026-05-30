@@ -625,7 +625,83 @@ body {
     }
 }
 
+/* ── Bulk Download Bar ── */
+
+.bulk-download-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background-color: var(--card);
+    color: var(--card-foreground);
+    margin-bottom: 12px;
+}
+
+.bulk-download-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    min-width: 0;
+}
+
+.bulk-download-info strong {
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.bulk-download-info span {
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+
+.bulk-download-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.btn.primary {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border: none;
+}
+
+.btn.primary:hover {
+    background-color: color-mix(in srgb, var(--primary) 85%, var(--foreground));
+}
+
+.btn.primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+    .bulk-download-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .bulk-download-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .bulk-download-actions {
+        flex-wrap: wrap;
+    }
+}
+
 .result-card {
+    position: relative;
     display: flex;
     gap: 14px;
     padding: 14px;
@@ -663,6 +739,76 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* ── Checkbox (file/category selection) ── */
+
+.checkbox-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.checkmark {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--background);
+    transition: all 0.15s;
+}
+
+.checkbox-container:hover .checkmark {
+    border-color: var(--primary);
+}
+
+.checkbox-container input:checked ~ .checkmark {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.checkmark::after {
+    content: '';
+    display: none;
+    width: 5px;
+    height: 9px;
+    border: solid var(--primary-foreground);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    position: absolute;
+    top: 3px;
+    left: 6px;
+}
+
+.checkbox-container input:checked ~ .checkmark::after {
+    display: block;
+}
+
+.result-select {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 2;
+}
+
+.result-card:has(.result-select) {
+    padding-left: 40px;
+}
+
+.result-card:has(.result-select) .result-thumb {
+    margin-left: -4px;
 }
 
 .result-body {
