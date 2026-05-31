@@ -413,7 +413,7 @@ fun BioCardScreen(
                                     subtitle = listOfNotNull(deck.faction, deck.author.takeIf { it.isNotBlank() })
                                         .joinToString(" · "),
                                     accentColor = MaterialTheme.colorScheme.tertiary,
-                                    icon = Icons.Outlined.BrowseGallery,
+                                    icon = null,
                                     onClick = { selectedDeck = deck }
                                 )
                             }
@@ -535,7 +535,7 @@ private fun BioInfoCard(
     title: String,
     subtitle: String,
     accentColor: Color,
-    icon: ImageVector,
+    icon: ImageVector?,
     onClick: () -> Unit
 ) {
     Card(
@@ -549,22 +549,24 @@ private fun BioInfoCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Surface(
-                shape = smoothCornerShape(16.dp),
-                color = accentColor.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
-                modifier = Modifier.size(72.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (!imageUrl.isNullOrBlank()) {
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
+            if (!imageUrl.isNullOrBlank() || icon != null) {
+                Surface(
+                    shape = smoothCornerShape(16.dp),
+                    color = accentColor.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
+                    modifier = Modifier.size(72.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (!imageUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (icon != null) {
+                            Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
+                        }
                     }
                 }
             }
@@ -1013,34 +1015,43 @@ private fun ProbabilitySection(probability: CardRefreshProbability) {
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold
         )
-        listOf(
-            "第1阶段" to probability.stage1,
-            "第2阶段" to probability.stage2,
-            "第3阶段" to probability.stage3,
-            "第4阶段" to probability.stage4
-        ).forEach { (label, value) ->
-            Surface(
-                shape = smoothCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-            ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                listOf("第1阶段" to probability.stage1, "第2阶段" to probability.stage2),
+                listOf("第3阶段" to probability.stage3, "第4阶段" to probability.stage4)
+            ).forEach { rowItems ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Text(
-                        value,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
+                    rowItems.forEach { (label, value) ->
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = smoothCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.76f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    value,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1080,7 +1091,7 @@ private fun DeckDetailSheet(
         badge = "卡组",
         badgeColor = MaterialTheme.colorScheme.tertiary,
         onDismiss = onDismiss,
-        heroIcon = Icons.Outlined.BrowseGallery
+        heroIcon = null
     ) {
         Column(
             modifier = Modifier
@@ -1148,9 +1159,11 @@ private fun CardDetailSheet(
     badge: String,
     badgeColor: Color,
     onDismiss: () -> Unit,
-    heroIcon: ImageVector = Icons.Outlined.AutoAwesome,
+    heroIcon: ImageVector? = Icons.Outlined.AutoAwesome,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val hasHero = !imageUrl.isNullOrBlank() || heroIcon != null
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(
@@ -1166,61 +1179,66 @@ private fun CardDetailSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-            ) {
-                if (!imageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = imageUrl,
-                        contentDescription = title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceContainerLow)
+            if (hasHero) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                ) {
+                    if (!imageUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceContainerLow)
+                                    )
                                 )
-                            )
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(heroIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(56.dp))
+                        )
+                    } else if (heroIcon != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(heroIcon, contentDescription = null, tint = badgeColor, modifier = Modifier.size(56.dp))
+                        }
                     }
-                }
 
-                if (badge.isNotBlank()) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp),
-                        shape = smoothCapsuleShape(),
-                        color = badgeColor.copy(alpha = 0.9f)
-                    ) {
-                        Text(
-                            badge,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    if (badge.isNotBlank()) {
+                        DetailBadge(
+                            text = badge,
+                            color = badgeColor,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
                         )
                     }
                 }
             }
 
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Column(Modifier.padding(horizontal = 20.dp, vertical = if (hasHero) 0.dp else 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (!hasHero && badge.isNotBlank()) {
+                        Spacer(Modifier.width(10.dp))
+                        DetailBadge(text = badge, color = badgeColor)
+                    }
+                }
                 if (subtitle.isNotBlank()) {
                     Spacer(Modifier.height(4.dp))
                     Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1243,6 +1261,23 @@ private fun CardDetailSheet(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DetailBadge(text: String, color: Color, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = smoothCapsuleShape(),
+        color = color.copy(alpha = 0.9f)
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
 

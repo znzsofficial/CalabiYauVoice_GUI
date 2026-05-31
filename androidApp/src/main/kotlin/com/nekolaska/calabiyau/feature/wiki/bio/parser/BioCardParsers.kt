@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.bio.parser
 
 import android.text.Html
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardRefreshProbability
 import com.nekolaska.calabiyau.feature.wiki.bio.model.MobileCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
@@ -47,7 +48,7 @@ object BioCardParsers {
                 maxLevel = cleanHtml(cells[4].html()),
                 effect = cleanHtml(cells[5].html()),
                 roles = roles,
-                imageUrl = nameCell.selectFirst("img")?.attr("src"),
+                imageUrl = WikiImageUrls.originalFromThumbnail(nameCell.selectFirst("img")?.attr("src")),
                 refreshProbability = refreshProbabilityMap[name]
             )
         }
@@ -101,7 +102,7 @@ object BioCardParsers {
                 rarity = item.attr("data-param3").toIntOrNull() ?: 0,
                 maxLevel = values["最大等级"] ?: "",
                 effect = values["等级效果描述"] ?: "",
-                imageUrl = item.selectFirst("img")?.attr("src")
+                imageUrl = WikiImageUrls.originalFromThumbnail(item.selectFirst("img")?.attr("src"))
             )
         }.toList()
 
