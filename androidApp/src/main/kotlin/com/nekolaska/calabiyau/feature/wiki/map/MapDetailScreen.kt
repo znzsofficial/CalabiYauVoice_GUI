@@ -118,7 +118,11 @@ private fun MapDetailContent(
     ) {
         // ── 头部：地图名 + 简介 ──
         item(key = "header") {
-            MapHeaderCard(detail, previewImageUrl)
+            MapHeaderCard(
+                detail = detail,
+                previewImageUrl = previewImageUrl,
+                onPreview = { url -> previewImage = PreviewImage(url, detail.name) }
+            )
         }
 
         // ── 支持模式 + 平台 ──
@@ -170,7 +174,11 @@ private fun MapDetailContent(
 // ────────────────────────────────────────────
 
 @Composable
-private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
+private fun MapHeaderCard(
+    detail: MapDetail,
+    previewImageUrl: String?,
+    onPreview: (String) -> Unit
+) {
     Card(
         shape = smoothCornerShape(28.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -187,6 +195,7 @@ private fun MapHeaderCard(detail: MapDetail, previewImageUrl: String?) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(16f / 9f)
+                        .clickable { onPreview(imageUrl) }
                         .clip(smoothCornerShape(28.dp))
                 )
             }

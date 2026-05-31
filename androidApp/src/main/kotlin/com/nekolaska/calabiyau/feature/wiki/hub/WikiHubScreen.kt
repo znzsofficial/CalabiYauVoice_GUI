@@ -215,6 +215,15 @@ fun WikiHubScreen(
         backStack = backStack + route
     }
 
+    fun navigateToMapDetail(name: String, imageUrl: String?) {
+        val resolvedImageUrl = imageUrl ?: gameModes
+            .asSequence()
+            .flatMap { it.maps.asSequence() }
+            .firstOrNull { it.name == name }
+            ?.imageUrl
+        navigateTo(WikiRoute.MapDetail(name, resolvedImageUrl))
+    }
+
     BackHandler(enabled = backStack.size > 1 && !isOverlaid) {
         popBackStack()
     }
@@ -276,7 +285,7 @@ fun WikiHubScreen(
                         navigateTo(WikiRoute.CharDetail(name, portrait))
                     },
                     onOpenMapDetail = { name, imageUrl ->
-                        navigateTo(WikiRoute.MapDetail(name, imageUrl))
+                        navigateToMapDetail(name, imageUrl)
                     },
                     factions = factions,
                     isLoadingCharacters = isLoadingCharacters,
@@ -345,7 +354,7 @@ fun WikiHubScreen(
                 MapListFullScreen(
                     onBack = { popBackStack() },
                     onOpenMapDetail = { name, imageUrl ->
-                        navigateTo(WikiRoute.MapDetail(name, imageUrl))
+                        navigateToMapDetail(name, imageUrl)
                     },
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
@@ -402,7 +411,7 @@ fun WikiHubScreen(
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl,
                     onOpenMapDetail = { name, imageUrl ->
-                        navigateTo(WikiRoute.MapDetail(name, imageUrl))
+                        navigateToMapDetail(name, imageUrl)
                     }
                 )
             }
