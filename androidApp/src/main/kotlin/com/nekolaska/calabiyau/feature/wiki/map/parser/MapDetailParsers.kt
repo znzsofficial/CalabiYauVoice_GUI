@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.map.parser
 
 import android.text.Html
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
 import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import org.jsoup.Jsoup
@@ -73,7 +74,7 @@ object MapDetailParsers {
         val sectionNodes = collectSectionNodes(document, "地形图")
         return sectionNodes
             .flatMap { node -> node.select("img[src]") }
-            .mapNotNull { image -> image.absUrl("src").ifBlank { image.attr("src").trim() } }
+            .mapNotNull { image -> WikiImageUrls.originalFromThumbnail(image.absUrl("src").ifBlank { image.attr("src").trim() }) }
             .firstOrNull { it.isNotBlank() }
     }
 
@@ -85,7 +86,7 @@ object MapDetailParsers {
             val sectionNodes = collectSectionNodes(document, title)
             sectionNodes
                 .flatMap { node -> node.select("img[src]") }
-                .mapNotNull { image -> image.absUrl("src").ifBlank { image.attr("src").trim() } }
+                .mapNotNull { image -> WikiImageUrls.originalFromThumbnail(image.absUrl("src").ifBlank { image.attr("src").trim() }) }
                 .filter { it.isNotBlank() }
                 .forEach { urls += it }
         }

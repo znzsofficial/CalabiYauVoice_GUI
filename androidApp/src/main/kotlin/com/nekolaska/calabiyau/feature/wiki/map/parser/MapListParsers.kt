@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.map.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
 import org.jsoup.Jsoup
 
@@ -23,7 +24,7 @@ object MapListParsers {
 
             if (name !in seen) {
                 seen += name
-                val imageUrl = extract600pxUrl(srcset) ?: defaultSrc
+                val imageUrl = WikiImageUrls.originalFromThumbnail(extract600pxUrl(srcset) ?: defaultSrc).orEmpty()
                 results += MapInfo(
                     name = name,
                     wikiUrl = "$WIKI_BASE$path",
