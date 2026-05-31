@@ -1094,10 +1094,7 @@ private fun DeckDetailSheet(
         heroIcon = null
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 420.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (deck.author.isNotBlank()) DetailLine("作者", deck.author)
@@ -1255,7 +1252,10 @@ private fun CardDetailSheet(
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     content = content
                 )
