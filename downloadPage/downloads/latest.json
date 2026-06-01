@@ -1,13 +1,13 @@
 {
-  "versionName": "2.0.4",
-  "versionCode": 24,
+  "versionName": "2.0.5",
+  "versionCode": 25,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3235626,
+  "apkSize": 3252006,
   "releaseUrl": "/",
   "changelog": [
-    "生化卡牌详情优化刷新概率布局，弹窗正文支持滚动，并改用 Wiki 原图展示卡牌图片",
-    "卡组分享列表与详情弹窗移除无效占位图标，内容展示更紧凑",
-    "地图详情支持从地图一览兜底头图，地图图片改用 Wiki 原图，并可点击预览头图"
+    "音频工具改为预览优先工作流，新增操作历史、撤销重做、降噪门、淡入淡出、DC 偏移和相位处理",
+    "频谱图生成升级为共享渲染核心，支持更细的时间/频率分辨率、缩放平移、配色和显示参数调节",
+    "图片与 GIF 工具修复导出格式、透明像素、GIF 帧画布和写出校验，提升桌面与 Android 处理稳定性"
   ],
-  "publishedAt": "2026-05-31"
+  "publishedAt": "2026-06-01"
 }
