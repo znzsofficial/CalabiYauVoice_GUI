@@ -19,10 +19,10 @@
   </button>
   <div class="cs-menu">
     {#if placeholder}
-      <button class:selected={!value} class="cs-option" type="button" role="option" aria-selected={!value} onclick={() => onSelect('')}>{placeholder}</button>
+      <button class:selected={!value} class="cs-option" type="button" role="option" aria-selected={!value} title={placeholder} onclick={() => onSelect('')}>{placeholder}</button>
     {/if}
     {#each options as option (option.code)}
-      <button class:selected={value === option.code} class="cs-option" type="button" role="option" aria-selected={value === option.code} onclick={() => onSelect(option.code)}>{option.name}</button>
+      <button class:selected={value === option.code} class="cs-option" type="button" role="option" aria-selected={value === option.code} title={option.name} onclick={() => onSelect(option.code)}>{option.name}</button>
     {/each}
   </div>
 </div>

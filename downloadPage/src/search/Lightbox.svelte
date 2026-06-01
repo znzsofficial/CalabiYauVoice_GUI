@@ -149,6 +149,12 @@
   }
 
   $effect(() => {
+    src;
+    loaded = false;
+    resetTransform();
+  });
+
+  $effect(() => {
     return () => cancelAnimationFrame(rafId);
   });
 </script>
@@ -166,15 +172,152 @@
 </div>
 
 <style>
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  .lightbox.open {
+    opacity: 1;
+  }
+
+  button.lightbox-backdrop,
+  button.lightbox-container {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    position: absolute;
+    appearance: none;
+    outline: none;
+  }
+
+  button.lightbox-backdrop {
+    inset: 0;
+    z-index: 0;
+    background-color: color-mix(in srgb, var(--background) 85%, transparent);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  button.lightbox-container {
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    cursor: zoom-in;
+  }
+
+  button.lightbox-container.zoomed {
+    cursor: grab;
+  }
+
+  button.lightbox-container.dragging {
+    cursor: grabbing;
+  }
+
+  .lightbox-img {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+    transform-origin: center center;
+    will-change: transform;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .lightbox-container.dragging .lightbox-img,
+  .lightbox-container.pinching .lightbox-img {
+    transition: none;
+  }
+
+  .lightbox-loading {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .lightbox-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+    border-top-color: var(--foreground);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .lightbox-action {
+    position: absolute;
+    top: 16px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background-color: color-mix(in srgb, var(--foreground) 10%, transparent);
+    color: var(--foreground);
+    cursor: pointer;
+    transition: background-color 0.15s, transform 0.15s;
+  }
+
   .lightbox-download { right: 68px; }
   .lightbox-close { right: 16px; }
-  .lightbox-action { position: absolute; z-index: 2; }
-  button.lightbox-backdrop, button.lightbox-container { border: 0; background: transparent; color: inherit; font: inherit; padding: 0; position: absolute; appearance: none; outline: none; }
-  button.lightbox-backdrop { inset: 0; z-index: 0; }
-  button.lightbox-container { inset: 0; z-index: 1; touch-action: none; user-select: none; }
-  .lightbox.open { background-color: transparent; }
+
+  .lightbox-action:hover {
+    background-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+    transform: scale(1.05);
+  }
+
+  .lightbox-action:active {
+    transform: scale(0.95);
+  }
+
+  .lightbox-action:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  .lightbox-action svg {
+    width: 20px;
+    height: 20px;
+  }
+
   @media (max-width: 640px) {
+    .lightbox-action {
+      top: 12px;
+      width: 36px;
+      height: 36px;
+    }
+
     .lightbox-download { right: 60px; }
     .lightbox-close { right: 12px; }
+
+    .lightbox-action svg {
+      width: 18px;
+      height: 18px;
+    }
   }
 </style>

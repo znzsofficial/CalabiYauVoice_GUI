@@ -68,6 +68,7 @@
   let savedQuery = $state('');
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let suggestionRequestId = $state(0);
+  let searchRequestId = $state(0);
   let status = $state('idle' as Status);
   let errorMessage = $state('');
   let results = $state([]) as SearchResult[];
@@ -333,6 +334,7 @@
 
   async function doSearch(): Promise<void> {
     if (!query.trim()) return;
+    const requestId = ++searchRequestId;
     status = 'loading';
     errorMessage = '';
     resultSuggestion = '';
@@ -341,6 +343,7 @@
 
     try {
       const data = await searchWiki({ search: getSearchQuery(), limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE, namespace: getActiveNSParam(), sort: activeSort });
+      if (requestId !== searchRequestId) return;
       const apiErr = apiErrorMessage(data);
       if (apiErr) throw new Error(apiErr);
 
@@ -349,22 +352,29 @@
       totalHits = info.totalhits || 0;
       resultSuggestion = info.suggestion || '';
       if (search.length === 0) {
+        if (requestId !== searchRequestId) return;
         results = [];
         status = 'empty';
         return;
       }
 
-      const titles = search.map(item => item.title);
-      const nsMap = Object.fromEntries(search.map(item => [item.title, item.ns]));
-      const [fileAssets, extra] = await Promise.all([fetchFileAssets(titles, nsMap), fetchPageExtra(titles)]);
-      let nextResults = search.map((item, index) => normalizeResult(item, fileAssets.images[item.title], fileAssets.files[item.title], extra[item.title], index));
-      if (categorySearchActive) nextResults = await organizeCategoryResults(nextResults);
+      let nextResults: SearchResult[];
+      if (categorySearchActive) {
+        nextResults = await organizeCategoryResults(search.map((item, index) => normalizeResult(item, undefined, undefined, undefined, index)));
+      } else {
+        const titles = search.map(item => item.title);
+        const nsMap = Object.fromEntries(search.map(item => [item.title, item.ns]));
+        const [fileAssets, extra] = await Promise.all([fetchFileAssets(titles, nsMap), fetchPageExtra(titles)]);
+        nextResults = search.map((item, index) => normalizeResult(item, fileAssets.images[item.title], fileAssets.files[item.title], extra[item.title], index));
+      }
+      if (requestId !== searchRequestId) return;
       results = nextResults;
       selectedFiles = new Set([...selectedFiles].filter(title => results.some(result => result.title === title && result.file)));
       selectedCategoryResults = new Set([...selectedCategoryResults].filter(title => results.some(result => result.title === title && result.ns === 14)));
       expandedCategories = new Set([...expandedCategories].filter(title => results.some(result => result.title === title && result.ns === 14)));
       status = 'ready';
     } catch (err) {
+      if (requestId !== searchRequestId) return;
       const error = toError(err);
       status = 'error';
       errorMessage = error.name === 'AbortError' ? '搜索请求超时，请检查网络或换个关键词重试' : error.message || '搜索出错，请稍后重试';

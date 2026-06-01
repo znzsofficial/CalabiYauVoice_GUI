@@ -788,8 +788,9 @@ ul.changelog-list {
 /* 自定义下拉组件 */
 .custom-select {
     position: relative;
-    flex: 1;
-    max-width: 220px;
+    flex: 0 1 180px;
+    width: 180px;
+    max-width: 100%;
     min-width: 0;
 }
 
@@ -797,6 +798,7 @@ ul.changelog-list {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
     height: 34px;
     min-width: 0;
     padding: 0 10px 0 12px;
@@ -849,9 +851,9 @@ ul.changelog-list {
     position: absolute;
     left: 0;
     z-index: 50;
-    width: max-content;
-    min-width: 100%;
-    max-width: 280px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     max-height: 240px;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -882,12 +884,18 @@ ul.changelog-list {
 }
 
 .cs-option {
+    display: block;
+    width: 100%;
+    text-align: left;
     padding: 7px 10px;
+    border: 0;
     font-size: 0.8125rem;
     border-radius: calc(var(--radius) - 4px);
+    background: transparent;
     cursor: pointer;
     transition: background-color 0.1s;
     color: var(--foreground);
+    font: inherit;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

@@ -33,6 +33,45 @@
 </div>
 
 <style>
+  .bulk-download-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background-color: var(--card);
+    color: var(--card-foreground);
+    margin-bottom: 12px;
+  }
+
+  .bulk-download-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    min-width: 0;
+  }
+
+  .bulk-download-info strong {
+    font-size: 0.875rem;
+    white-space: nowrap;
+  }
+
+  .bulk-download-info span {
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+
+  .bulk-download-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
   .concurrency-control {
     display: flex;
     align-items: center;
@@ -50,5 +89,24 @@
     color: inherit;
     padding: 0 8px;
     font: inherit;
+  }
+
+  @media (max-width: 640px) {
+    .bulk-download-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .bulk-download-info {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .bulk-download-actions {
+      flex-wrap: wrap;
+    }
   }
 </style>
