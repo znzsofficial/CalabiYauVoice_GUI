@@ -313,34 +313,12 @@ private fun ImagePreviewBottomSheet(
                                         .height(previewHeight)
                                 )
                             }
-                            Text(
-                                "画质：${(compressQuality * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodyMedium
+                            ExportOptions(
+                                quality = compressQuality,
+                                onQualityChange = onCompressQualityChange,
+                                format = compressFormat,
+                                onFormatChange = onCompressFormatChange
                             )
-                            Slider(
-                                value = compressQuality,
-                                onValueChange = onCompressQualityChange,
-                                valueRange = 0.05f..1f
-                            )
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                ExportFormat.entries.forEach { format ->
-                                    AssistChip(
-                                        onClick = { onCompressFormatChange(format) },
-                                        shape = smoothCapsuleShape(),
-                                        label = { Text(format.label) },
-                                        colors = AssistChipDefaults.assistChipColors(
-                                            containerColor = if (format == compressFormat) {
-                                                MaterialTheme.colorScheme.secondaryContainer
-                                            } else {
-                                                MaterialTheme.colorScheme.surfaceContainerHighest
-                                            }
-                                        )
-                                    )
-                                }
-                            }
                             CompressRealtimePreview(
                                 item = item,
                                 quality = compressQuality,
@@ -360,6 +338,12 @@ private fun ImagePreviewBottomSheet(
                                     NineGridOverlay(size = size)
                                 }
                             )
+                            ExportOptions(
+                                quality = compressQuality,
+                                onQualityChange = onCompressQualityChange,
+                                format = compressFormat,
+                                onFormatChange = onCompressFormatChange
+                            )
                         }
                         ImagePreviewMode.CROP -> {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -378,6 +362,12 @@ private fun ImagePreviewBottomSheet(
                                     text = "双击缩放，拖动调整",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                ExportOptions(
+                                    quality = compressQuality,
+                                    onQualityChange = onCompressQualityChange,
+                                    format = compressFormat,
+                                    onFormatChange = onCompressFormatChange
                                 )
                             }
                         }
@@ -421,6 +411,43 @@ private fun ImagePreviewBottomSheet(
                     Text(confirmLabel)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ExportOptions(
+    quality: Float,
+    onQualityChange: (Float) -> Unit,
+    format: ExportFormat,
+    onFormatChange: (ExportFormat) -> Unit
+) {
+    Text(
+        "导出质量：${(quality * 100).toInt()}%",
+        style = MaterialTheme.typography.bodyMedium
+    )
+    Slider(
+        value = quality,
+        onValueChange = onQualityChange,
+        valueRange = 0.05f..1f
+    )
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ExportFormat.entries.forEach { option ->
+            AssistChip(
+                onClick = { onFormatChange(option) },
+                shape = smoothCapsuleShape(),
+                label = { Text(option.label) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (option == format) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    }
+                )
+            )
         }
     }
 }
@@ -941,7 +968,7 @@ internal fun ImageToolsPage(
                     val outputDir = resolveOutputDirectory(outputPath, "图片工具/九宫格")
                     val created = mutableListOf<File>()
                     inputs.forEach { input ->
-                        created += splitToNineGrid(context, input, outputDir)
+                        created += splitToNineGrid(context, input, outputDir, exportFormat, (imageQuality * 100).toInt())
                     }
                     scanMediaLibrary(context, created)
                     ToolOutput(
@@ -970,7 +997,7 @@ internal fun ImageToolsPage(
                 withContext(Dispatchers.IO) {
                     val outputDir = resolveOutputDirectory(outputPath, "图片工具/比例裁切")
                     val created = inputs.mapIndexedNotNull { index, input ->
-                        cropImageWithPreset(context, input, outputDir, cropPreset, cropPreviewStateMap[index])
+                        cropImageWithPreset(context, input, outputDir, cropPreset, cropPreviewStateMap[index], exportFormat, (imageQuality * 100).toInt())
                     }
                     scanMediaLibrary(context, created)
                     ToolOutput(
@@ -1170,7 +1197,7 @@ internal fun ImageToolsPage(
                 withContext(Dispatchers.IO) {
                     val outputDir = resolveOutputDirectory(outputPath, "图片工具/GIF分解")
                     val created = inputs.flatMap { input ->
-                        decomposeGifToFrames(context, input, outputDir)
+                        decomposeGifToFrames(context, input, outputDir, exportFormat, (imageQuality * 100).toInt())
                     }
                     if (created.isEmpty()) throw IllegalStateException("未解析到可导出帧")
                     scanMediaLibrary(context, created)
@@ -1596,7 +1623,7 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "GIF 分解",
-            subtitle = "将 GIF 拆分为逐帧图片（PNG）",
+            subtitle = "将 GIF 拆分为逐帧图片（${exportFormat.label}）",
             icon = Icons.Outlined.GifBox
         ) {
             FilledTonalButton(onClick = {
@@ -2223,12 +2250,12 @@ private fun compressOrConvertImage(
     quality: Int
 ): File? {
     val bitmap = openBitmap(context, input) ?: return null
-    target.parentFile?.mkdirs()
-    FileOutputStream(target).use { out ->
-        bitmap.compress(resolveCompressFormat(format), quality.coerceIn(1, 100), out)
+    return try {
+        writeBitmapToFile(bitmap, target, format, quality.coerceIn(1, 100))
+        target
+    } finally {
+        bitmap.recycle()
     }
-    bitmap.recycle()
-    return target
 }
 
 private fun upscaleImage(
@@ -2242,11 +2269,13 @@ private fun upscaleImage(
 ): File? {
     val source = openBitmap(context, input) ?: return null
     val scaled = upscaleBitmap(source, factor, algorithm, hardEdgeMix, sharpenAmount)
-    target.parentFile?.mkdirs()
-    FileOutputStream(target).use { out -> scaled.compress(Bitmap.CompressFormat.PNG, 100, out) }
-    scaled.recycle()
-    source.recycle()
-    return target
+    return try {
+        writeBitmapToFile(scaled, target, ExportFormat.PNG, 100)
+        target
+    } finally {
+        scaled.recycle()
+        source.recycle()
+    }
 }
 
 private fun buildUpscalePreviewData(
@@ -2746,24 +2775,36 @@ private fun buildCompressPreviewData(
     )
 }
 
-private fun splitToNineGrid(context: Context, input: PickedInput, outputDir: File): List<File> {
+private fun splitToNineGrid(
+    context: Context,
+    input: PickedInput,
+    outputDir: File,
+    format: ExportFormat,
+    quality: Int
+): List<File> {
     val bitmap = openBitmap(context, input) ?: return emptyList()
     val baseName = sanitizeFileName(inputDisplayName(context, input)?.substringBeforeLast('.') ?: "grid")
     val cellWidth = max(1, bitmap.width / 3)
     val cellHeight = max(1, bitmap.height / 3)
     val outputs = mutableListOf<File>()
-    repeat(3) { row ->
-        repeat(3) { col ->
-            val x = min(bitmap.width - cellWidth, col * cellWidth)
-            val y = min(bitmap.height - cellHeight, row * cellHeight)
-            val piece = Bitmap.createBitmap(bitmap, x, y, min(cellWidth, bitmap.width - x), min(cellHeight, bitmap.height - y))
-            val target = File(outputDir, "${baseName}_${row + 1}_${col + 1}.jpg")
-            FileOutputStream(target).use { piece.compress(Bitmap.CompressFormat.JPEG, 92, it) }
-            piece.recycle()
-            outputs += target
+    try {
+        repeat(3) { row ->
+            repeat(3) { col ->
+                val x = min(bitmap.width - cellWidth, col * cellWidth)
+                val y = min(bitmap.height - cellHeight, row * cellHeight)
+                val piece = Bitmap.createBitmap(bitmap, x, y, min(cellWidth, bitmap.width - x), min(cellHeight, bitmap.height - y))
+                try {
+                    val target = File(outputDir, "${baseName}_${row + 1}_${col + 1}.${format.extension}")
+                    writeBitmapToFile(piece, target, format, quality)
+                    outputs += target
+                } finally {
+                    piece.recycle()
+                }
+            }
         }
+    } finally {
+        bitmap.recycle()
     }
-    bitmap.recycle()
     return outputs
 }
 
@@ -2834,7 +2875,7 @@ private fun stitchImages(
 
     outputDir.mkdirs()
     val target = File(outputDir, "拼图_${direction.label}_${System.currentTimeMillis()}.jpg")
-    FileOutputStream(target).use { merged.compress(Bitmap.CompressFormat.JPEG, 94, it) }
+    writeBitmapToFile(merged, target, ExportFormat.JPG, 94)
 
     merged.recycle()
     scaledBitmaps.forEachIndexed { index, scaled ->
@@ -3165,7 +3206,13 @@ private fun GifComposeOrderEditor(
     }
 }
 
-private fun decomposeGifToFrames(context: Context, input: PickedInput, outputDir: File): List<File> {
+private fun decomposeGifToFrames(
+    context: Context,
+    input: PickedInput,
+    outputDir: File,
+    format: ExportFormat,
+    quality: Int
+): List<File> {
     val bytes = readBytesFromInput(context, input) ?: return emptyList()
     val decoder = StandardGifDecoder(DefaultGifBitmapProvider)
     return runCatching {
@@ -3184,11 +3231,13 @@ private fun decomposeGifToFrames(context: Context, input: PickedInput, outputDir
             for (index in 0 until frameCount) {
                 decoder.advance()
                 val frame = decoder.nextFrame ?: continue
-                val file = File(frameDir, "${baseName}_${(index + 1).toString().padStart(3, '0')}.png")
-                FileOutputStream(file).use { out ->
-                    frame.compress(Bitmap.CompressFormat.PNG, 100, out)
+                try {
+                    val file = File(frameDir, "${baseName}_${(index + 1).toString().padStart(3, '0')}.${format.extension}")
+                    writeBitmapToFile(frame, file, format, quality)
+                    add(file)
+                } finally {
+                    frame.recycle()
                 }
-                add(file)
             }
         }
     }.getOrElse { emptyList() }
@@ -3200,7 +3249,9 @@ private fun cropImageWithPreset(
     input: PickedInput,
     outputDir: File,
     preset: String,
-    previewState: CropPreviewState? = null
+    previewState: CropPreviewState? = null,
+    format: ExportFormat,
+    quality: Int
 ): File? {
     val bitmap = openBitmap(context, input) ?: return null
     if (previewState != null && previewState.viewportSize != IntSize.Zero && previewState.imageSize != IntSize.Zero) {
@@ -3217,11 +3268,14 @@ private fun cropImageWithPreset(
             val srcBottom = ((cropRect.bottom - imageTop) / displayHeight * bitmap.height).toInt().coerceIn(srcTop + 1, bitmap.height)
             val cropped = Bitmap.createBitmap(bitmap, srcLeft, srcTop, srcRight - srcLeft, srcBottom - srcTop)
             val baseName = sanitizeFileName(inputDisplayName(context, input)?.substringBeforeLast('.') ?: "crop")
-            val target = File(outputDir, "${baseName}_${preset.replace(':', 'x')}.jpg")
-            FileOutputStream(target).use { cropped.compress(Bitmap.CompressFormat.JPEG, 94, it) }
-            cropped.recycle()
-            bitmap.recycle()
-            return target
+            val target = File(outputDir, "${baseName}_${preset.replace(':', 'x')}.${format.extension}")
+            try {
+                writeBitmapToFile(cropped, target, format, quality)
+                return target
+            } finally {
+                cropped.recycle()
+                bitmap.recycle()
+            }
         }
     }
     val (ratioW, ratioH) = presetToRatio(preset)
@@ -3240,11 +3294,36 @@ private fun cropImageWithPreset(
     val y = max(0, (bitmap.height - cropHeight) / 2)
     val cropped = Bitmap.createBitmap(bitmap, x, y, cropWidth, cropHeight)
     val baseName = sanitizeFileName(inputDisplayName(context, input)?.substringBeforeLast('.') ?: "crop")
-    val target = File(outputDir, "${baseName}_${preset.replace(':', 'x')}.jpg")
-    FileOutputStream(target).use { cropped.compress(Bitmap.CompressFormat.JPEG, 94, it) }
-    cropped.recycle()
-    bitmap.recycle()
-    return target
+    val target = File(outputDir, "${baseName}_${preset.replace(':', 'x')}.${format.extension}")
+    try {
+        writeBitmapToFile(cropped, target, format, quality)
+        return target
+    } finally {
+        cropped.recycle()
+        bitmap.recycle()
+    }
+}
+
+private fun writeBitmapToFile(bitmap: Bitmap, target: File, format: ExportFormat, quality: Int) {
+    target.parentFile?.mkdirs()
+    val outputBitmap = if (format == ExportFormat.JPG && bitmap.hasAlpha()) bitmap.withWhiteBackground() else bitmap
+    try {
+        FileOutputStream(target).use { out ->
+            check(outputBitmap.compress(resolveCompressFormat(format), quality.coerceIn(1, 100), out)) {
+                "图片写出失败：${target.name}"
+            }
+        }
+    } finally {
+        if (outputBitmap !== bitmap) outputBitmap.recycle()
+    }
+}
+
+private fun Bitmap.withWhiteBackground(): Bitmap {
+    val out = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(out)
+    canvas.drawColor(android.graphics.Color.WHITE)
+    canvas.drawBitmap(this, 0f, 0f, null)
+    return out
 }
 
 private fun readImageSize(context: Context, input: PickedInput): IntSize? {

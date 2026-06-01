@@ -19,6 +19,7 @@ class AnimatedGifEncoder {
     private var out: OutputStream? = null
     private var pixels: ByteArray? = null
     private var indexedPixels: ByteArray? = null
+    private var transparentPixels: BooleanArray? = null
     private var colorDepth = 0
     private var colorTab: ByteArray? = null
     private val usedEntry = BooleanArray(256)
@@ -164,6 +165,12 @@ class AnimatedGifEncoder {
             hasTransparentPixels -> findClosest(0x00000000)
             else -> transIndex
         }
+        if (hasTransparentPixels) {
+            transparentPixels?.forEachIndexed { pixelIndex, isTransparent ->
+                if (isTransparent) indexedPixels!![pixelIndex] = transIndex.toByte()
+            }
+            usedEntry[transIndex] = true
+        }
     }
 
     private fun findClosest(color: Int): Int {
@@ -201,16 +208,21 @@ class AnimatedGifEncoder {
             }
         }
         pixels = ByteArray(sourcePixels.size * 3)
+        transparentPixels = BooleanArray(sourcePixels.size)
         var pixelsIndex = 0
         hasTransparentPixels = false
         var transparentCount = 0
-        for (pixel in sourcePixels) {
-            if ((pixel ushr 24) == 0) transparentCount++
+        for ((index, pixel) in sourcePixels.withIndex()) {
+            val isTransparent = (pixel ushr 24) == 0
+            if (isTransparent) {
+                transparentCount++
+                transparentPixels!![index] = true
+            }
             pixels!![pixelsIndex++] = (pixel and 0xff).toByte()
             pixels!![pixelsIndex++] = ((pixel shr 8) and 0xff).toByte()
             pixels!![pixelsIndex++] = ((pixel shr 16) and 0xff).toByte()
         }
-        hasTransparentPixels = 100 * transparentCount / sourcePixels.size.toDouble() > MIN_TRANSPARENT_PERCENTAGE
+        hasTransparentPixels = transparentCount > 0
     }
 
     @Throws(IOException::class)
@@ -290,6 +302,5 @@ class AnimatedGifEncoder {
     }
 
     companion object {
-        private const val MIN_TRANSPARENT_PERCENTAGE = 4.0
     }
 }
