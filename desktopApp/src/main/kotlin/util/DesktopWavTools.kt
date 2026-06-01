@@ -1,21 +1,26 @@
 package util
 
+import com.nekolaska.calabiyau.core.media.audio.PcmWavData
+import com.nekolaska.calabiyau.core.media.audio.PcmWavChannelMode
+import com.nekolaska.calabiyau.core.media.audio.PcmWavPhaseMode
+import com.nekolaska.calabiyau.core.media.audio.PcmWavTrimMode
+import com.nekolaska.calabiyau.core.media.audio.PcmWavVolumeMode
+import com.nekolaska.calabiyau.core.media.audio.SpectrogramConfig
+import com.nekolaska.calabiyau.core.media.audio.adjustPcmWavVolume
+import com.nekolaska.calabiyau.core.media.audio.applyPcmWavFade
+import com.nekolaska.calabiyau.core.media.audio.applyPcmWavNoiseGate
+import com.nekolaska.calabiyau.core.media.audio.applyPcmWavPhase
+import com.nekolaska.calabiyau.core.media.audio.buildSpectrogramPixels
+import com.nekolaska.calabiyau.core.media.audio.calculatePcmPeakPercent
+import com.nekolaska.calabiyau.core.media.audio.convertPcmWavChannels
+import com.nekolaska.calabiyau.core.media.audio.expectedPcmBlockAlign
+import com.nekolaska.calabiyau.core.media.audio.removePcmWavDcOffset
+import com.nekolaska.calabiyau.core.media.audio.trimPcmWavSilence
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.awt.image.BufferedImage
-import kotlin.coroutines.coroutineContext
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.ln
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.PI
-import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
-import kotlinx.coroutines.ensureActive
 
 enum class DesktopWavTrimMode(val label: String) {
     BOTH("裁剪头尾"),
@@ -31,6 +36,13 @@ enum class DesktopWavChannelMode(val label: String) {
 enum class DesktopWavVolumeMode(val label: String) {
     GAIN("调节音量"),
     NORMALIZE("峰值标准化")
+}
+
+enum class DesktopWavPhaseMode(val label: String) {
+    INVERT_ALL("整体反相"),
+    INVERT_LEFT("左声道反相"),
+    INVERT_RIGHT("右声道反相"),
+    SWAP_STEREO("左右互换")
 }
 
 private const val MAX_IN_MEMORY_PCM_BYTES = 768L * 1024L * 1024L
@@ -50,15 +62,23 @@ data class DesktopSpectrogramConfig(
     val maxFrequencyBins: Int = 256,
     val cutoffFrequencyHz: Int = 0,
     val lowColorArgb: Int = 0xFF0F172A.toInt(),
-    val highColorArgb: Int = 0xFF38BDF8.toInt()
+    val highColorArgb: Int = 0xFF38BDF8.toInt(),
+    val gainDb: Double = 0.0,
+    val gamma: Double = 1.0,
+    val floorDb: Double = -60.0
 )
 
-internal data class PcmWavData(
-    val channels: Int,
-    val sampleRate: Int,
-    val bitsPerSample: Int,
-    val blockAlign: Int,
-    val pcmData: ByteArray
+private fun DesktopSpectrogramConfig.toSharedConfig(): SpectrogramConfig = SpectrogramConfig(
+    windowSize = windowSize,
+    hopRatio = hopRatio,
+    maxTimeBins = maxTimeBins,
+    maxFrequencyBins = maxFrequencyBins,
+    cutoffFrequencyHz = cutoffFrequencyHz,
+    lowColorArgb = lowColorArgb,
+    highColorArgb = highColorArgb,
+    gainDb = gainDb,
+    gamma = gamma,
+    floorDb = floorDb
 )
 
 fun inspectDesktopWav(file: File): DesktopWavMeta {
@@ -73,7 +93,7 @@ internal fun inspectDesktopWav(wav: PcmWavData): DesktopWavMeta {
         sampleRate = wav.sampleRate,
         bitsPerSample = wav.bitsPerSample,
         durationMs = frames * 1000L / wav.sampleRate,
-        peakPercent = calculatePeakPercent(wav)
+        peakPercent = calculatePcmPeakPercent(wav)
     )
 }
 
@@ -85,76 +105,32 @@ fun trimDesktopWavSilence(
     mode: DesktopWavTrimMode
 ): File {
     val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
-    val frameCount = wav.pcmData.size / wav.blockAlign
-    if (frameCount <= 0) error("WAV 没有可处理的采样")
-    val silenceFrames = (wav.sampleRate * minSilenceMs / 1000.0).roundToInt().coerceAtLeast(1)
-    var startFrame = 0
-    var silentRun = 0
-    for (frame in 0 until frameCount) {
-        if (framePeak(wav, frame) <= thresholdRatio) {
-            silentRun++
-            if (silentRun >= silenceFrames) startFrame = frame + 1
-        } else {
-            break
+    val output = trimPcmWavSilence(
+        wav,
+        thresholdRatio,
+        minSilenceMs,
+        when (mode) {
+            DesktopWavTrimMode.BOTH -> PcmWavTrimMode.BOTH
+            DesktopWavTrimMode.START_ONLY -> PcmWavTrimMode.START_ONLY
+            DesktopWavTrimMode.END_ONLY -> PcmWavTrimMode.END_ONLY
         }
-    }
-    var endFrame = frameCount
-    silentRun = 0
-    for (frame in frameCount - 1 downTo 0) {
-        if (framePeak(wav, frame) <= thresholdRatio) {
-            silentRun++
-            if (silentRun >= silenceFrames) endFrame = frame
-        } else {
-            break
-        }
-    }
-    if (mode == DesktopWavTrimMode.END_ONLY) startFrame = 0
-    if (mode == DesktopWavTrimMode.START_ONLY) endFrame = frameCount
-    if (endFrame <= startFrame) error("裁剪参数过强，未保留有效音频")
+    ) ?: error("裁剪参数过强，未保留有效音频")
     val out = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_trimmed", "wav")
-    val from = startFrame * wav.blockAlign
-    val to = endFrame * wav.blockAlign
-    writePcmWav(out, wav.pcmData, from, to - from, wav.channels, wav.sampleRate, wav.bitsPerSample)
+    writePcmWav(out, output.wav.pcmData, output.wav.channels, output.wav.sampleRate, output.wav.bitsPerSample)
     return out
 }
 
 fun convertDesktopWavChannels(inputFile: File, outputDir: File, mode: DesktopWavChannelMode): File {
     val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
-    val output = when (mode) {
-        DesktopWavChannelMode.MONO_TO_STEREO -> {
-            require(wav.channels == 1) { "源文件不是单声道" }
-            val bytesPerSample = wav.bitsPerSample / 8
-            val outSize = wav.pcmData.size.toLong() * 2L
-            require(outSize <= MAX_IN_MEMORY_PCM_BYTES) { "声道转换结果过大，当前工具一次性处理上限为 ${MAX_IN_MEMORY_PCM_BYTES / 1024 / 1024}MB" }
-            val out = ByteArray(outSize.toInt())
-            var sourceOffset = 0
-            var targetOffset = 0
-            while (sourceOffset < wav.pcmData.size) {
-                System.arraycopy(wav.pcmData, sourceOffset, out, targetOffset, bytesPerSample)
-                targetOffset += bytesPerSample
-                System.arraycopy(wav.pcmData, sourceOffset, out, targetOffset, bytesPerSample)
-                targetOffset += bytesPerSample
-                sourceOffset += bytesPerSample
-            }
-            out to 2
+    val output = convertPcmWavChannels(
+        wav,
+        when (mode) {
+            DesktopWavChannelMode.MONO_TO_STEREO -> PcmWavChannelMode.MONO_TO_STEREO
+            DesktopWavChannelMode.STEREO_TO_MONO -> PcmWavChannelMode.STEREO_TO_MONO
         }
-        DesktopWavChannelMode.STEREO_TO_MONO -> {
-            require(wav.channels == 2) { "源文件不是双声道" }
-            val bytesPerSample = wav.bitsPerSample / 8
-            ByteArrayOutputStream(wav.pcmData.size / 2).use { out ->
-                var offset = 0
-                while (offset + bytesPerSample * 2 <= wav.pcmData.size) {
-                    val left = readSignedLE(wav.pcmData, offset, wav.bitsPerSample)
-                    val right = readSignedLE(wav.pcmData, offset + bytesPerSample, wav.bitsPerSample)
-                    writeSignedLE(out, ((left.toLong() + right.toLong()) / 2).toInt(), wav.bitsPerSample)
-                    offset += bytesPerSample * 2
-                }
-                out.toByteArray() to 1
-            }
-        }
-    }
+    ) ?: error("当前声道不支持所选转换")
     val out = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_channels", "wav")
-    writePcmWav(out, output.first, output.second, wav.sampleRate, wav.bitsPerSample)
+    writePcmWav(out, output.pcmData, output.channels, output.sampleRate, output.bitsPerSample)
     return out
 }
 
@@ -166,15 +142,68 @@ fun adjustDesktopWavVolume(
     targetPeakPercent: Int
 ): File {
     val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
-    val peak = peakAmplitude(wav)
-    val maxAmp = maxAmplitude(wav.bitsPerSample)
-    val multiplier = when (mode) {
-        DesktopWavVolumeMode.GAIN -> gainPercent.coerceAtLeast(0) / 100.0
-        DesktopWavVolumeMode.NORMALIZE -> if (peak <= 0.0) 1.0 else (targetPeakPercent.coerceIn(1, 100) / 100.0 * maxAmp) / peak
-    }
+    val output = adjustPcmWavVolume(
+        wav,
+        when (mode) {
+            DesktopWavVolumeMode.GAIN -> PcmWavVolumeMode.GAIN
+            DesktopWavVolumeMode.NORMALIZE -> PcmWavVolumeMode.NORMALIZE
+        },
+        gainPercent,
+        targetPeakPercent
+    )?.wav ?: wav
     val out = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_volume", "wav")
-    writePcmWav(out, scalePcmData(wav, multiplier), wav.channels, wav.sampleRate, wav.bitsPerSample)
+    writePcmWav(out, output.pcmData, output.channels, output.sampleRate, output.bitsPerSample)
     return out
+}
+
+fun applyDesktopWavNoiseGate(
+    inputFile: File,
+    outputDir: File,
+    thresholdPercent: Double,
+    reductionDb: Double
+): File {
+    val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
+    val output = applyPcmWavNoiseGate(wav, thresholdPercent, reductionDb) ?: error("WAV 没有可处理的采样")
+    val outFile = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_gate", "wav")
+    writePcmWav(outFile, output.pcmData, output.channels, output.sampleRate, output.bitsPerSample)
+    return outFile
+}
+
+fun applyDesktopWavFade(
+    inputFile: File,
+    outputDir: File,
+    fadeInMs: Int,
+    fadeOutMs: Int
+): File {
+    val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
+    val output = applyPcmWavFade(wav, fadeInMs, fadeOutMs) ?: error("WAV 没有可处理的采样")
+    val outFile = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_fade", "wav")
+    writePcmWav(outFile, output.pcmData, output.channels, output.sampleRate, output.bitsPerSample)
+    return outFile
+}
+
+fun removeDesktopWavDcOffset(inputFile: File, outputDir: File): File {
+    val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
+    val output = removePcmWavDcOffset(wav) ?: error("WAV 没有可处理的采样")
+    val outFile = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_dc", "wav")
+    writePcmWav(outFile, output.pcmData, output.channels, output.sampleRate, output.bitsPerSample)
+    return outFile
+}
+
+fun applyDesktopWavPhase(inputFile: File, outputDir: File, mode: DesktopWavPhaseMode): File {
+    val wav = readPcmWav(inputFile) ?: error("仅支持 PCM WAV")
+    val output = applyPcmWavPhase(
+        wav,
+        when (mode) {
+            DesktopWavPhaseMode.INVERT_ALL -> PcmWavPhaseMode.INVERT_ALL
+            DesktopWavPhaseMode.INVERT_LEFT -> PcmWavPhaseMode.INVERT_LEFT
+            DesktopWavPhaseMode.INVERT_RIGHT -> PcmWavPhaseMode.INVERT_RIGHT
+            DesktopWavPhaseMode.SWAP_STEREO -> PcmWavPhaseMode.SWAP_STEREO
+        }
+    ) ?: error("WAV 没有可处理的采样")
+    val outFile = uniqueSiblingFile(outputDir, inputFile.nameWithoutExtension + "_phase", "wav")
+    writePcmWav(outFile, output.pcmData, output.channels, output.sampleRate, output.bitsPerSample)
+    return outFile
 }
 
 suspend fun buildDesktopSpectrogramImage(
@@ -189,56 +218,9 @@ internal suspend fun buildDesktopSpectrogramImage(
     wav: PcmWavData,
     config: DesktopSpectrogramConfig = DesktopSpectrogramConfig()
 ): BufferedImage {
-    val frameCount = wav.pcmData.size / wav.blockAlign
-    if (frameCount <= 0) return BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-
-    val windowSize = normalizeSpectrogramWindowSize(config.windowSize)
-    val hopRatio = config.hopRatio.coerceIn(0.05f, 1.0f)
-    val maxTimeBins = config.maxTimeBins.coerceAtLeast(1)
-    val maxFrequencyBins = config.maxFrequencyBins.coerceAtLeast(1)
-    val nyquist = (wav.sampleRate / 2.0).coerceAtLeast(1.0)
-    val displayMaxHz = config.cutoffFrequencyHz
-        .takeIf { it > 0 }
-        ?.toDouble()
-        ?.coerceIn(1.0, nyquist)
-        ?: nyquist
-    val rawHop = max(1, (windowSize * hopRatio).toInt())
-    val totalWindows = max(1, 1 + max(0, frameCount - windowSize) / rawHop)
-    val hop = max(1, rawHop * max(1, totalWindows / maxTimeBins))
-    val timeBins = min(maxTimeBins, totalWindows)
-    val fftFrequencyBins = (windowSize / 2).coerceAtLeast(1)
-    val frequencyScaleDenominator = (maxFrequencyBins - 1).coerceAtLeast(1)
-    val window = DoubleArray(windowSize) { index ->
-        0.5 - 0.5 * cos(2.0 * PI * index / (windowSize - 1))
-    }
-    val maxAmp = maxAmplitude(wav.bitsPerSample).coerceAtLeast(1.0)
-
-    val image = BufferedImage(timeBins, maxFrequencyBins * wav.channels, BufferedImage.TYPE_INT_ARGB)
-    val real = DoubleArray(windowSize)
-    val imag = DoubleArray(windowSize)
-
-    for (channel in 0 until wav.channels) {
-        coroutineContext.ensureActive()
-        val channelTop = channel * maxFrequencyBins
-        for (timeIndex in 0 until timeBins) {
-            coroutineContext.ensureActive()
-            real.fill(0.0)
-            imag.fill(0.0)
-            val startFrame = timeIndex * hop
-            for (i in 0 until windowSize) {
-                real[i] = (sampleValue(wav, startFrame + i, channel) / maxAmp) * window[i]
-            }
-            fft(real, imag)
-            for (pixelRow in 0 until maxFrequencyBins) {
-                val fromBottom = maxFrequencyBins - 1 - pixelRow
-                val freqHz = displayMaxHz * (fromBottom.toDouble() / frequencyScaleDenominator.toDouble())
-                val fftBin = ((freqHz / nyquist) * (fftFrequencyBins - 1)).roundToInt().coerceIn(0, fftFrequencyBins - 1)
-                val magnitude = sqrt(real[fftBin] * real[fftBin] + imag[fftBin] * imag[fftBin])
-                val intensity = (ln(1.0 + magnitude * 32.0) / ln(33.0)).coerceIn(0.0, 1.0).toFloat()
-                image.setRGB(timeIndex, channelTop + pixelRow, spectrogramColorArgb(intensity, config))
-            }
-        }
-    }
+    val pixels = buildSpectrogramPixels(wav, config.toSharedConfig())
+    val image = BufferedImage(pixels.width, pixels.height, BufferedImage.TYPE_INT_ARGB)
+    image.setRGB(0, 0, pixels.width, pixels.height, pixels.argb, 0, pixels.width)
     return image
 }
 
@@ -286,176 +268,13 @@ internal fun readPcmWav(inputFile: File): PcmWavData? {
             if (next > raf.filePointer) raf.seek(next)
         }
         val pcm = data ?: return null
-        if (channels !in 1..2 || sampleRate <= 0 || bitsPerSample !in listOf(8, 16, 24, 32) || blockAlign <= 0) return null
-        return PcmWavData(channels, sampleRate, bitsPerSample, blockAlign, pcm)
+        val expectedBlockAlign = expectedPcmBlockAlign(channels, bitsPerSample) ?: return null
+        if (sampleRate <= 0 || blockAlign != expectedBlockAlign) return null
+        val alignedLength = pcm.size - (pcm.size % blockAlign)
+        if (alignedLength <= 0) return null
+        val alignedPcm = if (alignedLength == pcm.size) pcm else pcm.copyOf(alignedLength)
+        return PcmWavData(channels, sampleRate, bitsPerSample, blockAlign, alignedPcm)
     }
-}
-
-private fun framePeak(wav: PcmWavData, frameIndex: Int): Double {
-    val bytesPerSample = wav.bitsPerSample / 8
-    val base = frameIndex * wav.blockAlign
-    var peak = 0.0
-    for (channel in 0 until wav.channels) {
-        val value = abs(readSignedLE(wav.pcmData, base + channel * bytesPerSample, wav.bitsPerSample).toDouble()) / maxAmplitude(wav.bitsPerSample)
-        if (value > peak) peak = value
-    }
-    return peak
-}
-
-private fun normalizeSpectrogramWindowSize(windowSize: Int): Int {
-    val clamped = windowSize.coerceIn(256, 8192)
-    val lowerPower = Integer.highestOneBit(clamped)
-    return if (lowerPower == clamped) {
-        clamped
-    } else {
-        val upperPower = lowerPower shl 1
-        if (upperPower <= 8192 && upperPower - clamped < clamped - lowerPower) upperPower else lowerPower
-    }
-}
-
-private fun sampleValue(wav: PcmWavData, frameIndex: Int, channel: Int): Double {
-    if (frameIndex < 0 || channel !in 0 until wav.channels) return 0.0
-    val frameCount = wav.pcmData.size / wav.blockAlign
-    if (frameIndex >= frameCount) return 0.0
-    val bytesPerSample = wav.bitsPerSample / 8
-    return readSignedLE(wav.pcmData, frameIndex * wav.blockAlign + channel * bytesPerSample, wav.bitsPerSample).toDouble()
-}
-
-private fun spectrogramColorArgb(value: Float, config: DesktopSpectrogramConfig): Int {
-    val v = value.coerceIn(0f, 1f)
-    val low = config.lowColorArgb
-    val high = config.highColorArgb
-    val lowA = (low ushr 24) and 0xff
-    val lowR = (low ushr 16) and 0xff
-    val lowG = (low ushr 8) and 0xff
-    val lowB = low and 0xff
-    val highA = (high ushr 24) and 0xff
-    val highR = (high ushr 16) and 0xff
-    val highG = (high ushr 8) and 0xff
-    val highB = high and 0xff
-    val red = (lowR + (highR - lowR) * v).toInt().coerceIn(0, 255)
-    val green = (lowG + (highG - lowG) * v).toInt().coerceIn(0, 255)
-    val blue = (lowB + (highB - lowB) * v).toInt().coerceIn(0, 255)
-    val alpha = (lowA + (highA - lowA) * v).toInt().coerceIn(0, 255)
-    return (alpha shl 24) or (red shl 16) or (green shl 8) or blue
-}
-
-private fun fft(real: DoubleArray, imag: DoubleArray) {
-    val n = real.size
-    var j = 0
-    for (i in 1 until n) {
-        var bit = n shr 1
-        while (j and bit != 0) {
-            j = j xor bit
-            bit = bit shr 1
-        }
-        j = j xor bit
-        if (i < j) {
-            val tempReal = real[i]
-            real[i] = real[j]
-            real[j] = tempReal
-            val tempImag = imag[i]
-            imag[i] = imag[j]
-            imag[j] = tempImag
-        }
-    }
-    var length = 2
-    while (length <= n) {
-        val angle = -2.0 * PI / length
-        val wLengthReal = cos(angle)
-        val wLengthImag = sin(angle)
-        var i = 0
-        while (i < n) {
-            var wReal = 1.0
-            var wImag = 0.0
-            for (k in 0 until length / 2) {
-                val even = i + k
-                val odd = even + length / 2
-                val oddReal = real[odd] * wReal - imag[odd] * wImag
-                val oddImag = real[odd] * wImag + imag[odd] * wReal
-                real[odd] = real[even] - oddReal
-                imag[odd] = imag[even] - oddImag
-                real[even] += oddReal
-                imag[even] += oddImag
-                val nextReal = wReal * wLengthReal - wImag * wLengthImag
-                wImag = wReal * wLengthImag + wImag * wLengthReal
-                wReal = nextReal
-            }
-            i += length
-        }
-        length = length shl 1
-    }
-}
-
-private fun calculatePeakPercent(wav: PcmWavData): Double = peakAmplitude(wav) / maxAmplitude(wav.bitsPerSample) * 100.0
-
-private fun peakAmplitude(wav: PcmWavData): Double {
-    val bytesPerSample = wav.bitsPerSample / 8
-    var peak = 0.0
-    var offset = 0
-    while (offset + bytesPerSample <= wav.pcmData.size) {
-        peak = max(peak, abs(readSignedLE(wav.pcmData, offset, wav.bitsPerSample).toDouble()))
-        offset += bytesPerSample
-    }
-    return peak
-}
-
-private fun scalePcmData(wav: PcmWavData, multiplier: Double): ByteArray {
-    val bytesPerSample = wav.bitsPerSample / 8
-    val maxValue = maxSignedValue(wav.bitsPerSample)
-    val minValue = minSignedValue(wav.bitsPerSample)
-    val out = ByteArray(wav.pcmData.size)
-    var offset = 0
-    while (offset + bytesPerSample <= wav.pcmData.size) {
-        val scaled = (readSignedLE(wav.pcmData, offset, wav.bitsPerSample) * multiplier).roundToInt().coerceIn(minValue, maxValue)
-        writeSignedLE(out, offset, scaled, wav.bitsPerSample)
-        offset += bytesPerSample
-    }
-    return out
-}
-
-private fun maxAmplitude(bits: Int): Double = maxSignedValue(bits).toDouble()
-private fun maxSignedValue(bits: Int): Int = if (bits == 32) Int.MAX_VALUE else (1 shl (bits - 1)) - 1
-private fun minSignedValue(bits: Int): Int = if (bits == 32) Int.MIN_VALUE else -(1 shl (bits - 1))
-
-private fun readSignedLE(data: ByteArray, offset: Int, bits: Int): Int {
-    return when (bits) {
-        8 -> (data[offset].toInt() and 0xFF) - 128
-        16 -> ((data[offset].toInt() and 0xFF) or ((data[offset + 1].toInt() and 0xFF) shl 8)).toShort().toInt()
-        24 -> {
-            val value = (data[offset].toInt() and 0xFF) or ((data[offset + 1].toInt() and 0xFF) shl 8) or (data[offset + 2].toInt() shl 16)
-            if (value and 0x800000 != 0) value or -0x1000000 else value
-        }
-        32 -> (data[offset].toInt() and 0xFF) or ((data[offset + 1].toInt() and 0xFF) shl 8) or ((data[offset + 2].toInt() and 0xFF) shl 16) or (data[offset + 3].toInt() shl 24)
-        else -> 0
-    }
-}
-
-private fun writeSignedLE(data: ByteArray, offset: Int, value: Int, bits: Int) {
-    when (bits) {
-        8 -> data[offset] = (value + 128).coerceIn(0, 255).toByte()
-        16 -> {
-            data[offset] = value.toByte()
-            data[offset + 1] = (value shr 8).toByte()
-        }
-        24 -> {
-            data[offset] = value.toByte()
-            data[offset + 1] = (value shr 8).toByte()
-            data[offset + 2] = (value shr 16).toByte()
-        }
-        32 -> {
-            data[offset] = value.toByte()
-            data[offset + 1] = (value shr 8).toByte()
-            data[offset + 2] = (value shr 16).toByte()
-            data[offset + 3] = (value shr 24).toByte()
-        }
-    }
-}
-
-private fun writeSignedLE(out: ByteArrayOutputStream, value: Int, bits: Int) {
-    val bytes = ByteArray(bits / 8)
-    writeSignedLE(bytes, 0, value, bits)
-    out.write(bytes)
 }
 
 private fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRate: Int, bitsPerSample: Int) {
@@ -474,6 +293,8 @@ private fun writePcmWav(
     file.parentFile?.mkdirs()
     val byteRate = sampleRate * channels * bitsPerSample / 8
     val blockAlign = channels * bitsPerSample / 8
+    require(expectedPcmBlockAlign(channels, bitsPerSample) == blockAlign && sampleRate > 0) { "无效的 PCM WAV 参数" }
+    require(offset >= 0 && length >= 0 && offset + length <= pcmData.size && length % blockAlign == 0) { "PCM 数据不是完整采样帧" }
     val riffSize = 36L + length.toLong()
     require(riffSize <= 0xFFFF_FFFFL) { "WAV 文件过大，RIFF size 超过 4GB" }
     FileOutputStream(file).use { fileOut ->

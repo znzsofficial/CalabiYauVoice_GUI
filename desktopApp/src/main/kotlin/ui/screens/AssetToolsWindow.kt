@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,12 +20,10 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,21 +47,18 @@ import ui.components.StyledWindow
 import util.*
 import java.awt.Desktop
 import java.awt.Color
+import java.awt.AlphaComposite
 import java.awt.datatransfer.DataFlavor
 import java.awt.Graphics2D
 import java.awt.image.BufferedImage
 import java.io.BufferedReader
 import java.io.File
 import java.io.StringReader
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 import javax.imageio.ImageWriter
+import javax.imageio.metadata.IIOMetadataNode
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.min
 import kotlin.math.max
@@ -80,32 +74,11 @@ private enum class GifComposeScaleMode(val label: String) {
 }
 private enum class TimelineExportFormat(val label: String, val ext: String) { SRT("SRT", "srt"), LRC("LRC", "lrc"), VTT("VTT", "vtt"), ASS("ASS", "ass"), SSA("SSA", "ssa") }
 
-private data class AudioToolInput(val source: File, val wavFile: File, val isTemporary: Boolean, val wavData: PcmWavData)
-
-private val assetAudioDecodeExecutor: ExecutorService by lazy {
-    Executors.newSingleThreadExecutor { task ->
-        Thread(task, "asset-tools-audio-decode").apply { isDaemon = true }
-    }
-}
-
-private enum class SpectrogramPaletteOption(
-    val label: String,
-    val lowColorArgb: Int,
-    val highColorArgb: Int
-) {
-    Ocean("海蓝", 0xFF0F172A.toInt(), 0xFF38BDF8.toInt()),
-    Fire("火焰", 0xFF1F0303.toInt(), 0xFFFFA726.toInt()),
-    Violet("紫罗兰", 0xFF120B2E.toInt(), 0xFFC084FC.toInt()),
-    Mono("单色", 0xFF050505.toInt(), 0xFFFFFFFF.toInt())
-}
-
 private data class TimelineClip(val id: Long, val startMs: Long, val endMs: Long, val text: String)
 private data class ParsedTimeline(val clips: List<TimelineClip>, val truncated: Boolean)
 
 private const val MIN_CLIP_MS = 100L
 private const val MAX_CLIPS = 8000
-private const val AUDIO_DECODE_TIMEOUT_SECONDS = 45L
-
 private suspend inline fun <T> runCatchingCancellable(block: suspend () -> T): Result<T> {
     return try {
         Result.success(block())
@@ -245,7 +218,7 @@ fun AssetToolsWindow(onCloseRequest: () -> Unit) {
 }
 
 @Composable
-private fun ToolSectionCard(title: String, modifier: Modifier = Modifier, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
+internal fun ToolSectionCard(title: String, modifier: Modifier = Modifier, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Card(modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -315,7 +288,7 @@ private fun ImageToolsTab(
                                 count++
                             }
                             ImageToolMode.GIF_SPLIT -> {
-                                count += exportGifFrames(file, outDir)
+                                count += exportGifFrames(file, outDir, selectedFormat, selectedQuality / 100f)
                             }
                             ImageToolMode.GIF_COMPOSE -> Unit
                         }
@@ -456,214 +429,6 @@ private fun TextToolsTab(
     }
 }
 
-@OptIn(ExperimentalFluentApi::class)
-@Composable
-private fun AudioToolsTab(
-    outputPath: String,
-    isBusy: Boolean,
-    onBusyChange: (Boolean) -> Unit,
-    onLog: (String) -> Unit,
-    scope: kotlinx.coroutines.CoroutineScope
-) {
-    var input by remember { mutableStateOf<AudioToolInput?>(null) }
-    var meta by remember { mutableStateOf<DesktopWavMeta?>(null) }
-    var trimThreshold by remember { mutableStateOf("1.5") }
-    var minSilenceMs by remember { mutableStateOf("120") }
-    var trimMode by remember { mutableStateOf(DesktopWavTrimMode.BOTH) }
-    var channelMode by remember { mutableStateOf(DesktopWavChannelMode.STEREO_TO_MONO) }
-    var volumeMode by remember { mutableStateOf(DesktopWavVolumeMode.NORMALIZE) }
-    var gainPercent by remember { mutableStateOf("120") }
-    var targetPeak by remember { mutableStateOf("90") }
-    var spectrogram by remember { mutableStateOf<BufferedImage?>(null) }
-    var spectrogramWindowSize by remember { mutableStateOf("1024") }
-    var spectrogramHopPercent by remember { mutableStateOf("25") }
-    var spectrogramTimeBins by remember { mutableStateOf("720") }
-    var spectrogramFrequencyBins by remember { mutableStateOf("256") }
-    var spectrogramCutoffHz by remember { mutableStateOf("0") }
-    var spectrogramZoomPercent by remember { mutableStateOf("180") }
-    var spectrogramPalette by remember { mutableStateOf(SpectrogramPaletteOption.Ocean) }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            input?.takeIf { it.isTemporary }?.wavFile?.delete()
-            runCatching { File(outputPath, "音频工具/_preview").takeIf { it.isDirectory }?.deleteRecursively() }
-        }
-    }
-
-    fun currentSpectrogramConfig(): DesktopSpectrogramConfig = DesktopSpectrogramConfig(
-        windowSize = spectrogramWindowSize.toIntOrNull()?.coerceIn(256, 8192) ?: 1024,
-        hopRatio = (spectrogramHopPercent.toIntOrNull()?.coerceIn(5, 100) ?: 25) / 100f,
-        maxTimeBins = spectrogramTimeBins.toIntOrNull()?.coerceIn(120, 4000) ?: 720,
-        maxFrequencyBins = spectrogramFrequencyBins.toIntOrNull()?.coerceIn(64, 1024) ?: 256,
-        cutoffFrequencyHz = spectrogramCutoffHz.toIntOrNull()?.coerceIn(0, 384000) ?: 0,
-        lowColorArgb = spectrogramPalette.lowColorArgb,
-        highColorArgb = spectrogramPalette.highColorArgb
-    )
-
-    fun regenerateSpectrogram() {
-        val source = input ?: return
-        val config = currentSpectrogramConfig()
-        scope.launch {
-            onBusyChange(true)
-            runCatchingCancellable {
-                withContext(Dispatchers.Default) { buildDesktopSpectrogramImage(source.wavData, config) }
-            }.onSuccess {
-                spectrogram = it
-                onLog("频谱图已重新生成：${it.width} x ${it.height}")
-            }.onFailure {
-                onLog("频谱图生成失败：${it.message ?: it::class.simpleName}")
-            }
-            onBusyChange(false)
-        }
-    }
-
-    fun load(file: File) {
-        scope.launch {
-            onBusyChange(true)
-            val specConfig = currentSpectrogramConfig()
-            runCatchingCancellable {
-                withContext(Dispatchers.Default) {
-                    val prepared = prepareAudioInput(file, File(outputPath, "音频工具/_preview"))
-                    Triple(prepared, inspectDesktopWav(prepared.wavData), buildDesktopSpectrogramImage(prepared.wavData, specConfig))
-                }
-            }
-                .onSuccess { (prepared, nextMeta, nextSpectrogram) ->
-                    input?.takeIf { it.isTemporary }?.wavFile?.delete()
-                    input = prepared
-                    meta = nextMeta
-                    spectrogram = nextSpectrogram
-                    channelMode = if (nextMeta.channels == 1) DesktopWavChannelMode.MONO_TO_STEREO else DesktopWavChannelMode.STEREO_TO_MONO
-                    onLog("已读取音频：${file.name}，${nextMeta.channels} 声道 / ${nextMeta.sampleRate} Hz / ${nextMeta.bitsPerSample} bit")
-                }
-                .onFailure { onLog("读取失败：${audioDecodeFailureMessage(it)}") }
-            onBusyChange(false)
-        }
-    }
-
-    fun runAudio(action: String, block: (File, File) -> File) {
-        val source = input ?: return
-        scope.launch {
-            onBusyChange(true)
-            val specConfig = currentSpectrogramConfig()
-            var nextWav: PcmWavData? = null
-            runCatchingCancellable {
-                withContext(Dispatchers.Default) {
-                    val output = block(source.wavFile, File(outputPath, "音频工具/$action").also { it.mkdirs() })
-                    val loadedWav = readPcmWav(output) ?: error("仅支持 PCM WAV")
-                    nextWav = loadedWav
-                    Triple(output, inspectDesktopWav(loadedWav), buildDesktopSpectrogramImage(loadedWav, specConfig))
-                }
-            }
-                .onSuccess { (output, next, nextSpectrogram) ->
-                    onLog("$action 完成：${output.absolutePath}")
-                    openDirectory(output.parentFile)
-                    input?.takeIf { previous -> previous.isTemporary }?.wavFile?.delete()
-                    meta = next
-                    spectrogram = nextSpectrogram
-                    input = AudioToolInput(output, output, false, nextWav ?: error("仅支持 PCM WAV"))
-                }
-                .onFailure { onLog("$action 失败：${it.message ?: it::class.simpleName}") }
-            onBusyChange(false)
-        }
-    }
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(end = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        ToolSectionCard(title = "音频输入", subtitle = "支持 WAV / MP3 / FLAC，自动转为临时 WAV 进行处理") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { chooseFiles(setOf("wav", "mp3", "flac"), multi = false)?.firstOrNull()?.let(::load) }, disabled = isBusy) { Text("选择音频") }
-                Text(input?.source?.absolutePath ?: "未选择 WAV/MP3/FLAC", modifier = Modifier.weight(1f), fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            meta?.let {
-                Text("${it.channels} 声道 / ${it.sampleRate} Hz / ${it.bitsPerSample} bit / ${formatDuration(it.durationMs)} / 峰值 ${"%.1f".format(it.peakPercent)}%", fontSize = 12.sp)
-            }
-        }
-        spectrogram?.let { image ->
-            ToolSectionCard(title = "频谱图", subtitle = "支持时间轴缩放、横向滚动和参数化生成") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${image.width} x ${image.height}", fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
-                    Spacer(Modifier.weight(1f))
-                    Button(onClick = ::regenerateSpectrogram, disabled = isBusy || input == null) { Text("重新生成") }
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                onBusyChange(true)
-                                runCatchingCancellable {
-                                    withContext(Dispatchers.IO) {
-                                        val outDir = File(outputPath, "音频工具/频谱图").also { it.mkdirs() }
-                                        val out = uniqueOutputFile(outDir, input?.source?.nameWithoutExtension?.plus("_spectrogram") ?: "spectrogram", "png")
-                                        ImageIO.write(image, "png", out)
-                                        out
-                                    }
-                                }.onSuccess {
-                                    onLog("频谱图已导出：${it.absolutePath}")
-                                    openDirectory(it.parentFile)
-                                }.onFailure {
-                                    onLog("频谱图导出失败：${it.message ?: it::class.simpleName}")
-                                }
-                                onBusyChange(false)
-                            }
-                        },
-                        disabled = isBusy
-                    ) { Text("导出 PNG") }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                    TextField(value = spectrogramWindowSize, onValueChange = { if (it.all(Char::isDigit)) spectrogramWindowSize = it }, header = { Text("窗口", fontSize = 12.sp) }, modifier = Modifier.width(90.dp), singleLine = true)
-                    TextField(value = spectrogramHopPercent, onValueChange = { if (it.all(Char::isDigit)) spectrogramHopPercent = it }, header = { Text("Hop %", fontSize = 12.sp) }, modifier = Modifier.width(90.dp), singleLine = true)
-                    TextField(value = spectrogramTimeBins, onValueChange = { if (it.all(Char::isDigit)) spectrogramTimeBins = it }, header = { Text("时间格", fontSize = 12.sp) }, modifier = Modifier.width(90.dp), singleLine = true)
-                    TextField(value = spectrogramFrequencyBins, onValueChange = { if (it.all(Char::isDigit)) spectrogramFrequencyBins = it }, header = { Text("频率格", fontSize = 12.sp) }, modifier = Modifier.width(90.dp), singleLine = true)
-                    TextField(value = spectrogramCutoffHz, onValueChange = { if (it.all(Char::isDigit)) spectrogramCutoffHz = it }, header = { Text("截止 Hz", fontSize = 12.sp) }, modifier = Modifier.width(100.dp), singleLine = true)
-                    TextField(value = spectrogramZoomPercent, onValueChange = { if (it.all(Char::isDigit)) spectrogramZoomPercent = it }, header = { Text("缩放 %", fontSize = 12.sp) }, modifier = Modifier.width(90.dp), singleLine = true)
-                    ComboBox(header = "配色", items = SpectrogramPaletteOption.entries.map { it.label }, selected = spectrogramPalette.ordinal, onSelectionChange = { i, _ -> spectrogramPalette = SpectrogramPaletteOption.entries[i] })
-                }
-                val zoom = (spectrogramZoomPercent.toIntOrNull()?.coerceIn(50, 1000) ?: 180) / 100f
-                val previewHeight = 180.dp
-                val previewWidth = (image.width * zoom).coerceAtLeast(320f).dp
-                val bitmap = remember(image) { image.toComposeImageBitmap() }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(previewHeight + 18.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(androidx.compose.ui.graphics.Color.Black)
-                        .horizontalScroll(rememberScrollState())
-                ) {
-                    androidx.compose.foundation.Image(
-                        bitmap = bitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.FillBounds,
-                        modifier = Modifier.width(previewWidth).height(previewHeight)
-                    )
-                }
-            }
-        }
-        ToolSectionCard(title = "静音裁剪", subtitle = "按阈值移除前后静音，保留中间有效内容") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                ComboBox(header = "模式", items = DesktopWavTrimMode.entries.map { it.label }, selected = trimMode.ordinal, onSelectionChange = { i, _ -> trimMode = DesktopWavTrimMode.entries[i] })
-                TextField(value = trimThreshold, onValueChange = { trimThreshold = it }, header = { Text("阈值 %", fontSize = 12.sp) }, modifier = Modifier.width(110.dp), singleLine = true)
-                TextField(value = minSilenceMs, onValueChange = { if (it.all(Char::isDigit)) minSilenceMs = it }, header = { Text("最短静音 ms", fontSize = 12.sp) }, modifier = Modifier.width(140.dp), singleLine = true)
-                Button(onClick = { runAudio("静音裁剪") { f, d -> trimDesktopWavSilence(f, d, (trimThreshold.toDoubleOrNull() ?: 1.5) / 100.0, minSilenceMs.toIntOrNull() ?: 120, trimMode) } }, disabled = isBusy || input == null) { Text("执行") }
-            }
-        }
-        ToolSectionCard(title = "声道与音量", subtitle = "支持声道转换、增益调整与目标峰值归一化") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                ComboBox(header = "声道", items = DesktopWavChannelMode.entries.map { it.label }, selected = channelMode.ordinal, onSelectionChange = { i, _ -> channelMode = DesktopWavChannelMode.entries[i] })
-                Button(onClick = { runAudio("声道转换") { f, d -> convertDesktopWavChannels(f, d, channelMode) } }, disabled = isBusy || input == null) { Text("转换声道") }
-                Spacer(Modifier.width(16.dp))
-                ComboBox(header = "音量", items = DesktopWavVolumeMode.entries.map { it.label }, selected = volumeMode.ordinal, onSelectionChange = { i, _ -> volumeMode = DesktopWavVolumeMode.entries[i] })
-                TextField(value = gainPercent, onValueChange = { if (it.all(Char::isDigit)) gainPercent = it }, header = { Text("增益 %", fontSize = 12.sp) }, modifier = Modifier.width(100.dp), singleLine = true)
-                TextField(value = targetPeak, onValueChange = { if (it.all(Char::isDigit)) targetPeak = it }, header = { Text("目标峰值 %", fontSize = 12.sp) }, modifier = Modifier.width(120.dp), singleLine = true)
-                Button(onClick = { runAudio("音量处理") { f, d -> adjustDesktopWavVolume(f, d, volumeMode, gainPercent.toIntOrNull() ?: 120, targetPeak.toIntOrNull() ?: 90) } }, disabled = isBusy || input == null) { Text("处理音量") }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class, ExperimentalFluentApi::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun FileDropList(
@@ -775,7 +540,7 @@ private fun chooseDirectory(initialPath: String): File? = SystemFileChooser(init
     fileSelectionMode = SystemFileChooser.DIRECTORIES_ONLY
 }.takeIf { it.showOpenDialog(null) == SystemFileChooser.APPROVE_OPTION }?.selectedFile
 
-private fun chooseFiles(exts: Set<String>, multi: Boolean): List<File>? = SystemFileChooser(home).apply {
+internal fun chooseFiles(exts: Set<String>, multi: Boolean): List<File>? = SystemFileChooser(home).apply {
     fileSelectionMode = SystemFileChooser.FILES_ONLY
     isMultiSelectionEnabled = multi
 }.takeIf { it.showOpenDialog(null) == SystemFileChooser.APPROVE_OPTION }?.let { chooser ->
@@ -788,48 +553,12 @@ private fun collectFiles(files: List<File>, exts: Set<String>): List<File> = fil
     else listOf(file).filter { it.isFile && it.extension.lowercase() in exts }
 }
 
-private fun prepareAudioInput(file: File, tempDir: File): AudioToolInput {
-    require(file.isFile) { "音频文件不存在" }
-    val ext = file.extension.lowercase()
-    require(ext in setOf("wav", "mp3", "flac")) { "不支持的音频格式：${file.extension}" }
-    if (ext == "wav") {
-        readPcmWav(file)?.let { wavData ->
-            return AudioToolInput(file, file, false, wavData)
-        }
-        tempDir.mkdirs()
-        val wav = uniqueOutputFile(tempDir, file.nameWithoutExtension + "_pcm", "wav")
-        runAudioDecodeWithTimeout { decodeDesktopAudioToPcmWav(file, wav) }
-        val wavData = readPcmWav(wav) ?: error("无法解码此 WAV 文件")
-        return AudioToolInput(file, wav, true, wavData)
-    }
-    tempDir.mkdirs()
-    val wav = uniqueOutputFile(tempDir, file.nameWithoutExtension + "_pcm", "wav")
-    runAudioDecodeWithTimeout { decodeDesktopAudioToPcmWav(file, wav) }
-    val wavData = readPcmWav(wav) ?: error("仅支持 PCM WAV")
-    return AudioToolInput(file, wav, true, wavData)
-}
-
-private fun runAudioDecodeWithTimeout(block: () -> Unit) {
-    val future = assetAudioDecodeExecutor.submit(Callable { block() })
-    try {
-        future.get(AUDIO_DECODE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    } catch (_: TimeoutException) {
-        future.cancel(true)
-        error("音频解码超时，请尝试先用音频转换工具转为 WAV")
-    }
-}
-
-private fun audioDecodeFailureMessage(error: Throwable): String {
-    val message = error.message ?: error::class.simpleName.orEmpty()
-    return if (message.contains("音频转换工具")) message else "$message。可尝试先用音频转换工具转为 WAV。"
-}
-
-private fun openDirectory(dir: File?) {
+internal fun openDirectory(dir: File?) {
     val target = dir?.let { if (it.exists()) it else it.parentFile } ?: return
     runCatching { Desktop.getDesktop().open(target) }
 }
 
-private fun uniqueOutputFile(dir: File, baseName: String, extension: String): File {
+internal fun uniqueOutputFile(dir: File, baseName: String, extension: String): File {
     dir.mkdirs()
     var candidate = File(dir, "$baseName.$extension")
     var index = 2
@@ -854,16 +583,19 @@ private fun writeImage(source: BufferedImage, out: File, format: ImageExportForm
     } else source
     if (format == ImageExportFormat.JPG) {
         val writer: ImageWriter = ImageIO.getImageWritersByFormatName("jpg").next()
-        ImageIO.createImageOutputStream(out).use { ios ->
-            writer.output = ios
-            val params = writer.defaultWriteParam
-            params.compressionMode = ImageWriteParam.MODE_EXPLICIT
-            params.compressionQuality = quality.coerceIn(0.01f, 1f)
-            writer.write(null, IIOImage(image, null, null), params)
+        try {
+            ImageIO.createImageOutputStream(out).use { ios ->
+                writer.output = ios
+                val params = writer.defaultWriteParam
+                params.compressionMode = ImageWriteParam.MODE_EXPLICIT
+                params.compressionQuality = quality.coerceIn(0.01f, 1f)
+                writer.write(null, IIOImage(image, null, null), params)
+            }
+        } finally {
+            writer.dispose()
         }
-        writer.dispose()
     } else {
-        ImageIO.write(image, "png", out)
+        check(ImageIO.write(image, "png", out)) { "当前环境不支持 PNG 写出" }
     }
 }
 
@@ -883,21 +615,89 @@ private fun exportNineGrid(file: File, outDir: File, format: ImageExportFormat, 
     }
 }
 
-private fun exportGifFrames(file: File, outDir: File): Int {
+private fun exportGifFrames(file: File, outDir: File, format: ImageExportFormat, quality: Float): Int {
     require(file.extension.equals("gif", ignoreCase = true)) { "请选择 GIF 文件" }
     val reader = ImageIO.getImageReadersByFormatName("gif").asSequence().firstOrNull() ?: error("当前环境不支持 GIF 解码")
     ImageIO.createImageInputStream(file).use { input ->
         reader.input = input
         val count = reader.getNumImages(true)
-        for (index in 0 until count) {
-            val frame = reader.read(index)
-            val out = uniqueOutputFile(outDir, "${file.nameWithoutExtension}_%03d".format(index + 1), "png")
-            ImageIO.write(frame, "png", out)
+        val canvasSize = readGifCanvasSize(reader)
+        val canvas = BufferedImage(canvasSize.first, canvasSize.second, BufferedImage.TYPE_INT_ARGB)
+        val graphics = canvas.createGraphics()
+        try {
+            for (index in 0 until count) {
+                val frame = reader.read(index)
+                val metadata = reader.getImageMetadata(index)
+                val offset = readGifFrameOffset(metadata)
+                val disposal = readGifDisposalMethod(metadata)
+                val previousCanvas = if (disposal == "restoreToPrevious") deepCopy(canvas) else null
+                graphics.drawImage(frame, offset.first, offset.second, null)
+                val out = uniqueOutputFile(outDir, "${file.nameWithoutExtension}_%03d".format(index + 1), format.ext)
+                writeImage(canvas, out, format, quality)
+                when (disposal) {
+                    "restoreToBackgroundColor" -> graphics.clearTransparent(offset.first, offset.second, frame.width, frame.height)
+                    "restoreToPrevious" -> {
+                        graphics.clearTransparent(0, 0, canvas.width, canvas.height)
+                        if (previousCanvas != null) graphics.drawImage(previousCanvas, 0, 0, null)
+                    }
+                }
+            }
+        } finally {
+            graphics.dispose()
+            reader.dispose()
         }
-        reader.dispose()
         return count
     }
 }
+
+private fun Graphics2D.clearTransparent(x: Int, y: Int, width: Int, height: Int) {
+    val oldComposite = composite
+    try {
+        composite = AlphaComposite.Clear
+        fillRect(x, y, width, height)
+    } finally {
+        composite = oldComposite
+    }
+}
+
+private fun readGifCanvasSize(reader: javax.imageio.ImageReader): Pair<Int, Int> {
+    val root = reader.streamMetadata?.getAsTree("javax_imageio_gif_stream_1.0") as? IIOMetadataNode
+    val descriptor = root?.childElements()
+        ?.firstOrNull { it.nodeName == "LogicalScreenDescriptor" }
+    val width = descriptor?.getAttribute("logicalScreenWidth")?.toIntOrNull()?.takeIf { it > 0 } ?: reader.getWidth(0)
+    val height = descriptor?.getAttribute("logicalScreenHeight")?.toIntOrNull()?.takeIf { it > 0 } ?: reader.getHeight(0)
+    return width to height
+}
+
+private fun readGifFrameOffset(metadata: javax.imageio.metadata.IIOMetadata): Pair<Int, Int> {
+    val root = metadata.getAsTree("javax_imageio_gif_image_1.0") as? IIOMetadataNode
+    val descriptor = root?.childElements()
+        ?.firstOrNull { it.nodeName == "ImageDescriptor" }
+    val left = descriptor?.getAttribute("imageLeftPosition")?.toIntOrNull() ?: 0
+    val top = descriptor?.getAttribute("imageTopPosition")?.toIntOrNull() ?: 0
+    return left to top
+}
+
+private fun readGifDisposalMethod(metadata: javax.imageio.metadata.IIOMetadata): String {
+    val root = metadata.getAsTree("javax_imageio_gif_image_1.0") as? IIOMetadataNode
+    return root?.childElements()
+        ?.firstOrNull { it.nodeName == "GraphicControlExtension" }
+        ?.getAttribute("disposalMethod")
+        .orEmpty()
+}
+
+private fun IIOMetadataNode.childElements(): List<IIOMetadataNode> =
+    (0 until childNodes.length).mapNotNull { index -> childNodes.item(index) as? IIOMetadataNode }
+
+private fun deepCopy(source: BufferedImage): BufferedImage =
+    BufferedImage(source.width, source.height, BufferedImage.TYPE_INT_ARGB).also { copy ->
+        val g = copy.createGraphics()
+        try {
+            g.drawImage(source, 0, 0, null)
+        } finally {
+            g.dispose()
+        }
+    }
 
 private fun composeGif(
     files: List<File>,
@@ -989,9 +789,9 @@ private fun applyOrderedDither(source: BufferedImage): BufferedImage {
             val color = source.getRGB(x, y)
             val threshold = matrix[y and 3][x and 3] - 8
             val alpha = color ushr 24 and 0xff
-            val red = ((color ushr 16) and 0xff + threshold * 2).coerceIn(0, 255)
-            val green = ((color ushr 8) and 0xff + threshold * 2).coerceIn(0, 255)
-            val blue = ((color) and 0xff + threshold * 2).coerceIn(0, 255)
+            val red = (((color ushr 16) and 0xff) + threshold * 2).coerceIn(0, 255)
+            val green = (((color ushr 8) and 0xff) + threshold * 2).coerceIn(0, 255)
+            val blue = ((color and 0xff) + threshold * 2).coerceIn(0, 255)
             out.setRGB(x, y, (alpha shl 24) or (red shl 16) or (green shl 8) or blue)
         }
     }
@@ -1154,4 +954,4 @@ private fun formatVttTime(ms: Long): String = formatSrt(ms).replace(',', '.')
 private fun lrcTime(ms: Long): String = "%02d:%02d.%02d".format(ms / 60_000, (ms / 1000) % 60, (ms % 1000) / 10)
 private fun formatAssTime(ms: Long): String = "%d:%02d:%02d.%02d".format(ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60, (ms % 1000) / 10)
 private fun formatShortTime(ms: Long): String = "%02d:%02d.%03d".format((ms / 60_000) % 60, (ms / 1000) % 60, ms % 1000)
-private fun formatDuration(ms: Long): String = "%02d:%02d.%03d".format(ms / 60_000, (ms / 1000) % 60, ms % 1000)
+internal fun formatDuration(ms: Long): String = "%02d:%02d.%03d".format(ms / 60_000, (ms / 1000) % 60, ms % 1000)

@@ -1,6 +1,6 @@
 package ui.components
 
-import java.net.URL
+import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
@@ -51,7 +51,7 @@ object AudioPlayerManager {
 
         playThread = Thread {
             try {
-                val inputStream = AudioSystem.getAudioInputStream(URL(url))
+                val inputStream = AudioSystem.getAudioInputStream(URI(url).toURL())
                 val baseFormat = inputStream.format
                 val decodedFormat = AudioFormat(
                     AudioFormat.Encoding.PCM_SIGNED,

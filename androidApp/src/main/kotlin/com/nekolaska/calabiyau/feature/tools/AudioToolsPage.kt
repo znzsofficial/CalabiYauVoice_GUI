@@ -7,7 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -56,11 +58,6 @@ private data class AudioProcessOutcome(
     val preview: LoadedWavAudio? = null
 )
 
-private data class AudioPreviewState(
-    val asset: LoadedAudioAsset,
-    val canPreviewWaveform: Boolean
-)
-
 @Composable
 internal fun AudioToolsPage(
     outputPath: String,
@@ -86,8 +83,7 @@ internal fun AudioToolsPage(
     val showSnack = rememberSnackbarLauncher()
     val scope = rememberCoroutineScope()
     var currentAudio by remember { mutableStateOf<AudioPreviewState?>(null) }
-    val undoStack = remember { mutableStateListOf<AudioPreviewState>() }
-    val redoStack = remember { mutableStateListOf<AudioPreviewState>() }
+    val audioHistory = remember { AudioHistoryController(File(context.cacheDir, "audio_tool_history_${System.nanoTime()}")) }
     var trimThresholdPercent by remember { mutableStateOf("1.5") }
     var minimumSilenceMs by remember { mutableStateOf("120") }
     var trimMode by remember { mutableStateOf(WavTrimMode.BOTH) }
@@ -95,6 +91,11 @@ internal fun AudioToolsPage(
     var volumeMode by remember { mutableStateOf(WavVolumeMode.NORMALIZE) }
     var gainPercent by remember { mutableStateOf("120") }
     var targetPeakPercent by remember { mutableStateOf("90") }
+    var gateThresholdPercent by remember { mutableStateOf("2") }
+    var gateReductionDb by remember { mutableStateOf("24") }
+    var fadeInMs by remember { mutableStateOf("10") }
+    var fadeOutMs by remember { mutableStateOf("50") }
+    var phaseMode by remember { mutableStateOf(WavPhaseMode.INVERT_ALL) }
     var playheadMs by rememberSaveable { mutableLongStateOf(0L) }
     var viewportStartMs by rememberSaveable { mutableFloatStateOf(0f) }
     var viewportDurationMs by rememberSaveable { mutableFloatStateOf(30_000f) }
@@ -104,6 +105,10 @@ internal fun AudioToolsPage(
     var spectrogramTimeBins by rememberSaveable { mutableStateOf(AppPrefs.audioSpectrogramTimeBins.toString()) }
     var spectrogramFrequencyBins by rememberSaveable { mutableStateOf(AppPrefs.audioSpectrogramFrequencyBins.toString()) }
     var spectrogramCutoffHz by rememberSaveable { mutableStateOf(AppPrefs.audioSpectrogramCutoffHz.toString()) }
+    var spectrogramGainDb by rememberSaveable { mutableStateOf(AppPrefs.audioSpectrogramGainDb.toString()) }
+    var spectrogramGamma by rememberSaveable { mutableStateOf(AppPrefs.audioSpectrogramGamma.toString()) }
+    var spectrogramFloorDb by rememberSaveable { mutableStateOf(AppPrefs.audioSpectrogramFloorDb.toString()) }
+    var autoSpectrogramTuning by rememberSaveable { mutableStateOf(true) }
     var spectrogramPalette by rememberSaveable { mutableStateOf(SpectrogramPalette.fromPref(AppPrefs.audioSpectrogramPalette)) }
     val isAudioPlaying by AudioPlayerManager.isPlaying
     val playingSource by AudioPlayerManager.playingSource
@@ -111,14 +116,34 @@ internal fun AudioToolsPage(
     @Suppress("UNUSED_EXPRESSION")
     onPickDirectoryFromFileManager
 
-    fun pushUndoSnapshot(state: AudioPreviewState?) {
-        if (state != null) {
-            undoStack.add(state)
-            if (undoStack.size > 20) {
-                undoStack.removeAt(0)
-            }
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching { File(context.cacheDir, "audio_tool_preview").takeIf { it.isDirectory }?.deleteRecursively() }
+            audioHistory.cleanup()
         }
-        redoStack.clear()
+    }
+
+    fun applyAutoSpectrogramTuning(durationMs: Long? = currentAudio?.asset?.wav?.durationMs) {
+        val durationSeconds = durationMs?.takeIf { it > 0 }?.let { it / 1000.0 } ?: 60.0
+        spectrogramWindowSize = when {
+            durationSeconds < 20.0 -> "512"
+            durationSeconds < 180.0 -> "768"
+            else -> "1024"
+        }
+        spectrogramHopPercent = when {
+            durationSeconds < 60.0 -> "8"
+            durationSeconds < 600.0 -> "10"
+            else -> "14"
+        }
+        val timeBins = when {
+            durationSeconds < 15.0 -> 2400
+            durationSeconds < 120.0 -> 3200
+            durationSeconds < 600.0 -> 5000
+            else -> 7000
+        }
+        spectrogramTimeBins = timeBins.coerceIn(120, 12000).toString()
+        val frequencyBins = if ((currentAudio?.asset?.wav?.data?.sampleRate ?: 0) >= 96000) 1024 else 768
+        spectrogramFrequencyBins = frequencyBins.coerceIn(64, 2048).toString()
     }
 
     fun setPreview(state: AudioPreviewState) {
@@ -129,7 +154,18 @@ internal fun AudioToolsPage(
         if (preview != null) {
             viewportDurationMs = min(30_000f, max(1_000f, preview.durationMs.toFloat()))
             channelMode = if (preview.data.channels == 1) WavChannelMode.MONO_TO_STEREO else WavChannelMode.STEREO_TO_MONO
+            if (autoSpectrogramTuning) applyAutoSpectrogramTuning(preview.durationMs)
         }
+    }
+
+    suspend fun pushAudioHistory(label: String, state: AudioPreviewState): AudioPreviewState? {
+        if (state.asset.wav == null) {
+            setPreview(state)
+            return null
+        }
+        val currentState = audioHistory.push(label, state)
+        currentState?.let(::setPreview)
+        return currentState
     }
 
     fun currentAudioSource(): String? = currentAudio?.asset?.wav?.file?.absolutePath
@@ -138,21 +174,27 @@ internal fun AudioToolsPage(
         return SpectrogramRenderConfig(
             windowSize = spectrogramWindowSize.toIntOrNull()?.coerceIn(256, 8192) ?: 1024,
             hopRatio = (spectrogramHopPercent.toIntOrNull()?.coerceIn(5, 80) ?: 25) / 100f,
-            maxTimeBins = spectrogramTimeBins.toIntOrNull()?.coerceIn(120, 2000) ?: 720,
-            maxFrequencyBins = spectrogramFrequencyBins.toIntOrNull()?.coerceIn(64, 1024) ?: 256,
+            maxTimeBins = spectrogramTimeBins.toIntOrNull()?.coerceIn(120, 12000) ?: 1200,
+            maxFrequencyBins = spectrogramFrequencyBins.toIntOrNull()?.coerceIn(64, 2048) ?: 512,
             cutoffFrequencyHz = spectrogramCutoffHz.toIntOrNull()?.coerceIn(0, 96000) ?: 0,
             lowColorArgb = spectrogramPalette.lowColorArgb,
-            highColorArgb = spectrogramPalette.highColorArgb
+            highColorArgb = spectrogramPalette.highColorArgb,
+            gainDb = spectrogramGainDb.toDoubleOrNull()?.coerceIn(-24.0, 36.0) ?: 6.0,
+            gamma = spectrogramGamma.toDoubleOrNull()?.coerceIn(0.35, 3.0) ?: 1.2,
+            floorDb = spectrogramFloorDb.toDoubleOrNull()?.coerceIn(-120.0, -24.0) ?: -72.0
         )
     }
 
     fun persistSpectrogramPreferences() {
         AppPrefs.audioSpectrogramWindowSize = spectrogramWindowSize.toIntOrNull()?.coerceIn(256, 8192) ?: 1024
         AppPrefs.audioSpectrogramHopPercent = spectrogramHopPercent.toIntOrNull()?.coerceIn(5, 80) ?: 25
-        AppPrefs.audioSpectrogramTimeBins = spectrogramTimeBins.toIntOrNull()?.coerceIn(120, 2000) ?: 720
-        AppPrefs.audioSpectrogramFrequencyBins = spectrogramFrequencyBins.toIntOrNull()?.coerceIn(64, 1024) ?: 256
+        AppPrefs.audioSpectrogramTimeBins = spectrogramTimeBins.toIntOrNull()?.coerceIn(120, 12000) ?: 1200
+        AppPrefs.audioSpectrogramFrequencyBins = spectrogramFrequencyBins.toIntOrNull()?.coerceIn(64, 2048) ?: 512
         AppPrefs.audioSpectrogramCutoffHz = spectrogramCutoffHz.toIntOrNull()?.coerceIn(0, 96000) ?: 0
         AppPrefs.audioSpectrogramPalette = spectrogramPalette.prefKey
+        AppPrefs.audioSpectrogramGainDb = spectrogramGainDb.toFloatOrNull()?.coerceIn(-24f, 36f) ?: 6f
+        AppPrefs.audioSpectrogramGamma = spectrogramGamma.toFloatOrNull()?.coerceIn(0.35f, 3f) ?: 1.2f
+        AppPrefs.audioSpectrogramFloorDb = spectrogramFloorDb.toFloatOrNull()?.coerceIn(-120f, -24f) ?: -72f
     }
 
     fun isPreviewPlaying(): Boolean = isAudioPlaying && playingSource == currentAudioSource()
@@ -164,23 +206,6 @@ internal fun AudioToolsPage(
         } else {
             AudioPlayerManager.playFrom(source, positionMs.toInt())
         }
-    }
-
-    fun applyPreview(state: AudioPreviewState) {
-        pushUndoSnapshot(currentAudio)
-        setPreview(state)
-    }
-
-    fun undoPreview() {
-        if (undoStack.isEmpty()) return
-        currentAudio?.let { redoStack.add(it) }
-        setPreview(undoStack.removeAt(undoStack.lastIndex))
-    }
-
-    fun redoPreview() {
-        if (redoStack.isEmpty()) return
-        currentAudio?.let { undoStack.add(it) }
-        setPreview(redoStack.removeAt(redoStack.lastIndex))
     }
 
     fun attachSpectrogramPreview(requestId: Long, wav: LoadedWavAudio) {
@@ -209,6 +234,28 @@ internal fun AudioToolsPage(
         }
     }
 
+    fun selectAudioHistory(index: Int) {
+        scope.launch {
+            onBusyChange(true)
+            runCatching {
+                audioHistory.select(index) ?: return@runCatching null
+            }.onSuccess { selected ->
+                val (step, state) = selected ?: return@onSuccess
+                AudioPlayerManager.stop()
+                setPreview(state)
+                state.asset.wav?.let { scheduleSpectrogramPreview(it, force = true) }
+                showSnack("时间轴：${step.label}")
+            }.onFailure {
+                showSnack("历史节点加载失败：${it.message ?: "未知错误"}")
+            }
+            onBusyChange(false)
+        }
+    }
+
+    fun moveAudioHistory(delta: Int) {
+        selectAudioHistory(audioHistory.nextIndex(delta))
+    }
+
     fun loadInput(input: PickedInput) {
         scope.launch {
             onBusyChange(true)
@@ -216,11 +263,14 @@ internal fun AudioToolsPage(
                 withContext(Dispatchers.IO) {
                     loadAudioAssetForPreview(context, input) ?: error("无法读取音频文件")
                 }
-            }.onSuccess { asset ->
+            }.mapCatching { asset ->
                 AudioPlayerManager.stop()
-                applyPreview(AudioPreviewState(asset, asset.wav != null))
-                asset.wav?.let { scheduleSpectrogramPreview(it, force = true) }
-                showSnack("已导入 ${asset.meta.name}")
+                audioHistory.clear()
+                asset to pushAudioHistory("导入", AudioPreviewState(asset, asset.wav != null))
+            }.onSuccess { asset ->
+                val currentState = asset.second
+                currentState?.asset?.wav?.let { scheduleSpectrogramPreview(it, force = true) }
+                showSnack("已导入 ${asset.first.meta.name}")
             }.onFailure {
                 showSnack("导入音频失败：${it.message ?: "未知错误"}")
             }
@@ -237,13 +287,15 @@ internal fun AudioToolsPage(
             onBusyChange(true)
             runCatching {
                 withContext(Dispatchers.IO) {
-                    block(audio.input, resolveOutputDirectory(outputPath, title))
+                    val previewRoot = File(context.cacheDir, "audio_tool_preview")
+                    val previewDir = File(previewRoot, "${System.currentTimeMillis()}_${title.substringAfterLast('/')}").apply { mkdirs() }
+                    block(audio.input, previewDir)
                 }
-            }.onSuccess { outcome ->
-                onResult(outcome.output)
+            }.mapCatching { outcome ->
                 outcome.preview?.let { preview ->
                     AudioPlayerManager.stop()
-                    applyPreview(
+                    val currentState = pushAudioHistory(
+                        title.substringAfterLast('/').removePrefix("WAV"),
                         AudioPreviewState(
                             LoadedAudioAsset(
                                 input = preview.input,
@@ -254,11 +306,43 @@ internal fun AudioToolsPage(
                             canPreviewWaveform = true
                         )
                     )
-                    scheduleSpectrogramPreview(preview, force = true)
+                    currentState?.asset?.wav?.let { scheduleSpectrogramPreview(it, force = true) }
+                    runCatching { preview.file.parentFile?.deleteRecursively() }
                 }
+                outcome
+            }.onSuccess { outcome ->
                 showSnack(outcome.output.message)
             }.onFailure {
                 showSnack("处理失败：${it.message ?: "未知错误"}")
+            }
+            onBusyChange(false)
+        }
+    }
+
+    fun exportCurrentAudio() {
+        val wav = currentAudio?.asset?.wav ?: run {
+            showSnack("请先导入或处理音频")
+            return
+        }
+        scope.launch {
+            onBusyChange(true)
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val outputDir = resolveOutputDirectory(outputPath, "音频工具/导出音频")
+                    val target = buildUniqueFile(outputDir, wav.file.nameWithoutExtension.ifBlank { "audio_preview" }, "wav")
+                    wav.file.copyTo(target, overwrite = false)
+                    ToolOutput(
+                        title = "音频导出完成",
+                        message = "已导出 ${target.name}",
+                        files = listOf(target),
+                        directory = outputDir
+                    )
+                }
+            }.onSuccess {
+                onResult(it)
+                showSnack(it.message)
+            }.onFailure {
+                showSnack("导出失败：${it.message ?: "未知错误"}")
             }
             onBusyChange(false)
         }
@@ -332,6 +416,11 @@ internal fun AudioToolsPage(
                         paths.toPickedFileInputs().firstOrNull()?.let(::loadInput)
                     }
                 }
+                AudioActionButton(
+                    text = "导出音频",
+                    icon = Icons.Outlined.FileDownload,
+                    enabled = !isBusy && audio?.asset?.wav != null
+                ) { exportCurrentAudio() }
 
                 if (audio == null) {
                     EmptyAudioPreview()
@@ -432,15 +521,14 @@ internal fun AudioToolsPage(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AudioHistoryButtons(
-                                isBusy = isBusy,
-                                canUndo = undoStack.isNotEmpty(),
-                                canRedo = redoStack.isNotEmpty(),
-                                onUndo = { undoPreview() },
-                                onRedo = { redoPreview() }
-                            )
-                        }
+                        AudioHistoryTimeline(
+                            steps = audioHistory.steps,
+                            currentIndex = audioHistory.currentIndex,
+                            isBusy = isBusy,
+                            onUndo = { moveAudioHistory(-1) },
+                            onRedo = { moveAudioHistory(1) },
+                            onSelect = ::selectAudioHistory
+                        )
                     } else {
                         Surface(shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f)) {
                             Text(
@@ -450,15 +538,14 @@ internal fun AudioToolsPage(
                                 modifier = Modifier.fillMaxWidth().padding(14.dp)
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AudioHistoryButtons(
-                                isBusy = isBusy,
-                                canUndo = undoStack.isNotEmpty(),
-                                canRedo = redoStack.isNotEmpty(),
-                                onUndo = { undoPreview() },
-                                onRedo = { redoPreview() }
-                            )
-                        }
+                        AudioHistoryTimeline(
+                            steps = audioHistory.steps,
+                            currentIndex = audioHistory.currentIndex,
+                            isBusy = isBusy,
+                            onUndo = { moveAudioHistory(-1) },
+                            onRedo = { moveAudioHistory(1) },
+                            onSelect = ::selectAudioHistory
+                        )
                     }
                 }
 
@@ -502,12 +589,92 @@ internal fun AudioToolsPage(
                         AudioProcessOutcome(
                             output = ToolOutput(
                                 title = "静音裁剪完成",
-                                message = result?.let { "已生成 ${it.outputFile.name}，去头 ${it.trimmedStartMs}ms / 去尾 ${it.trimmedEndMs}ms" } ?: "未检测到可裁剪静音",
+                                message = result?.let { "预览已更新，去头 ${it.trimmedStartMs}ms / 去尾 ${it.trimmedEndMs}ms" } ?: "未检测到可裁剪静音",
                                 files = result?.let { listOf(it.outputFile) } ?: emptyList(),
                                 directory = outputDir
                             ),
                             preview = preview
                         )
+                    }
+                }
+            }
+        }
+
+        ToolCard(
+            title = "修复处理",
+            subtitle = "降噪门、淡化、DC 偏移和相位处理",
+            icon = Icons.Outlined.Healing
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                AudioModuleHeader("De-noise", "压低空白段和低电平底噪", Icons.Outlined.Healing)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = gateThresholdPercent,
+                        onValueChange = { gateThresholdPercent = it },
+                        label = { Text("门限 (%)") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = smoothCornerShape(16.dp)
+                    )
+                    OutlinedTextField(
+                        value = gateReductionDb,
+                        onValueChange = { gateReductionDb = it },
+                        label = { Text("衰减 dB") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = smoothCornerShape(16.dp)
+                    )
+                }
+                AudioActionButton("应用降噪门", Icons.Outlined.Healing, !isBusy && currentAudio?.asset?.wav != null) {
+                    processCurrent("音频工具/WAV降噪门") { input, outputDir ->
+                        val result = applyWavNoiseGate(context, input, outputDir, gateThresholdPercent.toDoubleOrNull() ?: 2.0, gateReductionDb.toDoubleOrNull() ?: 24.0)
+                        val preview = result?.outputFile?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
+                        AudioProcessOutcome(
+                            output = ToolOutput("降噪门完成", result?.let { "预览已更新" } ?: "没有可处理的音频数据", result?.let { listOf(it.outputFile) } ?: emptyList(), outputDir),
+                            preview = preview
+                        )
+                    }
+                }
+                AudioModuleHeader("Fade / Repair", "修整首尾爆点并移除波形偏移", Icons.Outlined.Tune)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = fadeInMs,
+                        onValueChange = { fadeInMs = it.filter(Char::isDigit) },
+                        label = { Text("淡入 ms") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = smoothCornerShape(16.dp)
+                    )
+                    OutlinedTextField(
+                        value = fadeOutMs,
+                        onValueChange = { fadeOutMs = it.filter(Char::isDigit) },
+                        label = { Text("淡出 ms") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = smoothCornerShape(16.dp)
+                    )
+                }
+                AudioActionButton("应用淡化", Icons.Outlined.Tune, !isBusy && currentAudio?.asset?.wav != null) {
+                    processCurrent("音频工具/WAV淡化") { input, outputDir ->
+                        val result = applyWavFade(context, input, outputDir, fadeInMs.toIntOrNull() ?: 10, fadeOutMs.toIntOrNull() ?: 50)
+                        val preview = result?.outputFile?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
+                        AudioProcessOutcome(ToolOutput("淡化完成", result?.let { "预览已更新" } ?: "没有可处理的音频数据", result?.let { listOf(it.outputFile) } ?: emptyList(), outputDir), preview)
+                    }
+                }
+                AudioActionButton("移除 DC 偏移", Icons.Outlined.CenterFocusStrong, !isBusy && currentAudio?.asset?.wav != null) {
+                    processCurrent("音频工具/WAV_DC偏移移除") { input, outputDir ->
+                        val result = removeWavDcOffset(context, input, outputDir)
+                        val preview = result?.outputFile?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
+                        AudioProcessOutcome(ToolOutput("DC 偏移移除完成", result?.let { "预览已更新" } ?: "没有可处理的音频数据", result?.let { listOf(it.outputFile) } ?: emptyList(), outputDir), preview)
+                    }
+                }
+                AudioModuleHeader("Phase", "处理反相、声道接反和立体声方向", Icons.Outlined.SwapHoriz)
+                ModeChips(WavPhaseMode.entries, phaseMode, { phaseMode = it }, Icons.Outlined.SwapHoriz) { it.label }
+                AudioActionButton("应用相位处理", Icons.Outlined.SwapHoriz, !isBusy && currentAudio?.asset?.wav != null) {
+                    processCurrent("音频工具/WAV相位处理") { input, outputDir ->
+                        val result = applyWavPhase(context, input, outputDir, phaseMode)
+                        val preview = result?.outputFile?.let { loadWavAudioFileForPreview(it, includeSpectrogram = false) }
+                        AudioProcessOutcome(ToolOutput("相位处理完成", result?.let { "预览已更新" } ?: "没有可处理的音频数据", result?.let { listOf(it.outputFile) } ?: emptyList(), outputDir), preview)
                     }
                 }
             }
@@ -550,7 +717,7 @@ internal fun AudioToolsPage(
                         AudioProcessOutcome(
                             output = ToolOutput(
                                 title = "音量处理完成",
-                                message = result?.let { "已生成 ${it.outputFile.name}：${it.sourcePeakPercent.format1()}% → ${it.targetPeakPercent.format1()}%" } ?: "没有可处理的音频数据",
+                                message = result?.let { "预览已更新：${it.sourcePeakPercent.format1()}% → ${it.targetPeakPercent.format1()}%" } ?: "没有可处理的音频数据",
                                 files = result?.let { listOf(it.outputFile) } ?: emptyList(),
                                 directory = outputDir
                             ),
@@ -592,7 +759,7 @@ internal fun AudioToolsPage(
                         AudioProcessOutcome(
                             output = ToolOutput(
                                 title = "声道转换完成",
-                                message = result?.let { "已生成 ${it.outputFile.name}：${it.sourceChannels} 声道 → ${it.targetChannels} 声道" } ?: "当前声道不支持所选转换",
+                                message = result?.let { "预览已更新：${it.sourceChannels} 声道 → ${it.targetChannels} 声道" } ?: "当前声道不支持所选转换",
                                 files = result?.let { listOf(it.outputFile) } ?: emptyList(),
                                 directory = outputDir
                             ),
@@ -619,6 +786,17 @@ internal fun AudioToolsPage(
                 onFrequencyBinsChange = { spectrogramFrequencyBins = it },
                 cutoffHz = spectrogramCutoffHz,
                 onCutoffHzChange = { spectrogramCutoffHz = it },
+                gainDb = spectrogramGainDb,
+                onGainDbChange = { spectrogramGainDb = it },
+                gamma = spectrogramGamma,
+                onGammaChange = { spectrogramGamma = it },
+                floorDb = spectrogramFloorDb,
+                onFloorDbChange = { spectrogramFloorDb = it },
+                autoTuning = autoSpectrogramTuning,
+                onAutoTuningChange = {
+                    autoSpectrogramTuning = it
+                    if (it) applyAutoSpectrogramTuning()
+                },
                 palette = spectrogramPalette,
                 onPaletteChange = { spectrogramPalette = it },
                 enabled = audio?.asset?.wav != null,
@@ -632,30 +810,71 @@ internal fun AudioToolsPage(
 }
 
 @Composable
-private fun RowScope.AudioHistoryButtons(
+private fun AudioHistoryTimeline(
+    steps: List<AudioHistoryStep>,
+    currentIndex: Int,
     isBusy: Boolean,
-    canUndo: Boolean,
-    canRedo: Boolean,
     onUndo: () -> Unit,
-    onRedo: () -> Unit
+    onRedo: () -> Unit,
+    onSelect: (Int) -> Unit
 ) {
-    FilledTonalButton(
-        onClick = onUndo,
-        enabled = !isBusy && canUndo,
-        shape = smoothCornerShape(20.dp)
-    ) {
-        Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null)
-        Spacer(Modifier.size(6.dp))
-        Text("撤销")
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FilledTonalButton(
+                onClick = onUndo,
+                enabled = !isBusy && currentIndex > 0,
+                shape = smoothCornerShape(20.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text("撤销")
+            }
+            FilledTonalButton(
+                onClick = onRedo,
+                enabled = !isBusy && currentIndex in 0 until steps.lastIndex,
+                shape = smoothCornerShape(20.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.Redo, contentDescription = null)
+                Spacer(Modifier.size(6.dp))
+                Text("重做")
+            }
+            Text(
+                text = if (currentIndex in steps.indices) "当前：${steps[currentIndex].label}" else "时间轴待生成",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            steps.forEachIndexed { index, step ->
+                FilterChip(
+                    selected = index == currentIndex,
+                    onClick = { if (!isBusy) onSelect(index) },
+                    enabled = !isBusy,
+                    label = { Text("${index + 1}. ${step.label}", maxLines = 1) },
+                    leadingIcon = if (index == currentIndex) {
+                        { Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else null
+                )
+            }
+        }
     }
-    FilledTonalButton(
-        onClick = onRedo,
-        enabled = !isBusy && canRedo,
-        shape = smoothCornerShape(20.dp)
-    ) {
-        Icon(Icons.AutoMirrored.Outlined.Redo, contentDescription = null)
-        Spacer(Modifier.size(6.dp))
-        Text("重做")
+}
+
+@Composable
+private fun AudioModuleHeader(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(shape = smoothCornerShape(10.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.padding(8.dp).size(18.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -712,6 +931,14 @@ private fun SpectrogramSettingsPanel(
     onFrequencyBinsChange: (String) -> Unit,
     cutoffHz: String,
     onCutoffHzChange: (String) -> Unit,
+    gainDb: String,
+    onGainDbChange: (String) -> Unit,
+    gamma: String,
+    onGammaChange: (String) -> Unit,
+    floorDb: String,
+    onFloorDbChange: (String) -> Unit,
+    autoTuning: Boolean,
+    onAutoTuningChange: (Boolean) -> Unit,
     palette: SpectrogramPalette,
     onPaletteChange: (SpectrogramPalette) -> Unit,
     enabled: Boolean,
@@ -728,6 +955,10 @@ private fun SpectrogramSettingsPanel(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("频谱图设置", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     Text("调整 FFT 窗长、步进和配色，点击重绘后生效", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Switch(checked = autoTuning, onCheckedChange = onAutoTuningChange)
+                    Text("自动根据时长调参", style = MaterialTheme.typography.bodyMedium)
                 }
                 FilledTonalButton(onClick = onApply, enabled = enabled, shape = smoothCornerShape(20.dp)) {
                     Text("重绘")
@@ -779,6 +1010,33 @@ private fun SpectrogramSettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
                 supportingText = { Text("填 0 表示自动使用当前音频的 Nyquist 频率") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = smoothCornerShape(16.dp)
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = gainDb,
+                    onValueChange = onGainDbChange,
+                    label = { Text("显示增益 dB") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = smoothCornerShape(16.dp)
+                )
+                OutlinedTextField(
+                    value = gamma,
+                    onValueChange = onGammaChange,
+                    label = { Text("伽马") },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = smoothCornerShape(16.dp)
+                )
+            }
+            OutlinedTextField(
+                value = floorDb,
+                onValueChange = onFloorDbChange,
+                label = { Text("底噪 dB") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 shape = smoothCornerShape(16.dp)
             )
 

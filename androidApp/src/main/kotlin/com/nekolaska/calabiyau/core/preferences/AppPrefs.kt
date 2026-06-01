@@ -38,6 +38,9 @@ object AppPrefs {
     private const val KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS = "audio_spectrogram_frequency_bins"
     private const val KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ = "audio_spectrogram_cutoff_hz"
     private const val KEY_AUDIO_SPECTROGRAM_PALETTE = "audio_spectrogram_palette"
+    private const val KEY_AUDIO_SPECTROGRAM_GAIN_DB = "audio_spectrogram_gain_db"
+    private const val KEY_AUDIO_SPECTROGRAM_GAMMA = "audio_spectrogram_gamma"
+    private const val KEY_AUDIO_SPECTROGRAM_FLOOR_DB = "audio_spectrogram_floor_db"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -219,13 +222,13 @@ object AppPrefs {
 
     /** 音频工具频谱图时间桶数量 */
     var audioSpectrogramTimeBins: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, 720)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, value.coerceIn(120, 2000)) }
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, 1200)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, value.coerceIn(120, 12000)) }
 
     /** 音频工具频谱图频率桶数量 */
     var audioSpectrogramFrequencyBins: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, 256)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, value.coerceIn(64, 1024)) }
+        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, 512)
+        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, value.coerceIn(64, 2048)) }
 
     /** 音频工具频谱图截止频率（Hz，0 表示自动使用 Nyquist） */
     var audioSpectrogramCutoffHz: Int
@@ -236,5 +239,17 @@ object AppPrefs {
     var audioSpectrogramPalette: String
         get() = prefs.getString(KEY_AUDIO_SPECTROGRAM_PALETTE, "Ocean") ?: "Ocean"
         set(value) = prefs.edit { putString(KEY_AUDIO_SPECTROGRAM_PALETTE, value) }
+
+    var audioSpectrogramGainDb: Float
+        get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_GAIN_DB, 6f)
+        set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_GAIN_DB, value.coerceIn(-24f, 36f)) }
+
+    var audioSpectrogramGamma: Float
+        get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_GAMMA, 1.2f)
+        set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_GAMMA, value.coerceIn(0.35f, 3f)) }
+
+    var audioSpectrogramFloorDb: Float
+        get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_FLOOR_DB, -72f)
+        set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_FLOOR_DB, value.coerceIn(-120f, -24f)) }
 
 }
