@@ -1,3 +1,4 @@
+import buildlogic.TimestampedApkCopyTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -25,6 +26,7 @@ dependencies {
     implementation(libs.androidx.compose.material.iconsExtended)
     implementation(libs.androidx.lifecycle.viewmodelCompose.android)
     implementation(libs.androidx.exifinterface)
+    implementation(libs.androidx.graphics.path)
     implementation(libs.androidx.palette)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.kotlinx.coroutines.android)
@@ -50,8 +52,8 @@ android {
         applicationId = "com.nekolaska.calabiyau"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 25
-        versionName = "2.0.5"
+        versionCode = 26
+        versionName = "2.0.6"
     }
 
     val localProps = Properties()
@@ -105,10 +107,14 @@ android {
     }
 }
 
-base {
-    archivesName.set(providers.provider {
-        val ts = System.currentTimeMillis() / 1000
-        val ver = android.defaultConfig.versionName
-        "卡丘Wiki助手_${ver}_${ts}"
-    })
+val releaseVersionName = android.defaultConfig.versionName.orEmpty()
+
+tasks.register<TimestampedApkCopyTask>("copyReleaseApkWithTimestamp") {
+    group = "build"
+    description = "Copies release APK with a fresh timestamped file name."
+    dependsOn("assembleRelease")
+
+    releaseApkDirectory.set(layout.buildDirectory.dir("outputs/apk/release"))
+    outputDirectory.set(layout.buildDirectory.dir("outputs/apk/timestampedRelease"))
+    versionName.set(releaseVersionName)
 }

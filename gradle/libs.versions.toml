@@ -27,6 +27,7 @@ androidx-compose-material3 = "1.5.0-alpha20"
 androidx-compose-material3-window-size = "1.4.0"
 androidx-compose-material-icons-extended = "1.7.8"
 androidx-exifinterface = "1.4.2"
+androidx-graphics-path = "1.1.0"
 androidx-palette = "1.0.0"
 androidx-core-splashscreen = "1.2.0"
 justflac = "master-SNAPSHOT"
@@ -64,6 +65,7 @@ androidx-compose-material3-windowSizeClass = { module = "androidx.compose.materi
 androidx-compose-material-iconsExtended = { module = "androidx.compose.material:material-icons-extended", version.ref = "androidx-compose-material-icons-extended" }
 androidx-lifecycle-viewmodelCompose-android = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle-compose" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "androidx-exifinterface" }
+androidx-graphics-path = { module = "androidx.graphics:graphics-path", version.ref = "androidx-graphics-path" }
 androidx-palette = { module = "androidx.palette:palette", version.ref = "androidx-palette" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "androidx-core-splashscreen" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinx-coroutines" }
