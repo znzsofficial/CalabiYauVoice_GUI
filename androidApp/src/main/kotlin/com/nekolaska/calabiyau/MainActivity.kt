@@ -14,8 +14,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.*
@@ -42,7 +40,9 @@ import com.nekolaska.calabiyau.core.navigation.MainScreen
 import com.nekolaska.calabiyau.feature.download.DownloadViewModel
 import com.nekolaska.calabiyau.feature.download.PortraitViewModel
 import com.nekolaska.calabiyau.feature.download.SearchViewModel
+import com.nekolaska.calabiyau.feature.settings.UpdateAvailableDialog
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
+import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import data.PortraitRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
                 // 启动时静默检查更新，每天最多一次。
                 val context = LocalContext.current
                 var startupUpdateInfo by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
+                var startupUpdateWebUrl by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(Unit) {
                     val now = System.currentTimeMillis()
                     val lastCheck = AppPrefs.lastUpdateCheck
@@ -153,6 +154,14 @@ class MainActivity : ComponentActivity() {
                     ) {
                         SplashCover()
                     }
+
+                    startupUpdateWebUrl?.let { url ->
+                        WikiWebViewScreen(
+                            onExitWiki = { startupUpdateWebUrl = null },
+                            initialUrl = url,
+                            useTopBarMode = true
+                        )
+                    }
                 }
 
                 // 仅在发现新版本时展示启动更新提示。
@@ -162,37 +171,17 @@ class MainActivity : ComponentActivity() {
                             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
                         } catch (_: Exception) { "?" }
                     }
-                    AlertDialog(
-                        onDismissRequest = { startupUpdateInfo = null },
-                        title = { Text("发现新版本 ${info.versionName}") },
-                        text = {
-                            Column {
-                                Text(
-                                    "当前版本: $curVer",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (info.body.isNotBlank()) {
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        text = info.body.take(500),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
+                    UpdateAvailableDialog(
+                        info = info,
+                        currentVersion = curVer,
+                        onDismiss = { startupUpdateInfo = null },
+                        onOpenBrowser = {
+                            startupUpdateInfo = null
+                            context.startActivity(Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri()))
                         },
-                        confirmButton = {
-                            FilledTonalButton(onClick = {
-                                startupUpdateInfo = null
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
-                                )
-                            }) { Text("前往下载") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { startupUpdateInfo = null }) {
-                                Text("稍后再说")
-                            }
+                        onOpenInApp = {
+                            startupUpdateWebUrl = info.htmlUrl
+                            startupUpdateInfo = null
                         }
                     )
                 }

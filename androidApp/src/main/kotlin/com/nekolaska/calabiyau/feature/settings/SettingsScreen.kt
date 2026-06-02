@@ -771,59 +771,17 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 // ── 新版本对话框 ──
                 updateResult?.let { info ->
-                    AlertDialog(
-                        onDismissRequest = { updateResult = null },
-                        title = {
-                            Text("发现新版本 ${info.versionName}")
+                    UpdateAvailableDialog(
+                        info = info,
+                        currentVersion = currentVersion,
+                        onDismiss = { updateResult = null },
+                        onOpenBrowser = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri()))
                         },
-                        text = {
-                            Column {
-                                Text(
-                                    "当前版本: $currentVersion",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                if (info.body.isNotBlank()) {
-                                    Text(
-                                        "更新日志:",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = smoothCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {
-                                        Text(
-                                            text = info.body.take(1000),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            modifier = Modifier
-                                                .padding(12.dp)
-                                                .verticalScroll(rememberScrollState())
-                                        )
-                                    }
-                                }
-                            }
-                        },
-                        shape = smoothCornerShape(28.dp),
-                        confirmButton = {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = {
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
-                                    )
-                                }) { Text("浏览器下载") }
-                                FilledTonalButton(onClick = {
-                                    updateWebUrl = info.htmlUrl
-                                    updateResult = null
-                                    currentPage = SettingsPage.UPDATE_WEB
-                                }) { Text("应用内下载") }
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { updateResult = null }) { Text("稍后再说") }
+                        onOpenInApp = {
+                            updateWebUrl = info.htmlUrl
+                            updateResult = null
+                            currentPage = SettingsPage.UPDATE_WEB
                         }
                     )
                 }
