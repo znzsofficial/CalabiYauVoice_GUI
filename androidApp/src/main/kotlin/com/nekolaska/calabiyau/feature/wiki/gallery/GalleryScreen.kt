@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -277,10 +278,11 @@ private fun GallerySectionSelector(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
-                Icon(
-                    Icons.Outlined.Image,
-                    contentDescription = null,
-                    modifier = Modifier.padding(10.dp).size(22.dp)
+                GallerySectionThumbnail(
+                    imageUrl = selectedSection.images.firstOrNull()?.imageUrl,
+                    icon = Icons.Outlined.Image,
+                    modifier = Modifier.size(42.dp),
+                    iconModifier = Modifier.padding(10.dp).size(22.dp)
                 )
             }
 
@@ -404,10 +406,11 @@ private fun GallerySectionGridItem(
                     contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant
                 ) {
-                    Icon(
-                        Icons.Outlined.Image,
-                        contentDescription = null,
-                        modifier = Modifier.padding(10.dp).size(22.dp)
+                    GallerySectionThumbnail(
+                        imageUrl = section.images.firstOrNull()?.imageUrl,
+                        icon = Icons.Outlined.Image,
+                        modifier = Modifier.size(42.dp),
+                        iconModifier = Modifier.padding(10.dp).size(22.dp)
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -444,6 +447,35 @@ private fun GallerySectionGridItem(
                         else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun GallerySectionThumbnail(
+    imageUrl: String?,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    iconModifier: Modifier = Modifier
+) {
+    var failed by remember(imageUrl) { mutableStateOf(false) }
+    val showImage = !imageUrl.isNullOrBlank() && !failed
+
+    Box(modifier, contentAlignment = Alignment.Center) {
+        if (showImage) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = iconModifier
+            )
         }
     }
 }

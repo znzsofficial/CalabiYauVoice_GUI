@@ -327,7 +327,7 @@ private fun FilterBar(
             )
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(4.dp))
 
         FilterDropdown(
             label = "对比赛季",
@@ -349,73 +349,91 @@ private fun FilterBar(
             )
         }
 
-        Spacer(Modifier.height(6.dp))
-
-        // 第二行：地图 + 段位（横向滚动 Chip）
-        Text(
-            "地图",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp)
-        )
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            FilterChip(
-                selected = selectedMap == null,
-                onClick = { onMapChange(null) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("全选", maxLines = 1) }
-            )
-            settings.maps.forEach { map ->
-                FilterChip(
-                    selected = selectedMap == map,
-                    onClick = { onMapChange(map) },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text(map.name, maxLines = 1) }
-                )
-            }
-        }
-
         Spacer(Modifier.height(4.dp))
 
-        Text(
-            "段位",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp)
-        )
+        // 第二行：地图 + 段位（横向滚动 Chip）
         Row(
             Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .heightIn(min = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            FilterChip(
-                selected = selectedRanks.isEmpty(),
-                onClick = { onRanksChange(emptyList()) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("全选", maxLines = 1) }
+            Text(
+                "地图",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(32.dp),
+                textAlign = TextAlign.Center
             )
-            settings.ranks.forEach { rank ->
+            Row(
+                Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 FilterChip(
-                    selected = selectedRanks.contains(rank),
-                    onClick = {
-                        onRanksChange(
-                            if (selectedRanks.contains(rank)) selectedRanks - rank
-                            else selectedRanks + rank
-                        )
-                    },
+                    selected = selectedMap == null,
+                    onClick = { onMapChange(null) },
                     shape = smoothCornerShape(12.dp),
-                    label = { Text(rank.name, maxLines = 1) }
+                    label = { Text("全选", maxLines = 1) }
                 )
+                settings.maps.forEach { map ->
+                    FilterChip(
+                        selected = selectedMap == map,
+                        onClick = { onMapChange(map) },
+                        shape = smoothCornerShape(12.dp),
+                        label = { Text(map.name, maxLines = 1) }
+                    )
+                }
             }
         }
 
-        HorizontalDivider(Modifier.padding(top = 8.dp))
+        Spacer(Modifier.height(2.dp))
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "段位",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(32.dp),
+                textAlign = TextAlign.Center
+            )
+            Row(
+                Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = selectedRanks.isEmpty(),
+                    onClick = { onRanksChange(emptyList()) },
+                    shape = smoothCornerShape(12.dp),
+                    label = { Text("全选", maxLines = 1) }
+                )
+                settings.ranks.forEach { rank ->
+                    FilterChip(
+                        selected = selectedRanks.contains(rank),
+                        onClick = {
+                            onRanksChange(
+                                if (selectedRanks.contains(rank)) selectedRanks - rank
+                                else selectedRanks + rank
+                            )
+                        },
+                        shape = smoothCornerShape(12.dp),
+                        label = { Text(rank.name, maxLines = 1) }
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider(Modifier.padding(top = 6.dp))
     }
 }
 
@@ -528,7 +546,7 @@ private fun SideAndSortBar(
             Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 角色列（只显示头像）
@@ -558,8 +576,10 @@ private fun SortableHeader(
 ) {
     TextButton(
         onClick = onClick,
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
+        modifier = modifier
+            .defaultMinSize(minWidth = 0.dp, minHeight = 0.dp)
+            .height(28.dp),
+        contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp)
     ) {
         Text(
             label,
@@ -574,7 +594,7 @@ private fun SortableHeader(
                 if (order == SortOrder.DESC) Icons.Default.ArrowDropDown
                 else Icons.Default.ArrowDropUp,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
         }

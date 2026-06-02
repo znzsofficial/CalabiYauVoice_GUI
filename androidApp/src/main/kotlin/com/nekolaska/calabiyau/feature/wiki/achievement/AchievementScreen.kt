@@ -66,7 +66,7 @@ fun AchievementScreen(
 ) {
     val state = rememberLoadState(
         initial = AchievementPage(title = "成就", wikiUrl = ACHIEVEMENT_PAGE_URL, sections = emptyList()),
-        cachedPrefetchDelayMs = 300L,
+        cachedPrefetchDelayMs = 500L,
         cachedFetch = { AchievementApi.fetch(cacheOnly = true) }
     ) { force ->
         AchievementApi.fetch(forceRefresh = force, allowMemoryCache = false)
