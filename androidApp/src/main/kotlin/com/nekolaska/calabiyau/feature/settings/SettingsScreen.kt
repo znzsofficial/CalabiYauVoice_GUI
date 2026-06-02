@@ -55,6 +55,7 @@ import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import com.nekolaska.calabiyau.feature.tools.getPathFromUri
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.hub.QuickEntry
+import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.allQuickEntries
 import com.nekolaska.calabiyau.feature.wiki.hub.defaultQuickEntryIds
 import com.nekolaska.calabiyau.feature.wiki.hub.quickEntryById
@@ -67,7 +68,8 @@ import java.io.File
 private enum class SettingsPage {
     MAIN,
     ABOUT,
-    STORAGE
+    STORAGE,
+    UPDATE_WEB
 }
 
 private const val SHOW_SETTINGS_DEBUG_ITEM = false
@@ -100,6 +102,20 @@ fun SettingsScreen(onBack: () -> Unit) {
     var showQuickEntrySheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    var storageSnapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
+    var isStorageCalculating by remember { mutableStateOf(true) }
+    var storageRefreshKey by remember { mutableIntStateOf(0) }
+    var updateWebUrl by remember { mutableStateOf<String?>(null) }
+
+    fun refreshStorageSnapshot() {
+        storageRefreshKey++
+    }
+
+    LaunchedEffect(savePath, storageRefreshKey) {
+        isStorageCalculating = true
+        storageSnapshot = withContext(Dispatchers.IO) { computeStorageSnapshot(context, savePath) }
+        isStorageCalculating = false
+    }
 
     // SAF 目录选择器
     val dirPicker = rememberLauncherForActivityResult(
@@ -149,7 +165,18 @@ fun SettingsScreen(onBack: () -> Unit) {
         if (page == SettingsPage.STORAGE) {
             StorageSettingsScreen(
                 savePath = savePath,
+                snapshot = storageSnapshot,
+                isCalculating = isStorageCalculating,
+                onRefreshSnapshot = ::refreshStorageSnapshot,
                 onBack = { currentPage = SettingsPage.MAIN }
+            )
+            return@AnimatedContent
+        }
+        if (page == SettingsPage.UPDATE_WEB) {
+            WikiWebViewScreen(
+                onExitWiki = { currentPage = SettingsPage.MAIN },
+                initialUrl = updateWebUrl ?: "https://wiki.nekolaska.vip",
+                useTopBarMode = true
             )
             return@AnimatedContent
         }
@@ -648,7 +675,10 @@ fun SettingsScreen(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
-                        StorageSummaryItem(onClick = { currentPage = SettingsPage.STORAGE })
+                        StorageSummaryItem(
+                            snapshot = storageSnapshot,
+                            onClick = { currentPage = SettingsPage.STORAGE }
+                        )
                     }
                 }
 
@@ -779,12 +809,18 @@ fun SettingsScreen(onBack: () -> Unit) {
                         },
                         shape = smoothCornerShape(28.dp),
                         confirmButton = {
-                            FilledTonalButton(onClick = {
-                                updateResult = null
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
-                                )
-                            }) { Text("前往下载") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri())
+                                    )
+                                }) { Text("浏览器下载") }
+                                FilledTonalButton(onClick = {
+                                    updateWebUrl = info.htmlUrl
+                                    updateResult = null
+                                    currentPage = SettingsPage.UPDATE_WEB
+                                }) { Text("应用内下载") }
+                            }
                         },
                         dismissButton = {
                             TextButton(onClick = { updateResult = null }) { Text("稍后再说") }
@@ -1473,14 +1509,10 @@ private data class StorageSegment(
 )
 
 @Composable
-private fun StorageSummaryItem(onClick: () -> Unit) {
-    val context = LocalContext.current
-    var snapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
-
-    LaunchedEffect(Unit) {
-        snapshot = withContext(Dispatchers.IO) { computeStorageSnapshot(context, AppPrefs.savePath) }
-    }
-
+private fun StorageSummaryItem(
+    snapshot: StorageSnapshot?,
+    onClick: () -> Unit
+) {
     SettingsItem(
         icon = Icons.Outlined.Storage,
         title = "存储空间",
@@ -1495,24 +1527,18 @@ private fun StorageSummaryItem(onClick: () -> Unit) {
 @Composable
 private fun StorageSettingsScreen(
     savePath: String,
+    snapshot: StorageSnapshot?,
+    isCalculating: Boolean,
+    onRefreshSnapshot: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val showSnack = rememberSnackbarLauncher()
-    var snapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
-    var isCalculating by remember { mutableStateOf(true) }
-    var refreshKey by remember { mutableIntStateOf(0) }
     var clearingCategory by remember { mutableStateOf<CacheCategory?>(null) }
     var isClearingAll by remember { mutableStateOf(false) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
     var offlineCacheNeverExpire by remember { mutableStateOf(AppPrefs.offlineCacheNeverExpire) }
-
-    LaunchedEffect(savePath, refreshKey) {
-        isCalculating = true
-        snapshot = withContext(Dispatchers.IO) { computeStorageSnapshot(context, savePath) }
-        isCalculating = false
-    }
 
     Scaffold(
         topBar = {
@@ -1607,7 +1633,7 @@ private fun StorageSettingsScreen(
                 shape = smoothCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                StorageStatisticsCard(savePath = savePath)
+                StorageStatisticsCard(snapshot = snapshot, isCalculating = isCalculating)
             }
 
             SettingsGroupHeader("缓存")
@@ -1643,7 +1669,7 @@ private fun StorageSettingsScreen(
                                     clearingCategory = category
                                     withContext(Dispatchers.IO) { clearCache(context, category) }
                                     clearingCategory = null
-                                    refreshKey++
+                                    onRefreshSnapshot()
                                     showSnack("${category.title}已清除")
                                 }
                             }
@@ -1698,7 +1724,7 @@ private fun StorageSettingsScreen(
                             }
                             isClearingAll = false
                             showClearAllConfirm = false
-                            refreshKey++
+                            onRefreshSnapshot()
                             showSnack("所有缓存已清除")
                         }
                     },
@@ -1796,24 +1822,7 @@ private fun buildStorageSegments(snapshot: StorageSnapshot): List<StorageSegment
 }
 
 @Composable
-private fun StorageStatisticsCard(savePath: String) {
-    var totalSize by remember { mutableStateOf<Long?>(null) }
-    var subDirSizes by remember { mutableStateOf<List<DirSizeInfo>>(emptyList()) }
-    var fileCount by remember { mutableIntStateOf(0) }
-    var isCalculating by remember { mutableStateOf(true) }
-
-    // 计算目录大小
-    LaunchedEffect(savePath) {
-        isCalculating = true
-        withContext(Dispatchers.IO) {
-            val info = computeDownloadStorageInfo(savePath)
-            totalSize = info.totalSize
-            fileCount = info.fileCount
-            subDirSizes = info.subDirSizes
-        }
-        isCalculating = false
-    }
-
+private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1851,7 +1860,7 @@ private fun StorageStatisticsCard(savePath: String) {
                     )
                 } else {
                     Text(
-                        "${formatFileSize(totalSize ?: 0)}  ·  $fileCount 个文件",
+                        "${formatFileSize(snapshot?.downloadTotalSize ?: 0)}  ·  ${snapshot?.downloadFileCount ?: 0} 个文件",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1863,6 +1872,7 @@ private fun StorageStatisticsCard(savePath: String) {
         }
 
         // 子目录明细
+        val subDirSizes = snapshot?.subDirSizes.orEmpty()
         if (!isCalculating && subDirSizes.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(

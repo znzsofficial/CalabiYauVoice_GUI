@@ -11,15 +11,15 @@ import java.util.concurrent.TimeUnit
 /**
  * 检查更新 API — 基于 Cloudflare Pages 上的 latest.json。
  *
- * 请求 `https://calabiyauwiki.pages.dev/downloads/latest.json`
+ * 请求 `https://wiki.nekolaska.vip/downloads/latest.json`
  * 解析 versionName、versionCode、changelog、apkUrl。
  */
 object UpdateApi {
 
     private const val API_URL =
-        "https://calabiyauwiki.pages.dev/downloads/latest.json"
+        "https://wiki.nekolaska.vip/downloads/latest.json"
 
-    private const val BASE_URL = "https://calabiyauwiki.pages.dev"
+    private const val BASE_URL = "https://wiki.nekolaska.vip"
 
     /** 更新信息 */
     data class UpdateInfo(

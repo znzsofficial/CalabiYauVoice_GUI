@@ -38,6 +38,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,15 +54,17 @@ import kotlin.random.Random
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
 
-/** Wiki 域名白名单：在这些域名下的页面保留在 WebView 中 */
-private val WIKI_DOMAINS = listOf(
+/** WebView 域名白名单：在这些域名下的页面保留在 WebView 中 */
+private val WEBVIEW_ALLOWED_DOMAINS = listOf(
     "wiki.biligame.com",
     "patchwiki.biligame.com",
     "biligame.com",
     "bilibili.com",
     "line.biligame.net",
     "passport.bilibili.com",
-    "api.bilibili.com"
+    "api.bilibili.com",
+    "calabiyauwiki.pages.dev",
+    "nekolaska.vip"
 )
 
 /** 需要直接拦截（不加载也不打开外部浏览器）的域名 */
@@ -108,8 +111,8 @@ private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
     }
 }
 
-private fun isAllowedWikiHost(host: String): Boolean {
-    return WIKI_DOMAINS.any { domain ->
+private fun isAllowedWebViewHost(host: String): Boolean {
+    return WEBVIEW_ALLOWED_DOMAINS.any { domain ->
         host.equals(domain, ignoreCase = true) || host.endsWith(".$domain", ignoreCase = true)
     }
 }
@@ -251,6 +254,7 @@ fun WikiWebViewScreen(
     useTopBarMode: Boolean = false
 ) {
     val context = LocalContext.current
+    val webViewBackgroundColor = MaterialTheme.colorScheme.background.toArgb()
 
     // 状态
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -571,10 +575,13 @@ fun WikiWebViewScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
                     factory = { ctx ->
                         createWikiWebView(
                             context = ctx,
+                            backgroundColor = webViewBackgroundColor,
                             onPageStarted = { url ->
                                 currentUrl = url
                                 isLoading = true
@@ -647,6 +654,18 @@ fun WikiWebViewScreen(
                     },
                     update = { /* WebView 状态已通过回调管理 */ }
                 )
+
+                AnimatedVisibility(
+                    visible = isLoading && loadingProgress < 20,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    )
+                }
 
                 // 网络错误覆盖层
                 AnimatedVisibility(
@@ -1121,6 +1140,7 @@ private fun WikiOverflowMenu(
 @SuppressLint("SetJavaScriptEnabled")
 private fun createWikiWebView(
     context: Context,
+    backgroundColor: Int,
     onPageStarted: (String) -> Unit,
     onPageFinished: (String) -> Unit,
     onTitleChanged: (String) -> Unit,
@@ -1151,6 +1171,7 @@ private fun createWikiWebView(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
+        setBackgroundColor(backgroundColor)
 
         // ── Settings ──
         settings.apply {
@@ -1388,6 +1409,13 @@ private fun createWikiWebView(
                         style.textContent = `
                             .wiki-nav-ad, .wiki-side-ad, .game-ad-box,
                             .mw-footer, .footer-wiki { display: none !important; }
+                            #float-btn-group, .float-btn-group {
+                                display: flex !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                                pointer-events: auto !important;
+                                z-index: 2147483647 !important;
+                            }
                         `;
                         document.head.appendChild(style);
                     })();
@@ -1410,7 +1438,7 @@ private fun createWikiWebView(
                 }
 
                 // 主流程中的网页链接优先留在 WebView，避免登录完成后被外部浏览器接管
-                if (url.isHttpOrHttpsUrl() && isAllowedWikiHost(host)) {
+                if (url.isHttpOrHttpsUrl() && isAllowedWebViewHost(host)) {
                     return false
                 }
 
