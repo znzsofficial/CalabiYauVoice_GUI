@@ -84,6 +84,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -141,6 +142,7 @@ internal fun WikiHomePage(
     topAppBarState: TopAppBarState,
     wallpaperUrl: String?,
     onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateRoute: (WikiRoute) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     factions: List<CharacterListApi.FactionData>,
@@ -156,6 +158,7 @@ internal fun WikiHomePage(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     // ── 壁纸刷新后重新提取主题色 ──
     //
@@ -237,6 +240,18 @@ internal fun WikiHomePage(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                    item(key = "hub_search", contentType = "search") {
+                        HubSearchPanel(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            onNavigateTo = onNavigateRoute,
+                            factions = factions,
+                            gameModes = gameModes,
+                            isIndexLoading = isLoadingCharacters || isLoadingMaps,
+                            backdrop = backdrop
+                        )
+                    }
+
                 // ── 快捷入口 ──
                     item(key = "quick_access", contentType = "grid") {
                         QuickAccessGrid(

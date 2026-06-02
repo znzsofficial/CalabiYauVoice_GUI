@@ -281,6 +281,7 @@ fun WikiHubScreen(
                     topAppBarState = homeTopAppBarState,
                     wallpaperUrl = wallpaperUrl,
                     onNavigateTo = { navigateTo(it.toRoute()) },
+                    onNavigateRoute = { navigateTo(it) },
                     onOpenCharacterDetail = { name, portrait ->
                         navigateTo(WikiRoute.CharDetail(name, portrait))
                     },
