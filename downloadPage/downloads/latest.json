@@ -2,7 +2,7 @@
   "versionName": "2.0.6",
   "versionCode": 26,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3275722,
+  "apkSize": 3275726,
   "releaseUrl": "/",
   "changelog": [
     "Wiki 首页搜索升级为分组结果，支持角色、相关武器、地图和入口搜索，并优化单字搜索与输入框交互",
