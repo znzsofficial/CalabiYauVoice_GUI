@@ -695,9 +695,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.5"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.6"
                     } catch (_: Exception) {
-                        "2.0.5"
+                        "2.0.6"
                     }
                 }
                 val currentVersionCode = remember {
