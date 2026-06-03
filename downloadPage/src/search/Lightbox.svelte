@@ -233,6 +233,8 @@
     max-width: 90vw;
     max-height: 85vh;
     object-fit: contain;
+    border-radius: var(--radius);
+    box-shadow: 0 24px 80px color-mix(in srgb, var(--foreground) 22%, transparent);
     user-select: none;
     -webkit-user-drag: none;
     transform-origin: center center;
@@ -275,20 +277,29 @@
     justify-content: center;
     width: 40px;
     height: 40px;
-    border: none;
+    border: 1px solid color-mix(in srgb, var(--border) 70%, var(--foreground));
     border-radius: 50%;
-    background-color: color-mix(in srgb, var(--foreground) 10%, transparent);
+    background-color: color-mix(in srgb, var(--card) 92%, transparent);
     color: var(--foreground);
     cursor: pointer;
-    transition: background-color 0.15s, transform 0.15s;
+    box-shadow: 0 8px 24px -12px color-mix(in srgb, var(--foreground) 28%, transparent);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    transition: background-color 0.15s, transform 0.15s, border-color 0.15s, box-shadow 0.2s;
   }
 
   .lightbox-download { right: 68px; }
   .lightbox-close { right: 16px; }
 
   .lightbox-action:hover {
-    background-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+    background-color: var(--accent);
+    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
     transform: scale(1.05);
+  }
+
+  .lightbox-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
   }
 
   .lightbox-action:active {
@@ -303,6 +314,13 @@
   .lightbox-action svg {
     width: 20px;
     height: 20px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .lightbox-action:hover {
+      border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+      box-shadow: 0 0 20px -5px color-mix(in srgb, var(--primary) 15%, transparent);
+    }
   }
 
   @media (max-width: 640px) {

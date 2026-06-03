@@ -44,6 +44,14 @@
     background-color: var(--card);
     color: var(--card-foreground);
     margin-bottom: 12px;
+    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .bulk-download-bar:hover,
+  .bulk-download-bar:focus-within {
+    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
+    box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--foreground) 10%, transparent);
   }
 
   .bulk-download-info {
@@ -89,6 +97,21 @@
     color: inherit;
     padding: 0 8px;
     font: inherit;
+    transition: border-color 0.15s, box-shadow 0.2s;
+  }
+
+  .concurrency-control input:focus {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .bulk-download-bar:hover,
+    .bulk-download-bar:focus-within {
+      border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+      box-shadow: 0 0 20px -5px color-mix(in srgb, var(--primary) 15%, transparent);
+    }
   }
 
   @media (max-width: 640px) {

@@ -178,16 +178,26 @@
 
 <style>
   .category-result-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .category-action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--muted-foreground); font: inherit; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .category-action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--muted-foreground); font: inherit; font-size: 12px; cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s, box-shadow 0.2s; }
   .category-action-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
   .category-action-btn small { font-size: 11px; opacity: 0.6; }
-  .category-action-btn:hover { border-color: var(--muted-foreground); color: var(--foreground); background: var(--accent); }
+  .category-action-btn:hover { border-color: color-mix(in srgb, var(--border) 60%, var(--foreground)); color: var(--foreground); background: var(--accent); box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--foreground) 18%, transparent); }
+  .category-action-btn:active { transform: scale(0.98); }
+  .category-action-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring); }
   .category-action-btn.active { border-color: var(--primary); color: var(--foreground); background: var(--accent); }
-  .subcategory-panel { margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); }
+  .subcategory-panel { margin-top: 8px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent); }
   .subcategory-loading, .subcategory-empty, .subcategory-error { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); padding: 4px 0; }
   .subcategory-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .subcategory-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--background); color: inherit; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .subcategory-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--background); color: inherit; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; transition: background-color 0.15s, border-color 0.15s, transform 0.1s; }
   .subcategory-chip svg { width: 12px; height: 12px; flex-shrink: 0; }
-  .subcategory-chip:hover { border-color: var(--muted-foreground); }
+  .subcategory-chip:hover { border-color: color-mix(in srgb, var(--border) 60%, var(--foreground)); background: var(--accent); }
+  .subcategory-chip:active { transform: scale(0.98); }
   .subcategory-chip.checked { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+
+  @media (prefers-color-scheme: dark) {
+    .category-action-btn:hover,
+    .subcategory-panel {
+      border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+    }
+  }
 </style>

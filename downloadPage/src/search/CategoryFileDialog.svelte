@@ -148,17 +148,18 @@
 
 <style>
   .category-file-dialog { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 20px; }
-  .category-file-backdrop { position: absolute; inset: 0; border: 0; background: rgb(0 0 0 / 0.45); }
-  .category-file-panel { position: relative; width: min(720px, 100%); max-height: min(720px, 86vh); display: flex; flex-direction: column; overflow: hidden; border-radius: 8px; border: 1px solid var(--border); background: var(--background); box-shadow: 0 24px 80px rgb(0 0 0 / 0.25); }
+  .category-file-backdrop { position: absolute; inset: 0; border: 0; background: color-mix(in srgb, var(--background) 30%, #000 55%); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  .category-file-panel { position: relative; width: min(720px, 100%); max-height: min(720px, 86vh); display: flex; flex-direction: column; overflow: hidden; border-radius: 8px; border: 1px solid var(--border); background: var(--background); box-shadow: 0 24px 80px color-mix(in srgb, var(--foreground) 22%, transparent); animation: dialogIn 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
   .category-file-header, .category-file-item { display: flex; align-items: center; }
   .category-file-header { justify-content: space-between; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
   .category-file-header h2 { margin: 0; font-size: 18px; }
   .category-file-header p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 13px; }
   .category-file-list { overflow: auto; padding: 10px; }
-  .category-file-item { gap: 12px; padding: 10px 12px; border-radius: 8px; color: inherit; }
+  .category-file-item { gap: 12px; padding: 10px 12px; border-radius: 8px; color: inherit; transition: background-color 0.15s; }
   .category-file-item:hover { background: var(--accent); }
   .category-file-preview { width: 48px; height: 48px; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--muted); flex: 0 0 auto; cursor: pointer; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; appearance: none; outline: none; }
-  .category-file-preview:hover { transform: scale(1.08); border-color: var(--muted-foreground); box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+  .category-file-preview:hover { transform: scale(1.08); border-color: color-mix(in srgb, var(--border) 60%, var(--foreground)); box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--foreground) 18%, transparent); }
+  .category-file-preview:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring); }
   .category-file-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .category-audio-ring { position: relative; width: 48px; height: 48px; border: 0; border-radius: 999px; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; cursor: pointer; }
   .audio-ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
@@ -171,4 +172,16 @@
   .category-file-name { min-width: 0; display: grid; gap: 4px; color: inherit; text-decoration: none; flex: 1 1 auto; }
   .category-file-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .category-file-name small { color: var(--muted-foreground); white-space: nowrap; }
+
+  @keyframes dialogIn {
+    from { opacity: 0; transform: scale(0.96) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .category-file-panel {
+      border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+      box-shadow: 0 0 20px -5px color-mix(in srgb, var(--primary) 15%, transparent);
+    }
+  }
 </style>

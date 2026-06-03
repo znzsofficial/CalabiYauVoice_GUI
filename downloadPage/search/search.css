@@ -41,6 +41,7 @@
     box-sizing: border-box;
     -ms-overflow-style: none;
     scrollbar-width: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 *::-webkit-scrollbar {
@@ -70,6 +71,10 @@ body {
     min-height: 100%;
     display: flex;
     flex-direction: column;
+}
+
+button, a, input, select, textarea, label {
+    -webkit-tap-highlight-color: transparent;
 }
 
 .btn {
@@ -215,12 +220,13 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background-color: var(--card);
-    transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
 .search-input-wrap:focus-within {
     border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent), 0 10px 24px -14px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
 .mode-select {
@@ -381,7 +387,7 @@ body {
     background-color: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--foreground) 15%, transparent);
+    box-shadow: 0 16px 36px -16px color-mix(in srgb, var(--foreground) 28%, transparent);
     padding: 4px;
     max-height: 360px;
     overflow-y: auto;
@@ -497,6 +503,13 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background-color: var(--card);
+    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.filters:focus-within {
+    border-color: color-mix(in srgb, var(--border) 50%, var(--foreground));
+    box-shadow: 0 10px 24px -16px color-mix(in srgb, var(--foreground) 14%, transparent);
 }
 
 .filter-group {
@@ -638,6 +651,14 @@ body {
     background-color: var(--card);
     color: var(--card-foreground);
     margin-bottom: 12px;
+    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.bulk-download-bar:focus-within,
+.bulk-download-bar:hover {
+    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
+    box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .bulk-download-info {
@@ -710,14 +731,15 @@ body {
     background-color: var(--card);
     color: var(--card-foreground);
     text-decoration: none;
-    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
     animation: cardIn 0.3s ease backwards;
 }
 
 .result-card:hover {
-    border-color: color-mix(in srgb, var(--border) 40%, var(--foreground));
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .result-thumb {
@@ -875,6 +897,7 @@ body {
     line-height: 1.6;
     color: var(--muted-foreground);
     display: -webkit-box;
+    line-clamp: 3;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -1022,11 +1045,32 @@ body {
     font-size: 0.8125rem;
     font-family: inherit;
     cursor: pointer;
-    transition: background-color 0.15s, border-color 0.15s;
+    transition: background-color 0.15s, border-color 0.15s, transform 0.1s, box-shadow 0.2s;
 }
 
 .page-btn:hover:not([disabled]) {
     background-color: var(--accent);
+    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
+}
+
+.page-btn:active:not([disabled]) {
+    transform: scale(0.96);
+}
+
+.page-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+@media (prefers-color-scheme: dark) {
+    .search-input-wrap:focus-within,
+    .filters:focus-within,
+    .bulk-download-bar:hover,
+    .bulk-download-bar:focus-within,
+    .result-card:hover {
+        border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+        box-shadow: 0 0 20px -5px color-mix(in srgb, var(--primary) 15%, transparent);
+    }
 }
 
 .page-btn.active {
@@ -1167,6 +1211,7 @@ body {
 
     .result-snippet {
         font-size: 0.75rem;
+        line-clamp: 2;
         -webkit-line-clamp: 2;
     }
 

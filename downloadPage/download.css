@@ -198,23 +198,6 @@ button, a, input, select, textarea, label {
         margin: 0;
     }
 
-    .hero-section {
-        padding: 16px;
-    }
-
-    .hero-info-panel {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .hero-actions {
-        justify-content: stretch;
-    }
-
-    .hero-actions .btn {
-        flex: 1 1 100%;
-    }
-
     .feature-card {
         gap: 12px;
     }
@@ -247,7 +230,7 @@ button, a, input, select, textarea, label {
 
 .hero-section {
     position: relative;
-    padding: 28px 32px;
+    padding: 34px 38px;
     margin-bottom: 28px;
     overflow: hidden;
 }
@@ -273,11 +256,15 @@ button, a, input, select, textarea, label {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 32px;
+}
+
+.hero-version-info {
+    padding: 6px 12px;
 }
 
 .hero-version-info h2 {
-    margin: 10px 0 6px;
+    margin: 14px 0 10px;
     font-size: clamp(1.65rem, 4vw, 2.25rem);
     font-weight: 600;
     letter-spacing: -0.02em;
@@ -287,7 +274,7 @@ button, a, input, select, textarea, label {
 .hero-version-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 18px;
     font-size: 0.875rem;
     color: var(--muted-foreground);
 }
@@ -304,6 +291,49 @@ button, a, input, select, textarea, label {
     justify-content: flex-end;
     gap: 12px;
     flex: 0 0 auto;
+}
+
+@media (max-width: 520px) {
+    .hero-section {
+        padding: 18px 16px 16px;
+    }
+
+    .hero-info-panel {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .hero-version-info {
+        position: relative;
+        min-height: 82px;
+        padding: 18px 0 0;
+        text-align: center;
+    }
+
+    .hero-version-info .badge {
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
+
+    .hero-version-info h2 {
+        margin: 14px 0 8px;
+        text-align: center;
+    }
+
+    .hero-version-meta {
+        justify-content: center;
+        gap: 10px 14px;
+    }
+
+    .hero-actions {
+        justify-content: stretch;
+    }
+
+    .hero-actions .btn {
+        flex: 1 1 100%;
+    }
 }
 
 .hero-download-btn {
