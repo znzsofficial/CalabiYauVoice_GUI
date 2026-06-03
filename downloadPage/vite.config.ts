@@ -142,7 +142,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
-        search: resolve(import.meta.dirname, 'search/index.html')
+        search: resolve(import.meta.dirname, 'search/index.html'),
+        video: resolve(import.meta.dirname, 'video/index.html')
       }
     }
   }
