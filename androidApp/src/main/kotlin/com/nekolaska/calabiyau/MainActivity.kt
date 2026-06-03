@@ -43,6 +43,7 @@ import com.nekolaska.calabiyau.feature.download.SearchViewModel
 import com.nekolaska.calabiyau.feature.settings.UpdateAvailableDialog
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
+import com.nekolaska.calabiyau.core.webkit.WebViewWarmup
 import data.PortraitRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,6 +74,7 @@ class MainActivity : ComponentActivity() {
         AppPrefs.init(this)
         OfflineCache.init(this)
         AppCacheBootstrap.ensureRegistered()
+        WebViewWarmup.start(this)
         // 仅在冷启动时异步清理过期磁盘缓存，避免配置变更时重复执行。
         if (savedInstanceState == null) {
             lifecycleScope.launch(Dispatchers.IO) {

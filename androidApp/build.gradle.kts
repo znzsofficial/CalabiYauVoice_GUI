@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.androidx.graphics.path)
     implementation(libs.androidx.palette)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.webkit)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp.urlconnection)
     implementation(libs.coil.compose)
