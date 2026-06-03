@@ -49,6 +49,7 @@
   let sortField: SortField = $state('winRate');
   let sortDesc = $state(true);
   let balanceOpenSelect = $state('' as '' | 'mode' | 'season' | 'season2');
+  let activeNoticeTab = $state('notice');
 
   function resolveUrl(url: string | null | undefined): string {
     if (!url) return fallbackApk;
@@ -249,90 +250,110 @@
         <img src="/icon.svg" alt="Logo" class="header-logo">
         卡丘 Wiki 助手
       </h1>
-      <span class="badge">Android 客户端</span>
     </div>
   </header>
 
   <main class="main-content" id="main-content">
+    <!-- Suggestion 1: Hero Section -->
+    <section class="card shadow-sm hero-section">
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <div class="hero-info-panel">
+          <div class="hero-version-info">
+            <span class="badge">Android 客户端</span>
+            <h2 class:loading-pulse={versionName === '正在读取...'}>{versionName}</h2>
+            <div class="hero-version-meta">
+              <span><iconify-icon icon="lucide:calendar"></iconify-icon> {publishedAt}</span>
+              <span><iconify-icon icon="lucide:hard-drive-download"></iconify-icon> {apkSize}</span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <a class="btn primary hero-download-btn" href={apkUrl} download>
+              <iconify-icon icon="lucide:download" style="margin-right: 8px; font-size: 1.2em;"></iconify-icon>
+              立即下载 APK
+            </a>
+            <button class:copied class="btn outline hero-copy-btn" onclick={copyDownloadLink}>
+              <iconify-icon icon={copied ? "lucide:check" : "lucide:copy"} style="margin-right: 6px;"></iconify-icon>
+              {copied ? '已复制' : '复制直链'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Suggestion 2: Core Feature Matrix -->
+    <section class="feature-matrix">
+      <a href="/search/" class="card shadow-sm feature-card index-card">
+        <div class="feature-icon wiki-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></div>
+        <div class="feature-text">
+          <h3>Wiki 搜索</h3>
+          <p>实时检索角色、武器与地图资料</p>
+        </div>
+        <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
+      </a>
+      <a href="/video/" class="card shadow-sm feature-card index-card">
+        <div class="feature-icon video-icon"><iconify-icon icon="lucide:scissors"></iconify-icon></div>
+        <div class="feature-text">
+          <h3>视频工具</h3>
+          <p>裁切提取、压制与 B 站缓存合成</p>
+        </div>
+        <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
+      </a>
+      <button class="card shadow-sm feature-card index-card" onclick={openBalance}>
+        <div class="feature-icon balance-icon"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon></div>
+        <div class="feature-text">
+          <h3>平衡数据</h3>
+          <p>查看全角色赛季胜率与选取率</p>
+        </div>
+        <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
+      </button>
+    </section>
+
     <div class="grid-layout">
       <div class="col-left">
-        <section class="card shadow-sm">
-          <div class="card-header">
-            <div class="card-title">
-              <iconify-icon icon="lucide:download-cloud"></iconify-icon>
-              应用下载
-            </div>
-            <span class="badge">APK</span>
-          </div>
-          <div class="card-body">
-            <div class="info-grid">
-              <div class="info-item version-card">
-                <span class="info-label"><iconify-icon icon="lucide:tag"></iconify-icon>最新版本</span>
-                <strong class:loading-pulse={versionName === '正在读取...'} class="info-value version-value">{versionName}</strong>
-              </div>
-              <div class="info-item">
-                <span class="info-label"><iconify-icon icon="lucide:calendar"></iconify-icon>发布时间</span>
-                <strong class:loading-pulse={publishedAt === '-'} class="info-value">{publishedAt}</strong>
-              </div>
-              <div class="info-item">
-                <span class="info-label"><iconify-icon icon="lucide:hard-drive-download"></iconify-icon>文件大小</span>
-                <strong class:loading-pulse={apkSize === '正在测量...'} class="info-value">{apkSize}</strong>
-              </div>
-            </div>
-
-            <div class="download-row">
-              <a class="btn primary download-apk-btn" href={apkUrl} download>
-                <iconify-icon icon="lucide:download" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>
-                下载 APK
-              </a>
-              <button class:copied class="copy-link-btn" title={copied ? '已复制' : '复制下载链接'} aria-label={copied ? '已复制' : '复制下载链接'} onclick={copyDownloadLink}>
-                <span class="copy-link-label">
-                  <iconify-icon icon="lucide:copy"></iconify-icon>
-                  复制链接
-                </span>
-                <span class="copy-link-success">已复制</span>
-              </button>
-            </div>
-            <p class="status-hint">{statusText}</p>
-          </div>
-        </section>
-
+        <!-- Suggestion 3: Update Log Timeline Style -->
         <section class="card shadow-sm">
           <div class="card-header">
             <div class="card-title"><iconify-icon icon="lucide:history"></iconify-icon>更新日志</div>
           </div>
           <div class="card-body">
-            <ul class="changelog-list text-muted">
+            <div class="timeline-container">
               {#if changelog}
-                {#each changelog.filter(Boolean) as item, index (index)}
-                  <li style={`animation: fadeInUp 0.5s ease backwards ${Math.min(index, 10) * 0.05}s`}>{String(item).replace(/^[-*•]\s*/, '')}</li>
+                {#each changelog.filter(Boolean).slice(0, 8) as item, index (index)}
+                  <div class="timeline-item" style={`animation: fadeInUp 0.5s ease backwards ${index * 0.05}s`}>
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">{String(item).replace(/^[-*•]\s*/, '')}</div>
+                  </div>
                 {/each}
               {:else}
-                <li><span class="skeleton-line" style="width: 80%;"></span></li>
-                <li><span class="skeleton-line" style="width: 65%;"></span></li>
-                <li><span class="skeleton-line" style="width: 70%;"></span></li>
+                <div class="skeleton-timeline">
+                  <div class="skeleton-line" style="width: 80%;"></div>
+                  <div class="skeleton-line" style="width: 65%;"></div>
+                  <div class="skeleton-line" style="width: 70%;"></div>
+                </div>
               {/if}
-            </ul>
-          </div>
-        </section>
-
-        <section class="card shadow-sm">
-          <div class="card-header"><div class="card-title"><iconify-icon icon="lucide:shield-alert"></iconify-icon>安装提示</div></div>
-          <div class="card-body">
-            <div class="notice-content text-muted">
-              <p>Android 可能会提示"未知来源应用"。如果你信任此应用，请在系统提示中允许本次安装。</p>
-              <p>下载文件由本站 Cloudflare Pages 托管。若下载没有开始，请长按下载按钮或复制链接到浏览器打开。</p>
             </div>
           </div>
         </section>
 
-        <section class="card shadow-sm">
-          <div class="card-header"><div class="card-title"><iconify-icon icon="lucide:info"></iconify-icon>关于项目</div></div>
+        <!-- Suggestion 3: Merged About & Notice with Tabs -->
+        <section class="card shadow-sm tabbed-card">
+          <div class="card-tabs">
+            <button class:active={activeNoticeTab === 'notice'} onclick={() => activeNoticeTab = 'notice'}>安装提示</button>
+            <button class:active={activeNoticeTab === 'about'} onclick={() => activeNoticeTab = 'about'}>关于项目</button>
+          </div>
           <div class="card-body">
-            <div class="notice-content text-muted">
-              <p>卡丘 Wiki 助手 (CalabiYauVoice) 是面向《卡拉彼丘》玩家的社区工具客户端，整合了 Wiki 浏览、角色资料、高清语音与美术资源检索，以及高效的本地缓存管理等常用功能。</p>
-              <p>项目由玩家社区自发维护，基于 Compose Multiplatform 构建，力求在不同平台上提供一致且流畅的使用体验。我们始终坚持开源与非营利原则，如果你在查阅资料或使用过程中遇到问题，欢迎提交反馈参与共建。</p>
-            </div>
+            {#if activeNoticeTab === 'notice'}
+              <div class="notice-content text-muted animate-in">
+                <p>Android 可能会提示"未知来源应用"。如果你信任此应用，请在系统提示中允许本次安装。</p>
+                <p>下载文件由本站 Cloudflare Pages 托管。若下载没有开始，请长按下载按钮或复制链接到浏览器打开。</p>
+              </div>
+            {:else}
+              <div class="notice-content text-muted animate-in">
+                <p>卡丘 Wiki 助手 (CalabiYauVoice) 是面向《卡拉彼丘》玩家的社区工具客户端，整合了 Wiki 浏览、角色资料、高清语音与美术资源检索等常用功能。</p>
+                <p>项目由玩家社区自发维护，基于 Compose Multiplatform 构建。我们始终坚持开源与非营利原则。</p>
+              </div>
+            {/if}
           </div>
         </section>
       </div>
@@ -355,36 +376,30 @@
         </section>
 
         <section class="card shadow-sm">
-          <div class="card-header">
-            <div class="card-title"><iconify-icon icon="lucide:search"></iconify-icon>Wiki 搜索</div>
-            <span class="badge">MediaWiki</span>
-          </div>
-          <div class="card-body">
-            <div class="notice-content text-muted"><p>搜索卡拉彼丘 Wiki 的角色、武器、地图等资料，支持实时搜索建议与命名空间筛选。</p></div>
-            <div style="margin-top: 12px;"><a class="btn primary w-full" href="/search/"><iconify-icon icon="lucide:search" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>打开 Wiki 搜索</a></div>
-          </div>
-        </section>
-
-        <section class="card shadow-sm">
-          <div class="card-header">
-            <div class="card-title"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon>平衡数据</div>
-            <span class="badge">官网接口</span>
-          </div>
-          <div class="card-body">
-            <div class="notice-content text-muted"><p>查看角色胜率、选取率、K/D 等赛季数据，支持按模式、地图、段位与赛季筛选。</p></div>
-            <div style="margin-top: 12px;"><button class="btn primary w-full" onclick={openBalance}><iconify-icon icon="lucide:bar-chart-3" style="margin-right: 6px; font-size: 1.1em;"></iconify-icon>查看平衡数据</button></div>
-          </div>
-        </section>
-
-        <section class="card shadow-sm">
-          <div class="card-header"><div class="card-title"><iconify-icon icon="lucide:link"></iconify-icon>相关链接</div></div>
+          <div class="card-header"><div class="card-title"><iconify-icon icon="lucide:link"></iconify-icon>相关资源</div></div>
           <div class="card-body">
             <div class="link-grid">
-              <a class="resource-link" href="https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5" target="_blank" rel="noopener noreferrer"><span class="resource-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></span><span style="flex: 1;"><strong>卡拉彼丘 Wiki 首页</strong><small>查看角色、武器、活动、素材与社区整理资料。</small></span><iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon></a>
-              <a class="resource-link" href="https://klbq.idreamsky.com/?nav=home" target="_blank" rel="noopener noreferrer"><span class="resource-icon"><iconify-icon icon="lucide:globe"></iconify-icon></span><span style="flex: 1;"><strong>卡拉彼丘官网</strong><small>前往游戏官网，了解最新公告、活动和官方信息。</small></span><iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon></a>
-              <a class="resource-link" href="https://kc37ot2vpp.feishu.cn/docx/VWj6dYH37oGEOoxv0xYcU7mcnBh" target="_blank" rel="noopener noreferrer"><span class="resource-icon"><iconify-icon icon="lucide:image"></iconify-icon></span><span style="flex: 1;"><strong>官方素材库</strong><small>官方提供的高清美术素材与资源文档。</small></span><iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon></a>
+              <a class="resource-link" href="https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5" target="_blank" rel="noopener noreferrer">
+                <span class="resource-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></span>
+                <span style="flex: 1;"><strong>Wiki 首页</strong><small>角色、武器、活动资料</small></span>
+                <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+              </a>
+              <a class="resource-link" href="https://klbq.idreamsky.com/?nav=home" target="_blank" rel="noopener noreferrer">
+                <span class="resource-icon"><iconify-icon icon="lucide:globe"></iconify-icon></span>
+                <span style="flex: 1;"><strong>游戏官网</strong><small>官方最新公告与信息</small></span>
+                <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+              </a>
+              <a class="resource-link" href="https://kc37ot2vpp.feishu.cn/docx/VWj6dYH37oGEOoxv0xYcU7mcnBh" target="_blank" rel="noopener noreferrer">
+                <span class="resource-icon"><iconify-icon icon="lucide:image"></iconify-icon></span>
+                <span style="flex: 1;"><strong>高清素材库</strong><small>官方美术素材资源</small></span>
+                <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+              </a>
               <div class="creator-tooltip-wrap">
-                <a class="resource-link" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer" aria-describedby="creator-tooltip"><span class="resource-icon"><iconify-icon icon="lucide:palette"></iconify-icon></span><span style="flex: 1;"><strong>创作者中心</strong><small>官方创作者服务平台，获取创作资源与支持。</small></span><iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon></a>
+                <a class="resource-link" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer" aria-describedby="creator-tooltip">
+                  <span class="resource-icon"><iconify-icon icon="lucide:palette"></iconify-icon></span>
+                  <span style="flex: 1;"><strong>创作者中心</strong><small>官方创作者服务平台，获取创作资源与支持。</small></span>
+                  <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+                </a>
                 <div id="creator-tooltip" class="creator-tooltip" role="tooltip">
                   <div class="creator-tooltip-inner">
                     <div class="creator-tooltip-glow"></div>
