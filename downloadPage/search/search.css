@@ -790,6 +790,10 @@ button, a, input, select, textarea, label {
 }
 
 .checkmark {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 18px;
     height: 18px;
     border: 2px solid var(--border);
@@ -814,10 +818,10 @@ button, a, input, select, textarea, label {
     height: 9px;
     border: solid var(--primary-foreground);
     border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
     position: absolute;
-    top: 3px;
-    left: 6px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -56%) rotate(45deg);
 }
 
 .checkbox-container input:checked ~ .checkmark::after {

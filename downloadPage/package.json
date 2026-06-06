@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "gifenc": "^1.0.3",
+    "gifuct-js": "^2.1.2",
     "jszip": "^3.10.1"
   }
 }
