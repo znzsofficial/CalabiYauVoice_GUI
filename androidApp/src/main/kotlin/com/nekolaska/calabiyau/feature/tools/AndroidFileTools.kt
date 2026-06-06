@@ -33,6 +33,7 @@ fun formatDateTime(timestamp: Long): String {
 
 fun getMimeType(file: File): String {
     val ext = MimeTypeMap.getFileExtensionFromUrl(file.name)
+    if (ext.equals("apk", ignoreCase = true)) return "application/vnd.android.package-archive"
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
 }
 

@@ -274,8 +274,8 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
                     if (detail.obtainMethod.isNotBlank()) {
                         InfoChip(
                             detail.obtainMethod, Icons.Outlined.Lock,
-                            MaterialTheme.colorScheme.surfaceContainerHighest,
-                            MaterialTheme.colorScheme.onSurface
+                            MaterialTheme.colorScheme.errorContainer,
+                            MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                 }

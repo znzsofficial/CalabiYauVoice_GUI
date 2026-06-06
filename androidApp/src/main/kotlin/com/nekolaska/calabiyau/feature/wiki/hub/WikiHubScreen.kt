@@ -29,7 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
@@ -70,6 +73,11 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
 import com.nekolaska.calabiyau.feature.wiki.tips.GameTipsScreen
 import com.nekolaska.calabiyau.feature.wiki.voting.VotingScreen
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
@@ -85,6 +93,71 @@ private val lazyListStateSaver = listSaver<LazyListState, Int>(
     }
 )
 
+private object WikiHubWallpaperState {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    var url: String? = AppPrefs.wallpaperUrl
+        private set
+    private var refreshJob: Deferred<String?>? = null
+    private var autoRefreshAttempted = false
+    private var displayedImageCacheKey: String? = null
+
+    @Synchronized
+    fun updateUrl(newUrl: String?) {
+        if (!newUrl.isNullOrBlank()) {
+            url = newUrl
+        }
+    }
+
+    @Synchronized
+    fun currentUrl(): String? = url
+
+    @Synchronized
+    fun imageCacheKey(imageUrl: String): String = "wiki-hub-wallpaper:${imageUrl.hashCode()}"
+
+    @Synchronized
+    fun placeholderCacheKey(nextImageCacheKey: String): String? {
+        return displayedImageCacheKey?.takeIf { it != nextImageCacheKey }
+    }
+
+    @Synchronized
+    fun markImageDisplayed(imageCacheKey: String) {
+        displayedImageCacheKey = imageCacheKey
+    }
+
+    @Synchronized
+    fun shouldAutoRefresh(currentCachedUrl: String?): Boolean {
+        return when {
+            currentCachedUrl.isNullOrBlank() -> true
+            !AppPrefs.wallpaperAutoRefresh -> false
+            WallpaperApi.hasRefreshedThisSession -> false
+            autoRefreshAttempted -> false
+            else -> true
+        }
+    }
+
+    @Synchronized
+    fun ensureRefresh(forceRefresh: Boolean): Deferred<String?> {
+        refreshJob?.takeIf { it.isActive }?.let { return it }
+        if (forceRefresh) {
+            autoRefreshAttempted = true
+        }
+        return scope.async {
+            WallpaperApi.ensureWallpaperUrl(forceRefresh = forceRefresh)
+        }.also { job ->
+            refreshJob = job
+            job.invokeOnCompletion { clearRefreshIfCurrent(job) }
+        }
+    }
+
+    @Synchronized
+    fun clearRefreshIfCurrent(job: Deferred<String?>) {
+        if (refreshJob === job) {
+            refreshJob = null
+        }
+    }
+}
+
 @Composable
 private fun WikiHubWallpaperBackground(
     wallpaperUrl: String?,
@@ -93,6 +166,21 @@ private fun WikiHubWallpaperBackground(
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val primaryColor = MaterialTheme.colorScheme.primaryContainer
+    val context = LocalContext.current
+    val wallpaperRequest = remember(context, wallpaperUrl) {
+        wallpaperUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            val cacheKey = WikiHubWallpaperState.imageCacheKey(url)
+            ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(true)
+                .memoryCacheKey(cacheKey)
+                .diskCacheKey(cacheKey)
+                .apply {
+                    WikiHubWallpaperState.placeholderCacheKey(cacheKey)?.let { placeholderMemoryCacheKey(it) }
+                }
+                .build()
+        }
+    }
     val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor, primaryColor) {
         Brush.verticalGradient(
             colors = if (liquidGlassEnabled) listOf(
@@ -108,7 +196,7 @@ private fun WikiHubWallpaperBackground(
     }
 
     Box(Modifier.fillMaxSize()) {
-        if (wallpaperUrl != null) {
+        if (wallpaperRequest != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -118,9 +206,14 @@ private fun WikiHubWallpaperBackground(
                     )
             ) {
                 AsyncImage(
-                    model = wallpaperUrl,
+                    model = wallpaperRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    onSuccess = {
+                        wallpaperUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                            WikiHubWallpaperState.markImageDisplayed(WikiHubWallpaperState.imageCacheKey(url))
+                        }
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
                 Box(
@@ -178,26 +271,25 @@ fun WikiHubScreen(
     val isLoadingMaps = mapState.isLoading
 
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
-    var wallpaperUrl by remember { mutableStateOf(AppPrefs.wallpaperUrl) }
+    var wallpaperUrl by remember { mutableStateOf(WikiHubWallpaperState.currentUrl() ?: AppPrefs.wallpaperUrl) }
     val hubBackdrop = rememberLayerBackdrop()
     LaunchedEffect(Unit) {
         val currentCachedUrl = AppPrefs.wallpaperUrl
         if (!currentCachedUrl.isNullOrBlank() && wallpaperUrl != currentCachedUrl) {
             wallpaperUrl = currentCachedUrl
+            WikiHubWallpaperState.updateUrl(currentCachedUrl)
         }
-        val needRefresh = when {
-            currentCachedUrl.isNullOrBlank() -> true
-            AppPrefs.wallpaperAutoRefresh && !WallpaperApi.hasRefreshedThisSession -> true
-            else -> false
-        }
+        val needRefresh = WikiHubWallpaperState.shouldAutoRefresh(currentCachedUrl)
         if (needRefresh) {
-            val loadedUrl = WallpaperApi.ensureWallpaperUrl(forceRefresh = !currentCachedUrl.isNullOrBlank())
+            val refreshJob = WikiHubWallpaperState.ensureRefresh(forceRefresh = !currentCachedUrl.isNullOrBlank())
+            val loadedUrl = refreshJob.await()
             if (!loadedUrl.isNullOrBlank()) {
                 wallpaperUrl = loadedUrl
+                WikiHubWallpaperState.updateUrl(loadedUrl)
             }
         }
     }
-    val hasWallpaper = wallpaperUrl != null
+    val hasWallpaper = !wallpaperUrl.isNullOrBlank()
 
     // ── 导航方向追踪（用于过渡动画） ──
     var isNavigatingBack by remember { mutableStateOf(false) }
