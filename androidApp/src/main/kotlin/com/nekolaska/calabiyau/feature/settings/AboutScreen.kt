@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -29,6 +30,13 @@ import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val versionName = remember(context) {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0.7"
+        } catch (_: Exception) {
+            "2.0.7"
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -99,7 +107,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Text(
-                    text = "Version 2.0.6",
+                    text = "Version $versionName",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)

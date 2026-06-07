@@ -1,14 +1,15 @@
 {
-  "versionName": "2.0.6",
-  "versionCode": 26,
+  "versionName": "2.0.7",
+  "versionCode": 27,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3275726,
+  "apkSize": 3325079,
   "releaseUrl": "/",
   "changelog": [
-    "Wiki 首页搜索升级为分组结果，支持角色、相关武器、地图和入口搜索，并优化单字搜索与输入框交互",
-    "更新下载支持应用内网页下载和浏览器下载，默认使用 wiki.nekolaska.vip，并允许官方下载域名在 WebView 内打开",
-    "设置页与存储管理页共享同一份存储统计，清理缓存后摘要和管理页数据同步刷新",
-    "优化 Wiki 页面体验：角色/武器详情改为顶部刷新按钮，平衡数据筛选更紧凑，表情包分区选择器显示缩略图"
+    "优化 Android Wiki WebView 身份与启动流程，使用更接近浏览器的请求标识并启用安全浏览等兼容能力",
+    "Wiki 首页背景图改为稳定缓存与后台刷新，返回首页时减少闪烁和重复请求",
+    "主题系统迁移到 MaterialKolor 动态配色，并将主题、形状、文本和间距整理为统一 UI token",
+    "文件管理器支持直接打开 APK 安装包，并修复音频工具临时文件重命名失败时的返回文件问题",
+    "清理 Kotlin 2.4 / Material3 升级后的编译警告，补齐相关 Wiki 页面实验 API 标记"
   ],
-  "publishedAt": "2026-06-02"
+  "publishedAt": "2026-06-07"
 }

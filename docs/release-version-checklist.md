@@ -12,7 +12,8 @@ This project currently stores the app release version in a few separate places. 
   - `compose.desktop.application.nativeDistributions.packageVersion`: desktop package version, for example `"2.0.4"`.
 
 - `androidApp/src/main/kotlin/com/nekolaska/calabiyau/feature/settings/AboutScreen.kt`
-  - About page display text, for example `Version 2.0.4`.
+  - About page displays `PackageInfo.versionName` at runtime.
+  - Keep its fallback version string in sync, for example `"2.0.4"`.
 
 - `androidApp/src/main/kotlin/com/nekolaska/calabiyau/feature/settings/SettingsScreen.kt`
   - Fallback version string used if Android package info cannot be read.
