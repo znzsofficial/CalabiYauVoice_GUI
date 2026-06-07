@@ -29,30 +29,37 @@ import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi
 object AppCacheBootstrap {
 
     fun ensureRegistered() {
-        WeaponListApi
-        CharacterListApi
-        MapListApi
-        CostumeFilterApi
-        WeaponSkinFilterApi
-        BioCardApi
-        AnnouncementApi
-        GameModeApi
-        WallpaperApi
-        BalanceDataApi
-        GalleryApi
-        PlayerDecorationApi
-        AchievementApi
-        BgmApi
-        CollaborationApi
-        GameHistoryApi
-        GameTipsApi
-        ImprintApi
-        ItemCatalogApi
-        MemeApi
-        MeowLanguageApi
-        OathApi
-        PlayerLevelApi
-        StoryApi
-        StringerPushCardApi
+        touch(
+            WeaponListApi,
+            CharacterListApi,
+            MapListApi,
+            CostumeFilterApi,
+            WeaponSkinFilterApi,
+            BioCardApi,
+            AnnouncementApi,
+            GameModeApi,
+            WallpaperApi,
+            BalanceDataApi,
+            GalleryApi,
+            PlayerDecorationApi,
+            AchievementApi,
+            BgmApi,
+            CollaborationApi,
+            GameHistoryApi,
+            GameTipsApi,
+            ImprintApi,
+            ItemCatalogApi,
+            MemeApi,
+            MeowLanguageApi,
+            OathApi,
+            PlayerLevelApi,
+            StoryApi,
+            StringerPushCardApi,
+        )
+    }
+
+    private fun touch(vararg cacheOwners: Any) {
+        // Evaluating each singleton runs its init block, which registers its memory cache clearer.
+        cacheOwners.size
     }
 }

@@ -327,7 +327,7 @@ private fun materializeInputToFile(context: Context, input: PickedInput): File? 
         context.contentResolver.openInputStream(uri)?.use { inputStream ->
             temp.outputStream().use { output -> inputStream.copyTo(output) }
         } ?: return null
-        File(temp.parentFile, "${sanitizeFileName(name)}.${ext}").also { renamed ->
+        File(temp.parentFile, "${sanitizeFileName(name)}.${ext}").let { renamed ->
             if (temp.renameTo(renamed)) renamed else temp
         }
     }.getOrNull()
