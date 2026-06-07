@@ -88,7 +88,7 @@ fun SkeletonCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = modifier.fillMaxWidth()
     ) {
         Column(content = content)
@@ -116,13 +116,13 @@ fun SkeletonChipRow(
     modifier: Modifier = Modifier,
     count: Int = 3
 ) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)) {
         repeat(count) { index ->
             ShimmerBox(
                 Modifier
                     .width(skeletonChipWidth(index))
                     .height(28.dp),
-                shape = smoothCapsuleShape()
+                shape = AppShapes.capsule
             )
         }
     }
@@ -142,7 +142,7 @@ fun SkeletonTextLine(
 private fun RowScope.SkeletonStatCell() {
     Column(Modifier.weight(1f)) {
         ShimmerBox(Modifier.width(40.dp).height(10.dp))
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(AppSpacing.xSmall))
         ShimmerBox(Modifier.width(60.dp).height(14.dp))
     }
 }
@@ -162,13 +162,13 @@ fun WikiListSkeleton(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
     ) {
         if (showSearch) {
             item {
                 ShimmerBox(
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = smoothCornerShape(28.dp)
+                    shape = AppShapes.capsule
                 )
             }
         }
@@ -186,18 +186,18 @@ fun WikiListSkeleton(
 @Composable
 private fun SkeletonListCard() {
     Card(
-        shape = smoothCornerShape(22.dp),
+        shape = AppShapes.card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.large)
         ) {
             ShimmerBox(
                 modifier = Modifier.size(56.dp),
-                shape = smoothCornerShape(16.dp)
+                shape = AppShapes.compactCard
             )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)) {
                 SkeletonTextLine(widthFraction = 0.55f, height = 16.dp)
                 SkeletonTextLine(widthFraction = 0.9f)
                 SkeletonTextLine(widthFraction = 0.72f)

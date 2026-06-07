@@ -32,6 +32,10 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.media.AudioPlayButton
 import com.nekolaska.calabiyau.core.media.AudioPlayerManager
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextColors
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.ZoomableImage
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -189,7 +193,7 @@ fun FileManagerScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .statusBarsPadding()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                .padding(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = {
@@ -199,8 +203,7 @@ fun FileManagerScreen(
                             }
                             Text(
                                 text = "已选 ${selectedFiles.size} 项",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
+                                style = AppTextStyles.topBarTitle,
                                 modifier = Modifier.weight(1f)
                             )
                             // 全选 / 取消全选
@@ -241,7 +244,7 @@ fun FileManagerScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .statusBarsPadding()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                .padding(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = {
@@ -260,8 +263,7 @@ fun FileManagerScreen(
                                         isAtRoot -> "文件管理"
                                         else -> currentDir.name
                                     },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
+                                    style = AppTextStyles.topBarTitle,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -269,7 +271,7 @@ fun FileManagerScreen(
                                     text = "${files.size} 项" + if (!isAtRoot) " · ${
                                         currentDir.relativePathWithin(rootDir).orEmpty()
                                     }" else "",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = AppTextStyles.topBarSubtitle,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -309,7 +311,7 @@ fun FileManagerScreen(
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(AppSpacing.sectionGap))
                             Text(
                                 "文件夹为空",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -321,7 +323,7 @@ fun FileManagerScreen(
                 else -> {
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
                     ) {
                         if (isPickerMode) {
                             item {
@@ -405,21 +407,21 @@ fun FileManagerScreen(
         ModalBottomSheet(
             onDismissRequest = { selectedFile = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = smoothCornerShape(28.dp)
+            shape = AppShapes.sheet
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 32.dp)
+                    .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium)
+                    .padding(bottom = AppSpacing.xxxLarge)
             ) {
                 // 文件信息头
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = AppSpacing.medium, vertical = AppSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FileIcon(file, size = 48)
-                    Spacer(Modifier.width(16.dp))
+                    Spacer(Modifier.width(AppSpacing.sectionGap))
                     Column(Modifier.weight(1f)) {
                         Text(
                             file.name,
@@ -440,9 +442,9 @@ fun FileManagerScreen(
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp))
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(AppSpacing.itemGap))
+                HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.medium))
+                Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // 打开
                 if (file.isFile) {
@@ -540,7 +542,7 @@ fun FileManagerScreen(
                     shape = smoothCornerShape(16.dp)
                 )
             },
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.dialog,
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
@@ -577,7 +579,7 @@ fun FileManagerScreen(
                     else "确定要删除「${file.name}」吗？"
                 )
             },
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.dialog,
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
@@ -628,7 +630,7 @@ fun FileManagerScreen(
                     }
                 )
             },
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.dialog,
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
@@ -679,11 +681,11 @@ fun FileManagerScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
-                shape = smoothCornerShape(28.dp),
+                    .padding(AppSpacing.dialogMargin),
+                shape = AppShapes.dialog,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(AppSpacing.screen)) {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -714,7 +716,7 @@ fun FileManagerScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(AppSpacing.itemGap))
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier
@@ -736,7 +738,7 @@ fun FileManagerScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(AppSpacing.itemGap))
                     if (currentFile != null) {
                         Text(
                             text = "${formatFileSize(currentFile.length())} · ${formatDateTime(currentFile.lastModified())}",
@@ -761,8 +763,8 @@ private fun DirectoryPickerBanner(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        shape = smoothCornerShape(24.dp),
+            .padding(horizontal = AppSpacing.xSmall, vertical = AppSpacing.small),
+        shape = AppShapes.card,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -770,7 +772,7 @@ private fun DirectoryPickerBanner(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
+                .padding(AppSpacing.cardContent),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(config.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -789,7 +791,7 @@ private fun DirectoryPickerBanner(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = AppSpacing.large, vertical = AppSpacing.medium),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -805,11 +807,11 @@ private fun DirectoryPickerBanner(
                 FileManagerPickerMode.DIRECTORY -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)
                     ) {
                         FilledTonalButton(
                             onClick = onPickCurrentDirectory,
-                            shape = smoothCornerShape(24.dp),
+                            shape = AppShapes.capsule,
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(config.actionLabel)
@@ -818,7 +820,7 @@ private fun DirectoryPickerBanner(
                             OutlinedButton(
                                 onClick = { config.onOpenSystemPicker?.invoke() },
                                 enabled = config.onOpenSystemPicker != null,
-                                shape = smoothCornerShape(24.dp),
+                                shape = AppShapes.capsule,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(label)
@@ -829,12 +831,12 @@ private fun DirectoryPickerBanner(
                 FileManagerPickerMode.FILES -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)
                     ) {
                         FilledTonalButton(
                             onClick = onPickSelectedFiles,
                             enabled = selectedFiles.isNotEmpty(),
-                            shape = smoothCornerShape(24.dp),
+                            shape = AppShapes.capsule,
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
@@ -849,7 +851,7 @@ private fun DirectoryPickerBanner(
                             OutlinedButton(
                                 onClick = { config.onOpenSystemPicker?.invoke() },
                                 enabled = config.onOpenSystemPicker != null,
-                                shape = smoothCornerShape(24.dp),
+                                shape = AppShapes.capsule,
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(label)
@@ -899,7 +901,7 @@ private fun FileListItem(
         color = backgroundColor
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = AppSpacing.large, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 多选模式显示勾选框
@@ -917,11 +919,11 @@ private fun FileListItem(
             } else {
                 FileIcon(file, size = 44)
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(AppSpacing.iconGap))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = file.name,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = AppTextStyles.listItemTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = if (file.isDirectory) FontWeight.Medium else FontWeight.Normal
@@ -937,8 +939,8 @@ private fun FileListItem(
                         append(" · ")
                         append(formatDateTime(file.lastModified()))
                     },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = AppTextStyles.listItemMeta,
+                    color = AppTextColors.muted,
                     maxLines = 1
                 )
             }
@@ -1012,11 +1014,11 @@ private fun FileActionItem(
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = AppSpacing.screen, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(AppSpacing.sectionGap))
             Text(label, style = MaterialTheme.typography.bodyLarge, color = tint)
         }
     }

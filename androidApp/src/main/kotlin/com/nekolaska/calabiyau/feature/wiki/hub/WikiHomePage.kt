@@ -113,6 +113,7 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nekolaska.calabiyau.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.liquidGlass
@@ -562,7 +563,7 @@ private fun CharacterPreviewSection(
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
-    val charCardShape = smoothCornerShape(24.dp)
+    val charCardShape = AppShapes.card
     val btnShape = smoothCornerShape(20.dp)
     val onSurface = MaterialTheme.colorScheme.onSurface
     Card(
@@ -689,7 +690,7 @@ private fun CharacterPortraitCard(
     character: CharacterListApi.CharacterInfo,
     onClick: () -> Unit
 ) {
-    val cardShape = smoothCornerShape(16.dp)
+    val cardShape = AppShapes.compactCard
     val cardColors = CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     )
@@ -753,7 +754,7 @@ private fun MapPreviewSection(
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
-    val mapCardShape = smoothCornerShape(24.dp)
+    val mapCardShape = AppShapes.card
     val onSurface = MaterialTheme.colorScheme.onSurface
     Card(
         shape = mapCardShape,
@@ -888,7 +889,7 @@ private fun MapCard(
     map: MapInfo,
     onClick: () -> Unit
 ) {
-    val cardShape = smoothCornerShape(16.dp)
+    val cardShape = AppShapes.compactCard
     val cardColors = CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     )
@@ -952,7 +953,7 @@ internal fun ContentBlockCard(
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
 
-    val blockCardShape = smoothCornerShape(24.dp)
+    val blockCardShape = AppShapes.card
     val clickableShape = smoothCornerShape(12.dp)
     val onSurface = MaterialTheme.colorScheme.onSurface
     Card(
@@ -1066,8 +1067,8 @@ internal fun ActionCard(
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
-    val actionCardShape = smoothCornerShape(24.dp)
-    val capsuleShape = smoothCapsuleShape()
+    val actionCardShape = AppShapes.card
+    val capsuleShape = AppShapes.capsule
     Card(
         onClick = onClick,
         shape = actionCardShape,
@@ -1250,7 +1251,7 @@ private fun MapGridCard(
     map: MapInfo,
     onClick: () -> Unit
 ) {
-    val cardShape = smoothCornerShape(16.dp)
+    val cardShape = AppShapes.compactCard
     val hasWallpaper = LocalHasWallpaper.current
     val cardColors = CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)

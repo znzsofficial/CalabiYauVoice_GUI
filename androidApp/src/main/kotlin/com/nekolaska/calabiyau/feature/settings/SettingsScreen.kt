@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -47,6 +46,9 @@ import com.nekolaska.calabiyau.LocalThemeMode
 import com.nekolaska.calabiyau.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -189,7 +191,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FilledTonalIconButton(
@@ -201,7 +203,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(AppSpacing.iconGap))
                     Text(
                         "设置",
                         style = MaterialTheme.typography.headlineMedium,
@@ -217,7 +219,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     .padding(innerPadding)
                     .verticalScroll(settingsScrollState)
             ) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(AppSpacing.xSmall))
 
                 // ═══════════════════════════════════
                 //  外观
@@ -227,8 +229,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
+                        .padding(horizontal = AppSpacing.screen),
+                    shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
@@ -282,13 +284,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         }
                                     }
                                 },
-                                shape = smoothCornerShape(28.dp),
+                                shape = AppShapes.dialog,
                                 confirmButton = {}
                             )
                         }
 
                         // 主题色
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         ThemeColorPicker(
                             currentSeedColor = seedColorInt,
                             onColorSelected = { argb ->
@@ -298,7 +300,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         )
 
                         // 液态玻璃效果
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         SettingsToggleItem(
                             icon = Icons.Outlined.BlurOn,
                             title = "液态玻璃效果",
@@ -317,7 +319,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         var wallpaperAutoRefresh by remember { mutableStateOf(AppPrefs.wallpaperAutoRefresh) }
                         val scope = rememberCoroutineScope()
 
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         SettingsToggleItem(
                             icon = Icons.Outlined.Autorenew,
                             title = "自动刷新壁纸",
@@ -329,7 +331,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
 
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         SettingsItem(
                             icon = Icons.Outlined.Refresh,
                             title = "刷新首页背景图",
@@ -350,7 +352,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
 
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         SettingsItem(
                             icon = Icons.Outlined.SaveAlt,
                             title = "保存当前背景图",
@@ -393,7 +395,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // ═══════════════════════════════════
                 //  首页快捷入口
@@ -403,8 +405,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
+                        .padding(horizontal = AppSpacing.screen),
+                    shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     SettingsItem(
@@ -418,7 +420,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // ═══════════════════════════════════
                 //  下载
@@ -428,8 +430,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
+                        .padding(horizontal = AppSpacing.screen),
+                    shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
@@ -442,7 +444,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         )
 
                         // 手动输入路径
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         var showPathDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.Edit,
@@ -466,7 +468,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         shape = smoothCornerShape(16.dp)
                                     )
                                 },
-                                shape = smoothCornerShape(28.dp),
+                                shape = AppShapes.dialog,
                                 confirmButton = {
                                     FilledTonalButton(onClick = {
                                         savePath = tempPath
@@ -481,7 +483,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
 
                         // 最大并发数
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         var showConcurrencyDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.Speed,
@@ -501,7 +503,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        Spacer(Modifier.height(12.dp))
+                                        Spacer(Modifier.height(AppSpacing.large))
                                         OutlinedTextField(
                                             value = tempConcurrency,
                                             onValueChange = { tempConcurrency = it.filter { c -> c.isDigit() } },
@@ -513,7 +515,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         )
                                     }
                                 },
-                                shape = smoothCornerShape(28.dp),
+                                shape = AppShapes.dialog,
                                 confirmButton = {
                                     FilledTonalButton(onClick = {
                                         val value = tempConcurrency.toIntOrNull()?.coerceIn(1, 32) ?: 8
@@ -529,7 +531,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
 
                         // 底栏样式
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         var showBarStyleDialog by remember { mutableStateOf(false) }
                         val barStyleName = when (bottomBarStyle) {
                             AppPrefs.BAR_STYLE_DOCKED_TOOLBAR -> "悬浮工具栏"
@@ -577,14 +579,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         }
                                     }
                                 },
-                                shape = smoothCornerShape(28.dp),
+                                shape = AppShapes.dialog,
                                 confirmButton = {}
                             )
                         }
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // ═══════════════════════════════════
                 //  Wiki
@@ -594,8 +596,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
+                        .padding(horizontal = AppSpacing.screen),
+                    shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
@@ -616,7 +618,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
 
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
 
                         // 桌面模式
                         SettingsToggleItem(
@@ -630,7 +632,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             }
                         )
 
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
 
                         // 清除 Cookie
                         var showClearCookieDialog by remember { mutableStateOf(false) }
@@ -645,7 +647,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 onDismissRequest = { showClearCookieDialog = false },
                                 title = { Text("清除登录状态") },
                                 text = { Text("确定要清除 Wiki 登录状态吗？\n清除后需要重新登录才能使用投票等功能。") },
-                                shape = smoothCornerShape(28.dp),
+                                shape = AppShapes.dialog,
                                 confirmButton = {
                                     FilledTonalButton(onClick = {
                                         CookieManager.getInstance().removeAllCookies(null)
@@ -662,7 +664,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // 存储统计
                 SettingsGroupHeader("存储")
@@ -670,8 +672,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
+                        .padding(horizontal = AppSpacing.screen),
+                    shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
@@ -682,7 +684,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(AppSpacing.sectionGap))
 
                 // 关于分组
                 SettingsGroupHeader("关于")
@@ -717,8 +719,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
+                        .padding(horizontal = AppSpacing.screen),
+                    shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
@@ -786,7 +788,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                 }
 
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(AppSpacing.xxxLarge))
             }
         }
     } // AnimatedContent
@@ -819,7 +821,7 @@ private fun SettingsGroupHeader(title: String) {
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 32.dp, top = 20.dp, bottom = 10.dp)
+        modifier = Modifier.padding(start = AppSpacing.xxxLarge, top = AppSpacing.cardContent, bottom = 10.dp)
     )
 }
 
@@ -835,7 +837,7 @@ private fun SettingsItem(
             .fillMaxWidth()
             .clip(smoothCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = AppSpacing.cardContent, vertical = AppSpacing.sectionGap),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
@@ -852,16 +854,15 @@ private fun SettingsItem(
                 )
             }
         }
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(AppSpacing.sectionGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
+                style = AppTextStyles.settingsItemTitle
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
+                style = AppTextStyles.settingsItemSubtitle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -898,7 +899,7 @@ private fun SettingsDebugItem(
         icon = { Icon(Icons.Outlined.BugReport, null) },
         title = { Text("调试菜单") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
                 Surface(
                     shape = smoothCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -911,9 +912,8 @@ private fun SettingsDebugItem(
                             appendLine("系统: Android ${Build.VERSION.RELEASE}")
                             append("保存路径: ${AppPrefs.savePath}")
                         },
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(12.dp)
+                        style = AppTextStyles.codeBlock,
+                        modifier = Modifier.padding(AppSpacing.large)
                     )
                 }
 
@@ -932,7 +932,7 @@ private fun SettingsDebugItem(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.ContentCopy, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("复制设备信息")
                 }
 
@@ -945,12 +945,12 @@ private fun SettingsDebugItem(
                     )
                 ) {
                     Icon(Icons.Outlined.Warning, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("触发测试崩溃")
                 }
             }
         },
-        shape = smoothCornerShape(28.dp),
+        shape = AppShapes.dialog,
         confirmButton = {
             TextButton(onClick = { showDebugMenu = false }) { Text("关闭") }
         }
@@ -968,7 +968,7 @@ private fun SettingsDebugItem(
             },
             title = { Text("确认触发崩溃？") },
             text = { Text("应用会立即关闭并显示崩溃日志页面。") },
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.dialog,
             confirmButton = {
                 FilledTonalButton(
                     onClick = { throw RuntimeException("手动触发的测试崩溃 - CrashHandler 功能验证") },
@@ -1052,7 +1052,7 @@ private fun QuickEntryCustomizeSheet(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = AppSpacing.cardContent)
             .padding(bottom = 24.dp)
     ) {
         Text(
@@ -1060,14 +1060,14 @@ private fun QuickEntryCustomizeSheet(
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(AppSpacing.xSmall))
         Text(
             "已选中的按钮会显示在 Wiki 首页顶部。可移除、补充，并调整顺序。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(AppSpacing.sectionGap))
         Text(
             "当前顺序",
             style = MaterialTheme.typography.labelLarge,
@@ -1091,13 +1091,13 @@ private fun QuickEntryCustomizeSheet(
             )
             if (index < selectedEntries.lastIndex) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = AppSpacing.medium),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                 )
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(AppSpacing.sectionGap))
         Text(
             "可添加项",
             style = MaterialTheme.typography.labelLarge,
@@ -1106,7 +1106,7 @@ private fun QuickEntryCustomizeSheet(
         )
         Spacer(Modifier.height(10.dp))
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)) {
             items(remainingEntries, key = { it.id }) { entry ->
                 AssistChip(
                     onClick = {
@@ -1121,12 +1121,12 @@ private fun QuickEntryCustomizeSheet(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(AppSpacing.sectionGap))
         TextButton(onClick = { onSelectedIdsChange(defaultQuickEntryIds) }) {
             Text("恢复默认六按钮")
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(AppSpacing.xSmall))
         TextButton(onClick = onClose) {
             Text("完成")
         }
@@ -1162,7 +1162,7 @@ private fun QuickEntryEditorRow(
                 Icon(entry.icon, contentDescription = null, modifier = Modifier.size(20.dp))
             }
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(AppSpacing.iconGap))
         Column(Modifier.weight(1f)) {
             Text(entry.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Text(
@@ -1423,7 +1423,7 @@ private fun ThemeColorPicker(
                     }
                 }
             },
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.dialog,
             confirmButton = {
                 if (showCustomPicker) {
                     FilledTonalButton(onClick = {
@@ -1504,7 +1504,7 @@ private fun StorageSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 FilledTonalIconButton(
@@ -1516,7 +1516,7 @@ private fun StorageSettingsScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(AppSpacing.iconGap))
                 Text(
                     "存储空间",
                     style = MaterialTheme.typography.headlineMedium,
@@ -1531,17 +1531,17 @@ private fun StorageSettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp)
+                .padding(bottom = AppSpacing.xxxLarge)
         ) {
             SettingsGroupHeader("总览")
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(28.dp),
+                    .padding(horizontal = AppSpacing.screen),
+                shape = AppShapes.card,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.padding(AppSpacing.cardContent), verticalArrangement = Arrangement.spacedBy(AppSpacing.sectionGap)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             modifier = Modifier.size(48.dp),
@@ -1587,8 +1587,8 @@ private fun StorageSettingsScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
+                    .padding(horizontal = AppSpacing.screen),
+                shape = AppShapes.card,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 StorageStatisticsCard(snapshot = snapshot, isCalculating = isCalculating)
@@ -1598,8 +1598,8 @@ private fun StorageSettingsScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
+                    .padding(horizontal = AppSpacing.screen),
+                shape = AppShapes.card,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
                 Column {
@@ -1613,7 +1613,7 @@ private fun StorageSettingsScreen(
                             AppPrefs.offlineCacheNeverExpire = it
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
 
                     CacheCategory.entries.forEach { category ->
                         CacheCategoryRow(
@@ -1621,7 +1621,7 @@ private fun StorageSettingsScreen(
                             size = snapshot?.cacheSizes?.get(category) ?: 0L,
                             isClearing = clearingCategory == category,
                             enabled = !isCalculating && clearingCategory == null && !isClearingAll,
-                            modifier = Modifier.padding(horizontal = 20.dp),
+                            modifier = Modifier.padding(horizontal = AppSpacing.cardContent),
                             onClear = {
                                 scope.launch {
                                     clearingCategory = category
@@ -1633,12 +1633,12 @@ private fun StorageSettingsScreen(
                             }
                         )
                         if (category != CacheCategory.entries.last()) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    Box(Modifier.padding(16.dp)) {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                    Box(Modifier.padding(AppSpacing.screen)) {
                         FilledTonalButton(
                             enabled = (snapshot?.cacheTotalSize ?: 0L) > 0L && !isCalculating && clearingCategory == null && !isClearingAll,
                             onClick = { showClearAllConfirm = true },
@@ -1654,7 +1654,7 @@ private fun StorageSettingsScreen(
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(AppSpacing.itemGap))
                             }
                             Text("清除所有缓存")
                         }
@@ -1670,7 +1670,7 @@ private fun StorageSettingsScreen(
             icon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null) },
             title = { Text("清除所有缓存？") },
             text = { Text("将清除离线数据、图片缓存和网页缓存。已下载到保存目录的文件不会被删除。") },
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.dialog,
             confirmButton = {
                 FilledTonalButton(
                     enabled = !isClearingAll,
@@ -1697,7 +1697,7 @@ private fun StorageSettingsScreen(
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(AppSpacing.itemGap))
                     }
                     Text("确认清除")
                 }
@@ -1751,7 +1751,7 @@ private fun StorageUsageChart(segments: List<StorageSegment>) {
                         .clip(CircleShape)
                         .background(segment.color)
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(AppSpacing.itemGap))
                 Text(
                     segment.label,
                     style = MaterialTheme.typography.bodySmall,
@@ -1784,7 +1784,7 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(20.dp)
+            .padding(AppSpacing.cardContent)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1803,7 +1803,7 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
                     )
                 }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(AppSpacing.sectionGap))
             Column(Modifier.weight(1f)) {
                 Text(
                     "已用空间",
@@ -1832,11 +1832,11 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
         // 子目录明细
         val subDirSizes = snapshot?.subDirSizes.orEmpty()
         if (!isCalculating && subDirSizes.isNotEmpty()) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(AppSpacing.sectionGap))
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(AppSpacing.large))
 
             subDirSizes.forEach { dirInfo ->
                 Row(
@@ -1851,7 +1851,7 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacing.itemGap))
                     Text(
                         text = dirInfo.name,
                         style = MaterialTheme.typography.bodySmall,
@@ -1895,7 +1895,7 @@ private fun CacheCategoryRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = AppSpacing.medium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -1904,7 +1904,7 @@ private fun CacheCategoryRow(
             modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(AppSpacing.iconGap))
         Column(Modifier.weight(1f)) {
             Text(
                 category.title,

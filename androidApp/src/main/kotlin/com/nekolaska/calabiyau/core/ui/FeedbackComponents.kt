@@ -32,11 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
@@ -57,7 +54,7 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp)
+                .padding(horizontal = AppSpacing.cardContent, vertical = 14.dp)
         ) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -70,10 +67,10 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("下载中", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
-                Surface(color = MaterialTheme.colorScheme.primary, shape = smoothCornerShape(12.dp)) {
+                Surface(color = MaterialTheme.colorScheme.primary, shape = AppShapes.chip) {
                     Text(
                         "${(progress * 100).toInt()}%",
                         style = MaterialTheme.typography.labelMedium,
@@ -91,7 +88,7 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
                     .clip(smoothCornerShape(4.dp)),
                 trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(AppSpacing.small))
             Text(
                 text = statusText,
                 style = MaterialTheme.typography.bodySmall,
@@ -115,30 +112,30 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
-            shape = smoothCornerShape(28.dp),
+                .padding(AppSpacing.dialogMargin),
+            shape = AppShapes.dialog,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             tonalElevation = 0.dp
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(Modifier.padding(AppSpacing.dialogContent)) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("运行日志", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("运行日志", style = AppTextStyles.dialogTitle)
                     FilledTonalIconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                         Icon(Icons.Default.Close, null, modifier = Modifier.size(18.dp))
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(AppSpacing.large))
 
                 if (logs.isEmpty()) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("暂无日志", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Text("暂无日志", color = AppTextColors.muted, style = AppTextStyles.bodyMuted)
                     }
                 } else {
-                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)) {
                         items(logs.reversed(), key = { it }) { log ->
                             val isError = log.startsWith("[错误]")
                             Surface(
@@ -147,8 +144,8 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
                             ) {
                                 Text(
                                     text = log,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, lineHeight = 18.sp),
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = AppTextStyles.monoLog,
+                                    modifier = Modifier.padding(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
                                     color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -192,7 +189,7 @@ fun OfflineBanner(
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -201,8 +198,8 @@ fun OfflineBanner(
                 modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.onTertiaryContainer
             )
-            Spacer(Modifier.width(8.dp))
-            Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
+            Spacer(Modifier.width(AppSpacing.itemGap))
+            Text(text = label, style = AppTextStyles.chipLabel, color = MaterialTheme.colorScheme.onTertiaryContainer)
         }
     }
 }

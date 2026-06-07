@@ -45,11 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.liquidGlass
-import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -437,8 +436,8 @@ internal fun AggregatePreviewCard(
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
-    val cardShape = smoothCornerShape(24.dp)
-    val capsuleShape = smoothCapsuleShape()
+    val cardShape = AppShapes.card
+    val capsuleShape = AppShapes.capsule
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     val contentColor = MaterialTheme.colorScheme.onSurface
 

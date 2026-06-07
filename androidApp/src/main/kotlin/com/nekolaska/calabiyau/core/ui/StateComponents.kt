@@ -70,7 +70,7 @@ fun EmptyState(
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = AppSpacing.xxxLarge)
         ) {
             val isError = errorMessage != null
             androidx.compose.material3.Surface(
@@ -87,7 +87,7 @@ fun EmptyState(
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(AppSpacing.sectionGap))
             Text(
                 errorMessage ?: message,
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -95,10 +95,10 @@ fun EmptyState(
                 textAlign = TextAlign.Center
             )
             if (isError && onRetry != null) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(AppSpacing.sectionGap))
                 FilledTonalButton(onClick = onRetry) {
                     Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("重试")
                 }
             }
@@ -144,7 +144,7 @@ fun ErrorState(
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = AppSpacing.xxxLarge)
         ) {
             androidx.compose.material3.Surface(
                 modifier = Modifier.size(80.dp),
@@ -155,12 +155,12 @@ fun ErrorState(
                     Icon(icon, null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(AppSpacing.cardContent))
             Text(friendlyTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(AppSpacing.small))
             Text(friendlyHint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             if (kind == ErrorKind.UNKNOWN && message.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(AppSpacing.itemGap))
                 Text(
                     message,
                     style = MaterialTheme.typography.bodySmall,
@@ -171,10 +171,10 @@ fun ErrorState(
                 )
             }
             if (onRetry != null) {
-                Spacer(Modifier.height(20.dp))
-                FilledTonalButton(onClick = onRetry, shape = smoothCornerShape(24.dp)) {
+                Spacer(Modifier.height(AppSpacing.cardContent))
+                FilledTonalButton(onClick = onRetry, shape = AppShapes.capsule) {
                     Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("重试")
                 }
             }
@@ -193,7 +193,7 @@ fun LoadingState(
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(AppSpacing.large))
             Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

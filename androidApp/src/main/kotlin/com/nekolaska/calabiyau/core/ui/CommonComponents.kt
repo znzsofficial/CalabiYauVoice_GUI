@@ -365,7 +365,7 @@ fun DetailInfoRow(
                 shape = CircleShape,
                 imagePadding = 6.dp
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(AppSpacing.iconGap))
         }
         Text(
             label,
@@ -388,15 +388,15 @@ fun DetailInfoRow(
  */
 @Composable
 fun SectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AppSpacing.iconGap)) {
         Surface(
-            shape = smoothCornerShape(14.dp),
+            shape = AppShapes.sectionIcon,
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(20.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.padding(AppSpacing.medium).size(20.dp))
         }
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(title, style = AppTextStyles.sectionTitle)
     }
 }
 
@@ -411,17 +411,17 @@ fun InfoChip(
     contentColor: Color
 ) {
     Surface(
-        shape = smoothCornerShape(12.dp),
+        shape = AppShapes.chip,
         color = containerColor,
         contentColor = contentColor
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = AppSpacing.chipHorizontal, vertical = AppSpacing.chipVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.width(AppSpacing.small))
+            Text(label, style = AppTextStyles.chipLabel)
         }
     }
 }

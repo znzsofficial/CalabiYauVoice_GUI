@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppTextColors
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.InfoChip
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
@@ -211,7 +214,7 @@ private fun WeaponDetailContent(
 @Composable
 private fun WeaponHeaderCard(detail: WeaponDetail) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -291,7 +294,7 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
 @Composable
 private fun WeaponDescriptionCard(description: String) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -310,7 +313,7 @@ private fun WeaponDescriptionCard(description: String) {
 @Composable
 private fun WeaponObtainCard(method: String) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -346,7 +349,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
     if (stats.isEmpty()) return
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -364,11 +367,9 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
                 Row(Modifier.fillMaxWidth()) {
                     row.forEach { (label, value) ->
                         Column(Modifier.weight(1f)) {
-                            Text(label, style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(label, style = AppTextStyles.statLabel, color = AppTextColors.muted)
                             Spacer(Modifier.height(2.dp))
-                            Text(value, style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium)
+                            Text(value, style = AppTextStyles.statValue)
                         }
                     }
                     if (row.size < 2) Spacer(Modifier.weight(1f))
@@ -385,7 +386,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
 @Composable
 private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDetailApi.DamageRow>) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -529,7 +530,7 @@ private data class SimpleDamageDisplayRow(
 @Composable
 private fun WeaponSimpleDamageCard(simpleRows: List<WeaponDetailApi.DamageRow>) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -668,7 +669,7 @@ private fun WeaponSubPagesCard(
     onOpenWikiUrl: (String) -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -719,7 +720,7 @@ private fun WeaponSubPagesCard(
 @Composable
 private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
