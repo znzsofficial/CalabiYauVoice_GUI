@@ -25,6 +25,7 @@ private const val FILTER_ALL = "全部"
 private const val FILTER_TIMELINE = "时间轴"
 private const val FILTER_DETAIL = "联动详情"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollaborationScreen(
     onBack: () -> Unit,

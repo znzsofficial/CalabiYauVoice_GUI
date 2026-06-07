@@ -111,11 +111,11 @@ import coil3.size.Size
 import coil3.toBitmap
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.nekolaska.calabiyau.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.liquidGlassLight
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape

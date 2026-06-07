@@ -38,6 +38,7 @@ dependencies {
     implementation(libs.kyant.backdrop)
     implementation(libs.kyant.capsule)
     implementation(libs.jsoup)
+    implementation(libs.material.kolor)
 
     implementation(libs.androidx.activity.compose)
 

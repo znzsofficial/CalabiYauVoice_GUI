@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.PhotoFilter
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +53,7 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentItem
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentSection
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StringerTalentScreen(
     onBack: () -> Unit,

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,6 +70,7 @@ private const val GROUP_CATEGORY = "分类"
 private const val GROUP_CHARACTER = "角色"
 private const val GROUP_ALBUM = "专辑"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BgmScreen(
     onBack: () -> Unit,

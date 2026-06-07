@@ -34,6 +34,7 @@ private enum class OathTab(val label: String, val icon: ImageVector) {
 private const val ALL_GIFT_SOURCES = "全部礼物"
 private const val BIRTHDAY_GIFT_SOURCE = "生日专属礼物"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OathScreen(
     onBack: () -> Unit,

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.MilitaryTech
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -59,6 +60,7 @@ import com.nekolaska.calabiyau.feature.wiki.achievement.model.AchievementSection
 private const val ALL_CATEGORIES = "全部分类"
 private const val ALL_LEVELS = "全部等级"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AchievementScreen(
     onBack: () -> Unit,
