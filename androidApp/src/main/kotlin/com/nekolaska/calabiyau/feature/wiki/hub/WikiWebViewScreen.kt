@@ -3,10 +3,12 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Handler
@@ -44,12 +46,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.WikiUserAgent
+import com.nekolaska.calabiyau.feature.tools.openFile
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -75,6 +79,11 @@ private val BLOCKED_HOSTS = listOf(
 )
 
 private val WIKI_BOTTOM_TOOLBAR_SNACKBAR_OFFSET = 88.dp
+
+private data class PendingApkDownload(
+    val file: File,
+    val fileName: String
+)
 
 private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
     return buildMap {
@@ -287,6 +296,57 @@ fun WikiWebViewScreen(
     val snackbarScope = rememberCoroutineScope()
     val showSnack: (String) -> Unit = remember(snackbarScope, snackbarHostState) {
         { msg -> snackbarScope.launch { snackbarHostState.showSnackbar(msg) }; }
+    }
+    val showInstallPrompt: (PendingApkDownload) -> Unit = remember(context, snackbarScope, snackbarHostState) {
+        { pending ->
+            snackbarScope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = "APK 下载完成：${pending.fileName}",
+                    actionLabel = "安装",
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Long
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    openFile(context, pending.file) { message -> showSnack(message) }
+                }
+            }
+        }
+    }
+    val pendingApkDownloads = remember { mutableStateMapOf<Long, PendingApkDownload>() }
+
+    DisposableEffect(context, pendingApkDownloads, showInstallPrompt, showSnack) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                if (intent.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+                val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                val pending = pendingApkDownloads.remove(downloadId) ?: return
+
+                val dm = receiverContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                val status = dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    } else {
+                        null
+                    }
+                }
+
+                if (status == DownloadManager.STATUS_SUCCESSFUL && pending.file.exists()) {
+                    showInstallPrompt(pending)
+                } else {
+                    showSnack("APK 下载失败：${pending.fileName}")
+                }
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+            pendingApkDownloads.clear()
+        }
     }
     val showLoginReturnSnack: () -> Unit = remember(snackbarScope, snackbarHostState) {
         {
@@ -620,6 +680,7 @@ fun WikiWebViewScreen(
                                 true
                             },
                             onPassportDetected = showLoginReturnSnack,
+                            pendingApkDownloads = pendingApkDownloads,
                             showSnack = showSnack
                         ).also { wv ->
                             webView = wv
@@ -1134,6 +1195,7 @@ private fun createWikiWebView(
     onNetworkError: (String) -> Unit = {},
     onPassportDetected: () -> Unit = {},
     onFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams?) -> Boolean,
+    pendingApkDownloads: MutableMap<Long, PendingApkDownload>,
     showSnack: (String) -> Unit
 ): WebView {
     // 确保 Cookie 持久化
@@ -1295,6 +1357,7 @@ private fun createWikiWebView(
             try {
                 val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
                 val saveDir = ensureWikiSaveDirectory()
+                val outputFile = File(saveDir, fileName)
                 val request = DownloadManager.Request(url.toUri()).apply {
                     setMimeType(mimeType ?: "application/octet-stream")
                     addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
@@ -1302,10 +1365,13 @@ private fun createWikiWebView(
                     setDescription("正在下载文件...")
                     setTitle(fileName)
                     setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setDestinationUri(Uri.fromFile(File(saveDir, fileName)))
+                    setDestinationUri(Uri.fromFile(outputFile))
                 }
                 val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                dm.enqueue(request)
+                val downloadId = dm.enqueue(request)
+                if (isApkDownload(fileName, mimeType)) {
+                    pendingApkDownloads[downloadId] = PendingApkDownload(outputFile, fileName)
+                }
                 showSnack("已加入下载队列：$fileName")
             } catch (_: SecurityException) {
                 showSnack("下载失败：缺少存储权限")
@@ -1510,4 +1576,9 @@ private fun createWikiWebView(
         // 确保第三方 Cookie 可用（登录需要）
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
     }
+}
+
+private fun isApkDownload(fileName: String, mimeType: String?): Boolean {
+    return fileName.endsWith(".apk", ignoreCase = true) ||
+        mimeType.equals("application/vnd.android.package-archive", ignoreCase = true)
 }
