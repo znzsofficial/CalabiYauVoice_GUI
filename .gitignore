@@ -6,6 +6,7 @@ downloadPage/dist/
 !**/src/main/**/build/
 !**/src/test/**/build/
 .claude
+.agents
 .github
 .wrangler/
 

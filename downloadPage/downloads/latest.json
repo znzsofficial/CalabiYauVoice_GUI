@@ -1,15 +1,16 @@
 {
-  "versionName": "2.0.7",
-  "versionCode": 27,
+  "versionName": "2.0.8",
+  "versionCode": 28,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3325079,
+  "apkSize": 3343014,
   "releaseUrl": "/",
   "changelog": [
-    "优化 Android Wiki WebView 身份与启动流程，使用更接近浏览器的请求标识并启用安全浏览等兼容能力",
-    "Wiki 首页背景图改为稳定缓存与后台刷新，返回首页时减少闪烁和重复请求",
-    "主题系统迁移到 MaterialKolor 动态配色，并将主题、形状、文本和间距整理为统一 UI token",
-    "文件管理器支持直接打开 APK 安装包，并修复音频工具临时文件重命名失败时的返回文件问题",
-    "清理 Kotlin 2.4 / Material3 升级后的编译警告，补齐相关 Wiki 页面实验 API 标记"
+    "新增 Android 应用图标主题切换，可在品牌深色图标与系统强调色图标之间切换",
+    "重绘 Android 启动器图标背景，保留卡拉彼丘 Logo 并提升桌面小尺寸识别度",
+    "优化液态玻璃侧栏分组与高可读性模式，降低视觉密度并增强文字可读性",
+    "优化 Wiki Hub 快捷入口与顶部遮罩表现，减少背景拉伸和玻璃层闪烁感",
+    "修复 Wiki Hub 武器搜索索引加载不稳定的问题，并支持单字角色名搜索",
+    "更新网络依赖并继续清理 Android 兼容性细节"
   ],
-  "publishedAt": "2026-06-07"
+  "publishedAt": "2026-06-10"
 }
