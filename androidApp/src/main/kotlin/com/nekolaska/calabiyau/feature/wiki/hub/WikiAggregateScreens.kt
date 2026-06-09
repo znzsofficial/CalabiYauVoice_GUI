@@ -1,5 +1,8 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,9 +39,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -402,6 +409,24 @@ private fun AggregatePageScaffold(
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
     val surfaceColor = MaterialTheme.colorScheme.surface
+    var scrimVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(hasWallpaper) {
+        scrimVisible = hasWallpaper
+    }
+    val targetScrimAlpha = if (scrimVisible) {
+        wikiTopBarScrimAlpha(
+            progress = 1f,
+            liquidGlassEnabled = liquidGlassEnabled,
+            regularMaxAlpha = 0.52f
+        )
+    } else {
+        0f
+    }
+    val topBarScrimAlpha by animateFloatAsState(
+        targetValue = targetScrimAlpha,
+        animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing),
+        label = "AggregateTopBarScrim"
+    )
     Scaffold(
         topBar = {
             TopAppBar(
@@ -415,8 +440,8 @@ private fun AggregatePageScaffold(
                 } else {
                     TopAppBarDefaults.topAppBarColors()
                 },
-                modifier = if (hasWallpaper) Modifier.drawBehind {
-                    drawRect(surfaceColor.copy(alpha = 0.52f))
+                modifier = if (hasWallpaper) {
+                    Modifier.wikiTopBarScrim(surfaceColor, topBarScrimAlpha)
                 } else Modifier
             )
         },

@@ -31,6 +31,7 @@ object AppPrefs {
     private const val KEY_WALLPAPER_SEED_COLOR_URL = "wallpaper_seed_color_url"
     private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
     private const val KEY_HOME_QUICK_ENTRY_IDS = "home_quick_entry_ids"
+    private const val KEY_HOME_QUICK_ENTRY_LAYOUT = "home_quick_entry_layout"
     private const val KEY_TOOLS_OUTPUT_PATH = "tools_output_path"
     private const val KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE = "audio_spectrogram_window_size"
     private const val KEY_AUDIO_SPECTROGRAM_HOP_PERCENT = "audio_spectrogram_hop_percent"
@@ -54,6 +55,10 @@ object AppPrefs {
     /** Wiki 缓存模式：0=默认, 1=优先缓存 */
     const val WIKI_CACHE_DEFAULT = 0
     const val WIKI_CACHE_OFFLINE_FIRST = 1
+
+    /** 首页快捷入口布局：0=网格大卡, 1=六按钮 */
+    const val HOME_QUICK_LAYOUT_GRID = 0
+    const val HOME_QUICK_LAYOUT_BUTTONS = 1
 
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
@@ -202,6 +207,16 @@ object AppPrefs {
             ?: emptyList()
         set(value) = prefs.edit {
             putString(KEY_HOME_QUICK_ENTRY_IDS, value.take(6).joinToString("|||"))
+        }
+
+    /** 首页快捷入口布局，默认使用性能更好的网格大卡。 */
+    var homeQuickEntryLayout: Int
+        get() = prefs.getInt(KEY_HOME_QUICK_ENTRY_LAYOUT, HOME_QUICK_LAYOUT_GRID)
+        set(value) = prefs.edit {
+            putInt(
+                KEY_HOME_QUICK_ENTRY_LAYOUT,
+                if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID
+            )
         }
 
     /** 素材工具默认输出目录 */

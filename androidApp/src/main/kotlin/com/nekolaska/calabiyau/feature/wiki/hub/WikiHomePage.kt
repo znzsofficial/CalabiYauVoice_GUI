@@ -5,6 +5,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -63,6 +65,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
@@ -76,6 +79,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarState
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -90,7 +94,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -134,7 +137,7 @@ import java.net.URLEncoder
 /** 是否有壁纸背景（用于非液态玻璃模式下的半透明卡片） */
 internal val LocalHasWallpaper = staticCompositionLocalOf { false }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiHomePage(
     onOpenDrawer: () -> Unit,
@@ -203,6 +206,16 @@ internal fun WikiHomePage(
     val collapsedFraction by remember {
         derivedStateOf { scrollBehavior.state.collapsedFraction }
     }
+    val topBarScrimAlpha by remember {
+        derivedStateOf {
+            wikiTopBarScrimAlpha(
+                progress = collapsedFraction,
+                liquidGlassEnabled = liquidGlassEnabled,
+                regularMaxAlpha = 0.78f,
+                startThreshold = 0.08f
+            )
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -224,23 +237,22 @@ internal fun WikiHomePage(
                     TopAppBarDefaults.topAppBarColors()
                 },
                 modifier = if (hasWallpaper) {
-                    Modifier.drawBehind {
-                        drawRect(surfaceColor.copy(alpha = collapsedFraction * 0.78f))
-                    }
+                    Modifier.wikiTopBarScrim(surfaceColor, topBarScrimAlpha)
                 } else Modifier
             )
         },
         containerColor = Color.Transparent
     ) { innerPadding ->
         CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            CompositionLocalProvider(LocalOverscrollFactory provides null) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     item(key = "hub_search", contentType = "search") {
                         HubSearchPanel(
                             query = searchQuery,
@@ -411,6 +423,7 @@ internal fun WikiHomePage(
 
                     // 底部留白
                     item { Spacer(Modifier.height(24.dp)) }
+                }
             }
         }
     }
@@ -475,8 +488,112 @@ private fun QuickAccessGrid(
     val quickEntries = remember(configuredIds) {
         configuredIds.resolveQuickEntries()
     }
+    val layout = AppPrefs.homeQuickEntryLayout
+
+    if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
+        QuickAccessButtonGrid(
+            quickEntries = quickEntries,
+            onOpenWikiUrl = onOpenWikiUrl,
+            onNavigateTo = onNavigateTo,
+            backdrop = backdrop
+        )
+    } else {
+        QuickAccessGridCard(
+            quickEntries = quickEntries,
+            onOpenWikiUrl = onOpenWikiUrl,
+            onNavigateTo = onNavigateTo,
+            backdrop = backdrop
+        )
+    }
+}
+
+@Composable
+private fun QuickAccessGridCard(
+    quickEntries: List<QuickEntry>,
+    onOpenWikiUrl: (String) -> Unit,
+    onNavigateTo: (WikiHubPage) -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
+) {
     val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
 
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
+    val gridShape = AppShapes.card
+    val cellShape = smoothCornerShape(18.dp)
+    val surfaceColor = when {
+        liquidGlass -> Color.Transparent
+        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val iconTint = MaterialTheme.colorScheme.primary
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (liquidGlass) 0.22f else 0.42f)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { gridShape },
+                blurRadius = 2.dp,
+                lensHeight = 12.dp,
+                lensAmount = 20.dp,
+                surfaceAlpha = if (liquidGlass) 0.22f else 0.35f
+            ),
+        shape = gridShape,
+        color = surfaceColor,
+        contentColor = contentColor
+    ) {
+        Column(Modifier.padding(6.dp)) {
+            quickEntryRows.forEachIndexed { rowIndex, row ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    repeat(3) { columnIndex ->
+                        val entry = row.getOrNull(columnIndex)
+                        if (entry != null) {
+                            QuickAccessCell(
+                                entry = entry,
+                                iconTint = iconTint,
+                                cellShape = cellShape,
+                                onClick = {
+                                    if (entry.targetPage != null) onNavigateTo(entry.targetPage)
+                                    else entry.url?.let(onOpenWikiUrl)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        } else {
+                            Spacer(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(70.dp)
+                            )
+                        }
+                        if (columnIndex < 2) {
+                            VerticalDivider(
+                                modifier = Modifier.height(44.dp),
+                                color = dividerColor
+                            )
+                        }
+                    }
+                }
+                if (rowIndex < quickEntryRows.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        color = dividerColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickAccessButtonGrid(
+    quickEntries: List<QuickEntry>,
+    onOpenWikiUrl: (String) -> Unit,
+    onNavigateTo: (WikiHubPage) -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
+) {
+    val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
     val entryShape = smoothCornerShape(20.dp)
@@ -531,10 +648,41 @@ private fun QuickAccessGrid(
                         }
                     }
                 }
-                // 填充空位
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
+}
+
+@Composable
+private fun QuickAccessCell(
+    entry: QuickEntry,
+    iconTint: Color,
+    cellShape: androidx.compose.ui.graphics.Shape,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .height(70.dp)
+            .padding(3.dp)
+            .clip(cellShape)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            entry.icon,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = iconTint
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            entry.label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

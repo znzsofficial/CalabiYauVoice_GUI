@@ -96,6 +96,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
     var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
     var bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
+    var homeQuickEntryLayout by remember { mutableIntStateOf(AppPrefs.homeQuickEntryLayout) }
     var homeQuickEntryIds by remember {
         mutableStateOf(
             AppPrefs.homeQuickEntryIds.takeIf { it.isNotEmpty() } ?: defaultQuickEntryIds
@@ -409,15 +410,69 @@ fun SettingsScreen(onBack: () -> Unit) {
                     shape = AppShapes.card,
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    SettingsItem(
-                        icon = Icons.Outlined.SpaceDashboard,
-                        title = "顶部六按钮",
-                        subtitle = homeQuickEntryIds
-                            .mapNotNull(quickEntryById::get)
-                            .joinToString(" · ") { it.label }
-                            .ifBlank { "默认" },
-                        onClick = { showQuickEntrySheet = true }
-                    )
+                    Column {
+                        var showQuickLayoutDialog by remember { mutableStateOf(false) }
+                        SettingsItem(
+                            icon = Icons.Outlined.GridView,
+                            title = "快捷入口样式",
+                            subtitle = when (homeQuickEntryLayout) {
+                                AppPrefs.HOME_QUICK_LAYOUT_BUTTONS -> "六按钮"
+                                else -> "网格大卡（默认）"
+                            },
+                            onClick = { showQuickLayoutDialog = true }
+                        )
+                        if (showQuickLayoutDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showQuickLayoutDialog = false },
+                                title = { Text("快捷入口样式") },
+                                text = {
+                                    Column {
+                                        listOf(
+                                            AppPrefs.HOME_QUICK_LAYOUT_GRID to "网格大卡（默认）",
+                                            AppPrefs.HOME_QUICK_LAYOUT_BUTTONS to "六按钮"
+                                        ).forEach { (layout, label) ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(smoothCornerShape(12.dp))
+                                                    .clickable {
+                                                        homeQuickEntryLayout = layout
+                                                        AppPrefs.homeQuickEntryLayout = layout
+                                                        showQuickLayoutDialog = false
+                                                    }
+                                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = homeQuickEntryLayout == layout,
+                                                    onClick = {
+                                                        homeQuickEntryLayout = layout
+                                                        AppPrefs.homeQuickEntryLayout = layout
+                                                        showQuickLayoutDialog = false
+                                                    }
+                                                )
+                                                Spacer(Modifier.width(12.dp))
+                                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                                            }
+                                        }
+                                    }
+                                },
+                                shape = AppShapes.dialog,
+                                confirmButton = {}
+                            )
+                        }
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                        SettingsItem(
+                            icon = Icons.Outlined.SpaceDashboard,
+                            title = "顶部六入口",
+                            subtitle = homeQuickEntryIds
+                                .mapNotNull(quickEntryById::get)
+                                .joinToString(" · ") { it.label }
+                                .ifBlank { "默认" },
+                            onClick = { showQuickEntrySheet = true }
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(AppSpacing.itemGap))

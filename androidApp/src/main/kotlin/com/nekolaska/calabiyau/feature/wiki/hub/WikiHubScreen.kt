@@ -165,7 +165,6 @@ private fun WikiHubWallpaperBackground(
     backdrop: LayerBackdrop,
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
-    val primaryColor = MaterialTheme.colorScheme.primaryContainer
     val context = LocalContext.current
     val wallpaperRequest = remember(context, wallpaperUrl) {
         wallpaperUrl?.takeIf { it.isNotBlank() }?.let { url ->
@@ -181,30 +180,37 @@ private fun WikiHubWallpaperBackground(
                 .build()
         }
     }
-    val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor, primaryColor) {
-        Brush.verticalGradient(
-            colors = if (liquidGlassEnabled) listOf(
-                primaryColor.copy(alpha = 0.3f),
-                surfaceColor.copy(alpha = 0.6f),
-                surfaceColor.copy(alpha = 0.85f)
-            ) else listOf(
+    val wallpaperOverlayBrush = remember(liquidGlassEnabled, surfaceColor) {
+        if (liquidGlassEnabled) {
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to surfaceColor.copy(alpha = 0.18f),
+                    0.42f to surfaceColor.copy(alpha = 0.18f),
+                    0.72f to surfaceColor.copy(alpha = 0.6f),
+                    1f to surfaceColor.copy(alpha = 0.86f)
+                )
+            )
+        } else {
+            Brush.verticalGradient(
+                colors = listOf(
                 surfaceColor.copy(alpha = 0.15f),
                 surfaceColor.copy(alpha = 0.5f),
                 surfaceColor.copy(alpha = 0.8f)
             )
-        )
+            )
+        }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .then(
+                if (liquidGlassEnabled) Modifier.layerBackdrop(backdrop)
+                else Modifier
+            )
+    ) {
         if (wallpaperRequest != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        if (liquidGlassEnabled) Modifier.layerBackdrop(backdrop)
-                        else Modifier
-                    )
-            ) {
+            Box(Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = wallpaperRequest,
                     contentDescription = null,
