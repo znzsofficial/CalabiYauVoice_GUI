@@ -59,17 +59,33 @@ object WeaponListApi {
     @Volatile
     private var cachedData: List<WeaponCategoryData>? = null
 
-    fun clearMemoryCache() { cachedData = null }
+    @Volatile
+    private var cachedSearchData: List<WeaponCategoryData>? = null
+
+    fun clearMemoryCache() {
+        cachedData = null
+        cachedSearchData = null
+    }
 
     /**
      * 获取所有分类的武器列表（带内存缓存）。
      */
-    suspend fun fetchAllCategories(forceRefresh: Boolean = false): ApiResult<List<WeaponCategoryData>> {
+    suspend fun fetchAllCategories(
+        forceRefresh: Boolean = false,
+        includeImages: Boolean = true
+    ): ApiResult<List<WeaponCategoryData>> {
         if (!forceRefresh) {
-            cachedData?.let { return ApiResult.Success(it) }
+            if (includeImages) {
+                cachedData?.let { return ApiResult.Success(it) }
+            } else {
+                cachedSearchData?.let { return ApiResult.Success(it) }
+                cachedData?.let { return ApiResult.Success(it) }
+            }
         }
-        return fetchFromNetwork(forceRefresh).also {
-            if (it is ApiResult.Success) cachedData = it.value
+        return fetchFromNetwork(forceRefresh, includeImages).also {
+            if (it is ApiResult.Success) {
+                if (includeImages) cachedData = it.value else cachedSearchData = it.value
+            }
         }
     }
 
@@ -81,12 +97,13 @@ object WeaponListApi {
     )
 
     private suspend fun fetchFromNetwork(
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        includeImages: Boolean
     ): ApiResult<List<WeaponCategoryData>> =
         withContext(Dispatchers.IO) {
             try {
                 val results = WeaponCategory.entries.map { category ->
-                    async { fetchCategory(category, forceRefresh) }
+                    async { fetchCategory(category, forceRefresh, includeImages) }
                 }.awaitAll()
 
                 val data = results.filterNotNull()
@@ -111,7 +128,8 @@ object WeaponListApi {
      */
     private suspend fun fetchCategory(
         category: WeaponCategory,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        includeImages: Boolean
     ): CategoryResult? {
         return try {
             // 统一查询所有属性
@@ -151,10 +169,11 @@ object WeaponListApi {
                 )
             }.sortedBy { it.name }
 
-            // 批量获取武器图片
-            val imageUrls = fetchWeaponImages(weapons, category, forceRefresh)
-            val weaponsWithImages = weapons.map { weapon ->
-                weapon.copy(imageUrl = imageUrls[weapon.name])
+            val weaponsWithImages = if (includeImages) {
+                val imageUrls = fetchWeaponImages(weapons, category, forceRefresh)
+                weapons.map { weapon -> weapon.copy(imageUrl = imageUrls[weapon.name]) }
+            } else {
+                weapons
             }
 
             CategoryResult(

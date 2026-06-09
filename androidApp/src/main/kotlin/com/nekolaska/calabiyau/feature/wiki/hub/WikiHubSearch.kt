@@ -73,7 +73,6 @@ import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import data.ApiResult
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -106,12 +105,20 @@ private object HubWeaponSearchIndex {
     fun cached(): List<WeaponListApi.WeaponCategoryData> = cachedCategories.orEmpty()
 
     suspend fun load(): List<WeaponListApi.WeaponCategoryData> = mutex.withLock {
-        cachedCategories?.let { return@withLock it }
-        val loaded = when (val result = WeaponListApi.fetchAllCategories(false)) {
+        cachedCategories?.takeIf { it.isNotEmpty() }?.let { return@withLock it }
+        val lightweight = when (val result = WeaponListApi.fetchAllCategories(forceRefresh = false, includeImages = false)) {
             is ApiResult.Success -> result.value
             is ApiResult.Error -> emptyList()
         }
-        cachedCategories = loaded
+        val loaded = lightweight.ifEmpty {
+            when (val result = WeaponListApi.fetchAllCategories(forceRefresh = false, includeImages = true)) {
+                is ApiResult.Success -> result.value
+                is ApiResult.Error -> emptyList()
+            }
+        }
+        if (loaded.isNotEmpty()) {
+            cachedCategories = loaded
+        }
         loaded
     }
 }
@@ -214,13 +221,16 @@ internal fun HubSearchPanel(
     var isLoadingWeapons by remember { mutableStateOf(false) }
     var hasLoadedWeapons by remember { mutableStateOf(weaponCategories.isNotEmpty()) }
 
-    LaunchedEffect(normalizedQuery) {
-        if (normalizedQuery.isNotBlank() && !hasLoadedWeapons && !isLoadingWeapons) {
-            delay(250)
-            if (normalizedQuery.isBlank() || hasLoadedWeapons) return@LaunchedEffect
-            isLoadingWeapons = true
-            weaponCategories = HubWeaponSearchIndex.load()
-            hasLoadedWeapons = true
+    LaunchedEffect(searchActive, hasLoadedWeapons) {
+        if (!searchActive || hasLoadedWeapons || isLoadingWeapons) return@LaunchedEffect
+        isLoadingWeapons = true
+        try {
+            val loadedCategories = HubWeaponSearchIndex.load()
+            if (loadedCategories.isNotEmpty()) {
+                weaponCategories = loadedCategories
+                hasLoadedWeapons = true
+            }
+        } finally {
             isLoadingWeapons = false
         }
     }
