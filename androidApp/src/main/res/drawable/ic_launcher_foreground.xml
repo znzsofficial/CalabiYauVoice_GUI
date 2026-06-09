@@ -4,10 +4,10 @@
     android:height="108dp"
     android:viewportWidth="408"
     android:viewportHeight="408">
-    <!-- 先平移使图标居中，再以 viewport 中心为锚点缩小至 75% -->
+    <!-- 先平移使图标居中，再以 viewport 中心为锚点缩小至 68% -->
     <group
-        android:scaleX="0.75"
-        android:scaleY="0.75"
+        android:scaleX="0.68"
+        android:scaleY="0.68"
         android:pivotX="204"
         android:pivotY="204">
       <group

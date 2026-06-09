@@ -5,6 +5,30 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="@color/ic_launcher_background"
+        android:fillColor="#0D1228"
         android:pathData="M0,0h108v108H0z" />
+    <path
+        android:fillColor="#34206A"
+        android:fillAlpha="0.30"
+        android:pathData="M0,0h108v44C82,35 61,28 43,18C27,9 14,6 0,9z" />
+    <path
+        android:fillColor="#0C5360"
+        android:fillAlpha="0.26"
+        android:pathData="M108,58v50H53c11,-17 24,-28 39,-36c6,-4 11,-8 16,-14z" />
+    <path
+        android:fillColor="#5AD9FF"
+        android:fillAlpha="0.16"
+        android:pathData="M54,31a23,23 0,1 0,0.1 0z" />
+    <path
+        android:fillColor="#B18CFF"
+        android:fillAlpha="0.06"
+        android:pathData="M62,25a28,28 0,1 0,0.1 0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.06"
+        android:pathData="M0,0h108v12C82,8 62,9 43,12C26,15 13,18 0,24z" />
+    <path
+        android:fillColor="#020513"
+        android:fillAlpha="0.34"
+        android:pathData="M0,0h108v108H0z M54,6a48,48 0,1 1,0 96a48,48 0,0 1,0 -96" />
 </vector>
