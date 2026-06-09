@@ -24,6 +24,8 @@ object AppPrefs {
     private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
     private const val KEY_WIKI_DESKTOP_MODE = "wiki_desktop_mode"
     private const val KEY_LIQUID_GLASS_ENABLED = "liquid_glass_enabled"
+    private const val KEY_HIGH_READABILITY_DRAWER = "high_readability_drawer"
+    private const val KEY_LAUNCHER_ICON_THEME = "launcher_icon_theme"
     //private const val KEY_G2_CORNERS_ENABLED = "g2_corners_enabled"
     private const val KEY_WALLPAPER_URL = "wallpaper_url"
     private const val KEY_WALLPAPER_AUTO_REFRESH = "wallpaper_auto_refresh"
@@ -59,6 +61,10 @@ object AppPrefs {
     /** 首页快捷入口布局：0=网格大卡, 1=六按钮 */
     const val HOME_QUICK_LAYOUT_GRID = 0
     const val HOME_QUICK_LAYOUT_BUTTONS = 1
+
+    /** 启动器图标主题：0=品牌深色, 1=系统强调色 */
+    const val LAUNCHER_ICON_BRAND = 0
+    const val LAUNCHER_ICON_SYSTEM = 1
 
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
@@ -171,6 +177,21 @@ object AppPrefs {
     var liquidGlassEnabled: Boolean
         get() = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_LIQUID_GLASS_ENABLED, value) }
+
+    /** 液态玻璃侧栏高可读性模式，默认关闭以保留轻盈玻璃观感。 */
+    var highReadabilityDrawer: Boolean
+        get() = prefs.getBoolean(KEY_HIGH_READABILITY_DRAWER, false)
+        set(value) = prefs.edit { putBoolean(KEY_HIGH_READABILITY_DRAWER, value) }
+
+    /** 启动器图标主题。 */
+    var launcherIconTheme: Int
+        get() = prefs.getInt(KEY_LAUNCHER_ICON_THEME, LAUNCHER_ICON_BRAND)
+        set(value) = prefs.edit {
+            putInt(
+                KEY_LAUNCHER_ICON_THEME,
+                if (value == LAUNCHER_ICON_SYSTEM) LAUNCHER_ICON_SYSTEM else LAUNCHER_ICON_BRAND
+            )
+        }
 
     /** 缓存的首页壁纸 URL（空字符串表示未缓存） */
     var wallpaperUrl: String?

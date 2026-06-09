@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil3.SingletonImageLoader
 import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.launcher.LauncherIconTheme
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
@@ -91,6 +92,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var themeMode by globalThemeMode
     var seedColorInt by globalSeedColor
     var liquidGlassEnabled by globalLiquidGlass
+    var highReadabilityDrawer by remember { mutableStateOf(AppPrefs.highReadabilityDrawer) }
+    var launcherIconTheme by remember { mutableIntStateOf(AppPrefs.launcherIconTheme) }
 
     // 这些没有对应的 CompositionLocal，保留本地 remember
     var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
@@ -290,6 +293,69 @@ fun SettingsScreen(onBack: () -> Unit) {
                             )
                         }
 
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                        var showLauncherIconDialog by remember { mutableStateOf(false) }
+                        val launcherIconName = when (launcherIconTheme) {
+                            AppPrefs.LAUNCHER_ICON_SYSTEM -> "系统强调色"
+                            else -> "品牌深色"
+                        }
+                        SettingsItem(
+                            icon = Icons.Outlined.Apps,
+                            title = "应用图标",
+                            subtitle = launcherIconName,
+                            onClick = { showLauncherIconDialog = true }
+                        )
+                        if (showLauncherIconDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showLauncherIconDialog = false },
+                                title = { Text("应用图标") },
+                                text = {
+                                    Column {
+                                        Text(
+                                            "切换后桌面图标可能需要几秒刷新，部分启动器会缓存旧图标。",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.height(AppSpacing.medium))
+                                        listOf(
+                                            AppPrefs.LAUNCHER_ICON_BRAND to "品牌深色",
+                                            AppPrefs.LAUNCHER_ICON_SYSTEM to "系统强调色"
+                                        ).forEach { (theme, label) ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(smoothCornerShape(12.dp))
+                                                    .clickable {
+                                                        launcherIconTheme = theme
+                                                        AppPrefs.launcherIconTheme = theme
+                                                        LauncherIconTheme.apply(context, theme)
+                                                        showLauncherIconDialog = false
+                                                        showSnack("已切换应用图标")
+                                                    }
+                                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = launcherIconTheme == theme,
+                                                    onClick = {
+                                                        launcherIconTheme = theme
+                                                        AppPrefs.launcherIconTheme = theme
+                                                        LauncherIconTheme.apply(context, theme)
+                                                        showLauncherIconDialog = false
+                                                        showSnack("已切换应用图标")
+                                                    }
+                                                )
+                                                Spacer(Modifier.width(12.dp))
+                                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                                            }
+                                        }
+                                    }
+                                },
+                                shape = AppShapes.dialog,
+                                confirmButton = {}
+                            )
+                        }
+
                         // 主题色
                         HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         ThemeColorPicker(
@@ -310,6 +376,18 @@ fun SettingsScreen(onBack: () -> Unit) {
                             onCheckedChange = {
                                 liquidGlassEnabled = it
                                 AppPrefs.liquidGlassEnabled = it
+                            }
+                        )
+
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                        SettingsToggleItem(
+                            icon = Icons.Outlined.Visibility,
+                            title = "高可读性侧栏",
+                            subtitle = "增强液态玻璃侧栏文字和选中项对比",
+                            checked = highReadabilityDrawer,
+                            onCheckedChange = {
+                                highReadabilityDrawer = it
+                                AppPrefs.highReadabilityDrawer = it
                             }
                         )
 

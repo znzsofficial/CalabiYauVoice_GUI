@@ -470,6 +470,25 @@ private fun AppDrawerContent(
     var showLoginConfirmDialog by remember { mutableStateOf(false) }
     val wikiCoroutineScope = rememberCoroutineScope()
     val drawerContentShape = smoothCornerShape(28.dp)
+    val useHighReadability = liquidGlassEnabled && AppPrefs.highReadabilityDrawer
+    val drawerItemColors = if (useHighReadability) {
+        NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = Color.Transparent,
+            unselectedContainerColor = Color.Transparent,
+            selectedIconColor = MaterialTheme.colorScheme.primary,
+            selectedTextColor = MaterialTheme.colorScheme.primary,
+            selectedBadgeColor = MaterialTheme.colorScheme.primary,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurface,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+            unselectedBadgeColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    } else {
+        NavigationDrawerItemDefaults.colors()
+    }
+    val drawerSectionContainerColor = when {
+        useHighReadability -> MaterialTheme.colorScheme.surface.copy(alpha = 0.20f)
+        else -> Color.Transparent
+    }
 
     ModalDrawerSheet(
         drawerShape = drawerContentShape,
@@ -479,10 +498,12 @@ private fun AppDrawerContent(
             .liquidGlass(
                 backdrop = backdrop,
                 shape = { drawerContentShape },
-                blurRadius = 8.dp,
+                blurRadius = 5.dp,
+                surfaceAlpha = 0.26f,
                 tuning = LiquidGlassTuning(
-                    brightness = -0.15f,
-                    contrast = 1.2f
+                    brightness = -0.06f,
+                    contrast = 1.08f,
+                    saturation = 1.10f
                 ),
                 enabled = liquidGlassEnabled
             )
@@ -583,119 +604,77 @@ private fun AppDrawerContent(
 
         Spacer(Modifier.height(8.dp))
 
-        Text(
-            text = "探索",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
-        )
-
-        // 1. 首页
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
-            label = { Text("首页") },
-            selected = currentDestination == DrawerDestination.WIKI_HUB,
-            onClick = { onDestinationSelected(DrawerDestination.WIKI_HUB) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        // 2. Wiki 浏览器
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.Language, contentDescription = null) },
-            label = { Text("Wiki") },
-            badge = {
-                if (hasLoginCookie.value) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = smoothCornerShape(8.dp)
-                    ) {
+        DrawerSection(title = "探索", containerColor = drawerSectionContainerColor) {
+            DrawerNavItem(
+                icon = Icons.Outlined.Home,
+                label = "首页",
+                selected = currentDestination == DrawerDestination.WIKI_HUB,
+                onClick = { onDestinationSelected(DrawerDestination.WIKI_HUB) },
+                colors = drawerItemColors
+            )
+            DrawerNavItem(
+                icon = Icons.Outlined.Language,
+                label = "Wiki",
+                selected = currentDestination == DrawerDestination.WIKI,
+                onClick = { onDestinationSelected(DrawerDestination.WIKI) },
+                colors = drawerItemColors,
+                badge = {
+                    if (hasLoginCookie.value) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = smoothCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "已登录",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
                         Text(
-                            text = "已登录",
+                            text = "未登录",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                } else {
-                    Text(
-                        text = "未登录",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
-            },
-            selected = currentDestination == DrawerDestination.WIKI,
-            onClick = { onDestinationSelected(DrawerDestination.WIKI) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = smoothCornerShape(28.dp)
-        )
+            )
+        }
 
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp))
-        
-        Text(
-            text = "工具",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
-        )
+        DrawerSection(title = "工具", containerColor = drawerSectionContainerColor) {
+            DrawerNavItem(
+                icon = Icons.Outlined.Download,
+                label = "资源下载",
+                selected = currentDestination == DrawerDestination.DOWNLOADER,
+                onClick = { onDestinationSelected(DrawerDestination.DOWNLOADER) },
+                colors = drawerItemColors
+            )
+            DrawerNavItem(
+                icon = Icons.Outlined.FolderOpen,
+                label = "文件管理",
+                selected = currentDestination == DrawerDestination.FILE_MANAGER,
+                onClick = { onDestinationSelected(DrawerDestination.FILE_MANAGER) },
+                colors = drawerItemColors
+            )
+            DrawerNavItem(
+                icon = Icons.Outlined.BuildCircle,
+                label = "素材工具",
+                selected = currentDestination == DrawerDestination.TOOLS,
+                onClick = { onDestinationSelected(DrawerDestination.TOOLS) },
+                colors = drawerItemColors
+            )
+        }
 
-        // 3. 资源下载
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.Download, contentDescription = null) },
-            label = { Text("资源下载") },
-            selected = currentDestination == DrawerDestination.DOWNLOADER,
-            onClick = { onDestinationSelected(DrawerDestination.DOWNLOADER) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        // 4. 文件管理
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.FolderOpen, contentDescription = null) },
-            label = { Text("文件管理") },
-            selected = currentDestination == DrawerDestination.FILE_MANAGER,
-            onClick = { onDestinationSelected(DrawerDestination.FILE_MANAGER) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        // 5. 设置 
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.BuildCircle, contentDescription = null) },
-            label = { Text("素材工具") },
-            selected = currentDestination == DrawerDestination.TOOLS,
-            onClick = { onDestinationSelected(DrawerDestination.TOOLS) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 28.dp, vertical = 4.dp))
-        
-        Text(
-            text = "系统",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp)
-        )
-
-        // 6. 设置
-        NavigationDrawerItem(
-            icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-            label = { Text("设置") },
-            selected = currentDestination == DrawerDestination.SETTINGS,
-            onClick = { onDestinationSelected(DrawerDestination.SETTINGS) },
-            modifier = Modifier.padding(horizontal = 12.dp),
-            shape = smoothCornerShape(28.dp)
-        )
+        DrawerSection(title = "系统", containerColor = drawerSectionContainerColor) {
+            DrawerNavItem(
+                icon = Icons.Outlined.Settings,
+                label = "设置",
+                selected = currentDestination == DrawerDestination.SETTINGS,
+                onClick = { onDestinationSelected(DrawerDestination.SETTINGS) },
+                colors = drawerItemColors
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
         } // Column
@@ -732,6 +711,55 @@ private fun AppDrawerContent(
             }
         )
     }
+}
+
+@Composable
+private fun DrawerSection(
+    title: String,
+    containerColor: Color,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 28.dp, top = 14.dp, bottom = 8.dp)
+    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        shape = smoothCornerShape(24.dp),
+        color = containerColor
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 4.dp),
+            content = content
+        )
+    }
+    Spacer(Modifier.height(10.dp))
+}
+
+@Composable
+private fun DrawerNavItem(
+    icon: ImageVector,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    colors: NavigationDrawerItemColors,
+    badge: (@Composable () -> Unit)? = null
+) {
+    NavigationDrawerItem(
+        icon = { Icon(icon, contentDescription = null) },
+        label = { Text(label) },
+        badge = badge,
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        shape = smoothCornerShape(22.dp),
+        colors = colors
+    )
 }
 
 // ─────────────────────── Wiki 用户信息卡片（侧栏摘要） ───────────────────────

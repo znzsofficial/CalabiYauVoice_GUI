@@ -26,6 +26,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.launcher.LauncherIconTheme
 import com.nekolaska.calabiyau.core.cache.AppCacheBootstrap
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.feature.settings.UpdateApi
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
 
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
+        LauncherIconTheme.syncWithPreference(this, AppPrefs.launcherIconTheme)
         OfflineCache.init(this)
         AppCacheBootstrap.ensureRegistered()
         WebViewWarmup.start(this)
