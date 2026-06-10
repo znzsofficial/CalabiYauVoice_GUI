@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -51,6 +49,7 @@ import androidx.core.net.toUri
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.WikiUserAgent
 import com.nekolaska.calabiyau.feature.tools.openFile
@@ -297,6 +296,7 @@ fun WikiWebViewScreen(
     val showSnack: (String) -> Unit = remember(snackbarScope, snackbarHostState) {
         { msg -> snackbarScope.launch { snackbarHostState.showSnackbar(msg) }; }
     }
+    val copyText = rememberPlainTextClipboardCopier { showSnack("链接已复制") }
     val showInstallPrompt: (PendingApkDownload) -> Unit = remember(context, snackbarScope, snackbarHostState) {
         { pending ->
             snackbarScope.launch {
@@ -456,15 +456,7 @@ fun WikiWebViewScreen(
                                     )
                                 )
                                 .clickable {
-                                    val clipboard =
-                                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText(
-                                            "URL",
-                                            currentUrl
-                                        )
-                                    )
-                                    showSnack("链接已复制")
+                                    copyText("URL", currentUrl)
                                 }
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally

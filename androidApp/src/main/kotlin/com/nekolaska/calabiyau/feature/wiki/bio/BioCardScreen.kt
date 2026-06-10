@@ -1,8 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.bio
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -100,6 +97,7 @@ import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -142,6 +140,7 @@ fun BioCardScreen(
         BioCardApi.fetchAll(force)
     }
     val showSnack = rememberSnackbarLauncher()
+    val copyText = rememberPlainTextClipboardCopier { showSnack("已复制分享码") }
     var isWikiLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
     var isSubmittingDeck by remember { mutableStateOf(false) }
     val deckShareCardState = rememberLoadState(
@@ -434,8 +433,7 @@ fun BioCardScreen(
                     deck = deck,
                     onDismiss = { selectedDeck = null },
                     onCopyShareId = {
-                        copyText(context, deck.shareId)
-                        showSnack("已复制分享码")
+                        copyText("分享码", deck.shareId)
                     }
                 )
             }
@@ -1347,10 +1345,4 @@ private fun rarityColor(rarity: Int): Color = when (rarity) {
     3 -> Color(0xFFAB47BC)
     2 -> Color(0xFF42A5F5)
     else -> MaterialTheme.colorScheme.primary
-}
-
-private fun copyText(context: Context, value: String) {
-    if (value.isBlank()) return
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("分享码", value))
 }

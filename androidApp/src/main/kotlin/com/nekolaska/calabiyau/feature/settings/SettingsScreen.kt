@@ -1,7 +1,5 @@
 package com.nekolaska.calabiyau.feature.settings
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -51,6 +49,7 @@ import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.LocalSeedColor
 import com.nekolaska.calabiyau.core.ui.LocalThemeMode
 import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
+import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
@@ -1017,6 +1016,7 @@ private fun SettingsDebugItem(
     showSnack: (String) -> Unit
 ) {
     var showDebugMenu by remember { mutableStateOf(false) }
+    val copyText = rememberPlainTextClipboardCopier { showSnack("已复制") }
     SettingsItem(
         icon = Icons.Outlined.BugReport,
         title = "调试信息",
@@ -1058,9 +1058,7 @@ private fun SettingsDebugItem(
                             appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
                             append("保存路径: ${AppPrefs.savePath}")
                         }
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("设备信息", info))
-                        showSnack("已复制")
+                        copyText("设备信息", info)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {

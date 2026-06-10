@@ -1,8 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.meow
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +54,7 @@ import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.meow.api.MeowLanguageApi
@@ -71,8 +68,8 @@ fun MeowLanguageScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
+    val copyText = rememberPlainTextClipboardCopier { showSnack("已复制") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<MeowLanguageSection>()) { force ->
         MeowLanguageApi.fetchMeowLanguage(forceRefresh = force)
@@ -121,7 +118,7 @@ fun MeowLanguageScreen(
                         RandomMeowQuoteCard(
                             quote = quote,
                             onRefresh = { quoteRefreshKey++ },
-                            onCopy = { copyMeowText(context, quote, showSnack) }
+                            onCopy = { copyText("喵言喵语", quote) }
                         )
                     }
                 }
@@ -137,7 +134,7 @@ fun MeowLanguageScreen(
                     items(section.groups, key = { group -> "${section.title}-${group.title}" }) { group ->
                         MeowLanguageGroupBlock(
                             group = group,
-                            onCopyText = { copyMeowText(context, it, showSnack) }
+                            onCopyText = { copyText("喵言喵语", it) }
                         )
                     }
                 }
@@ -388,10 +385,4 @@ private fun CopyableMeowText(
             lineHeight = lineHeight
         )
     }
-}
-
-private fun copyMeowText(context: Context, text: String, showSnack: (String) -> Unit) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("喵言喵语", text))
-    showSnack("已复制")
 }

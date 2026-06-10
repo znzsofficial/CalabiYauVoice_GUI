@@ -1,8 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.tips
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +52,7 @@ import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.tips.api.GameTipsApi
@@ -68,8 +65,8 @@ fun GameTipsScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
+    val copyText = rememberPlainTextClipboardCopier { showSnack("已复制") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<GameTipsSection>()) { force ->
         GameTipsApi.fetchGameTips(forceRefresh = force)
@@ -112,14 +109,14 @@ fun GameTipsScreen(
                         RandomGameTipCard(
                             tip = tip,
                             onRefresh = { tipRefreshKey++ },
-                            onCopy = { copyTipText(context, tip, showSnack) }
+                            onCopy = { copyText("游戏Tips", tip) }
                         )
                     }
                 }
                 items(sections, key = { it.title }) { section ->
                     GameTipsSectionCard(
                         section = section,
-                        onCopyText = { copyTipText(context, it, showSnack) }
+                        onCopyText = { copyText("游戏Tips", it) }
                     )
                 }
                 item { Spacer(Modifier.height(24.dp)) }
@@ -285,10 +282,4 @@ private fun CopyableTipText(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         lineHeight = 20.sp
     )
-}
-
-private fun copyTipText(context: Context, text: String, showSnack: (String) -> Unit) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("游戏Tips", text))
-    showSnack("已复制")
 }
