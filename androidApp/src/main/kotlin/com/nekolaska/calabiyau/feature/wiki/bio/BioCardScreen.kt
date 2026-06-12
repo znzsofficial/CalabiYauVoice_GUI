@@ -362,13 +362,16 @@ fun BioCardScreen(
                                 filteredPc,
                                 key = { index, card -> "pc-${card.name}-${card.faction}-${card.category}-$index" }
                             ) { _, card ->
+                                val isTalent = card.category.contains("天赋")
+                                val accentColor = if (isTalent) talentColor(card.faction) else rarityColor(card.rarity)
+                                
                                 BioInfoCard(
                                     imageUrl = card.imageUrl,
                                     title = card.name,
-                                    subtitle = listOf(card.faction, card.category, rarityLabel(card.rarity))
+                                    subtitle = listOf(card.faction, card.category, rarityLabel(card.rarity).takeIf { !isTalent } ?: "")
                                         .filter { it.isNotBlank() }
                                         .joinToString(" · "),
-                                    accentColor = rarityColor(card.rarity),
+                                    accentColor = accentColor,
                                     icon = Icons.Outlined.SportsEsports,
                                     onClick = { selectedPcCard = card }
                                 )
@@ -384,13 +387,16 @@ fun BioCardScreen(
                                 filteredMobile,
                                 key = { index, card -> "mobile-${card.name}-${card.faction}-${card.category}-$index" }
                             ) { _, card ->
+                                val isTalent = card.category.contains("天赋")
+                                val accentColor = if (isTalent) talentColor(card.faction) else rarityColor(card.rarity)
+
                                 BioInfoCard(
                                     imageUrl = card.imageUrl,
                                     title = card.name,
-                                    subtitle = listOf(card.faction, card.category, rarityLabel(card.rarity))
+                                    subtitle = listOf(card.faction, card.category, rarityLabel(card.rarity).takeIf { !isTalent } ?: "")
                                         .filter { it.isNotBlank() }
                                         .joinToString(" · "),
-                                    accentColor = rarityColor(card.rarity),
+                                    accentColor = accentColor,
                                     icon = Icons.Outlined.PhoneAndroid,
                                     onClick = { selectedMobileCard = card }
                                 )
@@ -552,7 +558,7 @@ private fun BioInfoCard(
                     shape = smoothCornerShape(16.dp),
                     color = accentColor.copy(alpha = 0.12f),
                     border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f)),
-                    modifier = Modifier.size(72.dp)
+                    modifier = Modifier.size(84.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (!imageUrl.isNullOrBlank()) {
@@ -657,6 +663,7 @@ private fun DeckShareComposerCard(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .clip(smoothCornerShape(24.dp))
             .clickable { isExpanded = !isExpanded },
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
@@ -981,12 +988,16 @@ private fun normalizeDeckQuality(raw: String): String = when {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PcCardDetailSheet(card: PcCard, onDismiss: () -> Unit) {
+    val isTalent = card.category.contains("天赋")
+    val badge = if (isTalent) card.category else rarityLabel(card.rarity)
+    val badgeColor = if (isTalent) talentColor(card.faction) else rarityColor(card.rarity)
+
     CardDetailSheet(
         title = card.name,
         subtitle = listOf(card.faction, card.category, rarityLabel(card.rarity)).filter { it.isNotBlank() }.joinToString(" · "),
         imageUrl = card.imageUrl,
-        badge = rarityLabel(card.rarity),
-        badgeColor = rarityColor(card.rarity),
+        badge = badge,
+        badgeColor = badgeColor,
         onDismiss = onDismiss
     ) {
         DetailLine("最大等级", card.maxLevel)
@@ -1059,12 +1070,16 @@ private fun ProbabilitySection(probability: CardRefreshProbability) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MobileCardDetailSheet(card: MobileCard, onDismiss: () -> Unit) {
+    val isTalent = card.category.contains("天赋")
+    val badge = if (isTalent) card.category else rarityLabel(card.rarity)
+    val badgeColor = if (isTalent) talentColor(card.faction) else rarityColor(card.rarity)
+
     CardDetailSheet(
         title = card.name,
         subtitle = listOf(card.faction, card.category, rarityLabel(card.rarity)).filter { it.isNotBlank() }.joinToString(" · "),
         imageUrl = card.imageUrl,
-        badge = rarityLabel(card.rarity),
-        badgeColor = rarityColor(card.rarity),
+        badge = badge,
+        badgeColor = badgeColor,
         onDismiss = onDismiss
     ) {
         DetailLine("最大等级", card.maxLevel)
@@ -1116,6 +1131,7 @@ private fun DeckDetailSheet(
                         color = MaterialTheme.colorScheme.tertiaryContainer,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(smoothCornerShape(16.dp))
                             .combinedClickable(
                                 onClick = onCopyShareId,
                                 onLongClick = { scope.launch { tooltipState.show() } }
@@ -1178,7 +1194,7 @@ private fun CardDetailSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(220.dp)
+                        .height(280.dp)
                 ) {
                     if (!imageUrl.isNullOrBlank()) {
                         AsyncImage(
@@ -1336,7 +1352,14 @@ private fun rarityLabel(rarity: Int): String = when (rarity) {
     2 -> "精致"
     3 -> "卓越"
     4 -> "完美"
-    else -> if (rarity > 0) "品质$rarity" else ""
+    else -> ""
+}
+
+@Composable
+private fun talentColor(faction: String): Color = when {
+    faction.contains("晶源体") -> Color(0xFFF06A6A)
+    faction.contains("超弦体") -> Color(0xFF8B5CF6)
+    else -> MaterialTheme.colorScheme.primary
 }
 
 @Composable

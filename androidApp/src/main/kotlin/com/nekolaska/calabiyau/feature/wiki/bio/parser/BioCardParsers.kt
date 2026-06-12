@@ -17,43 +17,37 @@ object BioCardParsers {
         refreshProbabilityMap: Map<String, CardRefreshProbability>
     ): List<PcCard> {
         val document = Jsoup.parse(html)
-        val rows = document.select("table#CardSelectTr tr.divsort")
+        val items = document.select(".gallerygrid-item.zombie-card")
 
-        val cards = rows.mapNotNull { row ->
-            val cells = row.select("> th, > td")
-            if (cells.size < 7) {
-                WikiParseLogger.warnMalformed("BioCardApi.parsePcCards", "expected >=7 cells, actual=${cells.size}", row.outerHtml())
-                return@mapNotNull null
-            }
-
-            val nameCell = cells[0]
-            val name = nameCell.selectFirst("big b")?.text()?.trim()
+        val cards = items.mapNotNull { item ->
+            val name = item.selectFirst(".zombie-card__name")?.text()?.trim()
                 .orEmpty()
-                .ifBlank { nameCell.textNodes().joinToString("") { it.text() }.trim() }
                 .ifBlank { "未知卡牌" }
 
-            val roles = cleanHtml(cells[6].html())
+            val roles = cleanHtml(item.selectFirst(".zombie-card__roles")?.html().orEmpty())
                 .split(Regex("[、,/\\n]+"))
                 .map { it.trim() }
                 .filter { it.isNotBlank() && it != "无" }
 
             PcCard(
                 name = name,
-                faction = row.attr("data-param1"),
-                rarity = row.attr("data-param2").toIntOrNull() ?: 0,
-                category = row.attr("data-param3"),
-                defaultTag = row.attr("data-param4"),
-                acquireType = row.attr("data-param5"),
-                releaseDate = row.attr("data-param6"),
-                maxLevel = cleanHtml(cells[4].html()),
-                effect = cleanHtml(cells[5].html()),
+                faction = item.attr("data-param3"),
+                rarity = item.attr("data-param1").toIntOrNull() ?: 0,
+                category = item.attr("data-param2"),
+                defaultTag = item.attr("data-param4"),
+                acquireType = item.attr("data-param5"),
+                releaseDate = item.attr("data-param6"),
+                maxLevel = cleanHtml(item.selectFirst(".zombie-card__stat .zombie-card__value")?.html().orEmpty()),
+                effect = cleanHtml(item.selectFirst(".zombie-card__desc .zombie-card__value")?.html().orEmpty()),
                 roles = roles,
-                imageUrl = WikiImageUrls.originalFromThumbnail(nameCell.selectFirst("img")?.attr("src")),
+                imageUrl = item.selectFirst(".zombie-card__imagebox img")?.let { img ->
+                    img.attr("data-src").ifBlank { img.attr("src") }
+                }.let { WikiImageUrls.originalFromThumbnail(it) },
                 refreshProbability = refreshProbabilityMap[name]
             )
         }
 
-        return WikiParseLogger.finishList("BioCardApi.parsePcCards", cards, html, "rows=${rows.size}")
+        return WikiParseLogger.finishList("BioCardApi.parsePcCards", cards, html, "items=${items.size}")
     }
 
     fun parseRefreshProbabilities(html: String): Map<String, CardRefreshProbability> {
@@ -86,23 +80,17 @@ object BioCardParsers {
 
     fun parseMobileCards(html: String): List<MobileCard> {
         val document = Jsoup.parse(html)
-        val items = document.select(".mobile-card.gallerygrid-item").map { item ->
-            val values = item.select(".mobile-card-item, .mobile-card-item-odd, .mobile-card-desc")
-                .mapNotNull { row ->
-                    val key = row.selectFirst(".card-item-key")?.text()?.removeSuffix("：")?.trim().orEmpty()
-                    val value = row.selectFirst(".card-item-value")?.text()?.trim().orEmpty()
-                    if (key.isBlank() || value.isBlank()) null else key to value
-                }
-                .toMap()
-
+        val items = document.select(".gallerygrid-item.zombie-card-mobile").map { item ->
             MobileCard(
-                name = item.selectFirst(".mobile-card-name")?.text()?.trim().orEmpty().ifBlank { "未知卡牌" },
-                faction = item.attr("data-param1").ifBlank { values["适用阵营"] ?: "" },
-                category = item.attr("data-param2").ifBlank { values["分类"] ?: "" },
+                name = item.selectFirst(".zombie-card-mobile__name")?.text()?.trim().orEmpty().ifBlank { "未知卡牌" },
+                faction = item.attr("data-param1"),
+                category = item.attr("data-param2"),
                 rarity = item.attr("data-param3").toIntOrNull() ?: 0,
-                maxLevel = values["最大等级"] ?: "",
-                effect = values["等级效果描述"] ?: "",
-                imageUrl = WikiImageUrls.originalFromThumbnail(item.selectFirst("img")?.attr("src"))
+                maxLevel = cleanHtml(item.selectFirst(".zombie-card-mobile__stat .zombie-card-mobile__value")?.html().orEmpty()),
+                effect = cleanHtml(item.selectFirst(".zombie-card-mobile__desc .zombie-card-mobile__value")?.html().orEmpty()),
+                imageUrl = item.selectFirst(".zombie-card-mobile__imagebox img")?.let { img ->
+                    img.attr("data-src").ifBlank { img.attr("src") }
+                }.let { WikiImageUrls.originalFromThumbnail(it) }
             )
         }.toList()
 
@@ -149,29 +137,20 @@ object BioCardParsers {
         if (rows.isEmpty()) return null
 
         val title = rows.firstOrNull()?.selectFirst("th[colspan]")?.text()?.trim().orEmpty()
-        val fieldMap = rows.drop(1)
-            .mapNotNull { row ->
-                val key = row.selectFirst("th")?.text()?.trim().orEmpty()
-                val valueCell = row.selectFirst("td") ?: return@mapNotNull null
-                if (key.isBlank()) null else key to valueCell
-            }
-            .toMap()
-
-        val author = fieldMap["分享作者"]?.text()?.trim().orEmpty()
-        val shareIdCell = fieldMap["分享ID"]
+        
+        val author = table.selectFirst("tr:has(th:contains(分享作者)) td")?.text()?.trim().orEmpty()
+        val shareIdCell = table.selectFirst("tr:has(th:contains(分享ID)) td")
         val shareIdText = shareIdCell?.text().orEmpty()
         val shareId = extractShareId(shareIdText).ifBlank {
             val normalizedFaction = normalizeDeckFaction(faction)
             val cardIndexMap = cardIndexMapByFaction[normalizedFaction].orEmpty()
             extractShareIdFromDynamicScript(shareIdCell?.html().orEmpty(), normalizedFaction, cardIndexMap)
         }
-        val intro = fieldMap["介绍"]?.text()?.trim().orEmpty()
-        val cardNames = fieldMap["卡牌列表"]
-            ?.select(".zombie-card-name, .zombie-card-item-name, .card-name")
-            ?.map { it.text().trim() }
-            ?.filter { it.isNotBlank() }
-            ?.distinct()
-            .orEmpty()
+        val intro = table.selectFirst("tr:has(th:contains(介绍)) td")?.text()?.trim().orEmpty()
+        val cardNames = table.select(".zombie-card-name, .zombie-card-item-name, .card-name")
+            .map { it.text().trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
 
         if (title.isBlank() && shareId.isBlank() && cardNames.isEmpty()) return null
         return SharedDeck(

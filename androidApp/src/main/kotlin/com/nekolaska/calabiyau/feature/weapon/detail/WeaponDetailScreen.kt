@@ -8,7 +8,13 @@ import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -385,16 +391,48 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
 
 @Composable
 private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDetailApi.DamageRow>) {
+    var selectedPlatform by remember { mutableStateOf("PC") }
+    val groupedTables = remember(distanceRows) {
+        distanceRows.groupBy { row ->
+            if (row.distance.startsWith("移动端·")) "移动端" else "PC"
+        }
+    }
+    val platforms = listOf("PC", "移动端").filter { groupedTables.containsKey(it) }
+    
+    // 如果只有移动端，默认选中移动端
+    if (selectedPlatform == "PC" && !groupedTables.containsKey("PC") && groupedTables.containsKey("移动端")) {
+        selectedPlatform = "移动端"
+    }
+
     Card(
         shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(Icons.Outlined.GpsFixed, "武器伤害")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionTitle(Icons.Outlined.GpsFixed, "武器伤害")
+                
+                if (platforms.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        platforms.forEach { platform ->
+                            FilterChip(
+                                selected = selectedPlatform == platform,
+                                onClick = { selectedPlatform = platform },
+                                label = { Text(platform) },
+                                shape = smoothCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             // 倍率信息
             if (detail.baseDamage.isNotBlank()) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(12.dp))
                 @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -423,96 +461,61 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                 }
             }
 
-            if (distanceRows.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
+            val rows = groupedTables[selectedPlatform].orEmpty()
+            if (rows.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
 
-                val groupedTables = distanceRows.groupBy { row ->
-                    if (row.distance.startsWith("移动端·")) "移动端" else "PC"
+                Surface(
+                    shape = smoothCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Text("距离", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold)
+                        Text("头部", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center)
+                        Text("上肢", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center)
+                        Text("下肢", Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center)
+                    }
                 }
 
-                listOf("PC", "移动端").forEach { tableName ->
-                    val rows = groupedTables[tableName].orEmpty()
-                    if (rows.isEmpty()) return@forEach
+                Spacer(Modifier.height(4.dp))
 
-                    if (tableName == "移动端" && groupedTables["PC"]?.isNotEmpty() == true) {
-                        Spacer(Modifier.height(16.dp))
-                    }
-
-                    Surface(
-                        color = if (tableName == "移动端") {
-                            MaterialTheme.colorScheme.tertiaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        },
-                        shape = smoothCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = tableName,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (tableName == "移动端") {
-                                MaterialTheme.colorScheme.onTertiaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSecondaryContainer
-                            },
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                rows.forEachIndexed { index, row ->
+                    if (index > 0) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                         )
                     }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Surface(
-                        shape = smoothCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                            Text("距离", Modifier.weight(1f),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold)
-                            Text("头部", Modifier.weight(1f),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center)
-                            Text("上肢", Modifier.weight(1f),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center)
-                            Text("下肢", Modifier.weight(1f),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center)
-                        }
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    rows.forEachIndexed { index, row ->
-                        if (index > 0) {
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                            )
-                        }
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                        ) {
-                            Text(normalizeDistanceLabel(row.distance), Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium)
-                            Text(row.head, Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.error)
-                            Text(row.upper, Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center)
-                            Text(row.lower, Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        Text(normalizeDistanceLabel(row.distance), Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium)
+                        Text(row.head, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.error)
+                        Text(row.upper, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center)
+                        Text(row.lower, Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

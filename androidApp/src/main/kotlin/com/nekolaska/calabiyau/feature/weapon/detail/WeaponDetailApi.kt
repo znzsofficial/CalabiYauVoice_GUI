@@ -166,20 +166,26 @@ object WeaponDetailApi {
         val damageParams = if (damageContent != null) parseTemplateParams(damageContent) else emptyMap()
 
         // 构建伤害表
-        val damageTable = if (damageParams.isNotEmpty()) {
-            // 主武器：从 {{武器伤害}} 模板
+        val damageTable = mutableListOf<DamageRow>()
+        
+        // 1. 尝试从模板解析 (PC)
+        if (damageParams.isNotEmpty()) {
             val distances = listOf("10", "20", "30", "40", "50")
-            distances.mapNotNull { d ->
+            distances.forEach { d ->
                 val head = damageParams["${d}米头部"]
                 val upper = damageParams["${d}米上肢"]
                 val lower = damageParams["${d}米下肢"]
                 if (head != null || upper != null || lower != null) {
-                    DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-")
-                } else null
+                    damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
+                }
             }
-        } else {
-            // 副武器/近战武器：从渲染 HTML 表格中解析
-            parseWeaponDamageFromHtml(renderedHtml)
+        }
+        
+        // 2. 尝试从 HTML 解析 (移动端/副武器/近战)
+        val htmlDamages = parseWeaponDamageFromHtml(renderedHtml)
+        if (htmlDamages.isNotEmpty()) {
+            // 合并时去重，但由于移动端通常带有“移动端”前缀，故直接添加
+            damageTable.addAll(htmlDamages.filter { h -> damageTable.none { it.distance == h.distance } })
         }
 
         // 解析子页面
@@ -276,7 +282,6 @@ object WeaponDetailApi {
         return sectionElements
             .filter { it.tagName() == "table" && it.hasClass("klbqtable") }
             .flatMap { table -> parseDamageTable(table) }
-            .distinctBy { it.distance }
     }
 
     private fun parseDamageTable(table: Element): List<DamageRow> {
@@ -305,20 +310,16 @@ object WeaponDetailApi {
     }
 
     private fun parseDistanceDamageTable(table: Element, caption: String): List<DamageRow> {
-        val captionPrefix = when {
-            caption.contains("移动端") -> "移动端"
-            caption.isNotBlank() -> caption
-            else -> ""
-        }
+        val isMobile = caption.contains("移动端")
+        val prefix = if (isMobile) "移动端·" else ""
 
         return table.select("tr").mapNotNull { row ->
             val header = row.selectFirst("th")?.text()?.trim().orEmpty()
             val valueCells = row.select("td")
             if (!header.matches(Regex("\\d+米")) || valueCells.size < 3) return@mapNotNull null
 
-            val distanceLabel = if (captionPrefix.isNotBlank()) "$captionPrefix·$header" else header
             DamageRow(
-                distance = distanceLabel,
+                distance = "$prefix$header",
                 head = valueCells.getOrNull(0)?.text()?.trim().orEmpty(),
                 upper = valueCells.getOrNull(1)?.text()?.trim().orEmpty(),
                 lower = valueCells.getOrNull(2)?.text()?.trim().orEmpty()
