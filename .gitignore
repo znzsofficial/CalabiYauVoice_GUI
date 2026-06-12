@@ -58,3 +58,6 @@ local.properties
 *.keystore
 *.apk
 !downloadPage/downloads/.gitkeep
+
+### Tools & Samples ###
+/tools/wiki_samples/
