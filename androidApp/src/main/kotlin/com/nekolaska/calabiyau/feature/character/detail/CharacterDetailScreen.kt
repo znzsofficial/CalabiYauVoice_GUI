@@ -175,6 +175,11 @@ private fun CharacterDetailContent(
             }
         }
 
+        // ── 详细属性 ──
+        item(key = "attributes") {
+            Box(Modifier.padding(horizontal = 16.dp)) { AttributesCard(detail = detail) }
+        }
+
         if (
             detail.settingSummary.isNotBlank() ||
             detail.settingObserverQuote.isNotBlank() ||
@@ -184,11 +189,6 @@ private fun CharacterDetailContent(
             item(key = "setting_extra") {
                 Box(Modifier.padding(horizontal = 16.dp)) { SettingExtraCard(detail = detail) }
             }
-        }
-
-        // ── 详细属性 ──
-        item(key = "attributes") {
-            Box(Modifier.padding(horizontal = 16.dp)) { AttributesCard(detail = detail) }
         }
 
         // ── 武器信息 ──
