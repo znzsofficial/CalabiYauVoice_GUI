@@ -294,8 +294,8 @@
       <a href="/video/" class="card shadow-sm feature-card index-card">
         <div class="feature-icon video-icon"><iconify-icon icon="lucide:scissors"></iconify-icon></div>
         <div class="feature-text">
-          <h3>视频素材工坊</h3>
-          <p>截图、封面、动图与联系表快速生成</p>
+          <h3>视频素材工具台</h3>
+          <p>从本地视频整理截图、封面、GIF 与短视频</p>
         </div>
         <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
       </a>

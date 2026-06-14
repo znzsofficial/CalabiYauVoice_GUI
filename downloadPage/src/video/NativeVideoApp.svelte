@@ -41,6 +41,9 @@
     brightness: number;
     contrast: number;
     saturation: number;
+    grayscale: number;
+    hueRotate: number;
+    blur: number;
     overlayText: string;
     overlaySize: number;
     overlayBand: boolean;
@@ -76,6 +79,9 @@
   let brightness = $state(100);
   let contrast = $state(100);
   let saturation = $state(100);
+  let grayscale = $state(0);
+  let hueRotate = $state(0);
+  let blur = $state(0);
   let overlayText = $state('');
   let overlaySize = $state(42);
   let overlayBand = $state(true);
@@ -86,7 +92,11 @@
   let splitGifHeight = $state(0);
   let splitFrames = $state<GifFrameItem[]>([]);
   let timelineMarkers = $state<number[]>([]);
+  let previewHistory = $state<{ url: string; info: string }[]>([]);
+  let historyTimer: ReturnType<typeof setTimeout> | null = null;
+
   let markersOpen = $state(false);
+  let fileInfoOpen = $state(false);
   let batchBusy = $state(false);
   let activeMode = $state<WorkMode>('video');
   let activeTool = $state<ToolTab>('single');
@@ -102,11 +112,11 @@
   let seekTimer: ReturnType<typeof setTimeout> | null = null;
 
   const nativeIdeas = [
-    '按固定间隔生成 PNG/JPEG/WebP 帧图，适合整理镜头素材',
-    '加入音频波形预览，用节奏辅助定位截图和动图片段',
-    '扩展素材信息面板，集中查看尺寸、时长、类型和文件大小',
-    '制作封面套版，把标题、水印和基础图形一起写入画面',
-    '保存常用导出预设，快速复用比例、尺寸、帧率和 GIF 参数'
+    '按固定间隔生成 PNG/JPEG/WebP 帧图',
+    '加入音频波形预览，辅助定位画面',
+    '扩展素材信息面板，集中查看尺寸、时长与文件大小',
+    '制作封面套版，统一加入标题或水印',
+    '保存常用导出预设，快速复用比例、尺寸和帧率'
   ];
 
   const settingsKey = 'downloadPage.video.settings';
@@ -180,7 +190,7 @@
   $effect(() => {
     if (typeof localStorage === 'undefined') return;
     if (!settingsReady) return;
-    const settings: SavedSettings = { exportFormat, cropRatio, outputSize, cropAnchor, customRatioWidth, customRatioHeight, customOutputWidth, customOutputHeight, batchMode, batchCount, batchInterval, sheetColumns, gifSeconds, gifFps, gifWidth, gifColors, gifRepeat, webmBitrate, motionVideoFormat, motionDirection, brightness, contrast, saturation, overlayText, overlaySize, overlayBand };
+    const settings: SavedSettings = { exportFormat, cropRatio, outputSize, cropAnchor, customRatioWidth, customRatioHeight, customOutputWidth, customOutputHeight, batchMode, batchCount, batchInterval, sheetColumns, gifSeconds, gifFps, gifWidth, gifColors, gifRepeat, webmBitrate, motionVideoFormat, motionDirection, brightness, contrast, saturation, grayscale, hueRotate, blur, overlayText, overlaySize, overlayBand };
     localStorage.setItem(settingsKey, JSON.stringify(settings));
   });
 
@@ -245,7 +255,7 @@
       message = `已拆解 ${splitFrames.length} 帧`;
     } catch {
       status = 'error';
-      message = 'GIF 拆解没有完成，可以换一个文件或稍后再试';
+      message = 'GIF 拆解未完成，请换一个文件或稍后再试';
     }
   }
 
@@ -477,7 +487,7 @@
     canvasEl.height = targetHeight;
     const context = canvasEl.getContext('2d');
     if (!context) return null;
-    context.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    context.filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%) grayscale(${grayscale}%) hue-rotate(${hueRotate}deg) blur(${blur}px)`;
     context.drawImage(videoEl, sourceX, sourceY, width, height, 0, 0, targetWidth, targetHeight);
     context.filter = 'none';
     drawTextOverlay(context, targetWidth, targetHeight);
@@ -492,8 +502,19 @@
   async function updatePreview(): Promise<void> {
     const blob = await captureFrame();
     if (!blob) return;
-    revoke(previewUrl);
-    previewUrl = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    previewUrl = url;
+    if (historyTimer) clearTimeout(historyTimer);
+    historyTimer = setTimeout(() => {
+      const info = getOutputInfo();
+      previewHistory = [{ url, info }, ...previewHistory.slice(0, 5)];
+    }, 800);
+  }
+
+  function removeHistoryItem(index: number): void {
+    const item = previewHistory[index];
+    if (item && item.url !== previewUrl) URL.revokeObjectURL(item.url);
+    previewHistory = previewHistory.filter((_, i) => i !== index);
   }
 
   function getExtension(type = exportFormat): string {
@@ -518,314 +539,170 @@
     const start = Math.max(0, Math.min(rangeStart, duration || 0));
     const end = Math.max(start, Math.min(rangeEnd || duration || start, duration || start));
     if (batchMode === 'interval') {
-      const interval = Math.max(0.25, Number(batchInterval) || 5);
-      const safeEnd = Math.max(start, end - 0.08);
-      const count = Math.max(1, Math.min(Math.floor((safeEnd - start) / interval) + 1, 60));
-      return Array.from({ length: count }, (_, index) => Math.min(safeEnd, start + index * interval));
+      const interval = Math.max(0.25, Number(batchInterval) || 1);
+      const times: number[] = [];
+      for (let t = start; t <= end; t += interval) {
+        times.push(t);
+        if (times.length >= 60) break;
+      }
+      return times;
     }
-    const safeCount = Math.max(1, Math.min(Math.round(batchCount), 60));
-    if (!duration || safeCount === 1) return [Math.min(position, duration || position)];
-    const safeEnd = Math.max(start, end - 0.08);
-    const step = Math.max(0, safeEnd - start) / safeCount;
-    return Array.from({ length: safeCount }, (_, index) => Math.min(safeEnd, start + step * index + step / 2));
+    const count = Math.max(1, Math.min(Math.round(Number(batchCount) || 8), 60));
+    if (count === 1) return [start];
+    const step = (end - start) / (count - 1);
+    return Array.from({ length: count }, (_, i) => start + i * step);
   }
 
-  function seekTo(time: number): Promise<void> {
-    if (!videoEl) return Promise.resolve();
-    if (seekTimer) clearTimeout(seekTimer);
-    position = Math.max(0, Math.min(time, duration || time));
-    return new Promise((resolve, reject) => {
-      if (!videoEl) {
-        resolve();
-        return;
-      }
-      const timeout = window.setTimeout(() => {
-        cleanup();
-        reject(new Error('seek timeout'));
-      }, 5000);
-      const cleanup = (): void => {
-        window.clearTimeout(timeout);
-        videoEl?.removeEventListener('seeked', onSeeked);
-        videoEl?.removeEventListener('error', onError);
-      };
+  async function seekTo(time: number): Promise<void> {
+    if (!videoEl) return;
+    videoEl.currentTime = time;
+    return new Promise(resolve => {
       const onSeeked = (): void => {
-        cleanup();
+        videoEl?.removeEventListener('seeked', onSeeked);
         resolve();
       };
-      const onError = (): void => {
-        cleanup();
-        reject(new Error('seek failed'));
-      };
-      videoEl.addEventListener('seeked', onSeeked, { once: true });
-      videoEl.addEventListener('error', onError, { once: true });
-      videoEl.currentTime = position;
+      videoEl?.addEventListener('seeked', onSeeked);
     });
   }
 
-  async function exportFrame(): Promise<void> {
-    if (!file) return;
-    const blob = await captureFrame();
-    if (!blob) {
+  async function copyFrame(): Promise<void> {
+    if (!canvasEl || !drawCurrentFrame() || typeof ClipboardItem === 'undefined') return;
+    status = 'loading';
+    message = '正在复制到剪贴板';
+    try {
+      const blob = await blobFromCanvas(canvasEl, 'image/png');
+      if (!blob) throw new Error('blob failed');
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      status = 'done';
+      message = '已复制截图到剪贴板';
+    } catch {
       status = 'error';
-      message = '当前画面正在准备';
-      return;
+      message = '无法复制截图，请尝试直接导出';
     }
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const extension = getExtension();
-    const ratioSuffix = cropRatio === 'source' ? 'source' : cropRatio.replace(':', 'x');
-    const name = `${file.name.replace(/\.[^.]+$/, '') || 'video'}_${Math.round(position * 1000)}ms_${ratioSuffix}.${extension}`;
-    link.href = url;
-    link.download = name;
-    link.click();
-    URL.revokeObjectURL(url);
-    status = 'done';
-    message = `已导出 ${name}`;
   }
 
-  async function captureBatch(): Promise<{ blob: Blob; time: number }[]> {
-    if (!file || !videoEl) return [];
+  async function exportFrame(): Promise<void> {
+    const blob = await captureFrame();
+    if (blob) downloadBlob(blob, getFrameName(0, position));
+  }
+
+  async function exportBatchZip(): Promise<void> {
+    if (!file || !canvasEl) return;
     const times = sampleTimes;
-    const frames: { blob: Blob; time: number }[] = [];
+    const zip = new JSZip();
     batchBusy = true;
     status = 'loading';
     try {
       for (const [index, time] of times.entries()) {
-        message = `正在抽帧 ${index + 1}/${times.length}`;
+        message = `正在截取第 ${index + 1}/${times.length} 帧`;
         await seekTo(time);
         const blob = await captureFrame();
-        if (!blob) throw new Error('capture failed');
-        frames.push({ blob, time });
+        if (blob) zip.file(getFrameName(index, time), blob);
       }
-      return frames;
-    } finally {
-      batchBusy = false;
-      void updatePreview();
-    }
-  }
-
-  async function exportBatchZip(): Promise<void> {
-    if (!file) return;
-    try {
-      const frames = await captureBatch();
-      if (!frames.length) throw new Error('empty batch');
-      const zip = new JSZip();
-      const extension = getExtension();
-      frames.forEach(({ blob, time }, index) => {
-        zip.file(getFrameName(index, time, extension), blob);
-      });
-      message = '正在生成 ZIP';
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const name = `${file.name.replace(/\.[^.]+$/, '') || 'video'}_${frames.length}_frames.zip`;
-      downloadBlob(zipBlob, name);
+      message = '正在打包素材';
+      const content = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(content, `frames_${file.name.split('.')[0]}.zip`);
       status = 'done';
-      message = `已导出 ${name}`;
+      message = `已导出 ${times.length} 张素材图`;
     } catch {
       status = 'error';
-      message = '批量抽帧没有完成，可以调整数量后再次生成';
+      message = '批量导出未能完成';
+    } finally {
       batchBusy = false;
+      seekFrame(position, 0);
     }
   }
 
   async function exportMarkerZip(): Promise<void> {
-    if (!file || !timelineMarkers.length) return;
+    if (!file || !canvasEl || !timelineMarkers.length) return;
+    const zip = new JSZip();
     batchBusy = true;
     status = 'loading';
     try {
-      const zip = new JSZip();
-      const extension = getExtension();
       for (const [index, time] of timelineMarkers.entries()) {
         message = `正在导出标记 ${index + 1}/${timelineMarkers.length}`;
         await seekTo(time);
         const blob = await captureFrame();
-        if (!blob) throw new Error('marker capture failed');
-        zip.file(getFrameName(index, time, extension), blob);
+        if (blob) zip.file(getFrameName(index, time), blob);
       }
-      message = '正在生成 ZIP';
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const name = `${file.name.replace(/\.[^.]+$/, '') || 'video'}_${timelineMarkers.length}_markers.zip`;
-      downloadBlob(zipBlob, name);
+      message = '正在打包标记帧';
+      const content = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(content, `markers_${file.name.split('.')[0]}.zip`);
       status = 'done';
-      message = `已导出 ${name}`;
+      message = `已导出 ${timelineMarkers.length} 张标记素材`;
     } catch {
       status = 'error';
-      message = '标记帧导出没有完成，可以重新开始一次';
+      message = '标记导出失败';
     } finally {
       batchBusy = false;
-      void updatePreview();
-    }
-  }
-
-  async function exportSplitZip(): Promise<void> {
-    if (!splitFrames.length) return;
-    status = 'loading';
-    try {
-      const zip = new JSZip();
-      splitFrames.forEach((frame, index) => {
-        zip.file(`gif_frame_${String(index + 1).padStart(3, '0')}_${Math.round(frame.time)}ms.png`, frame.blob);
-      });
-      message = '正在生成 GIF 帧包';
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const name = `${splitGifName.replace(/\.[^.]+$/, '') || 'gif'}_${splitFrames.length}_frames.zip`;
-      downloadBlob(zipBlob, name);
-      status = 'done';
-      message = `已导出 ${name}`;
-    } catch {
-      status = 'error';
-      message = 'GIF 帧包没有生成完成，可以重新开始一次';
-    }
-  }
-
-  async function exportSplitSheet(): Promise<void> {
-    if (!splitFrames.length || !canvasEl) return;
-    const bitmaps: ImageBitmap[] = [];
-    status = 'loading';
-    try {
-      bitmaps.push(...await Promise.all(splitFrames.map(frame => createImageBitmap(frame.blob))));
-      const columns = Math.max(1, Math.min(Math.round(sheetColumns), bitmaps.length));
-      const rows = Math.ceil(bitmaps.length / columns);
-      const cellWidth = bitmaps[0].width;
-      const cellHeight = bitmaps[0].height;
-      const sheetCanvas = document.createElement('canvas');
-      sheetCanvas.width = cellWidth * columns;
-      sheetCanvas.height = cellHeight * rows;
-      const context = sheetCanvas.getContext('2d');
-      if (!context) throw new Error('no canvas context');
-      context.fillStyle = '#09090b';
-      context.fillRect(0, 0, sheetCanvas.width, sheetCanvas.height);
-      context.font = `${Math.max(12, Math.round(cellWidth * 0.035))}px ui-monospace, SFMono-Regular, Consolas, monospace`;
-      context.textBaseline = 'bottom';
-      bitmaps.forEach((bitmap, index) => {
-        const x = (index % columns) * cellWidth;
-        const y = Math.floor(index / columns) * cellHeight;
-        context.drawImage(bitmap, x, y, cellWidth, cellHeight);
-        const code = formatTime(splitFrames[index].time / 1000);
-        const padding = Math.max(8, Math.round(cellWidth * 0.018));
-        const textWidth = context.measureText(code).width;
-        context.fillStyle = 'rgb(0 0 0 / 0.68)';
-        context.fillRect(x + padding, y + cellHeight - padding - 24, textWidth + 14, 24);
-        context.fillStyle = '#fff';
-        context.fillText(code, x + padding + 7, y + cellHeight - padding - 6);
-      });
-      const blob = await blobFromCanvas(sheetCanvas, 'image/png');
-      if (!blob) throw new Error('sheet export failed');
-      const name = `${splitGifName.replace(/\.[^.]+$/, '') || 'gif'}_contact_sheet.png`;
-      downloadBlob(blob, name);
-      status = 'done';
-      message = `已导出 ${name}`;
-    } catch {
-      status = 'error';
-      message = 'GIF 联系表没有生成完成，可以重新开始一次';
-    } finally {
-      bitmaps.forEach(bitmap => bitmap.close());
+      seekFrame(position, 0);
     }
   }
 
   async function exportContactSheet(): Promise<void> {
     if (!file || !canvasEl) return;
-    try {
-      const frames = await captureBatch();
-      if (!frames.length) throw new Error('empty sheet');
-      const bitmaps = await Promise.all(frames.map(frame => createImageBitmap(frame.blob)));
-      const columns = Math.max(1, Math.min(Math.round(sheetColumns), bitmaps.length));
-      const rows = Math.ceil(bitmaps.length / columns);
-      const cellWidth = bitmaps[0].width;
-      const cellHeight = bitmaps[0].height;
-      canvasEl.width = cellWidth * columns;
-      canvasEl.height = cellHeight * rows;
-      const context = canvasEl.getContext('2d');
-      if (!context) throw new Error('no canvas context');
-      context.fillStyle = '#09090b';
-      context.fillRect(0, 0, canvasEl.width, canvasEl.height);
-      context.font = `${Math.max(12, Math.round(cellWidth * 0.035))}px ui-monospace, SFMono-Regular, Consolas, monospace`;
-      context.textBaseline = 'bottom';
-      bitmaps.forEach((bitmap, index) => {
-        const x = (index % columns) * cellWidth;
-        const y = Math.floor(index / columns) * cellHeight;
-        context.drawImage(bitmap, x, y, cellWidth, cellHeight);
-        const code = formatTime(frames[index].time);
-        const padding = Math.max(8, Math.round(cellWidth * 0.018));
-        const textWidth = context.measureText(code).width;
-        context.fillStyle = 'rgb(0 0 0 / 0.68)';
-        context.fillRect(x + padding, y + cellHeight - padding - 24, textWidth + 14, 24);
-        context.fillStyle = '#fff';
-        context.fillText(code, x + padding + 7, y + cellHeight - padding - 6);
-        bitmap.close();
-      });
-      const blob = await blobFromCanvas(canvasEl, exportFormat);
-      if (!blob) throw new Error('sheet export failed');
-      const name = `${file.name.replace(/\.[^.]+$/, '') || 'video'}_contact_sheet.${getExtension()}`;
-      downloadBlob(blob, name);
-      status = 'done';
-      message = `已导出 ${name}`;
-    } catch {
-      status = 'error';
-      message = '联系表没有生成完成，可以重新开始一次';
-      batchBusy = false;
-    }
-  }
-
-  async function exportGif(): Promise<void> {
-    if (!file || !videoEl || !canvasEl) return;
-    const fps = Math.max(2, Math.min(Math.round(Number(gifFps) || 8), 15));
-    const width = Math.max(96, Math.min(Math.round(Number(gifWidth) || 480), 960));
-    const colors = Math.max(16, Math.min(Math.round(Number(gifColors) || 128), 256));
-    const repeat = gifRepeat === 'once' ? -1 : gifRepeat === 'twice' ? 1 : 0;
-    const requestedSeconds = Math.max(0.5, Math.min(Number(gifSeconds) || 2, 6));
-    const frameCount = Math.max(1, Math.min(Math.round(requestedSeconds * fps), 90));
-    const { times, start, seconds } = getMotionTimes(frameCount, fps, requestedSeconds);
-    const gif = GIFEncoder();
+    const times = sampleTimes;
+    const cols = Math.max(1, Math.min(Math.round(Number(sheetColumns) || 4), 12));
+    const rows = Math.ceil(times.length / cols);
+    const sourceWidth = videoEl?.videoWidth || 1920;
+    const sourceHeight = videoEl?.videoHeight || 1080;
+    const { width: thumbWidth, height: thumbHeight } = getOutputSize(sourceWidth, sourceHeight, 480);
+    const sheetCanvas = document.createElement('canvas');
+    const padding = 20;
+    const headerHeight = 60;
+    sheetCanvas.width = cols * thumbWidth + (cols + 1) * padding;
+    sheetCanvas.height = rows * thumbHeight + (rows + 1) * padding + headerHeight;
+    const ctx = sheetCanvas.getContext('2d');
+    if (!ctx) return;
     batchBusy = true;
     status = 'loading';
     try {
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(0, 0, sheetCanvas.width, sheetCanvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 20px system-ui';
+      ctx.fillText(`素材预览表: ${file.name} (${times.length} 帧)`, padding, 40);
       for (const [index, time] of times.entries()) {
-        message = `正在编码 GIF ${index + 1}/${times.length}`;
+        message = `正在处理联系表 ${index + 1}/${times.length}`;
         await seekTo(time);
-        const context = drawCurrentFrame(width);
-        if (!context) throw new Error('gif frame failed');
-        const { data } = context.getImageData(0, 0, canvasEl.width, canvasEl.height);
-        const format = 'rgb444';
-        const palette = quantize(data, colors, { format });
-        const indexedFrame = applyPalette(data, palette, format);
-        gif.writeFrame(indexedFrame, canvasEl.width, canvasEl.height, {
-          palette,
-          delay: Math.round(1000 / fps),
-          repeat
-        });
-        await new Promise(resolve => window.setTimeout(resolve, 0));
+        const context = drawCurrentFrame(thumbWidth);
+        if (context) {
+          const x = (index % cols) * thumbWidth + (index % cols + 1) * padding;
+          const y = Math.floor(index / cols) * thumbHeight + (Math.floor(index / cols) + 1) * padding + headerHeight;
+          ctx.drawImage(context.canvas, x, y);
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillRect(x + 5, y + 5, 80, 24);
+          ctx.fillStyle = '#fff';
+          ctx.font = '14px tabular-nums system-ui';
+          ctx.fillText(formatTime(time), x + 12, y + 22);
+        }
       }
-      gif.finish();
-      const blob = new Blob([gif.bytes()], { type: 'image/gif' });
-      revoke(gifPreviewUrl);
-      gifPreviewUrl = URL.createObjectURL(blob);
-      const name = `${file.name.replace(/\.[^.]+$/, '') || 'video'}_${Math.round(start * 1000)}ms_${seconds.toFixed(1)}s_${fps}fps.gif`;
-      downloadBlob(blob, name);
+      const blob = await blobFromCanvas(sheetCanvas, 'image/jpeg');
+      if (blob) downloadBlob(blob, `sheet_${file.name.split('.')[0]}.jpg`);
       status = 'done';
-      message = `已导出 ${name}`;
+      message = '已生成素材联系表';
     } catch {
       status = 'error';
-      message = 'GIF 没有生成完成，可以调整参数后再次生成';
+      message = '联系表生成失败';
     } finally {
       batchBusy = false;
-      void updatePreview();
+      seekFrame(position, 0);
     }
   }
 
-  function resolveMotionVideoFormat(): { label: string; mime: string; extension: string } | null {
-    if (typeof MediaRecorder === 'undefined') return null;
-    const selected = motionVideoFormat === 'auto' ? null : motionVideoOptions.find(option => option.value === motionVideoFormat);
-    if (selected && MediaRecorder.isTypeSupported(selected.mime)) return selected;
-    return motionVideoOptions.find(option => MediaRecorder.isTypeSupported(option.mime)) || null;
-  }
-
-  function getMotionTimes(frameCount: number, fps: number, maxSeconds: number): { times: number[]; start: number; seconds: number } {
+  function getMotionTimes(frameCount: number, fps: number, requestedSeconds: number): { times: number[]; start: number; seconds: number } {
     const start = Math.max(0, Math.min(rangeStart, duration || 0));
-    const selectedEnd = Math.max(start, Math.min(rangeEnd || duration || start, duration || start));
-    const clipEnd = Math.min(selectedEnd, start + maxSeconds);
-    const seconds = Math.max(0.5, Math.min((clipEnd - start) || maxSeconds, maxSeconds));
-    const safeEnd = Math.max(start, Math.min(clipEnd, (duration || clipEnd) - 0.08));
-    const forward = Array.from({ length: frameCount }, (_, index) => Math.min(safeEnd, start + index / fps));
-    if (motionDirection === 'reverse') return { times: forward.reverse(), start, seconds };
+    const end = Math.max(start, Math.min(rangeEnd || duration || start, duration || start));
+    const availableSeconds = end - start;
+    const seconds = Math.min(requestedSeconds, availableSeconds);
+    const step = 1 / fps;
+    const forward: number[] = [];
+    for (let i = 0; i < frameCount; i++) {
+      const t = start + i * step;
+      if (t > end) break;
+      forward.push(t);
+    }
+    if (motionDirection === 'reverse') return { times: [...forward].reverse(), start, seconds };
     if (motionDirection === 'pingpong' && forward.length > 2) return { times: [...forward, ...forward.slice(1, -1).reverse()], start, seconds };
     return { times: forward, start, seconds };
   }
@@ -858,73 +735,130 @@
         if (!drawCurrentFrame(width)) throw new Error('webm frame failed');
         bitmaps.push(await createImageBitmap(canvasEl));
       }
-      canvasEl.width = bitmaps[0].width;
-      canvasEl.height = bitmaps[0].height;
-      const context = canvasEl.getContext('2d');
-      if (!context) throw new Error('no canvas context');
       const stream = canvasEl.captureStream(0);
-      const [track] = stream.getVideoTracks() as CanvasCaptureMediaStreamTrack[];
-      if (!track?.requestFrame) throw new Error('requestFrame unavailable');
       const recorder = new MediaRecorder(stream, { mimeType: format.mime, videoBitsPerSecond: bitrate });
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = event => {
-        if (event.data.size > 0) chunks.push(event.data);
-      };
-      const done = new Promise<void>((resolve, reject) => {
-        recorder.onstop = () => resolve();
-        recorder.onerror = () => reject(new Error('webm recorder failed'));
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      const recordPromise = new Promise<Blob>((resolve) => {
+        recorder.onstop = () => resolve(new Blob(chunks, { type: format.mime }));
       });
       recorder.start();
-      for (const [index, bitmap] of bitmaps.entries()) {
-        message = `正在编码短视频 ${index + 1}/${bitmaps.length}`;
-        context.clearRect(0, 0, canvasEl.width, canvasEl.height);
-        context.drawImage(bitmap, 0, 0);
-        track.requestFrame();
-        await new Promise(resolve => window.setTimeout(resolve, Math.round(1000 / fps)));
+      const track = stream.getVideoTracks()[0] as any;
+      for (const bitmap of bitmaps) {
+        const ctx = canvasEl.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+          ctx.drawImage(bitmap, 0, 0);
+          if (track?.requestFrame) track.requestFrame();
+        }
+        await new Promise(r => setTimeout(r, 1000 / fps));
       }
       recorder.stop();
-      await done;
-      const blob = new Blob(chunks, { type: format.mime });
+      const videoBlob = await recordPromise;
       revoke(webmPreviewUrl);
-      webmPreviewUrl = URL.createObjectURL(blob);
-      const name = `${file.name.replace(/\.[^.]+$/, '') || 'video'}_${Math.round(start * 1000)}ms_${seconds.toFixed(1)}s_${fps}fps.${format.extension}`;
-      downloadBlob(blob, name);
+      webmPreviewUrl = URL.createObjectURL(videoBlob);
+      downloadBlob(videoBlob, `motion_${file.name.split('.')[0]}.${format.extension}`);
       status = 'done';
-      message = `已导出 ${name}`;
+      message = `已导出短视频片段 (${seconds.toFixed(1)}s)`;
     } catch {
       status = 'error';
-      message = '短视频没有生成完成，可以调整参数后再次生成';
+      message = '短视频导出失败';
     } finally {
-      bitmaps.forEach(bitmap => bitmap.close());
+      bitmaps.forEach(b => b.close());
       batchBusy = false;
-      void updatePreview();
+      seekFrame(position, 0);
     }
   }
 
-  async function copyFrame(): Promise<void> {
-    const blob = await captureFrame('image/png');
-    if (!blob) {
-      status = 'error';
-      message = '当前画面正在准备';
-      return;
-    }
-    if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
-      status = 'error';
-      message = '剪贴板图片写入由系统接管，可先导出图片';
-      return;
-    }
+  function resolveMotionVideoFormat(): (typeof motionVideoOptions)[0] | null {
+    if (motionVideoFormat !== 'auto') return motionVideoOptions.find(o => o.value === motionVideoFormat) || null;
+    return supportedMotionVideoOptions[0] || null;
+  }
+
+  async function exportGif(): Promise<void> {
+    if (!file || !canvasEl) return;
+    const fps = Math.max(2, Math.min(Math.round(Number(gifFps) || 8), 15));
+    const width = Math.max(96, Math.min(Math.round(Number(gifWidth) || 320), 800));
+    const colors = Math.max(16, Math.min(Math.round(Number(gifColors) || 128), 256));
+    const requestedSeconds = Math.max(0.5, Math.min(Number(gifSeconds) || 2, 6));
+    const frameCount = Math.max(1, Math.min(Math.round(requestedSeconds * fps), 90));
+    const { times, start, seconds } = getMotionTimes(frameCount, fps, requestedSeconds);
+    batchBusy = true;
+    status = 'loading';
     try {
-      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      const gif = new (GIFEncoder as any)();
+      for (const [index, time] of times.entries()) {
+        message = `正在合成 GIF ${index + 1}/${times.length}`;
+        await seekTo(time);
+        const context = drawCurrentFrame(width);
+        if (context) {
+          const { data, width: w, height: h } = context.getImageData(0, 0, canvasEl.width, canvasEl.height);
+          const palette = quantize(data, colors);
+          const indexData = applyPalette(data, palette);
+          gif.writeFrame(indexData, w, h, { palette, delay: 1000 / fps, repeat: gifRepeat === 'forever' ? 0 : gifRepeat === 'once' ? -1 : 1 });
+        }
+      }
+      gif.finish();
+      const blob = new Blob([gif.bytes()], { type: 'image/gif' });
+      revoke(gifPreviewUrl);
+      gifPreviewUrl = URL.createObjectURL(blob);
+      downloadBlob(blob, `motion_${file.name.split('.')[0]}.gif`);
       status = 'done';
-      message = '已复制当前帧到剪贴板';
+      message = `已导出 GIF 动图 (${seconds.toFixed(1)}s)`;
     } catch {
       status = 'error';
-      message = '剪贴板授权待确认，可先导出图片';
+      message = 'GIF 导出失败';
+    } finally {
+      batchBusy = false;
+      seekFrame(position, 0);
     }
   }
 
-  function toggleSelect(name: string): void {
-    openSelect = openSelect === name ? '' : name;
+  async function exportSplitSheet(): Promise<void> {
+    if (!splitFrames.length) return;
+    const cols = Math.max(1, Math.min(Math.round(Number(sheetColumns) || 4), 12));
+    const rows = Math.ceil(splitFrames.length / cols);
+    const thumbWidth = splitGifWidth;
+    const thumbHeight = splitGifHeight;
+    const sheetCanvas = document.createElement('canvas');
+    const padding = 10;
+    sheetCanvas.width = cols * thumbWidth + (cols + 1) * padding;
+    sheetCanvas.height = rows * thumbHeight + (rows + 1) * padding;
+    const ctx = sheetCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#18181b';
+    ctx.fillRect(0, 0, sheetCanvas.width, sheetCanvas.height);
+    for (const [index, frame] of splitFrames.entries()) {
+      const img = await new Promise<HTMLImageElement>((resolve) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.src = frame.url;
+      });
+      const x = (index % cols) * thumbWidth + (index % cols + 1) * padding;
+      const y = Math.floor(index / cols) * thumbHeight + (Math.floor(index / cols) + 1) * padding;
+      ctx.drawImage(img, x, y);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(x + 2, y + 2, 60, 18);
+      ctx.fillStyle = '#fff';
+      ctx.font = '11px tabular-nums system-ui';
+      ctx.fillText(formatTime(frame.time / 1000), x + 6, y + 14);
+    }
+    const blob = await blobFromCanvas(sheetCanvas, 'image/jpeg');
+    if (blob) downloadBlob(blob, `gif_sheet_${splitGifName.split('.')[0]}.jpg`);
+  }
+
+  async function exportSplitZip(): Promise<void> {
+    if (!splitFrames.length) return;
+    const zip = new JSZip();
+    splitFrames.forEach((frame, index) => {
+      zip.file(`frame_${String(index + 1).padStart(3, '0')}.png`, frame.blob);
+    });
+    const content = await zip.generateAsync({ type: 'blob' });
+    downloadBlob(content, `gif_frames_${splitGifName.split('.')[0]}.zip`);
+  }
+
+  function toggleSelect(key: string): void {
+    openSelect = openSelect === key ? '' : key;
   }
 
   function selectExportFormat(value: string): void {
@@ -951,8 +885,8 @@
   }
 
   function updateCustomRatio(): void {
-    customRatioWidth = Math.max(1, Math.min(Math.round(Number(customRatioWidth) || 1), 99));
-    customRatioHeight = Math.max(1, Math.min(Math.round(Number(customRatioHeight) || 1), 99));
+    customRatioWidth = Math.max(1, Number(customRatioWidth) || 1);
+    customRatioHeight = Math.max(1, Number(customRatioHeight) || 1);
     void updatePreview();
   }
 
@@ -963,9 +897,6 @@
   }
 
   function updateVisualAdjustments(): void {
-    brightness = Math.max(50, Math.min(Math.round(Number(brightness) || 100), 150));
-    contrast = Math.max(50, Math.min(Math.round(Number(contrast) || 100), 150));
-    saturation = Math.max(0, Math.min(Math.round(Number(saturation) || 100), 200));
     void updatePreview();
   }
 
@@ -1041,6 +972,9 @@
         if (typeof settings.brightness === 'number') brightness = settings.brightness;
         if (typeof settings.contrast === 'number') contrast = settings.contrast;
         if (typeof settings.saturation === 'number') saturation = settings.saturation;
+        if (typeof settings.grayscale === 'number') grayscale = settings.grayscale;
+        if (typeof settings.hueRotate === 'number') hueRotate = settings.hueRotate;
+        if (typeof settings.blur === 'number') blur = settings.blur;
         if (typeof settings.overlayText === 'string') overlayText = settings.overlayText;
         if (typeof settings.overlaySize === 'number') overlaySize = settings.overlaySize;
         if (typeof settings.overlayBand === 'boolean') overlayBand = settings.overlayBand;
@@ -1070,7 +1004,7 @@
 <header class="header">
   <div class="header-content">
     <a href="/" class="header-back" aria-label="返回首页"><iconify-icon icon="lucide:chevron-left"></iconify-icon></a>
-    <h1 class="header-title"><iconify-icon class="header-logo" icon="lucide:film"></iconify-icon>视频素材工坊</h1>
+    <h1 class="header-title"><iconify-icon class="header-logo" icon="lucide:film"></iconify-icon>视频素材工具台</h1>
     <a class="header-link" href="/search/">Wiki 搜索</a>
   </div>
 </header>
@@ -1078,8 +1012,8 @@
 <main class="main native-video-page">
   <section class="workbench-head">
     <div class="workbench-copy">
-      <strong><iconify-icon icon={activeMode === 'video' ? 'lucide:clapperboard' : 'lucide:layers-3'}></iconify-icon>{activeMode === 'video' ? '视频素材' : 'GIF 工具'}</strong>
-      <span>{activeMode === 'video' ? '导入本地视频后，可以整理截图、批量帧图、联系表、GIF 和短视频片段。' : '把 GIF 拆成可下载的 PNG 帧，也可以生成带时间码的联系表。'}</span>
+      <strong><iconify-icon icon={activeMode === 'video' ? 'lucide:clapperboard' : 'lucide:layers-3'}></iconify-icon>{activeMode === 'video' ? '视频素材工具台' : 'GIF 工具台'}</strong>
+      <span>{activeMode === 'video' ? '从本地视频整理截图、批量帧图、联系表、GIF 和短视频片段。' : '拆解 GIF 为 PNG 帧，或生成带时间码的联系表。'}</span>
     </div>
     <div class:video={activeMode === 'video'} class:gif={activeMode === 'gif'} class="mode-switch" role="tablist" aria-label="工作模式">
       <button type="button" class:active={activeMode === 'video'} onclick={() => activeMode = 'video'}><iconify-icon icon="lucide:video"></iconify-icon>视频素材</button>
@@ -1092,7 +1026,7 @@
     <section class="empty-workbench">
       <div class="empty-copy">
         <strong>把视频整理成可直接使用的素材</strong>
-        <span>适合从录屏、PV 或演示视频里提取画面，顺手生成封面、短动图、帧图包和联系表。</span>
+        <span>适合从录屏、PV 或演示视频里提取画面，并导出封面、短视频、帧图包和联系表。</span>
       </div>
       <label class="file-drop hero-drop" ondragover={(event) => event.preventDefault()} ondrop={onDrop}>
         <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.ogv" onchange={chooseFile}>
@@ -1111,22 +1045,6 @@
               <span class="crop-box" style={cropOverlayStyle}></span>
             </div>
           </div>
-
-          <section class="shot-preview-card">
-            <div class="section-head"><strong><iconify-icon icon="lucide:image"></iconify-icon>截图预览</strong><span>{outputInfo}</span></div>
-            <div class="shot-preview-stage">
-              {#if previewUrl}
-                <img src={previewUrl} alt="截图预览">
-              {:else}
-                <div class="shot-preview-empty"><iconify-icon icon="lucide:image"></iconify-icon><span>定位时间点后可刷新预览</span></div>
-              {/if}
-            </div>
-            <div class="actions preview-actions">
-              <button type="button" onclick={updatePreview} disabled={batchBusy}><iconify-icon icon="lucide:refresh-cw"></iconify-icon>刷新预览</button>
-              <button type="button" onclick={copyFrame} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:copy"></iconify-icon>复制</button>
-              <button class="primary" type="button" onclick={exportFrame} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:download"></iconify-icon>导出</button>
-            </div>
-          </section>
 
           <div class="timeline-card">
             <div class="timeline-meta">
@@ -1199,215 +1117,253 @@
               </details>
             {/if}
           </div>
+
+          {#if previewHistory.length}
+            <section class="history-card">
+              <div class="section-head"><strong><iconify-icon icon="lucide:history"></iconify-icon>最近预览</strong><span>点击可放大查看</span></div>
+              <div class="history-grid">
+                {#each previewHistory as item, index}
+                  <div class="history-item" class:active={item.url === previewUrl}>
+                    <button class="history-thumb" type="button" onclick={() => previewUrl = item.url}>
+                      <img src={item.url} alt="预览历史">
+                    </button>
+                    <button class="history-remove" type="button" onclick={() => removeHistoryItem(index)} aria-label="移除历史">×</button>
+                  </div>
+                {/each}
+              </div>
+            </section>
+          {/if}
         </section>
 
         <aside class="toolbox-area">
-          <label class="file-drop compact-drop" ondragover={(event) => event.preventDefault()} ondrop={onDrop}>
-            <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.ogv" onchange={chooseFile}>
-            <strong><iconify-icon icon="lucide:file-video"></iconify-icon>{file?.name || '视频素材'}</strong>
-            <span>点击可更换当前视频</span>
-          </label>
-
-          {#if file}
-            <div class="file-meta">
-              <span><iconify-icon icon="lucide:hard-drive"></iconify-icon>{formatFileSize(file.size)}</span>
-              <span><iconify-icon icon="lucide:file-type"></iconify-icon>{file.type || '素材类型'}</span>
-              <span><iconify-icon icon="lucide:clock-3"></iconify-icon>{duration > 0 ? formatTime(duration) : '读取时长'}</span>
-            </div>
-          {/if}
-
-          <section class="global-settings">
-            <div class="section-head"><strong><iconify-icon icon="lucide:sliders-horizontal"></iconify-icon>输出设置</strong><span>这些参数会用于截图、批量帧图、联系表、GIF 和短视频导出。</span></div>
-            <div class="settings-stack">
-              <div class="settings-group">
-                <div class="settings-group-title"><iconify-icon icon="lucide:file-output"></iconify-icon><span>文件与尺寸</span></div>
-                <div class="options-grid compact">
-                  <label>
-                    <span>导出格式</span>
-                    <CustomSelect value={exportFormat} options={formatSelectOptions} open={openSelect === 'format'} onSelect={selectExportFormat} onToggle={() => toggleSelect('format')} />
-                  </label>
-                  {#if outputSize === 'custom'}
-                    <label>
-                      <span>输出宽度</span>
-                      <input type="number" min="64" max="4096" step="1" bind:value={customOutputWidth} onblur={updateCustomOutput} oninput={updateCustomOutput}>
-                    </label>
-                    <label>
-                      <span>输出高度</span>
-                      <input type="number" min="64" max="4096" step="1" bind:value={customOutputHeight} onblur={updateCustomOutput} oninput={updateCustomOutput}>
-                    </label>
-                  {/if}
-                  <label class="wide-field">
-                    <span>输出尺寸</span>
-                    <CustomSelect value={outputSize} options={outputSelectOptions} open={openSelect === 'output'} onSelect={selectOutputSize} onToggle={() => toggleSelect('output')} />
-                  </label>
-                </div>
+          <section class="inspector-section">
+            <div class="shot-preview-mini">
+              <div class="shot-preview-stage">
+                {#if previewUrl}
+                  <img src={previewUrl} alt="截图预览">
+                {:else}
+                  <div class="shot-preview-empty"><iconify-icon icon="lucide:image"></iconify-icon><span>预览区</span></div>
+                {/if}
               </div>
+              <div class="preview-info">{outputInfo}</div>
+              <div class="actions preview-actions compact">
+                <button type="button" onclick={updatePreview} disabled={batchBusy} title="刷新预览"><iconify-icon icon="lucide:refresh-cw"></iconify-icon></button>
+                <button type="button" onclick={copyFrame} disabled={status === 'loading' || batchBusy} title="复制图片"><iconify-icon icon="lucide:copy"></iconify-icon></button>
+                <button class="primary" type="button" onclick={exportFrame} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:download"></iconify-icon>导出当前帧</button>
+              </div>
+            </div>
 
-              <div class="settings-group">
-                <div class="settings-group-title"><iconify-icon icon="lucide:crop"></iconify-icon><span>裁切</span></div>
-                <div class="options-grid compact">
-                  {#if cropRatio === 'custom'}
-                    <label>
-                      <span>比例宽</span>
-                      <input type="number" min="1" max="99" step="1" bind:value={customRatioWidth} onblur={updateCustomRatio} oninput={updateCustomRatio}>
-                    </label>
-                    <label>
-                      <span>比例高</span>
-                      <input type="number" min="1" max="99" step="1" bind:value={customRatioHeight} onblur={updateCustomRatio} oninput={updateCustomRatio}>
-                    </label>
+            <label class="file-drop compact-drop" ondragover={(event) => event.preventDefault()} ondrop={onDrop}>
+              <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.ogv" onchange={chooseFile}>
+              <strong><iconify-icon icon="lucide:file-video"></iconify-icon>{file?.name || '选择视频素材'}</strong>
+              <span>更换视频</span>
+            </label>
+
+            <div class="file-info-card" class:open={fileInfoOpen}>
+              <button type="button" class="file-info-trigger" onclick={() => fileInfoOpen = !fileInfoOpen}>
+                <iconify-icon icon="lucide:info"></iconify-icon>
+                <span>素材信息</span>
+                <iconify-icon icon="lucide:chevron-down"></iconify-icon>
+              </button>
+              {#if fileInfoOpen}
+                <div class="file-info-body">
+                  {#if file}
+                    <span><iconify-icon icon="lucide:hard-drive"></iconify-icon>{formatFileSize(file.size)}</span>
+                    <span><iconify-icon icon="lucide:file-type"></iconify-icon>{file.type || '未知类型'}</span>
+                    <span><iconify-icon icon="lucide:clock-3"></iconify-icon>{duration > 0 ? formatTime(duration) : '读取时长'}</span>
+                  {:else}
+                    <span>未载入视频。</span>
                   {/if}
-                  <label class="wide-field">
-                    <span>封面比例</span>
-                    <CustomSelect value={cropRatio} options={ratioSelectOptions} open={openSelect === 'ratio'} onSelect={selectCropRatio} onToggle={() => toggleSelect('ratio')} />
-                  </label>
-                  <div class="wide-field crop-anchor-field">
-                    <span>裁切位置</span>
-                    <div class="anchor-grid" aria-label="裁切位置">
-                      {#each cropAnchors as anchor}
-                        <button type="button" class:active={cropAnchor === anchor.value} onclick={() => setCropAnchor(anchor.value)}>{anchor.label}</button>
-                      {/each}
+                </div>
+              {/if}
+            </div>
+
+            <div class:single={activeTool === 'single'} class:batch={activeTool === 'batch'} class:gif={activeTool === 'gif'} class="tabs-header" role="tablist" aria-label="视频素材工具">
+              <button type="button" class:active={activeTool === 'single'} onclick={() => activeTool = 'single'}><iconify-icon icon="lucide:camera"></iconify-icon>截图</button>
+              <button type="button" class:active={activeTool === 'batch'} onclick={() => activeTool = 'batch'}><iconify-icon icon="lucide:grid-3x3"></iconify-icon>批量</button>
+              <button type="button" class:active={activeTool === 'gif'} onclick={() => activeTool = 'gif'}><iconify-icon icon="lucide:sparkles"></iconify-icon>动态片段</button>
+            </div>
+
+            <section class="global-settings">
+              <div class="settings-stack">
+                <details class="settings-group">
+                  <summary class="settings-group-title"><iconify-icon icon="lucide:file-output"></iconify-icon><span>文件与尺寸</span></summary>
+                  <div class="options-grid compact">
+                    <label>
+                      <span>导出格式</span>
+                      <CustomSelect value={exportFormat} options={formatSelectOptions} open={openSelect === 'format'} onSelect={selectExportFormat} onToggle={() => toggleSelect('format')} />
+                    </label>
+                    {#if outputSize === 'custom'}
+                      <label>
+                        <span>输出宽度</span>
+                        <input type="number" min="64" max="4096" step="1" bind:value={customOutputWidth} onblur={updateCustomOutput} oninput={updateCustomOutput}>
+                      </label>
+                      <label>
+                        <span>输出高度</span>
+                        <input type="number" min="64" max="4096" step="1" bind:value={customOutputHeight} onblur={updateCustomOutput} oninput={updateCustomOutput}>
+                      </label>
+                    {/if}
+                    <label class="wide-field">
+                      <span>输出尺寸</span>
+                      <CustomSelect value={outputSize} options={outputSelectOptions} open={openSelect === 'output'} onSelect={selectOutputSize} onToggle={() => toggleSelect('output')} />
+                    </label>
+                  </div>
+                </details>
+
+                <details class="settings-group">
+                  <summary class="settings-group-title"><iconify-icon icon="lucide:crop"></iconify-icon><span>裁切</span></summary>
+                  <div class="options-grid compact">
+                    {#if cropRatio === 'custom'}
+                      <label>
+                        <span>比例宽</span>
+                        <input type="number" min="1" max="99" step="1" bind:value={customRatioWidth} onblur={updateCustomRatio} oninput={updateCustomRatio}>
+                      </label>
+                      <label>
+                        <span>比例高</span>
+                        <input type="number" min="1" max="99" step="1" bind:value={customRatioHeight} onblur={updateCustomRatio} oninput={updateCustomRatio}>
+                      </label>
+                    {/if}
+                    <label class="wide-field">
+                      <span>封面比例</span>
+                      <CustomSelect value={cropRatio} options={ratioSelectOptions} open={openSelect === 'ratio'} onSelect={selectCropRatio} onToggle={() => toggleSelect('ratio')} />
+                    </label>
+                    <div class="wide-field crop-anchor-field">
+                      <span>裁切位置</span>
+                      <div class="anchor-grid" aria-label="裁切位置">
+                        {#each cropAnchors as anchor}
+                          <button type="button" class:active={cropAnchor === anchor.value} onclick={() => setCropAnchor(anchor.value)}>{anchor.label}</button>
+                        {/each}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </details>
 
-              <div class="settings-group">
-                <div class="settings-group-title"><iconify-icon icon="lucide:sliders-horizontal"></iconify-icon><span>画面</span></div>
-                <div class="options-grid compact triple">
-                  <label>
-                    <span>亮度</span>
-                    <input type="number" min="50" max="150" step="5" bind:value={brightness} oninput={updateVisualAdjustments}>
-                  </label>
-                  <label>
-                    <span>对比度</span>
-                    <input type="number" min="50" max="150" step="5" bind:value={contrast} oninput={updateVisualAdjustments}>
-                  </label>
-                  <label>
-                    <span>饱和度</span>
-                    <input type="number" min="0" max="200" step="5" bind:value={saturation} oninput={updateVisualAdjustments}>
-                  </label>
-                </div>
-              </div>
+                <details class="settings-group">
+                  <summary class="settings-group-title"><iconify-icon icon="lucide:sliders-horizontal"></iconify-icon><span>画面</span></summary>
+                  <div class="settings-sliders">
+                    <label class="slider-row">
+                      <span>亮度</span>
+                      <input type="range" min="0" max="200" step="1" value={brightness} oninput={(event) => { brightness = Number((event.currentTarget as HTMLInputElement).value); updateVisualAdjustments(); }}>
+                      <input type="number" class="slider-value" step="1" bind:value={brightness} oninput={updateVisualAdjustments}>
+                    </label>
+                    <label class="slider-row">
+                      <span>对比度</span>
+                      <input type="range" min="0" max="200" step="1" value={contrast} oninput={(event) => { contrast = Number((event.currentTarget as HTMLInputElement).value); updateVisualAdjustments(); }}>
+                      <input type="number" class="slider-value" step="1" bind:value={contrast} oninput={updateVisualAdjustments}>
+                    </label>
+                    <label class="slider-row">
+                      <span>饱和度</span>
+                      <input type="range" min="0" max="300" step="1" value={saturation} oninput={(event) => { saturation = Number((event.currentTarget as HTMLInputElement).value); updateVisualAdjustments(); }}>
+                      <input type="number" class="slider-value" step="1" bind:value={saturation} oninput={updateVisualAdjustments}>
+                    </label>
+                    <label class="slider-row">
+                      <span>灰度</span>
+                      <input type="range" min="0" max="100" step="1" value={grayscale} oninput={(event) => { grayscale = Number((event.currentTarget as HTMLInputElement).value); updateVisualAdjustments(); }}>
+                      <input type="number" class="slider-value" step="1" bind:value={grayscale} oninput={updateVisualAdjustments}>
+                    </label>
+                    <label class="slider-row">
+                      <span>色相</span>
+                      <input type="range" min="0" max="360" step="1" value={hueRotate} oninput={(event) => { hueRotate = Number((event.currentTarget as HTMLInputElement).value); updateVisualAdjustments(); }}>
+                      <input type="number" class="slider-value" step="1" bind:value={hueRotate} oninput={updateVisualAdjustments}>
+                    </label>
+                    <label class="slider-row">
+                      <span>模糊</span>
+                      <input type="range" min="0" max="20" step="0.5" value={blur} oninput={(event) => { blur = Number((event.currentTarget as HTMLInputElement).value); updateVisualAdjustments(); }}>
+                      <input type="number" class="slider-value" step="0.5" bind:value={blur} oninput={updateVisualAdjustments}>
+                    </label>
+                  </div>
+                </details>
 
-              <div class="settings-group">
-                <div class="settings-group-title"><iconify-icon icon="lucide:type"></iconify-icon><span>文字</span></div>
-                <div class="options-grid compact">
-                  <label class="wide-field">
-                    <span>文字叠加</span>
-                    <textarea maxlength="90" rows="2" placeholder="留空则不叠加文字" bind:value={overlayText}></textarea>
-                  </label>
-                  <label>
-                    <span>文字大小</span>
-                    <input type="number" min="18" max="120" step="2" bind:value={overlaySize}>
-                  </label>
-                  <label class="check-field checkbox-container">
-                    <input type="checkbox" bind:checked={overlayBand}>
-                    <span class="checkmark"></span>
-                    <span>文字背景条</span>
-                  </label>
-                </div>
+                <details class="settings-group">
+                  <summary class="settings-group-title"><iconify-icon icon="lucide:type"></iconify-icon><span>文字</span></summary>
+                  <div class="options-grid compact">
+                    <label class="wide-field">
+                      <span>叠加文字</span>
+                      <textarea maxlength="90" rows="2" placeholder="留空则不叠加" bind:value={overlayText}></textarea>
+                    </label>
+                    <label>
+                      <span>文字大小</span>
+                      <input type="number" min="18" max="120" step="2" bind:value={overlaySize}>
+                    </label>
+                    <label class="check-field checkbox-container">
+                      <input type="checkbox" bind:checked={overlayBand}>
+                      <span class="checkmark"></span>
+                      <span>文字背景条</span>
+                    </label>
+                  </div>
+                </details>
               </div>
+            </section>
+
+            <div class="tab-content-inspector">
+              {#if activeTool === 'single'}
+                <div class="inspector-note"><iconify-icon icon="lucide:info"></iconify-icon><span>已开启单帧截图模式。</span></div>
+              {:else if activeTool === 'batch'}
+                <div class="inspector-group">
+                  <div class="settings-group-title"><iconify-icon icon="lucide:grid-3x3"></iconify-icon><span>批量选项</span></div>
+                  <div class="options-grid compact">
+                    <label>
+                      <span>抽帧模式</span>
+                      <CustomSelect value={batchMode} options={[{ code: 'count', name: '均匀数量' }, { code: 'interval', name: '固定间隔' }]} open={openSelect === 'batchMode'} onSelect={selectBatchMode} onToggle={() => toggleSelect('batchMode')} />
+                    </label>
+                    {#if batchMode === 'count'}
+                      <label>
+                        <span>抽帧数量</span>
+                        <input type="number" min="1" max="60" bind:value={batchCount}>
+                      </label>
+                    {:else}
+                      <label>
+                        <span>间隔秒数</span>
+                        <input type="number" min="0.25" max="600" step="0.25" bind:value={batchInterval}>
+                      </label>
+                    {/if}
+                    <label>
+                      <span>预计帧数</span>
+                      <input type="text" value={`${sampleTimes.length} 张`} readonly>
+                    </label>
+                    <label>
+                      <span>联系表列数</span>
+                      <input type="number" min="1" max="12" bind:value={sheetColumns}>
+                    </label>
+                  </div>
+                  <div class="actions-stack">
+                    <button type="button" onclick={exportContactSheet} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:layout-grid"></iconify-icon>导出联系表 ({sampleTimes.length})</button>
+                    <button class="primary" type="button" onclick={exportBatchZip} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:package-down"></iconify-icon>导出 ZIP 包 ({sampleTimes.length})</button>
+                  </div>
+                </div>
+              {:else if activeTool === 'gif'}
+                <div class="inspector-group">
+                  <div class="settings-group-title"><iconify-icon icon="lucide:sparkles"></iconify-icon><span>动态选项</span></div>
+                  <div class="options-grid compact">
+                    <label>
+                      <span>时长(s)</span>
+                      <input type="number" min="0.5" max="6" step="0.5" bind:value={gifSeconds}>
+                    </label>
+                    <label>
+                      <span>帧率(FPS)</span>
+                      <input type="number" min="2" max="15" bind:value={gifFps}>
+                    </label>
+                    <label>
+                      <span>宽度(px)</span>
+                      <input type="number" min="96" max="1280" step="16" bind:value={gifWidth}>
+                    </label>
+                    <label>
+                      <span>短视频格式</span>
+                      <CustomSelect value={motionVideoFormat} options={motionVideoSelectOptions} open={openSelect === 'motionFormat'} onSelect={selectMotionVideoFormat} onToggle={() => toggleSelect('motionFormat')} />
+                    </label>
+                    <label class="wide-field">
+                      <span>播放方向</span>
+                      <CustomSelect value={motionDirection} options={[{ code: 'forward', name: '正放' }, { code: 'reverse', name: '倒放' }, { code: 'pingpong', name: '乒乓' }]} open={openSelect === 'motionDirection'} onSelect={selectMotionDirection} onToggle={() => toggleSelect('motionDirection')} />
+                    </label>
+                  </div>
+                  <div class="actions-stack">
+                    <button type="button" onclick={exportWebm} disabled={status === 'loading' || batchBusy || !supportedMotionVideoOptions.length}><iconify-icon icon="lucide:file-video"></iconify-icon>导出短视频</button>
+                    <button class="primary" type="button" onclick={exportGif} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:image-play"></iconify-icon>导出 GIF</button>
+                  </div>
+                </div>
+              {/if}
             </div>
           </section>
-
-          <div class:single={activeTool === 'single'} class:batch={activeTool === 'batch'} class:gif={activeTool === 'gif'} class="tabs-header" role="tablist" aria-label="视频素材工具">
-            <button type="button" class:active={activeTool === 'single'} onclick={() => activeTool = 'single'}><iconify-icon icon="lucide:camera"></iconify-icon>截图</button>
-            <button type="button" class:active={activeTool === 'batch'} onclick={() => activeTool = 'batch'}><iconify-icon icon="lucide:grid-3x3"></iconify-icon>批量</button>
-            <button type="button" class:active={activeTool === 'gif'} onclick={() => activeTool = 'gif'}><iconify-icon icon="lucide:sparkles"></iconify-icon>动图</button>
-          </div>
-
-          <div class="tab-content">
-            {#if activeTool === 'single'}
-              <div class="section-head"><strong><iconify-icon icon="lucide:camera"></iconify-icon>单帧素材</strong><span>导出当前时间点的画面，可叠加文字、调整比例和尺寸。</span></div>
-              <div class="shot-note"><iconify-icon icon="lucide:info"></iconify-icon><span>左侧预览卡展示最终截图效果。调整比例、位置、滤镜或文字后，可刷新预览再导出。</span></div>
-            {:else if activeTool === 'batch'}
-              <div class="section-head"><strong><iconify-icon icon="lucide:grid-3x3"></iconify-icon>批量素材</strong><span>在当前区间内抽取多张画面，适合做帧图包或缩略图联系表。</span></div>
-              <div class="options-grid">
-                <label>
-                  <span>抽帧模式</span>
-                  <CustomSelect value={batchMode} options={[{ code: 'count', name: '均匀数量' }, { code: 'interval', name: '固定间隔' }]} open={openSelect === 'batchMode'} onSelect={selectBatchMode} onToggle={() => toggleSelect('batchMode')} />
-                </label>
-                {#if batchMode === 'count'}
-                  <label>
-                    <span>抽帧数量</span>
-                    <input type="number" min="1" max="60" bind:value={batchCount}>
-                  </label>
-                {:else}
-                  <label>
-                    <span>间隔秒数</span>
-                    <input type="number" min="0.25" max="600" step="0.25" bind:value={batchInterval}>
-                  </label>
-                {/if}
-                <label>
-                  <span>预计帧数</span>
-                  <input type="text" value={`${sampleTimes.length} 张`} readonly>
-                </label>
-                <label>
-                  <span>联系表列数</span>
-                  <input type="number" min="1" max="12" bind:value={sheetColumns}>
-                </label>
-              </div>
-              <div class="actions sticky-footer-actions">
-                <button type="button" onclick={exportContactSheet} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:layout-grid"></iconify-icon>导出联系表 · {sampleTimes.length}</button>
-                <button class="primary" type="button" onclick={exportBatchZip} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:package-down"></iconify-icon>导出 ZIP · {sampleTimes.length}</button>
-              </div>
-            {:else if activeTool === 'gif'}
-              <div class="section-head"><strong><iconify-icon icon="lucide:sparkles"></iconify-icon>短动图</strong><span>从当前区间生成 GIF 或短视频片段，可选择正放、倒放和乒乓循环。</span></div>
-              <div class="options-grid">
-                <label>
-                  <span>时长（秒）</span>
-                  <input type="number" min="0.5" max="6" step="0.5" bind:value={gifSeconds}>
-                </label>
-                <label>
-                  <span>帧率（FPS）</span>
-                  <input type="number" min="2" max="15" bind:value={gifFps}>
-                </label>
-                <label>
-                  <span>宽度（px）</span>
-                  <input type="number" min="96" max="1280" step="16" bind:value={gifWidth}>
-                </label>
-                <label>
-                  <span>短视频格式</span>
-                  <CustomSelect value={motionVideoFormat} options={motionVideoSelectOptions} open={openSelect === 'motionFormat'} onSelect={selectMotionVideoFormat} onToggle={() => toggleSelect('motionFormat')} />
-                </label>
-                <label>
-                  <span>播放方向</span>
-                  <CustomSelect value={motionDirection} options={[{ code: 'forward', name: '正放' }, { code: 'reverse', name: '倒放' }, { code: 'pingpong', name: '乒乓' }]} open={openSelect === 'motionDirection'} onSelect={selectMotionDirection} onToggle={() => toggleSelect('motionDirection')} />
-                </label>
-                <label>
-                  <span>GIF 色彩数</span>
-                  <input type="number" min="16" max="256" step="16" bind:value={gifColors}>
-                </label>
-                <label>
-                  <span>GIF 循环</span>
-                  <CustomSelect value={gifRepeat} options={[{ code: 'forever', name: '无限循环' }, { code: 'once', name: '播放一次' }, { code: 'twice', name: '播放两次' }]} open={openSelect === 'gifRepeat'} onSelect={selectGifRepeat} onToggle={() => toggleSelect('gifRepeat')} />
-                </label>
-                <label>
-                  <span>WebM 码率（kbps）</span>
-                  <input type="number" min="250" max="12000" step="250" bind:value={webmBitrate}>
-                </label>
-              </div>
-              <div class="actions sticky-footer-actions">
-                <button type="button" onclick={exportWebm} disabled={status === 'loading' || batchBusy || !supportedMotionVideoOptions.length}><iconify-icon icon="lucide:file-video"></iconify-icon>导出短视频 · {Math.max(1, Math.min(Math.round((Number(gifSeconds) || 2) * (Number(gifFps) || 8)), 300))} 帧</button>
-                <button class="primary" type="button" onclick={exportGif} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:image-play"></iconify-icon>导出 GIF · {Math.max(1, Math.min(Math.round((Number(gifSeconds) || 2) * (Number(gifFps) || 8)), 90))} 帧</button>
-              </div>
-              <div class="motion-previews">
-                {#if gifPreviewUrl}
-                  <div class="gif-preview">
-                    <span>最近 GIF</span>
-                    <img src={gifPreviewUrl} alt="GIF 预览">
-                  </div>
-                {/if}
-                {#if webmPreviewUrl}
-                  <div class="gif-preview">
-                    <span>最近短视频</span>
-                    <!-- svelte-ignore a11y_media_has_caption -->
-                    <video src={webmPreviewUrl} controls loop muted playsinline></video>
-                  </div>
-                {/if}
-              </div>
-            {/if}
-          </div>
         </aside>
       </div>
     </section>
@@ -1432,7 +1388,7 @@
           {/if}
         </section>
         <aside class="toolbox-area">
-          <div class="section-head"><strong><iconify-icon icon="lucide:layers-3"></iconify-icon>GIF 拆解</strong><span>载入 GIF 后会在本页解析帧信息并生成导出项。</span></div>
+          <div class="section-head"><strong><iconify-icon icon="lucide:layers-3"></iconify-icon>GIF 拆解</strong><span>载入 GIF 后会在本页解析帧信息并生成可用导出项。</span></div>
           {#if splitFrames.length}
             <div class="file-meta">
               <span><iconify-icon icon="lucide:scan"></iconify-icon>{splitGifWidth} x {splitGifHeight}</span>
