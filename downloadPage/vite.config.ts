@@ -3,6 +3,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+// These constants must stay in sync with downloadPage/src/api/_worker.js
 const upstream = 'https://klbq-prod-www.idreamsky.com';
 const allowedImageHosts = new Set(['wiki.biligame.com', 'patchwiki.biligame.com']);
 

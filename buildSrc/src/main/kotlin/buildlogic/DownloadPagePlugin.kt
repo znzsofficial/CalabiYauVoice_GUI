@@ -62,11 +62,14 @@ class DownloadPagePlugin : Plugin<Project> {
                 dependsOn("webBuild")
                 from(layout.projectDirectory.dir("downloadPage")) {
                     include("_headers")
+                    include("_redirects")
+                    include("download.html")
+                    include("downloads/**")
+                    include("icon.svg")
+                }
+                from(layout.projectDirectory.dir("downloadPage/src/api")) {
                     include("_worker.js")
-                include("download.html")
-                include("downloads/**")
-                include("icon.svg")
-            }
+                }
                 into(layout.projectDirectory.dir("downloadPage/dist"))
             }
 

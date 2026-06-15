@@ -1,3 +1,4 @@
+// These constants must stay in sync with downloadPage/vite.config.ts
 const UPSTREAM = "https://klbq-prod-www.idreamsky.com";
 const ALLOWED_IMAGE_HOSTS = new Set(["wiki.biligame.com", "patchwiki.biligame.com"]);
 
@@ -24,6 +25,24 @@ export default {
     // POST /api/balance/data → 平衡数据查询
     if (url.pathname === "/api/balance/data") {
       return proxy(`${UPSTREAM}/api/common/ide`, request);
+    }
+
+    // GET /api/github-stars → GitHub star count
+    if (url.pathname === "/api/github-stars") {
+      const corsHeaders = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+      };
+      try {
+        const headers = { Accept: "application/vnd.github+json", "User-Agent": "CalabiYauWiki/1.0" };
+        if (env.GITHUB_TOKEN) headers.Authorization = `Bearer ${env.GITHUB_TOKEN}`;
+        const resp = await fetch("https://api.github.com/repos/znzsofficial/CalabiYauVoice_GUI", { headers });
+        if (!resp.ok) return Response.json({ stars: 0 }, { headers: { ...corsHeaders, "Cache-Control": "public, max-age=300" } });
+        const data = await resp.json();
+        return Response.json({ stars: data.stargazers_count ?? 0 }, { headers: { ...corsHeaders, "Cache-Control": "public, max-age=300" } });
+      } catch {
+        return Response.json({ stars: 0 }, { headers: { ...corsHeaders, "Cache-Control": "public, max-age=60" } });
+      }
     }
 
     if (request.method === "GET" && (url.pathname === "/api/image-download" || url.pathname === "/api/file-download")) {
