@@ -31,6 +31,7 @@
   let statusText = $state('如果版本信息加载失败，下载按钮仍会使用默认 APK 地址。');
   let changelog: string[] | null = $state(null);
   let copied = $state(false);
+  let githubStars = $state(0);
 
   let balanceDialogRef: HTMLDialogElement | null = $state(null);
   let balanceStatus: BalanceStatus = $state('idle');
@@ -234,7 +235,21 @@
     (settings ? loadBalanceData : loadBalanceSettings)();
   }
 
-  onMount(loadLatestInfo);
+  async function loadGithubStars(): Promise<void> {
+    try {
+      const resp = await fetch('/api/github-stars');
+      if (!resp.ok) return;
+      const data = await resp.json() as { stars?: number };
+      if (typeof data.stars === 'number' && data.stars > 0) githubStars = data.stars;
+    } catch {
+      // silently ignore
+    }
+  }
+
+  onMount(() => {
+    loadLatestInfo();
+    loadGithubStars();
+  });
 </script>
 
 <svelte:head>
@@ -273,8 +288,8 @@
               立即下载 APK
             </a>
             <button class:copied class="btn outline hero-copy-btn" onclick={copyDownloadLink}>
-              <iconify-icon icon={copied ? "lucide:check" : "lucide:copy"} style="margin-right: 6px;"></iconify-icon>
-              {copied ? '已复制' : '复制直链'}
+              <span class="copy-default"><iconify-icon icon="lucide:copy" style="margin-right: 6px;"></iconify-icon>复制直链</span>
+              <span class="copy-success"><iconify-icon icon="lucide:check" style="margin-right: 6px;"></iconify-icon>已复制</span>
             </button>
           </div>
         </div>
@@ -362,7 +377,7 @@
         <section class="card shadow-sm">
           <div class="card-header">
             <div class="card-title"><iconify-icon icon="lucide:github"></iconify-icon>开源社区</div>
-            <span class="badge">Apache 2.0</span>
+            {#if githubStars > 0}<span class="badge star-badge"><iconify-icon icon="lucide:star"></iconify-icon>{githubStars}</span>{:else}<span class="badge">Apache 2.0</span>{/if}
           </div>
           <div class="card-body">
             <div class="notice-content text-muted">

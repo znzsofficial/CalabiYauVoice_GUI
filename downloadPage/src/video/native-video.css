@@ -1,5 +1,5 @@
-:root { --radius: 0.625rem; --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --primary: oklch(0.21 0 0); --primary-foreground: oklch(0.985 0 0); --muted: oklch(0.96 0 0); --muted-foreground: oklch(0.55 0 0); --accent: oklch(0.94 0 0); --ring: oklch(0.55 0 0); --danger: #b42318; --success: #087443; }
-@media (prefers-color-scheme: dark) { :root { --background: oklch(0.12 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.15 0 0); --border: oklch(0.25 0 0); --input: oklch(0.25 0 0); --primary: oklch(0.985 0 0); --primary-foreground: oklch(0.145 0 0); --muted: oklch(0.22 0 0); --muted-foreground: oklch(0.65 0 0); --accent: oklch(0.25 0 0); --ring: oklch(0.55 0 0); } }
+:root { --radius: 0.625rem; --background: oklch(1 0 0); --foreground: oklch(0.145 0 0); --card: oklch(1 0 0); --card-foreground: oklch(0.145 0 0); --secondary: oklch(0.96 0 0); --secondary-foreground: oklch(0.21 0 0); --border: oklch(0.922 0 0); --input: oklch(0.922 0 0); --primary: oklch(0.21 0 0); --primary-foreground: oklch(0.985 0 0); --muted: oklch(0.96 0 0); --muted-foreground: oklch(0.55 0 0); --accent: oklch(0.94 0 0); --ring: oklch(0.55 0 0); --danger: #b42318; --success: #087443; }
+@media (prefers-color-scheme: dark) { :root { --background: oklch(0.12 0 0); --foreground: oklch(0.985 0 0); --card: oklch(0.15 0 0); --card-foreground: oklch(0.985 0 0); --secondary: oklch(0.22 0 0); --secondary-foreground: oklch(0.985 0 0); --border: oklch(0.25 0 0); --input: oklch(0.25 0 0); --primary: oklch(0.985 0 0); --primary-foreground: oklch(0.145 0 0); --muted: oklch(0.22 0 0); --muted-foreground: oklch(0.65 0 0); --accent: oklch(0.25 0 0); --ring: oklch(0.55 0 0); } }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
 body { min-height: 100%; display: flex; flex-direction: column; background-color: var(--background); background-image: radial-gradient(at 0% 0%, color-mix(in srgb, var(--foreground) 3%, transparent) 0px, transparent 50%), radial-gradient(at 100% 100%, color-mix(in srgb, var(--foreground) 2%, transparent) 0px, transparent 50%); background-attachment: fixed; color: var(--foreground); font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; line-height: 1.5; }
@@ -64,6 +64,10 @@ video { width: 100%; height: 100%; object-fit: contain; }
 .shot-preview-mini { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
 .shot-preview-mini .shot-preview-stage { display: grid; place-items: center; border-radius: 4px; background: #000; overflow: hidden; }
 .shot-preview-mini img { width: 100%; height: auto; display: block; object-fit: contain; }
+.shot-preview-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; color: var(--muted-foreground); opacity: 0.6; }
+.shot-preview-empty iconify-icon { font-size: 1.5rem; }
+.crop-shade { position: absolute; inset: 0; background: rgb(0 0 0 / 0.35); pointer-events: none; }
+.crop-box { position: absolute; border: 2px solid var(--primary); border-radius: 2px; pointer-events: none; }
 .preview-info { color: var(--muted-foreground); font-size: 0.75rem; text-align: center; }
 .preview-actions.compact button { flex: 1; min-height: 32px; padding: 0; }
 .preview-actions.compact .primary { flex: 2; }

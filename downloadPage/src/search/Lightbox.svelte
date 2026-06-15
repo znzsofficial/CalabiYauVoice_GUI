@@ -202,9 +202,9 @@
   button.lightbox-backdrop {
     inset: 0;
     z-index: 0;
-    background-color: color-mix(in srgb, var(--background) 85%, transparent);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    background-color: color-mix(in srgb, var(--background) 80%, transparent);
+    backdrop-filter: blur(8px) saturate(150%);
+    -webkit-backdrop-filter: blur(8px) saturate(150%);
   }
 
   button.lightbox-container {
