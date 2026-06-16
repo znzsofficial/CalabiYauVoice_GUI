@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cake
 import androidx.compose.material3.AlertDialog
@@ -72,6 +74,7 @@ fun CharacterListScreen(
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null,
+    gridState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
@@ -141,6 +144,7 @@ fun CharacterListScreen(
                 CharacterGrid(
                     characters = currentFaction.characters,
                     onOpenCharacterDetail = onOpenCharacterDetail,
+                    gridState = gridState,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -280,10 +284,12 @@ private object CharacterBirthdays {
 private fun CharacterGrid(
     characters: List<CharacterListApi.CharacterInfo>,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
+    gridState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     LazyVerticalGrid(
+        state = gridState ?: rememberLazyGridState(),
         columns = GridCells.Adaptive(minSize = 100.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

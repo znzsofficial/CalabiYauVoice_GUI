@@ -261,6 +261,7 @@ fun WikiHubScreen(
     var homeFactionTab by rememberSaveable { mutableIntStateOf(0) }
     var homeMapModeTab by rememberSaveable { mutableIntStateOf(0) }
     var characterListTab by rememberSaveable { mutableIntStateOf(0) }
+    val characterGridState = rememberLazyGridState()
     var weaponListTab by rememberSaveable { mutableIntStateOf(0) }
     val weaponGridState = rememberLazyGridState()
     var mapListTab by rememberSaveable { mutableIntStateOf(0) }
@@ -406,6 +407,7 @@ fun WikiHubScreen(
                     },
                     initialTab = characterListTab,
                     onTabChanged = { characterListTab = it },
+                    gridState = characterGridState,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )
