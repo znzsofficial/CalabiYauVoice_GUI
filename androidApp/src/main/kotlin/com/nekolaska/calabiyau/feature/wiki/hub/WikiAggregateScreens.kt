@@ -61,7 +61,7 @@ import com.nekolaska.calabiyau.core.ui.liquidGlass
 @Composable
 internal fun WikiGameplayHubScreen(
     onBack: () -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     backdrop: Backdrop
 ) {
@@ -83,7 +83,7 @@ internal fun WikiGameplayHubScreen(
                     icon = Icons.Outlined.SportsEsports,
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.GAME_MODES) },
+                    onClick = { onNavigateTo(WikiRoute.GameModes) },
                     backdrop = backdrop
                 )
             }
@@ -94,7 +94,7 @@ internal fun WikiGameplayHubScreen(
                     icon = Icons.Outlined.EmojiEvents,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.ACHIEVEMENTS) },
+                    onClick = { onNavigateTo(WikiRoute.Achievements) },
                     backdrop = backdrop
                 )
             }
@@ -108,8 +108,8 @@ internal fun WikiGameplayHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "誓约" to { onNavigateTo(WikiHubPage.OATH) },
-                        "印迹" to { onNavigateTo(WikiHubPage.IMPRINTS) }
+                        "誓约" to { onNavigateTo(WikiRoute.Oath) },
+                        "印迹" to { onNavigateTo(WikiRoute.Imprints) }
                     ),
                     backdrop = backdrop
                 )
@@ -129,7 +129,7 @@ internal fun WikiGameplayHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "玩家等级" to { onNavigateTo(WikiHubPage.PLAYER_LEVELS) }
+                        "玩家等级" to { onNavigateTo(WikiRoute.PlayerLevels) }
                     ),
                     backdrop = backdrop
                 )
@@ -146,10 +146,10 @@ internal fun WikiGameplayHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "超弦体天赋" to { onNavigateTo(WikiHubPage.STRINGER_TALENTS) },
-                        "超弦推进卡牌" to { onNavigateTo(WikiHubPage.STRINGER_PUSH_CARDS) },
-                        "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) },
-                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) }
+                        "超弦体天赋" to { onNavigateTo(WikiRoute.StringerTalents) },
+                        "超弦推进卡牌" to { onNavigateTo(WikiRoute.StringerPushCards) },
+                        "载具外观" to { onNavigateTo(WikiRoute.VehicleSkins) },
+                        "头像框" to { onNavigateTo(WikiRoute.AvatarFrames) }
                     ),
                     backdrop = backdrop
                 )
@@ -163,7 +163,7 @@ internal fun WikiGameplayHubScreen(
 @Composable
 internal fun WikiCatalogHubScreen(
     onBack: () -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop
 ) {
     AggregatePageScaffold(title = "外观与图鉴", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
@@ -184,7 +184,7 @@ internal fun WikiCatalogHubScreen(
                     icon = Icons.Outlined.Inventory2,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.ITEMS) },
+                    onClick = { onNavigateTo(WikiRoute.Items) },
                     backdrop = backdrop
                 )
             }
@@ -195,7 +195,7 @@ internal fun WikiCatalogHubScreen(
                     icon = Icons.Outlined.Checkroom,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.COSTUMES) },
+                    onClick = { onNavigateTo(WikiRoute.Costumes()) },
                     backdrop = backdrop
                 )
             }
@@ -206,7 +206,7 @@ internal fun WikiCatalogHubScreen(
                     icon = Icons.Outlined.Palette,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.WEAPON_SKINS) },
+                    onClick = { onNavigateTo(WikiRoute.WeaponSkins()) },
                     backdrop = backdrop
                 )
             }
@@ -219,7 +219,7 @@ internal fun WikiCatalogHubScreen(
 @Composable
 internal fun WikiExtensionHubScreen(
     onBack: () -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     backdrop: Backdrop
 ) {
@@ -241,7 +241,7 @@ internal fun WikiExtensionHubScreen(
                     icon = Icons.Outlined.HowToVote,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.VOTING) },
+                    onClick = { onNavigateTo(WikiRoute.Voting) },
                     backdrop = backdrop
                 )
             }
@@ -259,12 +259,12 @@ internal fun WikiExtensionHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "剧情故事" to { onNavigateTo(WikiHubPage.STORY) },
-                        "游戏历史" to { onNavigateTo(WikiHubPage.GAME_HISTORY) },
-                        "四格漫画" to { onNavigateTo(WikiHubPage.COMICS) },
-                        "联动" to { onNavigateTo(WikiHubPage.COLLABORATIONS) },
-                        "梗百科" to { onNavigateTo(WikiHubPage.MEMES) },
-                        "游戏Tips" to { onNavigateTo(WikiHubPage.GAME_TIPS) }
+                        "剧情故事" to { onNavigateTo(WikiRoute.Story) },
+                        "游戏历史" to { onNavigateTo(WikiRoute.GameHistory) },
+                        "四格漫画" to { onNavigateTo(WikiRoute.Comics) },
+                        "联动" to { onNavigateTo(WikiRoute.Collaborations) },
+                        "梗百科" to { onNavigateTo(WikiRoute.Memes) },
+                        "游戏Tips" to { onNavigateTo(WikiRoute.GameTips) }
                     ),
                     backdrop = backdrop
                 )
@@ -276,7 +276,7 @@ internal fun WikiExtensionHubScreen(
                     icon = Icons.Outlined.Wallpaper,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.WALLPAPERS) },
+                    onClick = { onNavigateTo(WikiRoute.Wallpapers) },
                     backdrop = backdrop
                 )
             }
@@ -287,7 +287,7 @@ internal fun WikiExtensionHubScreen(
                     icon = Icons.Outlined.EmojiEmotions,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.STICKERS) },
+                    onClick = { onNavigateTo(WikiRoute.Stickers) },
                     backdrop = backdrop
                 )
             }
@@ -298,7 +298,7 @@ internal fun WikiExtensionHubScreen(
                     icon = Icons.Outlined.Pets,
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.MEOW_LANGUAGE) },
+                    onClick = { onNavigateTo(WikiRoute.MeowLanguage) },
                     backdrop = backdrop
                 )
             }
@@ -309,7 +309,7 @@ internal fun WikiExtensionHubScreen(
                     icon = Icons.Outlined.MusicNote,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    onClick = { onNavigateTo(WikiHubPage.BGM) },
+                    onClick = { onNavigateTo(WikiRoute.Bgm) },
                     backdrop = backdrop
                 )
             }
@@ -322,7 +322,7 @@ internal fun WikiExtensionHubScreen(
 @Composable
 internal fun WikiDecorationHubScreen(
     onBack: () -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     backdrop: Backdrop
 ) {
@@ -349,10 +349,10 @@ internal fun WikiDecorationHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "基板" to { onNavigateTo(WikiHubPage.BASEPLATES) },
-                        "封装" to { onNavigateTo(WikiHubPage.ENCASINGS) },
-                        "勋章" to { onNavigateTo(WikiHubPage.MEDALS) },
-                        "头像框" to { onNavigateTo(WikiHubPage.AVATAR_FRAMES) }
+                        "基板" to { onNavigateTo(WikiRoute.Baseplates) },
+                        "封装" to { onNavigateTo(WikiRoute.Encasings) },
+                        "勋章" to { onNavigateTo(WikiRoute.Medals) },
+                        "头像框" to { onNavigateTo(WikiRoute.AvatarFrames) }
                     ),
                     backdrop = backdrop
                 )
@@ -369,10 +369,10 @@ internal fun WikiDecorationHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "喷漆" to { onNavigateTo(WikiHubPage.SPRAYS) },
-                        "聊天气泡" to { onNavigateTo(WikiHubPage.CHAT_BUBBLES) },
-                        "头套" to { onNavigateTo(WikiHubPage.HEADGEAR) },
-                        "超弦体动作" to { onNavigateTo(WikiHubPage.STRINGER_ACTIONS) }
+                        "喷漆" to { onNavigateTo(WikiRoute.Sprays) },
+                        "聊天气泡" to { onNavigateTo(WikiRoute.ChatBubbles) },
+                        "头套" to { onNavigateTo(WikiRoute.Headgear) },
+                        "超弦体动作" to { onNavigateTo(WikiRoute.StringerActions) }
                     ),
                     backdrop = backdrop
                 )
@@ -387,8 +387,8 @@ internal fun WikiDecorationHubScreen(
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "房间外观" to { onNavigateTo(WikiHubPage.ROOM_APPEARANCES) },
-                        "载具外观" to { onNavigateTo(WikiHubPage.VEHICLE_SKINS) }
+                        "房间外观" to { onNavigateTo(WikiRoute.RoomAppearances) },
+                        "载具外观" to { onNavigateTo(WikiRoute.VehicleSkins) }
                     ),
                     backdrop = backdrop
                 )

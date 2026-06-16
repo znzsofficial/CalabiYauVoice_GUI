@@ -1,6 +1,9 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -92,6 +95,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -121,7 +125,6 @@ import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.liquidGlassLight
-import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
@@ -145,7 +148,7 @@ internal fun WikiHomePage(
     listState: LazyListState,
     topAppBarState: TopAppBarState,
     wallpaperUrl: String?,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     onNavigateRoute: (WikiRoute) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
@@ -157,7 +160,9 @@ internal fun WikiHomePage(
     onHomeFactionChanged: (Int) -> Unit,
     selectedHomeMapMode: Int,
     onHomeMapModeChanged: (Int) -> Unit,
-    backdrop: Backdrop
+    backdrop: Backdrop,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
@@ -282,8 +287,10 @@ internal fun WikiHomePage(
                             selectedFaction = selectedHomeFaction,
                             onSelectedFactionChanged = onHomeFactionChanged,
                             onOpenCharacterDetail = onOpenCharacterDetail,
-                            onViewAll = { onNavigateTo(WikiHubPage.CHARACTERS) },
-                            backdrop = backdrop
+                            onViewAll = { onNavigateTo(WikiRoute.Characters) },
+                            backdrop = backdrop,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
 
@@ -295,7 +302,7 @@ internal fun WikiHomePage(
                             icon = Icons.Outlined.GpsFixed,
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            onClick = { onNavigateTo(WikiHubPage.WEAPONS) },
+                            onClick = { onNavigateTo(WikiRoute.Weapons) },
                             backdrop = backdrop
                         )
                     }
@@ -308,7 +315,7 @@ internal fun WikiHomePage(
                             selectedMode = selectedHomeMapMode,
                             onSelectedModeChanged = onHomeMapModeChanged,
                             onOpenMapDetail = onOpenMapDetail,
-                            onViewAll = { onNavigateTo(WikiHubPage.MAPS) },
+                            onViewAll = { onNavigateTo(WikiRoute.Maps) },
                             backdrop = backdrop
                         )
                     }
@@ -321,7 +328,7 @@ internal fun WikiHomePage(
                             icon = Icons.Outlined.BarChart,
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            onClick = { onNavigateTo(WikiHubPage.BALANCE_DATA) },
+                            onClick = { onNavigateTo(WikiRoute.BalanceData) },
                             backdrop = backdrop
                         )
                     }
@@ -332,7 +339,7 @@ internal fun WikiHomePage(
                             title = "玩法与养成",
                             subtitle = "角色培养、玩法系统与移动端内容",
                             icon = Icons.Outlined.Extension,
-                            onClick = { onNavigateTo(WikiHubPage.GAMEPLAY_HUB) },
+                            onClick = { onNavigateTo(WikiRoute.GameplayHub) },
                             backdrop = backdrop
                         )
                     }
@@ -343,7 +350,7 @@ internal fun WikiHomePage(
                             title = "外观与图鉴",
                             subtitle = "道具图鉴、时装筛选与武器外观",
                             icon = Icons.Outlined.Inventory2,
-                            onClick = { onNavigateTo(WikiHubPage.CATALOG_HUB) },
+                            onClick = { onNavigateTo(WikiRoute.CatalogHub) },
                             backdrop = backdrop
                         )
                     }
@@ -354,7 +361,7 @@ internal fun WikiHomePage(
                             title = "玩家装饰",
                             subtitle = "基板、封装、勋章、喷漆等外观装饰",
                             icon = Icons.Outlined.Palette,
-                            onClick = { onNavigateTo(WikiHubPage.DECORATION_HUB) },
+                            onClick = { onNavigateTo(WikiRoute.DecorationHub) },
                             backdrop = backdrop
                         )
                     }
@@ -365,7 +372,7 @@ internal fun WikiHomePage(
                             title = "游戏延伸",
                             subtitle = "剧情、历史、BGM、投票与百科内容",
                             icon = Icons.Outlined.MoreHoriz,
-                            onClick = { onNavigateTo(WikiHubPage.EXTENSION_HUB) },
+                            onClick = { onNavigateTo(WikiRoute.ExtensionHub) },
                             backdrop = backdrop
                         )
                     }
@@ -378,7 +385,7 @@ internal fun WikiHomePage(
                             icon = Icons.Outlined.Style,
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            onClick = { onNavigateTo(WikiHubPage.BIO_CARDS) },
+                            onClick = { onNavigateTo(WikiRoute.BioCards) },
                             backdrop = backdrop
                         )
                     }
@@ -391,7 +398,7 @@ internal fun WikiHomePage(
                             icon = Icons.Outlined.Event,
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            onClick = { onNavigateTo(WikiHubPage.ACTIVITIES) },
+                            onClick = { onNavigateTo(WikiRoute.Activities) },
                             backdrop = backdrop
                         )
                     }
@@ -403,7 +410,7 @@ internal fun WikiHomePage(
                             icon = Icons.Outlined.Campaign,
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            onClick = { onNavigateTo(WikiHubPage.ANNOUNCEMENTS) },
+                            onClick = { onNavigateTo(WikiRoute.Announcements) },
                             backdrop = backdrop
                         )
                     }
@@ -416,7 +423,7 @@ internal fun WikiHomePage(
                             icon = Icons.Outlined.AccountTree,
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            onClick = { onNavigateTo(WikiHubPage.NAVIGATION) },
+                            onClick = { onNavigateTo(WikiRoute.Navigation) },
                             backdrop = backdrop
                         )
                     }
@@ -438,32 +445,32 @@ internal data class QuickEntry(
     val id: String,
     val label: String,
     val icon: ImageVector,
-    val targetPage: WikiHubPage?,       // null 表示使用 url
+    val targetRoute: WikiRoute?,       // null 表示使用 url
     val url: String? = null
 )
 
 internal val allQuickEntries = listOf(
-    QuickEntry("characters", "角色", Icons.Outlined.People, WikiHubPage.CHARACTERS),
-    QuickEntry("weapons", "武器", Icons.Outlined.GpsFixed, WikiHubPage.WEAPONS),
-    QuickEntry("maps", "地图", Icons.Outlined.Map, WikiHubPage.MAPS),
-    QuickEntry("items", "图鉴", Icons.Outlined.Inventory2, WikiHubPage.ITEMS),
-    QuickEntry("voting", "投票", Icons.Outlined.HowToVote, WikiHubPage.VOTING),
-    QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiHubPage.COSTUMES),
-    QuickEntry("weapon_skins", "枪皮", Icons.Outlined.Palette, WikiHubPage.WEAPON_SKINS),
-    QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiHubPage.BIO_CARDS),
-    QuickEntry("activities", "活动", Icons.Outlined.Event, WikiHubPage.ACTIVITIES),
-    QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiHubPage.ANNOUNCEMENTS),
-    QuickEntry("oath", "誓约", Icons.Outlined.FavoriteBorder, WikiHubPage.OATH),
-    QuickEntry("imprints", "印迹", Icons.Outlined.MilitaryTech, WikiHubPage.IMPRINTS),
-    QuickEntry("memes", "梗百科", Icons.Outlined.AutoAwesome, WikiHubPage.MEMES),
-    QuickEntry("collaborations", "联动", Icons.Outlined.Handshake, WikiHubPage.COLLABORATIONS),
-    QuickEntry("bgm", "BGM", Icons.Outlined.MusicNote, WikiHubPage.BGM),
-    QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiHubPage.BALANCE_DATA),
-    QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiHubPage.GAMEPLAY_HUB),
-    QuickEntry("decorations", "装饰", Icons.Outlined.Palette, WikiHubPage.DECORATION_HUB),
-    QuickEntry("extension_hub", "延伸", Icons.Outlined.MoreHoriz, WikiHubPage.EXTENSION_HUB),
-    QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiHubPage.WALLPAPERS),
-    QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiHubPage.NAVIGATION),
+    QuickEntry("characters", "角色", Icons.Outlined.People, WikiRoute.Characters),
+    QuickEntry("weapons", "武器", Icons.Outlined.GpsFixed, WikiRoute.Weapons),
+    QuickEntry("maps", "地图", Icons.Outlined.Map, WikiRoute.Maps),
+    QuickEntry("items", "图鉴", Icons.Outlined.Inventory2, WikiRoute.Items),
+    QuickEntry("voting", "投票", Icons.Outlined.HowToVote, WikiRoute.Voting),
+    QuickEntry("costumes", "时装", Icons.Outlined.Checkroom, WikiRoute.Costumes()),
+    QuickEntry("weapon_skins", "枪皮", Icons.Outlined.Palette, WikiRoute.WeaponSkins()),
+    QuickEntry("bio_cards", "卡牌", Icons.Outlined.Style, WikiRoute.BioCards),
+    QuickEntry("activities", "活动", Icons.Outlined.Event, WikiRoute.Activities),
+    QuickEntry("announcements", "公告", Icons.Outlined.Campaign, WikiRoute.Announcements),
+    QuickEntry("oath", "誓约", Icons.Outlined.FavoriteBorder, WikiRoute.Oath),
+    QuickEntry("imprints", "印迹", Icons.Outlined.MilitaryTech, WikiRoute.Imprints),
+    QuickEntry("memes", "梗百科", Icons.Outlined.AutoAwesome, WikiRoute.Memes),
+    QuickEntry("collaborations", "联动", Icons.Outlined.Handshake, WikiRoute.Collaborations),
+    QuickEntry("bgm", "BGM", Icons.Outlined.MusicNote, WikiRoute.Bgm),
+    QuickEntry("balance_data", "平衡", Icons.Outlined.BarChart, WikiRoute.BalanceData),
+    QuickEntry("game_modes", "玩法", Icons.Outlined.Extension, WikiRoute.GameplayHub),
+    QuickEntry("decorations", "装饰", Icons.Outlined.Palette, WikiRoute.DecorationHub),
+    QuickEntry("extension_hub", "延伸", Icons.Outlined.MoreHoriz, WikiRoute.ExtensionHub),
+    QuickEntry("wallpapers", "壁纸", Icons.Outlined.Wallpaper, WikiRoute.Wallpapers),
+    QuickEntry("navigation", "导航", Icons.Outlined.AccountTree, WikiRoute.Navigation),
 )
 internal val defaultQuickEntryIds = listOf(
     "characters", "weapons", "maps", "voting", "costumes", "bio_cards"
@@ -481,7 +488,7 @@ private val mapGradient = Brush.verticalGradient(
 @Composable
 private fun QuickAccessGrid(
     onOpenWikiUrl: (String) -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
     val configuredIds = remember { AppPrefs.homeQuickEntryIds }
@@ -511,7 +518,7 @@ private fun QuickAccessGrid(
 private fun QuickAccessGridCard(
     quickEntries: List<QuickEntry>,
     onOpenWikiUrl: (String) -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
     val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
@@ -555,7 +562,7 @@ private fun QuickAccessGridCard(
                                 iconTint = iconTint,
                                 cellShape = cellShape,
                                 onClick = {
-                                    if (entry.targetPage != null) onNavigateTo(entry.targetPage)
+                                    if (entry.targetRoute != null) onNavigateTo(entry.targetRoute)
                                     else entry.url?.let(onOpenWikiUrl)
                                 },
                                 modifier = Modifier.weight(1f)
@@ -590,7 +597,7 @@ private fun QuickAccessGridCard(
 private fun QuickAccessButtonGrid(
     quickEntries: List<QuickEntry>,
     onOpenWikiUrl: (String) -> Unit,
-    onNavigateTo: (WikiHubPage) -> Unit,
+    onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
     val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
@@ -614,7 +621,7 @@ private fun QuickAccessButtonGrid(
                 row.forEach { entry ->
                     Surface(
                         onClick = {
-                            if (entry.targetPage != null) onNavigateTo(entry.targetPage)
+                            if (entry.targetRoute != null) onNavigateTo(entry.targetRoute)
                             else entry.url?.let(onOpenWikiUrl)
                         },
                         modifier = Modifier
@@ -706,7 +713,9 @@ private fun CharacterPreviewSection(
     onSelectedFactionChanged: (Int) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onViewAll: () -> Unit,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop = emptyBackdrop(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
@@ -797,6 +806,16 @@ private fun CharacterPreviewSection(
                 // 角色横向滚动
                 val currentFaction = factions.getOrNull(selectedFaction.coerceIn(0, factions.lastIndex))
                 if (currentFaction != null) {
+                    // 阵营色（用于卡片背景）
+                    val factionBaseColor = remember(currentFaction.faction) {
+                        when (currentFaction.faction) {
+                            "欧泊" -> Color(0xFF4B77DC)
+                            "剪刀手" -> Color(0xFFBC3B47)
+                            "乌尔比诺" -> Color(0xFFDEB639)
+                            "晶源体" -> Color(0xFF8B5CF6)
+                            else -> null
+                        }
+                    }
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp)
@@ -804,7 +823,10 @@ private fun CharacterPreviewSection(
                         items(currentFaction.characters, key = { it.name }) { character ->
                             CharacterPortraitCard(
                                 character = character,
-                                onClick = { onOpenCharacterDetail(character.name, character.imageUrl) }
+                                factionBaseColor = factionBaseColor,
+                                onClick = { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -836,28 +858,59 @@ private fun CharacterPreviewSection(
 @Composable
 private fun CharacterPortraitCard(
     character: CharacterListApi.CharacterInfo,
-    onClick: () -> Unit
+    factionBaseColor: Color? = null,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val cardShape = AppShapes.compactCard
-    val cardColors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    )
+    // 阵营色淡色背景，无阵营色时使用默认表面色
+    val cardBgColor = if (factionBaseColor != null) {
+        factionBaseColor.copy(alpha = 0.15f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    // 底部渐变色（使用阵营色的深色版本）
+    val gradientColor = if (factionBaseColor != null) {
+        factionBaseColor.copy(alpha = 0.85f)
+    } else {
+        Color.Black.copy(alpha = 0.7f)
+    }
+
     Card(
         onClick = onClick,
         shape = cardShape,
         modifier = Modifier.width(90.dp),
-        colors = cardColors
+        colors = CardDefaults.cardColors(
+            containerColor = cardBgColor
+        )
     ) {
         Box {
             // 立绘图片：使用原始比例 (280x680 ≈ 5:12)
-            AsyncImage(
-                model = character.imageUrl,
-                contentDescription = character.name,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(5f / 12f)
-            )
+                    .then(
+                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = "home-char-image-${character.name}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
+                    )
+            ) {
+                AsyncImage(
+                    model = character.portraitUrl ?: character.imageUrl,
+                    contentDescription = character.name,
+                    contentScale = ContentScale.Crop,
+                    alignment = BiasAlignment(0f, -0.85f),
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
 
             // 底部渐变 + 角色名
             Box(
@@ -865,7 +918,14 @@ private fun CharacterPortraitCard(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(40.dp)
-                    .background(characterGradient),
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                gradientColor
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Text(

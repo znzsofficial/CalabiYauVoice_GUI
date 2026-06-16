@@ -3,12 +3,37 @@ package com.nekolaska.calabiyau.core.navigation
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -17,51 +42,97 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Login
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.BuildCircle
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.PersonOff
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemColors
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.PermanentNavigationDrawer
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.core.wiki.WikiUserApi
-import com.nekolaska.calabiyau.R
-import com.nekolaska.calabiyau.feature.settings.SettingsScreen
-import com.nekolaska.calabiyau.feature.download.DownloadHistoryScreen
-import com.nekolaska.calabiyau.feature.download.DownloaderScreen
-import com.nekolaska.calabiyau.core.media.AudioPlayerManager
-import com.nekolaska.calabiyau.core.ui.LocalSnackbarHostState
-import com.nekolaska.calabiyau.core.ui.LiquidGlassTuning
-import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import com.nekolaska.calabiyau.R
+import com.nekolaska.calabiyau.core.media.AudioPlayerManager
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.LiquidGlassTuning
+import com.nekolaska.calabiyau.core.ui.LocalHighReadabilityDrawer
+import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.ui.LocalSnackbarHostState
+import com.nekolaska.calabiyau.core.ui.liquidGlass
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.wiki.WikiUserApi
+import com.nekolaska.calabiyau.feature.download.DownloadHistoryScreen
+import com.nekolaska.calabiyau.feature.download.DownloadViewModel
+import com.nekolaska.calabiyau.feature.download.DownloaderScreen
+import com.nekolaska.calabiyau.feature.download.PortraitViewModel
+import com.nekolaska.calabiyau.feature.download.SearchViewModel
+import com.nekolaska.calabiyau.feature.settings.SettingsScreen
 import com.nekolaska.calabiyau.feature.tools.FileManagerDirectoryPickerConfig
 import com.nekolaska.calabiyau.feature.tools.FileManagerPickerMode
 import com.nekolaska.calabiyau.feature.tools.FileManagerScreen
 import com.nekolaska.calabiyau.feature.tools.ToolsHomeScreen
-import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubPage
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubScreen
+import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
-import com.nekolaska.calabiyau.feature.download.DownloadViewModel
-import com.nekolaska.calabiyau.feature.download.PortraitViewModel
-import com.nekolaska.calabiyau.feature.download.SearchViewModel
 import data.ApiResult
 import kotlinx.coroutines.launch
 
@@ -98,9 +169,9 @@ private fun shortcutTargetToDestination(shortcutTarget: String?): DrawerDestinat
     else -> DrawerDestination.WIKI_HUB
 }
 
-private fun shortcutTargetToHubPage(shortcutTarget: String?): WikiHubPage = when (shortcutTarget) {
-    "characters" -> WikiHubPage.CHARACTERS
-    else -> WikiHubPage.HOME
+private fun shortcutTargetToHubPage(shortcutTarget: String?): WikiRoute = when (shortcutTarget) {
+    "characters" -> WikiRoute.Characters
+    else -> WikiRoute.Home
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
@@ -127,7 +198,7 @@ fun MainScreen(
     var currentDestination by rememberSaveable {
         mutableStateOf(initialDestination)
     }
-    var hubStartPage by rememberSaveable {
+    var hubStartPage by remember {
         mutableStateOf(shortcutTargetToHubPage(shortcutTarget))
     }
     var hubResetToken by rememberSaveable { mutableIntStateOf(0) }
@@ -147,7 +218,7 @@ fun MainScreen(
     fun normalizePreviousDestination(destination: DrawerDestination): DrawerDestination =
         if (destination == DrawerDestination.WIKI_HUB_WEBVIEW) DrawerDestination.WIKI_HUB else destination
 
-    fun openWikiHub(page: WikiHubPage = WikiHubPage.HOME, resetStack: Boolean = true) {
+    fun openWikiHub(page: WikiRoute = WikiRoute.Home, resetStack: Boolean = true) {
         wikiEnteredFromHub = false
         hubStartPage = page
         if (resetStack) hubResetToken++
@@ -160,7 +231,7 @@ fun MainScreen(
 
         toolFileManagerOverlay = null
         when (target) {
-            "characters" -> openWikiHub(page = WikiHubPage.CHARACTERS)
+            "characters" -> openWikiHub(page = WikiRoute.Characters)
             "downloader" -> currentDestination = DrawerDestination.DOWNLOADER
             "wiki" -> {
                 wikiEnteredFromHub = false
@@ -208,7 +279,7 @@ fun MainScreen(
     // 使用 movableContentOf 保持组合树身份，避免 Drawer 类型切换时子树重建
     val pageContent = remember { movableContentOf {
         // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
-        var hubWebViewUrl by remember { mutableStateOf<String?>(null) }
+        var hubWebViewUrl by rememberSaveable { mutableStateOf<String?>(null) }
 
         // 将 WIKI_HUB 和 WIKI_HUB_WEBVIEW 视为同一动画状态（WebView 叠加在 Hub 上，不需要转场）
         val animKey = if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW)
@@ -373,6 +444,7 @@ fun MainScreen(
     }
 
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+    val highReadabilityDrawer = LocalHighReadabilityDrawer.current.value
     val configuration = LocalConfiguration.current
     val useLiquidGlassDrawer = liquidGlassEnabled && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val mainLayerBackdrop = rememberLayerBackdrop()
@@ -403,7 +475,8 @@ fun MainScreen(
                 if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
             },
             backdrop = drawerBackdrop,
-            liquidGlassEnabled = useLiquidGlassDrawer
+            liquidGlassEnabled = useLiquidGlassDrawer,
+            highReadabilityDrawer = highReadabilityDrawer
         )
     }
 
@@ -460,7 +533,8 @@ private fun AppDrawerContent(
     onDestinationSelected: (DrawerDestination) -> Unit,
     onLoginRequested: () -> Unit,
     backdrop: Backdrop = emptyBackdrop(),
-    liquidGlassEnabled: Boolean = LocalLiquidGlassEnabled.current.value
+    liquidGlassEnabled: Boolean = LocalLiquidGlassEnabled.current.value,
+    highReadabilityDrawer: Boolean = AppPrefs.highReadabilityDrawer
 ) {
     // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
     val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
@@ -468,9 +542,8 @@ private fun AppDrawerContent(
     var isLoadingUserInfo by remember { mutableStateOf(false) }
     var showUserInfoSheet by remember { mutableStateOf(false) }
     var showLoginConfirmDialog by remember { mutableStateOf(false) }
-    val wikiCoroutineScope = rememberCoroutineScope()
     val drawerContentShape = smoothCornerShape(28.dp)
-    val useHighReadability = liquidGlassEnabled && AppPrefs.highReadabilityDrawer
+    val useHighReadability = liquidGlassEnabled && highReadabilityDrawer
     val drawerItemColors = if (useHighReadability) {
         NavigationDrawerItemDefaults.colors(
             selectedContainerColor = Color.Transparent,
@@ -546,18 +619,16 @@ private fun AppDrawerContent(
             hasLoginCookie.value = hasWikiLoginCookie()
             if (hasLoginCookie.value && wikiUserInfo == null && !isLoadingUserInfo) {
                 isLoadingUserInfo = true
-                wikiCoroutineScope.launch {
-                    when (val result = WikiUserApi.fetchCurrentUserInfo()) {
-                        is ApiResult.Success -> {
-                            val info = result.value
-                            if (info != null && info.isLoggedIn) {
-                                wikiUserInfo = info
-                            }
+                when (val result = WikiUserApi.fetchCurrentUserInfo()) {
+                    is ApiResult.Success -> {
+                        val info = result.value
+                        if (info != null && info.isLoggedIn) {
+                            wikiUserInfo = info
                         }
-                        is ApiResult.Error -> { /* 忽略错误 */ }
                     }
-                    isLoadingUserInfo = false
+                    is ApiResult.Error -> { /* 忽略错误 */ }
                 }
+                isLoadingUserInfo = false
             }
             if (!hasLoginCookie.value) {
                 wikiUserInfo = null

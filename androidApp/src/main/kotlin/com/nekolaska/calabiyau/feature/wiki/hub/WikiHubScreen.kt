@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -244,11 +245,11 @@ fun WikiHubScreen(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     isOverlaid: Boolean = false,
-    initialPage: WikiHubPage = WikiHubPage.HOME,
+    initialPage: WikiRoute = WikiRoute.Home,
     resetKey: Int = 0
 ) {
     var backStack by rememberSaveable(resetKey, stateSaver = wikiRouteStackSaver) {
-        mutableStateOf(listOf(initialPage.toRoute()))
+        mutableStateOf(listOf(initialPage))
     }
     val currentRoute = backStack.lastOrNull() ?: WikiRoute.Home
 
@@ -297,7 +298,6 @@ fun WikiHubScreen(
     }
     val hasWallpaper = !wallpaperUrl.isNullOrBlank()
 
-    // ── 导航方向追踪（用于过渡动画） ──
     var isNavigatingBack by remember { mutableStateOf(false) }
 
     fun popBackStack() {
@@ -335,35 +335,31 @@ fun WikiHubScreen(
         )
 
         androidx.compose.runtime.CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
+            SharedTransitionLayout {
             AnimatedContent(
                 targetState = currentRoute,
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
                     val duration = 400
-                    if (isNavigatingBack) {
-                        // 返回：从左滑入(强调减速) + 淡入，旧页向右滑出(加速) + 淡出
+                    val isDetailTransition = targetState is WikiRoute.CharDetail ||
+                            targetState is WikiRoute.WeaponDetail ||
+                            initialState is WikiRoute.CharDetail ||
+                            initialState is WikiRoute.WeaponDetail
+                    if (isDetailTransition) {
+                        // 详情页：crossfade，配合 sharedElement
+                        fadeIn(tween(duration)) togetherWith fadeOut(tween(duration / 2))
+                    } else if (isNavigatingBack) {
                         (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { -it / 8 } +
                                 fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
                             .togetherWith(
-                                slideOutHorizontally(
-                                    tween(
-                                        duration / 2,
-                                        easing = FastOutLinearInEasing
-                                    )
-                                ) { it / 8 } +
+                                slideOutHorizontally(tween(duration / 2, easing = FastOutLinearInEasing)) { it / 8 } +
                                         fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
                             )
                     } else {
-                        // 前进：从右滑入(强调减速) + 淡入，旧页向左滑出(加速) + 淡出
                         (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { it / 8 } +
                                 fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
                             .togetherWith(
-                                slideOutHorizontally(
-                                    tween(
-                                        duration / 2,
-                                        easing = FastOutLinearInEasing
-                                    )
-                                ) { -it / 8 } +
+                                slideOutHorizontally(tween(duration / 2, easing = FastOutLinearInEasing)) { -it / 8 } +
                                         fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
                             )
                     }
@@ -378,10 +374,10 @@ fun WikiHubScreen(
                     listState = homeListState,
                     topAppBarState = homeTopAppBarState,
                     wallpaperUrl = wallpaperUrl,
-                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onNavigateTo = { navigateTo(it) },
                     onNavigateRoute = { navigateTo(it) },
                     onOpenCharacterDetail = { name, portrait ->
-                        navigateTo(WikiRoute.CharDetail(name, portrait))
+                        navigateTo(WikiRoute.CharDetail(name, portrait, source = "home"))
                     },
                     onOpenMapDetail = { name, imageUrl ->
                         navigateToMapDetail(name, imageUrl)
@@ -394,7 +390,9 @@ fun WikiHubScreen(
                     onHomeFactionChanged = { homeFactionTab = it },
                     selectedHomeMapMode = homeMapModeTab,
                     onHomeMapModeChanged = { homeMapModeTab = it },
-                    backdrop = hubBackdrop
+                    backdrop = hubBackdrop,
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 
@@ -405,7 +403,9 @@ fun WikiHubScreen(
                         navigateTo(WikiRoute.CharDetail(name, portrait))
                     },
                     initialTab = characterListTab,
-                    onTabChanged = { characterListTab = it }
+                    onTabChanged = { characterListTab = it },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 
@@ -413,6 +413,7 @@ fun WikiHubScreen(
                 CharacterDetailScreen(
                     characterName = route.name,
                     portraitUrl = route.portrait,
+                    source = route.source,
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl,
                     onOpenCostumes = { charName ->
@@ -423,29 +424,36 @@ fun WikiHubScreen(
                     },
                     onOpenWeaponDetail = { weaponName ->
                         navigateTo(WikiRoute.WeaponDetail(weaponName))
-                    }
+                    },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 
             is WikiRoute.Weapons -> {
                 WeaponListScreen(
                     onBack = { popBackStack() },
-                    onOpenWeaponDetail = { name ->
-                        navigateTo(WikiRoute.WeaponDetail(name))
+                    onOpenWeaponDetail = { name, imageUrl ->
+                        navigateTo(WikiRoute.WeaponDetail(name, imageUrl))
                     },
                     initialTab = weaponListTab,
-                    onTabChanged = { weaponListTab = it }
+                    onTabChanged = { weaponListTab = it },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 
             is WikiRoute.WeaponDetail -> {
                 WeaponDetailScreen(
                     weaponName = route.name,
+                    imageUrl = route.imageUrl,
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl,
                     onOpenWeaponSkins = { weaponName ->
                         navigateTo(WikiRoute.WeaponSkins(weaponName))
-                    }
+                    },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 
@@ -737,7 +745,7 @@ fun WikiHubScreen(
             is WikiRoute.GameplayHub -> {
                 WikiGameplayHubScreen(
                     onBack = { popBackStack() },
-                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onNavigateTo = { navigateTo(it) },
                     onOpenWikiUrl = onOpenWikiUrl,
                     backdrop = hubBackdrop
                 )
@@ -746,7 +754,7 @@ fun WikiHubScreen(
             is WikiRoute.DecorationHub -> {
                 WikiDecorationHubScreen(
                     onBack = { popBackStack() },
-                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onNavigateTo = { navigateTo(it) },
                     onOpenWikiUrl = onOpenWikiUrl,
                     backdrop = hubBackdrop
                 )
@@ -755,7 +763,7 @@ fun WikiHubScreen(
             is WikiRoute.CatalogHub -> {
                 WikiCatalogHubScreen(
                     onBack = { popBackStack() },
-                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onNavigateTo = { navigateTo(it) },
                     backdrop = hubBackdrop
                 )
             }
@@ -763,13 +771,14 @@ fun WikiHubScreen(
             is WikiRoute.ExtensionHub -> {
                 WikiExtensionHubScreen(
                     onBack = { popBackStack() },
-                    onNavigateTo = { navigateTo(it.toRoute()) },
+                    onNavigateTo = { navigateTo(it) },
                     onOpenWikiUrl = onOpenWikiUrl,
                     backdrop = hubBackdrop
                 )
             }
         }
             }
+            } // SharedTransitionLayout
         }
     }
 }

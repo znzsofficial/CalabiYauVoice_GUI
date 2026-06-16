@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
 import android.net.Uri
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 
 private const val ROUTE_SEPARATOR = "|"
@@ -19,10 +20,10 @@ internal fun WikiRoute.encode(): String = when (this) {
         encodeRoutePart(
             portrait
         )
-    }"
+    }$ROUTE_SEPARATOR${encodeRoutePart(source)}"
 
     WikiRoute.Weapons -> "weapons"
-    is WikiRoute.WeaponDetail -> "weaponDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}"
+    is WikiRoute.WeaponDetail -> "weaponDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${encodeRoutePart(imageUrl)}"
     WikiRoute.Maps -> "maps"
     is WikiRoute.MapDetail -> "mapDetail$ROUTE_SEPARATOR${encodeRoutePart(name)}$ROUTE_SEPARATOR${
         encodeRoutePart(
@@ -80,12 +81,14 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "characters" -> WikiRoute.Characters
         "charDetail" -> WikiRoute.CharDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
-            portrait = decodeRoutePart(parts.getOrNull(2))
+            portrait = decodeRoutePart(parts.getOrNull(2)),
+            source = decodeRoutePart(parts.getOrNull(3)) ?: "list"
         )
 
         "weapons" -> WikiRoute.Weapons
         "weaponDetail" -> WikiRoute.WeaponDetail(
-            name = decodeRoutePart(parts.getOrNull(1)) ?: return null
+            name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
+            imageUrl = decodeRoutePart(parts.getOrNull(2))
         )
 
         "maps" -> WikiRoute.Maps
@@ -144,4 +147,9 @@ internal val wikiRouteStackSaver = listSaver<List<WikiRoute>, String>(
     restore = { encodedStack ->
         encodedStack.mapNotNull(::decodeRoute).ifEmpty { listOf(WikiRoute.Home) }
     }
+)
+
+internal val wikiRouteSaver = Saver<WikiRoute, String>(
+    save = { it.encode() },
+    restore = { decodeRoute(it) ?: WikiRoute.Home }
 )
