@@ -1,14 +1,16 @@
 {
-  "versionName": "2.0.9",
-  "versionCode": 29,
+  "versionName": "2.1.0",
+  "versionCode": 30,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3343014,
+  "apkSize": 3375782,
   "releaseUrl": "/",
   "changelog": [
-    "适配 Wiki 改版后的生化卡牌栅格布局，并优化卡组详情页 UI 视觉细节",
-    "提升生化卡牌图片清晰度，优先解析 Wiki 原始高清素材，并重排角色详情展示顺序",
-    "优化生化“天赋”类卡牌展示逻辑，基于阵营（晶源红/超弦紫）自动渲染视觉品质",
-    "合并武器详情页 PC 与移动端伤害表格，支持 Chip 切换并过滤冗余重复数据"
+    "全新设计系统：统一圆角、间距、字号 Token，切换 Material Expressive 主题",
+    "角色/武器/地图详情页共享元素过渡动画，一览页返回保留滚动位置",
+    "角色一览支持立绘展示，地图详情页骨架屏加载优化",
+    "新增 9 种主题配色风格选择器（PaletteStyle）",
+    "设置页重构拆分，侧栏高可读性模式增强",
+    "修复多处潜在崩溃和导航竞态问题"
   ],
-  "publishedAt": "2026-06-12"
+  "publishedAt": "2026-06-16"
 }

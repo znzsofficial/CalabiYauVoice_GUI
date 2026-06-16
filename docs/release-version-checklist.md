@@ -5,15 +5,15 @@ This project currently stores the app release version in a few separate places. 
 ## Version Fields
 
 - `androidApp/build.gradle.kts`
-  - `defaultConfig.versionCode`: Android monotonically increasing integer, for example `24`.
-  - `defaultConfig.versionName`: user-facing Android version, for example `"2.0.4"`.
+  - `defaultConfig.versionCode`: Android monotonically increasing integer, for example `30`.
+  - `defaultConfig.versionName`: user-facing Android version, for example `"2.1.0"`.
 
 - `desktopApp/build.gradle.kts`
-  - `compose.desktop.application.nativeDistributions.packageVersion`: desktop package version, for example `"2.0.4"`.
+  - `compose.desktop.application.nativeDistributions.packageVersion`: desktop package version, for example `"2.1.0"`.
 
 - `androidApp/src/main/kotlin/com/nekolaska/calabiyau/feature/settings/AboutScreen.kt`
   - About page displays `PackageInfo.versionName` at runtime.
-  - Keep its fallback version string in sync, for example `"2.0.4"`.
+  - Keep its fallback version string in sync, for example `"2.1.0"`.
 
 - `androidApp/src/main/kotlin/com/nekolaska/calabiyau/feature/settings/SettingsScreen.kt`
   - Fallback version string used if Android package info cannot be read.
@@ -39,12 +39,12 @@ This project currently stores the app release version in a few separate places. 
 Before finishing a release bump, search tracked source files for the old app version and old Android version code. Useful patterns:
 
 ```text
-2.0.3
-versionCode = 23
-"versionCode": 23
-packageVersion = "2.0.3"
-versionName = "2.0.3"
-Version 2.0.3
+2.0.9
+versionCode = 29
+"versionCode": 29
+packageVersion = "2.0.9"
+versionName = "2.0.9"
+Version 2.0.9
 ```
 
 Adjust the old values to match the release you are replacing.
