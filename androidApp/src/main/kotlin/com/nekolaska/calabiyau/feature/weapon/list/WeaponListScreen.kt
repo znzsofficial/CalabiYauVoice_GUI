@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.weapon.list
 
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -35,9 +37,11 @@ import com.nekolaska.calabiyau.feature.wiki.hub.LocalHasWallpaper
 @Composable
 fun WeaponListScreen(
     onBack: () -> Unit,
-    onOpenWeaponDetail: (weaponName: String) -> Unit,
+    onOpenWeaponDetail: (weaponName: String, imageUrl: String?) -> Unit,
     initialTab: Int = 0,
-    onTabChanged: ((Int) -> Unit)? = null
+    onTabChanged: ((Int) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     val state =
         rememberLoadState(emptyList<WeaponListApi.WeaponCategoryData>()) { force ->
@@ -98,7 +102,9 @@ fun WeaponListScreen(
             if (currentCategory != null) {
                 WeaponGrid(
                     weapons = currentCategory.weapons,
-                    onOpenWeaponDetail = onOpenWeaponDetail
+                    onOpenWeaponDetail = onOpenWeaponDetail,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -108,7 +114,9 @@ fun WeaponListScreen(
 @Composable
 private fun WeaponGrid(
     weapons: List<WeaponListApi.WeaponInfo>,
-    onOpenWeaponDetail: (weaponName: String) -> Unit
+    onOpenWeaponDetail: (weaponName: String, imageUrl: String?) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 140.dp),
@@ -119,7 +127,9 @@ private fun WeaponGrid(
         items(weapons, key = { it.name }) { weapon ->
             WeaponCard(
                 weapon = weapon,
-                onClick = { onOpenWeaponDetail(weapon.name) }
+                onClick = { onOpenWeaponDetail(weapon.name, weapon.imageUrl) },
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
 
@@ -133,7 +143,9 @@ private fun WeaponGrid(
 @Composable
 private fun WeaponCard(
     weapon: WeaponListApi.WeaponInfo,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     val hasWallpaper = LocalHasWallpaper.current
     Card(
@@ -154,7 +166,18 @@ private fun WeaponCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 10f)
-                    .clip(smoothCornerShape(16.dp)),
+                    .clip(smoothCornerShape(16.dp))
+                    .then(
+                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = "weapon-image-${weapon.name}"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (weapon.imageUrl != null) {

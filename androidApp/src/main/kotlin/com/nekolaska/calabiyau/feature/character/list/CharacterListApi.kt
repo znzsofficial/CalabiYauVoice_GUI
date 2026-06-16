@@ -5,6 +5,7 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
+import com.nekolaska.calabiyau.feature.character.list.CharacterListApi.FACTIONS
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -45,7 +46,8 @@ object CharacterListApi {
     data class CharacterInfo(
         val name: String,
         val wikiUrl: String,
-        val imageUrl: String
+        val imageUrl: String,
+        val portraitUrl: String? = null
     )
 
     data class FactionData(
@@ -116,8 +118,9 @@ object CharacterListApi {
                 ?: return ApiResult.Error("解析 $faction HTML 失败", kind = ErrorKind.PARSE)
 
             val characters = parseCharactersFromHtml(html)
+            val withPortraits = fetchPortraits(characters)
             ApiResult.Success(
-                FactionData(faction, characters),
+                FactionData(faction, withPortraits),
                 isOffline = result.isFromCache,
                 cacheAgeMs = result.ageMs
             )
@@ -159,6 +162,42 @@ object CharacterListApi {
             }
         }
         return WikiParseLogger.finishList("CharacterListApi.parseCharactersFromHtml", results, html)
+    }
+
+    /**
+     * 批量获取角色立绘 URL。
+     * 并发请求每个角色的 Wiki 页面，从渲染 HTML 中解析第一个立绘图片。
+     */
+    private suspend fun fetchPortraits(
+        characters: List<CharacterInfo>
+    ): List<CharacterInfo> = withContext(Dispatchers.IO) {
+        if (characters.isEmpty()) return@withContext characters
+        val portraitPattern = Regex(
+            """^.+-[^|\]\n{}]+立绘\.(?:png|jpg|jpeg|webp)$""",
+            RegexOption.IGNORE_CASE
+        )
+        characters.map { char ->
+            async {
+                try {
+                    val encoded = URLEncoder.encode(char.name, "UTF-8")
+                    val url = "$API?action=parse&page=$encoded&prop=text&format=json"
+                    val body = WikiEngine.safeGet(url) ?: return@async char
+                    val json = SharedJson.parseToJsonElement(body).jsonObject
+                    val html = json["parse"]
+                        ?.jsonObject?.get("text")
+                        ?.jsonObject?.get("*")
+                        ?.jsonPrimitive?.content
+                        ?: return@async char
+                    val portraitSrc = Jsoup.parse(html).select("img[src][alt]")
+                        .firstOrNull { img -> portraitPattern.matches(img.attr("alt").trim()) }
+                        ?.attr("src")
+                    val portraitUrl = WikiImageUrls.originalFromThumbnail(portraitSrc)
+                    char.copy(portraitUrl = portraitUrl)
+                } catch (_: Exception) {
+                    char
+                }
+            }
+        }.awaitAll()
     }
 
 }

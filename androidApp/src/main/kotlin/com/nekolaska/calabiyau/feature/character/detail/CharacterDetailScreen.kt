@@ -1,9 +1,12 @@
 package com.nekolaska.calabiyau.feature.character.detail
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -60,12 +63,19 @@ private val CharacterHeaderAvatarHeight = 240.dp
 fun CharacterDetailScreen(
     characterName: String,
     portraitUrl: String? = null,   // 从列表页传入的立绘 URL（可选）
+    source: String = "list",       // 来源：home 或 list
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     onOpenCostumes: ((String) -> Unit)? = null,
     onOpenWeaponSkins: ((String) -> Unit)? = null,
-    onOpenWeaponDetail: ((String) -> Unit)? = null
+    onOpenWeaponDetail: ((String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    // 根据来源选择 sharedElement key
+    val sharedElementKey = remember(source, characterName) {
+        if (source == "home") "home-char-image-$characterName" else "list-char-image-$characterName"
+    }
     val state = rememberLoadState<CharacterDetail?>(
         null,
         key = characterName
@@ -102,21 +112,35 @@ fun CharacterDetailScreen(
             )
         }
     ) { innerPadding ->
-        ApiResourceContent(
-            state = state,
-            modifier = Modifier.padding(innerPadding),
-            isDataEmpty = { it == null },
-            enablePullToRefresh = false,
-            loading = { mod -> CharacterDetailSkeleton(mod) }
-        ) { detail ->
-            CharacterDetailContent(
-                detail = detail!!,
-                portraitUrl = portraitUrl,
-                onOpenWikiUrl = onOpenWikiUrl,
-                onOpenCostumes = onOpenCostumes,
-                onOpenWeaponSkins = onOpenWeaponSkins,
-                onOpenWeaponDetail = onOpenWeaponDetail
-            )
+        Box(Modifier.padding(innerPadding)) {
+            ApiResourceContent(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                isDataEmpty = { it == null },
+                enablePullToRefresh = false,
+                loading = { mod ->
+                    CharacterDetailSkeleton(
+                        modifier = mod,
+                        portraitUrl = portraitUrl,
+                        characterName = characterName,
+                        sharedElementKey = sharedElementKey,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+            ) { detail ->
+                CharacterDetailContent(
+                    detail = detail ?: return@ApiResourceContent,
+                    portraitUrl = portraitUrl,
+                    sharedElementKey = sharedElementKey,
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenCostumes = onOpenCostumes,
+                    onOpenWeaponSkins = onOpenWeaponSkins,
+                    onOpenWeaponDetail = onOpenWeaponDetail,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+            }
         }
     }
 }
@@ -129,10 +153,13 @@ fun CharacterDetailScreen(
 private fun CharacterDetailContent(
     detail: CharacterDetail,
     portraitUrl: String?,
+    sharedElementKey: String = "char-image-${detail.name}",
     onOpenWikiUrl: (String) -> Unit,
     onOpenCostumes: ((String) -> Unit)? = null,
     onOpenWeaponSkins: ((String) -> Unit)? = null,
-    onOpenWeaponDetail: ((String) -> Unit)? = null
+    onOpenWeaponDetail: ((String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -141,7 +168,13 @@ private fun CharacterDetailContent(
     ) {
         // ── 头部：立绘 + 基本信息 ──
         item(key = "header") {
-            HeaderSection(detail = detail, portraitUrl = portraitUrl)
+            HeaderSection(
+                detail = detail,
+                portraitUrl = portraitUrl,
+                sharedElementKey = sharedElementKey,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
+            )
         }
 
         // ── 个性语录 ──
@@ -300,7 +333,13 @@ private fun CharacterDetailContent(
 // ────────────────────────────────────────────
 
 @Composable
-private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) {
+private fun HeaderSection(
+    detail: CharacterDetail,
+    portraitUrl: String? = null,
+    sharedElementKey: String = "char-image-${detail.name}",
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
     val headerImage = detail.portraitUrl ?: portraitUrl ?: detail.avatarUrl
     val hasPortrait = detail.portraitUrl != null || portraitUrl != null
     
@@ -313,6 +352,17 @@ private fun HeaderSection(detail: CharacterDetail, portraitUrl: String? = null) 
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(if (hasPortrait) CharacterHeaderPortraitHeight else CharacterHeaderAvatarHeight)
+                    .then(
+                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = sharedElementKey),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
+                    )
             ) {
                 AsyncImage(
                     model = headerImage,
@@ -1245,19 +1295,53 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
 }
 
 @Composable
-private fun CharacterDetailSkeleton(modifier: Modifier = Modifier) {
+private fun CharacterDetailSkeleton(
+    modifier: Modifier = Modifier,
+    portraitUrl: String? = null,
+    characterName: String = "",
+    sharedElementKey: String = "char-image-$characterName",
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(bottom = 24.dp),
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 头部骨架
+        // 头部骨架：立绘 + 基本信息
         Column(modifier = Modifier.fillMaxWidth()) {
-            ShimmerBox(
-                modifier = Modifier.fillMaxWidth().height(CharacterHeaderPortraitHeight),
-                shape = RectangleShape
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(CharacterHeaderPortraitHeight)
+                    .then(
+                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = sharedElementKey),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
+                    )
+            ) {
+                if (portraitUrl != null) {
+                    AsyncImage(
+                        model = portraitUrl,
+                        contentDescription = characterName,
+                        contentScale = ContentScale.Crop,
+                        alignment = BiasAlignment(0f, -0.85f),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    ShimmerBox(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RectangleShape
+                    )
+                }
+            }
             Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)) {
                 ShimmerBox(Modifier.width(120.dp).height(32.dp))
                 Spacer(Modifier.height(8.dp))

@@ -1,18 +1,53 @@
 package com.nekolaska.calabiyau.feature.weapon.detail
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.FlashOn
+import androidx.compose.material.icons.outlined.GpsFixed
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,7 +60,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppTextColors
@@ -42,6 +76,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.SkeletonStatRow
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
 import java.net.URLEncoder
 
 // ════════════════════════════════════════════════════════
@@ -52,9 +87,12 @@ import java.net.URLEncoder
 @Composable
 fun WeaponDetailScreen(
     weaponName: String,
+    imageUrl: String? = null,
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
-    onOpenWeaponSkins: ((String) -> Unit)? = null
+    onOpenWeaponSkins: ((String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     val state = rememberLoadState<WeaponDetail?>(
         null,
@@ -88,18 +126,30 @@ fun WeaponDetailScreen(
             )
         }
     ) { innerPadding ->
-        ApiResourceContent(
-            state = state,
-            modifier = Modifier.padding(innerPadding),
-            isDataEmpty = { it == null },
-            enablePullToRefresh = false,
-            loading = { mod -> WeaponDetailSkeleton(mod) }
-        ) { detail ->
-            WeaponDetailContent(
-                detail = detail!!,
-                onOpenWikiUrl = onOpenWikiUrl,
-                onOpenSkins = onOpenWeaponSkins
-            )
+        Box(Modifier.padding(innerPadding)) {
+            ApiResourceContent(
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                isDataEmpty = { it == null },
+                enablePullToRefresh = false,
+                loading = { mod ->
+                    WeaponDetailSkeleton(
+                        modifier = mod,
+                        imageUrl = imageUrl,
+                        weaponName = weaponName,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+            ) { detail ->
+                WeaponDetailContent(
+                    detail = detail ?: return@ApiResourceContent,
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenSkins = onOpenWeaponSkins,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+            }
         }
     }
 }
@@ -109,7 +159,9 @@ private fun WeaponDetailContent(
     detail: WeaponDetail,
     onOpenWikiUrl: (String) -> Unit,
     onOpenSkins: ((String) -> Unit)? = null,
-    onOpenCharacter: ((String) -> Unit)? = null
+    onOpenCharacter: ((String) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -118,7 +170,13 @@ private fun WeaponDetailContent(
     ) {
         // ── 头部：武器图片 + 名称 + 类型 ──
         item(key = "header") {
-            Box(Modifier.padding(horizontal = 16.dp)) { WeaponHeaderCard(detail) }
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                WeaponHeaderCard(
+                    detail = detail,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+            }
         }
 
         // ── 武器介绍 ──
@@ -218,7 +276,11 @@ private fun WeaponDetailContent(
 // ────────────────────────────────────────────
 
 @Composable
-private fun WeaponHeaderCard(detail: WeaponDetail) {
+private fun WeaponHeaderCard(
+    detail: WeaponDetail,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
+) {
     Card(
         shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
@@ -229,14 +291,25 @@ private fun WeaponHeaderCard(detail: WeaponDetail) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp),
+                        .height(160.dp)
+                        .then(
+                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedElement(
+                                        sharedContentState = rememberSharedContentState(key = "weapon-image-${detail.name}"),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = { _, _ -> tween(500) }
+                                    )
+                                }
+                            } else Modifier
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
                         model = detail.imageUrl,
                         contentDescription = detail.name,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().padding(16.dp)
+                        modifier = Modifier.fillMaxSize().padding(8.dp)
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -772,7 +845,13 @@ private fun WeaponCooldownCard(cooldowns: Map<String, Int>) {
 }
 
 @Composable
-private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
+private fun WeaponDetailSkeleton(
+    modifier: Modifier = Modifier,
+    imageUrl: String? = null,
+    weaponName: String = "",
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -783,10 +862,37 @@ private fun WeaponDetailSkeleton(modifier: Modifier = Modifier) {
         Box(Modifier.padding(horizontal = 16.dp)) {
             SkeletonCard {
                 Column(Modifier.padding(20.dp)) {
-                    ShimmerBox(
-                        modifier = Modifier.fillMaxWidth().height(160.dp),
-                        shape = smoothCornerShape(12.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .then(
+                                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                    with(sharedTransitionScope) {
+                                        Modifier.sharedElement(
+                                            sharedContentState = rememberSharedContentState(key = "weapon-image-$weaponName"),
+                                            animatedVisibilityScope = animatedVisibilityScope,
+                                            boundsTransform = { _, _ -> tween(500) }
+                                        )
+                                    }
+                                } else Modifier
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (imageUrl != null) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = weaponName,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize().padding(8.dp)
+                            )
+                        } else {
+                            ShimmerBox(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = smoothCornerShape(12.dp)
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(12.dp))
                     ShimmerBox(Modifier.width(140.dp).height(36.dp))
                     Spacer(Modifier.height(8.dp))
