@@ -63,8 +63,8 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(AppSizes.iconXSmall),
+                        strokeWidth = AppSpacing.tiny,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(Modifier.width(AppSpacing.itemGap))

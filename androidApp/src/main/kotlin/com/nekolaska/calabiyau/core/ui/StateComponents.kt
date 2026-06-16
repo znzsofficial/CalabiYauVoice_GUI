@@ -82,7 +82,7 @@ fun EmptyState(
                     Icon(
                         if (isError) Icons.Outlined.WifiOff else icon,
                         null,
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(AppSizes.buttonMedium),
                         tint = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                 }
@@ -97,7 +97,7 @@ fun EmptyState(
             if (isError && onRetry != null) {
                 Spacer(Modifier.height(AppSpacing.sectionGap))
                 FilledTonalButton(onClick = onRetry) {
-                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(AppSizes.iconSmall))
                     Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("重试")
                 }

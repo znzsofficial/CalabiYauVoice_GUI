@@ -25,6 +25,9 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 /** 液态玻璃是否启用 */
 val LocalLiquidGlassEnabled = staticCompositionLocalOf { mutableStateOf(false) }
 
+/** 高可读性侧栏 */
+val LocalHighReadabilityDrawer = staticCompositionLocalOf { mutableStateOf(false) }
+
 /**
  * 根据 App 当前生效主题（非系统主题）判断是否处于暗色模式。
  *
@@ -94,7 +97,7 @@ private fun rememberLiquidGlassTuning(surfaceAlpha: Float, isLightVariant: Boole
  * 返回统一使用的连续圆角 Shape。
  */
 @Composable
-fun smoothCornerShape(radius: Dp): Shape {
+fun smoothCornerShape(radius: Dp): ContinuousRoundedRectangle {
     return remember(radius) { ContinuousRoundedRectangle(radius) }
 }
 

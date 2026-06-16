@@ -3,7 +3,9 @@ package com.nekolaska.calabiyau.core.ui
 import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -17,9 +19,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
 import com.materialkolor.PaletteStyle
 import com.materialkolor.rememberDynamicColorScheme
+import com.kyant.capsule.ContinuousRoundedRectangle
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import kotlinx.coroutines.Dispatchers
@@ -34,12 +39,17 @@ val LocalSeedColor = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.custo
 /** Theme color extracted from wallpaper. 0 means not extracted yet. */
 val LocalWallpaperSeedColor = staticCompositionLocalOf { mutableIntStateOf(0) }
 
+/** Palette style index (0–8), maps to materialkolor PaletteStyle enum ordinal. */
+val LocalPaletteStyle = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.paletteStyle) }
+
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
     val wallpaperSeedColor = remember { mutableIntStateOf(AppPrefs.wallpaperSeedColorCache) }
     val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
+    val highReadabilityDrawer = remember { mutableStateOf(AppPrefs.highReadabilityDrawer) }
+    val paletteStyle = remember { mutableIntStateOf(AppPrefs.paletteStyle) }
 
     LaunchedEffect(seedColor.intValue) {
         if (seedColor.intValue != AppPrefs.SEED_WALLPAPER) return@LaunchedEffect
@@ -65,7 +75,7 @@ fun AppTheme(content: @Composable () -> Unit) {
         rememberDynamicColorScheme(
             seedColor = Color(effectiveSeed),
             isDark = darkTheme,
-            style = PaletteStyle.TonalSpot
+            style = PaletteStyle.entries[paletteStyle.intValue]
         )
     } else {
         null
@@ -82,9 +92,34 @@ fun AppTheme(content: @Composable () -> Unit) {
         LocalThemeMode provides themeMode,
         LocalSeedColor provides seedColor,
         LocalWallpaperSeedColor provides wallpaperSeedColor,
-        LocalLiquidGlassEnabled provides liquidGlassEnabled
+        LocalLiquidGlassEnabled provides liquidGlassEnabled,
+        LocalHighReadabilityDrawer provides highReadabilityDrawer,
+        LocalPaletteStyle provides paletteStyle
     ) {
-        MaterialTheme(colorScheme = colorScheme, content = content)
+        val appShapes = remember {
+            Shapes(
+                extraSmall = ContinuousRoundedRectangle(12.dp),
+                small = ContinuousRoundedRectangle(12.dp),
+                medium = ContinuousRoundedRectangle(16.dp),
+                large = ContinuousRoundedRectangle(24.dp),
+                extraLarge = ContinuousRoundedRectangle(28.dp)
+            )
+        }
+        val appTypography = remember {
+            val base = Typography()
+            Typography(
+                titleLarge = base.titleLarge.copy(fontWeight = FontWeight.Bold),
+                titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Bold),
+                bodyLarge = base.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium)
+            )
+        }
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            shapes = appShapes,
+            typography = appTypography,
+            content = content
+        )
     }
 }
 

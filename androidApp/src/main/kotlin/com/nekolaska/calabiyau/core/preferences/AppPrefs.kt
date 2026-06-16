@@ -44,6 +44,7 @@ object AppPrefs {
     private const val KEY_AUDIO_SPECTROGRAM_GAIN_DB = "audio_spectrogram_gain_db"
     private const val KEY_AUDIO_SPECTROGRAM_GAMMA = "audio_spectrogram_gamma"
     private const val KEY_AUDIO_SPECTROGRAM_FLOOR_DB = "audio_spectrogram_floor_db"
+    private const val KEY_PALETTE_STYLE = "palette_style"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -287,5 +288,22 @@ object AppPrefs {
     var audioSpectrogramFloorDb: Float
         get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_FLOOR_DB, -72f)
         set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_FLOOR_DB, value.coerceIn(-120f, -24f)) }
+
+    /**
+     * 配色风格索引，对应 materialkolor PaletteStyle 枚举顺序：
+     *
+     *  0 = TonalSpot（默认）
+     *  1 = Neutral
+     *  2 = Vibrant
+     *  3 = Expressive
+     *  4 = Rainbow
+     *  5 = FruitSalad
+     *  6 = Monochrome
+     *  7 = Fidelity
+     *  8 = Content
+     */
+    var paletteStyle: Int
+        get() = prefs.getInt(KEY_PALETTE_STYLE, 0)
+        set(value) = prefs.edit { putInt(KEY_PALETTE_STYLE, value.coerceIn(0, 8)) }
 
 }

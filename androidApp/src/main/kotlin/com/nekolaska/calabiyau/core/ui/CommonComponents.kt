@@ -55,7 +55,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 
 // ════════════════════════════════════════════════════════
@@ -74,8 +73,8 @@ fun BackNavButton(
     FilledTonalIconButton(
         onClick = onClick,
         modifier = modifier
-            .padding(start = 8.dp, end = 8.dp)
-            .size(40.dp),
+            .padding(start = AppSpacing.medium, end = AppSpacing.medium)
+            .size(AppSizes.iconButton),
         colors = IconButtonDefaults.filledTonalIconButtonColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         )
@@ -83,7 +82,7 @@ fun BackNavButton(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = contentDescription,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(AppSizes.iconMedium)
         )
     }
 }
@@ -106,8 +105,8 @@ fun SearchBar(
         onValueChange = onKeywordChange,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp),
-        shape = smoothCornerShape(28.dp),
+            .heightIn(min = AppSizes.searchMinHeight),
+        shape = smoothCornerShape(AppShapes.sheetRadius),
         colors = TextFieldDefaults.colors(
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -121,8 +120,8 @@ fun SearchBar(
         leadingIcon = {
             if (isSearching) {
                 CircularProgressIndicator(
-                    Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
+                    Modifier.size(AppSizes.iconMedium),
+                    strokeWidth = AppSpacing.tiny,
                     color = MaterialTheme.colorScheme.primary
                 )
             } else {
@@ -169,7 +168,7 @@ fun SimpleDropdownSelector(
             modifier = Modifier
                 .fillMaxWidth()
                 .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
-            shape = smoothCornerShape(16.dp),
+            shape = smoothCornerShape(AppShapes.compactCardRadius),
             singleLine = true
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -202,14 +201,14 @@ fun <T> HorizontalFilterChips(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
     ) {
         items.forEach { item ->
             val isSelected = item == selected
             FilterChip(
                 selected = isSelected,
                 onClick = { onSelected(item) },
-                shape = smoothCornerShape(12.dp),
+                shape = smoothCornerShape(AppShapes.chipRadius),
                 label = { Text(label(item), maxLines = 1) },
                 leadingIcon = if (showCheckIcon && isSelected) {
                     { Icon(Icons.Outlined.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
@@ -235,19 +234,19 @@ fun QualityFilterChips(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
     ) {
         FilterChip(
             selected = selectedLevel == null,
             onClick = { onSelectedLevelChange(null) },
-            shape = smoothCornerShape(12.dp),
+            shape = smoothCornerShape(AppShapes.chipRadius),
             label = { Text(allLabel, maxLines = 1) }
         )
         levels.forEach { (level, label) ->
             FilterChip(
                 selected = selectedLevel == level,
                 onClick = { onSelectedLevelChange(if (selectedLevel == level) null else level) },
-                shape = smoothCornerShape(12.dp),
+                shape = smoothCornerShape(AppShapes.chipRadius),
                 label = { Text(label, maxLines = 1) },
                 colors = colorForLevel?.let { color ->
                     FilterChipDefaults.filterChipColors(selectedContainerColor = color(level).copy(alpha = 0.2f))
@@ -308,12 +307,12 @@ fun WikiIconBox(
     imageUrl: String?,
     fallbackIcon: ImageVector,
     modifier: Modifier = Modifier,
-    size: Dp = 56.dp,
-    shape: Shape = smoothCornerShape(16.dp),
+    size: Dp = AppSizes.iconBox,
+    shape: Shape = smoothCornerShape(AppShapes.compactCardRadius),
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
     iconTint: Color = MaterialTheme.colorScheme.primary,
     contentScale: ContentScale = ContentScale.Fit,
-    imagePadding: Dp = 6.dp,
+    imagePadding: Dp = AppSpacing.small,
     contentDescription: String? = null
 ) {
     Surface(shape = shape, color = containerColor, modifier = modifier.size(size)) {
@@ -361,15 +360,15 @@ fun DetailInfoRow(
             WikiIconBox(
                 imageUrl = imageUrl ?: fallbackImageUrl,
                 fallbackIcon = icon ?: Icons.Outlined.Info,
-                size = 36.dp,
+                size = AppSizes.buttonMedium,
                 shape = CircleShape,
-                imagePadding = 6.dp
+                imagePadding = AppSpacing.small
             )
             Spacer(Modifier.width(AppSpacing.iconGap))
         }
         Text(
             label,
-            modifier = labelWidth?.let { Modifier.width(it) } ?: Modifier.width(96.dp),
+            modifier = labelWidth?.let { Modifier.width(it) } ?: Modifier.width(AppSizes.labelWidth),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold
@@ -394,7 +393,7 @@ fun SectionTitle(icon: ImageVector, title: String) {
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.padding(AppSpacing.medium).size(20.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.padding(AppSpacing.medium).size(AppSizes.iconMedium))
         }
         Text(title, style = AppTextStyles.sectionTitle)
     }
@@ -419,7 +418,7 @@ fun InfoChip(
             modifier = Modifier.padding(horizontal = AppSpacing.chipHorizontal, vertical = AppSpacing.chipVertical),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(AppSizes.iconXSmall))
             Spacer(Modifier.width(AppSpacing.small))
             Text(label, style = AppTextStyles.chipLabel)
         }
