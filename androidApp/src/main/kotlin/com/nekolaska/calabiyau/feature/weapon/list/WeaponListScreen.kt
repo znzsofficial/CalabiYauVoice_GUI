@@ -6,8 +6,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material3.*
@@ -40,6 +42,7 @@ fun WeaponListScreen(
     onOpenWeaponDetail: (weaponName: String, imageUrl: String?) -> Unit,
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null,
+    gridState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
@@ -103,6 +106,7 @@ fun WeaponListScreen(
                 WeaponGrid(
                     weapons = currentCategory.weapons,
                     onOpenWeaponDetail = onOpenWeaponDetail,
+                    gridState = gridState,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -115,10 +119,12 @@ fun WeaponListScreen(
 private fun WeaponGrid(
     weapons: List<WeaponListApi.WeaponInfo>,
     onOpenWeaponDetail: (weaponName: String, imageUrl: String?) -> Unit,
+    gridState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     LazyVerticalGrid(
+        state = gridState ?: rememberLazyGridState(),
         columns = GridCells.Adaptive(minSize = 140.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),

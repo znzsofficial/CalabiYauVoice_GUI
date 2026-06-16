@@ -15,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberTopAppBarState
@@ -261,6 +262,7 @@ fun WikiHubScreen(
     var homeMapModeTab by rememberSaveable { mutableIntStateOf(0) }
     var characterListTab by rememberSaveable { mutableIntStateOf(0) }
     var weaponListTab by rememberSaveable { mutableIntStateOf(0) }
+    val weaponGridState = rememberLazyGridState()
     var mapListTab by rememberSaveable { mutableIntStateOf(0) }
 
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
@@ -438,6 +440,7 @@ fun WikiHubScreen(
                     },
                     initialTab = weaponListTab,
                     onTabChanged = { weaponListTab = it },
+                    gridState = weaponGridState,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )
