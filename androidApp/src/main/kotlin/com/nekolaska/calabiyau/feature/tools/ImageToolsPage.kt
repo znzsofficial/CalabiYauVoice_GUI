@@ -2464,11 +2464,11 @@ private fun bicubicScale(source: Bitmap, targetWidth: Int, targetHeight: Int): B
 
     for (y in 0 until outHeight) {
         val srcY = (y + 0.5f) * srcHeight / outHeight - 0.5f
-        val yBase = kotlin.math.floor(srcY).toInt()
+        val yBase = floor(srcY).toInt()
         val yT = srcY - yBase
         for (x in 0 until outWidth) {
             val srcX = (x + 0.5f) * srcWidth / outWidth - 0.5f
-            val xBase = kotlin.math.floor(srcX).toInt()
+            val xBase = floor(srcX).toInt()
             val xT = srcX - xBase
 
             val samplesA = FloatArray(4)

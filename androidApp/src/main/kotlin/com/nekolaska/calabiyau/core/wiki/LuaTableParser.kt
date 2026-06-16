@@ -153,8 +153,7 @@ internal object LuaTableParser {
         }
 
         private fun parseKeywordValue(): LuaValue {
-            val identifier = parseIdentifier()
-            return when (identifier) {
+            return when (val identifier = parseIdentifier()) {
                 "true" -> LuaValue.LuaBoolean(true)
                 "false" -> LuaValue.LuaBoolean(false)
                 "nil" -> LuaValue.LuaNil

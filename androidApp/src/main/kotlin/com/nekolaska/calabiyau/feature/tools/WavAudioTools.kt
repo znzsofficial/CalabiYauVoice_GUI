@@ -8,8 +8,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.os.Build
-import com.nekolaska.calabiyau.core.media.audio.PcmWavData
 import com.nekolaska.calabiyau.core.media.audio.PcmWavChannelMode
+import com.nekolaska.calabiyau.core.media.audio.PcmWavData
 import com.nekolaska.calabiyau.core.media.audio.PcmWavPhaseMode
 import com.nekolaska.calabiyau.core.media.audio.PcmWavTrimMode
 import com.nekolaska.calabiyau.core.media.audio.PcmWavVolumeMode
@@ -22,10 +22,8 @@ import com.nekolaska.calabiyau.core.media.audio.buildSpectrogramPixels
 import com.nekolaska.calabiyau.core.media.audio.calculatePcmPeakPercent
 import com.nekolaska.calabiyau.core.media.audio.convertPcmWavChannels
 import com.nekolaska.calabiyau.core.media.audio.expectedPcmBlockAlign
-import com.nekolaska.calabiyau.core.media.audio.framePeakAmplitude
 import com.nekolaska.calabiyau.core.media.audio.maxAmplitude
 import com.nekolaska.calabiyau.core.media.audio.pcmDurationMs
-import com.nekolaska.calabiyau.core.media.audio.peakAmplitude
 import com.nekolaska.calabiyau.core.media.audio.readSignedSample
 import com.nekolaska.calabiyau.core.media.audio.removePcmWavDcOffset
 import com.nekolaska.calabiyau.core.media.audio.trimPcmWavSilence

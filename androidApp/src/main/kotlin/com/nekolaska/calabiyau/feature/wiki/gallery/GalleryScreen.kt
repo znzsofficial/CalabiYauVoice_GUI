@@ -562,7 +562,6 @@ private fun GalleryImageCard(
 ) {
     val context = LocalContext.current
     val cardShape = smoothCornerShape(16.dp)
-    val isSticker = imageAspectRatio == 1f / 1f
 
     Card(
         onClick = onClick,
