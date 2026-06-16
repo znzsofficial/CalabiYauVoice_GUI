@@ -316,7 +316,9 @@ internal fun WikiHomePage(
                             onSelectedModeChanged = onHomeMapModeChanged,
                             onOpenMapDetail = onOpenMapDetail,
                             onViewAll = { onNavigateTo(WikiRoute.Maps) },
-                            backdrop = backdrop
+                            backdrop = backdrop,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
 
@@ -957,7 +959,9 @@ private fun MapPreviewSection(
     onSelectedModeChanged: (Int) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     onViewAll: () -> Unit = {},
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop = emptyBackdrop(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
@@ -1054,7 +1058,9 @@ private fun MapPreviewSection(
                         items(currentMode.maps, key = { it.name }) { map ->
                             MapCard(
                                 map = map,
-                                onClick = { onOpenMapDetail(map.name, map.imageUrl) }
+                                onClick = { onOpenMapDetail(map.name, map.imageUrl) },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -1095,7 +1101,9 @@ private fun MapPreviewSection(
 @Composable
 private fun MapCard(
     map: MapInfo,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val cardShape = AppShapes.compactCard
     val cardColors = CardDefaults.cardColors(
@@ -1104,11 +1112,21 @@ private fun MapCard(
     Card(
         onClick = onClick,
         shape = cardShape,
-        modifier = Modifier.width(220.dp),
+        modifier = Modifier.width(220.dp)
+            .then(
+                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            sharedContentState = rememberSharedContentState(key = "home-map-image-${map.name}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> tween(500) }
+                        )
+                    }
+                } else Modifier
+            ),
         colors = cardColors
     ) {
         Box {
-            // 地图图片 (600x338 ≈ 16:9)
             AsyncImage(
                 model = map.imageUrl,
                 contentDescription = map.name,
@@ -1349,7 +1367,9 @@ internal fun MapListFullScreen(
     gameModes: List<GameModeData>,
     isLoading: Boolean,
     initialTab: Int = 0,
-    onTabChanged: ((Int) -> Unit)? = null
+    onTabChanged: ((Int) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     var selectedMode by remember { mutableIntStateOf(initialTab) }
     val hasWallpaper = LocalHasWallpaper.current
@@ -1432,7 +1452,9 @@ internal fun MapListFullScreen(
                             items(currentMode.maps, key = { it.name }) { map ->
                                 MapGridCard(
                                     map = map,
-                                    onClick = { onOpenMapDetail(map.name, map.imageUrl) }
+                                    onClick = { onOpenMapDetail(map.name, map.imageUrl) },
+                                    sharedTransitionScope = sharedTransitionScope,
+                                    animatedVisibilityScope = animatedVisibilityScope
                                 )
                             }
                             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1457,7 +1479,9 @@ internal fun MapListFullScreen(
 @Composable
 private fun MapGridCard(
     map: MapInfo,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val cardShape = AppShapes.compactCard
     val hasWallpaper = LocalHasWallpaper.current
@@ -1467,7 +1491,18 @@ private fun MapGridCard(
     Card(
         onClick = onClick,
         shape = cardShape,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth()
+            .then(
+                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            sharedContentState = rememberSharedContentState(key = "list-map-image-${map.name}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> tween(500) }
+                        )
+                    }
+                } else Modifier
+            ),
         colors = cardColors
     ) {
         Box {

@@ -316,13 +316,13 @@ fun WikiHubScreen(
         backStack = backStack + route
     }
 
-    fun navigateToMapDetail(name: String, imageUrl: String?) {
+    fun navigateToMapDetail(name: String, imageUrl: String?, source: String = "list") {
         val resolvedImageUrl = imageUrl ?: gameModes
             .asSequence()
             .flatMap { it.maps.asSequence() }
             .firstOrNull { it.name == name }
             ?.imageUrl
-        navigateTo(WikiRoute.MapDetail(name, resolvedImageUrl))
+        navigateTo(WikiRoute.MapDetail(name, resolvedImageUrl, source))
     }
 
     BackHandler(enabled = backStack.size > 1 && !isOverlaid) {
@@ -346,8 +346,10 @@ fun WikiHubScreen(
                     val duration = 400
                     val isDetailTransition = targetState is WikiRoute.CharDetail ||
                             targetState is WikiRoute.WeaponDetail ||
+                            targetState is WikiRoute.MapDetail ||
                             initialState is WikiRoute.CharDetail ||
-                            initialState is WikiRoute.WeaponDetail
+                            initialState is WikiRoute.WeaponDetail ||
+                            initialState is WikiRoute.MapDetail
                     if (isDetailTransition) {
                         // 详情页：crossfade，配合 sharedElement
                         fadeIn(tween(duration)) togetherWith fadeOut(tween(duration / 2))
@@ -383,7 +385,7 @@ fun WikiHubScreen(
                         navigateTo(WikiRoute.CharDetail(name, portrait, source = "home"))
                     },
                     onOpenMapDetail = { name, imageUrl ->
-                        navigateToMapDetail(name, imageUrl)
+                        navigateToMapDetail(name, imageUrl, source = "home")
                     },
                     factions = factions,
                     isLoadingCharacters = isLoadingCharacters,
@@ -471,7 +473,9 @@ fun WikiHubScreen(
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
                     initialTab = mapListTab,
-                    onTabChanged = { mapListTab = it }
+                    onTabChanged = { mapListTab = it },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 
@@ -479,8 +483,11 @@ fun WikiHubScreen(
                 MapDetailScreen(
                     mapName = route.name,
                     mapImageUrl = route.imageUrl,
+                    source = route.source,
                     onBack = { popBackStack() },
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent
                 )
             }
 

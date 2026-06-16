@@ -29,7 +29,7 @@ internal fun WikiRoute.encode(): String = when (this) {
         encodeRoutePart(
             imageUrl
         )
-    }"
+    }$ROUTE_SEPARATOR${encodeRoutePart(source)}"
 
     WikiRoute.Items -> "items"
     is WikiRoute.Costumes -> "costumes$ROUTE_SEPARATOR${encodeRoutePart(character)}"
@@ -94,7 +94,8 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "maps" -> WikiRoute.Maps
         "mapDetail" -> WikiRoute.MapDetail(
             name = decodeRoutePart(parts.getOrNull(1)) ?: return null,
-            imageUrl = decodeRoutePart(parts.getOrNull(2))
+            imageUrl = decodeRoutePart(parts.getOrNull(2)),
+            source = decodeRoutePart(parts.getOrNull(3)) ?: "list"
         )
 
         "items" -> WikiRoute.Items

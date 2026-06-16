@@ -1,8 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.map
 
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -24,46 +27,54 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapDetailApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
 import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
+import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.PreviewImage
+import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SectionTitle
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
+import com.nekolaska.calabiyau.core.ui.SkeletonCard
+import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
+import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
+import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import data.ApiResult
 import java.net.URLEncoder
 
 // ════════════════════════════════════════════════════════
 //  地图详情页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
+private val HeaderCardPadding = 16.dp
+private val HeaderCardVerticalPadding = 10.dp
+
+@Composable
+private fun headerCardShape() = smoothCornerShape(16.dp)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapDetailScreen(
     mapName: String,
-    mapImageUrl: String? = null,  // 从列表传入的预览图
+    mapImageUrl: String? = null,
+    source: String = "list",
     onBack: () -> Unit,
-    onOpenWikiUrl: (String) -> Unit
+    onOpenWikiUrl: (String) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var detail by remember { mutableStateOf<MapDetail?>(null) }
-    var retryTrigger by remember { mutableIntStateOf(0) }
+    val sharedElementKey = remember(source, mapName) {
+        if (source == "home") "home-map-image-$mapName" else "list-map-image-$mapName"
+    }
+    val state = rememberLoadState<MapDetail?>(
+        null,
+        key = mapName
+    ) { force ->
+        MapDetailApi.fetchMapDetail(mapName, force)
+    }
     val wikiUrl = remember(mapName) {
         val enc = URLEncoder.encode(mapName, "UTF-8").replace("+", "%20")
         "https://wiki.biligame.com/klbq/$enc"
-    }
-
-    LaunchedEffect(mapName, retryTrigger) {
-        isLoading = true
-        errorMessage = null
-        when (val result = MapDetailApi.fetchMapDetail(mapName)) {
-            is ApiResult.Success -> detail = result.value
-            is ApiResult.Error -> errorMessage = result.message
-        }
-        isLoading = false
     }
 
     Scaffold(
@@ -77,129 +88,106 @@ fun MapDetailScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
+                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
                     OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                 }
             )
         }
     ) { innerPadding ->
-        when {
-            isLoading -> {
-                LoadingState(Modifier.padding(innerPadding), "正在加载地图信息…")
+        var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
+        val headerShape = headerCardShape()
+        Column(
+            Modifier
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // 图片 sharedElement 提到 ApiResourceContent 外，loading/content 切换不影响过渡
+            val imageUrl = mapImageUrl
+            Card(
+                onClick = {
+                    if (imageUrl != null) previewImage = PreviewImage(imageUrl, mapName)
+                },
+                shape = headerShape,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = HeaderCardPadding, vertical = HeaderCardVerticalPadding)
+                    .then(
+                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = sharedElementKey),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
+                    ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                if (imageUrl != null) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = mapName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(headerShape)
+                    )
+                } else {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f),
+                        shape = headerShape
+                    )
+                }
             }
-            errorMessage != null && detail == null -> {
-                ErrorState(
-                    message = errorMessage!!,
-                    onRetry = { retryTrigger++ },
-                    modifier = Modifier.padding(innerPadding)
-                )
-            }
-            detail != null -> {
-                MapDetailContent(
-                    detail = detail!!,
-                    previewImageUrl = mapImageUrl,
-                    modifier = Modifier.padding(innerPadding)
+
+            // 文字/数据部分由 ApiResourceContent 控制
+            ApiResourceContent(
+                state = state,
+                modifier = Modifier.fillMaxWidth(),
+                isDataEmpty = { it == null },
+                loading = { mod ->
+                    MapDetailBodySkeleton(modifier = mod)
+                }
+            ) { detail ->
+                MapDetailBody(
+                    detail = detail ?: return@ApiResourceContent,
+                    onPreviewImage = { url, title -> previewImage = PreviewImage(url, title) }
                 )
             }
         }
-    }
-}
 
-@Composable
-private fun MapDetailContent(
-    detail: MapDetail,
-    previewImageUrl: String?,
-    modifier: Modifier = Modifier
-) {
-    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // ── 头部：地图名 + 简介 ──
-        item(key = "header") {
-            MapHeaderCard(
-                detail = detail,
-                previewImageUrl = previewImageUrl,
-                onPreview = { url -> previewImage = PreviewImage(url, detail.name) }
+        previewImage?.let { image ->
+            ImagePreviewDialog(
+                model = image.url,
+                contentDescription = image.title,
+                onDismiss = { previewImage = null }
             )
         }
-
-        // ── 支持模式 + 平台 ──
-        item(key = "info") {
-            MapInfoCard(detail)
-        }
-
-        // ── 地形图 ──
-        if (detail.terrainMapUrl != null) {
-            item(key = "terrain") {
-                MapTerrainCard(
-                    terrainMapUrl = detail.terrainMapUrl,
-                    onPreview = { previewImage = PreviewImage(detail.terrainMapUrl, "${detail.name} 地形图") }
-                )
-            }
-        }
-
-        // ── 地图概览（横向滚动图片） ──
-        if (detail.galleryUrls.isNotEmpty()) {
-            item(key = "gallery") {
-                MapGalleryCard(
-                    galleryUrls = detail.galleryUrls,
-                    onPreview = { url -> previewImage = PreviewImage(url, "${detail.name} 地图概览") }
-                )
-            }
-        }
-
-        // ── 更新改动历史 ──
-        if (detail.updateHistory.isNotEmpty()) {
-            item(key = "update_history") {
-                MapUpdateHistoryCard(detail.updateHistory)
-            }
-        }
-
-        item { Spacer(Modifier.height(24.dp)) }
-    }
-
-    previewImage?.let { image ->
-        ImagePreviewDialog(
-            model = image.url,
-            contentDescription = image.title,
-            onDismiss = { previewImage = null }
-        )
     }
 }
 
-// ────────────────────────────────────────────
-//  头部卡片
-// ────────────────────────────────────────────
-
 @Composable
-private fun MapHeaderCard(
+private fun MapDetailBody(
     detail: MapDetail,
-    previewImageUrl: String?,
-    onPreview: (String) -> Unit
+    onPreviewImage: (url: String, title: String) -> Unit
 ) {
-    Card(
-        shape = smoothCornerShape(28.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    val headerShape = headerCardShape()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = HeaderCardPadding, vertical = HeaderCardVerticalPadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column {
-            // 预览图
-            val imageUrl = previewImageUrl ?: detail.galleryUrls.firstOrNull()
-            if (imageUrl != null) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = detail.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clickable { onPreview(imageUrl) }
-                        .clip(smoothCornerShape(28.dp))
-                )
-            }
-
+        // ── 标题 + 简介 ──
+        Card(
+            shape = headerShape,
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        ) {
             Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     detail.name,
@@ -216,8 +204,33 @@ private fun MapHeaderCard(
                 }
             }
         }
-    }
 
+        // ── 支持模式 + 平台 ──
+        MapInfoCard(detail)
+
+        // ── 地形图 ──
+        if (detail.terrainMapUrl != null) {
+            MapTerrainCard(
+                terrainMapUrl = detail.terrainMapUrl,
+                onPreview = { onPreviewImage(detail.terrainMapUrl, "${detail.name} 地形图") }
+            )
+        }
+
+        // ── 地图概览（横向滚动图片） ──
+        if (detail.galleryUrls.isNotEmpty()) {
+            MapGalleryCard(
+                galleryUrls = detail.galleryUrls,
+                onPreview = { url -> onPreviewImage(url, "${detail.name} 地图概览") }
+            )
+        }
+
+        // ── 更新改动历史 ──
+        if (detail.updateHistory.isNotEmpty()) {
+            MapUpdateHistoryCard(detail.updateHistory)
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
 }
 
 // ────────────────────────────────────────────
@@ -414,6 +427,43 @@ private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {
                 ) {
                     Text(if (expanded) "收起" else "查看全部 ${updateHistory.size} 条更新")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapDetailBodySkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = HeaderCardPadding, vertical = HeaderCardVerticalPadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 标题 + 简介 shimmer
+        SkeletonCard {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ShimmerBox(Modifier.width(160.dp).height(36.dp))
+                ShimmerBox(Modifier.fillMaxWidth().height(48.dp), shape = smoothCornerShape(8.dp))
+            }
+        }
+
+        // 地图信息卡片骨架
+        SkeletonCard {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                SkeletonSectionTitle()
+                SkeletonChipRow(count = 4)
+            }
+        }
+
+        // 地形图卡片骨架
+        SkeletonCard {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                SkeletonSectionTitle()
+                ShimmerBox(
+                    Modifier.fillMaxWidth().height(200.dp),
+                    shape = smoothCornerShape(18.dp)
+                )
             }
         }
     }

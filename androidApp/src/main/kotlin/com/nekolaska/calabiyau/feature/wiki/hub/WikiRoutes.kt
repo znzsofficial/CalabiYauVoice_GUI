@@ -8,7 +8,7 @@ sealed interface WikiRoute {
     data object Weapons : WikiRoute
     data class WeaponDetail(val name: String, val imageUrl: String? = null) : WikiRoute
     data object Maps : WikiRoute
-    data class MapDetail(val name: String, val imageUrl: String?) : WikiRoute
+    data class MapDetail(val name: String, val imageUrl: String?, val source: String = "list") : WikiRoute
     data object Items : WikiRoute
     data class Costumes(val character: String? = null) : WikiRoute
     data class WeaponSkins(val weapon: String? = null) : WikiRoute

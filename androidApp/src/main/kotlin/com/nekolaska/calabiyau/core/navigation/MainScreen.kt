@@ -546,7 +546,7 @@ private fun AppDrawerContent(
     val useHighReadability = liquidGlassEnabled && highReadabilityDrawer
     val drawerItemColors = if (useHighReadability) {
         NavigationDrawerItemDefaults.colors(
-            selectedContainerColor = Color.Transparent,
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
             unselectedContainerColor = Color.Transparent,
             selectedIconColor = MaterialTheme.colorScheme.primary,
             selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -559,7 +559,7 @@ private fun AppDrawerContent(
         NavigationDrawerItemDefaults.colors()
     }
     val drawerSectionContainerColor = when {
-        useHighReadability -> MaterialTheme.colorScheme.surface.copy(alpha = 0.20f)
+        useHighReadability -> MaterialTheme.colorScheme.surface.copy(alpha = 0.35f)
         else -> Color.Transparent
     }
 
@@ -571,12 +571,12 @@ private fun AppDrawerContent(
             .liquidGlass(
                 backdrop = backdrop,
                 shape = { drawerContentShape },
-                blurRadius = 5.dp,
-                surfaceAlpha = 0.26f,
+                blurRadius = if (useHighReadability) 8.dp else 5.dp,
+                surfaceAlpha = if (useHighReadability) 0.42f else 0.26f,
                 tuning = LiquidGlassTuning(
-                    brightness = -0.06f,
-                    contrast = 1.08f,
-                    saturation = 1.10f
+                    brightness = if (useHighReadability) 0.02f else -0.06f,
+                    contrast = if (useHighReadability) 1.14f else 1.08f,
+                    saturation = if (useHighReadability) 1.04f else 1.10f
                 ),
                 enabled = liquidGlassEnabled
             )
@@ -619,16 +619,21 @@ private fun AppDrawerContent(
             hasLoginCookie.value = hasWikiLoginCookie()
             if (hasLoginCookie.value && wikiUserInfo == null && !isLoadingUserInfo) {
                 isLoadingUserInfo = true
-                when (val result = WikiUserApi.fetchCurrentUserInfo()) {
-                    is ApiResult.Success -> {
-                        val info = result.value
-                        if (info != null && info.isLoggedIn) {
-                            wikiUserInfo = info
+                try {
+                    when (val result = WikiUserApi.fetchCurrentUserInfo()) {
+                        is ApiResult.Success -> {
+                            val info = result.value
+                            if (info != null && info.isLoggedIn) {
+                                wikiUserInfo = info
+                            }
                         }
+                        is ApiResult.Error -> { /* 忽略错误 */ }
                     }
-                    is ApiResult.Error -> { /* 忽略错误 */ }
+                } catch (_: Exception) {
+                    /* 网络异常，保持 null 状态 */
+                } finally {
+                    isLoadingUserInfo = false
                 }
-                isLoadingUserInfo = false
             }
             if (!hasLoginCookie.value) {
                 wikiUserInfo = null
