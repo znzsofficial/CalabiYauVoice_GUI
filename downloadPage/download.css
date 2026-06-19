@@ -120,12 +120,26 @@
 
 .hero-bg {
     position: absolute;
-    inset: 0;
-    opacity: 0.05;
-    background-image:
-        radial-gradient(circle at 20% 30%, var(--primary) 0%, transparent 40%),
-        radial-gradient(circle at 80% 70%, var(--accent) 0%, transparent 40%);
-    filter: blur(40px);
+    left: 50%;
+    top: 50%;
+    width: 150%;
+    height: 150%;
+    transform: translate(-50%, -50%);
+    /* 高饱和圆锥渐变极光 */
+    background-image: conic-gradient(from 90deg at 50% 50%, color-mix(in srgb, var(--primary) 80%, transparent) 0%, color-mix(in srgb, var(--accent) 80%, transparent) 33%, color-mix(in srgb, var(--secondary) 80%, transparent) 66%, color-mix(in srgb, var(--primary) 80%, transparent) 100%);
+    filter: blur(60px);
+    opacity: 0.15;
+    animation: hero-spin 12s linear infinite;
+    z-index: 0;
+    pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    .hero-bg { opacity: 0.35; filter: blur(80px); }
+}
+
+@keyframes hero-spin {
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .hero-content {
@@ -219,12 +233,68 @@
     }
 }
 
+/* --- Vercel 级按钮光效 --- */
 .hero-download-btn {
+    position: relative;
+    z-index: 1;
     height: 3rem;
     padding: 0 1.5rem;
     font-size: 0.9375rem;
     border-radius: calc(var(--radius) - 4px);
+    overflow: visible; 
+    /* 重新构建均匀的玻璃体积感：顶部白线高光 + 底部黑线压底 + 极其轻柔的均匀下沉阴影 */
+    box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.2), 
+        inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+        0 4px 6px rgba(0, 0, 0, 0.05); 
 }
+
+/* 隐藏无用的旧效果 */
+.hero-download-btn::before {
+    display: none;
+}
+
+/* 构建边缘溢出光晕 (Border Glow) */
+.hero-download-btn::after {
+    content: "";
+    position: absolute;
+    /* 取消负值的偏移，让光晕严格贴合按钮本身，依靠 blur 向外均匀扩散，避免单边变粗（左右不均的问题） */
+    inset: 0;
+    border-radius: inherit;
+    z-index: -1;
+    /* 恢复动态渐变，但使用透明度更可控的主题色混合，确保光效柔和 */
+    background: linear-gradient(135deg, var(--primary), var(--accent), var(--secondary));
+    background-size: 200% 200%;
+    filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.3s ease, filter 0.3s ease;
+    will-change: opacity, filter, background-position;
+}
+
+/* 深色模式下的玻璃质感微调 */
+@media (prefers-color-scheme: dark) {
+    .hero-download-btn {
+        box-shadow: 
+            inset 0 1px 0 rgba(255, 255, 255, 0.15), 
+            inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+            0 4px 12px rgba(0, 0, 0, 0.3),
+            0 0 20px -5px color-mix(in srgb, var(--primary) 40%, transparent);
+    }
+}
+
+/* 悬停时的光晕爆发 */
+.hero-download-btn:hover::after {
+    opacity: 0.85;
+    filter: blur(12px);
+    animation: btn-border-spin 2s ease-in-out infinite alternate;
+}
+
+/* 使用背景移动制造光芒流转的错觉 */
+@keyframes btn-border-spin {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
+}
+
 
 .hero-copy-btn {
     position: relative;
@@ -482,15 +552,15 @@
 .col-right .card:nth-child(3) { animation-delay: 0.35s; }
 
 .card:hover {
-    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
+    border-color: color-mix(in srgb, var(--foreground) 40%, transparent);
     transform: translateY(-2px);
-    box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--foreground) 10%, transparent);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.04), 0 0 0 1px color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
     .card:hover {
-        box-shadow: 0 0 20px -5px color-mix(in srgb, var(--primary) 15%, transparent);
-        border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+        box-shadow: 0 8px 30px rgba(0,0,0,0.2), 0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent), 0 0 20px -5px color-mix(in srgb, var(--primary) 20%, transparent);
+        border-color: color-mix(in srgb, var(--primary) 60%, transparent);
     }
 }
 
