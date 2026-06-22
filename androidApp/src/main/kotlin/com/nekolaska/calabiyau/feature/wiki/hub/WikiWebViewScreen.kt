@@ -49,6 +49,7 @@ import androidx.core.net.toUri
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.util.enqueueDownload
 import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.WikiUserAgent
@@ -852,20 +853,16 @@ fun WikiWebViewScreen(
                     try {
                         val fileName = URLUtil.guessFileName(imageUrl, null, null)
                         val dir = ensureWikiSaveDirectory()
-                        val request = DownloadManager.Request(imageUrl.toUri()).apply {
-                            addRequestHeader(
-                                "Cookie",
-                                CookieManager.getInstance().getCookie(imageUrl) ?: ""
-                            )
-                            addRequestHeader("User-Agent", webView?.settings?.userAgentString ?: "")
-                            setTitle(fileName)
-                            setDescription("正在保存图片...")
-                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                            setDestinationUri(Uri.fromFile(File(dir, fileName)))
-                        }
-                        val dm =
-                            context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                        dm.enqueue(request)
+                        context.enqueueDownload(
+                            url = imageUrl,
+                            dir = dir,
+                            fileName = fileName,
+                            description = "正在保存图片...",
+                            headers = buildMap {
+                                CookieManager.getInstance().getCookie(imageUrl)?.let { put("Cookie", it) }
+                                webView?.settings?.userAgentString?.let { put("User-Agent", it) }
+                            }
+                        )
                         showSnack("图片已保存：$fileName")
                     } catch (e: Exception) {
                         showSnack("图片保存失败：${e.message}")
@@ -1350,17 +1347,17 @@ private fun createWikiWebView(
                 val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
                 val saveDir = ensureWikiSaveDirectory()
                 val outputFile = File(saveDir, fileName)
-                val request = DownloadManager.Request(url.toUri()).apply {
-                    setMimeType(mimeType ?: "application/octet-stream")
-                    addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
-                    addRequestHeader("User-Agent", userAgent ?: "")
-                    setDescription("正在下载文件...")
-                    setTitle(fileName)
-                    setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    setDestinationUri(Uri.fromFile(outputFile))
-                }
-                val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                val downloadId = dm.enqueue(request)
+                val downloadId = context.enqueueDownload(
+                    url = url,
+                    dir = saveDir,
+                    fileName = fileName,
+                    description = "正在下载文件...",
+                    headers = buildMap {
+                        CookieManager.getInstance().getCookie(url)?.let { put("Cookie", it) }
+                        userAgent?.let { put("User-Agent", it) }
+                    },
+                    mimeType = mimeType ?: "application/octet-stream"
+                )
                 if (isApkDownload(fileName, mimeType)) {
                     pendingApkDownloads[downloadId] = PendingApkDownload(outputFile, fileName)
                 }

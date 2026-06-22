@@ -4,17 +4,15 @@ import com.nekolaska.calabiyau.CalabiYauApplication
 import com.nekolaska.calabiyau.CrashContextStore
 import data.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
-import java.net.URLEncoder
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+import util.buildWikiUrl
+import util.bodyToFile
+import util.executeGet
 
 object WikiEngine {
 
@@ -69,8 +67,7 @@ object WikiEngine {
      */
     fun safeGet(url: String): String? {
         return try {
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
+            client.executeGet(url).use { response ->
                 if (!response.isSuccessful) {
                     CalabiYauApplication.instanceOrNull?.let {
                         CrashContextStore.recordWikiRequest(
@@ -147,13 +144,10 @@ object WikiEngine {
             return mime?.startsWith("audio/") == true ||
                 clean.endsWith(".wav") || clean.endsWith(".mp3") || clean.endsWith(".ogg")
         }
-        val encoded = URLEncoder.encode(keyword, "UTF-8")
-
         val path1 = LinkedHashMap<String, String>()
         var aicontinue: String? = null
         do {
-            val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue, "UTF-8")}" else ""
-            val url = "${WikiEngineCore.API_BASE_URL}?action=query&list=allimages&aiprefix=$encoded&aiprop=url|mime&ailimit=500&format=json$cArg"
+            val url = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "list" to "allimages", "aiprefix" to keyword, "aiprop" to "url|mime", "ailimit" to "500", "format" to "json", *(if (aicontinue != null) arrayOf("aicontinue" to aicontinue) else emptyArray()))
             val json = fetchString(url, onError = { onLog?.invoke("[文件搜索] 前缀搜索: $it") })
             if (json == null) { onLog?.invoke("[文件搜索] 前缀搜索请求失败"); break }
             if (json.trimStart().startsWith("<")) { onLog?.invoke("[文件搜索] 前缀搜索被WAF拦截"); break }
@@ -170,7 +164,7 @@ object WikiEngine {
         val path2 = LinkedHashMap<String, String>()
         var sroffset = 0
         do {
-            val url = "${WikiEngineCore.API_BASE_URL}?action=query&list=search&srsearch=$encoded&srnamespace=6&format=json&srlimit=100&sroffset=$sroffset"
+            val url = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "list" to "search", "srsearch" to keyword, "srnamespace" to "6", "format" to "json", "srlimit" to "100", "sroffset" to sroffset.toString())
             val json = fetchString(url, onError = { onLog?.invoke("[文件搜索] 全文搜索: $it") })
             if (json == null) { onLog?.invoke("[文件搜索] 全文搜索请求失败"); break }
             if (json.trimStart().startsWith("<")) { onLog?.invoke("[文件搜索] 全文搜索被WAF拦截"); break }
@@ -179,8 +173,8 @@ object WikiEngine {
                 val titles = res.query?.search?.map { it.title } ?: emptyList()
                 if (titles.isEmpty()) break
                 titles.chunked(50).forEach { chunk ->
-                    val titlesParam = chunk.joinToString("|") { URLEncoder.encode(it, "UTF-8") }
-                    val infoUrl = "${WikiEngineCore.API_BASE_URL}?action=query&titles=$titlesParam&prop=imageinfo&iiprop=url|mime&format=json"
+                    val titlesParam = chunk.joinToString("|")
+                    val infoUrl = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "titles" to titlesParam, "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json")
                     val infoJson = fetchString(infoUrl, onError = { onLog?.invoke("[文件搜索] imageinfo请求: $it") }) ?: return@forEach
                     try {
                         val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
@@ -212,25 +206,8 @@ object WikiEngine {
      * @param fileNames 不含 "文件:" 前缀的文件名列表（如 "壁纸1.png"）
      * @return Map<fileName, url>
      */
-    suspend fun fetchImageUrls(fileNames: List<String>): Map<String, String> = withContext(Dispatchers.IO) {
-        if (fileNames.isEmpty()) return@withContext emptyMap()
-        val result = ConcurrentHashMap<String, String>()
-        fileNames.chunked(50).map { chunk ->
-            async {
-                val titlesParam = chunk.joinToString("|") { URLEncoder.encode("文件:$it", "UTF-8") }
-                val url = "${WikiEngineCore.API_BASE_URL}?action=query&titles=$titlesParam&prop=imageinfo&iiprop=url&format=json"
-                val json = fetchStringSimple(url) ?: return@async
-                try {
-                    val res = jsonParser.decodeFromString<WikiResponse>(json)
-                    res.query?.pages?.values?.forEach { page ->
-                        val imageUrl = page.imageinfo?.firstOrNull()?.url ?: return@forEach
-                        val name = page.title.replace(filePrefixRegex, "")
-                        result[name] = imageUrl
-                    }
-                } catch (_: Exception) {}
-            }
-        }.awaitAll()
-        result
+    suspend fun fetchImageUrls(fileNames: List<String>): Map<String, String> {
+        return fetchBatchImageUrls(fileNames, fetchJson = ::fetchStringSimple)
     }
 
     /**
@@ -253,7 +230,7 @@ object WikiEngine {
     private suspend fun fetchString(url: String, onError: ((String) -> Unit)? = null): String? = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
             try {
-                val response = client.newCall(Request.Builder().url(url).build()).execute()
+                val response = client.executeGet(url)
                 val result = response.use { if (it.isSuccessful) it.body.string() else { onError?.invoke("HTTP ${it.code}: ${it.message}"); null } }
                 if (result != null) return@withContext result
             } catch (e: Exception) {
@@ -266,10 +243,10 @@ object WikiEngine {
 
     private fun downloadFile(url: String, targetFile: File) {
         if (targetFile.exists() && targetFile.length() > 0) return
-        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+        client.executeGet(url).use { response ->
             if (response.isSuccessful) {
                 val tmp = File(targetFile.parent, targetFile.name + ".tmp")
-                response.body.byteStream().use { input -> tmp.outputStream().use { output -> input.copyTo(output) } }
+                response.bodyToFile(tmp)
                 if (tmp.exists()) tmp.renameTo(targetFile)
             }
         }

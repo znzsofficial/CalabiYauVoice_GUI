@@ -69,7 +69,8 @@ import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.Request
+import util.bodyToFile
+import util.executeGet
 import java.io.File
 
 private val PRESET_COLORS = listOf(
@@ -602,15 +603,9 @@ private fun WallpaperItems() {
                         val saveDir = File(AppPrefs.savePath)
                         if (!saveDir.exists()) saveDir.mkdirs()
                         val destFile = File(saveDir, fileName)
-                        val request = Request.Builder()
-                            .url(currentUrl).build()
-                        WikiEngine.client.newCall(request).execute().use { resp ->
+                        WikiEngine.client.executeGet(currentUrl).use { resp ->
                             if (!resp.isSuccessful) return@withContext false
-                            resp.body.byteStream().use { input ->
-                                destFile.outputStream().use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
+                            resp.bodyToFile(destFile)
                         }
                         true
                     } catch (_: Exception) {

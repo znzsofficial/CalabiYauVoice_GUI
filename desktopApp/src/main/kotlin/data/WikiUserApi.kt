@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.Request
+import util.buildWikiUrl
+import util.executeGet
 
 /**
  * MediaWiki API 用户信息查询。
@@ -243,7 +243,7 @@ object WikiUserApi {
      * 获取当前已登录用户的详细信息（需要有效 Cookie）。
      */
     suspend fun fetchCurrentUserInfoResult(): ApiResult<UserInfo?> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "meta" to "userinfo",
             "uiprop" to "groups|rights|editcount|registrationdate|email|realname",
             "format" to "json"
@@ -263,7 +263,7 @@ object WikiUserApi {
      * 获取指定用户的最近编辑贡献（最多 [limit] 条）。
      */
     suspend fun fetchContributionsResult(userName: String, limit: Int = 50): ApiResult<List<UserContrib>> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "list" to "usercontribs", "ucuser" to userName,
             "ucprop" to "ids|title|timestamp|comment|size|sizediff|flags",
             "uclimit" to "$limit", "format" to "json"
@@ -283,7 +283,7 @@ object WikiUserApi {
      * 获取当前用户的监视列表最近变更（需要已登录 Cookie）。
      */
     suspend fun fetchWatchlistResult(limit: Int = 50): ApiResult<List<WatchlistItem>> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "list" to "watchlist",
             "wlprop" to "ids|title|type|user|comment|timestamp|flags",
             "wllimit" to "$limit", "format" to "json"
@@ -303,7 +303,7 @@ object WikiUserApi {
      * 获取指定用户的操作日志（上传/删除/保护/封禁等）。
      */
     suspend fun fetchUserLogEventsResult(userName: String, limit: Int = 50): ApiResult<List<LogEvent>> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "list" to "logevents", "leuser" to userName,
             "leprop" to "ids|title|type|user|comment|timestamp",
             "lelimit" to "$limit", "format" to "json"
@@ -342,7 +342,7 @@ object WikiUserApi {
             UserLookupMode.BID -> "ususers" to normalized
             UserLookupMode.WIKI_ID -> "ususerids" to normalized
         }
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query",
             "list" to "users",
             userParam,
@@ -364,7 +364,7 @@ object WikiUserApi {
      * 获取指定用户上传的文件列表（通过 list=allimages 按上传者筛选）。
      */
     suspend fun fetchUserFilesResult(userName: String, limit: Int = 50): ApiResult<List<UserFile>> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "list" to "allimages", "aiuser" to userName,
             "aiprop" to "timestamp|url|size|mime",
             "ailimit" to "$limit", "aisort" to "timestamp", "aidir" to "descending",
@@ -385,7 +385,7 @@ object WikiUserApi {
      * 查询指定用户名的封禁状态，未被封禁时返回 null。
      */
     suspend fun fetchBlockStatusResult(userName: String): ApiResult<BlockInfo?> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "list" to "blocks", "bkusers" to userName,
             "bkprop" to "id|user|by|timestamp|expiry|reason|flags",
             "format" to "json"
@@ -405,7 +405,7 @@ object WikiUserApi {
      * 获取指定用户最近一次编辑的时间戳，无编辑记录时返回 null。
      */
     suspend fun fetchLastEditTimestampResult(userName: String): ApiResult<String?> = withContext(Dispatchers.IO) {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query", "list" to "usercontribs", "ucuser" to userName,
             "ucprop" to "timestamp", "uclimit" to "1", "format" to "json"
         )
@@ -422,20 +422,10 @@ object WikiUserApi {
 
     // ───── 内部工具 ──────────────────────────────────────────────────
 
-    /**
-     * 使用 [okhttp3.HttpUrl.Builder] 构造 API 请求，确保所有参数正确编码（包括 `|` 分隔符）。
-     * params 中的 vararg 格式为 "key" to "value"。
-     */
-    private fun buildUrl(vararg params: Pair<String, String>): String {
-        val builder = API.toHttpUrlOrNull()?.newBuilder() ?: return ""
-        params.forEach { (k, v) -> builder.addQueryParameter(k, v) }
-        return builder.build().toString()
-    }
-
     private fun fetchStringResult(url: String): ApiResult<String> {
         if (url.isBlank()) return ApiResult.Error("API 地址无效")
         return runCatching {
-            WikiEngine.client.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            WikiEngine.client.executeGet(url).use { resp ->
                 val body = resp.body.string()
                 when {
                     !resp.isSuccessful -> ApiResult.Error("请求失败：HTTP ${resp.code}")

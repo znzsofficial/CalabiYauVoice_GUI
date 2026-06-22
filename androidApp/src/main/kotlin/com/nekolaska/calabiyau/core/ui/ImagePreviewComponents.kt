@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.core.ui
 
-import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
 import android.webkit.URLUtil
@@ -27,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.util.enqueueDownload
 import java.io.File
 
 // ════════════════════════════════════════════════════════
@@ -123,15 +123,12 @@ private fun savePreviewImage(
             ?: contentDescription?.takeIf { it.isNotBlank() }
             ?: "image"
         val dir = File(AppPrefs.savePath)
-        dir.mkdirs()
-        val request = DownloadManager.Request(uri).apply {
-            setTitle(fileName)
-            setDescription("正在保存图片...")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationUri(Uri.fromFile(File(dir, fileName)))
-        }
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        dm.enqueue(request)
+        context.enqueueDownload(
+            url = uri.toString(),
+            dir = dir,
+            fileName = fileName,
+            description = "正在保存图片..."
+        )
         showSnack("已保存: $fileName")
     } catch (e: Exception) {
         showSnack("保存失败: ${e.message}")

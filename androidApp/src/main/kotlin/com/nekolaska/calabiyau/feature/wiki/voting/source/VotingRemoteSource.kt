@@ -3,10 +3,11 @@ package com.nekolaska.calabiyau.feature.wiki.voting.source
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 import data.SharedJson
+import util.buildWikiUrl
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.FormBody
-import okhttp3.Request
+import util.executeRequest
+import util.formBodyOf
 
 data class VoteSubmitOperation(val pollId: String, val answer: String)
 data class VoteSubmitResult(val success: Boolean, val statusCode: Int, val message: String? = null)
@@ -17,10 +18,6 @@ object VotingRemoteSource {
     private const val VOTE_PAGE_URL = "https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8"
     private const val WIKI_ROOT_URL = "https://wiki.biligame.com"
 
-    fun buildUrl(vararg params: Pair<String, String>): String {
-        return WikiAuthHelper.buildUrl(API, *params)
-    }
-
     fun getWikiCookies(): String? {
         return WikiAuthHelper.getWikiCookies()
     }
@@ -30,7 +27,7 @@ object VotingRemoteSource {
     }
 
     fun fetchVotePageHtml(votePage: String): String? {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "parse",
             "page" to votePage,
             "prop" to "text",
@@ -45,7 +42,7 @@ object VotingRemoteSource {
     }
 
     fun fetchVoteDataHtml(fullText: String, cookies: String): String? {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "parse",
             "text" to fullText,
             "prop" to "text",
@@ -62,26 +59,21 @@ object VotingRemoteSource {
     }
 
     fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
-        val formBody = FormBody.Builder()
-            .add("action", "pollsubmitvote")
-            .add("poll", operation.pollId)
-            .add("answer", operation.answer)
-            .add("token", token)
-            .add("format", "json")
-            .build()
-
-        val request = Request.Builder()
-            .url(API)
-            .post(formBody)
-            .header("Cookie", cookies)
-            .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-            .header("Accept", "application/json, text/javascript, */*; q=0.01")
-            .header("Origin", "https://wiki.biligame.com")
-            .header("Referer", VOTE_PAGE_URL)
-            .header("X-Requested-With", "XMLHttpRequest")
-            .build()
-
-        return WikiEngine.client.newCall(request).execute().use { resp ->
+        return WikiEngine.client.executeRequest(API) {
+            post(formBodyOf(
+                "action" to "pollsubmitvote",
+                "poll" to operation.pollId,
+                "answer" to operation.answer,
+                "token" to token,
+                "format" to "json"
+            ))
+            header("Cookie", cookies)
+            header("User-Agent", "CalabiYauVoice/2.0 (Android)")
+            header("Accept", "application/json, text/javascript, */*; q=0.01")
+            header("Origin", "https://wiki.biligame.com")
+            header("Referer", VOTE_PAGE_URL)
+            header("X-Requested-With", "XMLHttpRequest")
+        }.use { resp ->
             WikiAuthHelper.syncResponseCookies(resp.headers("Set-Cookie"))
             val body = resp.body.string()
             val success = resp.isSuccessful && isSubmitBodySuccessful(body)

@@ -1,10 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.balance.source
 
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import util.executeGet
+import util.executeRequest
 
 data class BalanceHttpResult(
     val code: Int,
@@ -23,20 +24,16 @@ object BalanceDataRemoteSource {
 
     fun fetchSettingsBody(): BalanceHttpResult {
         val url = "$BASE_URL/api/pages/KLBQ_BALANCE/index"
-        val request = Request.Builder().url(url).get().build()
-        return client.newCall(request).execute().use { resp ->
+        return client.executeGet(url).use { resp ->
             val body = if (resp.isSuccessful) resp.body.string() else null
             BalanceHttpResult(resp.code, body)
         }
     }
 
     fun fetchBalanceDataBody(payload: String): BalanceHttpResult {
-        val request = Request.Builder()
-            .url("$BASE_URL/api/common/ide")
-            .post(payload.toRequestBody(JSON_MEDIA))
-            .build()
-
-        return client.newCall(request).execute().use { resp ->
+        return client.executeRequest("$BASE_URL/api/common/ide") {
+            post(payload.toRequestBody(JSON_MEDIA))
+        }.use { resp ->
             val body = if (resp.isSuccessful) resp.body.string() else null
             BalanceHttpResult(resp.code, body)
         }

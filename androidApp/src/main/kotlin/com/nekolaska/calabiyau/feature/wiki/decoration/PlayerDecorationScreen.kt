@@ -1,8 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration
 
-import android.app.DownloadManager
 import android.content.Context
-import android.net.Uri
 import android.webkit.URLUtil
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -30,6 +28,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.util.enqueueDownload
 import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.decoration.api.PlayerDecorationApi
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationItem
@@ -271,15 +270,12 @@ fun PlayerDecorationScreen(
                     try {
                         val fileName = URLUtil.guessFileName(url, null, null)
                         val dir = File(AppPrefs.savePath)
-                        dir.mkdirs()
-                        val request = DownloadManager.Request(url.toUri()).apply {
-                            setTitle(fileName)
-                            setDescription("正在保存图片...")
-                            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                            setDestinationUri(Uri.fromFile(File(dir, fileName)))
-                        }
-                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                        dm.enqueue(request)
+                        context.enqueueDownload(
+                            url = url,
+                            dir = dir,
+                            fileName = fileName,
+                            description = "正在保存图片..."
+                        )
                         showSnack("已保存: $fileName")
                     } catch (e: Exception) {
                         showSnack("保存失败: ${e.message}")

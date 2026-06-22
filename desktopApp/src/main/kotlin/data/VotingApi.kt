@@ -4,8 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.FormBody
-import okhttp3.Request
+import util.buildWikiUrl
+import util.executeGetString
+import util.executeRequest
+import util.formBodyOf
 
 /**
  * Desktop 端 Wiki 投票 API。
@@ -59,7 +61,7 @@ object VotingApi {
      */
     suspend fun fetchPollConfig(): ApiResult<PollConfig> = withContext(Dispatchers.IO) {
         try {
-            val url = buildUrl(
+            val url = buildWikiUrl(API,
                 "action" to "parse",
                 "page" to VOTE_PAGE,
                 "prop" to "text",
@@ -93,7 +95,7 @@ object VotingApi {
             val totalPollText = "<poll show-results-before-voting=1>\n${config.name}-总计锚点\n已参加\n</poll>"
             val fullText = (pollTexts + totalPollText).joinToString("\n")
 
-            val url = buildUrl(
+            val url = buildWikiUrl(API,
                 "action" to "parse",
                 "text" to fullText,
                 "prop" to "text",
@@ -179,19 +181,14 @@ object VotingApi {
             }
 
             for ((pollId, answer) in operations) {
-                val formBody = FormBody.Builder()
-                    .add("action", "pollsubmitvote")
-                    .add("poll", pollId)
-                    .add("answer", answer)
-                    .add("token", token)
-                    .build()
-
-                val request = Request.Builder()
-                    .url(API)
-                    .post(formBody)
-                    .build()
-
-                WikiEngine.client.newCall(request).execute().use { resp ->
+                WikiEngine.client.executeRequest(API) {
+                    post(formBodyOf(
+                        "action" to "pollsubmitvote",
+                        "poll" to pollId,
+                        "answer" to answer,
+                        "token" to token
+                    ))
+                }.use { resp ->
                     if (!resp.isSuccessful) {
                         return@withContext ApiResult.Error("提交投票失败: HTTP ${resp.code}")
                     }
@@ -334,13 +331,13 @@ object VotingApi {
     }
 
     private fun fetchCsrfToken(): String? {
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query",
             "meta" to "tokens",
             "type" to "csrf",
             "format" to "json"
         )
-        val body = httpGet(url) ?: return null
+        val body = WikiEngine.client.executeGetString(url) ?: return null
         return try {
             val json = SharedJson.parseToJsonElement(body)
             json.jsonObject["query"]
@@ -352,19 +349,7 @@ object VotingApi {
         }
     }
 
-    private fun buildUrl(vararg params: Pair<String, String>): String {
-        val query = params.joinToString("&") { (k, v) ->
-            "${java.net.URLEncoder.encode(k, "UTF-8")}=${java.net.URLEncoder.encode(v, "UTF-8")}"
-        }
-        return "$API?$query"
-    }
-
     private fun httpGet(url: String): String? {
-        val request = Request.Builder()
-            .url(url)
-            .build()
-        return WikiEngine.client.newCall(request).execute().use { resp ->
-            if (resp.isSuccessful) resp.body.string() else null
-        }
+        return WikiEngine.client.executeGetString(url)
     }
 }

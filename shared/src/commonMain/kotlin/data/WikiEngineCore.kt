@@ -10,14 +10,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.io.IOException
-import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
+import util.buildWikiUrl
+import util.executeGet
 
 /**
  * Wiki API 核心业务逻辑 —— 纯函数集合，不持有状态。
@@ -84,12 +84,11 @@ object WikiEngineCore {
         jsonParser: Json,
         nameCache: CharacterNameCache
     ): List<CharacterGroup> = withContext(Dispatchers.IO) {
-        val encoded = URLEncoder.encode(keyword, "UTF-8")
-        val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=14&format=json&srlimit=200"
+        val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "search", "srsearch" to keyword, "srnamespace" to "14", "format" to "json", "srlimit" to "200")
 
         repeat(3) { attempt ->
             try {
-                val responseString = client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                val responseString = client.executeGet(url).use { response ->
                     if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
                     response.body.string()
                 }
@@ -143,14 +142,11 @@ object WikiEngineCore {
             return mime?.startsWith("audio/") == true ||
                 clean.endsWith(".wav") || clean.endsWith(".mp3") || clean.endsWith(".ogg")
         }
-        val encoded = URLEncoder.encode(keyword, "UTF-8")
-
         // --- 路径 1：allimages 前缀搜索 ---
         val path1 = LinkedHashMap<String, String>()
         var aicontinue: String? = null
         do {
-            val cArg = if (aicontinue != null) "&aicontinue=${URLEncoder.encode(aicontinue, "UTF-8")}" else ""
-            val url = "$API_BASE_URL?action=query&list=allimages&aiprefix=$encoded&aiprop=url|mime&ailimit=500&format=json$cArg"
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "allimages", "aiprefix" to keyword, "aiprop" to "url|mime", "ailimit" to "500", "format" to "json", *(if (aicontinue != null) arrayOf("aicontinue" to aicontinue) else emptyArray()))
             val json = fetchStringFn(url) ?: break
             if (json.trimStart().startsWith("<")) break
             try {
@@ -166,7 +162,7 @@ object WikiEngineCore {
         val path2 = LinkedHashMap<String, String>()
         var sroffset = 0
         do {
-            val url = "$API_BASE_URL?action=query&list=search&srsearch=$encoded&srnamespace=6&format=json&srlimit=100&sroffset=$sroffset"
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "search", "srsearch" to keyword, "srnamespace" to "6", "format" to "json", "srlimit" to "100", "sroffset" to sroffset.toString())
             val json = fetchStringFn(url) ?: break
             if (json.trimStart().startsWith("<")) break
             try {
@@ -174,8 +170,8 @@ object WikiEngineCore {
                 val titles = res.query?.search?.map { it.title } ?: emptyList()
                 if (titles.isEmpty()) break
                 titles.chunked(50).forEach { chunk ->
-                    val titlesParam = chunk.joinToString("|") { URLEncoder.encode(it, "UTF-8") }
-                    val infoUrl = "$API_BASE_URL?action=query&titles=$titlesParam&prop=imageinfo&iiprop=url|mime&format=json"
+                    val titlesParam = chunk.joinToString("|")
+                    val infoUrl = buildWikiUrl(API_BASE_URL, "action" to "query", "titles" to titlesParam, "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json")
                     val infoJson = fetchStringFn(infoUrl) ?: return@forEach
                     try {
                         val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
@@ -294,11 +290,9 @@ object WikiEngineCore {
         jsonParser: Json
     ): List<String> {
         val list = mutableListOf<String>()
-        val encoded = URLEncoder.encode(category, "UTF-8")
         var token: String? = null
         do {
-            val cArg = if (token != null) "&cmcontinue=$token" else ""
-            val url = "$API_BASE_URL?action=query&list=categorymembers&cmtitle=$encoded&cmnamespace=$namespace&cmtype=$cmtype&cmlimit=500&format=json$cArg"
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "categorymembers", "cmtitle" to category, "cmnamespace" to namespace.toString(), "cmtype" to cmtype, "cmlimit" to "500", "format" to "json", *(if (token != null) arrayOf("cmcontinue" to token) else emptyArray()))
             val json = fetchStringFn(url) ?: break
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
@@ -324,11 +318,9 @@ object WikiEngineCore {
         jsonParser: Json
     ): List<Pair<String, String>> {
         val list = mutableListOf<Pair<String, String>>()
-        val encoded = URLEncoder.encode(category, "UTF-8")
         var token: String? = null
         do {
-            val cArg = if (token != null) "&gcmcontinue=$token" else ""
-            val url = "$API_BASE_URL?action=query&generator=categorymembers&gcmtitle=$encoded&gcmnamespace=6&prop=imageinfo&iiprop=url|mime&format=json&gcmlimit=500$cArg"
+            val url = buildWikiUrl(API_BASE_URL, "action" to "query", "generator" to "categorymembers", "gcmtitle" to category, "gcmnamespace" to "6", "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json", "gcmlimit" to "500", *(if (token != null) arrayOf("gcmcontinue" to token) else emptyArray()))
             val json = fetchStringFn(url) ?: break
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)

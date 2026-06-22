@@ -5,9 +5,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+import util.executeGet
+import util.executeRequest
 
 /**
  * 官网平衡数据 API（Desktop）。
@@ -94,8 +95,7 @@ object BalanceDataApi {
         return withContext(Dispatchers.IO) {
             try {
                 val url = "$BASE_URL/api/pages/KLBQ_BALANCE/index"
-                val request = Request.Builder().url(url).get().build()
-                val body = client.newCall(request).execute().use { resp ->
+                val body = client.executeGet(url).use { resp ->
                     if (!resp.isSuccessful) return@withContext ApiResult.Error("HTTP ${resp.code}")
                     resp.body.string()
                 }
@@ -176,12 +176,9 @@ object BalanceDataApi {
                 put("season2", season2Code)
             }
 
-            val request = Request.Builder()
-                .url("$BASE_URL/api/common/ide")
-                .post(payload.toString().toRequestBody(JSON_MEDIA))
-                .build()
-
-            val body = client.newCall(request).execute().use { resp ->
+            val body = client.executeRequest("$BASE_URL/api/common/ide") {
+                post(payload.toString().toRequestBody(JSON_MEDIA))
+            }.use { resp ->
                 if (!resp.isSuccessful) return@withContext ApiResult.Error("HTTP ${resp.code}")
                 resp.body.string()
             }

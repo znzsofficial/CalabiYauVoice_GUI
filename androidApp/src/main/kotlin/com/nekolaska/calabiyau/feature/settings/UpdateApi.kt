@@ -5,8 +5,8 @@ import data.SharedJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import util.executeRequest
 
 /**
  * 检查更新 API — 基于 Cloudflare Pages 上的 latest.json。
@@ -53,11 +53,9 @@ object UpdateApi {
         currentVersionCode: Long
     ): Result = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url(API_URL)
-                .header("Accept", "application/json")
-                .build()
-            val response = client.newCall(request).execute()
+            val response = client.executeRequest(API_URL) {
+                header("Accept", "application/json")
+            }
             val body = response.use {
                 if (it.isSuccessful) it.body.string() else null
             } ?: return@withContext Result.Error("无法连接更新服务器")

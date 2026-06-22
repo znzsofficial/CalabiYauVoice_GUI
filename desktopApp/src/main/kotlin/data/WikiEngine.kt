@@ -7,7 +7,6 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -15,6 +14,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+import util.bodyToFile
+import util.executeGet
+import util.executeGetString
 
 object WikiEngine {
 
@@ -216,8 +218,7 @@ object WikiEngine {
     private suspend fun fetchString(url: String): String? = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
             try {
-                val result = client.newCall(Request.Builder().url(url).build()).execute()
-                    .use { if (it.isSuccessful) it.body.string() else null }
+                val result = client.executeGetString(url)
                 if (result != null) return@withContext result
             } catch (_: Exception) { }
             if (attempt == 0) Thread.sleep(500)
@@ -227,10 +228,10 @@ object WikiEngine {
 
     private fun downloadFile(url: String, targetFile: File) {
         if (targetFile.exists() && targetFile.length() > 0) return
-        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+        client.executeGet(url).use { response ->
             if (response.isSuccessful) {
                 val tmp = File(targetFile.parent, targetFile.name + ".tmp")
-                response.body.byteStream().use { input -> tmp.outputStream().use { output -> input.copyTo(output) } }
+                response.bodyToFile(tmp)
                 if (tmp.exists()) Files.move(tmp.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
         }

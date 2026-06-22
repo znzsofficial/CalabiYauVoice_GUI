@@ -4,21 +4,14 @@ import android.webkit.CookieManager
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Request
-import java.net.URLEncoder
+import util.buildWikiUrl
+import util.executeRequest
 
 internal object WikiAuthHelper {
 
     private const val DEFAULT_USER_AGENT = "CalabiYauVoice/2.0 (Android)"
     private const val WIKI_ROOT_URL = "https://wiki.biligame.com"
     private const val WIKI_SUB_PATH = "$WIKI_ROOT_URL/klbq/"
-
-    fun buildUrl(baseUrl: String, vararg params: Pair<String, String>): String {
-        val query = params.joinToString("&") { (key, value) ->
-            "${URLEncoder.encode(key, "UTF-8")}=${URLEncoder.encode(value, "UTF-8")}"
-        }
-        return if (query.isBlank()) baseUrl else "$baseUrl?$query"
-    }
 
     fun getWikiCookies(): String? {
         return try {
@@ -41,7 +34,7 @@ internal object WikiAuthHelper {
     }
 
     fun fetchCsrfToken(apiUrl: String, cookies: String): String? {
-        val url = buildUrl(
+        val url = buildWikiUrl(
             apiUrl,
             "action" to "query",
             "meta" to "tokens",
@@ -62,11 +55,9 @@ internal object WikiAuthHelper {
 
     fun httpGet(url: String, expectJson: Boolean = false): String? {
         return try {
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", DEFAULT_USER_AGENT)
-                .build()
-            WikiEngine.client.newCall(request).execute().use { resp ->
+            WikiEngine.client.executeRequest(url) {
+                header("User-Agent", DEFAULT_USER_AGENT)
+            }.use { resp ->
                 if (!resp.isSuccessful) return null
                 syncResponseCookies(resp.headers("Set-Cookie"))
                 val body = resp.body.string()
@@ -80,12 +71,10 @@ internal object WikiAuthHelper {
 
     fun httpGetWithCookies(url: String, cookies: String, expectJson: Boolean = false): String? {
         return try {
-            val request = Request.Builder()
-                .url(url)
-                .header("Cookie", cookies)
-                .header("User-Agent", DEFAULT_USER_AGENT)
-                .build()
-            WikiEngine.client.newCall(request).execute().use { resp ->
+            WikiEngine.client.executeRequest(url) {
+                header("Cookie", cookies)
+                header("User-Agent", DEFAULT_USER_AGENT)
+            }.use { resp ->
                 if (!resp.isSuccessful) return null
                 syncResponseCookies(resp.headers("Set-Cookie"))
                 val body = resp.body.string()

@@ -8,8 +8,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
-import okhttp3.Request
-import java.net.URLEncoder
+import util.buildWikiUrl
+import util.executeRequest
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -127,7 +127,7 @@ object WikiUserApi {
             return@withContext ApiResult.Error("未检测到登录 Cookie")
         }
 
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query",
             "meta" to "userinfo",
             "uiprop" to "groups|rights|editcount|registrationdate|email|realname",
@@ -149,7 +149,7 @@ object WikiUserApi {
             return@withContext ApiResult.Error("未检测到登录 Cookie")
         }
 
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query",
             "list" to "usercontribs",
             "ucuser" to userName,
@@ -174,7 +174,7 @@ object WikiUserApi {
             return@withContext ApiResult.Error("未检测到登录 Cookie")
         }
 
-        val url = buildUrl(
+        val url = buildWikiUrl(API,
             "action" to "query",
             "list" to "watchlist",
             "wlprop" to "ids|title|type|user|comment|timestamp|flags",
@@ -202,35 +202,7 @@ object WikiUserApi {
      * 从 Android WebView CookieManager 获取 Wiki 站点的 Cookie 字符串。
      * 需要合并根路径和 /klbq/ 路径的 Cookie，因为关键的 session Cookie path=/klbq/。
      */
-    private fun getWikiCookies(): String? {
-        return try {
-            val cm = CookieManager.getInstance()
-            val rootCookies = cm.getCookie("https://wiki.biligame.com") ?: ""
-            val klbqCookies = cm.getCookie("https://wiki.biligame.com/klbq/") ?: ""
-            val cookieMap = mutableMapOf<String, String>()
-            ("$rootCookies; $klbqCookies").split(";").forEach { part ->
-                val trimmed = part.trim()
-                val eq = trimmed.indexOf('=')
-                if (eq > 0) {
-                    cookieMap[trimmed.substring(0, eq).trim()] = trimmed.substring(eq + 1).trim()
-                }
-            }
-            if (cookieMap.isEmpty()) return null
-            cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    /**
-     * 构造 API URL。
-     */
-    private fun buildUrl(vararg params: Pair<String, String>): String {
-        val query = params.joinToString("&") { (k, v) ->
-            "${URLEncoder.encode(k, "UTF-8")}=${URLEncoder.encode(v, "UTF-8")}"
-        }
-        return "$API?$query"
-    }
+    private fun getWikiCookies(): String? = WikiAuthHelper.getWikiCookies()
 
     /**
      * 用 OkHttp 发起带 Cookie 的请求并解析 UserInfo。
@@ -251,13 +223,10 @@ object WikiUserApi {
         crossinline transform: (String) -> T
     ): ApiResult<T> {
         return runCatching {
-            val request = Request.Builder()
-                .url(url)
-                .header("Cookie", cookies)
-                .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-                .build()
-
-            WikiEngine.client.newCall(request).execute().use { resp ->
+            WikiEngine.client.executeRequest(url) {
+                header("Cookie", cookies)
+                header("User-Agent", "CalabiYauVoice/2.0 (Android)")
+            }.use { resp ->
                 val body = resp.body.string()
                 when {
                     !resp.isSuccessful ->

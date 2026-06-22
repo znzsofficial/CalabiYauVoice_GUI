@@ -18,8 +18,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.FormBody
-import okhttp3.Request
+import util.buildWikiUrl
+import util.executeRequest
+import util.formBodyOf
 
 /**
  * 晶源感染卡组分享（Android）。
@@ -49,7 +50,7 @@ object BioDeckShareApi {
                     cachedDeckCardMap?.let { return@withContext ApiResult.Success(it) }
                 }
 
-                val url = BioDeckShareRemoteSource.buildUrl(
+                val url = buildWikiUrl(API,
                     "action" to "query",
                     "prop" to "revisions",
                     "titles" to WIKI_JSON_PAGE,
@@ -187,24 +188,21 @@ object BioDeckShareApi {
                     appendLine("<noinclude><!-- 分享码(调试): ${safeTemplateParam(shareCode)} --></noinclude>")
                 }
 
-                val formBody = FormBody.Builder()
-                    .add("action", "edit")
-                    .add("title", targetTitle)
-                    .add("text", wikitext)
-                    .add("summary", "App 提交: ${payload.deckName}")
-                    .add("createonly", "true")
-                    .add("token", token)
-                    .add("format", "json")
-                    .build()
+                val formBody = formBodyOf(
+                    "action" to "edit",
+                    "title" to targetTitle,
+                    "text" to wikitext,
+                    "summary" to "App 提交: ${payload.deckName}",
+                    "createonly" to "true",
+                    "token" to token,
+                    "format" to "json"
+                )
 
-                val request = Request.Builder()
-                    .url(API)
-                    .post(formBody)
-                    .header("Cookie", cookies)
-                    .header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-                    .build()
-
-                WikiEngine.client.newCall(request).execute().use { resp ->
+                WikiEngine.client.executeRequest(API) {
+                    post(formBody)
+                    header("Cookie", cookies)
+                    header("User-Agent", "CalabiYauVoice/2.0 (Android)")
+                }.use { resp ->
                     val respBody = resp.body.string()
                     if (!resp.isSuccessful) {
                         return@withContext ApiResult.Error("发布失败：HTTP ${resp.code}", kind = ErrorKind.NETWORK)

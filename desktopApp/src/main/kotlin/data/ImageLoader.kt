@@ -6,10 +6,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.net.URLEncoder
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import util.buildWikiUrl
+import util.executeGet
+import util.executeGetString
 
 object ImageLoader {
 
@@ -81,8 +82,7 @@ object ImageLoader {
         if (raced != null) return@withContext raced.await()
 
         try {
-            val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
+            client.executeGet(url).use { response ->
                 if (!response.isSuccessful) {
                     deferred.complete(null)
                     return@withContext null
@@ -132,12 +132,10 @@ object ImageLoader {
         avatarCache[characterName]?.let { return@withContext it }
 
         val fileName = "File:${characterName}头像.png"
-        val encodedTitle = URLEncoder.encode(fileName, "UTF-8")
-        val url = "$apiBaseUrl?action=query&titles=$encodedTitle&prop=imageinfo&iiprop=url&format=json"
+        val url = buildWikiUrl(apiBaseUrl, "action" to "query", "titles" to fileName, "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
 
         val jsonStr = try {
-            client.newCall(Request.Builder().url(url).build()).execute()
-                .use { if (it.isSuccessful) it.body.string() else null }
+            client.executeGetString(url)
         } catch (_: Exception) {
             null
         } ?: return@withContext null

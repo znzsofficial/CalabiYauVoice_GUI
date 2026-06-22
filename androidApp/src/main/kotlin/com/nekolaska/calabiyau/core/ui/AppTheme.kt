@@ -29,6 +29,7 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import util.executeGet
 
 /** Global theme mode state, readable and writable from composables. */
 val LocalThemeMode = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.themeMode) }
@@ -126,8 +127,7 @@ fun AppTheme(content: @Composable () -> Unit) {
 private suspend fun extractWallpaperSeedColor(url: String): Int = withContext(Dispatchers.IO) {
     var bitmap: android.graphics.Bitmap? = null
     try {
-        val request = okhttp3.Request.Builder().url(url).build()
-        val bytes = WikiEngine.client.newCall(request).execute().use { response ->
+        val bytes = WikiEngine.client.executeGet(url).use { response ->
             response.body.bytes()
         }
         bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@withContext 0
