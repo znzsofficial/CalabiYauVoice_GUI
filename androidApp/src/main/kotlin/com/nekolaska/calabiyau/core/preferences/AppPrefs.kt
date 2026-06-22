@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.os.Environment
 import java.io.File
 import androidx.core.content.edit
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
 
 /**
  * Android 端应用偏好存储，使用 SharedPreferences 持久化。
@@ -12,39 +14,6 @@ import androidx.core.content.edit
 object AppPrefs {
 
     private const val PREFS_NAME = "calabiyau_prefs"
-    private const val KEY_SAVE_PATH = "save_path"
-    private const val KEY_MAX_CONCURRENCY = "max_concurrency"
-    private const val KEY_THEME_MODE = "theme_mode"
-    private const val KEY_SEARCH_HISTORY = "search_history"
-    private const val KEY_FAVORITE_CHARACTERS = "favorite_characters"
-    private const val KEY_WIKI_CACHE_MODE = "wiki_cache_mode"
-    private const val KEY_OFFLINE_CACHE_NEVER_EXPIRE = "offline_cache_never_expire"
-    private const val KEY_DOWNLOAD_HISTORY = "download_history"
-    private const val KEY_BOTTOM_BAR_STYLE = "bottom_bar_style"
-    private const val KEY_CUSTOM_SEED_COLOR = "custom_seed_color"
-    private const val KEY_WIKI_DESKTOP_MODE = "wiki_desktop_mode"
-    private const val KEY_LIQUID_GLASS_ENABLED = "liquid_glass_enabled"
-    private const val KEY_HIGH_READABILITY_DRAWER = "high_readability_drawer"
-    private const val KEY_LAUNCHER_ICON_THEME = "launcher_icon_theme"
-    //private const val KEY_G2_CORNERS_ENABLED = "g2_corners_enabled"
-    private const val KEY_WALLPAPER_URL = "wallpaper_url"
-    private const val KEY_WALLPAPER_AUTO_REFRESH = "wallpaper_auto_refresh"
-    private const val KEY_WALLPAPER_SEED_COLOR_CACHE = "wallpaper_seed_color_cache"
-    private const val KEY_WALLPAPER_SEED_COLOR_URL = "wallpaper_seed_color_url"
-    private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
-    private const val KEY_HOME_QUICK_ENTRY_IDS = "home_quick_entry_ids"
-    private const val KEY_HOME_QUICK_ENTRY_LAYOUT = "home_quick_entry_layout"
-    private const val KEY_TOOLS_OUTPUT_PATH = "tools_output_path"
-    private const val KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE = "audio_spectrogram_window_size"
-    private const val KEY_AUDIO_SPECTROGRAM_HOP_PERCENT = "audio_spectrogram_hop_percent"
-    private const val KEY_AUDIO_SPECTROGRAM_TIME_BINS = "audio_spectrogram_time_bins"
-    private const val KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS = "audio_spectrogram_frequency_bins"
-    private const val KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ = "audio_spectrogram_cutoff_hz"
-    private const val KEY_AUDIO_SPECTROGRAM_PALETTE = "audio_spectrogram_palette"
-    private const val KEY_AUDIO_SPECTROGRAM_GAIN_DB = "audio_spectrogram_gain_db"
-    private const val KEY_AUDIO_SPECTROGRAM_GAMMA = "audio_spectrogram_gamma"
-    private const val KEY_AUDIO_SPECTROGRAM_FLOOR_DB = "audio_spectrogram_floor_db"
-    private const val KEY_PALETTE_STYLE = "palette_style"
 
     /** 底栏样式：0=DockedToolbar（悬浮工具栏）, 1=BottomAppBar（经典导航栏） */
     const val BAR_STYLE_DOCKED_TOOLBAR = 0
@@ -67,12 +36,60 @@ object AppPrefs {
     const val LAUNCHER_ICON_BRAND = 0
     const val LAUNCHER_ICON_SYSTEM = 1
 
+    /**
+     * 自定义主题种子色（ARGB Int）。
+     * [SEED_WALLPAPER] (-1) = 跟随背景图主题色（默认）
+     * 0 = 使用系统动态取色 / 默认配色
+     * 其他正整数 = 自定义 ARGB 色值
+     */
+    const val SEED_WALLPAPER = -1
+
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
 
     fun init(context: Context) {
         appContext = context.applicationContext
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private fun intPref(def: Int = 0) = object : ReadWriteProperty<Any?, Int> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getInt(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) = prefs.edit { putInt(property.name, value) }
+    }
+
+    private fun floatPref(def: Float = 0f) = object : ReadWriteProperty<Any?, Float> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getFloat(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) = prefs.edit { putFloat(property.name, value) }
+    }
+
+    private fun booleanPref(def: Boolean = false) = object : ReadWriteProperty<Any?, Boolean> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getBoolean(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) = prefs.edit { putBoolean(property.name, value) }
+    }
+
+    private fun stringPref(def: String? = null) = object : ReadWriteProperty<Any?, String?> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getString(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: String?) = prefs.edit { putString(property.name, value) }
+    }
+
+    private fun stringSetPref(def: Set<String> = emptySet()) = object : ReadWriteProperty<Any?, Set<String>> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getStringSet(property.name, def) ?: def
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Set<String>) = prefs.edit { putStringSet(property.name, value) }
+    }
+
+    private fun longPref(def: Long = 0L) = object : ReadWriteProperty<Any?, Long> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getLong(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Long) = prefs.edit { putLong(property.name, value) }
+    }
+
+    private fun constrainedIntPref(def: Int, min: Int, max: Int) = object : ReadWriteProperty<Any?, Int> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getInt(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) = prefs.edit { putInt(property.name, value.coerceIn(min, max)) }
+    }
+
+    private fun constrainedFloatPref(def: Float, min: Float, max: Float) = object : ReadWriteProperty<Any?, Float> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getFloat(property.name, def)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Float) = prefs.edit { putFloat(property.name, value.coerceIn(min, max)) }
     }
 
     /**
@@ -89,29 +106,21 @@ object AppPrefs {
         }
 
     var savePath: String
-        get() = prefs.getString(KEY_SAVE_PATH, null) ?: defaultSavePath
-        set(value) = prefs.edit {putString(KEY_SAVE_PATH, value)}
+        get() = prefs.getString("savePath", null) ?: defaultSavePath
+        set(value) = prefs.edit { putString("savePath", value) }
 
-    var maxConcurrency: Int
-        get() = prefs.getInt(KEY_MAX_CONCURRENCY, 8)
-        set(value) = prefs.edit { putInt(KEY_MAX_CONCURRENCY, value.coerceIn(1, 32))}
-
-    /** 主题模式 */
-    var themeMode: Int
-        get() = prefs.getInt(KEY_THEME_MODE, THEME_SYSTEM)
-        set(value) = prefs.edit {putInt(KEY_THEME_MODE, value)}
+    var maxConcurrency by constrainedIntPref(8, 1, 32)
+    var themeMode by intPref(THEME_SYSTEM)
 
     /** 搜索历史（最多 20 条，逗号分隔存储） */
     var searchHistory: List<String>
-        get() = prefs.getString(KEY_SEARCH_HISTORY, null)
+        get() = prefs.getString("searchHistory", null)
             ?.split("|||")
             ?.filter { it.isNotBlank() }
             ?: emptyList()
         set(value) = prefs.edit {
-            putString(
-                KEY_SEARCH_HISTORY,
-                value.take(20).joinToString("|||")
-        )}
+            putString("searchHistory", value.take(20).joinToString("|||"))
+        }
 
     fun addSearchHistory(keyword: String) {
         val trimmed = keyword.trim()
@@ -126,10 +135,7 @@ object AppPrefs {
         searchHistory = emptyList()
     }
 
-    /** 收藏的角色名列表 */
-    var favoriteCharacters: Set<String>
-        get() = prefs.getStringSet(KEY_FAVORITE_CHARACTERS, emptySet()) ?: emptySet()
-        set(value) = prefs.edit { putStringSet(KEY_FAVORITE_CHARACTERS, value)}
+    var favoriteCharacters by stringSetPref()
 
     fun toggleFavorite(name: String) {
         val current = favoriteCharacters.toMutableSet()
@@ -137,157 +143,65 @@ object AppPrefs {
         favoriteCharacters = current
     }
 
-    /** 底栏样式 */
-    var bottomBarStyle: Int
-        get() = prefs.getInt(KEY_BOTTOM_BAR_STYLE, BAR_STYLE_BOTTOM_APP_BAR)
-        set(value) = prefs.edit { putInt(KEY_BOTTOM_BAR_STYLE, value)}
-
-    /** Wiki 离线缓存模式 */
-    var wikiCacheMode: Int
-        get() = prefs.getInt(KEY_WIKI_CACHE_MODE, WIKI_CACHE_DEFAULT)
-        set(value) = prefs.edit { putInt(KEY_WIKI_CACHE_MODE, value)}
-
-    /** 离线缓存是否永不过期。开启后启动清理不会删除过期 Wiki 缓存。 */
-    var offlineCacheNeverExpire: Boolean
-        get() = prefs.getBoolean(KEY_OFFLINE_CACHE_NEVER_EXPIRE, false)
-        set(value) = prefs.edit { putBoolean(KEY_OFFLINE_CACHE_NEVER_EXPIRE, value) }
-
-    /**
-     * 自定义主题种子色（ARGB Int）。
-     * [SEED_WALLPAPER] (-1) = 跟随背景图主题色（默认）
-     * 0 = 使用系统动态取色 / 默认配色
-     * 其他正整数 = 自定义 ARGB 色值
-     */
-    const val SEED_WALLPAPER = -1
-
-    var customSeedColor: Int
-        get() = prefs.getInt(KEY_CUSTOM_SEED_COLOR, SEED_WALLPAPER)
-        set(value) = prefs.edit { putInt(KEY_CUSTOM_SEED_COLOR, value) }
-
-    /** Wiki 桌面模式 UA（默认 false） */
-    var wikiDesktopMode: Boolean
-        get() = prefs.getBoolean(KEY_WIKI_DESKTOP_MODE, false)
-        set(value) = prefs.edit { putBoolean(KEY_WIKI_DESKTOP_MODE, value) }
-
-    /** 下载历史记录（JSON 格式存储） */
+    var bottomBarStyle by intPref(BAR_STYLE_BOTTOM_APP_BAR)
+    var wikiCacheMode by intPref(WIKI_CACHE_DEFAULT)
+    var offlineCacheNeverExpire by booleanPref(false)
+    var customSeedColor by intPref(SEED_WALLPAPER)
+    var wikiDesktopMode by booleanPref(false)
     var downloadHistoryJson: String
-        get() = prefs.getString(KEY_DOWNLOAD_HISTORY, "[]") ?: "[]"
-        set(value) = prefs.edit { putString(KEY_DOWNLOAD_HISTORY, value) }
+        get() = prefs.getString("downloadHistoryJson", "[]") ?: "[]"
+        set(value) = prefs.edit { putString("downloadHistoryJson", value) }
 
-    /** 液态玻璃效果（默认关闭，需 Android 12+） */
-    var liquidGlassEnabled: Boolean
-        get() = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(KEY_LIQUID_GLASS_ENABLED, value) }
+    var liquidGlassEnabled by booleanPref(false)
+    var highReadabilityDrawer by booleanPref(false)
 
-    /** 液态玻璃侧栏高可读性模式，默认关闭以保留轻盈玻璃观感。 */
-    var highReadabilityDrawer: Boolean
-        get() = prefs.getBoolean(KEY_HIGH_READABILITY_DRAWER, false)
-        set(value) = prefs.edit { putBoolean(KEY_HIGH_READABILITY_DRAWER, value) }
-
-    /** 启动器图标主题。 */
     var launcherIconTheme: Int
-        get() = prefs.getInt(KEY_LAUNCHER_ICON_THEME, LAUNCHER_ICON_BRAND)
+        get() = prefs.getInt("launcherIconTheme", LAUNCHER_ICON_BRAND)
         set(value) = prefs.edit {
-            putInt(
-                KEY_LAUNCHER_ICON_THEME,
-                if (value == LAUNCHER_ICON_SYSTEM) LAUNCHER_ICON_SYSTEM else LAUNCHER_ICON_BRAND
-            )
+            putInt("launcherIconTheme", if (value == LAUNCHER_ICON_SYSTEM) LAUNCHER_ICON_SYSTEM else LAUNCHER_ICON_BRAND)
         }
 
-    /** 缓存的首页壁纸 URL（空字符串表示未缓存） */
-    var wallpaperUrl: String?
-        get() = prefs.getString(KEY_WALLPAPER_URL, null)
-        set(value) = prefs.edit { putString(KEY_WALLPAPER_URL, value) }
+    var wallpaperUrl by stringPref()
+    var wallpaperAutoRefresh by booleanPref(false)
+    var wallpaperSeedColorCache by intPref(0)
+    var wallpaperSeedColorUrl by stringPref()
+    var lastUpdateCheck by longPref(0L)
 
-    /** 启动时是否自动刷新壁纸（默认 false） */
-    var wallpaperAutoRefresh: Boolean
-        get() = prefs.getBoolean(KEY_WALLPAPER_AUTO_REFRESH, false)
-        set(value) = prefs.edit { putBoolean(KEY_WALLPAPER_AUTO_REFRESH, value) }
-
-    /** 缓存的壁纸主题色（ARGB Int，0 = 未缓存） */
-    var wallpaperSeedColorCache: Int
-        get() = prefs.getInt(KEY_WALLPAPER_SEED_COLOR_CACHE, 0)
-        set(value) = prefs.edit { putInt(KEY_WALLPAPER_SEED_COLOR_CACHE, value) }
-
-    /** 缓存主题色对应的壁纸 URL（用于判断壁纸是否更换） */
-    var wallpaperSeedColorUrl: String?
-        get() = prefs.getString(KEY_WALLPAPER_SEED_COLOR_URL, null)
-        set(value) = prefs.edit { putString(KEY_WALLPAPER_SEED_COLOR_URL, value) }
-
-    /** 上次检查更新的时间戳（毫秒） */
-    var lastUpdateCheck: Long
-        get() = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L)
-        set(value) = prefs.edit { putLong(KEY_LAST_UPDATE_CHECK, value) }
-
-    /** 首页顶部六按钮的配置 ID 列表，最多 6 个。 */
     var homeQuickEntryIds: List<String>
-        get() = prefs.getString(KEY_HOME_QUICK_ENTRY_IDS, null)
+        get() = prefs.getString("homeQuickEntryIds", null)
             ?.split("|||")
             ?.map { it.trim() }
             ?.filter { it.isNotEmpty() }
             ?.take(6)
             ?: emptyList()
         set(value) = prefs.edit {
-            putString(KEY_HOME_QUICK_ENTRY_IDS, value.take(6).joinToString("|||"))
+            putString("homeQuickEntryIds", value.take(6).joinToString("|||"))
         }
 
-    /** 首页快捷入口布局，默认使用性能更好的网格大卡。 */
     var homeQuickEntryLayout: Int
-        get() = prefs.getInt(KEY_HOME_QUICK_ENTRY_LAYOUT, HOME_QUICK_LAYOUT_GRID)
+        get() = prefs.getInt("homeQuickEntryLayout", HOME_QUICK_LAYOUT_GRID)
         set(value) = prefs.edit {
-            putInt(
-                KEY_HOME_QUICK_ENTRY_LAYOUT,
-                if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID
-            )
+            putInt("homeQuickEntryLayout", if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID)
         }
 
-    /** 素材工具默认输出目录 */
     var toolsOutputPath: String
-        get() = prefs.getString(KEY_TOOLS_OUTPUT_PATH, null)
+        get() = prefs.getString("toolsOutputPath", null)
             ?: File(savePath, "素材工具").absolutePath
-        set(value) = prefs.edit { putString(KEY_TOOLS_OUTPUT_PATH, value) }
+        set(value) = prefs.edit { putString("toolsOutputPath", value) }
 
-    /** 音频工具频谱图 FFT 窗长 */
-    var audioSpectrogramWindowSize: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE, 1024)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_WINDOW_SIZE, value.coerceIn(256, 8192)) }
+    var audioSpectrogramWindowSize by constrainedIntPref(1024, 256, 8192)
+    var audioSpectrogramHopPercent by constrainedIntPref(25, 5, 80)
+    var audioSpectrogramTimeBins by constrainedIntPref(1200, 120, 12000)
+    var audioSpectrogramFrequencyBins by constrainedIntPref(512, 64, 2048)
+    var audioSpectrogramCutoffHz by constrainedIntPref(0, 0, 96000)
 
-    /** 音频工具频谱图步进比例（百分比） */
-    var audioSpectrogramHopPercent: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_HOP_PERCENT, 25)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_HOP_PERCENT, value.coerceIn(5, 80)) }
-
-    /** 音频工具频谱图时间桶数量 */
-    var audioSpectrogramTimeBins: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, 1200)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_TIME_BINS, value.coerceIn(120, 12000)) }
-
-    /** 音频工具频谱图频率桶数量 */
-    var audioSpectrogramFrequencyBins: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, 512)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_FREQUENCY_BINS, value.coerceIn(64, 2048)) }
-
-    /** 音频工具频谱图截止频率（Hz，0 表示自动使用 Nyquist） */
-    var audioSpectrogramCutoffHz: Int
-        get() = prefs.getInt(KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ, 0)
-        set(value) = prefs.edit { putInt(KEY_AUDIO_SPECTROGRAM_CUTOFF_HZ, value.coerceIn(0, 96000)) }
-
-    /** 音频工具频谱图配色方案 */
     var audioSpectrogramPalette: String
-        get() = prefs.getString(KEY_AUDIO_SPECTROGRAM_PALETTE, "Ocean") ?: "Ocean"
-        set(value) = prefs.edit { putString(KEY_AUDIO_SPECTROGRAM_PALETTE, value) }
+        get() = prefs.getString("audioSpectrogramPalette", "Ocean") ?: "Ocean"
+        set(value) = prefs.edit { putString("audioSpectrogramPalette", value) }
 
-    var audioSpectrogramGainDb: Float
-        get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_GAIN_DB, 6f)
-        set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_GAIN_DB, value.coerceIn(-24f, 36f)) }
-
-    var audioSpectrogramGamma: Float
-        get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_GAMMA, 1.2f)
-        set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_GAMMA, value.coerceIn(0.35f, 3f)) }
-
-    var audioSpectrogramFloorDb: Float
-        get() = prefs.getFloat(KEY_AUDIO_SPECTROGRAM_FLOOR_DB, -72f)
-        set(value) = prefs.edit { putFloat(KEY_AUDIO_SPECTROGRAM_FLOOR_DB, value.coerceIn(-120f, -24f)) }
+    var audioSpectrogramGainDb by constrainedFloatPref(6f, -24f, 36f)
+    var audioSpectrogramGamma by constrainedFloatPref(1.2f, 0.35f, 3f)
+    var audioSpectrogramFloorDb by constrainedFloatPref(-72f, -120f, -24f)
 
     /**
      * 配色风格索引，对应 materialkolor PaletteStyle 枚举顺序：
@@ -302,8 +216,5 @@ object AppPrefs {
      *  7 = Fidelity
      *  8 = Content
      */
-    var paletteStyle: Int
-        get() = prefs.getInt(KEY_PALETTE_STYLE, 0)
-        set(value) = prefs.edit { putInt(KEY_PALETTE_STYLE, value.coerceIn(0, 8)) }
-
+    var paletteStyle by constrainedIntPref(0, 0, 8)
 }

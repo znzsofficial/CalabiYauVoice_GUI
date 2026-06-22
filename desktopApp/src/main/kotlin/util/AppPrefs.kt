@@ -9,14 +9,14 @@ import java.io.File
  * %APPDATA%\CalabiYauVoice（即 AppData\Roaming\CalabiYauVoice）。
  */
 @Serializable
-private data class PrefsData(
-    val categoryHintDismissed: Boolean = false,
-    val savePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源",
-    val converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted",
-    val assetToolsOutputPath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}素材工具",
-    val recentUserLookupIds: List<String> = emptyList(),
-    val recentBidLookupValues: List<String> = emptyList(),
-    val recentWikiIdLookupValues: List<String> = emptyList()
+data class PrefsData(
+    var categoryHintDismissed: Boolean = false,
+    var savePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源",
+    var converterSavePath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}converted",
+    var assetToolsOutputPath: String = "${System.getProperty("user.home")}${File.separator}卡拉彼丘资源${File.separator}素材工具",
+    var recentUserLookupIds: List<String> = emptyList(),
+    var recentBidLookupValues: List<String> = emptyList(),
+    var recentWikiIdLookupValues: List<String> = emptyList()
 )
 
 object AppPrefs {
@@ -38,28 +38,25 @@ object AppPrefs {
         file.writeText(json.encodeToString(data))
     }
 
-    var categoryHintDismissed: Boolean
-        get() = data.categoryHintDismissed
-        set(value) { data = data.copy(categoryHintDismissed = value); save() }
+    private inline fun <T> pref(
+        crossinline getter: (PrefsData) -> T,
+        crossinline setter: (PrefsData, T) -> Unit
+    ) = object : kotlin.properties.ReadWriteProperty<Any?, T> {
+        override fun getValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>): T = getter(data)
+        override fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: T) {
+            setter(data, value)
+            save()
+        }
+    }
 
-    var savePath: String
-        get() = data.savePath
-        set(value) { data = data.copy(savePath = value); save() }
-
-    var converterSavePath: String
-        get() = data.converterSavePath
-        set(value) { data = data.copy(converterSavePath = value); save() }
-
-    var assetToolsOutputPath: String
-        get() = data.assetToolsOutputPath
-        set(value) { data = data.copy(assetToolsOutputPath = value); save() }
-
-    var recentBidLookupValues: List<String>
-        get() = data.recentBidLookupValues
-        set(value) { data = data.copy(recentBidLookupValues = value); save() }
+    var categoryHintDismissed by pref({ it.categoryHintDismissed }, { d, v -> d.categoryHintDismissed = v })
+    var savePath by pref({ it.savePath }, { d, v -> d.savePath = v })
+    var converterSavePath by pref({ it.converterSavePath }, { d, v -> d.converterSavePath = v })
+    var assetToolsOutputPath by pref({ it.assetToolsOutputPath }, { d, v -> d.assetToolsOutputPath = v })
+    var recentBidLookupValues by pref({ it.recentBidLookupValues }, { d, v -> d.recentBidLookupValues = v })
 
     var recentWikiIdLookupValues: List<String>
         // 向后兼容：如果新字段为空，则迁移旧字段 recentUserLookupIds 的数据
         get() = data.recentWikiIdLookupValues.ifEmpty { data.recentUserLookupIds }
-        set(value) { data = data.copy(recentWikiIdLookupValues = value); save() }
+        set(value) { data.recentWikiIdLookupValues = value; save() }
 }
