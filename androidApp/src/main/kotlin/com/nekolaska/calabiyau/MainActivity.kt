@@ -31,14 +31,13 @@ import com.nekolaska.calabiyau.core.cache.AppCacheBootstrap
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.feature.settings.UpdateApi
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.core.ui.AppTheme
 import com.nekolaska.calabiyau.core.navigation.MainScreen
 import com.nekolaska.calabiyau.feature.download.DownloadViewModel
 import com.nekolaska.calabiyau.feature.download.PortraitViewModel
 import com.nekolaska.calabiyau.feature.download.SearchViewModel
 import com.nekolaska.calabiyau.feature.settings.UpdateAvailableDialog
-import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
-import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.core.webkit.WebViewWarmup
 import data.PortraitRepository
 import kotlinx.coroutines.Dispatchers
@@ -143,7 +142,8 @@ class MainActivity : ComponentActivity() {
                         downloadVM,
                         portraitVM,
                         shortcutTarget = shortcutTargetState.value,
-                        shortcutRequestKey = shortcutRequestKeyState.intValue
+                        shortcutRequestKey = shortcutRequestKeyState.intValue,
+                        pendingUrl = startupUpdateWebUrl
                     )
 
                     AnimatedVisibility(
@@ -151,14 +151,6 @@ class MainActivity : ComponentActivity() {
                         exit = fadeOut(animationSpec = tween(220)) + scaleOut(targetScale = 0.96f, animationSpec = tween(220))
                     ) {
                         SplashCover()
-                    }
-
-                    startupUpdateWebUrl?.let { url ->
-                        WikiWebViewScreen(
-                            onExitWiki = { startupUpdateWebUrl = null },
-                            initialUrl = url,
-                            useTopBarMode = true
-                        )
                     }
                 }
 

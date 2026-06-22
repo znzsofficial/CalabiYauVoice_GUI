@@ -60,6 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -100,7 +101,7 @@ private const val SHOW_SETTINGS_DEBUG_ITEM = false
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {}) {
     var savePath by remember { mutableStateOf(AppPrefs.savePath) }
     var maxConcurrency by remember { mutableStateOf(AppPrefs.maxConcurrency.toString()) }
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
@@ -179,6 +180,8 @@ fun SettingsScreen(onBack: () -> Unit) {
             return@AnimatedContent
         }
         if (page == SettingsPage.UPDATE_WEB) {
+            LaunchedEffect(Unit) { onWebViewVisible(true) }
+            DisposableEffect(Unit) { onDispose { onWebViewVisible(false) } }
             WikiWebViewScreen(
                 onExitWiki = { currentPage = SettingsPage.MAIN },
                 initialUrl = updateWebUrl ?: "https://wiki.nekolaska.vip",

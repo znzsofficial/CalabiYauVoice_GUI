@@ -342,7 +342,7 @@ fun WikiWebViewScreen(
             context,
             receiver,
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
         onDispose {
             runCatching { context.unregisterReceiver(receiver) }
@@ -381,6 +381,13 @@ fun WikiWebViewScreen(
         val uris = extractChosenUris(result)
         fileChooserCallback?.onReceiveValue(uris)
         fileChooserCallback = null
+    }
+    // 销毁时清理未完成的文件选择回调，防止 WebView 挂起
+    DisposableEffect(Unit) {
+        onDispose {
+            fileChooserCallback?.onReceiveValue(null)
+            fileChooserCallback = null
+        }
     }
 
     // 返回键拦截 —— 在 WebView 中可后退时拦截返回键
@@ -696,7 +703,7 @@ fun WikiWebViewScreen(
                             onInitialUrlConsumed?.invoke()
                         }
                     },
-                    update = { /* WebView 状态已通过回调管理 */ }
+                    update = { wv -> wv.setBackgroundColor(webViewBackgroundColor) }
                 )
 
                 AnimatedVisibility(
@@ -1296,22 +1303,25 @@ private fun createWikiWebView(
                 val guessedName = URLUtil.guessFileName(url, contentDisposition, mimeType)
                     .let { if (it == "downloadfile.bin" || it.isBlank()) "download_${System.currentTimeMillis()}" else it }
                 val safeMime = mimeType ?: "application/octet-stream"
+                val jsEscape = { s: String ->
+                    s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r")
+                }
                 evaluateJavascript(
                     """
                     (function() {
                         var xhr = new XMLHttpRequest();
-                        xhr.open('GET', '$url', true);
+                        xhr.open('GET', '${jsEscape(url)}', true);
                         xhr.responseType = 'blob';
                         xhr.onload = function() {
                             var reader = new FileReader();
                             reader.onloadend = function() {
                                 var base64 = reader.result.split(',')[1] || '';
-                                _blobDownloader.onBlobData(base64, '$safeMime', '$guessedName');
+                                _blobDownloader.onBlobData(base64, '${jsEscape(safeMime)}', '${jsEscape(guessedName)}');
                             };
                             reader.readAsDataURL(xhr.response);
                         };
                         xhr.onerror = function() {
-                            _blobDownloader.onBlobData('', '$safeMime', '$guessedName');
+                            _blobDownloader.onBlobData('', '${jsEscape(safeMime)}', '${jsEscape(guessedName)}');
                         };
                         xhr.send();
                     })();
