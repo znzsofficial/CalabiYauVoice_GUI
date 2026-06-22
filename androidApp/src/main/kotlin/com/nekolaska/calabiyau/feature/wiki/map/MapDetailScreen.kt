@@ -40,7 +40,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 // ════════════════════════════════════════════════════════
 //  地图详情页 —— 原生客户端版 (MD3 Expressive)
@@ -73,8 +73,7 @@ fun MapDetailScreen(
         MapDetailApi.fetchMapDetail(mapName, force)
     }
     val wikiUrl = remember(mapName) {
-        val enc = URLEncoder.encode(mapName, "UTF-8").replace("+", "%20")
-        "https://wiki.biligame.com/klbq/$enc"
+        "https://wiki.biligame.com/klbq/${mapName.wikiPathEncode()}"
     }
 
     Scaffold(

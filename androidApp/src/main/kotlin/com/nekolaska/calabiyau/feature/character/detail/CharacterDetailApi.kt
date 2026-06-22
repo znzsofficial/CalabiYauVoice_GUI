@@ -18,7 +18,9 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
-import java.net.URLEncoder
+import util.buildParseUrl
+import util.buildWikiUrl
+import util.wikiPathEncode
 
 /**
  * 角色详情 API（Android）。
@@ -136,8 +138,7 @@ object CharacterDetailApi {
     ): ApiResult<CharacterDetail> =
         withContext(Dispatchers.IO) {
             try {
-                val encoded = URLEncoder.encode(characterName, "UTF-8")
-                val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
+                val url = buildParseUrl(API, characterName, "wikitext|text")
 
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.CHARACTER_DETAIL,
@@ -205,8 +206,7 @@ object CharacterDetailApi {
                 .map { characterName ->
                     async {
                         runCatching {
-                            val encoded = URLEncoder.encode(characterName, "UTF-8")
-                            val url = "$API?action=parse&page=$encoded&prop=wikitext&format=json"
+                            val url = buildParseUrl(API, characterName, "wikitext")
                             val result = OfflineCache.fetchWithCache(
                                 type = OfflineCache.Type.CHARACTER_DETAIL,
                                 key = characterName,
@@ -356,8 +356,7 @@ object CharacterDetailApi {
         cacheKey: String,
         forceRefresh: Boolean
     ): AggregatePageSourceResult? {
-        val encoded = URLEncoder.encode(pageName, "UTF-8")
-        val url = "$API?action=parse&page=$encoded&prop=text&format=json"
+        val url = buildParseUrl(API, pageName, "text")
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.CHARACTER_DETAIL,
             key = cacheKey,
@@ -621,7 +620,7 @@ object CharacterDetailApi {
                 val imageFile = match.groupValues[1].trim()
                 val pagePath = match.groupValues[2].trim()
                 val title = match.groupValues[3].trim()
-                val encoded = URLEncoder.encode(pagePath, "UTF-8").replace("+", "%20")
+                val encoded = pagePath.wikiPathEncode()
                 entries.add(
                     StoryEntry(
                         title = title,
@@ -661,8 +660,7 @@ object CharacterDetailApi {
         val result = mutableMapOf<String, String>()
         try {
             val titles = fileNames.joinToString("|") { "文件:$it" }
-            val encoded = URLEncoder.encode(titles, "UTF-8")
-            val url = "$API?action=query&titles=$encoded&prop=imageinfo&iiprop=url&format=json"
+            val url = buildWikiUrl(API, "action" to "query", "titles" to titles, "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return result
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values?.forEach { page ->
@@ -776,7 +774,7 @@ object CharacterDetailApi {
                 val pageTitle = part.substring(0, eqIdx).trim()
                 val displayName = part.substring(eqIdx + 1).trim()
                 if (pageTitle.isNotBlank() && displayName.isNotBlank()) {
-                    val encoded = URLEncoder.encode(pageTitle, "UTF-8").replace("+", "%20")
+                    val encoded = pageTitle.wikiPathEncode()
                     pages.add(
                         SubPage(
                             title = pageTitle,
@@ -795,8 +793,7 @@ object CharacterDetailApi {
      */
     private fun fetchAvatarUrl(characterName: String): String? {
         return try {
-            val fileTitle = URLEncoder.encode("文件:${characterName}头像.png", "UTF-8")
-            val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
+            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:${characterName}头像.png", "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values

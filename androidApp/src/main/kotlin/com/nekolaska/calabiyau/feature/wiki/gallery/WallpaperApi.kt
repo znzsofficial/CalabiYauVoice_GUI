@@ -9,7 +9,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
-import java.net.URLEncoder
+import util.buildParseUrl
+import util.buildWikiUrl
 import java.security.MessageDigest
 
 /**
@@ -79,7 +80,7 @@ object WallpaperApi {
      */
     private fun fetchWallpaperFileNames(): List<String> {
         val cacheFile = cacheFile(WALLPAPER_FILE_LIST_KEY)
-        val url = "$API?action=parse&page=${URLEncoder.encode("壁纸", "UTF-8")}&prop=wikitext&format=json"
+        val url = buildParseUrl(API, "壁纸", "wikitext")
         val body = WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
             ?: cacheFile?.readTextSafely()
             ?: return emptyList()
@@ -116,8 +117,7 @@ object WallpaperApi {
     private fun fetchImageUrl(fileName: String, forceRefresh: Boolean): String? {
         return try {
             val cacheFile = cacheFile("wallpaper_image_url_$fileName")
-            val fileTitle = URLEncoder.encode("文件:$fileName", "UTF-8")
-            val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
+            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
             val body = if (forceRefresh) {
                 WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
             } else {

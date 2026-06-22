@@ -4,7 +4,7 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.URLEncoder
+import util.buildParseUrl
 
 data class WikiParseSourceResult(
     val html: String? = null,
@@ -44,8 +44,7 @@ object WikiParseSource {
         prop: String,
         forceRefresh: Boolean
     ): WikiParseSourceResult? {
-        val encoded = URLEncoder.encode(pageName, "UTF-8")
-        val url = "$API?action=parse&page=$encoded&prop=$prop&format=json"
+        val url = buildParseUrl(API, pageName, prop)
         val result = OfflineCache.fetchWithCache(
             type = cacheType,
             key = cacheKey,

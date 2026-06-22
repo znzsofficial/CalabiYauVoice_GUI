@@ -17,7 +17,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
-import java.net.URLEncoder
+import util.buildParseUrl
+import util.buildWikiUrl
 
 /**
  * 角色列表 API（Android）。
@@ -97,8 +98,7 @@ object CharacterListApi {
     ): ApiResult<FactionData> {
         return try {
             val wikitext = "{{阵营角色|$faction}}"
-            val encoded = URLEncoder.encode(wikitext, "UTF-8")
-            val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
+            val url = buildWikiUrl(API, "action" to "parse", "text" to wikitext, "prop" to "text", "contentmodel" to "wikitext", "format" to "json")
 
             val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.CHARACTER_LIST,
@@ -179,8 +179,7 @@ object CharacterListApi {
         characters.map { char ->
             async {
                 try {
-                    val encoded = URLEncoder.encode(char.name, "UTF-8")
-                    val url = "$API?action=parse&page=$encoded&prop=text&format=json"
+                    val url = buildParseUrl(API, char.name, "text")
                     val body = WikiEngine.safeGet(url) ?: return@async char
                     val json = SharedJson.parseToJsonElement(body).jsonObject
                     val html = json["parse"]

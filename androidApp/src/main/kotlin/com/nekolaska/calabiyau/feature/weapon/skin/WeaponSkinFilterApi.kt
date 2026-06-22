@@ -16,7 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
+import util.buildWikiUrl
 
 /**
  * 武器外观筛选 API（Android）。
@@ -100,8 +100,7 @@ object WeaponSkinFilterApi {
                 }
 
                 val weaponMeta = fetchWeaponMetaMap(forceRefresh, cacheOnly = false)
-                val text = URLEncoder.encode("{{#invoke:武器|武器外观筛选}}", "UTF-8")
-                val url = "$API?action=parse&text=$text&prop=text&format=json"
+                val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:武器|武器外观筛选}}", "prop" to "text", "format" to "json")
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.WEAPON_SKINS,
                     key = "all_weapon_skins",

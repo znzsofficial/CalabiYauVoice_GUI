@@ -2,14 +2,11 @@ package com.nekolaska.calabiyau.feature.wiki.bio.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
+import util.buildWikiUrl
 
 object BioDeckShareRemoteSource {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
-
-    fun buildUrl(vararg params: Pair<String, String>): String {
-        return WikiAuthHelper.buildUrl(API, *params)
-    }
 
     fun getWikiCookies(): String? {
         return WikiAuthHelper.getWikiCookies()

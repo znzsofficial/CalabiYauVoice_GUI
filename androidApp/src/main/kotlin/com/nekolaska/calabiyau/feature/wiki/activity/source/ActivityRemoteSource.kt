@@ -7,7 +7,8 @@ import data.SharedJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.URLEncoder
+import util.buildParseUrl
+import util.buildWikiUrl
 
 data class ActivityPageSourceResult(
     val html: String,
@@ -51,7 +52,7 @@ object ActivityRemoteSource {
     }
 
     private fun fetchHighResImageUrlFromDetailPage(detailPageTitle: String): String? {
-        val detailUrl = "$API?action=parse&page=${URLEncoder.encode(detailPageTitle, "UTF-8")}&prop=text&format=json"
+        val detailUrl = buildParseUrl(API, detailPageTitle, "text")
         val detailJson = WikiEngine.safeGet(detailUrl) ?: return null
         val detailHtml = SharedJson.parseToJsonElement(detailJson).jsonObject["parse"]
             ?.jsonObject?.get("text")
@@ -59,7 +60,7 @@ object ActivityRemoteSource {
             ?: return null
 
         val fileTitle = com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityParsers.extractFirstFileTitle(detailHtml) ?: return null
-        val infoUrl = "$API?action=query&titles=${URLEncoder.encode(fileTitle, "UTF-8")}&prop=imageinfo&iiprop=url&format=json"
+        val infoUrl = buildWikiUrl(API, "action" to "query", "titles" to fileTitle, "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
         val infoJson = WikiEngine.safeGet(infoUrl) ?: return null
         val pages = SharedJson.parseToJsonElement(infoJson).jsonObject["query"]
             ?.jsonObject?.get("pages")?.jsonObject

@@ -2,7 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.bio.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 data class BioCardPageSourceResult(
     val html: String,
@@ -34,6 +34,6 @@ object BioCardRemoteSource {
     }
 
     fun pageUrl(pageName: String): String {
-        return WIKI_BASE + URLEncoder.encode(pageName, "UTF-8").replace("+", "%20")
+        return WIKI_BASE + pageName.wikiPathEncode()
     }
 }

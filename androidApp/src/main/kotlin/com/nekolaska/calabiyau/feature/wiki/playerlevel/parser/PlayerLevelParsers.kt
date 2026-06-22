@@ -9,7 +9,7 @@ import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelRewardI
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelWeapon
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 object PlayerLevelParsers {
 
@@ -67,8 +67,7 @@ object PlayerLevelParsers {
     }
 
     private fun String.toWikiFileRedirectUrl(): String {
-        val encoded = URLEncoder.encode(this, "UTF-8").replace("+", "%20")
-        return "https://wiki.biligame.com/klbq/Special:Redirect/file/$encoded"
+        return "https://wiki.biligame.com/klbq/Special:Redirect/file/${wikiPathEncode()}"
     }
 
     private fun extractSection(wikitext: String, title: String, nextTitle: String?): String {

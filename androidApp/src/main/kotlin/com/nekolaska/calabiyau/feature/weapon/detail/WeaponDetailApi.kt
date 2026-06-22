@@ -13,7 +13,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
+import util.buildParseUrl
+import util.buildWikiUrl
+import util.wikiPathEncode
 
 /**
  * 武器详情 API（Android）。
@@ -80,8 +82,7 @@ object WeaponDetailApi {
     ): ApiResult<WeaponDetail> =
         withContext(Dispatchers.IO) {
             try {
-                val encoded = URLEncoder.encode(weaponName, "UTF-8")
-                val url = "$API?action=parse&page=$encoded&prop=wikitext|text&format=json"
+                val url = buildParseUrl(API, weaponName, "wikitext|text")
 
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.WEAPON_DETAIL,
@@ -490,7 +491,7 @@ object WeaponDetailApi {
                 val pageTitle = part.substring(0, eqIdx).trim()
                 val displayName = part.substring(eqIdx + 1).trim()
                 if (pageTitle.isNotBlank() && displayName.isNotBlank()) {
-                    val enc = URLEncoder.encode(pageTitle, "UTF-8").replace("+", "%20")
+                    val enc = pageTitle.wikiPathEncode()
                     pages.add(SubPage(pageTitle, displayName, "https://wiki.biligame.com/klbq/$enc"))
                 }
             }
@@ -501,8 +502,7 @@ object WeaponDetailApi {
     /** 获取图片 URL */
     private fun fetchImageUrl(fileName: String): String? {
         return try {
-            val fileTitle = URLEncoder.encode("文件:$fileName", "UTF-8")
-            val url = "$API?action=query&titles=$fileTitle&prop=imageinfo&iiprop=url&format=json"
+            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values
@@ -518,8 +518,7 @@ object WeaponDetailApi {
      */
     private fun fetchCooldowns(weaponName: String): Map<String, Int> {
         return try {
-            val encoded = URLEncoder.encode("战术道具冷却时间表", "UTF-8")
-            val url = "$API?action=parse&page=$encoded&prop=text&format=json"
+            val url = buildParseUrl(API, "战术道具冷却时间表", "text")
             val body = WikiEngine.safeGet(url) ?: return emptyMap()
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]?.jsonObject?.get("text")

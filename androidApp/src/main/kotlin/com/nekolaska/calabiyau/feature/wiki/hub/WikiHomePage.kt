@@ -131,7 +131,7 @@ import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 // ────────────────────────────────────────────
 //  Wiki 主页
@@ -1239,7 +1239,7 @@ internal fun ContentBlockCard(
             val resolvedUrls = remember(items) {
                 items.map { (display, page) ->
                     display to if (page.startsWith("http")) page
-                    else "$WIKI_BASE${URLEncoder.encode(page, "UTF-8").replace("+", "%20")}"
+                    else "$WIKI_BASE${page.wikiPathEncode()}"
                 }
             }
 

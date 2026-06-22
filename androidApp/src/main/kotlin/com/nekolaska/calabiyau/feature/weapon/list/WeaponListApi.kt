@@ -12,7 +12,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import java.net.URLEncoder
+import util.buildWikiUrl
+import util.wikiPathEncode
 
 /**
  * 武器列表 API（Android）。
@@ -134,8 +135,7 @@ object WeaponListApi {
         return try {
             // 统一查询所有属性
             val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100"
-            val encoded = URLEncoder.encode(query, "UTF-8")
-            val url = "$API?action=ask&query=$encoded&format=json"
+            val url = buildWikiUrl(API, "action" to "ask", "query" to query, "format" to "json")
             val cacheResult = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_LIST,
                 key = "category_${category.name}",
@@ -157,7 +157,7 @@ object WeaponListApi {
                 val desc = printouts?.get("武器介绍")?.jsonArray
                     ?.firstOrNull()?.jsonPrimitive?.content ?: ""
                 val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
-                    ?: "${WIKI_BASE}${URLEncoder.encode(weaponName, "UTF-8").replace("+", "%20")}"
+                    ?: "$WIKI_BASE${weaponName.wikiPathEncode()}"
 
                 WeaponInfo(
                     name = weaponName,

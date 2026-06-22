@@ -2,7 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.game.parser
 
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 object GameModeParsers {
 
@@ -67,7 +67,7 @@ object GameModeParsers {
 
         val winCondition = extractSection(wikitext, "获胜条件")
         val settings = extractSection(wikitext, "模式设定")
-        val enc = URLEncoder.encode(mode.pageName, "UTF-8").replace("+", "%20")
+        val enc = mode.pageName.wikiPathEncode()
 
         return GameModeDetail(
             name = mode.displayName,

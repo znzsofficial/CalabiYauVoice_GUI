@@ -25,7 +25,7 @@ import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 // ════════════════════════════════════════════════════════
 //  战斗模式页 —— 原生客户端版 (MD3 Expressive)
@@ -182,8 +182,7 @@ private fun GameModeCard(
                                     if (onOpenMapDetail != null) {
                                         onOpenMapDetail(mapName, null)
                                     } else {
-                                        val enc = URLEncoder.encode(mapName, "UTF-8")
-                                            .replace("+", "%20")
+                                        val enc = mapName.wikiPathEncode()
                                         onOpenWikiUrl("https://wiki.biligame.com/klbq/$enc")
                                     }
                                 },

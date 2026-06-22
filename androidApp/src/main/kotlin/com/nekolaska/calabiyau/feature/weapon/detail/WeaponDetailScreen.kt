@@ -77,7 +77,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonStatRow
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 // ════════════════════════════════════════════════════════
 //  武器详情页 —— 原生客户端版 (MD3 Expressive)
@@ -101,8 +101,7 @@ fun WeaponDetailScreen(
         WeaponDetailApi.fetchWeaponDetail(weaponName, force)
     }
     val wikiUrl = remember(weaponName) {
-        val encoded = URLEncoder.encode(weaponName, "UTF-8").replace("+", "%20")
-        "https://wiki.biligame.com/klbq/$encoded"
+        "https://wiki.biligame.com/klbq/${weaponName.wikiPathEncode()}"
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()

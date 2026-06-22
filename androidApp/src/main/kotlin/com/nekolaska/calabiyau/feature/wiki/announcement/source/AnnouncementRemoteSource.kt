@@ -5,7 +5,7 @@ import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
-import java.net.URLEncoder
+import util.buildWikiUrl
 
 data class AnnouncementSourceResult(
     val results: JsonObject,
@@ -19,8 +19,7 @@ object AnnouncementRemoteSource {
 
     suspend fun fetchAnnouncements(limit: Int, forceRefresh: Boolean): AnnouncementSourceResult? {
         val query = "[[分类:公告资讯]]|?时间|?b站|?官网|sort=时间|order=desc|limit=$limit"
-        val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "$API?action=ask&query=$encoded&format=json"
+        val url = buildWikiUrl(API, "action" to "ask", "query" to query, "format" to "json")
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.ANNOUNCEMENTS,
             key = "announcements_$limit",

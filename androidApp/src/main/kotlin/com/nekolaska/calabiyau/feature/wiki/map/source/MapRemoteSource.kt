@@ -6,7 +6,7 @@ import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.URLEncoder
+import util.buildWikiUrl
 
 data class MapListSourceResult(
     val html: String,
@@ -27,8 +27,7 @@ object MapRemoteSource {
 
     suspend fun fetchModeHtml(templateName: String, forceRefresh: Boolean): MapListSourceResult? {
         val wikitext = "{{游戏地图|$templateName}}"
-        val encoded = URLEncoder.encode(wikitext, "UTF-8")
-        val url = "$API?action=parse&text=$encoded&prop=text&contentmodel=wikitext&format=json"
+        val url = buildWikiUrl(API, "action" to "parse", "text" to wikitext, "prop" to "text", "contentmodel" to "wikitext", "format" to "json")
 
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.MAP_LIST,

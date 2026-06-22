@@ -2,7 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.navigation.parser
 
 import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavItem
 import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavSection
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 object NavigationMenuParsers {
 
@@ -78,8 +78,7 @@ object NavigationMenuParsers {
         if (target.startsWith("http://") || target.startsWith("https://")) {
             return target
         }
-        val encoded = URLEncoder.encode(target, "UTF-8")
-            .replace("+", "%20")
+        val encoded = target.wikiPathEncode()
         return "$WIKI_BASE$encoded"
     }
 

@@ -49,7 +49,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 private val CharacterHeaderPortraitHeight = 440.dp
 private val CharacterHeaderAvatarHeight = 240.dp
@@ -83,8 +83,7 @@ fun CharacterDetailScreen(
         CharacterDetailApi.fetchCharacterDetail(characterName, force)
     }
     val wikiUrl = remember(characterName) {
-        val encoded = URLEncoder.encode(characterName, "UTF-8").replace("+", "%20")
-        "https://wiki.biligame.com/klbq/$encoded"
+        "https://wiki.biligame.com/klbq/${characterName.wikiPathEncode()}"
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()

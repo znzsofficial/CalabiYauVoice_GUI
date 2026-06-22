@@ -14,7 +14,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.net.URLEncoder
+import util.buildWikiUrl
 
 /**
  * 角色时装筛选 API（Android）。
@@ -91,8 +91,7 @@ object CostumeFilterApi {
                     return@withContext parseCostumeResult(entry.content, isOffline = true, cacheAgeMs = entry.ageMs)
                 }
 
-                val text = URLEncoder.encode("{{#invoke:角色|角色时装筛选}}", "UTF-8")
-                val url = "$API?action=parse&text=$text&prop=text&format=json"
+                val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:角色|角色时装筛选}}", "prop" to "text", "format" to "json")
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.COSTUMES,
                     key = "all_costumes",

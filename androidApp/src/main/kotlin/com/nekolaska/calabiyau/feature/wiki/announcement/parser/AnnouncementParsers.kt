@@ -6,7 +6,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.URLEncoder
+import util.wikiPathEncode
 
 object AnnouncementParsers {
 
@@ -17,7 +17,7 @@ object AnnouncementParsers {
             val obj = value.jsonObject
             val printouts = obj["printouts"]?.jsonObject
             val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
-                ?: "${WIKI_BASE}${URLEncoder.encode(title, "UTF-8").replace("+", "%20")}"
+                ?: "$WIKI_BASE${title.wikiPathEncode()}"
 
             val dateStr = printouts?.get("时间")?.jsonArray?.firstOrNull()?.let { elem ->
                 when (elem) {

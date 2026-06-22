@@ -4,20 +4,12 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
 import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import data.SharedJson
-import data.WikiResponse
-import data.filePrefixRegex
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.URLEncoder
-import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
 
 typealias DecorationHtmlSourceResult = WikiHtmlPageSourceResult
 
@@ -61,47 +53,20 @@ object PlayerDecorationRemoteSource {
         fileNames: List<String>,
         forceRefresh: Boolean,
         cacheOnly: Boolean = false
-    ): Map<String, String> = withContext(Dispatchers.IO) {
-        val distinctNames = fileNames.filter { it.isNotBlank() }.distinct()
-        if (distinctNames.isEmpty()) return@withContext emptyMap()
-
-        val result = ConcurrentHashMap<String, String>()
-        distinctNames.chunked(50).map { chunk ->
-            async {
-                val titlesParam = chunk.joinToString("|") { URLEncoder.encode("文件:$it", "UTF-8") }
-                val url = "$API?action=query&titles=$titlesParam&prop=imageinfo&iiprop=url&format=json"
-                val cacheKey = "decoration_image_urls_${chunk.stableHashKey()}"
-                val payload = if (cacheOnly) {
-                    OfflineCache.getEntry(OfflineCache.Type.DECORATIONS, cacheKey)?.content
-                } else {
-                    OfflineCache.fetchWithCache(
-                        type = OfflineCache.Type.DECORATIONS,
-                        key = cacheKey,
-                        forceRefresh = forceRefresh
-                    ) { WikiEngine.safeGet(url) }?.payload
-                } ?: return@async
-
-                try {
-                    val response = SharedJson.decodeFromString<WikiResponse>(payload)
-                    response.query?.pages?.values.orEmpty().forEach { page ->
-                        val imageUrl = page.imageinfo?.firstOrNull()?.url ?: return@forEach
-                        val name = page.title.replace(filePrefixRegex, "")
-                        result[name] = imageUrl
-                    }
-                } catch (_: Exception) {
-                }
+    ): Map<String, String> {
+        return fetchBatchImageUrls(fileNames) { url ->
+            val cacheKey = "decoration_image_urls_${url.hashCode().toString(16)}"
+            if (cacheOnly) {
+                OfflineCache.getEntry(OfflineCache.Type.DECORATIONS, cacheKey)?.content
+            } else {
+                OfflineCache.fetchWithCache(
+                    type = OfflineCache.Type.DECORATIONS,
+                    key = cacheKey,
+                    forceRefresh = forceRefresh
+                ) { WikiEngine.safeGet(url) }?.payload
             }
-        }.awaitAll()
-
-        result
+        }
     }
 
     private fun pageCacheKey(pageName: String): String = "decoration_$pageName"
-
-    private fun List<String>.stableHashKey(): String {
-        val raw = sorted().joinToString("|")
-        return MessageDigest.getInstance("MD5")
-            .digest(raw.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-    }
 }

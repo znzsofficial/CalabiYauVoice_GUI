@@ -6,6 +6,7 @@ import data.SharedJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import util.buildWikiUrl
 
 data class NavigationMenuSourceResult(
     val sidebar: String,
@@ -18,7 +19,7 @@ object NavigationMenuRemoteSource {
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
     suspend fun fetchSidebar(forceRefresh: Boolean): NavigationMenuSourceResult? {
-        val url = "$API?action=query&meta=allmessages&ammessages=sidebar&format=json"
+        val url = buildWikiUrl(API, "action" to "query", "meta" to "allmessages", "ammessages" to "sidebar", "format" to "json")
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.NAVIGATION,
             key = "sidebar",
