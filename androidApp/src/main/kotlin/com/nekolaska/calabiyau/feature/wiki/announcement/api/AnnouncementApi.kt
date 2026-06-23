@@ -6,9 +6,7 @@ import com.nekolaska.calabiyau.feature.wiki.announcement.parser.AnnouncementPars
 import com.nekolaska.calabiyau.feature.wiki.announcement.source.AnnouncementRemoteSource
 import data.ApiResult
 import data.ErrorKind
-import data.toErrorKind
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import data.ioApiCall
 
 /**
  * 公告资讯 API（Android）。
@@ -19,13 +17,11 @@ import kotlinx.coroutines.withContext
 object AnnouncementApi {
 
     init {
-        MemoryCacheRegistry.register("AnnouncementApi", ::clearMemoryCache)
+        MemoryCacheRegistry.register("AnnouncementApi") { cachedData = null }
     }
 
     @Volatile
     private var cachedData: List<Announcement>? = null
-
-    fun clearMemoryCache() { cachedData = null }
 
     suspend fun fetchAnnouncements(
         limit: Int = 50,
@@ -34,35 +30,18 @@ object AnnouncementApi {
         if (!forceRefresh) {
             cachedData?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(limit, forceRefresh).also {
+        return ioApiCall("获取公告失败") {
+            val sourceResult = AnnouncementRemoteSource.fetchAnnouncements(limit, forceRefresh)
+                ?: return@ioApiCall ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
+
+            val announcements = AnnouncementParsers.parseAnnouncements(sourceResult.results)
+            if (announcements.isEmpty()) {
+                ApiResult.Error("未找到公告数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(announcements, isOffline = sourceResult.isFromCache, cacheAgeMs = sourceResult.ageMs)
+            }
+        }.also {
             if (it is ApiResult.Success) cachedData = it.value
         }
     }
-
-    private suspend fun fetchFromNetwork(
-        limit: Int,
-        forceRefresh: Boolean
-    ): ApiResult<List<Announcement>> =
-        withContext(Dispatchers.IO) {
-            try {
-                val sourceResult = AnnouncementRemoteSource.fetchAnnouncements(limit, forceRefresh)
-                    ?: return@withContext ApiResult.Error(
-                        "请求失败，且无离线缓存",
-                        kind = ErrorKind.NETWORK
-                    )
-
-                val announcements = AnnouncementParsers.parseAnnouncements(sourceResult.results)
-                if (announcements.isEmpty()) {
-                    ApiResult.Error("未找到公告数据", kind = ErrorKind.NOT_FOUND)
-                } else {
-                    ApiResult.Success(
-                        announcements,
-                        isOffline = sourceResult.isFromCache,
-                        cacheAgeMs = sourceResult.ageMs
-                    )
-                }
-            } catch (e: Exception) {
-                ApiResult.Error("获取公告失败: ${e.message}", kind = e.toErrorKind())
-            }
-        }
 }

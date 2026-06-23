@@ -6,11 +6,11 @@ import com.nekolaska.calabiyau.feature.wiki.map.parser.MapListParsers
 import com.nekolaska.calabiyau.feature.wiki.map.source.MapRemoteSource
 import data.ApiResult
 import data.ErrorKind
+import data.ioApiCall
 import data.toErrorKind
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
 
 /**
  * 地图列表 API（Android）。
@@ -21,13 +21,11 @@ import kotlinx.coroutines.withContext
 object MapListApi {
 
     init {
-        MemoryCacheRegistry.register("MapListApi", ::clearMemoryCache)
+        MemoryCacheRegistry.register("MapListApi") { cachedModes = null }
     }
 
     @Volatile
     private var cachedModes: List<GameModeData>? = null
-
-    fun clearMemoryCache() { cachedModes = null }
 
     val GAME_MODES: List<Pair<String, String>> = listOf(
         "爆破/团队乱斗" to "一般爆破",
@@ -41,16 +39,20 @@ object MapListApi {
         "晶能冲突" to "晶能冲突",
     )
 
-    suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeData>> = withContext(Dispatchers.IO) {
-        if (!forceRefresh) cachedModes?.let { return@withContext ApiResult.Success(it) }
-        try {
-            val results = GAME_MODES.map { (display, template) ->
-                async { fetchMode(display, template, forceRefresh) }
-            }.awaitAll()
+    suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeData>> {
+        if (!forceRefresh) {
+            cachedModes?.let { return ApiResult.Success(it) }
+        }
+        return ioApiCall("获取地图列表失败") {
+            val results = coroutineScope {
+                GAME_MODES.map { (display, template) ->
+                    async { fetchMode(display, template, forceRefresh) }
+                }.awaitAll()
+            }
 
             val errors = results.filterIsInstance<ApiResult.Error>()
             if (errors.size == results.size) {
-                return@withContext ApiResult.Error(
+                return@ioApiCall ApiResult.Error(
                     "所有模式加载失败: ${errors.first().message}",
                     kind = errors.first().kind
                 )
@@ -69,10 +71,9 @@ object MapListApi {
                     }
                 }
             }
-            cachedModes = modes
             ApiResult.Success(modes, isOffline = isOffline, cacheAgeMs = maxAge)
-        } catch (e: Exception) {
-            ApiResult.Error("获取地图列表失败: ${e.message}", kind = e.toErrorKind())
+        }.also {
+            if (it is ApiResult.Success) cachedModes = it.value
         }
     }
 
@@ -83,10 +84,7 @@ object MapListApi {
     ): ApiResult<GameModeData> {
         return try {
             val sourceResult = MapRemoteSource.fetchModeHtml(templateName, forceRefresh)
-                ?: return ApiResult.Error(
-                    "请求 $displayName 失败，且无离线缓存",
-                    kind = ErrorKind.NETWORK
-                )
+                ?: return ApiResult.Error("请求 $displayName 失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val maps = MapListParsers.parseMapsFromHtml(sourceResult.html)
             ApiResult.Success(

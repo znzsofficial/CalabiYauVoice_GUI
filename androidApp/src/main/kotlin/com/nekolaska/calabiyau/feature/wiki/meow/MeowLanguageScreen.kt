@@ -72,7 +72,7 @@ fun MeowLanguageScreen(
     val copyText = rememberPlainTextClipboardCopier { showSnack("已复制") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<MeowLanguageSection>()) { force ->
-        MeowLanguageApi.fetchMeowLanguage(forceRefresh = force)
+        MeowLanguageApi.fetch(forceRefresh = force)
     }
 
     Scaffold(

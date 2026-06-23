@@ -61,7 +61,7 @@ fun StoryScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<StorySection>()) { force ->
-        StoryApi.fetchStory(forceRefresh = force)
+        StoryApi.fetch(forceRefresh = force)
     }
 
     Scaffold(

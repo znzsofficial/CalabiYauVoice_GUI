@@ -69,7 +69,7 @@ fun GameTipsScreen(
     val copyText = rememberPlainTextClipboardCopier { showSnack("已复制") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<GameTipsSection>()) { force ->
-        GameTipsApi.fetchGameTips(forceRefresh = force)
+        GameTipsApi.fetch(forceRefresh = force)
     }
 
     Scaffold(

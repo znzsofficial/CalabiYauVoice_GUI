@@ -37,8 +37,8 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
     val state = rememberLoadState(
         initial = emptyList<ItemInfo>(),
         cachedPrefetchDelayMs = 300L,
-        cachedFetch = { ItemCatalogApi.fetchItems(cacheOnly = true) },
-        fetch = { force -> ItemCatalogApi.fetchItems(forceRefresh = force, allowMemoryCache = false) }
+        cachedFetch = { ItemCatalogApi.fetch(cacheOnly = true) },
+        fetch = { force -> ItemCatalogApi.fetch(forceRefresh = force, allowMemoryCache = false) }
     )
     val allItems = state.data
     var selectedCategory by remember { mutableStateOf<String?>(null) }

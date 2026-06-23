@@ -7,11 +7,10 @@ import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
 import com.nekolaska.calabiyau.feature.wiki.game.source.GameModeRemoteSource
 import data.ApiResult
 import data.ErrorKind
-import data.toErrorKind
-import kotlinx.coroutines.Dispatchers
+import data.ioApiCall
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.coroutineScope
 
 /**
  * 游戏模式 API（Android）。
@@ -22,7 +21,7 @@ import kotlinx.coroutines.withContext
 object GameModeApi {
 
     init {
-        MemoryCacheRegistry.register("GameModeApi", ::clearMemoryCache)
+        MemoryCacheRegistry.register("GameModeApi") { cachedModes = null }
     }
 
     val MODES = listOf(
@@ -41,13 +40,28 @@ object GameModeApi {
     @Volatile
     private var cachedModes: List<GameModeDetail>? = null
 
-    fun clearMemoryCache() { cachedModes = null }
-
     suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeDetail>> {
         if (!forceRefresh) {
             cachedModes?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(forceRefresh).also {
+        return ioApiCall("获取游戏模式失败") {
+            val modeMapMapping = fetchModeMapMapping(forceRefresh)
+
+            val results = coroutineScope {
+                MODES.map { mode ->
+                    async { fetchMode(mode, modeMapMapping, forceRefresh) }
+                }.awaitAll()
+            }
+
+            val data = results.filterNotNull()
+            if (data.isEmpty()) {
+                ApiResult.Error("获取游戏模式失败", kind = ErrorKind.NETWORK)
+            } else {
+                val isOffline = data.any { it.isFromCache }
+                val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
+                ApiResult.Success(data.map { it.detail }, isOffline = isOffline, cacheAgeMs = maxAge)
+            }
+        }.also {
             if (it is ApiResult.Success) cachedModes = it.value
         }
     }
@@ -57,34 +71,6 @@ object GameModeApi {
         val isFromCache: Boolean,
         val ageMs: Long
     )
-
-    private suspend fun fetchFromNetwork(
-        forceRefresh: Boolean
-    ): ApiResult<List<GameModeDetail>> =
-        withContext(Dispatchers.IO) {
-            try {
-                val modeMapMapping = fetchModeMapMapping(forceRefresh)
-
-                val results = MODES.map { mode ->
-                    async { fetchMode(mode, modeMapMapping, forceRefresh) }
-                }.awaitAll()
-
-                val data = results.filterNotNull()
-                if (data.isEmpty()) {
-                    ApiResult.Error("获取游戏模式失败", kind = ErrorKind.NETWORK)
-                } else {
-                    val isOffline = data.any { it.isFromCache }
-                    val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
-                    ApiResult.Success(
-                        data.map { it.detail },
-                        isOffline = isOffline,
-                        cacheAgeMs = maxAge
-                    )
-                }
-            } catch (e: Exception) {
-                ApiResult.Error("获取游戏模式失败: ${e.message}", kind = e.toErrorKind())
-            }
-        }
 
     private suspend fun fetchModeMapMapping(forceRefresh: Boolean): Map<String, List<String>> {
         return try {
@@ -107,11 +93,7 @@ object GameModeApi {
                 sourceResult.wikitext,
                 modeMapMapping[mode.displayName] ?: emptyList()
             )
-            ModeResult(
-                detail = detail,
-                isFromCache = sourceResult.isFromCache,
-                ageMs = sourceResult.ageMs
-            )
+            ModeResult(detail = detail, isFromCache = sourceResult.isFromCache, ageMs = sourceResult.ageMs)
         } catch (_: Exception) {
             null
         }

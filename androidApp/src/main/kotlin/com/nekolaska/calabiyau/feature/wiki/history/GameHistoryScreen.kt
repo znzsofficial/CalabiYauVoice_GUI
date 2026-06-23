@@ -62,7 +62,7 @@ fun GameHistoryScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<GameHistorySection>()) { force ->
-        GameHistoryApi.fetchGameHistory(forceRefresh = force)
+        GameHistoryApi.fetch(forceRefresh = force)
     }
 
     Scaffold(
