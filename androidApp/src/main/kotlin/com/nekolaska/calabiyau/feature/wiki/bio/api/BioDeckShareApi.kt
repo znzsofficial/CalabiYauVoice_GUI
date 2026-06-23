@@ -11,6 +11,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.source.BioDeckShareRemoteSource
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
+import data.ioApiCall
 import data.toErrorKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,75 +45,71 @@ object BioDeckShareApi {
     }
 
     suspend fun fetchDeckCardMap(forceRefresh: Boolean = false): ApiResult<Map<String, List<DeckCardOption>>> =
-        withContext(Dispatchers.IO) {
-            try {
-                if (!forceRefresh) {
-                    cachedDeckCardMap?.let { return@withContext ApiResult.Success(it) }
-                }
-
-                val url = buildWikiUrl(API,
-                    "action" to "query",
-                    "prop" to "revisions",
-                    "titles" to WIKI_JSON_PAGE,
-                    "rvprop" to "content",
-                    "rvslots" to "main",
-                    "format" to "json"
-                )
-
-                val body = BioDeckShareRemoteSource.httpGetWithCache(
-                    url = url,
-                    cacheKey = "bio_deck_card_map",
-                    forceRefresh = forceRefresh
-                )
-                    ?: return@withContext ApiResult.Error("请求卡牌数据失败", kind = ErrorKind.NETWORK)
-
-                val root = SharedJson.parseToJsonElement(body).jsonObject
-                val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject
-                    ?: return@withContext ApiResult.Error("卡牌数据结构异常", kind = ErrorKind.PARSE)
-
-                val page = pages.values.firstOrNull()?.jsonObject
-                    ?: return@withContext ApiResult.Error("卡牌数据为空", kind = ErrorKind.NOT_FOUND)
-
-                if (page.containsKey("missing")) {
-                    return@withContext ApiResult.Error("数据源页面不存在: $WIKI_JSON_PAGE", kind = ErrorKind.NOT_FOUND)
-                }
-
-                val rawContent = page["revisions"]
-                    ?.jsonArray
-                    ?.firstOrNull()
-                    ?.jsonObject
-                    ?.get("slots")
-                    ?.jsonObject
-                    ?.get("main")
-                    ?.jsonObject
-                    ?.get("*")
-                    ?.jsonPrimitive
-                    ?.content
-                    .orEmpty()
-
-                val jsonText = rawContent
-                    .trim()
-                    .replace(Regex("^<pre[^>]*>", RegexOption.IGNORE_CASE), "")
-                    .replace(Regex("</pre>$", RegexOption.IGNORE_CASE), "")
-                    .trim()
-
-                val parsed = SharedJson.parseToJsonElement(jsonText).jsonObject
-                val result = buildMap {
-                    parsed.forEach { (faction, value) ->
-                        if (value !is JsonArray) return@forEach
-                        put(faction, BioDeckShareParsers.parseFactionCards(value))
-                    }
-                }
-
-                if (result.isEmpty()) {
-                    return@withContext ApiResult.Error("未解析到卡牌数据", kind = ErrorKind.PARSE)
-                }
-
-                cachedDeckCardMap = result
-                ApiResult.Success(result)
-            } catch (e: Exception) {
-                ApiResult.Error("读取卡牌数据失败: ${e.message}", kind = e.toErrorKind())
+        ioApiCall("读取卡牌数据失败") {
+            if (!forceRefresh) {
+                cachedDeckCardMap?.let { return@ioApiCall ApiResult.Success(it) }
             }
+
+            val url = buildWikiUrl(API,
+                "action" to "query",
+                "prop" to "revisions",
+                "titles" to WIKI_JSON_PAGE,
+                "rvprop" to "content",
+                "rvslots" to "main",
+                "format" to "json"
+            )
+
+            val body = BioDeckShareRemoteSource.httpGetWithCache(
+                url = url,
+                cacheKey = "bio_deck_card_map",
+                forceRefresh = forceRefresh
+            )
+                ?: return@ioApiCall ApiResult.Error("请求卡牌数据失败", kind = ErrorKind.NETWORK)
+
+            val root = SharedJson.parseToJsonElement(body).jsonObject
+            val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject
+                ?: return@ioApiCall ApiResult.Error("卡牌数据结构异常", kind = ErrorKind.PARSE)
+
+            val page = pages.values.firstOrNull()?.jsonObject
+                ?: return@ioApiCall ApiResult.Error("卡牌数据为空", kind = ErrorKind.NOT_FOUND)
+
+            if (page.containsKey("missing")) {
+                return@ioApiCall ApiResult.Error("数据源页面不存在: $WIKI_JSON_PAGE", kind = ErrorKind.NOT_FOUND)
+            }
+
+            val rawContent = page["revisions"]
+                ?.jsonArray
+                ?.firstOrNull()
+                ?.jsonObject
+                ?.get("slots")
+                ?.jsonObject
+                ?.get("main")
+                ?.jsonObject
+                ?.get("*")
+                ?.jsonPrimitive
+                ?.content
+                .orEmpty()
+
+            val jsonText = rawContent
+                .trim()
+                .replace(Regex("^<pre[^>]*>", RegexOption.IGNORE_CASE), "")
+                .replace(Regex("</pre>$", RegexOption.IGNORE_CASE), "")
+                .trim()
+
+            val parsed = SharedJson.parseToJsonElement(jsonText).jsonObject
+            val result = buildMap {
+                parsed.forEach { (faction, value) ->
+                    if (value !is JsonArray) return@forEach
+                    put(faction, BioDeckShareParsers.parseFactionCards(value))
+                }
+            }
+
+            if (result.isEmpty()) {
+                return@ioApiCall ApiResult.Error("未解析到卡牌数据", kind = ErrorKind.PARSE)
+            }
+
+            cachedDeckCardMap = result
+            ApiResult.Success(result)
         }
 
     fun encodeShareCode(cardIndexes: List<Int>, faction: String): String =

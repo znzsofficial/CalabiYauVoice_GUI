@@ -55,7 +55,7 @@ fun ActivityScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(emptyList<ActivityEntry>()) { force ->
-        ActivityApi.fetchActivities(forceRefresh = force)
+        ActivityApi.fetch(forceRefresh = force)
     }
 
     Scaffold(
