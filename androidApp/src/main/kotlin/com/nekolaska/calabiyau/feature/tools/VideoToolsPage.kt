@@ -132,99 +132,38 @@ internal fun VideoToolsPage(
     }
 
     fun runBilibiliMux() {
-        val video = biliVideoInput ?: run {
-            showSnack("请先选择 video.m4s")
-            return
-        }
-        val audioTrack = biliAudioInput ?: run {
-            showSnack("请先选择 audio.m4s")
-            return
-        }
-        scope.launch {
-            onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val outputDir = resolveOutputDirectory(outputPath, "视频工具/B站缓存音画合成")
-                    val result = muxBilibiliM4sCache(context, video, audioTrack, outputDir)
-                    scanMediaLibrary(context, listOf(result.outputFile))
-                    ToolOutput(
-                        title = "B站缓存合成完成",
-                        message = "已生成 ${result.outputFile.name}",
-                        files = listOf(result.outputFile),
-                        directory = outputDir
-                    )
-                }
-            }.onSuccess {
-                onResult(it)
-                showSnack(it.message)
-            }.onFailure {
-                showSnack("合成失败：${it.message ?: "未知错误"}")
-            }
-            onBusyChange(false)
+        val video = biliVideoInput ?: run { showSnack("请先选择 video.m4s"); return }
+        val audioTrack = biliAudioInput ?: run { showSnack("请先选择 audio.m4s"); return }
+        scope.launchToolJob(onBusyChange, onResult, showSnack, "合成失败") {
+            val outputDir = resolveOutputDirectory(outputPath, "视频工具/B站缓存音画合成")
+            val result = muxBilibiliM4sCache(context, video, audioTrack, outputDir)
+            scanMediaLibrary(context, listOf(result.outputFile))
+            ToolOutput(title = "B站缓存合成完成", message = "已生成 ${result.outputFile.name}", files = listOf(result.outputFile), directory = outputDir)
         }
     }
 
     fun runMediaSplit() {
-        val input = splitInput ?: run {
-            showSnack("请先选择要拆分的视频")
-            return
-        }
-        scope.launch {
-            onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val outputDir = resolveOutputDirectory(outputPath, "视频工具/音视频拆分")
-                    val result = splitMediaTracks(context, input, outputDir)
-                    val files = listOfNotNull(result.videoFile, result.audioFile)
-                    scanMediaLibrary(context, files)
-                    ToolOutput(
-                        title = "音视频拆分完成",
-                        message = "已生成 ${files.size} 个文件：视频轨 ${result.videoSamples} 帧，音频轨 ${result.audioSamples} 帧",
-                        files = files,
-                        directory = outputDir
-                    )
-                }
-            }.onSuccess {
-                onResult(it)
-                showSnack(it.message)
-            }.onFailure {
-                showSnack("拆分失败：${it.message ?: "未知错误"}")
-            }
-            onBusyChange(false)
+        val input = splitInput ?: run { showSnack("请先选择要拆分的视频"); return }
+        scope.launchToolJob(onBusyChange, onResult, showSnack, "拆分失败") {
+            val outputDir = resolveOutputDirectory(outputPath, "视频工具/音视频拆分")
+            val result = splitMediaTracks(context, input, outputDir)
+            val files = listOfNotNull(result.videoFile, result.audioFile)
+            scanMediaLibrary(context, files)
+            ToolOutput(title = "音视频拆分完成", message = "已生成 ${files.size} 个文件：视频轨 ${result.videoSamples} 帧，音频轨 ${result.audioSamples} 帧", files = files, directory = outputDir)
         }
     }
 
     fun runFrameExport() {
-        val input = frameInput ?: run {
-            showSnack("请先选择视频")
-            return
-        }
-        scope.launch {
-            onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val outputDir = resolveOutputDirectory(outputPath, "视频工具/帧画面提取")
-                    val sourceName = frameName?.substringBeforeLast('.') ?: input.file?.nameWithoutExtension ?: "video"
-                    val target = buildUniqueFile(outputDir, "${sanitizeFileName(sourceName)}_${framePositionMs}ms", "png")
-                    val bitmap = extractVideoFrameBitmap(context, input, framePositionMs)
-                        ?: throw IllegalStateException("无法读取该时间点画面")
-                    FileOutputStream(target).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                    bitmap.recycle()
-                    scanMediaLibrary(context, listOf(target))
-                    ToolOutput(
-                        title = "帧画面提取完成",
-                        message = "已导出 ${target.name}",
-                        files = listOf(target),
-                        directory = outputDir
-                    )
-                }
-            }.onSuccess {
-                onResult(it)
-                showSnack(it.message)
-            }.onFailure {
-                showSnack("帧画面导出失败：${it.message ?: "未知错误"}")
-            }
-            onBusyChange(false)
+        val input = frameInput ?: run { showSnack("请先选择视频"); return }
+        scope.launchToolJob(onBusyChange, onResult, showSnack, "帧画面导出失败") {
+            val outputDir = resolveOutputDirectory(outputPath, "视频工具/帧画面提取")
+            val sourceName = frameName?.substringBeforeLast('.') ?: input.file?.nameWithoutExtension ?: "video"
+            val target = buildUniqueFile(outputDir, "${sanitizeFileName(sourceName)}_${framePositionMs}ms", "png")
+            val bitmap = extractVideoFrameBitmap(context, input, framePositionMs) ?: throw IllegalStateException("无法读取该时间点画面")
+            FileOutputStream(target).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+            scanMediaLibrary(context, listOf(target))
+            ToolOutput(title = "帧画面提取完成", message = "已导出 ${target.name}", files = listOf(target), directory = outputDir)
         }
     }
 

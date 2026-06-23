@@ -320,31 +320,12 @@ internal fun AudioToolsPage(
     }
 
     fun exportCurrentAudio() {
-        val wav = currentAudio?.asset?.wav ?: run {
-            showSnack("请先导入或处理音频")
-            return
-        }
-        scope.launch {
-            onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val outputDir = resolveOutputDirectory(outputPath, "音频工具/导出音频")
-                    val target = buildUniqueFile(outputDir, wav.file.nameWithoutExtension.ifBlank { "audio_preview" }, "wav")
-                    wav.file.copyTo(target, overwrite = false)
-                    ToolOutput(
-                        title = "音频导出完成",
-                        message = "已导出 ${target.name}",
-                        files = listOf(target),
-                        directory = outputDir
-                    )
-                }
-            }.onSuccess {
-                onResult(it)
-                showSnack(it.message)
-            }.onFailure {
-                showSnack("导出失败：${it.message ?: "未知错误"}")
-            }
-            onBusyChange(false)
+        val wav = currentAudio?.asset?.wav ?: run { showSnack("请先导入或处理音频"); return }
+        scope.launchToolJob(onBusyChange, onResult, showSnack, "导出失败") {
+            val outputDir = resolveOutputDirectory(outputPath, "音频工具/导出音频")
+            val target = buildUniqueFile(outputDir, wav.file.nameWithoutExtension.ifBlank { "audio_preview" }, "wav")
+            wav.file.copyTo(target, overwrite = false)
+            ToolOutput(title = "音频导出完成", message = "已导出 ${target.name}", files = listOf(target), directory = outputDir)
         }
     }
 

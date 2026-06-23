@@ -199,63 +199,37 @@ internal fun TextToolsPage(
     }
 
     fun exportTimeline(shiftMs: Int, normalize: Boolean, skipEmptyText: Boolean) {
-        if (clips.isEmpty()) {
-            showSnack("没有可导出的片段")
-            return
-        }
-        scope.launch {
-            onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val outputDir = resolveOutputDirectory(outputPath, "文本工具/时间轴")
-                    val target = buildUniqueFile(outputDir, "timeline_${System.currentTimeMillis()}", exportFormat.ext)
-                    var source = clips.toList()
-                    if (skipEmptyText) {
-                        source = source.filter { it.text.isNotBlank() }
-                    }
-                    if (source.isEmpty()) error("所有片段都为空文本，无法导出")
-
-                    source = if (normalize) {
-                        val sorted = source.sortedBy { it.startMs }
-                        var cursor = 0L
-                        sorted.map { clip ->
-                            val s = max(cursor, max(0L, clip.startMs))
-                            val e = max(s + MIN_CLIP_MS, clip.endMs)
-                            cursor = e
-                            clip.copy(startMs = s, endMs = e)
-                        }
-                    } else {
-                        source.sortedBy { it.startMs }
-                    }
-
-                    val shifted = source
-                        .map {
-                            val s = max(0L, it.startMs + shiftMs)
-                            val e = max(s + MIN_CLIP_MS, it.endMs + shiftMs)
-                            it.copy(startMs = s, endMs = e)
-                        }
-                    val content = when (exportFormat) {
-                        TimelineExportFormat.SRT -> toSrt(shifted)
-                        TimelineExportFormat.LRC -> toLrc(shifted)
-                        TimelineExportFormat.VTT -> toVtt(shifted)
-                        TimelineExportFormat.ASS -> toAss(shifted)
-                        TimelineExportFormat.SSA -> toSsa(shifted)
-                    }
-                    target.writeText(content)
-                    ToolOutput(
-                        title = "时间轴导出完成",
-                        message = "已导出 ${target.name}",
-                        files = listOf(target),
-                        directory = outputDir
-                    )
+        if (clips.isEmpty()) { showSnack("没有可导出的片段"); return }
+        scope.launchToolJob(onBusyChange, onResult, showSnack, "导出失败") {
+            val outputDir = resolveOutputDirectory(outputPath, "文本工具/时间轴")
+            val target = buildUniqueFile(outputDir, "timeline_${System.currentTimeMillis()}", exportFormat.ext)
+            var source = clips.toList()
+            if (skipEmptyText) source = source.filter { it.text.isNotBlank() }
+            if (source.isEmpty()) error("所有片段都为空文本，无法导出")
+            source = if (normalize) {
+                val sorted = source.sortedBy { it.startMs }
+                var cursor = 0L
+                sorted.map { clip ->
+                    val s = max(cursor, max(0L, clip.startMs))
+                    val e = max(s + MIN_CLIP_MS, clip.endMs)
+                    cursor = e
+                    clip.copy(startMs = s, endMs = e)
                 }
-            }.onSuccess {
-                onResult(it)
-                showSnack(it.message)
-            }.onFailure {
-                showSnack("导出失败：${it.message ?: "未知错误"}")
+            } else { source.sortedBy { it.startMs } }
+            val shifted = source.map {
+                val s = max(0L, it.startMs + shiftMs)
+                val e = max(s + MIN_CLIP_MS, it.endMs + shiftMs)
+                it.copy(startMs = s, endMs = e)
             }
-            onBusyChange(false)
+            val content = when (exportFormat) {
+                TimelineExportFormat.SRT -> toSrt(shifted)
+                TimelineExportFormat.LRC -> toLrc(shifted)
+                TimelineExportFormat.VTT -> toVtt(shifted)
+                TimelineExportFormat.ASS -> toAss(shifted)
+                TimelineExportFormat.SSA -> toSsa(shifted)
+            }
+            target.writeText(content)
+            ToolOutput(title = "时间轴导出完成", message = "已导出 ${target.name}", files = listOf(target), directory = outputDir)
         }
     }
 
