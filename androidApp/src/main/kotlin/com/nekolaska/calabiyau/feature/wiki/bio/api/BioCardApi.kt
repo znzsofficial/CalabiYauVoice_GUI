@@ -7,6 +7,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardRemoteSource
 import data.ApiResult
 import data.ErrorKind
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -90,6 +91,8 @@ object BioCardApi {
                         cacheAgeMs = listOf(pc, mobile, decks, mode).maxOfOrNull { it.ageMs } ?: 0L
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("获取卡牌数据失败: ${e.message}", kind = e.toErrorKind())
             }

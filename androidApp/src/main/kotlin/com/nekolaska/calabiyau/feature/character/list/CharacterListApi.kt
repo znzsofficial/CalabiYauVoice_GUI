@@ -10,6 +10,7 @@ import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -87,6 +88,8 @@ object CharacterListApi {
             }
             cachedFactions = factions
             ApiResult.Success(factions, isOffline = isOffline, cacheAgeMs = maxAge)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("获取角色列表失败: ${e.message}", kind = e.toErrorKind())
         }
@@ -124,6 +127,8 @@ object CharacterListApi {
                 isOffline = result.isFromCache,
                 cacheAgeMs = result.ageMs
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("加载 $faction 失败: ${e.message}", kind = e.toErrorKind())
         }
@@ -192,6 +197,8 @@ object CharacterListApi {
                         ?.attr("src")
                     val portraitUrl = WikiImageUrls.originalFromThumbnail(portraitSrc)
                     char.copy(portraitUrl = portraitUrl)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (_: Exception) {
                     char
                 }

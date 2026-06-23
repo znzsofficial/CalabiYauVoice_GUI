@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.settings
 
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -87,6 +88,8 @@ object UpdateApi {
             } else {
                 Result.AlreadyLatest
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.Error("检查失败: ${e.javaClass.simpleName}")
         }

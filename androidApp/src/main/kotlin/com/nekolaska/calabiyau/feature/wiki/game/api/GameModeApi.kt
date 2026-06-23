@@ -8,6 +8,7 @@ import com.nekolaska.calabiyau.feature.wiki.game.source.GameModeRemoteSource
 import data.ApiResult
 import data.ErrorKind
 import data.ioApiCall
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -76,6 +77,8 @@ object GameModeApi {
         return try {
             val wikitext = GameModeRemoteSource.fetchModeMapMappingWikitext(forceRefresh) ?: return emptyMap()
             GameModeParsers.parseModeMapMapping(wikitext)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             emptyMap()
         }
@@ -94,6 +97,8 @@ object GameModeApi {
                 modeMapMapping[mode.displayName] ?: emptyList()
             )
             ModeResult(detail = detail, isFromCache = sourceResult.isFromCache, ageMs = sourceResult.ageMs)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }

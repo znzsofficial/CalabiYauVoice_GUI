@@ -91,6 +91,11 @@ internal fun TextToolsPage(
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
     val scope = rememberCoroutineScope()
+    val toolJobs = ToolJobCallbacks(
+        onBusyChange = onBusyChange,
+        onResult = onResult,
+        showSnack = showSnack
+    )
 
     val clips = remember { mutableStateListOf<TimelineClip>() }
     val undoStack = remember { mutableStateListOf<HistoryState>() }
@@ -200,7 +205,10 @@ internal fun TextToolsPage(
 
     fun exportTimeline(shiftMs: Int, normalize: Boolean, skipEmptyText: Boolean) {
         if (clips.isEmpty()) { showSnack("没有可导出的片段"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "导出失败") {
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "导出失败"
+        ) {
             val outputDir = resolveOutputDirectory(outputPath, "文本工具/时间轴")
             val target = buildUniqueFile(outputDir, "timeline_${System.currentTimeMillis()}", exportFormat.ext)
             var source = clips.toList()

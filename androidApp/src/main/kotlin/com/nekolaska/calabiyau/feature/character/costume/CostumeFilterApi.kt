@@ -8,6 +8,7 @@ import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
@@ -82,7 +83,7 @@ object CostumeFilterApi {
         withContext(Dispatchers.IO) {
             try {
                 // 强刷时必须绕过内存缓存
-                if (allowMemoryCache) getCachedCostumes(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
+                if (!cacheOnly && allowMemoryCache) getCachedCostumes(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
 
                 // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
                 if (cacheOnly) {
@@ -104,6 +105,8 @@ object CostumeFilterApi {
                 val body = result.payload
 
                 parseCostumeResult(body, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("获取时装数据失败: ${e.message}", kind = e.toErrorKind())
             }

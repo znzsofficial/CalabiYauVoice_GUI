@@ -8,6 +8,7 @@ import com.nekolaska.calabiyau.feature.wiki.decoration.source.PlayerDecorationRe
 import data.ApiResult
 import data.ErrorKind
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -107,7 +108,7 @@ object PlayerDecorationApi {
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
     ): ApiResult<List<DecorationSection>> {
-        if (allowMemoryCache) getCachedSections(pageName, forceRefresh)?.let { return ApiResult.Success(it) }
+        if (!cacheOnly && allowMemoryCache) getCachedSections(pageName, forceRefresh)?.let { return ApiResult.Success(it) }
         return if (cacheOnly) fetchFromCache(pageName) else fetchFromNetwork(pageName, forceRefresh).also {
             if (it is ApiResult.Success) cacheMap[pageName] = it.value
         }
@@ -176,6 +177,8 @@ object PlayerDecorationApi {
                     cacheAgeMs = sourceResult.ageMs
                 )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("网络异常: ${e.message}", kind = e.toErrorKind())
         }
@@ -196,6 +199,8 @@ object PlayerDecorationApi {
             }
                 ?: return emptyMap()
             PlayerDecorationParsers.parseModuleData(wikitext)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             emptyMap()
         }

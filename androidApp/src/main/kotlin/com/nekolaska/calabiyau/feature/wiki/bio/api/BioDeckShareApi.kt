@@ -13,6 +13,7 @@ import data.ErrorKind
 import data.SharedJson
 import data.ioApiCall
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -222,6 +223,8 @@ object BioDeckShareApi {
                     val isPending = editObj?.get("moderation") != null
                     ApiResult.Success(SubmitDeckResult(title = targetTitle, isPending = isPending))
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("发布失败: ${e.message}", kind = e.toErrorKind())
             }

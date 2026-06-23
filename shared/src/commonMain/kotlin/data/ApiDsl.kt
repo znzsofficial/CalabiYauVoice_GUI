@@ -1,5 +1,6 @@
 package data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -20,6 +21,8 @@ suspend fun <T> ioApiCall(
 ): ApiResult<T> = withContext(Dispatchers.IO) {
     try {
         block()
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         ApiResult.Error("$errorMessage: ${e.message}", kind = e.toErrorKind())
     }

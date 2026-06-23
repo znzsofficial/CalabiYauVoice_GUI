@@ -8,6 +8,7 @@ import com.nekolaska.calabiyau.feature.wiki.balance.source.BalanceDataRemoteSour
 import data.ApiResult
 import data.ErrorKind
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -59,6 +60,8 @@ object BalanceDataApi {
 
                 cachedSettings = settings
                 ApiResult.Success(settings)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error(e.message ?: "网络错误", kind = e.toErrorKind())
             }
@@ -115,6 +118,8 @@ object BalanceDataApi {
             }
 
             ApiResult.Success(parsed)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error(e.message ?: "网络错误", kind = e.toErrorKind())
         }

@@ -6,6 +6,7 @@ import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -133,6 +134,8 @@ object WeaponDetailApi {
                     isOffline = result.isFromCache,
                     cacheAgeMs = result.ageMs
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("获取武器详情失败: ${e.message}", kind = e.toErrorKind())
             }

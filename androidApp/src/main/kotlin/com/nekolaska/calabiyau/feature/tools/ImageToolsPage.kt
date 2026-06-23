@@ -792,6 +792,11 @@ internal fun ImageToolsPage(
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
     val scope = rememberCoroutineScope()
+    val toolJobs = ToolJobCallbacks(
+        onBusyChange = onBusyChange,
+        onResult = onResult,
+        showSnack = showSnack
+    )
     var imageQuality by rememberSaveable { mutableFloatStateOf(0.82f) }
     var exportFormat by rememberSaveable { mutableStateOf(ExportFormat.JPG) }
     var cropPreset by rememberSaveable { mutableStateOf("1:1") }
@@ -884,7 +889,9 @@ internal fun ImageToolsPage(
 
     fun runCompress(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "图片处理失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "图片处理失败",
             onSuccess = { compressSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/图片压缩")
@@ -900,7 +907,9 @@ internal fun ImageToolsPage(
 
     fun runBatchConvert(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "批量格式转换失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "批量格式转换失败",
             onSuccess = { batchConvertSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/批量格式转换")
@@ -920,7 +929,9 @@ internal fun ImageToolsPage(
 
     fun runNineGrid(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "九宫格切图失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "九宫格切图失败",
             onSuccess = { nineGridSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/九宫格")
@@ -933,7 +944,9 @@ internal fun ImageToolsPage(
 
     fun runCrop(inputs: List<PickedInput>, cropPreviewStateMap: Map<Int, CropPreviewState> = emptyMap()) {
         if (inputs.isEmpty()) return
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "比例裁切失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "比例裁切失败",
             onSuccess = { cropSources = emptyList(); cropPreviewStates.clear() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/比例裁切")
@@ -947,7 +960,9 @@ internal fun ImageToolsPage(
 
     fun runUpscale(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "插值放大失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "插值放大失败",
             onSuccess = { upscaleSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/插值放大")
@@ -963,7 +978,9 @@ internal fun ImageToolsPage(
 
     fun runStitch(inputs: List<PickedInput>) {
         if (inputs.size < 2) { showSnack("请至少选择 2 张图片"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "拼图失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "拼图失败",
             onSuccess = { stitchSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/拼图")
@@ -975,7 +992,9 @@ internal fun ImageToolsPage(
 
     fun runGifCompose(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) { showSnack("请先选择要合成的图片"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "GIF 合成失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "GIF 合成失败",
             onSuccess = { gifComposeSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/GIF合成")
@@ -992,7 +1011,9 @@ internal fun ImageToolsPage(
 
     fun runExifCleanup(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "元数据清理失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "元数据清理失败",
             onSuccess = { exifCleanupSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/元数据清理")
@@ -1017,7 +1038,9 @@ internal fun ImageToolsPage(
 
     fun runGifDecompose(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) { showSnack("请先选择 GIF 文件"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "GIF 分解失败",
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "GIF 分解失败",
             onSuccess = { gifDecomposeSources = emptyList() }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "图片工具/GIF分解")

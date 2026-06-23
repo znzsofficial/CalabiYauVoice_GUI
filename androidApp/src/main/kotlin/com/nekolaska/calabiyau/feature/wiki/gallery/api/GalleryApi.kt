@@ -9,6 +9,7 @@ import com.nekolaska.calabiyau.feature.wiki.gallery.source.GalleryPageSourceResu
 import data.ApiResult
 import data.ErrorKind
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -38,7 +39,7 @@ object GalleryApi {
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
     ): ApiResult<List<GallerySection>> {
-        if (!forceRefresh && allowMemoryCache) {
+        if (!forceRefresh && !cacheOnly && allowMemoryCache) {
             cache[pageName]?.let { return ApiResult.Success(it) }
         }
         return if (cacheOnly) fetchFromCache(pageName) else fetchFromNetwork(pageName, forceRefresh).also {
@@ -120,6 +121,8 @@ object GalleryApi {
                         cacheAgeMs = result.ageMs
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("网络异常: ${e.message}", kind = e.toErrorKind())
             }

@@ -9,6 +9,7 @@ import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonArray
@@ -85,7 +86,7 @@ object WeaponSkinFilterApi {
         withContext(Dispatchers.IO) {
             try {
                 // 强刷时必须绕过内存缓存
-                if (allowMemoryCache) getCachedSkins(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
+                if (!cacheOnly && allowMemoryCache) getCachedSkins(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
 
                 // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
                 if (cacheOnly) {
@@ -113,6 +114,8 @@ object WeaponSkinFilterApi {
                 val body = result.payload
 
                 parseSkinResult(body, weaponMeta, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("获取武器外观数据失败: ${e.message}", kind = e.toErrorKind())
             }

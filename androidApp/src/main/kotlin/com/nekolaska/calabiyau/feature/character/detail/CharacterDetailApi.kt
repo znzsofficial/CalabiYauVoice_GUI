@@ -9,6 +9,7 @@ import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -186,6 +187,8 @@ object CharacterDetailApi {
                     isOffline = result.isFromCache,
                     cacheAgeMs = result.ageMs
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error("获取角色详情失败: ${e.message}", kind = e.toErrorKind())
             }

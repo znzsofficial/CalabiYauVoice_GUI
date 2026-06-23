@@ -70,6 +70,11 @@ internal fun VideoToolsPage(
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
     val scope = rememberCoroutineScope()
+    val toolJobs = ToolJobCallbacks(
+        onBusyChange = onBusyChange,
+        onResult = onResult,
+        showSnack = showSnack
+    )
     var biliVideoInput by remember { mutableStateOf<PickedInput?>(null) }
     var biliAudioInput by remember { mutableStateOf<PickedInput?>(null) }
     var biliVideoName by remember { mutableStateOf<String?>(null) }
@@ -134,7 +139,10 @@ internal fun VideoToolsPage(
     fun runBilibiliMux() {
         val video = biliVideoInput ?: run { showSnack("请先选择 video.m4s"); return }
         val audioTrack = biliAudioInput ?: run { showSnack("请先选择 audio.m4s"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "合成失败") {
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "合成失败"
+        ) {
             val outputDir = resolveOutputDirectory(outputPath, "视频工具/B站缓存音画合成")
             val result = muxBilibiliM4sCache(context, video, audioTrack, outputDir)
             scanMediaLibrary(context, listOf(result.outputFile))
@@ -144,7 +152,10 @@ internal fun VideoToolsPage(
 
     fun runMediaSplit() {
         val input = splitInput ?: run { showSnack("请先选择要拆分的视频"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "拆分失败") {
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "拆分失败"
+        ) {
             val outputDir = resolveOutputDirectory(outputPath, "视频工具/音视频拆分")
             val result = splitMediaTracks(context, input, outputDir)
             val files = listOfNotNull(result.videoFile, result.audioFile)
@@ -155,7 +166,10 @@ internal fun VideoToolsPage(
 
     fun runFrameExport() {
         val input = frameInput ?: run { showSnack("请先选择视频"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "帧画面导出失败") {
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "帧画面导出失败"
+        ) {
             val outputDir = resolveOutputDirectory(outputPath, "视频工具/帧画面提取")
             val sourceName = frameName?.substringBeforeLast('.') ?: input.file?.nameWithoutExtension ?: "video"
             val target = buildUniqueFile(outputDir, "${sanitizeFileName(sourceName)}_${framePositionMs}ms", "png")

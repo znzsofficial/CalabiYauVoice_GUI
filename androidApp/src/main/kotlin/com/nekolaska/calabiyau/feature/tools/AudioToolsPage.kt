@@ -82,6 +82,11 @@ internal fun AudioToolsPage(
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
     val scope = rememberCoroutineScope()
+    val toolJobs = ToolJobCallbacks(
+        onBusyChange = onBusyChange,
+        onResult = onResult,
+        showSnack = showSnack
+    )
     var currentAudio by remember { mutableStateOf<AudioPreviewState?>(null) }
     val audioHistory = remember { AudioHistoryController(File(context.cacheDir, "audio_tool_history_${System.nanoTime()}")) }
     var trimThresholdPercent by remember { mutableStateOf("1.5") }
@@ -321,7 +326,10 @@ internal fun AudioToolsPage(
 
     fun exportCurrentAudio() {
         val wav = currentAudio?.asset?.wav ?: run { showSnack("请先导入或处理音频"); return }
-        scope.launchToolJob(onBusyChange, onResult, showSnack, "导出失败") {
+        scope.launchToolJob(
+            callbacks = toolJobs,
+            errorLabel = "导出失败"
+        ) {
             val outputDir = resolveOutputDirectory(outputPath, "音频工具/导出音频")
             val target = buildUniqueFile(outputDir, wav.file.nameWithoutExtension.ifBlank { "audio_preview" }, "wav")
             wav.file.copyTo(target, overwrite = false)

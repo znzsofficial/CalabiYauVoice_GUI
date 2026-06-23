@@ -29,14 +29,14 @@ abstract class CachedWikiApi<T>(private val name: String) {
      *
      * @param forceRefresh 忽略内存缓存，强制从网络获取
      * @param cacheOnly 仅从离线缓存加载，不发起网络请求
-     * @param allowMemoryCache 是否允许内存缓存（false 时跳过内存缓存检查）
+     * @param allowMemoryCache 是否允许内存缓存；cacheOnly 为 true 时始终跳过内存缓存
      */
     suspend fun fetch(
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
     ): ApiResult<T> {
-        if (!forceRefresh && allowMemoryCache) {
+        if (!forceRefresh && !cacheOnly && allowMemoryCache) {
             cachedValue?.let { return ApiResult.Success(it) }
         }
         val result = if (cacheOnly) fetchFromCache() else fetchFromNetwork(forceRefresh)
@@ -45,11 +45,11 @@ abstract class CachedWikiApi<T>(private val name: String) {
     }
 
     /**
-     * 从离线缓存加载数据。默认抛出 [UnsupportedOperationException]。
+     * 从离线缓存加载数据。默认返回不支持 cacheOnly 的错误结果。
      * 需要 cacheOnly 支持的子类应覆写此方法。
      */
     protected open suspend fun fetchFromCache(): ApiResult<T> =
-        throw UnsupportedOperationException("$name 不支持 cacheOnly")
+        ApiResult.Error("$name 不支持 cacheOnly")
 
     protected abstract suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<T>
 }

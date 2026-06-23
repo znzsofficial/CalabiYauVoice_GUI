@@ -8,6 +8,7 @@ import data.ApiResult
 import data.ErrorKind
 import data.ioApiCall
 import data.toErrorKind
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -92,6 +93,8 @@ object MapListApi {
                 isOffline = sourceResult.isFromCache,
                 cacheAgeMs = sourceResult.ageMs
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("加载 $displayName 失败: ${e.message}", kind = e.toErrorKind())
         }
