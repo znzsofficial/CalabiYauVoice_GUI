@@ -85,7 +85,9 @@ fun StringerPushCardScreen(
             summary = "",
             wikiUrl = "",
             cards = emptyList()
-        )
+        ),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { StringerPushCardApi.fetch(cacheOnly = true) }
     ) { force ->
         StringerPushCardApi.fetch(force)
     }
