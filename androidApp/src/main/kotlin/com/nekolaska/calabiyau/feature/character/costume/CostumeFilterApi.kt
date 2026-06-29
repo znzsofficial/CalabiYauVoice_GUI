@@ -1,14 +1,13 @@
 package com.nekolaska.calabiyau.feature.character.costume
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
-import data.toErrorKind
-import kotlinx.coroutines.CancellationException
+import data.ioApiCall
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
@@ -23,23 +22,9 @@ import util.buildWikiUrl
  * 通过 MediaWiki parse API 渲染 `{{#invoke:角色|角色时装筛选}}` Lua 模块，
  * 从返回的 HTML 中提取时装数据（data-param 属性 + img 标签）。
  */
-object CostumeFilterApi {
-
-    init {
-        MemoryCacheRegistry.register("CostumeFilterApi", ::clearMemoryCache)
-    }
+object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("CostumeFilterApi") {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
-
-    /** 内存缓存（进程生命周期内有效，避免重复请求） */
-    @Volatile
-    private var cachedCostumes: List<CostumeInfo>? = null
-
-    fun clearMemoryCache() { cachedCostumes = null }
-
-    private fun getCachedCostumes(forceRefresh: Boolean): List<CostumeInfo>? {
-        return if (forceRefresh) null else cachedCostumes
-    }
 
     /** 品质等级 */
     enum class Quality(val level: Int, val displayName: String) {
@@ -79,36 +64,35 @@ object CostumeFilterApi {
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
-    ): ApiResult<List<CostumeInfo>> =
+    ): ApiResult<List<CostumeInfo>> = fetch(
+        forceRefresh = forceRefresh,
+        cacheOnly = cacheOnly,
+        allowMemoryCache = allowMemoryCache
+    )
+
+    override suspend fun fetchFromCache(): ApiResult<List<CostumeInfo>> =
         withContext(Dispatchers.IO) {
-            try {
-                // 强刷时必须绕过内存缓存
-                if (!cacheOnly && allowMemoryCache) getCachedCostumes(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
+            ioApiCall("获取时装数据失败") {
+                val entry = OfflineCache.getEntry(OfflineCache.Type.COSTUMES, "all_costumes")
+                    ?: return@ioApiCall ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
+                parseCostumeResult(entry.content, isOffline = true, cacheAgeMs = entry.ageMs)
+            }
+        }
 
-                // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
-                if (cacheOnly) {
-                    val entry = OfflineCache.getEntry(OfflineCache.Type.COSTUMES, "all_costumes")
-                        ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
-                    return@withContext parseCostumeResult(entry.content, isOffline = true, cacheAgeMs = entry.ageMs)
-                }
-
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<CostumeInfo>> =
+        withContext(Dispatchers.IO) {
+            ioApiCall("获取时装数据失败") {
                 val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:角色|角色时装筛选}}", "prop" to "text", "format" to "json")
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.COSTUMES,
                     key = "all_costumes",
                     forceRefresh = forceRefresh
                 ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error(
+                    ?: return@ioApiCall ApiResult.Error(
                         "请求失败，且无离线缓存",
                         kind = ErrorKind.NETWORK
                     )
-                val body = result.payload
-
-                parseCostumeResult(body, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                ApiResult.Error("获取时装数据失败: ${e.message}", kind = e.toErrorKind())
+                parseCostumeResult(result.payload, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
             }
         }
 
@@ -126,7 +110,6 @@ object CostumeFilterApi {
         return if (costumes.isEmpty()) {
             ApiResult.Error("未找到时装数据", kind = ErrorKind.NOT_FOUND)
         } else {
-            cachedCostumes = costumes
             ApiResult.Success(costumes, isOffline = isOffline, cacheAgeMs = cacheAgeMs)
         }
     }

@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.balance.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceResult
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceSettings
 import com.nekolaska.calabiyau.feature.wiki.balance.parser.BalanceDataParsers
@@ -13,23 +13,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** 官网平衡数据 API（Android）。 */
-object BalanceDataApi {
-
-    init {
-        MemoryCacheRegistry.register("BalanceDataApi", ::clearMemoryCache)
-    }
+object BalanceDataApi : CachedWikiApi<BalanceSettings>("BalanceDataApi") {
 
     private const val CHART_ID = "338985"
     private const val IDE_TOKEN = "b7FM3m"
 
-    private var cachedSettings: BalanceSettings? = null
-
-    fun clearMemoryCache() { cachedSettings = null }
-
     suspend fun fetchSettings(forceRefresh: Boolean = false): ApiResult<BalanceSettings> {
-        if (!forceRefresh) cachedSettings?.let { return ApiResult.Success(it) }
+        return fetch(forceRefresh = forceRefresh)
+    }
 
-        return withContext(Dispatchers.IO) {
+    override suspend fun fetchFromCache(): ApiResult<BalanceSettings> =
+        ApiResult.Error("平衡数据不支持 cacheOnly", kind = ErrorKind.NETWORK)
+
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<BalanceSettings> =
+        withContext(Dispatchers.IO) {
             try {
                 val result = BalanceDataRemoteSource.fetchSettingsBody()
                 if (result.code !in 200..299) {
@@ -58,7 +55,6 @@ object BalanceDataApi {
                     throw e
                 }
 
-                cachedSettings = settings
                 ApiResult.Success(settings)
             } catch (e: CancellationException) {
                 throw e
@@ -66,7 +62,6 @@ object BalanceDataApi {
                 ApiResult.Error(e.message ?: "网络错误", kind = e.toErrorKind())
             }
         }
-    }
 
     suspend fun fetchBalanceData(
         modeCode: String,

@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.map.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.parser.MapListParsers
 import com.nekolaska.calabiyau.feature.wiki.map.source.MapRemoteSource
@@ -19,14 +19,7 @@ import kotlinx.coroutines.coroutineScope
  * 通过 MediaWiki parse API 渲染 `{{游戏地图|模式名}}` 模板，
  * 从返回的 HTML 中提取地图名、链接和图片 URL。
  */
-object MapListApi {
-
-    init {
-        MemoryCacheRegistry.register("MapListApi") { cachedModes = null }
-    }
-
-    @Volatile
-    private var cachedModes: List<GameModeData>? = null
+object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
 
     val GAME_MODES: List<Pair<String, String>> = listOf(
         "爆破/团队乱斗" to "一般爆破",
@@ -41,10 +34,11 @@ object MapListApi {
     )
 
     suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeData>> {
-        if (!forceRefresh) {
-            cachedModes?.let { return ApiResult.Success(it) }
-        }
-        return ioApiCall("获取地图列表失败") {
+        return fetch(forceRefresh = forceRefresh)
+    }
+
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameModeData>> =
+        ioApiCall("获取地图列表失败") {
             val results = coroutineScope {
                 GAME_MODES.map { (display, template) ->
                     async { fetchMode(display, template, forceRefresh) }
@@ -73,10 +67,7 @@ object MapListApi {
                 }
             }
             ApiResult.Success(modes, isOffline = isOffline, cacheAgeMs = maxAge)
-        }.also {
-            if (it is ApiResult.Success) cachedModes = it.value
         }
-    }
 
     private suspend fun fetchMode(
         displayName: String,

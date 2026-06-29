@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardPageData
 import com.nekolaska.calabiyau.feature.wiki.bio.parser.BioCardParsers
 import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardRemoteSource
@@ -21,31 +21,22 @@ import kotlinx.coroutines.withContext
  * - 战斗模式/晶源感染/移动端卡牌筛选
  * - 晶源感染卡组分享
  */
-object BioCardApi {
-
-    init {
-        MemoryCacheRegistry.register("BioCardApi", ::clearMemoryCache)
-    }
+object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
 
     private const val PC_PAGE = "战斗模式/晶源感染/PC端卡牌筛选"
     private const val MOBILE_PAGE = "战斗模式/晶源感染/移动端卡牌筛选"
     private const val DECK_PAGE = "晶源感染卡组分享"
     private const val MODE_PAGE = "战斗模式/晶源感染"
 
-    @Volatile
-    private var cachedData: CardPageData? = null
-
-    fun clearMemoryCache() {
-        cachedData = null
-    }
-
     suspend fun fetchAll(forceRefresh: Boolean = false): ApiResult<CardPageData> =
+        fetch(forceRefresh = forceRefresh)
+
+    override suspend fun fetchFromCache(): ApiResult<CardPageData> =
+        ApiResult.Error("卡牌整合页不支持 cacheOnly", kind = ErrorKind.NETWORK)
+
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<CardPageData> =
         withContext(Dispatchers.IO) {
             try {
-                if (!forceRefresh) {
-                    cachedData?.let { return@withContext ApiResult.Success(it) }
-                }
-
                 val results = awaitAll(
                     async { BioCardRemoteSource.fetchPageHtml(PC_PAGE, "bio_cards_pc", forceRefresh) },
                     async { BioCardRemoteSource.fetchPageHtml(MOBILE_PAGE, "bio_cards_mobile", forceRefresh) },
@@ -84,7 +75,6 @@ object BioCardApi {
                 if (data.pcCards.isEmpty() && data.mobileCards.isEmpty() && data.decks.isEmpty()) {
                     ApiResult.Error("未找到卡牌数据", kind = ErrorKind.NOT_FOUND)
                 } else {
-                    cachedData = data
                     ApiResult.Success(
                         data,
                         isOffline = listOf(pc, mobile, decks, mode).any { it.isFromCache },

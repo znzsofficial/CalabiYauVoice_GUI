@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.weapon.list
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
@@ -22,11 +22,7 @@ import util.wikiPathEncode
  * 通过 Semantic MediaWiki ask API 获取各分类武器列表，
  * 武器图片通过 `文件:使用者名-weapon.png` 命名规则获取。
  */
-object WeaponListApi {
-
-    init {
-        MemoryCacheRegistry.register("WeaponListApi", ::clearMemoryCache)
-    }
+object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<WeaponListApi.WeaponCategoryData>>("WeaponListApi") {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
@@ -55,19 +51,7 @@ object WeaponListApi {
         val weapons: List<WeaponInfo>
     )
 
-
-
-    // ── 内存缓存 ──
-    @Volatile
-    private var cachedData: List<WeaponCategoryData>? = null
-
-    @Volatile
-    private var cachedSearchData: List<WeaponCategoryData>? = null
-
-    fun clearMemoryCache() {
-        cachedData = null
-        cachedSearchData = null
-    }
+    data class WeaponListKey(val includeImages: Boolean)
 
     /**
      * 获取所有分类的武器列表（带内存缓存）。
@@ -76,19 +60,14 @@ object WeaponListApi {
         forceRefresh: Boolean = false,
         includeImages: Boolean = true
     ): ApiResult<List<WeaponCategoryData>> {
-        if (!forceRefresh) {
-            if (includeImages) {
-                cachedData?.let { return ApiResult.Success(it) }
-            } else {
-                cachedSearchData?.let { return ApiResult.Success(it) }
-                cachedData?.let { return ApiResult.Success(it) }
-            }
+        if (!forceRefresh && !includeImages) {
+            getCachedValue(WeaponListKey(false))?.let { return ApiResult.Success(it) }
+            getCachedValue(WeaponListKey(true))?.let { return ApiResult.Success(it) }
         }
-        return fetchFromNetwork(forceRefresh, includeImages).also {
-            if (it is ApiResult.Success) {
-                if (includeImages) cachedData = it.value else cachedSearchData = it.value
-            }
+        if (!forceRefresh && includeImages) {
+            getCachedValue(WeaponListKey(true))?.let { return ApiResult.Success(it) }
         }
+        return fetch(WeaponListKey(includeImages), forceRefresh = forceRefresh)
     }
 
     /** 内部：带缓存元数据的分类结果 */
@@ -98,12 +77,13 @@ object WeaponListApi {
         val ageMs: Long
     )
 
-    private suspend fun fetchFromNetwork(
-        forceRefresh: Boolean,
-        includeImages: Boolean
+    override suspend fun fetchFromNetwork(
+        key: WeaponListKey,
+        forceRefresh: Boolean
     ): ApiResult<List<WeaponCategoryData>> =
         withContext(Dispatchers.IO) {
             try {
+                val includeImages = key.includeImages
                 val results = WeaponCategory.entries.map { category ->
                     async { fetchCategory(category, forceRefresh, includeImages) }
                 }.awaitAll()

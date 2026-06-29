@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.game.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
 import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
@@ -19,11 +19,7 @@ import kotlinx.coroutines.coroutineScope
  * 通过 MediaWiki parse API 获取各战斗模式子页面的 wikitext，
  * 解析模式说明、获胜条件、模式设定等信息。
  */
-object GameModeApi {
-
-    init {
-        MemoryCacheRegistry.register("GameModeApi") { cachedModes = null }
-    }
+object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
 
     val MODES = listOf(
         ModeEntry("一般爆破", "战斗模式/一般爆破"),
@@ -38,14 +34,12 @@ object GameModeApi {
         ModeEntry("大头乱斗", "战斗模式/大头乱斗"),
     )
 
-    @Volatile
-    private var cachedModes: List<GameModeDetail>? = null
-
     suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeDetail>> {
-        if (!forceRefresh) {
-            cachedModes?.let { return ApiResult.Success(it) }
-        }
-        return ioApiCall("获取游戏模式失败") {
+        return fetch(forceRefresh = forceRefresh)
+    }
+
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameModeDetail>> =
+        ioApiCall("获取游戏模式失败") {
             val modeMapMapping = fetchModeMapMapping(forceRefresh)
 
             val results = coroutineScope {
@@ -62,10 +56,7 @@ object GameModeApi {
                 val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
                 ApiResult.Success(data.map { it.detail }, isOffline = isOffline, cacheAgeMs = maxAge)
             }
-        }.also {
-            if (it is ApiResult.Success) cachedModes = it.value
         }
-    }
 
     private data class ModeResult(
         val detail: GameModeDetail,

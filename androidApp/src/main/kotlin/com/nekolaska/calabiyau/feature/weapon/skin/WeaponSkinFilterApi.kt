@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.weapon.skin
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
@@ -8,10 +8,7 @@ import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
-import data.toErrorKind
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import data.ioApiCall
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -25,23 +22,9 @@ import util.buildWikiUrl
  * 通过 MediaWiki parse API 渲染 `{{#invoke:武器|武器外观筛选}}` Lua 模块，
  * 从返回的 HTML 中提取武器外观数据（data-param 属性 + img 标签）。
  */
-object WeaponSkinFilterApi {
-
-    init {
-        MemoryCacheRegistry.register("WeaponSkinFilterApi", ::clearMemoryCache)
-    }
+object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinInfo>>("WeaponSkinFilterApi") {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
-
-    /** 内存缓存（进程生命周期内有效，避免重复请求） */
-    @Volatile
-    private var cachedSkins: List<WeaponSkinInfo>? = null
-
-    fun clearMemoryCache() { cachedSkins = null }
-
-    private fun getCachedSkins(forceRefresh: Boolean): List<WeaponSkinInfo>? {
-        return if (forceRefresh) null else cachedSkins
-    }
 
     /** 品质等级 */
     enum class Quality(val level: Int, val displayName: String) {
@@ -82,43 +65,39 @@ object WeaponSkinFilterApi {
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
-    ): ApiResult<List<WeaponSkinInfo>> =
-        withContext(Dispatchers.IO) {
-            try {
-                // 强刷时必须绕过内存缓存
-                if (!cacheOnly && allowMemoryCache) getCachedSkins(forceRefresh)?.let { return@withContext ApiResult.Success(it) }
+    ): ApiResult<List<WeaponSkinInfo>> = fetch(
+        forceRefresh = forceRefresh,
+        cacheOnly = cacheOnly,
+        allowMemoryCache = allowMemoryCache
+    )
 
-                // cacheOnly 模式：仅读磁盘缓存，不发起网络请求
-                if (cacheOnly) {
-                    val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_SKINS, "all_weapon_skins")
-                        ?: return@withContext ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
-                    return@withContext parseSkinResult(
-                        entry.content,
-                        weaponMeta = fetchWeaponMetaMap(forceRefresh = false, cacheOnly = true),
-                        isOffline = true,
-                        cacheAgeMs = entry.ageMs
-                    )
-                }
+    override suspend fun fetchFromCache(): ApiResult<List<WeaponSkinInfo>> =
+        ioApiCall("获取武器外观数据失败") {
+            val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_SKINS, "all_weapon_skins")
+                ?: return@ioApiCall ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
+            parseSkinResult(
+                entry.content,
+                weaponMeta = fetchWeaponMetaMap(forceRefresh = false, cacheOnly = true),
+                isOffline = true,
+                cacheAgeMs = entry.ageMs
+            )
+        }
 
-                val weaponMeta = fetchWeaponMetaMap(forceRefresh, cacheOnly = false)
-                val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:武器|武器外观筛选}}", "prop" to "text", "format" to "json")
-                val result = OfflineCache.fetchWithCache(
-                    type = OfflineCache.Type.WEAPON_SKINS,
-                    key = "all_weapon_skins",
-                    forceRefresh = forceRefresh
-                ) { WikiEngine.safeGet(url) }
-                    ?: return@withContext ApiResult.Error(
-                        "请求失败，且无离线缓存",
-                        kind = ErrorKind.NETWORK
-                    )
-                val body = result.payload
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<WeaponSkinInfo>> =
+        ioApiCall("获取武器外观数据失败") {
+            val weaponMeta = fetchWeaponMetaMap(forceRefresh, cacheOnly = false)
+            val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:武器|武器外观筛选}}", "prop" to "text", "format" to "json")
+            val result = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.WEAPON_SKINS,
+                key = "all_weapon_skins",
+                forceRefresh = forceRefresh
+            ) { WikiEngine.safeGet(url) }
+                ?: return@ioApiCall ApiResult.Error(
+                    "请求失败，且无离线缓存",
+                    kind = ErrorKind.NETWORK
+                )
 
-                parseSkinResult(body, weaponMeta, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                ApiResult.Error("获取武器外观数据失败: ${e.message}", kind = e.toErrorKind())
-            }
+            parseSkinResult(result.payload, weaponMeta, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
         }
 
     data class WeaponMeta(
@@ -186,7 +165,6 @@ object WeaponSkinFilterApi {
         return if (skins.isEmpty()) {
             ApiResult.Error("未找到武器外观数据", kind = ErrorKind.NOT_FOUND)
         } else {
-            cachedSkins = skins
             ApiResult.Success(skins, isOffline = isOffline, cacheAgeMs = cacheAgeMs)
         }
     }

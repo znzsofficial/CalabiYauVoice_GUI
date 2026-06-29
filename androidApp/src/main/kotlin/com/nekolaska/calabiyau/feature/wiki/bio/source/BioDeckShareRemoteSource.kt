@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.feature.wiki.bio.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
-import util.buildWikiUrl
 
 object BioDeckShareRemoteSource {
 

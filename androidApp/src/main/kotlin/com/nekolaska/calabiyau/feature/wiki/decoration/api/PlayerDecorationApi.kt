@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
 import com.nekolaska.calabiyau.feature.wiki.decoration.parser.PlayerDecorationParsers
 import com.nekolaska.calabiyau.feature.wiki.decoration.source.DecorationHtmlSourceResult
@@ -21,11 +21,7 @@ import kotlinx.coroutines.withContext
  *
  * 所有页面共享相同的 gallerygrid HTML 结构。
  */
-object PlayerDecorationApi {
-
-    init {
-        MemoryCacheRegistry.register("PlayerDecorationApi", ::clearMemoryCache)
-    }
+object PlayerDecorationApi : KeyedCachedWikiApi<String, List<DecorationSection>>("PlayerDecorationApi") {
 
     /**
      * 玩家装饰页可选的模块真值配置。
@@ -88,50 +84,33 @@ object PlayerDecorationApi {
         "登场特效" to DecorationModuleConfig("模块:玩家装饰/LoginFXData")
     )
 
-    private val cacheMap = mutableMapOf<String, List<DecorationSection>>()
-
-    fun clearMemoryCache() {
-        cacheMap.clear()
-    }
-
-    private fun getCachedSections(pageName: String, forceRefresh: Boolean): List<DecorationSection>? {
-        return if (forceRefresh) null else cacheMap[pageName]
-    }
-
     /**
      * 获取装饰数据（带缓存）。
      * @param pageName Wiki 页面名，如 "基板"、"封装"、"聊天气泡"、"头套"、"超弦体动作"、"头像框"
      */
-    suspend fun fetch(
+    suspend fun fetchDecoration(
         pageName: String,
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
-    ): ApiResult<List<DecorationSection>> {
-        if (!cacheOnly && allowMemoryCache) getCachedSections(pageName, forceRefresh)?.let { return ApiResult.Success(it) }
-        return if (cacheOnly) fetchFromCache(pageName) else fetchFromNetwork(pageName, forceRefresh).also {
-            if (it is ApiResult.Success) cacheMap[pageName] = it.value
-        }
-    }
+    ): ApiResult<List<DecorationSection>> = super.fetch(pageName, forceRefresh, cacheOnly, allowMemoryCache)
 
-    private suspend fun fetchFromCache(pageName: String): ApiResult<List<DecorationSection>> = fetchFromSource(
-        pageName = pageName,
+    override suspend fun fetchFromCache(key: String): ApiResult<List<DecorationSection>> = fetchFromSource(
+        pageName = key,
         forceRefresh = false,
         cacheOnly = true,
-        loadSource = { PlayerDecorationRemoteSource.loadCachedPageHtml(pageName) },
+        loadSource = { PlayerDecorationRemoteSource.loadCachedPageHtml(key) },
         networkErrorMessage = "无离线缓存"
-    ).also {
-        if (it is ApiResult.Success) cacheMap[pageName] = it.value
-    }
+    )
 
-    private suspend fun fetchFromNetwork(
-        pageName: String,
+    override suspend fun fetchFromNetwork(
+        key: String,
         forceRefresh: Boolean
     ): ApiResult<List<DecorationSection>> = fetchFromSource(
-        pageName = pageName,
+        pageName = key,
         forceRefresh = forceRefresh,
         cacheOnly = false,
-        loadSource = { PlayerDecorationRemoteSource.fetchPageHtml(pageName, forceRefresh) },
+        loadSource = { PlayerDecorationRemoteSource.fetchPageHtml(key, forceRefresh) },
         networkErrorMessage = "获取页面失败，且无离线缓存"
     )
 

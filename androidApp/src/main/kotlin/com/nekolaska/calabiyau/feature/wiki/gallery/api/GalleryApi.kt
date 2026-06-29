@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GallerySection
 import com.nekolaska.calabiyau.feature.wiki.gallery.parser.GalleryParsers
@@ -19,15 +19,7 @@ import kotlinx.coroutines.withContext
  * 解析 Wiki 页面的渲染 HTML，提取分 section 的图片列表，
  * 然后批量获取图片 URL。支持壁纸、表情包、四格漫画等页面。
  */
-object GalleryApi {
-
-    init {
-        MemoryCacheRegistry.register("GalleryApi", ::clearMemoryCache)
-    }
-
-    private val cache = mutableMapOf<String, List<GallerySection>>()
-
-    fun clearMemoryCache() { cache.clear() }
+object GalleryApi : KeyedCachedWikiApi<String, List<GallerySection>>("GalleryApi") {
 
     /**
      * 获取画廊数据（带缓存）。
@@ -38,34 +30,24 @@ object GalleryApi {
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
-    ): ApiResult<List<GallerySection>> {
-        if (!forceRefresh && !cacheOnly && allowMemoryCache) {
-            cache[pageName]?.let { return ApiResult.Success(it) }
-        }
-        return if (cacheOnly) fetchFromCache(pageName) else fetchFromNetwork(pageName, forceRefresh).also {
-            if (it is ApiResult.Success) cache[pageName] = it.value
-        }
-    }
+    ): ApiResult<List<GallerySection>> = fetch(pageName, forceRefresh, cacheOnly, allowMemoryCache)
 
-    private suspend fun fetchFromCache(pageName: String): ApiResult<List<GallerySection>> =
-        fetchFromSource(
-            pageName = pageName,
-            forceRefresh = false,
-            cacheOnly = true,
-            loadSource = { GalleryRemoteSource.loadCachedPageHtml(pageName) },
-            networkErrorMessage = "无离线缓存"
-        ).also {
-            if (it is ApiResult.Success) cache[pageName] = it.value
-        }
+    override suspend fun fetchFromCache(key: String): ApiResult<List<GallerySection>> = fetchFromSource(
+        pageName = key,
+        forceRefresh = false,
+        cacheOnly = true,
+        loadSource = { GalleryRemoteSource.loadCachedPageHtml(key) },
+        networkErrorMessage = "无离线缓存"
+    )
 
-    private suspend fun fetchFromNetwork(
-        pageName: String,
+    override suspend fun fetchFromNetwork(
+        key: String,
         forceRefresh: Boolean
     ): ApiResult<List<GallerySection>> = fetchFromSource(
-        pageName = pageName,
+        pageName = key,
         forceRefresh = forceRefresh,
         cacheOnly = false,
-        loadSource = { GalleryRemoteSource.fetchPageHtml(pageName, forceRefresh) },
+        loadSource = { GalleryRemoteSource.fetchPageHtml(key, forceRefresh) },
         networkErrorMessage = "获取页面失败，且无离线缓存"
     )
 

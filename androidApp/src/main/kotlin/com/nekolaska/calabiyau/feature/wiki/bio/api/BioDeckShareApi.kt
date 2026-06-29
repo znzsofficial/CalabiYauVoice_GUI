@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.api
 
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.wiki.bio.model.DeckCardOption
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckPayload
@@ -32,25 +33,20 @@ import util.formBodyOf
  * 2) 按 Wiki Widget 规则生成/解析卡组分享码。
  * 3) 通过 MediaWiki API（edit）发布卡组页面。
  */
-object BioDeckShareApi {
+object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDeckShareApi") {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_JSON_PAGE = "MediaWiki:ZombieCardList.json"
     private const val TARGET_BASE = "晶源感染卡组分享"
 
-    @Volatile
-    private var cachedDeckCardMap: Map<String, List<DeckCardOption>>? = null
-
-    fun clearMemoryCache() {
-        cachedDeckCardMap = null
-    }
-
     suspend fun fetchDeckCardMap(forceRefresh: Boolean = false): ApiResult<Map<String, List<DeckCardOption>>> =
-        ioApiCall("读取卡牌数据失败") {
-            if (!forceRefresh) {
-                cachedDeckCardMap?.let { return@ioApiCall ApiResult.Success(it) }
-            }
+        fetch(forceRefresh = forceRefresh)
 
+    override suspend fun fetchFromCache(): ApiResult<Map<String, List<DeckCardOption>>> =
+        ApiResult.Error("卡牌清单不支持 cacheOnly", kind = ErrorKind.NETWORK)
+
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<Map<String, List<DeckCardOption>>> =
+        ioApiCall("读取卡牌数据失败") {
             val url = buildWikiUrl(API,
                 "action" to "query",
                 "prop" to "revisions",
@@ -109,7 +105,6 @@ object BioDeckShareApi {
                 return@ioApiCall ApiResult.Error("未解析到卡牌数据", kind = ErrorKind.PARSE)
             }
 
-            cachedDeckCardMap = result
             ApiResult.Success(result)
         }
 

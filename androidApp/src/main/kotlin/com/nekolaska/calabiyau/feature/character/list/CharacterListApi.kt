@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.character.list
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
@@ -27,23 +27,13 @@ import util.buildWikiUrl
  * 通过 MediaWiki parse API 渲染 `{{阵营角色|阵营名}}` 模板，
  * 从返回的 HTML 中提取角色名、链接和图片 URL。
  */
-object CharacterListApi {
-
-    init {
-        MemoryCacheRegistry.register("CharacterListApi", ::clearMemoryCache)
-    }
+object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("CharacterListApi") {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
 
     /** 四个阵营（与 Wiki 首页"超弦体 & 晶源体"内容块一致） */
     val FACTIONS = listOf("欧泊", "剪刀手", "乌尔比诺", "晶源体")
-
-    /** 内存缓存 */
-    @Volatile
-    private var cachedFactions: List<FactionData>? = null
-
-    fun clearMemoryCache() { cachedFactions = null }
 
     data class CharacterInfo(
         val name: String,
@@ -61,8 +51,13 @@ object CharacterListApi {
      * 获取所有阵营的角色列表。
      * 并行请求四个阵营，返回按 [FACTIONS] 顺序排列的结果。
      */
-    suspend fun fetchAllFactions(forceRefresh: Boolean = false): ApiResult<List<FactionData>> = withContext(Dispatchers.IO) {
-        if (!forceRefresh) cachedFactions?.let { return@withContext ApiResult.Success(it) }
+    suspend fun fetchAllFactions(forceRefresh: Boolean = false): ApiResult<List<FactionData>> =
+        fetch(forceRefresh = forceRefresh)
+
+    override suspend fun fetchFromCache(): ApiResult<List<FactionData>> =
+        ApiResult.Error("角色列表不支持 cacheOnly", kind = ErrorKind.NETWORK)
+
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<FactionData>> = withContext(Dispatchers.IO) {
         try {
             val results = FACTIONS.map { faction ->
                 async { fetchFaction(faction, forceRefresh) }
@@ -86,7 +81,6 @@ object CharacterListApi {
                     is ApiResult.Error -> FactionData(FACTIONS[index], emptyList())
                 }
             }
-            cachedFactions = factions
             ApiResult.Success(factions, isOffline = isOffline, cacheAgeMs = maxAge)
         } catch (e: CancellationException) {
             throw e
@@ -196,7 +190,7 @@ object CharacterListApi {
                         .firstOrNull { img -> portraitPattern.matches(img.attr("alt").trim()) }
                         ?.attr("src")
                     val portraitUrl = WikiImageUrls.originalFromThumbnail(portraitSrc)
-                    char.copy(portraitUrl = portraitUrl)
+                    if (portraitUrl.isNullOrBlank()) char else char.copy(portraitUrl = portraitUrl)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {

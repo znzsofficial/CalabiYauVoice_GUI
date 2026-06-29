@@ -1,6 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.announcement.api
 
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.announcement.model.Announcement
 import com.nekolaska.calabiyau.feature.wiki.announcement.parser.AnnouncementParsers
 import com.nekolaska.calabiyau.feature.wiki.announcement.source.AnnouncementRemoteSource
@@ -14,24 +14,16 @@ import data.ioApiCall
  * 通过 Semantic MediaWiki ask API 获取公告列表，
  * 包含标题、时间、B站链接和官网链接。
  */
-object AnnouncementApi {
-
-    init {
-        MemoryCacheRegistry.register("AnnouncementApi") { cachedData = null }
-    }
-
-    @Volatile
-    private var cachedData: List<Announcement>? = null
+object AnnouncementApi : KeyedCachedWikiApi<Int, List<Announcement>>("AnnouncementApi") {
 
     suspend fun fetchAnnouncements(
         limit: Int = 50,
         forceRefresh: Boolean = false
-    ): ApiResult<List<Announcement>> {
-        if (!forceRefresh) {
-            cachedData?.let { return ApiResult.Success(it) }
-        }
-        return ioApiCall("获取公告失败") {
-            val sourceResult = AnnouncementRemoteSource.fetchAnnouncements(limit, forceRefresh)
+    ): ApiResult<List<Announcement>> = fetch(limit, forceRefresh)
+
+    override suspend fun fetchFromNetwork(key: Int, forceRefresh: Boolean): ApiResult<List<Announcement>> =
+        ioApiCall("获取公告失败") {
+            val sourceResult = AnnouncementRemoteSource.fetchAnnouncements(key, forceRefresh)
                 ?: return@ioApiCall ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val announcements = AnnouncementParsers.parseAnnouncements(sourceResult.results)
@@ -40,8 +32,5 @@ object AnnouncementApi {
             } else {
                 ApiResult.Success(announcements, isOffline = sourceResult.isFromCache, cacheAgeMs = sourceResult.ageMs)
             }
-        }.also {
-            if (it is ApiResult.Success) cachedData = it.value
         }
-    }
 }
