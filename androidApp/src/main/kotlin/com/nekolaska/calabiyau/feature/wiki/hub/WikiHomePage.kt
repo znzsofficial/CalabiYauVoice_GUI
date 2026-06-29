@@ -867,17 +867,9 @@ private fun CharacterPortraitCard(
 ) {
     val cardShape = AppShapes.compactCard
     // 阵营色淡色背景，无阵营色时使用默认表面色
-    val cardBgColor = if (factionBaseColor != null) {
-        factionBaseColor.copy(alpha = 0.15f)
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
+    val cardBgColor = factionBaseColor?.copy(alpha = 0.15f) ?: MaterialTheme.colorScheme.surfaceContainerLow
     // 底部渐变色（使用阵营色的深色版本）
-    val gradientColor = if (factionBaseColor != null) {
-        factionBaseColor.copy(alpha = 0.85f)
-    } else {
-        Color.Black.copy(alpha = 0.7f)
-    }
+    val gradientColor = factionBaseColor?.copy(alpha = 0.85f) ?: Color.Black.copy(alpha = 0.7f)
 
     Card(
         onClick = onClick,
