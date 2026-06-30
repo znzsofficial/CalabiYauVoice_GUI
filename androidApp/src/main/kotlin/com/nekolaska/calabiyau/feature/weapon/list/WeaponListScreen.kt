@@ -46,10 +46,12 @@ fun WeaponListScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
-    val state =
-        rememberLoadState(emptyList<WeaponListApi.WeaponCategoryData>()) { force ->
-            WeaponListApi.fetchAllCategories(force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<WeaponListApi.WeaponCategoryData>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
+        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force, allowMemoryCache = false) }
+    )
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     val hasWallpaper = LocalHasWallpaper.current
     val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)

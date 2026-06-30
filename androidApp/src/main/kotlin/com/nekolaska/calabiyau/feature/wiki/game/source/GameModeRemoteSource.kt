@@ -20,12 +20,33 @@ object GameModeRemoteSource {
         )?.wikitext
     }
 
+    suspend fun loadCachedModeMapMappingWikitext(): String? {
+        return WikiParseSource.loadCachedWikitext(
+            cacheType = OfflineCache.Type.GAME_MODES,
+            cacheKey = "mode_map_mapping"
+        )?.wikitext
+    }
+
     suspend fun fetchModeWikitext(pageName: String, forceRefresh: Boolean): GameModeSourceResult? {
         val result = WikiParseSource.fetchWikitext(
             pageName = pageName,
             cacheType = OfflineCache.Type.GAME_MODES,
             cacheKey = "mode_$pageName",
             forceRefresh = forceRefresh
+        ) ?: return null
+        val wikitext = result.wikitext ?: return null
+
+        return GameModeSourceResult(
+            wikitext = wikitext,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
+    }
+
+    suspend fun loadCachedModeWikitext(pageName: String): GameModeSourceResult? {
+        val result = WikiParseSource.loadCachedWikitext(
+            cacheType = OfflineCache.Type.GAME_MODES,
+            cacheKey = "mode_$pageName"
         ) ?: return null
         val wikitext = result.wikitext ?: return null
 

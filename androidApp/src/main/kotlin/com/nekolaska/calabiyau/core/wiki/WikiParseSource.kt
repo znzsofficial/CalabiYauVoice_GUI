@@ -37,6 +37,11 @@ object WikiParseSource {
         forceRefresh: Boolean
     ): WikiParseSourceResult? = fetch(pageName, cacheType, cacheKey, "wikitext|text", forceRefresh)
 
+    suspend fun loadCachedWikitext(
+        cacheType: OfflineCache.Type,
+        cacheKey: String
+    ): WikiParseSourceResult? = loadCached(cacheType, cacheKey)?.takeIf { it.wikitext != null }
+
     private suspend fun fetch(
         pageName: String,
         cacheType: OfflineCache.Type,
@@ -51,15 +56,31 @@ object WikiParseSource {
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
-        val parse = SharedJson.parseToJsonElement(result.payload).jsonObject["parse"]?.jsonObject ?: return null
+        return parsePayload(result.payload, result.isFromCache, result.ageMs)
+    }
+
+    private suspend fun loadCached(
+        cacheType: OfflineCache.Type,
+        cacheKey: String
+    ): WikiParseSourceResult? {
+        val entry = OfflineCache.getEntry(cacheType, cacheKey) ?: return null
+        return parsePayload(entry.content, isFromCache = true, ageMs = entry.ageMs)
+    }
+
+    private fun parsePayload(
+        payload: String,
+        isFromCache: Boolean,
+        ageMs: Long
+    ): WikiParseSourceResult? {
+        val parse = SharedJson.parseToJsonElement(payload).jsonObject["parse"]?.jsonObject ?: return null
         val html = parse["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content
         val wikitext = parse["wikitext"]?.jsonObject?.get("*")?.jsonPrimitive?.content
 
         return WikiParseSourceResult(
             html = html,
             wikitext = wikitext,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
+            isFromCache = isFromCache,
+            ageMs = ageMs
         )
     }
 }

@@ -34,17 +34,33 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
         ModeEntry("大头乱斗", "战斗模式/大头乱斗"),
     )
 
-    suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeDetail>> {
-        return fetch(forceRefresh = forceRefresh)
+    suspend fun fetchAllModes(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
+    ): ApiResult<List<GameModeDetail>> {
+        return fetch(
+            forceRefresh = forceRefresh,
+            cacheOnly = cacheOnly,
+            allowMemoryCache = allowMemoryCache
+        )
     }
 
+    override suspend fun fetchFromCache(): ApiResult<List<GameModeDetail>> = fetchFromSource(cacheOnly = true)
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameModeDetail>> =
+        fetchFromSource(forceRefresh = forceRefresh)
+
+    private suspend fun fetchFromSource(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false
+    ): ApiResult<List<GameModeDetail>> =
         ioApiCall("获取游戏模式失败") {
-            val modeMapMapping = fetchModeMapMapping(forceRefresh)
+            val modeMapMapping = fetchModeMapMapping(forceRefresh, cacheOnly)
 
             val results = coroutineScope {
                 MODES.map { mode ->
-                    async { fetchMode(mode, modeMapMapping, forceRefresh) }
+                    async { fetchMode(mode, modeMapMapping, forceRefresh, cacheOnly) }
                 }.awaitAll()
             }
 
@@ -64,9 +80,13 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
         val ageMs: Long
     )
 
-    private suspend fun fetchModeMapMapping(forceRefresh: Boolean): Map<String, List<String>> {
+    private suspend fun fetchModeMapMapping(forceRefresh: Boolean, cacheOnly: Boolean): Map<String, List<String>> {
         return try {
-            val wikitext = GameModeRemoteSource.fetchModeMapMappingWikitext(forceRefresh) ?: return emptyMap()
+            val wikitext = if (cacheOnly) {
+                GameModeRemoteSource.loadCachedModeMapMappingWikitext()
+            } else {
+                GameModeRemoteSource.fetchModeMapMappingWikitext(forceRefresh)
+            } ?: return emptyMap()
             GameModeParsers.parseModeMapMapping(wikitext)
         } catch (e: CancellationException) {
             throw e
@@ -78,10 +98,15 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
     private suspend fun fetchMode(
         mode: ModeEntry,
         modeMapMapping: Map<String, List<String>>,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        cacheOnly: Boolean
     ): ModeResult? {
         return try {
-            val sourceResult = GameModeRemoteSource.fetchModeWikitext(mode.pageName, forceRefresh) ?: return null
+            val sourceResult = if (cacheOnly) {
+                GameModeRemoteSource.loadCachedModeWikitext(mode.pageName)
+            } else {
+                GameModeRemoteSource.fetchModeWikitext(mode.pageName, forceRefresh)
+            } ?: return null
             val detail = GameModeParsers.parseModeWikitext(
                 mode,
                 sourceResult.wikitext,

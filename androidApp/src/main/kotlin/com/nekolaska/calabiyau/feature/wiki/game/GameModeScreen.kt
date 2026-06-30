@@ -38,9 +38,12 @@ fun GameModeScreen(
     onOpenWikiUrl: (String) -> Unit,
     onOpenMapDetail: ((name: String, imageUrl: String?) -> Unit)? = null
 ) {
-    val state = rememberLoadState(emptyList<GameModeDetail>()) { force ->
-        GameModeApi.fetchAllModes(force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<GameModeDetail>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { GameModeApi.fetchAllModes(cacheOnly = true) },
+        fetch = { force -> GameModeApi.fetchAllModes(forceRefresh = force, allowMemoryCache = false) }
+    )
     var expandedMode by remember { mutableStateOf<String?>(null) }
 
     Scaffold(

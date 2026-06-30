@@ -64,10 +64,11 @@ fun StringerTalentScreen(
             title = "超弦体天赋",
             wikiUrl = "",
             sections = emptyList()
-        )
-    ) { force ->
-        StringerTalentApi.fetch(force)
-    }
+        ),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { StringerTalentApi.fetch(cacheOnly = true) },
+        fetch = { force -> StringerTalentApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
 
     Scaffold(
         topBar = {

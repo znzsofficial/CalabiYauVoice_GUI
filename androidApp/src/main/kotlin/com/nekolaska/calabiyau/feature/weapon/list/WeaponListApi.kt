@@ -58,16 +58,23 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
      */
     suspend fun fetchAllCategories(
         forceRefresh: Boolean = false,
-        includeImages: Boolean = true
+        includeImages: Boolean = true,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
     ): ApiResult<List<WeaponCategoryData>> {
-        if (!forceRefresh && !includeImages) {
+        if (!forceRefresh && !cacheOnly && allowMemoryCache && !includeImages) {
             getCachedValue(WeaponListKey(false))?.let { return ApiResult.Success(it) }
             getCachedValue(WeaponListKey(true))?.let { return ApiResult.Success(it) }
         }
-        if (!forceRefresh && includeImages) {
+        if (!forceRefresh && !cacheOnly && allowMemoryCache && includeImages) {
             getCachedValue(WeaponListKey(true))?.let { return ApiResult.Success(it) }
         }
-        return fetch(WeaponListKey(includeImages), forceRefresh = forceRefresh)
+        return fetch(
+            WeaponListKey(includeImages),
+            forceRefresh = forceRefresh,
+            cacheOnly = cacheOnly,
+            allowMemoryCache = allowMemoryCache
+        )
     }
 
     /** 内部：带缓存元数据的分类结果 */
@@ -76,6 +83,30 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         val isFromCache: Boolean,
         val ageMs: Long
     )
+
+    override suspend fun fetchFromCache(key: WeaponListKey): ApiResult<List<WeaponCategoryData>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val results = WeaponCategory.entries.map { category ->
+                    async { loadCachedCategory(category, key.includeImages) }
+                }.awaitAll()
+
+                val data = results.filterNotNull()
+                if (data.isEmpty()) {
+                    ApiResult.Error("没有武器列表缓存", kind = ErrorKind.NETWORK)
+                } else {
+                    ApiResult.Success(
+                        data.map { it.data },
+                        isOffline = true,
+                        cacheAgeMs = data.maxOfOrNull { it.ageMs } ?: 0L
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ApiResult.Error("读取武器列表缓存失败: ${e.message}", kind = e.toErrorKind())
+            }
+        }
 
     override suspend fun fetchFromNetwork(
         key: WeaponListKey,
@@ -126,31 +157,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
             ) { WikiEngine.safeGet(url) } ?: return null
             val body = cacheResult.payload
 
-            val json = SharedJson.parseToJsonElement(body).jsonObject
-            val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
-
-            val weapons = results.entries.map { (weaponName, value) ->
-                val obj = value.jsonObject
-                val printouts = obj["printouts"]?.jsonObject
-
-                val user = printouts?.get("使用者")?.jsonArray
-                    ?.firstOrNull()?.jsonPrimitive?.content ?: ""
-                val type = printouts?.get("类型")?.jsonArray
-                    ?.firstOrNull()?.jsonPrimitive?.content ?: ""
-                val desc = printouts?.get("武器介绍")?.jsonArray
-                    ?.firstOrNull()?.jsonPrimitive?.content ?: ""
-                val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
-                    ?: "$WIKI_BASE${weaponName.wikiPathEncode()}"
-
-                WeaponInfo(
-                    name = weaponName,
-                    user = user,
-                    type = type,
-                    description = desc,
-                    wikiUrl = fullUrl,
-                    imageUrl = null // 图片稍后批量获取
-                )
-            }.sortedBy { it.name }
+            val weapons = parseWeapons(body)
 
             val weaponsWithImages = if (includeImages) {
                 val imageUrls = fetchWeaponImages(weapons, category, forceRefresh)
@@ -172,6 +179,75 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         } catch (_: Exception) {
             null
         }
+    }
+
+    private suspend fun loadCachedCategory(
+        category: WeaponCategory,
+        includeImages: Boolean
+    ): CategoryResult? {
+        return try {
+            val entry = OfflineCache.getEntry(
+                type = OfflineCache.Type.WEAPON_LIST,
+                key = "category_${category.name}"
+            ) ?: return null
+            val weapons = parseWeapons(entry.content)
+            val weaponsWithImages = if (includeImages) {
+                val imageUrls = loadCachedWeaponImages(category)
+                weapons.map { weapon -> weapon.copy(imageUrl = imageUrls[weapon.name]) }
+            } else {
+                weapons
+            }
+
+            CategoryResult(
+                data = WeaponCategoryData(
+                    category = category,
+                    weapons = weaponsWithImages
+                ),
+                isFromCache = true,
+                ageMs = entry.ageMs
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseWeapons(body: String): List<WeaponInfo> {
+        val json = SharedJson.parseToJsonElement(body).jsonObject
+        val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return emptyList()
+
+        return results.entries.map { (weaponName, value) ->
+            val obj = value.jsonObject
+            val printouts = obj["printouts"]?.jsonObject
+
+            val user = printouts?.get("使用者")?.jsonArray
+                ?.firstOrNull()?.jsonPrimitive?.content ?: ""
+            val type = printouts?.get("类型")?.jsonArray
+                ?.firstOrNull()?.jsonPrimitive?.content ?: ""
+            val desc = printouts?.get("武器介绍")?.jsonArray
+                ?.firstOrNull()?.jsonPrimitive?.content ?: ""
+            val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
+                ?: "$WIKI_BASE${weaponName.wikiPathEncode()}"
+
+            WeaponInfo(
+                name = weaponName,
+                user = user,
+                type = type,
+                description = desc,
+                wikiUrl = fullUrl,
+                imageUrl = null
+            )
+        }.sortedBy { it.name }
+    }
+
+    private suspend fun loadCachedWeaponImages(category: WeaponCategory): Map<String, String> {
+        val entry = OfflineCache.getEntry(
+            type = OfflineCache.Type.WEAPON_LIST,
+            key = "category_images_${category.name}"
+        ) ?: return emptyMap()
+        val parsed = SharedJson.parseToJsonElement(entry.content).jsonObject
+        return parsed.mapValues { (_, value) -> value.jsonPrimitive.content }
     }
 
     /**
