@@ -42,6 +42,11 @@ object WikiParseSource {
         cacheKey: String
     ): WikiParseSourceResult? = loadCached(cacheType, cacheKey)?.takeIf { it.wikitext != null }
 
+    suspend fun loadCachedHtmlAndWikitext(
+        cacheType: OfflineCache.Type,
+        cacheKey: String
+    ): WikiParseSourceResult? = loadCached(cacheType, cacheKey)?.takeIf { it.html != null && it.wikitext != null }
+
     private suspend fun fetch(
         pageName: String,
         cacheType: OfflineCache.Type,

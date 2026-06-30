@@ -71,9 +71,12 @@ fun MeowLanguageScreen(
     val showSnack = rememberSnackbarLauncher()
     val copyText = rememberPlainTextClipboardCopier { showSnack("已复制") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val state = rememberLoadState(emptyList<MeowLanguageSection>()) { force ->
-        MeowLanguageApi.fetch(forceRefresh = force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<MeowLanguageSection>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { MeowLanguageApi.fetch(cacheOnly = true) },
+        fetch = { force -> MeowLanguageApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

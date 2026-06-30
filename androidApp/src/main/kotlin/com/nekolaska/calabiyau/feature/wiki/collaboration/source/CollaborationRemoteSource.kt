@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.collaboration.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import com.nekolaska.calabiyau.feature.wiki.collaboration.model.COLLABORATION_PAGE_NAME
 
 data class CollaborationPageSourceResult(
@@ -22,6 +23,19 @@ object CollaborationRemoteSource {
 
         return CollaborationPageSourceResult(
             html = html,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
+    }
+
+    suspend fun loadCachedPage(): CollaborationPageSourceResult? {
+        val result = loadCachedWikiHtmlPage(
+            cacheType = OfflineCache.Type.COLLABORATIONS,
+            cacheKey = "collaboration_page"
+        ) ?: return null
+
+        return CollaborationPageSourceResult(
+            html = result.html,
             isFromCache = result.isFromCache,
             ageMs = result.ageMs
         )

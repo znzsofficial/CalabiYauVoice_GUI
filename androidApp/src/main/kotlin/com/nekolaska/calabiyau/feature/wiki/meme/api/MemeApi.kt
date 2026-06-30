@@ -10,6 +10,18 @@ import data.ioApiCall
 
 object MemeApi : CachedWikiApi<MemePage>("MemeApi") {
 
+    override suspend fun fetchFromCache(): ApiResult<MemePage> =
+        ioApiCall("读取梗百科缓存失败") {
+            val result = MemeRemoteSource.loadCachedPage()
+                ?: return@ioApiCall ApiResult.Error("没有梗百科缓存", kind = ErrorKind.NETWORK)
+            val page = MemeParsers.parsePage(result.html)
+            if (page.officialIssues.isEmpty() && page.editorEntries.isEmpty()) {
+                ApiResult.Error("未找到梗百科缓存数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(page, isOffline = true, cacheAgeMs = result.ageMs)
+            }
+        }
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<MemePage> =
         ioApiCall("获取梗百科失败") {
             val result = MemeRemoteSource.fetchPage(forceRefresh)

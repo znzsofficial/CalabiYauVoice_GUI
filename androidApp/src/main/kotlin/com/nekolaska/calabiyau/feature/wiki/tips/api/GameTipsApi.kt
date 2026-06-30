@@ -10,6 +10,18 @@ import data.ioApiCall
 
 object GameTipsApi : CachedWikiApi<List<GameTipsSection>>("GameTipsApi") {
 
+    override suspend fun fetchFromCache(): ApiResult<List<GameTipsSection>> =
+        ioApiCall("读取游戏Tips缓存失败") {
+            val sourceResult = GameTipsRemoteSource.loadCachedPage()
+                ?: return@ioApiCall ApiResult.Error("没有游戏Tips缓存", kind = ErrorKind.NETWORK)
+            val sections = GameTipsParsers.parseSections(sourceResult.html)
+            if (sections.isEmpty()) {
+                ApiResult.Error("未找到游戏Tips缓存数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(sections, isOffline = true, cacheAgeMs = sourceResult.ageMs)
+            }
+        }
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameTipsSection>> =
         ioApiCall("获取游戏Tips失败") {
             val sourceResult = GameTipsRemoteSource.fetchPage(forceRefresh)

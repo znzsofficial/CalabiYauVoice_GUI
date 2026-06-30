@@ -73,10 +73,11 @@ fun MemeScreen(
         initial = MemePage(
             officialIssues = emptyList(),
             editorEntries = emptyList()
-        )
-    ) { force ->
-        MemeApi.fetch(force)
-    }
+        ),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { MemeApi.fetch(cacheOnly = true) },
+        fetch = { force -> MemeApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
     var keyword by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FILTER_ALL) }
     var previewIssue by remember { mutableStateOf<MemeOfficialIssue?>(null) }

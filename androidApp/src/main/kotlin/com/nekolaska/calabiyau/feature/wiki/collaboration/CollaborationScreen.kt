@@ -35,10 +35,11 @@ fun CollaborationScreen(
         initial = CollaborationPage(
             timelineYears = emptyList(),
             events = emptyList()
-        )
-    ) { force ->
-        CollaborationApi.fetch(force)
-    }
+        ),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { CollaborationApi.fetch(cacheOnly = true) },
+        fetch = { force -> CollaborationApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
     var keyword by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FILTER_ALL) }
     var previewImage by remember { mutableStateOf<String?>(null) }

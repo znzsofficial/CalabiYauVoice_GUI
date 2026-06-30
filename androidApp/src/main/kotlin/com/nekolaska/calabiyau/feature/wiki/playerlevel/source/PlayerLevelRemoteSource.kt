@@ -28,4 +28,18 @@ object PlayerLevelRemoteSource {
             ageMs = result.ageMs
         )
     }
+
+    suspend fun loadCachedPage(): PlayerLevelSourceResult? {
+        val result = WikiParseSource.loadCachedHtmlAndWikitext(
+            cacheType = OfflineCache.Type.PLAYER_LEVELS,
+            cacheKey = "player_level_page_v2"
+        ) ?: return null
+        val html = result.html ?: return null
+        return PlayerLevelSourceResult(
+            html = html,
+            wikitext = result.wikitext,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
+    }
 }

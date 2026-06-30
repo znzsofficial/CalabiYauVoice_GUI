@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.meme.source
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import com.nekolaska.calabiyau.feature.wiki.meme.model.MEME_PAGE_NAME
 
 typealias MemePageSourceResult = WikiHtmlPageSourceResult
@@ -14,6 +15,13 @@ object MemeRemoteSource {
             cacheType = OfflineCache.Type.MEMES,
             cacheKey = "meme_encyclopedia",
             forceRefresh = forceRefresh
+        )
+    }
+
+    suspend fun loadCachedPage(): MemePageSourceResult? {
+        return loadCachedWikiHtmlPage(
+            cacheType = OfflineCache.Type.MEMES,
+            cacheKey = "meme_encyclopedia"
         )
     }
 }

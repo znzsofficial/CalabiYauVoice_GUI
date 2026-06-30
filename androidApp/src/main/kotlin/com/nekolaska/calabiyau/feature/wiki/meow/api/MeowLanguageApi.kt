@@ -10,6 +10,18 @@ import data.ioApiCall
 
 object MeowLanguageApi : CachedWikiApi<List<MeowLanguageSection>>("MeowLanguageApi") {
 
+    override suspend fun fetchFromCache(): ApiResult<List<MeowLanguageSection>> =
+        ioApiCall("读取喵言喵语缓存失败") {
+            val sourceResult = MeowLanguageRemoteSource.loadCachedPage()
+                ?: return@ioApiCall ApiResult.Error("没有喵言喵语缓存", kind = ErrorKind.NETWORK)
+            val sections = MeowLanguageParsers.parseSections(sourceResult.html)
+            if (sections.isEmpty()) {
+                ApiResult.Error("未找到喵言喵语缓存数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(sections, isOffline = true, cacheAgeMs = sourceResult.ageMs)
+            }
+        }
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<MeowLanguageSection>> =
         ioApiCall("获取喵言喵语失败") {
             val sourceResult = MeowLanguageRemoteSource.fetchPage(forceRefresh)

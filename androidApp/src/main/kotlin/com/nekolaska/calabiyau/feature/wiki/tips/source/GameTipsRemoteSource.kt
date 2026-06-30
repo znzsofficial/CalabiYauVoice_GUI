@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.tips.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import com.nekolaska.calabiyau.feature.wiki.tips.model.GAME_TIPS_PAGE_NAME
 
 data class GameTipsPageSourceResult(
@@ -23,6 +24,19 @@ object GameTipsRemoteSource {
 
         return GameTipsPageSourceResult(
             html = html,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
+    }
+
+    suspend fun loadCachedPage(): GameTipsPageSourceResult? {
+        val result = loadCachedWikiHtmlPage(
+            cacheType = OfflineCache.Type.GAME_TIPS,
+            cacheKey = "game_tips"
+        ) ?: return null
+
+        return GameTipsPageSourceResult(
+            html = result.html,
             isFromCache = result.isFromCache,
             ageMs = result.ageMs
         )
