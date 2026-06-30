@@ -54,9 +54,12 @@ fun ActivityScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val state = rememberLoadState(emptyList<ActivityEntry>()) { force ->
-        ActivityApi.fetch(forceRefresh = force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<ActivityEntry>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { ActivityApi.fetch(cacheOnly = true) },
+        fetch = { force -> ActivityApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

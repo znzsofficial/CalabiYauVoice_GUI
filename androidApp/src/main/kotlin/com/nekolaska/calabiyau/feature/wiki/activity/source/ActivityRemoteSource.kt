@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.activity.source
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import data.SharedJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -32,6 +33,19 @@ object ActivityRemoteSource {
 
         return ActivityPageSourceResult(
             html = html,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
+    }
+
+    suspend fun loadCachedActivitiesPage(): ActivityPageSourceResult? {
+        val result = loadCachedWikiHtmlPage(
+            cacheType = OfflineCache.Type.ACTIVITIES,
+            cacheKey = "activities"
+        ) ?: return null
+
+        return ActivityPageSourceResult(
+            html = result.html,
             isFromCache = result.isFromCache,
             ageMs = result.ageMs
         )

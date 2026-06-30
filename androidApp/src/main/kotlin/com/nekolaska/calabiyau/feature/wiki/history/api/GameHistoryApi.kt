@@ -12,6 +12,21 @@ import data.ioApiCall
 
 object GameHistoryApi : CachedWikiApi<List<GameHistorySection>>("GameHistoryApi") {
 
+    override suspend fun fetchFromCache(): ApiResult<List<GameHistorySection>> =
+        ioApiCall("读取游戏历史缓存失败") {
+            val sourceResult = GameHistoryRemoteSource.loadCachedGameHistoryPage()
+                ?: return@ioApiCall ApiResult.Error("没有游戏历史缓存", kind = ErrorKind.NETWORK)
+
+            val parsedSections = GameHistoryParsers.parseSections(sourceResult.html)
+            val sections = enrichWithImageUrls(parsedSections)
+
+            if (sections.isEmpty()) {
+                ApiResult.Error("未找到游戏历史缓存数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(sections, isOffline = true, cacheAgeMs = sourceResult.ageMs)
+            }
+        }
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameHistorySection>> =
         ioApiCall("获取游戏历史失败") {
             val sourceResult = GameHistoryRemoteSource.fetchGameHistoryPage(forceRefresh)

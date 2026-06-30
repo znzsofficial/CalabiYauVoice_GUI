@@ -15,6 +15,19 @@ import kotlinx.coroutines.coroutineScope
 
 object ActivityApi : CachedWikiApi<List<ActivityEntry>>("ActivityApi") {
 
+    override suspend fun fetchFromCache(): ApiResult<List<ActivityEntry>> =
+        ioApiCall("读取活动缓存失败") {
+            val result = ActivityRemoteSource.loadCachedActivitiesPage()
+                ?: return@ioApiCall ApiResult.Error("没有活动缓存", kind = ErrorKind.NETWORK)
+            val parsedActivities = ActivityParsers.parseActivities(result.html)
+            val activities = enrichActivitiesWithHighResImages(parsedActivities, forceRefresh = false)
+            if (activities.isEmpty()) {
+                ApiResult.Error("未找到活动缓存数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(activities, isOffline = true, cacheAgeMs = result.ageMs)
+            }
+        }
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<ActivityEntry>> =
         ioApiCall("获取活动失败") {
             val result = ActivityRemoteSource.fetchActivitiesPage(forceRefresh)

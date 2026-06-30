@@ -60,9 +60,12 @@ fun StoryScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val state = rememberLoadState(emptyList<StorySection>()) { force ->
-        StoryApi.fetch(forceRefresh = force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<StorySection>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { StoryApi.fetch(cacheOnly = true) },
+        fetch = { force -> StoryApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

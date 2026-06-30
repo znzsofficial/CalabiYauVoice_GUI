@@ -12,6 +12,21 @@ import data.ioApiCall
 
 object StoryApi : CachedWikiApi<List<StorySection>>("StoryApi") {
 
+    override suspend fun fetchFromCache(): ApiResult<List<StorySection>> =
+        ioApiCall("读取剧情故事缓存失败") {
+            val sourceResult = StoryRemoteSource.loadCachedStoryPage()
+                ?: return@ioApiCall ApiResult.Error("没有剧情故事缓存", kind = ErrorKind.NETWORK)
+
+            val parsedSections = StoryParsers.parseSections(sourceResult.html)
+            val sections = enrichWithImageUrls(parsedSections)
+
+            if (sections.isEmpty()) {
+                ApiResult.Error("未找到剧情故事缓存数据", kind = ErrorKind.NOT_FOUND)
+            } else {
+                ApiResult.Success(sections, isOffline = true, cacheAgeMs = sourceResult.ageMs)
+            }
+        }
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<StorySection>> =
         ioApiCall("获取剧情故事失败") {
             val sourceResult = StoryRemoteSource.fetchStoryPage(forceRefresh)

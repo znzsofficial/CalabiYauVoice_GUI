@@ -61,9 +61,12 @@ fun GameHistoryScreen(
     onOpenWikiUrl: (String) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val state = rememberLoadState(emptyList<GameHistorySection>()) { force ->
-        GameHistoryApi.fetch(forceRefresh = force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<GameHistorySection>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { GameHistoryApi.fetch(cacheOnly = true) },
+        fetch = { force -> GameHistoryApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

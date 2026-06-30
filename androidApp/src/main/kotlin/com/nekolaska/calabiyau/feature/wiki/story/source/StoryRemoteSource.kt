@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.story.source
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import com.nekolaska.calabiyau.feature.wiki.story.model.STORY_PAGE_NAME
 
 data class StoryPageSourceResult(
@@ -23,6 +24,19 @@ object StoryRemoteSource {
 
         return StoryPageSourceResult(
             html = html,
+            isFromCache = result.isFromCache,
+            ageMs = result.ageMs
+        )
+    }
+
+    suspend fun loadCachedStoryPage(): StoryPageSourceResult? {
+        val result = loadCachedWikiHtmlPage(
+            cacheType = OfflineCache.Type.GAME_HISTORY,
+            cacheKey = "story_page"
+        ) ?: return null
+
+        return StoryPageSourceResult(
+            html = result.html,
             isFromCache = result.isFromCache,
             ageMs = result.ageMs
         )
