@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.character.detail
 
 import android.text.Html
 import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
@@ -19,6 +20,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
+import java.util.concurrent.ConcurrentHashMap
 import util.buildParseUrl
 import util.buildWikiUrl
 import util.wikiPathEncode
@@ -35,8 +37,17 @@ object CharacterDetailApi {
     private const val WIKI_BASE = "https://wiki.biligame.com"
     private const val SETTING_PAGE = "超弦体设定"
 
+    private val detailCache = ConcurrentHashMap<String, CharacterDetail>()
+
     @Volatile
     private var cachedExtras: Map<String, CharacterExtraInfo>? = null
+
+    init {
+        MemoryCacheRegistry.register("CharacterDetailApi") {
+            detailCache.clear()
+            cachedExtras = null
+        }
+    }
 
     /** 角色详情信息 */
     data class CharacterDetail(
@@ -139,6 +150,10 @@ object CharacterDetailApi {
     ): ApiResult<CharacterDetail> =
         withContext(Dispatchers.IO) {
             try {
+                if (!forceRefresh) {
+                    detailCache[characterName]?.let { return@withContext ApiResult.Success(it) }
+                }
+
                 val url = buildParseUrl(API, characterName, "wikitext|text")
 
                 val result = OfflineCache.fetchWithCache(
@@ -182,8 +197,11 @@ object CharacterDetailApi {
                     portraitUrl = html?.let { parseFirstCostumePortraitUrl(characterName, it) }
                 )
 
+                val finalDetail = mergeExtraInfo(detail, extraInfo).copy(updateHistory = history)
+                detailCache[characterName] = finalDetail
+
                 ApiResult.Success(
-                    mergeExtraInfo(detail, extraInfo).copy(updateHistory = history),
+                    finalDetail,
                     isOffline = result.isFromCache,
                     cacheAgeMs = result.ageMs
                 )

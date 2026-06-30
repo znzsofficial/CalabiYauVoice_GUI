@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.weapon.detail
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.ApiResult
 import data.ErrorKind
@@ -14,6 +15,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import java.util.concurrent.ConcurrentHashMap
 import util.buildParseUrl
 import util.buildWikiUrl
 import util.wikiPathEncode
@@ -27,6 +29,14 @@ import util.wikiPathEncode
 object WeaponDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
+
+    private val detailCache = ConcurrentHashMap<String, WeaponDetail>()
+
+    init {
+        MemoryCacheRegistry.register("WeaponDetailApi") {
+            detailCache.clear()
+        }
+    }
 
     /** 武器详情 */
     data class WeaponDetail(
@@ -83,6 +93,10 @@ object WeaponDetailApi {
     ): ApiResult<WeaponDetail> =
         withContext(Dispatchers.IO) {
             try {
+                if (!forceRefresh) {
+                    detailCache[weaponName]?.let { return@withContext ApiResult.Success(it) }
+                }
+
                 val url = buildParseUrl(API, weaponName, "wikitext|text")
 
                 val result = OfflineCache.fetchWithCache(
@@ -128,6 +142,8 @@ object WeaponDetailApi {
                         "未找到武器信息模板",
                         kind = ErrorKind.NOT_FOUND
                     )
+
+                detailCache[weaponName] = detail
 
                 ApiResult.Success(
                     detail,
