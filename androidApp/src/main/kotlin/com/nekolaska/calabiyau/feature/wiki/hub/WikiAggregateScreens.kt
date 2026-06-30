@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -124,12 +125,14 @@ internal fun WikiGameplayHubScreen(
                         "特别行动" to "特别行动",
                         "赫尔墨斯" to "赫尔墨斯",
                         "玩家等级" to "玩家等级",
+                        "互动道具" to "好友",
                         "超弦体定位" to "超弦体定位",
                         "赛事系统" to "赛事系统"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
-                        "玩家等级" to { onNavigateTo(WikiRoute.PlayerLevels) }
+                        "玩家等级" to { onNavigateTo(WikiRoute.PlayerLevels) },
+                        "互动道具" to { onNavigateTo(WikiRoute.InteractionItems) }
                     ),
                     backdrop = backdrop
                 )
@@ -266,6 +269,17 @@ internal fun WikiExtensionHubScreen(
                         "梗百科" to { onNavigateTo(WikiRoute.Memes) },
                         "游戏Tips" to { onNavigateTo(WikiRoute.GameTips) }
                     ),
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "投稿作品",
+                    subtitle = "查看引航者投稿的视频、文章与游戏作品",
+                    icon = Icons.Outlined.UploadFile,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    onClick = { onNavigateTo(WikiRoute.Submissions) },
                     backdrop = backdrop
                 )
             }

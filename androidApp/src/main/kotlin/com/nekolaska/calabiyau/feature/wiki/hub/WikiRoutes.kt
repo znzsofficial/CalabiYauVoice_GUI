@@ -21,6 +21,7 @@ sealed interface WikiRoute {
     data object BioMobileCards : WikiRoute
     data object Story : WikiRoute
     data object GameHistory : WikiRoute
+    data object Submissions : WikiRoute
     data object Memes : WikiRoute
     data object Collaborations : WikiRoute
     data object Bgm : WikiRoute
@@ -46,6 +47,7 @@ sealed interface WikiRoute {
     data object Imprints : WikiRoute
     data object Achievements : WikiRoute
     data object PlayerLevels : WikiRoute
+    data object InteractionItems : WikiRoute
     data object GameplayHub : WikiRoute
     data object DecorationHub : WikiRoute
     data object CatalogHub : WikiRoute

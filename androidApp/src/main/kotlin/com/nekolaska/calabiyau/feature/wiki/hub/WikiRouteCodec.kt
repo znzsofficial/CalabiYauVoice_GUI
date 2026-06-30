@@ -43,6 +43,7 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.BioMobileCards -> "bioMobileCards"
     WikiRoute.Story -> "story"
     WikiRoute.GameHistory -> "gameHistory"
+    WikiRoute.Submissions -> "submissions"
     WikiRoute.Memes -> "memes"
     WikiRoute.Collaborations -> "collaborations"
     WikiRoute.Bgm -> "bgm"
@@ -68,6 +69,7 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Imprints -> "imprints"
     WikiRoute.Achievements -> "achievements"
     WikiRoute.PlayerLevels -> "playerLevels"
+    WikiRoute.InteractionItems -> "interactionItems"
     WikiRoute.GameplayHub -> "gameplayHub"
     WikiRoute.DecorationHub -> "decorationHub"
     WikiRoute.CatalogHub -> "catalogHub"
@@ -110,6 +112,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "bioMobileCards" -> WikiRoute.BioMobileCards
         "story" -> WikiRoute.Story
         "gameHistory" -> WikiRoute.GameHistory
+        "submissions" -> WikiRoute.Submissions
         "memes" -> WikiRoute.Memes
         "collaborations" -> WikiRoute.Collaborations
         "bgm" -> WikiRoute.Bgm
@@ -135,6 +138,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "imprints" -> WikiRoute.Imprints
         "achievements" -> WikiRoute.Achievements
         "playerLevels" -> WikiRoute.PlayerLevels
+        "interactionItems" -> WikiRoute.InteractionItems
         "gameplayHub" -> WikiRoute.GameplayHub
         "decorationHub" -> WikiRoute.DecorationHub
         "catalogHub" -> WikiRoute.CatalogHub

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.DockedSearchBar
 import androidx.compose.material3.Icon
@@ -167,6 +168,7 @@ private val hubSearchEntries = listOf(
     searchEntry("oath", "誓约", "角色培养与誓约资料", listOf("誓约", "角色培养", "好感", "礼物", "生日"), Icons.Outlined.FavoriteBorder, WikiRoute.Oath),
     searchEntry("imprints", "印迹", "印迹资料与养成内容", listOf("印迹", "角色培养", "养成"), Icons.Outlined.MilitaryTech, WikiRoute.Imprints),
     searchEntry("player_levels", "玩家等级", "等级奖励和经验", listOf("等级", "玩家等级", "经验", "奖励", "等级奖励"), Icons.Outlined.MilitaryTech, WikiRoute.PlayerLevels),
+    searchEntry("interaction_items", "互动道具", "好友互动道具列表", listOf("互动", "互动道具", "好友", "礼物", "道具"), Icons.Outlined.People, WikiRoute.InteractionItems),
     searchEntry("stringer_talents", "超弦体天赋", "移动端超弦体天赋", listOf("天赋", "超弦体天赋", "移动端", "手游天赋"), Icons.Outlined.PhoneAndroid, WikiRoute.StringerTalents),
     searchEntry("stringer_push_cards", "超弦推进卡牌", "超弦推进模式卡牌", listOf("超弦推进", "推进", "移动端卡牌", "推进卡牌", "卡牌"), Icons.Outlined.PhoneAndroid, WikiRoute.StringerPushCards),
     searchEntry("catalog_hub", "外观与图鉴", "道具图鉴、时装筛选与武器外观", listOf("外观", "图鉴", "时装", "枪皮", "道具", "目录"), Icons.Outlined.Inventory2, WikiRoute.CatalogHub),
@@ -184,6 +186,7 @@ private val hubSearchEntries = listOf(
     searchEntry("extension_hub", "游戏延伸", "剧情、历史、BGM、投票与百科内容", listOf("延伸", "资料", "世界观", "剧情", "历史", "BGM", "音乐", "百科"), Icons.Outlined.MoreHoriz, WikiRoute.ExtensionHub),
     searchEntry("story", "剧情故事", "角色与世界观故事", listOf("剧情", "故事", "世界观", "资料", "角色故事"), Icons.Outlined.Style, WikiRoute.Story),
     searchEntry("history", "游戏历史", "版本和游戏历史记录", listOf("历史", "版本历史", "游戏历史", "记录", "年表"), Icons.Outlined.AccountTree, WikiRoute.GameHistory),
+    searchEntry("submissions", "投稿作品", "引航者投稿的视频、文章与游戏作品", listOf("投稿", "投稿作品", "同人", "作品", "视频", "文章", "手书", "AMV"), Icons.Outlined.UploadFile, WikiRoute.Submissions),
     searchEntry("comics", "四格漫画", "官方四格漫画", listOf("四格", "漫画", "四格漫画", "官方漫画"), Icons.Outlined.AutoAwesome, WikiRoute.Comics),
     searchEntry("collaborations", "联动", "联动活动与内容", listOf("联动", "合作", "联动活动"), Icons.Outlined.Handshake, WikiRoute.Collaborations),
     searchEntry("memes", "梗百科", "社区梗与百科内容", listOf("梗", "梗百科", "百科", "社区梗"), Icons.Outlined.AutoAwesome, WikiRoute.Memes),

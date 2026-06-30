@@ -1,16 +1,14 @@
 {
-  "versionName": "2.1.0",
-  "versionCode": 30,
+  "versionName": "2.1.1",
+  "versionCode": 31,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3375782,
+  "apkSize": 3392090,
   "releaseUrl": "/",
   "changelog": [
-    "全新设计系统：统一圆角、间距、字号 Token，切换 Material Expressive 主题",
-    "角色/武器/地图详情页共享元素过渡动画，一览页返回保留滚动位置",
-    "角色一览支持立绘展示，地图详情页骨架屏加载优化",
-    "新增 9 种主题配色风格选择器（PaletteStyle）",
-    "设置页重构拆分，侧栏高可读性模式增强",
-    "修复多处潜在崩溃和导航竞态问题"
+    "新增投稿作品和互动道具 Wiki 原生页面",
+    "更多 Wiki 页面接入离线缓存和首屏预读",
+    "优化互动道具品质解析与图鉴式展示布局",
+    "修复缓存只读路径和取消语义，提升加载稳定性"
   ],
-  "publishedAt": "2026-06-16"
+  "publishedAt": "2026-06-30"
 }

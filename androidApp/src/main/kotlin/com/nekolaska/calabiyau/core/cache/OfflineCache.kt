@@ -61,6 +61,7 @@ object OfflineCache {
         BGM("bgm", 3 * DAY),
         ACHIEVEMENTS("achievements", 3 * DAY),
         PLAYER_LEVELS("player_levels", 3 * DAY),
+        SUBMISSIONS("submissions", 3 * DAY),
     }
 
     private val typeByDir = Type.entries.associateBy { it.dir }

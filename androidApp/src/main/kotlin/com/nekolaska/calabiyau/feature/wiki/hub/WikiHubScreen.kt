@@ -61,6 +61,7 @@ import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
 import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.imprint.ImprintScreen
+import com.nekolaska.calabiyau.feature.wiki.interactionitem.InteractionItemScreen
 import com.nekolaska.calabiyau.feature.wiki.item.ItemCatalogScreen
 import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
@@ -71,6 +72,7 @@ import com.nekolaska.calabiyau.feature.wiki.navigation.NavigationMenuScreen
 import com.nekolaska.calabiyau.feature.wiki.oath.OathScreen
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.PlayerLevelScreen
 import com.nekolaska.calabiyau.feature.wiki.story.StoryScreen
+import com.nekolaska.calabiyau.feature.wiki.submission.SubmissionScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
 import com.nekolaska.calabiyau.feature.wiki.tips.GameTipsScreen
@@ -574,6 +576,13 @@ fun WikiHubScreen(
                 )
             }
 
+            is WikiRoute.Submissions -> {
+                SubmissionScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
             is WikiRoute.Memes -> {
                 MemeScreen(
                     onBack = { popBackStack() },
@@ -753,6 +762,13 @@ fun WikiHubScreen(
 
             is WikiRoute.PlayerLevels -> {
                 PlayerLevelScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
+            is WikiRoute.InteractionItems -> {
+                InteractionItemScreen(
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl
                 )
