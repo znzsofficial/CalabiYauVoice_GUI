@@ -58,10 +58,12 @@ fun NavigationMenuScreen(
     onOpenWikiUrl: (String) -> Unit,
     embedded: Boolean = false
 ) {
-    val state =
-        rememberLoadState(emptyList<NavSection>()) { force ->
-            NavigationMenuApi.fetchNavigationSections(force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<NavSection>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { NavigationMenuApi.fetchNavigationSections(cacheOnly = true) },
+        fetch = { force -> NavigationMenuApi.fetchNavigationSections(forceRefresh = force, allowMemoryCache = false) }
+    )
     val sections = state.data
     var expandedSections by remember { mutableStateOf<Set<String>>(emptySet()) }
 

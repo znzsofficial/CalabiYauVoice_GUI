@@ -51,11 +51,46 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
      * 获取所有阵营的角色列表。
      * 并行请求四个阵营，返回按 [FACTIONS] 顺序排列的结果。
      */
-    suspend fun fetchAllFactions(forceRefresh: Boolean = false): ApiResult<List<FactionData>> =
-        fetch(forceRefresh = forceRefresh)
+    suspend fun fetchAllFactions(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
+    ): ApiResult<List<FactionData>> = fetch(
+        forceRefresh = forceRefresh,
+        cacheOnly = cacheOnly,
+        allowMemoryCache = allowMemoryCache
+    )
 
     override suspend fun fetchFromCache(): ApiResult<List<FactionData>> =
-        ApiResult.Error("角色列表不支持 cacheOnly", kind = ErrorKind.NETWORK)
+        withContext(Dispatchers.IO) {
+            try {
+                val results = FACTIONS.map { faction ->
+                    async { loadCachedFaction(faction) }
+                }.awaitAll()
+
+                val errors = results.filterIsInstance<ApiResult.Error>()
+                if (errors.size == results.size) {
+                    return@withContext ApiResult.Error(
+                        "所有阵营缓存加载失败: ${errors.first().message}",
+                        kind = errors.first().kind
+                    )
+                }
+
+                val successes = results.filterIsInstance<ApiResult.Success<FactionData>>()
+                val maxAge = successes.maxOfOrNull { it.cacheAgeMs } ?: 0L
+                val factions = results.mapIndexed { index, result ->
+                    when (result) {
+                        is ApiResult.Success -> result.value
+                        is ApiResult.Error -> FactionData(FACTIONS[index], emptyList())
+                    }
+                }
+                ApiResult.Success(factions, isOffline = true, cacheAgeMs = maxAge)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ApiResult.Error("读取角色列表缓存失败: ${e.message}", kind = e.toErrorKind())
+            }
+        }
 
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<FactionData>> = withContext(Dispatchers.IO) {
         try {
@@ -125,6 +160,32 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             throw e
         } catch (e: Exception) {
             ApiResult.Error("加载 $faction 失败: ${e.message}", kind = e.toErrorKind())
+        }
+    }
+
+    private suspend fun loadCachedFaction(faction: String): ApiResult<FactionData> {
+        return try {
+            val entry = OfflineCache.getEntry(
+                type = OfflineCache.Type.CHARACTER_LIST,
+                key = "faction_$faction"
+            ) ?: return ApiResult.Error("没有 $faction 缓存", kind = ErrorKind.NETWORK)
+
+            val json = SharedJson.parseToJsonElement(entry.content).jsonObject
+            val html = json["parse"]
+                ?.jsonObject?.get("text")
+                ?.jsonObject?.get("*")
+                ?.jsonPrimitive?.content
+                ?: return ApiResult.Error("解析 $faction 缓存 HTML 失败", kind = ErrorKind.PARSE)
+
+            ApiResult.Success(
+                FactionData(faction, parseCharactersFromHtml(html)),
+                isOffline = true,
+                cacheAgeMs = entry.ageMs
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error("加载 $faction 缓存失败: ${e.message}", kind = e.toErrorKind())
         }
     }
 

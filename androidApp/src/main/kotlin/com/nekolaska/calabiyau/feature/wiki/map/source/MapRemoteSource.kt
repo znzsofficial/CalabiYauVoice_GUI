@@ -48,6 +48,25 @@ object MapRemoteSource {
         )
     }
 
+    suspend fun loadCachedModeHtml(templateName: String): MapListSourceResult? {
+        val entry = OfflineCache.getEntry(
+            type = OfflineCache.Type.MAP_LIST,
+            key = "mode_$templateName"
+        ) ?: return null
+
+        val json = SharedJson.parseToJsonElement(entry.content).jsonObject
+        val html = json["parse"]
+            ?.jsonObject?.get("text")
+            ?.jsonObject?.get("*")
+            ?.jsonPrimitive?.content ?: return null
+
+        return MapListSourceResult(
+            html = html,
+            isFromCache = true,
+            ageMs = entry.ageMs
+        )
+    }
+
     suspend fun fetchMapDetailPayload(mapName: String, forceRefresh: Boolean): MapDetailSourceResult? {
         val result = WikiParseSource.fetchHtmlAndWikitext(
             pageName = mapName,

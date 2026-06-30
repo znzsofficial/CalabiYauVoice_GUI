@@ -39,9 +39,12 @@ fun AnnouncementScreen(
 ) {
     val context = LocalContext.current
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val state = rememberLoadState(emptyList<Announcement>()) { force ->
-        AnnouncementApi.fetchAnnouncements(forceRefresh = force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<Announcement>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { AnnouncementApi.fetchAnnouncements(cacheOnly = true) },
+        fetch = { force -> AnnouncementApi.fetchAnnouncements(forceRefresh = force, allowMemoryCache = false) }
+    )
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

@@ -33,15 +33,31 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
         "晶能冲突" to "晶能冲突",
     )
 
-    suspend fun fetchAllModes(forceRefresh: Boolean = false): ApiResult<List<GameModeData>> {
-        return fetch(forceRefresh = forceRefresh)
+    suspend fun fetchAllModes(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true
+    ): ApiResult<List<GameModeData>> {
+        return fetch(
+            forceRefresh = forceRefresh,
+            cacheOnly = cacheOnly,
+            allowMemoryCache = allowMemoryCache
+        )
     }
 
+    override suspend fun fetchFromCache(): ApiResult<List<GameModeData>> = fetchFromSource(cacheOnly = true)
+
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<GameModeData>> =
+        fetchFromSource(forceRefresh = forceRefresh)
+
+    private suspend fun fetchFromSource(
+        forceRefresh: Boolean = false,
+        cacheOnly: Boolean = false
+    ): ApiResult<List<GameModeData>> =
         ioApiCall("获取地图列表失败") {
             val results = coroutineScope {
                 GAME_MODES.map { (display, template) ->
-                    async { fetchMode(display, template, forceRefresh) }
+                    async { fetchMode(display, template, forceRefresh, cacheOnly) }
                 }.awaitAll()
             }
 
@@ -72,10 +88,15 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
     private suspend fun fetchMode(
         displayName: String,
         templateName: String,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        cacheOnly: Boolean
     ): ApiResult<GameModeData> {
         return try {
-            val sourceResult = MapRemoteSource.fetchModeHtml(templateName, forceRefresh)
+            val sourceResult = if (cacheOnly) {
+                MapRemoteSource.loadCachedModeHtml(templateName)
+            } else {
+                MapRemoteSource.fetchModeHtml(templateName, forceRefresh)
+            }
                 ?: return ApiResult.Error("请求 $displayName 失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val maps = MapListParsers.parseMapsFromHtml(sourceResult.html)

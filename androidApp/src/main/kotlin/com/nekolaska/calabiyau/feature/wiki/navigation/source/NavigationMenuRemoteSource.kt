@@ -40,4 +40,25 @@ object NavigationMenuRemoteSource {
             ageMs = result.ageMs
         )
     }
+
+    suspend fun loadCachedSidebar(): NavigationMenuSourceResult? {
+        val entry = OfflineCache.getEntry(
+            type = OfflineCache.Type.NAVIGATION,
+            key = "sidebar"
+        ) ?: return null
+
+        val root = SharedJson.parseToJsonElement(entry.content).jsonObject
+        val sidebar = root["query"]
+            ?.jsonObject?.get("allmessages")
+            ?.jsonArray?.firstOrNull()
+            ?.jsonObject?.get("*")
+            ?.jsonPrimitive?.content
+            ?: return null
+
+        return NavigationMenuSourceResult(
+            sidebar = sidebar,
+            isFromCache = true,
+            ageMs = entry.ageMs
+        )
+    }
 }

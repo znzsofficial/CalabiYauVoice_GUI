@@ -34,4 +34,19 @@ object AnnouncementRemoteSource {
             ageMs = result.ageMs
         )
     }
+
+    suspend fun loadCachedAnnouncements(limit: Int): AnnouncementSourceResult? {
+        val entry = OfflineCache.getEntry(
+            type = OfflineCache.Type.ANNOUNCEMENTS,
+            key = "announcements_$limit"
+        ) ?: return null
+
+        val json = SharedJson.parseToJsonElement(entry.content).jsonObject
+        val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return null
+        return AnnouncementSourceResult(
+            results = results,
+            isFromCache = true,
+            ageMs = entry.ageMs
+        )
+    }
 }

@@ -78,10 +78,12 @@ fun CharacterListScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
-    val state =
-        rememberLoadState(emptyList<CharacterListApi.FactionData>()) { force ->
-            CharacterListApi.fetchAllFactions(force)
-    }
+    val state = rememberLoadState(
+        initial = emptyList<CharacterListApi.FactionData>(),
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
+        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force, allowMemoryCache = false) }
+    )
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     var showBirthdayDialog by remember { mutableStateOf(false) }
     val hasWallpaper = LocalHasWallpaper.current
