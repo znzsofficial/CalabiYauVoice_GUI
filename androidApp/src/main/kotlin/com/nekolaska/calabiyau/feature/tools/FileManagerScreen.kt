@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.tools
 
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -54,6 +55,11 @@ data class FileManagerDirectoryPickerConfig(
     val onOpenSystemPicker: (() -> Unit)? = null
 )
 
+private data class ApkFileInfo(
+    val versionName: String?,
+    val versionCode: Long?
+)
+
 enum class FileManagerPickerMode {
     DIRECTORY,
     FILES
@@ -88,6 +94,7 @@ fun FileManagerScreen(
         )
     }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
+    var apkInfoByPath by remember { mutableStateOf<Map<String, ApkFileInfo>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
     var refreshCounter by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -120,13 +127,20 @@ fun FileManagerScreen(
     // 加载当前目录文件列表
     LaunchedEffect(currentDir, refreshCounter) {
         isLoading = true
-        files = withContext(Dispatchers.IO) {
+        val snapshot = withContext(Dispatchers.IO) {
             val dir = currentDir
             if (!dir.exists()) dir.mkdirs()
             val list = dir.listFiles()?.toList() ?: emptyList()
             // 文件夹在前，文件在后，各自按名称排序
-            list.sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
+            val sortedFiles = list.sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
+            val apkInfo = sortedFiles
+                .filter { it.isFile && it.isApkFile() }
+                .mapNotNull { file -> readApkFileInfo(context, file)?.let { info -> file.absolutePath to info } }
+                .toMap()
+            sortedFiles to apkInfo
         }
+        files = snapshot.first
+        apkInfoByPath = snapshot.second
         isLoading = false
     }
 
@@ -344,6 +358,7 @@ fun FileManagerScreen(
                             val isSelected = file.absolutePath in selectedFiles
                             FileListItem(
                                 file = file,
+                                apkInfo = apkInfoByPath[file.absolutePath],
                                 isSelectionMode = isSelectionMode,
                                 isSelected = isSelected,
                                 onClick = {
@@ -404,6 +419,7 @@ fun FileManagerScreen(
     // ── 文件操作菜单 BottomSheet ──
     if (selectedFile != null) {
         val file = selectedFile!!
+        val apkInfo = apkInfoByPath[file.absolutePath]
         ModalBottomSheet(
             onDismissRequest = { selectedFile = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -431,11 +447,7 @@ fun FileManagerScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            buildString {
-                                if (file.isFile) append(formatFileSize(file.length()))
-                                append(" · ")
-                                append(formatDateTime(file.lastModified()))
-                            },
+                            fileMetaText(file, apkInfo),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -870,6 +882,7 @@ private fun DirectoryPickerBanner(
 @Composable
 private fun FileListItem(
     file: File,
+    apkInfo: ApkFileInfo? = null,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onClick: () -> Unit,
@@ -929,16 +942,7 @@ private fun FileListItem(
                     fontWeight = if (file.isDirectory) FontWeight.Medium else FontWeight.Normal
                 )
                 Text(
-                    text = buildString {
-                        if (file.isDirectory) {
-                            val count = file.listFiles()?.size ?: 0
-                            append("$count 项")
-                        } else {
-                            append(formatFileSize(file.length()))
-                        }
-                        append(" · ")
-                        append(formatDateTime(file.lastModified()))
-                    },
+                    text = fileMetaText(file, apkInfo),
                     style = AppTextStyles.listItemMeta,
                     color = AppTextColors.muted,
                     maxLines = 1
@@ -983,6 +987,20 @@ private fun FileIcon(file: File, size: Int) {
                 .clip(smoothCornerShape(12.dp)),
             contentScale = ContentScale.Crop
         )
+    } else if (file.isApkFile()) {
+        Surface(
+            modifier = Modifier.size(size.dp),
+            shape = smoothCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.tertiaryContainer
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Outlined.InstallMobile, null,
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size((size * 0.5).dp)
+                )
+            }
+        }
     } else {
         Surface(
             modifier = Modifier.size(size.dp),
@@ -1167,9 +1185,48 @@ private fun File.isVideoFile(): Boolean {
     return ext in listOf("mp4", "mkv", "avi", "mov", "webm")
 }
 
+private fun File.isApkFile(): Boolean = extension.equals("apk", ignoreCase = true)
+
+private fun fileMetaText(file: File, apkInfo: ApkFileInfo? = null): String {
+    return buildString {
+        if (file.isDirectory) {
+            val count = file.listFiles()?.size ?: 0
+            append("$count 项")
+        } else {
+            append(formatFileSize(file.length()))
+            if (file.isApkFile()) {
+                append(" · 安装包")
+                apkInfo?.versionName?.takeIf { it.isNotBlank() }?.let { versionName ->
+                    append(" v")
+                    append(versionName.removePrefix("v").removePrefix("V"))
+                }
+                apkInfo?.versionCode?.let { versionCode ->
+                    append(" ($versionCode)")
+                }
+            }
+        }
+        append(" · ")
+        append(formatDateTime(file.lastModified()))
+    }
+}
+
+@Suppress("DEPRECATION")
+private fun readApkFileInfo(context: Context, file: File): ApkFileInfo? {
+    return runCatching {
+        val info = context.packageManager.getPackageArchiveInfo(file.absolutePath, 0) ?: return null
+        val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            info.versionCode.toLong()
+        }
+        ApkFileInfo(info.versionName, versionCode)
+    }.getOrNull()
+}
+
 private fun getFileIcon(file: File): ImageVector {
     return when {
         file.isDirectory -> Icons.Default.Folder
+        file.isApkFile() -> Icons.Outlined.InstallMobile
         file.isAudioFile() -> Icons.Outlined.AudioFile
         file.isVideoFile() -> Icons.Outlined.VideoFile
         file.isImageFile() -> Icons.Outlined.Image
