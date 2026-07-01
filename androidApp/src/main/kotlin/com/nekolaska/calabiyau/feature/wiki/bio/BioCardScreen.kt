@@ -89,11 +89,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
@@ -233,8 +233,9 @@ fun BioCardScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.pcCards.isEmpty() && it.mobileCards.isEmpty() && it.decks.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载卡牌数据…") }
+            loading = { mod -> BioCardSkeleton(mod) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -441,6 +442,88 @@ fun BioCardScreen(
                         copyText("分享码", deck.shareId)
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BioCardSkeleton(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                repeat(3) { index ->
+                    ShimmerBox(
+                        modifier = Modifier.weight(1f).height(if (index == 0) 64.dp else 56.dp),
+                        shape = smoothCornerShape(18.dp)
+                    )
+                }
+            }
+        }
+        item {
+            ShimmerBox(
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = smoothCornerShape(26.dp)
+            )
+        }
+        item {
+            Card(
+                shape = smoothCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ShimmerBox(Modifier.width(88.dp).height(20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShimmerBox(Modifier.weight(1f).height(56.dp), shape = smoothCornerShape(16.dp))
+                        ShimmerBox(Modifier.weight(1f).height(56.dp), shape = smoothCornerShape(16.dp))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(3) { index ->
+                            ShimmerBox(
+                                Modifier.width((72 - index * 4).dp).height(32.dp),
+                                shape = smoothCornerShape(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        repeat(6) { index ->
+            item(key = "bio-card-skeleton-$index") {
+                BioInfoCardSkeleton()
+            }
+        }
+    }
+}
+
+@Composable
+private fun BioInfoCardSkeleton() {
+    Card(
+        shape = smoothCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            ShimmerBox(Modifier.size(84.dp), shape = smoothCornerShape(16.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                ShimmerBox(Modifier.fillMaxWidth(0.55f).height(18.dp))
+                ShimmerBox(Modifier.fillMaxWidth(0.85f).height(14.dp))
+                ShimmerBox(Modifier.fillMaxWidth(0.65f).height(14.dp))
             }
         }
     }

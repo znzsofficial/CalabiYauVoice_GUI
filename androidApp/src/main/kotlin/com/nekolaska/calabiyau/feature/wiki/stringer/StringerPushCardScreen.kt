@@ -17,8 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,11 +49,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SimpleDropdownSelector
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -138,8 +138,9 @@ fun StringerPushCardScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.cards.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载超弦推进卡牌…") }
+            loading = { mod -> StringerPushCardSkeleton(mod) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -279,6 +280,97 @@ fun StringerPushCardScreen(
                 }
                 Spacer(Modifier.height(12.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun StringerPushCardSkeleton(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            ShimmerBox(
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = smoothCornerShape(26.dp)
+            )
+        }
+        item {
+            Card(
+                shape = smoothCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ShimmerBox(Modifier.width(88.dp).height(20.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ShimmerBox(Modifier.weight(1f).height(56.dp), shape = smoothCornerShape(16.dp))
+                        ShimmerBox(Modifier.weight(1f).height(56.dp), shape = smoothCornerShape(16.dp))
+                    }
+                    ShimmerBox(Modifier.fillMaxWidth().height(56.dp), shape = smoothCornerShape(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(3) { index ->
+                            ShimmerBox(
+                                Modifier.width((72 - index * 4).dp).height(32.dp),
+                                shape = smoothCornerShape(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val cardMinWidth = 168.dp
+                val columns = (maxWidth / cardMinWidth).toInt().coerceAtLeast(1)
+                val cardWidth = (maxWidth - (12.dp * (columns - 1))) / columns
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    maxItemsInEachRow = columns
+                ) {
+                    repeat(columns * 3) {
+                        Box(modifier = Modifier.width(cardWidth)) {
+                            StringerPushCardSkeletonItem()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StringerPushCardSkeletonItem() {
+    Card(
+        shape = smoothCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShimmerBox(Modifier.size(56.dp), shape = smoothCornerShape(16.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ShimmerBox(Modifier.fillMaxWidth(0.7f).height(18.dp))
+                    ShimmerBox(Modifier.fillMaxWidth(0.9f).height(14.dp))
+                }
+            }
+            ShimmerBox(Modifier.fillMaxWidth().height(14.dp))
+            ShimmerBox(Modifier.fillMaxWidth(0.85f).height(14.dp))
+            ShimmerBox(Modifier.width(96.dp).height(24.dp), shape = smoothCornerShape(8.dp))
         }
     }
 }
