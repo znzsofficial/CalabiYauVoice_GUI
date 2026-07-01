@@ -331,7 +331,7 @@ fun WikiWebViewScreen(
                     }
                 }
 
-                if (status == DownloadManager.STATUS_SUCCESSFUL && pending.file.exists()) {
+                if (status == DownloadManager.STATUS_SUCCESSFUL) {
                     showInstallPrompt(pending)
                 } else {
                     showSnack("APK 下载失败：${pending.fileName}")
@@ -342,7 +342,7 @@ fun WikiWebViewScreen(
             context,
             receiver,
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_NOT_EXPORTED
+            ContextCompat.RECEIVER_EXPORTED
         )
         onDispose {
             runCatching { context.unregisterReceiver(receiver) }
