@@ -5,11 +5,12 @@
   import Lightbox from './Lightbox.svelte';
   import SearchResults from './SearchResults.svelte';
   import { downloadBlob, downloadFilesInParallel, fileNameFromTitle, generateZip, uniqueFileName } from './downloadZip';
-  import { apiErrorMessage, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
+  import { apiErrorMessage, fetchAllCharacters, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type CategoryPage, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
   import { toError, highlightMatch, esc, categoryDisplayName } from './utils';
   import SearchFilters from './SearchFilters.svelte';
+  import VoiceCharacterDialog from './VoiceCharacterDialog.svelte';
 
-  type ProfileValue = 'default' | 'images' | 'all' | 'advanced' | 'voiceCategory' | 'categoryDownload';
+  type ProfileValue = 'default' | 'images' | 'all' | 'advanced' | 'voiceCategory' | 'categoryDownload' | 'voiceSubtitle';
   type Status = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
   type SortValue = 'relevance' | 'last_edit_desc' | 'last_edit_asc' | 'create_timestamp_desc' | 'incoming_links_desc';
   type NamespaceOption = { id: number; name: string };
@@ -93,6 +94,12 @@
   let categoryFileDialogFiles = $state([]) as CategoryFile[];
   let categoryFileDialogLoading = $state(false);
   let categoryFileDialogError = $state('');
+  let voiceCharacters = $state([]) as CategoryPage[];
+  let voiceCharsLoading = $state(false);
+  let voiceCharsError = $state('');
+  let voiceDialogOpen = $state(false);
+  let voiceDialogCharacter = $state(null) as CategoryPage | null;
+  let voiceDialogRef = $state(null) as HTMLDialogElement | null;
 
   let nsList = $derived(nsExpanded ? NS_EXTENDED : NS_PRIMARY);
   let totalPages = $derived(Math.ceil(totalHits / PAGE_SIZE));
@@ -105,6 +112,7 @@
   let categoryResults = $derived(results.filter(result => result.ns === 14));
   let selectedCategoryResultItems = $derived(categoryResults.filter(result => selectedCategoryResults.has(result.title)));
   let categorySelectionEnabled = $derived(categorySearchActive && categoryResults.length > 0);
+  let voiceSubtitleActive = $derived(activeProfile === 'voiceSubtitle');
   let totalHitsStr = $derived(totalHits.toLocaleString());
   let categoryResultsCountStr = $derived(categoryResults.length.toLocaleString());
 
@@ -121,6 +129,20 @@
 
   function setProfile(value: ProfileValue): void {
     activeProfile = value;
+    if (value === 'voiceSubtitle') {
+      selectedNS = [0];
+      nsExpanded = false;
+      selectedFiles = new Set();
+      selectedCategoryResults = new Set();
+      expandedCategories = new Set();
+      categorySubcatErrors = {};
+      currentPage = 1;
+      categoryStatusText = '';
+      results = [];
+      status = 'idle';
+      loadVoiceCharacters();
+      return;
+    }
     if (value !== 'advanced') {
       selectedNS = isCategorySearchProfile(value) ? [14] : [...PROFILE_NS_MAP[value]];
       nsExpanded = false;
@@ -505,6 +527,24 @@
     categoryFileDialogLoading = false;
   }
 
+  async function loadVoiceCharacters(): Promise<void> {
+    if (voiceCharacters.length > 0) return;
+    voiceCharsLoading = true;
+    voiceCharsError = '';
+    try {
+      voiceCharacters = await fetchAllCharacters();
+    } catch (err) {
+      voiceCharsError = toError(err).message || '加载角色列表失败';
+    } finally {
+      voiceCharsLoading = false;
+    }
+  }
+
+  function openVoiceDialog(character: CategoryPage): void {
+    voiceDialogCharacter = character;
+    voiceDialogOpen = true;
+  }
+
   async function downloadSelectedFilesZip(): Promise<void> {
     if (selectedFileResults.length === 0 || zipDownloading) return;
 
@@ -687,6 +727,44 @@
 
   <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => nsExpanded = !nsExpanded} />
 
+  {#if voiceSubtitleActive}
+    <div class="voice-char-section">
+      {#if voiceCharsLoading}
+        <div class="voice-char-skeleton">
+          {#each Array(18) as _, i (i)}
+            <div class="voice-char-item"><span class="skeleton-line" style="width:48px;height:48px;border-radius:50%;margin:0 auto;"></span><span class="skeleton-line" style="width:56px;"></span></div>
+          {/each}
+        </div>
+      {:else if voiceCharsError}
+        <div class="balance-placeholder text-muted">
+          <iconify-icon icon="lucide:alert-circle"></iconify-icon>
+          <p>{voiceCharsError}</p>
+          <button class="btn outline" style="margin-top:8px;" onclick={loadVoiceCharacters}>重试</button>
+        </div>
+      {:else if voiceCharacters.length > 0}
+        <div class="voice-char-grid">
+          {#each voiceCharacters as character (character.pageid)}
+            <button class="voice-char-item" onclick={() => openVoiceDialog(character)}>
+              <div class="voice-char-avatar">
+                {#if character.thumbnail}
+                  <img src={character.thumbnail} alt="" loading="lazy">
+                {:else}
+                  <span class="hero-avatar-fallback">{character.title.charAt(0)}</span>
+                {/if}
+              </div>
+              <span class="voice-char-name">{character.title}</span>
+            </button>
+          {/each}
+        </div>
+      {:else}
+        <div class="balance-placeholder text-muted">
+          <iconify-icon icon="lucide:users"></iconify-icon>
+          <p>暂无角色数据</p>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   {#if status === 'ready'}
     <div class="result-meta">
       {#if categorySearchActive}
@@ -723,6 +801,10 @@
 
 {#if categoryFileDialogOpen}
   <CategoryFileDialog title={categoryDisplayName(categoryFileDialogTitle)} subtitle={activeProfile === 'voiceCategory' ? '音频文件' : '分类文件'} files={categoryFileDialogFiles} loading={categoryFileDialogLoading} error={categoryFileDialogError} onClose={closeCategoryFileDialog} onPreview={openLightbox} />
+{/if}
+
+{#if voiceDialogOpen && voiceDialogCharacter}
+  <VoiceCharacterDialog bind:dialogRef={voiceDialogRef} character={voiceDialogCharacter} onClose={() => voiceDialogOpen = false} />
 {/if}
 
 <style>

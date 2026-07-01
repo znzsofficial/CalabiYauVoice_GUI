@@ -14,6 +14,16 @@ export type WikiSearchItem = {
 export type Suggestion = { title: string; desc: string; url: string; ns: number; pageid?: number };
 
 import { formatFileSize, fileNameFromTitle } from './utils';
+export type CategoryPage = { title: string; pageid: number; thumbnail?: string; url: string };
+export type VoiceLine = {
+  category: string;
+  cnAudio: string;
+  cnText: string;
+  jpAudio: string;
+  jpText: string;
+  enAudio: string;
+  enText: string;
+};
 export { formatFileSize, fileNameFromTitle };
 
 type WikiPage = {
@@ -166,7 +176,7 @@ export async function fetchPageExtra(titles: string[]): Promise<Record<string, {
   }
 }
 
-export async function fetchCategoryMembers(category: string, namespace: number, type: 'subcat' | 'file'): Promise<string[]> {
+export async function fetchCategoryMembers(category: string, namespace: number, type: 'subcat' | 'file' | 'page'): Promise<string[]> {
   const output: string[] = [];
   let cmcontinue = '';
   do {
@@ -202,4 +212,86 @@ export async function fetchCategoryFiles(category: string, audioOnly: boolean): 
 function isAudioFile(url: string, mime?: string): boolean {
   const clean = url.split('?')[0];
   return mime?.startsWith('audio/') === true || /\.(wav|mp3|ogg)$/i.test(clean);
+}
+
+export async function fetchCategoryPages(category: string): Promise<CategoryPage[]> {
+  const pages: CategoryPage[] = [];
+  let cmcontinue = '';
+
+  do {
+    const params = new URLSearchParams({ action: 'query', list: 'categorymembers', cmtitle: category, cmnamespace: '0', cmtype: 'page', cmlimit: '500', format: 'json', origin: '*' });
+    if (cmcontinue) params.set('cmcontinue', cmcontinue);
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000)).json() as { continue?: { cmcontinue?: string }; query?: { categorymembers?: Array<{ ns: number; title: string; pageid: number }> } };
+    const members = data.query?.categorymembers || [];
+    for (const member of members) {
+      pages.push({ title: member.title, pageid: member.pageid, url: WIKI_BASE + encodeURIComponent(member.title.replace(/ /g, '_')) });
+    }
+    cmcontinue = data.continue?.cmcontinue || '';
+  } while (cmcontinue);
+
+  return pages.filter(p => !p.title.startsWith('文件:') && !p.title.startsWith('File:'));
+}
+
+async function fillPageThumbnails(pages: CategoryPage[]): Promise<void> {
+  for (const page of pages) {
+    const filename = encodeURIComponent(`${page.title}头像.png`);
+    page.thumbnail = `${WIKI_BASE}Special:Redirect/file/${filename}`;
+  }
+}
+
+const CHARACTER_CATEGORIES = ['超弦体', '晶源体'];
+
+export async function fetchAllCharacters(): Promise<CategoryPage[]> {
+  const pages: CategoryPage[] = [];
+  for (const cat of CHARACTER_CATEGORIES) {
+    const categoryPages = await fetchCategoryPages(`Category:${cat}`);
+    for (const page of categoryPages) pages.push(page);
+  }
+  if (pages.length > 0) await fillPageThumbnails(pages);
+  return pages;
+}
+
+export async function fetchVoicePageParsetree(pageTitle: string): Promise<string> {
+  let url = `${API}?action=parse&page=${encodeURIComponent(pageTitle)}&prop=parsetree&format=json&origin=*`;
+  let resp = await fetchWithTimeout(url, 15000);
+  if (!resp.ok) {
+    const pageid = await resolveVoicePageId(pageTitle);
+    if (!pageid) return '';
+    url = `${API}?action=parse&pageid=${pageid}&prop=parsetree&format=json&origin=*`;
+    resp = await fetchWithTimeout(url, 15000);
+  }
+  const data = await resp.json() as { parse?: { parsetree?: { '*': string } } };
+  return data.parse?.parsetree?.['*'] || '';
+}
+
+const voicePageIdCache = new Map<string, number | null>();
+
+async function resolveVoicePageId(pageTitle: string): Promise<number | null> {
+  if (voicePageIdCache.has(pageTitle)) return voicePageIdCache.get(pageTitle)!;
+
+  let cmcontinue = '';
+  do {
+    const params = new URLSearchParams({ action: 'query', list: 'categorymembers', cmtitle: 'Category:语音台词', cmnamespace: '0', cmtype: 'page', cmlimit: '500', format: 'json', origin: '*' });
+    if (cmcontinue) params.set('cmcontinue', cmcontinue);
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000)).json() as { continue?: { cmcontinue?: string }; query?: { categorymembers?: Array<{ pageid: number; title: string }> } };
+    const members = data.query?.categorymembers || [];
+    for (const m of members) {
+      const charName = m.title.replace(/\/语音台词$/, '');
+      voicePageIdCache.set(m.title, m.pageid);
+      voicePageIdCache.set(charName, m.pageid);
+    }
+    cmcontinue = data.continue?.cmcontinue || '';
+  } while (cmcontinue);
+
+  const pid = voicePageIdCache.get(pageTitle);
+  if (pid != null) return pid;
+
+  const charName = pageTitle.replace(/\/语音台词$/, '');
+  return voicePageIdCache.get(charName) ?? null;
+}
+
+export function resolveAudioUrl(filename: string): string {
+  if (!filename) return '';
+  const clean = filename.trim().replace(/^文件:|^File:/, '');
+  return WIKI_BASE + 'Special:Redirect/file/' + encodeURIComponent(clean);
 }

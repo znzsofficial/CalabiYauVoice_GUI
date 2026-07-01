@@ -27,7 +27,7 @@
   </div>
   <div class="bulk-download-actions">
     <button class="btn outline" type="button" onclick={onToggleAll}>{allSelected ? '取消全选' : '全选本页'}</button>
-    <label class="concurrency-control"><span>并发</span><input value={concurrency} type="number" min="1" max="16" step="1" onchange={handleConcurrencyChange}></label>
+    <label class="concurrency-control"><span>线程</span><input value={concurrency} type="number" min="1" max="16" step="1" onchange={handleConcurrencyChange}></label>
     <button class="btn primary" type="button" disabled={disabled || downloading} onclick={onDownload}>{downloading ? downloadingLabel : downloadLabel}</button>
   </div>
 </div>

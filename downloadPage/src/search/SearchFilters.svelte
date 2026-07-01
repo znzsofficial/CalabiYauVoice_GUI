@@ -1,5 +1,5 @@
 <script lang="ts">
-  type ProfileValue = 'default' | 'images' | 'all' | 'advanced' | 'voiceCategory' | 'categoryDownload';
+  type ProfileValue = 'default' | 'images' | 'all' | 'advanced' | 'voiceCategory' | 'categoryDownload' | 'voiceSubtitle';
   type SortValue = 'relevance' | 'last_edit_desc' | 'last_edit_asc' | 'create_timestamp_desc' | 'incoming_links_desc';
   type NamespaceOption = { id: number; name: string };
 
@@ -33,7 +33,8 @@
     { value: 'all', name: '全部', desc: '所有命名空间' },
     { value: 'advanced', name: '高级', desc: '自选命名空间' },
     { value: 'voiceCategory', name: '语音分类', desc: '按语音分类打包下载' },
-    { value: 'categoryDownload', name: '分类下载', desc: '搜索分类命名空间' }
+    { value: 'categoryDownload', name: '分类下载', desc: '搜索分类命名空间' },
+    { value: 'voiceSubtitle', name: '语音字幕', desc: '浏览角色语音与字幕' }
   ];
   const SORT_OPTIONS: Array<{ value: SortValue; name: string }> = [
     { value: 'relevance', name: '相关度' },
