@@ -1,14 +1,14 @@
 {
-  "versionName": "2.1.1",
-  "versionCode": 31,
+  "versionName": "2.1.2",
+  "versionCode": 32,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3392090,
+  "apkSize": 3392086,
   "releaseUrl": "/",
   "changelog": [
-    "新增投稿作品和互动道具 Wiki 原生页面",
-    "更多 Wiki 页面接入离线缓存和首屏预读",
-    "优化互动道具品质解析与图鉴式展示布局",
-    "修复缓存只读路径和取消语义，提升加载稳定性"
+    "修复应用内更新下载完成后的安装提示",
+    "文件管理器支持识别 APK 安装包并显示版本信息",
+    "推进卡牌和生化卡牌页新增骨架加载项",
+    "优化 Wiki 页面初始加载和空数据判断"
   ],
-  "publishedAt": "2026-06-30"
+  "publishedAt": "2026-07-01"
 }
