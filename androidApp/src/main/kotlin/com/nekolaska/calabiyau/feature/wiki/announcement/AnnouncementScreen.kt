@@ -43,7 +43,7 @@ fun AnnouncementScreen(
         initial = emptyList<Announcement>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { AnnouncementApi.fetchAnnouncements(cacheOnly = true) },
-        fetch = { force -> AnnouncementApi.fetchAnnouncements(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> AnnouncementApi.fetchAnnouncements(forceRefresh = force) }
     )
 
     Scaffold(

@@ -38,7 +38,7 @@ fun CollaborationScreen(
         ),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { CollaborationApi.fetch(cacheOnly = true) },
-        fetch = { force -> CollaborationApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> CollaborationApi.fetch(forceRefresh = force) }
     )
     var keyword by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FILTER_ALL) }

@@ -72,7 +72,7 @@ fun InteractionItemScreen(
         initial = emptyList<InteractionItemInfo>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { InteractionItemApi.fetch(cacheOnly = true) },
-        fetch = { force -> InteractionItemApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> InteractionItemApi.fetch(forceRefresh = force) }
     )
     var keyword by remember { mutableStateOf("") }
     var selectedQuality by remember { mutableStateOf(FILTER_ALL) }

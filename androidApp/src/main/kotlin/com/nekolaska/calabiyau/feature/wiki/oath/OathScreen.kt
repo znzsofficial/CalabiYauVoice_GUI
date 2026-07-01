@@ -53,7 +53,7 @@ fun OathScreen(
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { OathApi.fetch(cacheOnly = true) }
     ) { force ->
-        OathApi.fetch(forceRefresh = force, allowMemoryCache = false)
+        OathApi.fetch(forceRefresh = force)
     }
     var selectedTab by remember { mutableStateOf(OathTab.GIFTS) }
     var keyword by remember { mutableStateOf("") }

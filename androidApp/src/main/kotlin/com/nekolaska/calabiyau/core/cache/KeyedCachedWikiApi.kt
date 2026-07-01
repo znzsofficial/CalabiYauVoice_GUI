@@ -40,7 +40,7 @@ abstract class KeyedCachedWikiApi<K, T>(private val name: String) {
             getCachedValue(key)?.let { return ApiResult.Success(it) }
         }
         val result = if (cacheOnly) fetchFromCache(key) else fetchFromNetwork(key, forceRefresh)
-        if (result is ApiResult.Success) updateCache(key, result.value)
+        if (!cacheOnly && result is ApiResult.Success) updateCache(key, result.value)
         return result
     }
 

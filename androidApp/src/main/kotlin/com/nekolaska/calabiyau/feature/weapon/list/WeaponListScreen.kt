@@ -50,7 +50,7 @@ fun WeaponListScreen(
         initial = emptyList<WeaponListApi.WeaponCategoryData>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
-        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) }
     )
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     val hasWallpaper = LocalHasWallpaper.current

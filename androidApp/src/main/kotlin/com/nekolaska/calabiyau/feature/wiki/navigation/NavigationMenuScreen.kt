@@ -62,7 +62,7 @@ fun NavigationMenuScreen(
         initial = emptyList<NavSection>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { NavigationMenuApi.fetchNavigationSections(cacheOnly = true) },
-        fetch = { force -> NavigationMenuApi.fetchNavigationSections(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> NavigationMenuApi.fetchNavigationSections(forceRefresh = force) }
     )
     val sections = state.data
     var expandedSections by remember { mutableStateOf<Set<String>>(emptySet()) }

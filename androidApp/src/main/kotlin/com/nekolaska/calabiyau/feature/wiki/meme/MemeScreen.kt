@@ -76,7 +76,7 @@ fun MemeScreen(
         ),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { MemeApi.fetch(cacheOnly = true) },
-        fetch = { force -> MemeApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> MemeApi.fetch(forceRefresh = force) }
     )
     var keyword by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FILTER_ALL) }

@@ -24,6 +24,18 @@ class CachedWikiApiTest {
     }
 
     @Test
+    fun cacheOnlyDoesNotUpdateMemory() = runBlocking {
+        val api = TestCachedWikiApi()
+        api.primeMemory("memory")
+
+        val result = api.fetch(cacheOnly = true)
+
+        assertTrue(result is ApiResult.Success)
+        assertEquals("disk", result.value)
+        assertEquals("memory", api.cachedValue())
+    }
+
+    @Test
     fun allowMemoryCacheFalseBypassesMemory() = runBlocking {
         val api = TestCachedWikiApi()
         api.primeMemory("memory")

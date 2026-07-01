@@ -75,7 +75,7 @@ fun MeowLanguageScreen(
         initial = emptyList<MeowLanguageSection>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { MeowLanguageApi.fetch(cacheOnly = true) },
-        fetch = { force -> MeowLanguageApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> MeowLanguageApi.fetch(forceRefresh = force) }
     )
 
     Scaffold(

@@ -146,6 +146,8 @@ internal fun WikiHomePage(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     listState: LazyListState,
+    characterRowState: LazyListState,
+    mapRowState: LazyListState,
     topAppBarState: TopAppBarState,
     wallpaperUrl: String?,
     onNavigateTo: (WikiRoute) -> Unit,
@@ -286,6 +288,7 @@ internal fun WikiHomePage(
                             isLoading = isLoadingCharacters,
                             selectedFaction = selectedHomeFaction,
                             onSelectedFactionChanged = onHomeFactionChanged,
+                            rowState = characterRowState,
                             onOpenCharacterDetail = onOpenCharacterDetail,
                             onViewAll = { onNavigateTo(WikiRoute.Characters) },
                             backdrop = backdrop,
@@ -314,6 +317,7 @@ internal fun WikiHomePage(
                             isLoading = isLoadingMaps,
                             selectedMode = selectedHomeMapMode,
                             onSelectedModeChanged = onHomeMapModeChanged,
+                            rowState = mapRowState,
                             onOpenMapDetail = onOpenMapDetail,
                             onViewAll = { onNavigateTo(WikiRoute.Maps) },
                             backdrop = backdrop,
@@ -713,6 +717,7 @@ private fun CharacterPreviewSection(
     isLoading: Boolean,
     selectedFaction: Int,
     onSelectedFactionChanged: (Int) -> Unit,
+    rowState: LazyListState,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onViewAll: () -> Unit,
     backdrop: Backdrop = emptyBackdrop(),
@@ -819,6 +824,7 @@ private fun CharacterPreviewSection(
                         }
                     }
                     LazyRow(
+                        state = rowState,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp)
                     ) {
@@ -949,6 +955,7 @@ private fun MapPreviewSection(
     isLoading: Boolean,
     selectedMode: Int,
     onSelectedModeChanged: (Int) -> Unit,
+    rowState: LazyListState,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     onViewAll: () -> Unit = {},
     backdrop: Backdrop = emptyBackdrop(),
@@ -1044,6 +1051,7 @@ private fun MapPreviewSection(
                 val currentMode = gameModes.getOrNull(selectedMode.coerceIn(0, gameModes.lastIndex))
                 if (currentMode != null && currentMode.maps.isNotEmpty()) {
                     LazyRow(
+                        state = rowState,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp)
                     ) {

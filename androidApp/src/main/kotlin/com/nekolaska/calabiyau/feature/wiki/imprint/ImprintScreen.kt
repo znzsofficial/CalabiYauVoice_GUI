@@ -75,7 +75,7 @@ fun ImprintScreen(
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { ImprintApi.fetch(cacheOnly = true) }
     ) { force ->
-        ImprintApi.fetch(forceRefresh = force, allowMemoryCache = false)
+        ImprintApi.fetch(forceRefresh = force)
     }
     var keyword by remember { mutableStateOf("") }
     var selectedCharacter by remember { mutableStateOf(ALL_CHARACTERS) }

@@ -77,7 +77,7 @@ fun PlayerLevelScreen(
         ),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { PlayerLevelApi.fetch(cacheOnly = true) },
-        fetch = { force -> PlayerLevelApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> PlayerLevelApi.fetch(forceRefresh = force) }
     )
     var keyword by remember { mutableStateOf("") }
     var selectedSegment by remember { mutableStateOf<PlayerLevelSegment?>(null) }

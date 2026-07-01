@@ -68,7 +68,7 @@ fun SubmissionScreen(
         initial = SubmissionPage(entries = emptyList()),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { SubmissionApi.fetch(cacheOnly = true) },
-        fetch = { force -> SubmissionApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> SubmissionApi.fetch(forceRefresh = force) }
     )
     var keyword by remember { mutableStateOf("") }
     var selectedTopic by remember { mutableStateOf(FILTER_ALL) }

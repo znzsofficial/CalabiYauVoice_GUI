@@ -64,7 +64,7 @@ fun StoryScreen(
         initial = emptyList<StorySection>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { StoryApi.fetch(cacheOnly = true) },
-        fetch = { force -> StoryApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> StoryApi.fetch(forceRefresh = force) }
     )
 
     Scaffold(

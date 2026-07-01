@@ -42,7 +42,7 @@ fun GameModeScreen(
         initial = emptyList<GameModeDetail>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { GameModeApi.fetchAllModes(cacheOnly = true) },
-        fetch = { force -> GameModeApi.fetchAllModes(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> GameModeApi.fetchAllModes(forceRefresh = force) }
     )
     var expandedMode by remember { mutableStateOf<String?>(null) }
 

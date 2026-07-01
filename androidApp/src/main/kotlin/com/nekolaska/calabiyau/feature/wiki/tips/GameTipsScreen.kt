@@ -72,7 +72,7 @@ fun GameTipsScreen(
         initial = emptyList<GameTipsSection>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { GameTipsApi.fetch(cacheOnly = true) },
-        fetch = { force -> GameTipsApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> GameTipsApi.fetch(forceRefresh = force) }
     )
 
     Scaffold(

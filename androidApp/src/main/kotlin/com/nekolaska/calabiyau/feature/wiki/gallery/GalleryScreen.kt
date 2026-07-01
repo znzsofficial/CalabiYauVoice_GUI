@@ -99,7 +99,7 @@ fun GalleryScreen(
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { GalleryApi.fetchGallery(pageName, cacheOnly = true) }
     ) { force ->
-        GalleryApi.fetchGallery(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
+        GalleryApi.fetchGallery(pageName = pageName, forceRefresh = force)
     }
     var selectedSectionIndex by remember { mutableIntStateOf(0) }
 

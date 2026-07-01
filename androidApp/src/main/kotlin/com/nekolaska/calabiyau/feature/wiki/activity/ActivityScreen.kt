@@ -58,7 +58,7 @@ fun ActivityScreen(
         initial = emptyList<ActivityEntry>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { ActivityApi.fetch(cacheOnly = true) },
-        fetch = { force -> ActivityApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> ActivityApi.fetch(forceRefresh = force) }
     )
 
     Scaffold(

@@ -106,7 +106,7 @@ fun PlayerDecorationScreen(
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { PlayerDecorationApi.fetchDecoration(pageName, cacheOnly = true) }
     ) { force ->
-        PlayerDecorationApi.fetchDecoration(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
+        PlayerDecorationApi.fetchDecoration(pageName = pageName, forceRefresh = force)
     }
     val sections = state.data
     var selectedSectionIndex by remember { mutableIntStateOf(0) }

@@ -71,7 +71,7 @@ fun AchievementScreen(
         cachedPrefetchDelayMs = 500L,
         cachedFetch = { AchievementApi.fetch(cacheOnly = true) }
     ) { force ->
-        AchievementApi.fetch(forceRefresh = force, allowMemoryCache = false)
+        AchievementApi.fetch(forceRefresh = force)
     }
     var keyword by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(ALL_CATEGORIES) }

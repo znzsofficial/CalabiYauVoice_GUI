@@ -65,7 +65,7 @@ fun GameHistoryScreen(
         initial = emptyList<GameHistorySection>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { GameHistoryApi.fetch(cacheOnly = true) },
-        fetch = { force -> GameHistoryApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> GameHistoryApi.fetch(forceRefresh = force) }
     )
 
     Scaffold(

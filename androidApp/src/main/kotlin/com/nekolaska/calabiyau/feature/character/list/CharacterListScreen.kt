@@ -80,9 +80,7 @@ fun CharacterListScreen(
 ) {
     val state = rememberLoadState(
         initial = emptyList<CharacterListApi.FactionData>(),
-        cachedPrefetchDelayMs = 300L,
-        cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
-        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) }
     )
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     var showBirthdayDialog by remember { mutableStateOf(false) }

@@ -80,7 +80,7 @@ fun BgmScreen(
         initial = BgmPage(tracks = emptyList(), albums = emptyList(), lyricSections = emptyList()),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { BgmApi.fetch(cacheOnly = true) },
-        fetch = { force -> BgmApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> BgmApi.fetch(forceRefresh = force) }
     )
     var keyword by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(FILTER_ALL) }

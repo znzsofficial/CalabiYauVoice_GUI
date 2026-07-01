@@ -257,6 +257,8 @@ fun WikiHubScreen(
     val currentRoute = backStack.lastOrNull() ?: WikiRoute.Home
 
     val homeListState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
+    val homeCharacterRowState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
+    val homeMapRowState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
     val homeTopAppBarState = rememberTopAppBarState()
 
     // 内部分页 Tab 状态继续保留，因为它们不随压栈出栈而丢失（或者让它们由各个页面自行接管）
@@ -271,15 +273,13 @@ fun WikiHubScreen(
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
     val characterState = rememberLoadState(
         initial = emptyList<CharacterListApi.FactionData>(),
-        cachedPrefetchDelayMs = 300L,
-        cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
-        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) }
     )
     val mapState = rememberLoadState(
         initial = emptyList<GameModeData>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { MapListApi.fetchAllModes(cacheOnly = true) },
-        fetch = { force -> MapListApi.fetchAllModes(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> MapListApi.fetchAllModes(forceRefresh = force) }
     )
     val factions = characterState.data
     val isLoadingCharacters = characterState.isLoading
@@ -383,6 +383,8 @@ fun WikiHubScreen(
                     onOpenDrawer = onOpenDrawer,
                     onOpenWikiUrl = onOpenWikiUrl,
                     listState = homeListState,
+                    characterRowState = homeCharacterRowState,
+                    mapRowState = homeMapRowState,
                     topAppBarState = homeTopAppBarState,
                     wallpaperUrl = wallpaperUrl,
                     onNavigateTo = { navigateTo(it) },

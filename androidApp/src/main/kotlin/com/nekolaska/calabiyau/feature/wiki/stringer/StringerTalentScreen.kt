@@ -67,7 +67,7 @@ fun StringerTalentScreen(
         ),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { StringerTalentApi.fetch(cacheOnly = true) },
-        fetch = { force -> StringerTalentApi.fetch(forceRefresh = force, allowMemoryCache = false) }
+        fetch = { force -> StringerTalentApi.fetch(forceRefresh = force) }
     )
 
     Scaffold(
