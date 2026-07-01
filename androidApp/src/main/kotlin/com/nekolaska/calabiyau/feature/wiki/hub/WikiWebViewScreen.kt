@@ -85,6 +85,22 @@ private data class PendingApkDownload(
     val fileName: String
 )
 
+private fun PendingApkDownload.withCompletedDownload(cursor: android.database.Cursor): PendingApkDownload {
+    val localUri = runCatching {
+        cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+    }.getOrNull()
+    val completedFile = localUri
+        ?.let(Uri::parse)
+        ?.takeIf { it.scheme.equals("file", ignoreCase = true) }
+        ?.path
+        ?.let(::File)
+    return if (completedFile != null) {
+        copy(file = completedFile, fileName = completedFile.name)
+    } else {
+        this
+    }
+}
+
 private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
     return buildMap {
         put(
@@ -323,16 +339,21 @@ fun WikiWebViewScreen(
                 val pending = pendingApkDownloads.remove(downloadId) ?: return
 
                 val dm = receiverContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                val status = dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { cursor ->
+                val completed = dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { cursor ->
                     if (cursor.moveToFirst()) {
-                        cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                        val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            pending.withCompletedDownload(cursor)
+                        } else {
+                            null
+                        }
                     } else {
                         null
                     }
                 }
 
-                if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    showInstallPrompt(pending)
+                if (completed != null) {
+                    showInstallPrompt(completed)
                 } else {
                     showSnack("APK 下载失败：${pending.fileName}")
                 }
