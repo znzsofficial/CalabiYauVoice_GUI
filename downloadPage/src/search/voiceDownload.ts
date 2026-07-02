@@ -4,7 +4,7 @@ import type { generateZip } from './downloadZip';
 type LangKey = 'cn' | 'jp' | 'en';
 type SubtitleMode = 'merged' | 'perLine' | 'none';
 type SubtitleFormat = 'full' | 'plain';
-type FolderMode = 'none' | 'lang' | 'category' | 'both';
+type FolderMode = 'none' | 'lang' | 'category' | 'chapter' | 'both';
 
 const langLabels: Record<LangKey, string> = { cn: '中文', jp: '日文', en: '英文' };
 
@@ -13,10 +13,11 @@ function safeCategory(text: string): string {
   return text.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_').slice(0, 80) || 'other';
 }
 
-export function buildFolderPath(folderMode: FolderMode, langKey: LangKey, category: string, filename: string): string {
+export function buildFolderPath(folderMode: FolderMode, langKey: LangKey, category: string, filename: string, chapter?: string): string {
   const parts: string[] = [];
   if (folderMode === 'lang' || folderMode === 'both') parts.push(langLabels[langKey]);
   if (folderMode === 'category' || folderMode === 'both') parts.push(safeCategory(category));
+  if (folderMode === 'chapter' && chapter) parts.push(safeCategory(chapter));
   parts.push(filename);
   return parts.join('/');
 }

@@ -126,6 +126,16 @@
     z-index: 2;
 }
 
+.search-mode-badge {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    padding: 0 10px 0 12px;
+    border-right: 1px solid var(--border);
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+}
+
 .mode-trigger {
     display: flex;
     align-items: center;
@@ -1116,6 +1126,91 @@
     word-break: break-all;
 }
 
+/* ── Voice Search Hits ── */
+
+.voice-search-hits {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.voice-hit-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--card);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: var(--foreground);
+    transition: background-color 0.12s, border-color 0.12s;
+}
+
+.voice-hit-item:hover {
+    background: var(--accent);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+}
+
+.voice-hit-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.voice-hit-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.voice-hit-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.voice-hit-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.voice-hit-section {
+    font-size: 0.625rem;
+    color: var(--muted-foreground);
+}
+
+.voice-hit-text {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.voice-hit-arrow {
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+}
+
 .voice-char-skeleton {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -1243,6 +1338,7 @@
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
+    min-width: fit-content;
 }
 
 .voice-sidebar-chips-vert .chip {
@@ -1348,6 +1444,22 @@
     border-bottom-color: var(--foreground);
 }
 
+.voice-tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-left: 4px;
+}
+
 .voice-section-tabs-loading {
     padding: 10px 16px;
     gap: 8px;
@@ -1423,6 +1535,7 @@
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
+    min-width: fit-content;
 }
 
 .voice-sidebar-chips-vert .chip {
@@ -1476,6 +1589,29 @@
     color: var(--foreground);
     width: 14px;
     text-align: center;
+}
+
+.voice-template-input {
+    width: 100%;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 4px);
+    background: var(--card);
+    color: var(--foreground);
+    font-size: 0.6875rem;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
+    outline: none;
+    transition: border-color 0.12s;
+}
+
+.voice-template-input:focus {
+    border-color: var(--primary);
+}
+
+.voice-template-input::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.5;
 }
 
 /* Toggle switch */
@@ -1793,25 +1929,21 @@
     font-size: 0.625rem;
     font-family: inherit;
     cursor: pointer;
-    color: var(--muted-foreground);
+    color: var(--foreground);
     transition: all 0.15s;
     line-height: 1.6;
     min-width: 18px;
     text-align: center;
-    opacity: 0.6;
 }
 
 .voice-tab:hover {
     background-color: var(--accent);
-    color: var(--foreground);
-    opacity: 1;
 }
 
 .voice-tab.active {
     background-color: var(--primary);
     color: var(--primary-foreground);
     border-color: var(--primary);
-    opacity: 1;
     font-weight: 500;
 }
 
@@ -1819,7 +1951,7 @@
     padding: 0 6px;
     font-size: 0.625rem;
     color: var(--muted-foreground);
-    opacity: 0.18;
+    opacity: 0.2;
     line-height: 1.6;
     min-width: 18px;
     text-align: center;
@@ -1887,7 +2019,7 @@
 
     .voice-sidebar-section {
         padding: 2px 0;
-        min-width: 0;
+        min-width: fit-content;
     }
 
     .voice-sidebar-section + .voice-sidebar-section {

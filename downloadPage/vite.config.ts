@@ -91,8 +91,8 @@ async function handleFileDownloadProxy(url: URL, res: ServerResponse): Promise<v
 
   try {
     const response = await fetch(target, { headers: { accept: '*/*' } });
-    if (!response.ok) {
-      throw new Error(`Image request failed: ${response.status}`);
+    if (!response.ok && ![302, 303, 307].includes(response.status)) {
+      throw new Error(`File request failed: ${response.status}`);
     }
 
     res.statusCode = response.status;

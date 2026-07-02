@@ -974,6 +974,7 @@
 
 .cs-menu {
     position: absolute;
+    top: calc(100% + 4px);
     left: 0;
     z-index: 50;
     width: 100%;
@@ -988,15 +989,18 @@
     box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--foreground) 15%, transparent);
     padding: 4px;
     opacity: 0;
+    visibility: hidden;
     transform: translateY(-4px) scale(0.98);
     pointer-events: none;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s 0.15s;
 }
 
 .cs.open .cs-menu {
     opacity: 1;
+    visibility: visible;
     transform: translateY(0) scale(1);
     pointer-events: auto;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0s 0s;
 }
 
 .cs-menu::-webkit-scrollbar {

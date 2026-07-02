@@ -5,7 +5,8 @@
   import Lightbox from './Lightbox.svelte';
   import SearchResults from './SearchResults.svelte';
   import { downloadBlob, downloadFilesInParallel, fileNameFromTitle, generateZip, uniqueFileName } from './downloadZip';
-  import { apiErrorMessage, fetchAllCharacters, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type CategoryPage, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
+  import { apiErrorMessage, fetchAllCharacters, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, fetchVoicePageParsetree, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type CategoryPage, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
+  import { parseVoiceSections } from './voiceParser';
   import { toError, highlightMatch, esc, categoryDisplayName } from './utils';
   import SearchFilters from './SearchFilters.svelte';
   import VoiceCharacterDialog from './VoiceCharacterDialog.svelte';
@@ -97,9 +98,24 @@
   let voiceCharacters = $state([]) as CategoryPage[];
   let voiceCharsLoading = $state(false);
   let voiceCharsError = $state('');
+  let voiceIndexReady = $state(false);
+  let voiceIndexLoading = $state(false);
+  let voiceIndexVersion = $state(0);
+  let voiceSearchIndex: Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>> = new Map();
+  let voiceSearchQuery = $state('');
   let voiceDialogOpen = $state(false);
   let voiceDialogCharacter = $state(null) as CategoryPage | null;
   let voiceDialogRef = $state(null) as HTMLDialogElement | null;
+  let voiceDialogNavSection = $state(0);
+  let voiceDialogNavQuery = $state('');
+
+  let voiceDebounceTimer: ReturnType<typeof setTimeout>;
+  $effect(() => {
+    const q = inputValue.trim();
+    clearTimeout(voiceDebounceTimer);
+    voiceDebounceTimer = setTimeout(() => { voiceSearchQuery = q; }, 150);
+    return () => clearTimeout(voiceDebounceTimer);
+  });
 
   let nsList = $derived(nsExpanded ? NS_EXTENDED : NS_PRIMARY);
   let totalPages = $derived(Math.ceil(totalHits / PAGE_SIZE));
@@ -113,6 +129,40 @@
   let selectedCategoryResultItems = $derived(categoryResults.filter(result => selectedCategoryResults.has(result.title)));
   let categorySelectionEnabled = $derived(categorySearchActive && categoryResults.length > 0);
   let voiceSubtitleActive = $derived(activeProfile === 'voiceSubtitle');
+  let voiceFilterResult = $derived.by((): {
+    characters: CategoryPage[];
+    hits: Array<{ character: CategoryPage; sectionIdx: number; sectionTitle: string; lineIdx: number; lineText: string }> | null;
+  } => {
+    void voiceIndexVersion;
+    const q = voiceSearchQuery.toLowerCase();
+    if (!q || !voiceIndexReady) {
+      return { characters: voiceCharacters, hits: null };
+    }
+    const matchedChars = new Set<CategoryPage>();
+    const hits: Array<{ character: CategoryPage; sectionIdx: number; sectionTitle: string; lineIdx: number; lineText: string }> = [];
+    for (const c of voiceCharacters) {
+      if (c.title.toLowerCase().includes(q)) { matchedChars.add(c); }
+      const sections = voiceSearchIndex.get(c.title);
+      if (!sections) continue;
+      for (let si = 0; si < sections.length; si++) {
+        const sec = sections[si];
+        if (sec.title.toLowerCase().includes(q)) { matchedChars.add(c); }
+        let sectionHaystack = '';
+        for (let li = 0; li < sec.lines.length; li++) {
+          const line = sec.lines[li];
+          const haystack = [line.cnText, line.jpText, line.enText, line.category].join(' ').toLowerCase();
+          if (!matchedChars.has(c)) {
+            sectionHaystack += haystack;
+            if (sectionHaystack.includes(q)) { matchedChars.add(c); }
+          }
+          if (haystack.includes(q)) {
+            hits.push({ character: c, sectionIdx: si, sectionTitle: sec.title, lineIdx: li, lineText: line.cnText || line.jpText || line.enText || line.category });
+          }
+        }
+      }
+    }
+    return { characters: [...matchedChars], hits: hits.slice(0, 30) };
+  });
   let totalHitsStr = $derived(totalHits.toLocaleString());
   let categoryResultsCountStr = $derived(categoryResults.length.toLocaleString());
 
@@ -141,6 +191,7 @@
       results = [];
       status = 'idle';
       loadVoiceCharacters();
+      buildVoiceSearchIndex();
       return;
     }
     if (value !== 'advanced') {
@@ -391,9 +442,10 @@
       }
       if (requestId !== searchRequestId) return;
       results = nextResults;
-      selectedFiles = new Set([...selectedFiles].filter(title => results.some(result => result.title === title && result.file)));
-      selectedCategoryResults = new Set([...selectedCategoryResults].filter(title => results.some(result => result.title === title && result.ns === 14)));
-      expandedCategories = new Set([...expandedCategories].filter(title => results.some(result => result.title === title && result.ns === 14)));
+      const resultTitles = new Set(nextResults.map(r => r.title));
+      selectedFiles = new Set([...selectedFiles].filter(t => resultTitles.has(t)));
+      selectedCategoryResults = new Set([...selectedCategoryResults].filter(t => resultTitles.has(t)));
+      expandedCategories = new Set([...expandedCategories].filter(t => resultTitles.has(t)));
       status = 'ready';
     } catch (err) {
       if (requestId !== searchRequestId) return;
@@ -540,8 +592,35 @@
     }
   }
 
-  function openVoiceDialog(character: CategoryPage): void {
+  async function buildVoiceSearchIndex(): Promise<void> {
+    if (voiceIndexReady || voiceIndexLoading) return;
+    voiceIndexLoading = true;
+    const idx = new Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>>();
+    const chars = voiceCharacters.length > 0 ? voiceCharacters : await fetchAllCharacters();
+    const concurrency = 4;
+    for (let i = 0; i < chars.length; i += concurrency) {
+      const batch = chars.slice(i, i + concurrency);
+      await Promise.all(batch.map(async c => {
+        try {
+          const pt = await fetchVoicePageParsetree(`${c.title}/语音台词`);
+          const groups = parseVoiceSections(pt);
+          idx.set(c.title, groups.map(g => ({
+            title: g.title,
+            lines: g.lines.map(l => ({ category: l.category, cnText: l.cnText, jpText: l.jpText, enText: l.enText }))
+          })));
+        } catch { /* skip */ }
+      }));
+    }
+    voiceSearchIndex = idx;
+    voiceIndexVersion++;
+    voiceIndexReady = true;
+    voiceIndexLoading = false;
+  }
+
+  function openVoiceDialog(character: CategoryPage, sectionIdx?: number, query?: string): void {
     voiceDialogCharacter = character;
+    voiceDialogNavSection = sectionIdx ?? 0;
+    voiceDialogNavQuery = query ?? '';
     voiceDialogOpen = true;
   }
 
@@ -696,15 +775,21 @@
 <main class="main">
   <div class="search-box">
     <div class="search-input-wrap">
-      <div class:open={modeOpen} class="mode-select">
-        <button class="mode-trigger" type="button" aria-expanded={modeOpen} aria-haspopup="listbox" onclick={() => modeOpen = !modeOpen}><span class="mode-value">{searchModeLabel}</span><svg class="mode-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-        <div class="mode-menu" role="listbox">
-          {#each [['', '内容'], ['intitle:', '标题'], ['insource:', '源码']] as [prefix, label]}
-            <button class:selected={searchModePrefix === prefix} class="mode-option" type="button" role="option" aria-selected={searchModePrefix === prefix} onclick={() => setMode(prefix, label)}>{label}</button>
-          {/each}
+      {#if !voiceSubtitleActive}
+        <div class:open={modeOpen} class="mode-select">
+          <button class="mode-trigger" type="button" aria-expanded={modeOpen} aria-haspopup="listbox" onclick={() => modeOpen = !modeOpen}><span class="mode-value">{searchModeLabel}</span><svg class="mode-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+          <div class="mode-menu" role="listbox">
+            {#each [['', '内容'], ['intitle:', '标题'], ['insource:', '源码']] as [prefix, label]}
+              <button class:selected={searchModePrefix === prefix} class="mode-option" type="button" role="option" aria-selected={searchModePrefix === prefix} onclick={() => setMode(prefix, label)}>{label}</button>
+            {/each}
+          </div>
         </div>
-      </div>
-      <input bind:value={inputValue} oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" placeholder="搜索角色、武器、地图、技能…" autocomplete="off">
+      {:else}
+        <span class="search-mode-badge">
+          <iconify-icon icon="lucide:volume-2" style="font-size:0.85rem;"></iconify-icon>
+        </span>
+      {/if}
+      <input bind:value={inputValue} oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" placeholder={voiceSubtitleActive ? '筛选角色名…' : '搜索角色、武器、地图、技能…'} autocomplete="off">
       {#if inputValue}<button class="search-clear" aria-label="清空搜索" onclick={clearSearch}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
     </div>
     {#if showSuggestDropdown}
@@ -743,7 +828,7 @@
         </div>
       {:else if voiceCharacters.length > 0}
         <div class="voice-char-grid">
-          {#each voiceCharacters as character (character.pageid)}
+          {#each voiceFilterResult.characters as character (character.pageid)}
             <button class="voice-char-item" onclick={() => openVoiceDialog(character)}>
               <div class="voice-char-avatar">
                 {#if character.thumbnail}
@@ -756,10 +841,44 @@
             </button>
           {/each}
         </div>
+        {#if voiceFilterResult.hits && voiceFilterResult.hits.length > 0}
+          <div class="voice-search-hits">
+            {#each voiceFilterResult.hits as hit (hit.character.pageid + '-' + hit.sectionIdx + '-' + hit.lineIdx)}
+              <button class="voice-hit-item" onclick={() => openVoiceDialog(hit.character, hit.sectionIdx, inputValue.trim())}>
+                <div class="voice-hit-avatar">
+                  {#if hit.character.thumbnail}
+                    <img src={hit.character.thumbnail} alt="" loading="lazy">
+                  {:else}
+                    <span class="hero-avatar-fallback">{hit.character.title.charAt(0)}</span>
+                  {/if}
+                </div>
+                <div class="voice-hit-body">
+                  <span class="voice-hit-name">{hit.character.title}</span>
+                  {#if hit.sectionTitle}
+                    <span class="voice-hit-section">{hit.sectionTitle}</span>
+                  {/if}
+                  <span class="voice-hit-text">{hit.lineText}</span>
+                </div>
+                <iconify-icon icon="lucide:chevron-right" class="voice-hit-arrow"></iconify-icon>
+              </button>
+            {/each}
+          </div>
+        {/if}
+        {#if voiceFilterResult.characters.length === 0 && (!voiceFilterResult.hits || voiceFilterResult.hits.length === 0)}
+          <div class="balance-placeholder text-muted" style="margin-top:16px;">
+            <iconify-icon icon="lucide:search-x"></iconify-icon>
+            <p>无匹配角色</p>
+          </div>
+        {/if}
       {:else}
         <div class="balance-placeholder text-muted">
           <iconify-icon icon="lucide:users"></iconify-icon>
           <p>暂无角色数据</p>
+        </div>
+      {/if}
+      {#if voiceIndexLoading}
+        <div style="text-align:center;padding:8px;font-size:0.75rem;color:var(--muted-foreground);">
+          <span class="suggest-spinner" style="display:inline-block;vertical-align:middle;margin-right:6px;"></span>正在索引章节与字幕…
         </div>
       {/if}
     </div>
@@ -804,7 +923,7 @@
 {/if}
 
 {#if voiceDialogOpen && voiceDialogCharacter}
-  <VoiceCharacterDialog bind:dialogRef={voiceDialogRef} character={voiceDialogCharacter} onClose={() => voiceDialogOpen = false} />
+  <VoiceCharacterDialog bind:dialogRef={voiceDialogRef} character={voiceDialogCharacter} initialSection={voiceDialogNavSection} highlightQuery={voiceDialogNavQuery} onClose={() => voiceDialogOpen = false} />
 {/if}
 
 <style>

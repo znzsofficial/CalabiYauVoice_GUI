@@ -47,13 +47,19 @@ type PagesResponse = { continue?: { gcmcontinue?: string }; query?: { pages?: Re
 export const WIKI_BASE = 'https://wiki.biligame.com/klbq/';
 const API = 'https://wiki.biligame.com/klbq/api.php';
 const CACHE_TTL = 60_000;
+const MAX_CACHE = 100;
 const requestCache = new Map<string, { response: Response; time: number }>();
 
-function evictStaleCache(): void {
-  const now = Date.now();
-  for (const [key, entry] of requestCache) {
-    if (now - entry.time >= CACHE_TTL) requestCache.delete(key);
+function setCache(url: string, response: Response): void {
+  if (requestCache.size >= MAX_CACHE) {
+    let oldestKey = '';
+    let oldestTime = Infinity;
+    for (const [k, v] of requestCache) {
+      if (v.time < oldestTime) { oldestTime = v.time; oldestKey = k; }
+    }
+    requestCache.delete(oldestKey);
   }
+  requestCache.set(url, { response: response.clone(), time: Date.now() });
 }
 
 export function apiErrorMessage(data: SearchResponse): string | null {
@@ -71,13 +77,12 @@ export function httpErrorMessage(statusCode: number): string {
 export async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
   const cached = requestCache.get(url);
   if (cached && Date.now() - cached.time < CACHE_TTL) return cached.response.clone();
-  evictStaleCache();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(httpErrorMessage(response.status));
-    requestCache.set(url, { response: response.clone(), time: Date.now() });
+    setCache(url, response);
     return response;
   } finally {
     clearTimeout(timer);
@@ -280,6 +285,8 @@ async function resolveVoicePageId(pageTitle: string): Promise<number | null> {
       voicePageIdCache.set(m.title, m.pageid);
       voicePageIdCache.set(charName, m.pageid);
     }
+    const found = voicePageIdCache.get(pageTitle);
+    if (found != null) return found;
     cmcontinue = data.continue?.cmcontinue || '';
   } while (cmcontinue);
 
