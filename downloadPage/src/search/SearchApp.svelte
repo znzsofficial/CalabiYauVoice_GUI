@@ -1,34 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import BulkDownloadBar from './BulkDownloadBar.svelte';
   import CategoryFileDialog from './CategoryFileDialog.svelte';
   import Lightbox from './Lightbox.svelte';
-  import SearchResults from './SearchResults.svelte';
-  import { downloadBlob, downloadFilesInParallel, fileNameFromTitle, generateZip, uniqueFileName } from './downloadZip';
+  import { downloadBlob, downloadFailuresText, downloadFilesInParallel, fileNameFromTitle, generateZip, uniqueFileName } from './download';
   import { apiErrorMessage, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
+  import type { NamespaceOption, ProfileValue, SearchResult, SortValue, Status } from './searchTypes';
   import { toError, categoryDisplayName } from './utils';
   import SearchFilters from './SearchFilters.svelte';
   import SearchBox from './SearchBox.svelte';
-  import VoiceSubtitlePanel from './VoiceSubtitlePanel.svelte';
-
-  type ProfileValue = 'default' | 'images' | 'all' | 'advanced' | 'voiceCategory' | 'categoryDownload' | 'voiceSubtitle';
-  type Status = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
-  type SortValue = 'relevance' | 'last_edit_desc' | 'last_edit_asc' | 'create_timestamp_desc' | 'incoming_links_desc';
-  type NamespaceOption = { id: number; name: string };
-  type SearchResult = WikiSearchItem & {
-    title: string;
-    ns: number;
-    image?: ResultImage;
-    file?: FileAsset;
-    categories: string[];
-    url: string;
-    nsName: string;
-    dateStr: string;
-    pageSizeKB: string;
-    fileSize: string;
-    wordCountStr: string;
-    delay: string;
-  };
+  import VoiceSubtitlePanel from './panels/VoiceSubtitlePanel.svelte';
+  import WikiSearchPanel from './panels/WikiSearchPanel.svelte';
+  import CategoryDownloadPanel from './panels/CategoryDownloadPanel.svelte';
 
   const PAGE_SIZE = 20;
   const SUGGEST_LIMIT = 8;
@@ -68,12 +50,16 @@
   let selectedCategoryResults = $state(new Set<string>());
   let zipDownloading = $state(false);
   let zipProgress = $state('');
+  let zipAbortController = $state(null) as AbortController | null;
   let downloadConcurrency = $state(4);
   let lightboxSrc = $state('');
   let lightboxOpen = $state(false);
   let lightboxDownloading = $state(false);
   let categoryDownloading = $state(false);
+  let categoryAbortController = $state(null) as AbortController | null;
   let categoryStatusText = $state('');
+  let categoryShowAllResults = $state(false);
+  let categoryAllResults = $state([]) as SearchResult[];
   let expandedCategories = $state(new Set<string>());
   let categorySubcats = $state({}) as Record<string, string[]>;
   let categorySubcatLoading = $state(new Set<string>());
@@ -84,6 +70,7 @@
   let categoryFileDialogFiles = $state([]) as CategoryFile[];
   let categoryFileDialogLoading = $state(false);
   let categoryFileDialogError = $state('');
+  let categoryFilesInFlight = new Map<string, Promise<CategoryFile[]>>();
   let nsList = $derived(nsExpanded ? NS_EXTENDED : NS_PRIMARY);
   let totalPages = $derived(Math.ceil(totalHits / PAGE_SIZE));
   let pages = $derived(paginationPages(currentPage, totalPages));
@@ -95,8 +82,10 @@
   let selectedCategoryResultItems = $derived(categoryResults.filter(result => selectedCategoryResults.has(result.title)));
   let categorySelectionEnabled = $derived(categorySearchActive && categoryResults.length > 0);
   let voiceSubtitleActive = $derived(activeProfile === 'voiceSubtitle');
+  let downloadBusy = $derived(zipDownloading || categoryDownloading);
   let totalHitsStr = $derived(totalHits.toLocaleString());
   let categoryResultsCountStr = $derived(categoryResults.length.toLocaleString());
+  let categoryAllResultsCountStr = $derived((categoryAllResults.length || categoryResults.length).toLocaleString());
 
   onMount(() => {
     const urlQ = new URLSearchParams(location.search).get('q');
@@ -108,15 +97,21 @@
   });
 
   function setProfile(value: ProfileValue): void {
+    if (downloadBusy) return;
+    if (activeProfile !== value) searchRequestId++;
     activeProfile = value;
     if (value === 'voiceSubtitle') {
       selectedNS = [0];
       nsExpanded = false;
       selectedFiles = new Set();
       selectedCategoryResults = new Set();
+      categoryAllResults = [];
       expandedCategories = new Set();
       categorySubcatErrors = {};
       currentPage = 1;
+      totalHits = 0;
+      resultSuggestion = '';
+      errorMessage = '';
       categoryStatusText = '';
       results = [];
       status = 'idle';
@@ -128,6 +123,7 @@
     }
     selectedFiles = new Set();
     selectedCategoryResults = new Set();
+    categoryAllResults = [];
     expandedCategories = new Set();
     categorySubcatErrors = {};
     currentPage = 1;
@@ -144,6 +140,7 @@
   }
 
   function setSort(value: SortValue): void {
+    if (downloadBusy) return;
     activeSort = value;
     currentPage = 1;
     if (query.trim()) doSearch();
@@ -163,12 +160,14 @@
   }
 
   function toggleNamespace(id: number): void {
+    if (downloadBusy) return;
     selectedNS = selectedNS.includes(id) ? selectedNS.filter(item => item !== id) : [...selectedNS, id];
     currentPage = 1;
     if (query.trim()) doSearch();
   }
 
   function toggleAllNamespaces(): void {
+    if (downloadBusy) return;
     const allChecked = nsList.every(ns => selectedNS.includes(ns.id));
     selectedNS = allChecked
       ? selectedNS.filter(id => !nsList.some(ns => ns.id === id))
@@ -202,6 +201,7 @@
     query = value;
     if (categorySearchActive) {
       selectedCategoryResults = new Set();
+      categoryAllResults = [];
       expandedCategories = new Set();
       categorySubcatErrors = {};
     }
@@ -209,6 +209,7 @@
   }
 
   function clearSearch(): void {
+    if (downloadBusy) return;
     inputValue = '';
     query = '';
     status = 'idle';
@@ -216,6 +217,7 @@
     results = [];
     resultSuggestion = '';
     selectedCategoryResults = new Set();
+    categoryAllResults = [];
     expandedCategories = new Set();
     categorySubcatErrors = {};
     categoryFileDialogOpen = false;
@@ -227,7 +229,7 @@
   }
 
   function submitSearch(value: string): void {
-    if (voiceSubtitleActive) return;
+    if (voiceSubtitleActive || downloadBusy) return;
     inputValue = value;
     query = value;
     currentPage = 1;
@@ -235,6 +237,7 @@
   }
 
   function searchSuggestion(value: string): void {
+    if (downloadBusy) return;
     inputValue = value;
     query = value;
     currentPage = 1;
@@ -244,14 +247,20 @@
   async function doSearch(searchValue = query): Promise<void> {
     if (!searchValue.trim()) return;
     query = searchValue;
+    const requestProfile = activeProfile;
+    const requestCategorySearchActive = requestProfile === 'voiceCategory' || requestProfile === 'categoryDownload';
+    const requestNamespace = getActiveNSParam();
+    const requestSort = activeSort;
+    const requestPage = currentPage;
+    const requestSearch = getSearchQuery(searchValue);
     const requestId = ++searchRequestId;
     status = 'loading';
     errorMessage = '';
     resultSuggestion = '';
 
     try {
-      const data = await searchWiki({ search: getSearchQuery(searchValue), limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE, namespace: getActiveNSParam(), sort: activeSort });
-      if (requestId !== searchRequestId) return;
+      const data = await searchWiki({ search: requestSearch, limit: PAGE_SIZE, offset: (requestPage - 1) * PAGE_SIZE, namespace: requestNamespace, sort: requestSort });
+      if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
       const apiErr = apiErrorMessage(data);
       if (apiErr) throw new Error(apiErr);
 
@@ -260,34 +269,77 @@
       totalHits = info.totalhits || 0;
       resultSuggestion = info.suggestion || '';
       if (search.length === 0) {
-        if (requestId !== searchRequestId) return;
+        if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
         results = [];
+        categoryAllResults = [];
         status = 'empty';
         return;
       }
 
       let nextResults: SearchResult[];
-      if (categorySearchActive) {
-        nextResults = await organizeCategoryResults(search.map((item, index) => normalizeResult(item, undefined, undefined, undefined, index)));
+      if (requestCategorySearchActive) {
+        nextResults = search.map((item, index) => normalizeResult(item, undefined, undefined, undefined, index));
+        await hydrateCategoryHierarchy(nextResults);
       } else {
         const titles = search.map(item => item.title);
         const nsMap = Object.fromEntries(search.map(item => [item.title, item.ns]));
         const [fileAssets, extra] = await Promise.all([fetchFileAssets(titles, nsMap), fetchPageExtra(titles)]);
         nextResults = search.map((item, index) => normalizeResult(item, fileAssets.images[item.title], fileAssets.files[item.title], extra[item.title], index));
       }
-      if (requestId !== searchRequestId) return;
-      results = nextResults;
+      if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
+      if (nextResults.length === 0) {
+        results = [];
+        categoryAllResults = [];
+        status = 'empty';
+        return;
+      }
+      categoryAllResults = requestCategorySearchActive ? nextResults : [];
+      results = requestCategorySearchActive ? displayCategoryResults(nextResults) : nextResults;
       const resultTitles = new Set(nextResults.map(r => r.title));
       selectedFiles = new Set([...selectedFiles].filter(t => resultTitles.has(t)));
       selectedCategoryResults = new Set([...selectedCategoryResults].filter(t => resultTitles.has(t)));
       expandedCategories = new Set([...expandedCategories].filter(t => resultTitles.has(t)));
       status = 'ready';
     } catch (err) {
-      if (requestId !== searchRequestId) return;
+      if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
       const error = toError(err);
       status = 'error';
       errorMessage = error.name === 'AbortError' ? '搜索请求超时，请检查网络或换个关键词重试' : error.message || '搜索出错，请稍后重试';
     }
+  }
+
+  async function hydrateCategoryHierarchy(items: SearchResult[]): Promise<void> {
+    const categories = items.filter(item => item.ns === 14).map(item => item.title);
+    if (categories.length === 0) return;
+    const loadedSubcats: Record<string, string[]> = {};
+    await Promise.all(categories.map(async category => {
+      if (categorySubcats[category]) return;
+      try {
+        loadedSubcats[category] = await fetchCategoryMembers(category, 14, 'subcat');
+      } catch {
+        loadedSubcats[category] = [];
+      }
+    }));
+    categorySubcats = { ...categorySubcats, ...loadedSubcats };
+  }
+
+  function displayCategoryResults(items: SearchResult[]): SearchResult[] {
+    if (categoryShowAllResults) return items;
+    const resultTitles = new Set(items.filter(item => item.ns === 14).map(item => item.title));
+    const childTitles = new Set<string>();
+    for (const result of items) {
+      if (result.ns !== 14) continue;
+      for (const subcat of categorySubcats[result.title] || []) {
+        if (resultTitles.has(subcat)) childTitles.add(subcat);
+      }
+    }
+    return items.filter(item => item.ns !== 14 || !childTitles.has(item.title));
+  }
+
+  function setCategoryShowAllResults(value: boolean): void {
+    if (downloadBusy) return;
+    categoryShowAllResults = value;
+    results = displayCategoryResults(categoryAllResults.length > 0 ? categoryAllResults : results);
   }
 
   function normalizeResult(item: WikiSearchItem, image: ResultImage | undefined, file: FileAsset | undefined, extra: { categories?: string[] } | undefined, index: number): SearchResult {
@@ -307,36 +359,8 @@
     };
   }
 
-  async function organizeCategoryResults(items: SearchResult[]): Promise<SearchResult[]> {
-    const categoryItems = items.filter(item => item.ns === 14);
-    const audioOnly = activeProfile === 'voiceCategory';
-    const nextSubcats: Record<string, string[]> = { ...categorySubcats };
-    const nextFiles: Record<string, CategoryFile[]> = { ...categoryFilesCache };
-
-    await Promise.all(categoryItems.map(async item => {
-      if (!nextSubcats[item.title]) {
-        try {
-          nextSubcats[item.title] = await fetchCategoryMembers(item.title, 14, 'subcat');
-        } catch {
-          nextSubcats[item.title] = [];
-        }
-      }
-      const cacheKey = categoryFilesCacheKey(item.title, true);
-      if (audioOnly && !nextFiles[cacheKey]) {
-        try {
-          nextFiles[cacheKey] = await fetchCategoryFiles(item.title, true);
-        } catch {
-          nextFiles[cacheKey] = [];
-        }
-      }
-    }));
-
-    categorySubcats = nextSubcats;
-    categoryFilesCache = nextFiles;
-    return audioOnly ? items.filter(item => item.ns !== 14 || (nextFiles[categoryFilesCacheKey(item.title, true)]?.length || 0) > 0) : items;
-  }
-
   function toggleFileSelection(title: string): void {
+    if (downloadBusy) return;
     const next = new Set(selectedFiles);
     if (next.has(title)) next.delete(title);
     else next.add(title);
@@ -344,10 +368,12 @@
   }
 
   function setAllFileSelection(selected: boolean): void {
+    if (downloadBusy) return;
     selectedFiles = selected ? new Set(fileResults.map(result => result.title)) : new Set();
   }
 
   function toggleCategoryResultSelection(title: string): void {
+    if (downloadBusy) return;
     const next = new Set(selectedCategoryResults);
     if (next.has(title)) next.delete(title);
     else next.add(title);
@@ -355,10 +381,12 @@
   }
 
   function setAllCategoryResultSelection(selected: boolean): void {
+    if (downloadBusy) return;
     selectedCategoryResults = selected ? new Set(categoryResults.map(result => result.title)) : new Set();
   }
 
   async function toggleCategoryExpanded(category: string): Promise<void> {
+    if (downloadBusy) return;
     const next = new Set(expandedCategories);
     if (next.has(category)) {
       next.delete(category);
@@ -377,6 +405,11 @@
     try {
       const subcats = await fetchCategoryMembers(category, 14, 'subcat');
       categorySubcats = { ...categorySubcats, [category]: subcats };
+      if (subcats.length === 0) {
+        const collapsed = new Set(expandedCategories);
+        collapsed.delete(category);
+        expandedCategories = collapsed;
+      }
     } catch (error) {
       categorySubcatErrors = { ...categorySubcatErrors, [category]: toError(error).message || '加载子分类失败' };
     } finally {
@@ -396,13 +429,34 @@
     if (categoryFilesCache[cacheKey]) return;
     categoryFileDialogLoading = true;
     try {
-      const files = await fetchCategoryFiles(category, audioOnly);
+      const files = await getCategoryFilesCached(category, audioOnly);
+      if (!categoryFileDialogOpen || categoryFileDialogTitle !== category || (activeProfile === 'voiceCategory') !== audioOnly) return;
       categoryFileDialogFiles = files;
-      categoryFilesCache = { ...categoryFilesCache, [cacheKey]: files };
     } catch (error) {
+      if (!categoryFileDialogOpen || categoryFileDialogTitle !== category || (activeProfile === 'voiceCategory') !== audioOnly) return;
       categoryFileDialogError = toError(error).message || '加载分类文件失败';
     } finally {
-      categoryFileDialogLoading = false;
+      if (categoryFileDialogOpen && categoryFileDialogTitle === category && (activeProfile === 'voiceCategory') === audioOnly) {
+        categoryFileDialogLoading = false;
+      }
+    }
+  }
+
+  async function getCategoryFilesCached(category: string, audioOnly: boolean, signal?: AbortSignal): Promise<CategoryFile[]> {
+    const cacheKey = categoryFilesCacheKey(category, audioOnly);
+    const cached = categoryFilesCache[cacheKey];
+    if (cached) return cached;
+    let request = categoryFilesInFlight.get(cacheKey);
+    if (!request) {
+      request = fetchCategoryFiles(category, audioOnly, signal);
+      categoryFilesInFlight.set(cacheKey, request);
+    }
+    try {
+      const files = await request;
+      categoryFilesCache = { ...categoryFilesCache, [cacheKey]: files };
+      return files;
+    } finally {
+      categoryFilesInFlight.delete(cacheKey);
     }
   }
 
@@ -418,25 +472,47 @@
     if (selectedFileResults.length === 0 || zipDownloading) return;
 
     zipDownloading = true;
+    const controller = new AbortController();
+    zipAbortController = controller;
     zipProgress = `准备打包 0/${selectedFileResults.length}`;
     try {
       const zip = await generateZip();
       const usedNames = new Set<string>();
       const files = selectedFileResults.flatMap(result => result.file ? [{ name: fileNameFromTitle(result.title), url: result.file.url, mime: result.file.mime, size: result.file.size }] : []);
-      const downloaded = await downloadFilesInParallel(files, downloadConcurrency, current => {
-        zipProgress = `正在下载 ${current}/${files.length}`;
+      const downloaded = await downloadFilesInParallel(files, downloadConcurrency, progress => {
+        zipProgress = progress.failed > 0 ? `正在下载 ${progress.finished}/${progress.total}，失败 ${progress.failed}` : `正在下载 ${progress.finished}/${progress.total}`;
+      }, {
+        signal: controller.signal
       });
-      for (const file of downloaded) zip.file(uniqueFileName(file.name, usedNames), file.blob);
+      if (controller.signal.aborted) throw new Error('已取消下载');
+      const failures: Array<{ name: string; error: string }> = [];
+      let successCount = 0;
+      for (const file of downloaded) {
+        if (file.ok) {
+          zip.file(uniqueFileName(file.name, usedNames), file.blob);
+          successCount++;
+        } else {
+          failures.push({ name: file.name, error: file.error });
+        }
+      }
+      if (successCount === 0) throw new Error(failures.length > 0 ? `下载失败：${failures.length} 个文件均无法获取` : '没有可下载文件');
+      if (failures.length > 0) zip.file('_download_failed.txt', downloadFailuresText(failures));
 
       zipProgress = '正在生成 ZIP';
       const content = await zip.generateAsync({ type: 'blob' });
       downloadBlob(content, `klbq-files-${new Date().toISOString().slice(0, 10)}.zip`);
-      zipProgress = '';
+      zipProgress = failures.length > 0 ? `已打包 ${successCount} 个文件，${failures.length} 个失败` : '';
     } catch (error) {
       zipProgress = toError(error).message || '打包失败';
     } finally {
       zipDownloading = false;
+      zipAbortController = null;
     }
+  }
+
+  function cancelSelectedFilesZip(): void {
+    zipAbortController?.abort();
+    zipProgress = '正在取消...';
   }
 
   function normalizeCategoryTitle(value: string): string {
@@ -453,38 +529,57 @@
     if (categories.length === 0 || categoryDownloading) return;
 
     categoryDownloading = true;
+    const controller = new AbortController();
+    categoryAbortController = controller;
     categoryStatusText = `准备分类 0/${categories.length}`;
     const audioOnly = activeProfile === 'voiceCategory';
     try {
       const zip = await generateZip();
       let totalFiles = 0;
+      const allFailures: Array<{ name: string; error: string; category?: string }> = [];
       for (const [index, category] of categories.entries()) {
+        if (controller.signal.aborted) throw new Error('已取消下载');
         const displayName = categoryDisplayName(category);
         categoryStatusText = `正在读取 ${displayName} (${index + 1}/${categories.length})`;
-        const files = await fetchCategoryFiles(category, audioOnly);
+        const files = await getCategoryFilesCached(category, audioOnly, controller.signal);
+        if (controller.signal.aborted) throw new Error('已取消下载');
         if (files.length === 0) continue;
         const folder = zip.folder(fileNameFromTitle(displayName));
-        let finished = 0;
-        const downloaded = await downloadFilesInParallel(files, downloadConcurrency, current => {
-          finished = current;
-          categoryStatusText = `正在下载 ${displayName} ${finished}/${files.length}`;
+        const downloaded = await downloadFilesInParallel(files, downloadConcurrency, progress => {
+          categoryStatusText = progress.failed > 0
+            ? `正在下载 ${displayName} ${progress.finished}/${progress.total}，失败 ${progress.failed}`
+            : `正在下载 ${displayName} ${progress.finished}/${progress.total}`;
+        }, {
+          signal: controller.signal
         });
+        if (controller.signal.aborted) throw new Error('已取消下载');
         const usedNames = new Set<string>();
         for (const file of downloaded) {
-          folder?.file(uniqueFileName(file.name, usedNames), file.blob);
-          totalFiles += 1;
+          if (file.ok) {
+            folder?.file(uniqueFileName(file.name, usedNames), file.blob);
+            totalFiles += 1;
+          } else {
+            allFailures.push({ name: file.name, error: file.error, category: displayName });
+          }
         }
       }
-      if (totalFiles === 0) throw new Error('选中分类里没有可下载文件');
+      if (totalFiles === 0) throw new Error(allFailures.length > 0 ? `下载失败：${allFailures.length} 个文件均无法获取` : '选中分类里没有可下载文件');
+      if (allFailures.length > 0) zip.file('_download_failed.txt', downloadFailuresText(allFailures));
       categoryStatusText = '正在生成 ZIP';
       const content = await zip.generateAsync({ type: 'blob' });
       downloadBlob(content, `${activeProfile === 'voiceCategory' ? 'klbq-voice-categories' : 'klbq-categories'}-${new Date().toISOString().slice(0, 10)}.zip`);
-      categoryStatusText = `已打包 ${totalFiles} 个文件`;
+      categoryStatusText = allFailures.length > 0 ? `已打包 ${totalFiles} 个文件，${allFailures.length} 个失败` : `已打包 ${totalFiles} 个文件`;
     } catch (error) {
       categoryStatusText = toError(error).message || '分类打包失败';
     } finally {
       categoryDownloading = false;
+      categoryAbortController = null;
     }
+  }
+
+  function cancelSelectedCategoriesZip(): void {
+    categoryAbortController?.abort();
+    categoryStatusText = '正在取消...';
   }
 
   function paginationPages(page: number, total: number): Array<number | '...'> {
@@ -505,7 +600,12 @@
   }
 
   function goPage(page: number): void {
-    currentPage = page;
+    if (downloadBusy) return;
+    const nextPage = Math.max(1, Math.min(page, totalPages || 1));
+    if (nextPage === currentPage) return;
+    currentPage = nextPage;
+    selectedFiles = new Set();
+    selectedCategoryResults = new Set();
     doSearch();
     document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
   }
@@ -562,41 +662,22 @@
   </div>
 </header>
 
-<main class="main">
-  <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
+<main class:main-wide={activeProfile === 'images' || categorySearchActive || voiceSubtitleActive} class="main">
+  <div class="search-controls-shell">
+    <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} disabled={downloadBusy} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
 
-  <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => nsExpanded = !nsExpanded} />
+    <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} disabled={downloadBusy} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => { if (!downloadBusy) nsExpanded = !nsExpanded; }} />
+  </div>
 
   {#if voiceSubtitleActive}
     <VoiceSubtitlePanel query={inputValue} />
   {/if}
 
-  {#if !voiceSubtitleActive && status === 'ready'}
-    <div class="result-meta">
-      {#if categorySearchActive}
-        找到 <strong>{categoryResultsCountStr}</strong> 个分类
-      {:else}
-        找到 <strong>{totalHitsStr}</strong> 条结果
-      {/if}
-      {#if resultSuggestion && !categorySearchActive}
-        · 你是不是要搜：<button class="suggestion-link" onclick={() => searchSuggestion(resultSuggestion)}>{resultSuggestion}</button>
-      {/if}
-    </div>
+  {#if !voiceSubtitleActive && categorySearchActive}
+    <CategoryDownloadPanel activeProfile={activeProfile === 'voiceCategory' ? 'voiceCategory' : 'categoryDownload'} {status} {query} {errorMessage} {results} {categoryResults} {categoryResultsCountStr} {categoryAllResultsCountStr} categoryShowAllResults={categoryShowAllResults} {categorySelectionEnabled} {selectedCategoryResults} {selectedCategoryResultItems} {categoryStatusText} {categoryDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {expandedCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} {pages} {currentPage} {totalPages} onRetry={doSearch} onToggleCategory={toggleCategoryResultSelection} onToggleCategoryExpanded={toggleCategoryExpanded} onOpenCategoryFiles={openCategoryFileDialog} onToggleAllCategories={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onDownloadCategories={downloadSelectedCategoriesZip} onCancelCategories={cancelSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} onSetCategoryShowAllResults={setCategoryShowAllResults} onGoPage={goPage} />
+  {:else if !voiceSubtitleActive}
+    <WikiSearchPanel {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={doSearch} onSuggestion={searchSuggestion} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
   {/if}
-
-  {#if categorySelectionEnabled && status === 'ready'}
-    <BulkDownloadBar title={activeProfile === 'voiceCategory' ? '语音分类打包' : '分类打包'} info={selectedCategoryResults.size > 0 ? `已选择 ${selectedCategoryResults.size} 个分类` : `本页 ${categoryResults.length} 个分类可选`} progress={categoryStatusText} allSelected={selectedCategoryResultItems.length === categoryResults.length} disabled={selectedCategoryResults.size === 0} downloading={categoryDownloading} concurrency={downloadConcurrency} downloadingLabel="打包中…" onToggleAll={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onDownload={downloadSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} />
-  {/if}
-
-  {#if !categorySearchActive && status === 'ready' && fileSelectionEnabled}
-    <BulkDownloadBar title="批量下载" info={selectedFileResults.length > 0 ? `已选择 ${selectedFileResults.length} 个文件` : `本页 ${fileResults.length} 个文件可选`} progress={zipProgress} allSelected={selectedFileResults.length === fileResults.length} disabled={selectedFileResults.length === 0} downloading={zipDownloading} concurrency={downloadConcurrency} downloadingLabel="打包中…" onToggleAll={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onDownload={downloadSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} />
-  {/if}
-
-  {#if !voiceSubtitleActive && (status === 'ready' || status === 'loading' || status === 'empty' || status === 'error' || !categorySearchActive)}
-    <SearchResults {status} {query} {resultSuggestion} {errorMessage} {results} {fileSelectionEnabled} {categorySelectionEnabled} {categorySearchActive} {selectedFiles} {selectedCategoryResults} {expandedCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} onRetry={doSearch} onSuggestion={searchSuggestion} onToggleFile={toggleFileSelection} onToggleCategory={toggleCategoryResultSelection} onOpenLightbox={openLightbox} onToggleCategoryExpanded={toggleCategoryExpanded} onOpenCategoryFiles={openCategoryFileDialog} />
-  {/if}
-
-  {#if !voiceSubtitleActive && pages.length > 0 && status === 'ready'}<div class="pagination"><button class="page-btn" disabled={currentPage <= 1} onclick={() => goPage(currentPage - 1)}>‹</button>{#each pages as page}<button class:active={page === currentPage} class="page-btn" disabled={page === '...'} onclick={() => typeof page === 'number' && goPage(page)}>{page}</button>{/each}<button class="page-btn" disabled={currentPage >= totalPages} onclick={() => goPage(currentPage + 1)}>›</button></div>{/if}
 </main>
 
 <footer class="footer"><p>数据来源：<a href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer">卡拉彼丘 Wiki</a> · Powered by MediaWiki API</p></footer>

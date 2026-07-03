@@ -2,14 +2,14 @@
   import { onMount } from 'svelte';
   import { highlightMatch } from './utils';
   import type { Suggestion } from './searchApi';
-
-  type Status = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
+  import type { Status } from './searchTypes';
 
   let {
     value = $bindable(''),
     modePrefix = $bindable(''),
     modeLabel = $bindable('内容'),
     voiceSubtitleActive = false,
+    disabled = false,
     status = 'idle' as Status,
     onSubmit = (value: string) => {},
     onClear = () => {},
@@ -20,6 +20,7 @@
     modePrefix?: string;
     modeLabel?: string;
     voiceSubtitleActive?: boolean;
+    disabled?: boolean;
     status?: Status;
     onSubmit?: (value: string) => void;
     onClear?: () => void;
@@ -48,12 +49,20 @@
   });
 
   function setMode(prefix: string, label: string): void {
+    if (disabled) return;
     modePrefix = prefix;
     modeLabel = label;
     modeOpen = false;
+    requestId++;
+    clearTimeout(searchTimer);
+    closeSuggestions();
+    suggestionsReady = false;
+    suggestionsLoading = false;
   }
 
   function handleInput(): void {
+    if (disabled) return;
+    requestId++;
     onInputChange(value);
     clearTimeout(searchTimer);
     if (voiceSubtitleActive) {
@@ -75,12 +84,14 @@
   }
 
   function handleInputFocus(): void {
+    if (disabled) return;
     if (voiceSubtitleActive) return;
     if (suggestions.length > 0 || suggestionsLoading) suggestionsOpen = true;
     else if (value.trim() && status === 'idle') loadSuggestions();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    if (disabled) return;
     if (voiceSubtitleActive) {
       if (event.key === 'Enter') {
         event.preventDefault();
@@ -127,6 +138,7 @@
   }
 
   function clear(): void {
+    if (disabled) return;
     value = '';
     closeSuggestions();
     suggestionsReady = false;
@@ -154,14 +166,16 @@
 
   async function loadSuggestions(): Promise<void> {
     const id = ++requestId;
+    const requestValue = value;
+    const requestModePrefix = modePrefix;
     suggestionsLoading = true;
     try {
-      const nextSuggestions = await fetchSuggestions(value, modePrefix);
-      if (id !== requestId) return;
+      const nextSuggestions = await fetchSuggestions(requestValue, requestModePrefix);
+      if (id !== requestId || requestValue !== value || requestModePrefix !== modePrefix) return;
       suggestions = nextSuggestions;
       suggestIdx = -1;
     } catch {
-      if (id !== requestId) return;
+      if (id !== requestId || requestValue !== value || requestModePrefix !== modePrefix) return;
       suggestions = [];
     } finally {
       if (id === requestId) {
@@ -186,10 +200,10 @@
   <div class="search-input-wrap">
     {#if !voiceSubtitleActive}
       <div class:open={modeOpen} class="mode-select">
-        <button class="mode-trigger" type="button" aria-expanded={modeOpen} aria-haspopup="listbox" onclick={() => modeOpen = !modeOpen}><span class="mode-value">{modeLabel}</span><svg class="mode-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button class="mode-trigger" type="button" aria-expanded={modeOpen} aria-haspopup="listbox" disabled={disabled} onclick={() => modeOpen = !modeOpen}><span class="mode-value">{modeLabel}</span><svg class="mode-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
         <div class="mode-menu" role="listbox">
           {#each modes as [prefix, label]}
-            <button class:selected={modePrefix === prefix} class="mode-option" type="button" role="option" aria-selected={modePrefix === prefix} onclick={() => setMode(prefix, label)}>{label}</button>
+            <button class:selected={modePrefix === prefix} class="mode-option" type="button" role="option" aria-selected={modePrefix === prefix} disabled={disabled} onclick={() => setMode(prefix, label)}>{label}</button>
           {/each}
         </div>
       </div>
@@ -198,8 +212,8 @@
         <iconify-icon icon="lucide:volume-2" style="font-size:0.85rem;"></iconify-icon>
       </span>
     {/if}
-    <input bind:value oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" placeholder={voiceSubtitleActive ? '筛选角色名…' : '搜索角色、武器、地图、技能…'} autocomplete="off">
-    {#if value}<button class="search-clear" aria-label="清空搜索" onclick={clear}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
+    <input bind:value oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" placeholder={voiceSubtitleActive ? '筛选角色名…' : '搜索角色、武器、地图、技能…'} autocomplete="off" disabled={disabled}>
+    {#if value}<button class="search-clear" aria-label="清空搜索" disabled={disabled} onclick={clear}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
   </div>
   {#if showSuggestDropdown}
     <div class="suggest-dropdown" role="listbox" tabindex="-1" onmousedown={handleSuggestMousedown}>

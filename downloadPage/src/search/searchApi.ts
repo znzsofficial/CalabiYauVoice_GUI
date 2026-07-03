@@ -74,11 +74,13 @@ export function httpErrorMessage(statusCode: number): string {
   return map[statusCode] || `HTTP ${statusCode} 错误`;
 }
 
-export async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+export async function fetchWithTimeout(url: string, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
   const cached = requestCache.get(url);
   if (cached && Date.now() - cached.time < CACHE_TTL) return cached.response.clone();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(httpErrorMessage(response.status));
@@ -86,6 +88,7 @@ export async function fetchWithTimeout(url: string, timeoutMs: number): Promise<
     return response;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
   }
 }
 
@@ -194,14 +197,14 @@ export async function fetchCategoryMembers(category: string, namespace: number, 
   return output;
 }
 
-export async function fetchCategoryFiles(category: string, audioOnly: boolean): Promise<CategoryFile[]> {
+export async function fetchCategoryFiles(category: string, audioOnly: boolean, signal?: AbortSignal): Promise<CategoryFile[]> {
   const files: CategoryFile[] = [];
   const seenUrls = new Set<string>();
   let gcmcontinue = '';
   do {
     const params = new URLSearchParams({ action: 'query', generator: 'categorymembers', gcmtitle: category, gcmnamespace: '6', gcmlimit: '500', prop: 'imageinfo', iiprop: 'url|mime|size', format: 'json', origin: '*' });
     if (gcmcontinue) params.set('gcmcontinue', gcmcontinue);
-    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000)).json() as PagesResponse;
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000, signal)).json() as PagesResponse;
     for (const page of Object.values(data.query?.pages || {})) {
       const info = page.imageinfo?.[0];
       if (!info?.url || seenUrls.has(info.url)) continue;
@@ -257,15 +260,23 @@ export async function fetchAllCharacters(): Promise<CategoryPage[]> {
 }
 
 export async function fetchVoicePageParsetree(pageTitle: string): Promise<string> {
-  let url = `${API}?action=parse&page=${encodeURIComponent(pageTitle)}&prop=parsetree&format=json&origin=*`;
-  let resp = await fetchWithTimeout(url, 15000);
-  if (!resp.ok) {
-    const pageid = await resolveVoicePageId(pageTitle);
-    if (!pageid) return '';
-    url = `${API}?action=parse&pageid=${pageid}&prop=parsetree&format=json&origin=*`;
-    resp = await fetchWithTimeout(url, 15000);
+  const pageUrl = `${API}?action=parse&page=${encodeURIComponent(pageTitle)}&prop=parsetree&format=json&origin=*`;
+  let pageError: unknown;
+  try {
+    const data = await (await fetchWithTimeout(pageUrl, 15000)).json() as { parse?: { parsetree?: { '*': string } } };
+    const parsetree = data.parse?.parsetree?.['*'] || '';
+    if (parsetree) return parsetree;
+  } catch (err) {
+    pageError = err;
   }
-  const data = await resp.json() as { parse?: { parsetree?: { '*': string } } };
+
+  const pageid = await resolveVoicePageId(pageTitle);
+  if (!pageid) {
+    if (pageError) throw pageError;
+    return '';
+  }
+  const pageIdUrl = `${API}?action=parse&pageid=${pageid}&prop=parsetree&format=json&origin=*`;
+  const data = await (await fetchWithTimeout(pageIdUrl, 15000)).json() as { parse?: { parsetree?: { '*': string } } };
   return data.parse?.parsetree?.['*'] || '';
 }
 

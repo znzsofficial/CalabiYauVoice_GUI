@@ -1,4 +1,4 @@
-import type { VoiceLine } from './searchApi';
+import type { VoiceLine } from '../searchApi';
 
 export type VoiceSectionGroup = { title: string; lines: VoiceLine[] };
 

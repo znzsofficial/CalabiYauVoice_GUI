@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { title = '', info = '', progress = '', allSelected = false, disabled = false, downloading = false, concurrency = 4, downloadLabel = '下载 ZIP', downloadingLabel = '打包中...', onToggleAll = () => {}, onDownload = () => {}, onConcurrencyChange = (value: number) => {} }: {
+  let { title = '', info = '', progress = '', allSelected = false, disabled = false, downloading = false, concurrency = 4, downloadLabel = '下载 ZIP', downloadingLabel = '打包中...', variant = 'bar' as 'bar' | 'rail', onToggleAll = () => {}, onDownload = () => {}, onCancel = () => {}, onConcurrencyChange = (value: number) => {} }: {
     title?: string;
     info?: string;
     progress?: string;
@@ -9,8 +9,10 @@
     concurrency?: number;
     downloadLabel?: string;
     downloadingLabel?: string;
+    variant?: 'bar' | 'rail';
     onToggleAll?: () => void;
     onDownload?: () => void;
+    onCancel?: () => void;
     onConcurrencyChange?: (value: number) => void;
   } = $props();
 
@@ -19,16 +21,30 @@
   }
 </script>
 
-<div class="bulk-download-bar">
+<div class:rail={variant === 'rail'} class="bulk-download-bar">
   <div class="bulk-download-info">
     <strong>{title}</strong>
     <span>{info}</span>
     {#if progress}<span>{progress}</span>{/if}
   </div>
   <div class="bulk-download-actions">
-    <button class="btn outline" type="button" onclick={onToggleAll}>{allSelected ? '取消全选' : '全选本页'}</button>
-    <label class="concurrency-control"><span>线程</span><input value={concurrency} type="number" min="1" max="16" step="1" onchange={handleConcurrencyChange}></label>
-    <button class="btn primary" type="button" disabled={disabled || downloading} onclick={onDownload}>{downloading ? downloadingLabel : downloadLabel}</button>
+    <button class="btn outline" type="button" disabled={downloading} onclick={onToggleAll}>{allSelected ? '取消全选' : '全选本页'}</button>
+    <label class="concurrency-control">
+      <span>线程</span>
+      {#if variant === 'rail'}
+        <div class="concurrency-slider-wrap">
+          <input value={concurrency} type="range" min="1" max="16" step="1" oninput={handleConcurrencyChange}>
+          <strong>{concurrency}</strong>
+        </div>
+      {:else}
+        <input value={concurrency} type="number" min="1" max="16" step="1" onchange={handleConcurrencyChange}>
+      {/if}
+    </label>
+    {#if downloading}
+      <button class="btn outline" type="button" onclick={onCancel}>取消</button>
+    {:else}
+      <button class="btn primary" type="button" disabled={disabled} onclick={onDownload}>{downloadLabel}</button>
+    {/if}
   </div>
 </div>
 
@@ -104,6 +120,70 @@
     outline: none;
     border-color: var(--ring);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+  }
+
+  .bulk-download-bar.rail {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 0;
+  }
+
+  .bulk-download-bar.rail .bulk-download-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .bulk-download-bar.rail .bulk-download-info span {
+    white-space: normal;
+  }
+
+  .bulk-download-bar.rail .bulk-download-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bulk-download-bar.rail .bulk-download-actions .btn {
+    width: 100%;
+  }
+
+  .bulk-download-bar.rail .concurrency-control {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .concurrency-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .concurrency-slider-wrap input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+    height: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--border);
+    accent-color: var(--primary);
+  }
+
+  .concurrency-slider-wrap strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
   }
 
   @media (prefers-color-scheme: dark) {

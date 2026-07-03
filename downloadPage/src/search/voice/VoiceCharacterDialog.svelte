@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { fetchVoicePageParsetree, resolveAudioUrl, type CategoryPage, type VoiceLine } from './searchApi';
+  import { onMount, tick } from 'svelte';
+  import { fetchVoicePageParsetree, resolveAudioUrl, type CategoryPage, type VoiceLine } from '../searchApi';
   import { parseVoiceSections, type VoiceSectionGroup } from './voiceParser';
-  import { toError } from './utils';
-  import { downloadBlob, generateZip, uniqueFileName } from './downloadZip';
+  import { toError } from '../utils';
+  import { downloadBlob, downloadFailuresText, downloadUrlWithRetry, generateZip, uniqueFileName } from '../download';
   import { mergeMp3Buffers, buildFolderPath, addSubtitlesToZip } from './voiceDownload';
   import AudioPlayButton from './AudioPlayButton.svelte';
 
@@ -14,12 +14,14 @@
     dialogRef = $bindable(null),
     character,
     initialSection = 0,
+    initialLineIndex,
     highlightQuery = '',
     onClose = () => {}
   }: {
     dialogRef?: HTMLDialogElement | null;
     character: CategoryPage;
     initialSection?: number;
+    initialLineIndex?: number;
     highlightQuery?: string;
     onClose?: () => void;
   } = $props();
@@ -48,6 +50,7 @@
   let downloading = $state(false);
   let downloadProgress = $state('');
   let downloadConcurrency = $state(4);
+  let highlightedLineIndex = $state(undefined) as number | undefined;
 
   const langLabels: Record<LangKey, string> = { cn: '中文', jp: '日文', en: '英文' };
   const langShort: Record<LangKey, string> = { cn: '中', jp: '日', en: '英' };
@@ -146,21 +149,17 @@
     return namingTemplate.replace(/\{(\w+)\}/g, (_, key: string) => replacements[key] ?? _) + '.mp3';
   }
 
-  async function downloadOneAudio(audioName: string, retries = 2): Promise<{ ok: true; blob: Blob } | { ok: false }> {
+  async function downloadOneAudio(audioName: string, retries = 2): Promise<{ ok: true; blob: Blob } | { ok: false; error: string }> {
     const url = `/api/file-download?url=${encodeURIComponent(resolveAudioUrl(audioName))}`;
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 300 * attempt));
-        const resp = await fetch(url);
-        if (!resp.ok) { console.warn('[voice] dl status', attempt, audioName.slice(0, 40), resp.status); continue; }
-        const blob = await resp.blob();
-        if (blob.size === 0) { console.warn('[voice] dl empty', attempt, audioName.slice(0, 40)); continue; }
-        console.log('[voice] dl ok', attempt > 0 ? `retry${attempt}` : '', audioName.slice(0, 40), blob.size);
-        return { ok: true, blob };
-      } catch (err) { console.warn('[voice] dl err', attempt, audioName.slice(0, 40), err); continue; }
+    try {
+      const blob = await downloadUrlWithRetry(url, { retries });
+      console.log('[voice] dl ok', audioName.slice(0, 40), blob.size);
+      return { ok: true, blob };
+    } catch (err) {
+      const error = toError(err).message || '下载失败';
+      console.warn('[voice] dl exhausted', audioName.slice(0, 40), error);
+      return { ok: false, error };
     }
-    console.warn('[voice] dl exhausted', audioName.slice(0, 40));
-    return { ok: false };
   }
 
   async function downloadOneAudioBuf(audioName: string, retries = 2): Promise<ArrayBuffer | null> {
@@ -257,12 +256,13 @@
         const catCounters: Record<string, number> = {};
         let finished = 0;
         let failed = 0;
+        const failures: Array<{ name: string; error: string; category?: string }> = [];
 
         for (let i = 0; i < tasks.length; i += limit) {
           const batch = tasks.slice(i, i + limit);
           await Promise.all(batch.map(async task => {
             const result = await downloadOneAudio(task.audioName);
-            if (!result.ok) { failed++; return; }
+            if (!result.ok) { failed++; failures.push({ name: task.audioName, error: result.error, category: task.line.category }); return; }
             const blob = result.blob;
             let name: string;
             if (namingMode === 'both') {
@@ -291,6 +291,7 @@
 
         addSubtitlesToZip(zip, lines, downloadLangs, getText, { subtitleMode, subtitleFormat, folderMode }, uniqueFileName);
         if (exportDetailFiles) addDetailFiles(zip, lines, downloadLangs, uniqueFileName);
+        if (failures.length > 0) zip.file('_download_failed.txt', downloadFailuresText(failures));
         downloadProgress = '正在生成 ZIP...';
         const content = await zip.generateAsync({ type: 'blob' });
         downloadBlob(content, `${character.title}-语音-${new Date().toISOString().slice(0, 10)}.zip`);
@@ -325,13 +326,28 @@
     }
   }
 
-  function selectSection(index: number): void {
-    if (index === activeSectionIdx) return;
+  function selectSection(index: number, force = false): void {
+    if (!force && index === activeSectionIdx) return;
     sectionSelections = { ...sectionSelections, [activeSectionIdx]: selectedIndices };
     activeSectionIdx = index;
     selectedIndices = sectionSelections[index] || new Set();
     const group = sectionGroups[index];
     voiceLines = group ? group.lines : [];
+  }
+
+  async function scrollToLine(index: number | undefined): Promise<void> {
+    if (index == null) return;
+    highlightedLineIndex = index;
+    await tick();
+    let target = dialogRef?.querySelector(`[data-voice-line="${index}"]`);
+    if (!target) {
+      await tick();
+      target = dialogRef?.querySelector(`[data-voice-line="${index}"]`);
+    }
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setTimeout(() => {
+      if (highlightedLineIndex === index) highlightedLineIndex = undefined;
+    }, 1800);
   }
 
   function lineSearchText(line: VoiceLine): string {
@@ -374,10 +390,11 @@
       const parsetree = await fetchVoicePageParsetree(pageTitle);
       sectionGroups = parseVoiceSections(parsetree);
       if (sectionGroups.length > 0) {
-        const secIdx = Math.min(initialSection, sectionGroups.length - 1);
-        selectSection(secIdx);
+        const secIdx = Math.max(0, Math.min(initialSection, sectionGroups.length - 1));
+        selectSection(secIdx, true);
         if (highlightQuery) searchQuery = highlightQuery;
         status = 'ready';
+        await scrollToLine(initialLineIndex);
       } else {
         status = 'error';
         errorMessage = '未解析到语音台词数据';
@@ -607,7 +624,7 @@
                 {#each group.lines as { line, globalIndex } (globalIndex)}
                   {@const activeLang = getTabLang(globalIndex)}
                   {@const lineHasAudio = hasAnyAudio(line)}
-                  <div class:selected={selectedIndices.has(globalIndex)} class:voice-line-muted={!lineHasAudio} class="voice-line">
+                  <div class:selected={selectedIndices.has(globalIndex)} class:voice-line-muted={!lineHasAudio} class:voice-line-highlighted={highlightedLineIndex === globalIndex} class="voice-line" data-voice-line={globalIndex}>
                     {#if lineHasAudio}
                       <button class="voice-line-check" onclick={() => toggleLine(globalIndex)} aria-label="选择">
                         <iconify-icon icon={selectedIndices.has(globalIndex) ? 'lucide:check-square' : 'lucide:square'}></iconify-icon>

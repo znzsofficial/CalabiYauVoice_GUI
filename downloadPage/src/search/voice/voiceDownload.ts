@@ -1,5 +1,5 @@
-import type { VoiceLine } from './searchApi';
-import type { generateZip } from './downloadZip';
+import type { VoiceLine } from '../searchApi';
+import type { generateZip } from '../download';
 
 type LangKey = 'cn' | 'jp' | 'en';
 type SubtitleMode = 'merged' | 'perLine' | 'none';
