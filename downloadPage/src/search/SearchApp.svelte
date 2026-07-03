@@ -5,11 +5,11 @@
   import Lightbox from './Lightbox.svelte';
   import SearchResults from './SearchResults.svelte';
   import { downloadBlob, downloadFilesInParallel, fileNameFromTitle, generateZip, uniqueFileName } from './downloadZip';
-  import { apiErrorMessage, fetchAllCharacters, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, fetchVoicePageParsetree, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type CategoryPage, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
-  import { parseVoiceSections } from './voiceParser';
-  import { toError, highlightMatch, esc, categoryDisplayName } from './utils';
+  import { apiErrorMessage, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
+  import { toError, categoryDisplayName } from './utils';
   import SearchFilters from './SearchFilters.svelte';
-  import VoiceCharacterDialog from './VoiceCharacterDialog.svelte';
+  import SearchBox from './SearchBox.svelte';
+  import VoiceSubtitlePanel from './VoiceSubtitlePanel.svelte';
 
   type ProfileValue = 'default' | 'images' | 'all' | 'advanced' | 'voiceCategory' | 'categoryDownload' | 'voiceSubtitle';
   type Status = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
@@ -32,8 +32,6 @@
 
   const PAGE_SIZE = 20;
   const SUGGEST_LIMIT = 8;
-  const DEBOUNCE_MS = 300;
-
   const NS_PRIMARY: NamespaceOption[] = [
     { id: 0, name: '条目' }, { id: 6, name: '文件' }, { id: 14, name: '分类' },
     { id: 10, name: '模板' }, { id: 828, name: '模块' }, { id: 4, name: '项目' }, { id: 2, name: '用户' }
@@ -61,15 +59,6 @@
   let totalHits = $state(0);
   let searchModePrefix = $state('');
   let searchModeLabel = $state('内容');
-  let modeOpen = $state(false);
-  let suggestions: Suggestion[] = $state([]);
-  let suggestionsLoading = $state(false);
-  let suggestionsReady = $state(false);
-  let suggestionsOpen = $state(false);
-  let suggestIdx = $state(-1);
-  let savedQuery = $state('');
-  let searchTimer: ReturnType<typeof setTimeout> | undefined;
-  let suggestionRequestId = $state(0);
   let searchRequestId = $state(0);
   let status = $state('idle' as Status);
   let errorMessage = $state('');
@@ -95,32 +84,9 @@
   let categoryFileDialogFiles = $state([]) as CategoryFile[];
   let categoryFileDialogLoading = $state(false);
   let categoryFileDialogError = $state('');
-  let voiceCharacters = $state([]) as CategoryPage[];
-  let voiceCharsLoading = $state(false);
-  let voiceCharsError = $state('');
-  let voiceIndexReady = $state(false);
-  let voiceIndexLoading = $state(false);
-  let voiceIndexVersion = $state(0);
-  let voiceSearchIndex: Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>> = new Map();
-  let voiceSearchQuery = $state('');
-  let voiceDialogOpen = $state(false);
-  let voiceDialogCharacter = $state(null) as CategoryPage | null;
-  let voiceDialogRef = $state(null) as HTMLDialogElement | null;
-  let voiceDialogNavSection = $state(0);
-  let voiceDialogNavQuery = $state('');
-
-  let voiceDebounceTimer: ReturnType<typeof setTimeout>;
-  $effect(() => {
-    const q = inputValue.trim();
-    clearTimeout(voiceDebounceTimer);
-    voiceDebounceTimer = setTimeout(() => { voiceSearchQuery = q; }, 150);
-    return () => clearTimeout(voiceDebounceTimer);
-  });
-
   let nsList = $derived(nsExpanded ? NS_EXTENDED : NS_PRIMARY);
   let totalPages = $derived(Math.ceil(totalHits / PAGE_SIZE));
   let pages = $derived(paginationPages(currentPage, totalPages));
-  let showSuggestDropdown = $derived(suggestionsOpen && !!query.trim() && (suggestionsLoading || suggestionsReady || suggestions.length > 0));
   let fileResults = $derived(results.filter(result => result.ns === 6 && result.file));
   let selectedFileResults = $derived(fileResults.filter(result => selectedFiles.has(result.title)));
   let fileSelectionEnabled = $derived(activeProfile === 'images' && fileResults.length > 0);
@@ -129,40 +95,6 @@
   let selectedCategoryResultItems = $derived(categoryResults.filter(result => selectedCategoryResults.has(result.title)));
   let categorySelectionEnabled = $derived(categorySearchActive && categoryResults.length > 0);
   let voiceSubtitleActive = $derived(activeProfile === 'voiceSubtitle');
-  let voiceFilterResult = $derived.by((): {
-    characters: CategoryPage[];
-    hits: Array<{ character: CategoryPage; sectionIdx: number; sectionTitle: string; lineIdx: number; lineText: string }> | null;
-  } => {
-    void voiceIndexVersion;
-    const q = voiceSearchQuery.toLowerCase();
-    if (!q || !voiceIndexReady) {
-      return { characters: voiceCharacters, hits: null };
-    }
-    const matchedChars = new Set<CategoryPage>();
-    const hits: Array<{ character: CategoryPage; sectionIdx: number; sectionTitle: string; lineIdx: number; lineText: string }> = [];
-    for (const c of voiceCharacters) {
-      if (c.title.toLowerCase().includes(q)) { matchedChars.add(c); }
-      const sections = voiceSearchIndex.get(c.title);
-      if (!sections) continue;
-      for (let si = 0; si < sections.length; si++) {
-        const sec = sections[si];
-        if (sec.title.toLowerCase().includes(q)) { matchedChars.add(c); }
-        let sectionHaystack = '';
-        for (let li = 0; li < sec.lines.length; li++) {
-          const line = sec.lines[li];
-          const haystack = [line.cnText, line.jpText, line.enText, line.category].join(' ').toLowerCase();
-          if (!matchedChars.has(c)) {
-            sectionHaystack += haystack;
-            if (sectionHaystack.includes(q)) { matchedChars.add(c); }
-          }
-          if (haystack.includes(q)) {
-            hits.push({ character: c, sectionIdx: si, sectionTitle: sec.title, lineIdx: li, lineText: line.cnText || line.jpText || line.enText || line.category });
-          }
-        }
-      }
-    }
-    return { characters: [...matchedChars], hits: hits.slice(0, 30) };
-  });
   let totalHitsStr = $derived(totalHits.toLocaleString());
   let categoryResultsCountStr = $derived(categoryResults.length.toLocaleString());
 
@@ -171,10 +103,8 @@
     if (urlQ) {
       inputValue = urlQ;
       query = urlQ;
-      doSearch();
+      doSearch(urlQ);
     }
-    document.addEventListener('click', handleDocumentClick);
-    return () => document.removeEventListener('click', handleDocumentClick);
   });
 
   function setProfile(value: ProfileValue): void {
@@ -190,8 +120,6 @@
       categoryStatusText = '';
       results = [];
       status = 'idle';
-      loadVoiceCharacters();
-      buildVoiceSearchIndex();
       return;
     }
     if (value !== 'advanced') {
@@ -219,12 +147,6 @@
     activeSort = value;
     currentPage = 1;
     if (query.trim()) doSearch();
-  }
-
-  function setMode(prefix: string, label: string): void {
-    searchModePrefix = prefix;
-    searchModeLabel = label;
-    modeOpen = false;
   }
 
   function normalizeDownloadConcurrency(): void {
@@ -255,11 +177,15 @@
     if (query.trim()) doSearch();
   }
 
-  function getSearchQuery(): string {
-    const q = query.trim();
+  function getSearchQuery(value = query): string {
+    return buildSearchQuery(value, searchModePrefix);
+  }
+
+  function buildSearchQuery(value: string, prefix: string): string {
+    const q = value.trim();
     if (!q) return '';
     if (q.startsWith('intitle:') || q.startsWith('insource:')) return q;
-    return searchModePrefix + q;
+    return prefix + q;
   }
 
   function getActiveNSParam(): string {
@@ -271,95 +197,20 @@
     return isBuiltinSearchProfile(activeProfile) ? PROFILE_NS_MAP[activeProfile].join('|') : '0';
   }
 
-  function handleInput(): void {
-    query = inputValue;
-    savedQuery = inputValue;
+  function handleSearchInputChange(value: string): void {
+    if (voiceSubtitleActive) return;
+    query = value;
     if (categorySearchActive) {
       selectedCategoryResults = new Set();
       expandedCategories = new Set();
       categorySubcatErrors = {};
     }
     categoryStatusText = '';
-    clearTimeout(searchTimer);
-    suggestionsReady = false;
-    suggestionsOpen = true;
-    if (!query.trim()) {
-      suggestions = [];
-      suggestIdx = -1;
-      suggestionsLoading = false;
-      return;
-    }
-    searchTimer = setTimeout(fetchSuggestions, DEBOUNCE_MS);
-  }
-
-  function handleInputFocus(): void {
-    if (suggestions.length > 0 || suggestionsLoading) suggestionsOpen = true;
-    else if (inputValue.trim() && status === 'idle') fetchSuggestions();
-  }
-
-  function handleKeydown(event: KeyboardEvent): void {
-    if (suggestions.length > 0 && event.key === 'ArrowDown') {
-      event.preventDefault();
-      if (suggestIdx === -1) savedQuery = inputValue;
-      suggestIdx = Math.min(suggestIdx + 1, suggestions.length - 1);
-      inputValue = suggestions[suggestIdx].title;
-      return;
-    }
-    if (suggestions.length > 0 && event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (suggestIdx <= 0) {
-        suggestIdx = -1;
-        inputValue = savedQuery;
-      } else {
-        suggestIdx -= 1;
-        inputValue = suggestions[suggestIdx].title;
-      }
-      return;
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      query = inputValue;
-      closeSuggestions();
-      currentPage = 1;
-      doSearch();
-    }
-    if (event.key === 'Escape') {
-      if (suggestionsOpen) {
-        closeSuggestions();
-        inputValue = savedQuery || query;
-      } else if (query) {
-        clearSearch();
-      }
-    }
-    if (event.key === 'Tab') {
-      closeSuggestions();
-    }
-  }
-
-  function closeSuggestions(): void {
-    suggestions = [];
-    suggestionsOpen = false;
-    suggestIdx = -1;
-    savedQuery = '';
-  }
-
-  function handleDocumentClick(event: MouseEvent): void {
-    if (!suggestionsOpen) return;
-    const target = event.target as HTMLElement;
-    if (target.closest('.search-box')) return;
-    closeSuggestions();
-  }
-
-  function handleSuggestMousedown(event: MouseEvent): void {
-    event.preventDefault();
   }
 
   function clearSearch(): void {
     inputValue = '';
     query = '';
-    closeSuggestions();
-    suggestionsReady = false;
-    suggestionsLoading = false;
     status = 'idle';
     totalHits = 0;
     results = [];
@@ -371,51 +222,35 @@
     categoryStatusText = '';
   }
 
-  async function fetchSuggestions(): Promise<void> {
-    const requestId = ++suggestionRequestId;
-    suggestionsLoading = true;
-    try {
-      const nextSuggestions = await fetchPrefixSuggestions({ search: getSearchQuery(), limit: SUGGEST_LIMIT, namespace: getActiveNSParam() || '0', nsNameMap });
-      if (requestId !== suggestionRequestId) return;
-      suggestions = nextSuggestions;
-      suggestIdx = -1;
-    } catch {
-      if (requestId !== suggestionRequestId) return;
-      suggestions = [];
-    } finally {
-      if (requestId === suggestionRequestId) {
-        suggestionsLoading = false;
-        suggestionsReady = true;
-      }
-    }
+  async function fetchSearchSuggestions(value: string, modePrefix: string): Promise<Suggestion[]> {
+    return await fetchPrefixSuggestions({ search: buildSearchQuery(value, modePrefix), limit: SUGGEST_LIMIT, namespace: getActiveNSParam() || '0', nsNameMap });
   }
 
-  function selectSuggestion(suggestion: Suggestion): void {
-    inputValue = suggestion.title;
-    query = suggestion.title;
-    closeSuggestions();
+  function submitSearch(value: string): void {
+    if (voiceSubtitleActive) return;
+    inputValue = value;
+    query = value;
     currentPage = 1;
-    doSearch();
+    doSearch(value);
   }
 
   function searchSuggestion(value: string): void {
     inputValue = value;
     query = value;
     currentPage = 1;
-    doSearch();
+    doSearch(value);
   }
 
-  async function doSearch(): Promise<void> {
-    if (!query.trim()) return;
+  async function doSearch(searchValue = query): Promise<void> {
+    if (!searchValue.trim()) return;
+    query = searchValue;
     const requestId = ++searchRequestId;
     status = 'loading';
     errorMessage = '';
     resultSuggestion = '';
-    suggestions = [];
-    suggestionsOpen = false;
 
     try {
-      const data = await searchWiki({ search: getSearchQuery(), limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE, namespace: getActiveNSParam(), sort: activeSort });
+      const data = await searchWiki({ search: getSearchQuery(searchValue), limit: PAGE_SIZE, offset: (currentPage - 1) * PAGE_SIZE, namespace: getActiveNSParam(), sort: activeSort });
       if (requestId !== searchRequestId) return;
       const apiErr = apiErrorMessage(data);
       if (apiErr) throw new Error(apiErr);
@@ -579,51 +414,6 @@
     categoryFileDialogLoading = false;
   }
 
-  async function loadVoiceCharacters(): Promise<void> {
-    if (voiceCharacters.length > 0) return;
-    voiceCharsLoading = true;
-    voiceCharsError = '';
-    try {
-      voiceCharacters = await fetchAllCharacters();
-    } catch (err) {
-      voiceCharsError = toError(err).message || '加载角色列表失败';
-    } finally {
-      voiceCharsLoading = false;
-    }
-  }
-
-  async function buildVoiceSearchIndex(): Promise<void> {
-    if (voiceIndexReady || voiceIndexLoading) return;
-    voiceIndexLoading = true;
-    const idx = new Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>>();
-    const chars = voiceCharacters.length > 0 ? voiceCharacters : await fetchAllCharacters();
-    const concurrency = 4;
-    for (let i = 0; i < chars.length; i += concurrency) {
-      const batch = chars.slice(i, i + concurrency);
-      await Promise.all(batch.map(async c => {
-        try {
-          const pt = await fetchVoicePageParsetree(`${c.title}/语音台词`);
-          const groups = parseVoiceSections(pt);
-          idx.set(c.title, groups.map(g => ({
-            title: g.title,
-            lines: g.lines.map(l => ({ category: l.category, cnText: l.cnText, jpText: l.jpText, enText: l.enText }))
-          })));
-        } catch { /* skip */ }
-      }));
-    }
-    voiceSearchIndex = idx;
-    voiceIndexVersion++;
-    voiceIndexReady = true;
-    voiceIndexLoading = false;
-  }
-
-  function openVoiceDialog(character: CategoryPage, sectionIdx?: number, query?: string): void {
-    voiceDialogCharacter = character;
-    voiceDialogNavSection = sectionIdx ?? 0;
-    voiceDialogNavQuery = query ?? '';
-    voiceDialogOpen = true;
-  }
-
   async function downloadSelectedFilesZip(): Promise<void> {
     if (selectedFileResults.length === 0 || zipDownloading) return;
 
@@ -773,118 +563,15 @@
 </header>
 
 <main class="main">
-  <div class="search-box">
-    <div class="search-input-wrap">
-      {#if !voiceSubtitleActive}
-        <div class:open={modeOpen} class="mode-select">
-          <button class="mode-trigger" type="button" aria-expanded={modeOpen} aria-haspopup="listbox" onclick={() => modeOpen = !modeOpen}><span class="mode-value">{searchModeLabel}</span><svg class="mode-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
-          <div class="mode-menu" role="listbox">
-            {#each [['', '内容'], ['intitle:', '标题'], ['insource:', '源码']] as [prefix, label]}
-              <button class:selected={searchModePrefix === prefix} class="mode-option" type="button" role="option" aria-selected={searchModePrefix === prefix} onclick={() => setMode(prefix, label)}>{label}</button>
-            {/each}
-          </div>
-        </div>
-      {:else}
-        <span class="search-mode-badge">
-          <iconify-icon icon="lucide:volume-2" style="font-size:0.85rem;"></iconify-icon>
-        </span>
-      {/if}
-      <input bind:value={inputValue} oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" placeholder={voiceSubtitleActive ? '筛选角色名…' : '搜索角色、武器、地图、技能…'} autocomplete="off">
-      {#if inputValue}<button class="search-clear" aria-label="清空搜索" onclick={clearSearch}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
-    </div>
-    {#if showSuggestDropdown}
-      <div class="suggest-dropdown" role="listbox" tabindex="-1" onmousedown={handleSuggestMousedown}>
-        {#if suggestionsLoading}
-          <div class="suggest-state"><span class="suggest-spinner"></span><span>正在查找建议…</span></div>
-        {:else if suggestions.length > 0}
-          {#each suggestions as suggestion, index (suggestion.title)}
-            <button class:highlighted={suggestIdx === index} class="suggest-item" type="button" role="option" aria-selected={suggestIdx === index} onmouseenter={() => suggestIdx = index} onclick={() => selectSuggestion(suggestion)}>
-              <svg class="suggest-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <span class="suggest-text"><span class="suggest-title">{@html highlightMatch(suggestion.title, query)}</span><span class="suggest-meta"><span class="suggest-ns">{suggestion.desc}</span><span>{suggestionPath(suggestion.title)}</span>{#if suggestion.pageid}<span>#{suggestion.pageid}</span>{/if}</span></span>
-            </button>
-          {/each}
-        {:else}
-          <div class="suggest-state">暂无实时建议，按 Enter 搜索</div>
-        {/if}
-      </div>
-    {/if}
-  </div>
+  <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
 
   <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => nsExpanded = !nsExpanded} />
 
   {#if voiceSubtitleActive}
-    <div class="voice-char-section">
-      {#if voiceCharsLoading}
-        <div class="voice-char-skeleton">
-          {#each Array(18) as _, i (i)}
-            <div class="voice-char-item"><span class="skeleton-line" style="width:48px;height:48px;border-radius:50%;margin:0 auto;"></span><span class="skeleton-line" style="width:56px;"></span></div>
-          {/each}
-        </div>
-      {:else if voiceCharsError}
-        <div class="balance-placeholder text-muted">
-          <iconify-icon icon="lucide:alert-circle"></iconify-icon>
-          <p>{voiceCharsError}</p>
-          <button class="btn outline" style="margin-top:8px;" onclick={loadVoiceCharacters}>重试</button>
-        </div>
-      {:else if voiceCharacters.length > 0}
-        <div class="voice-char-grid">
-          {#each voiceFilterResult.characters as character (character.pageid)}
-            <button class="voice-char-item" onclick={() => openVoiceDialog(character)}>
-              <div class="voice-char-avatar">
-                {#if character.thumbnail}
-                  <img src={character.thumbnail} alt="" loading="lazy">
-                {:else}
-                  <span class="hero-avatar-fallback">{character.title.charAt(0)}</span>
-                {/if}
-              </div>
-              <span class="voice-char-name">{character.title}</span>
-            </button>
-          {/each}
-        </div>
-        {#if voiceFilterResult.hits && voiceFilterResult.hits.length > 0}
-          <div class="voice-search-hits">
-            {#each voiceFilterResult.hits as hit (hit.character.pageid + '-' + hit.sectionIdx + '-' + hit.lineIdx)}
-              <button class="voice-hit-item" onclick={() => openVoiceDialog(hit.character, hit.sectionIdx, inputValue.trim())}>
-                <div class="voice-hit-avatar">
-                  {#if hit.character.thumbnail}
-                    <img src={hit.character.thumbnail} alt="" loading="lazy">
-                  {:else}
-                    <span class="hero-avatar-fallback">{hit.character.title.charAt(0)}</span>
-                  {/if}
-                </div>
-                <div class="voice-hit-body">
-                  <span class="voice-hit-name">{hit.character.title}</span>
-                  {#if hit.sectionTitle}
-                    <span class="voice-hit-section">{hit.sectionTitle}</span>
-                  {/if}
-                  <span class="voice-hit-text">{hit.lineText}</span>
-                </div>
-                <iconify-icon icon="lucide:chevron-right" class="voice-hit-arrow"></iconify-icon>
-              </button>
-            {/each}
-          </div>
-        {/if}
-        {#if voiceFilterResult.characters.length === 0 && (!voiceFilterResult.hits || voiceFilterResult.hits.length === 0)}
-          <div class="balance-placeholder text-muted" style="margin-top:16px;">
-            <iconify-icon icon="lucide:search-x"></iconify-icon>
-            <p>无匹配角色</p>
-          </div>
-        {/if}
-      {:else}
-        <div class="balance-placeholder text-muted">
-          <iconify-icon icon="lucide:users"></iconify-icon>
-          <p>暂无角色数据</p>
-        </div>
-      {/if}
-      {#if voiceIndexLoading}
-        <div style="text-align:center;padding:8px;font-size:0.75rem;color:var(--muted-foreground);">
-          <span class="suggest-spinner" style="display:inline-block;vertical-align:middle;margin-right:6px;"></span>正在索引章节与字幕…
-        </div>
-      {/if}
-    </div>
+    <VoiceSubtitlePanel query={inputValue} />
   {/if}
 
-  {#if status === 'ready'}
+  {#if !voiceSubtitleActive && status === 'ready'}
     <div class="result-meta">
       {#if categorySearchActive}
         找到 <strong>{categoryResultsCountStr}</strong> 个分类
@@ -892,7 +579,7 @@
         找到 <strong>{totalHitsStr}</strong> 条结果
       {/if}
       {#if resultSuggestion && !categorySearchActive}
-        · 你是不是要搜：<button class="suggestion-link" onclick={() => { inputValue = resultSuggestion; query = resultSuggestion; currentPage = 1; doSearch(); }}>{resultSuggestion}</button>
+        · 你是不是要搜：<button class="suggestion-link" onclick={() => searchSuggestion(resultSuggestion)}>{resultSuggestion}</button>
       {/if}
     </div>
   {/if}
@@ -905,11 +592,11 @@
     <BulkDownloadBar title="批量下载" info={selectedFileResults.length > 0 ? `已选择 ${selectedFileResults.length} 个文件` : `本页 ${fileResults.length} 个文件可选`} progress={zipProgress} allSelected={selectedFileResults.length === fileResults.length} disabled={selectedFileResults.length === 0} downloading={zipDownloading} concurrency={downloadConcurrency} downloadingLabel="打包中…" onToggleAll={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onDownload={downloadSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} />
   {/if}
 
-  {#if status === 'ready' || status === 'loading' || status === 'empty' || status === 'error' || !categorySearchActive}
+  {#if !voiceSubtitleActive && (status === 'ready' || status === 'loading' || status === 'empty' || status === 'error' || !categorySearchActive)}
     <SearchResults {status} {query} {resultSuggestion} {errorMessage} {results} {fileSelectionEnabled} {categorySelectionEnabled} {categorySearchActive} {selectedFiles} {selectedCategoryResults} {expandedCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} onRetry={doSearch} onSuggestion={searchSuggestion} onToggleFile={toggleFileSelection} onToggleCategory={toggleCategoryResultSelection} onOpenLightbox={openLightbox} onToggleCategoryExpanded={toggleCategoryExpanded} onOpenCategoryFiles={openCategoryFileDialog} />
   {/if}
 
-  {#if pages.length > 0 && status === 'ready'}<div class="pagination"><button class="page-btn" disabled={currentPage <= 1} onclick={() => goPage(currentPage - 1)}>‹</button>{#each pages as page}<button class:active={page === currentPage} class="page-btn" disabled={page === '...'} onclick={() => typeof page === 'number' && goPage(page)}>{page}</button>{/each}<button class="page-btn" disabled={currentPage >= totalPages} onclick={() => goPage(currentPage + 1)}>›</button></div>{/if}
+  {#if !voiceSubtitleActive && pages.length > 0 && status === 'ready'}<div class="pagination"><button class="page-btn" disabled={currentPage <= 1} onclick={() => goPage(currentPage - 1)}>‹</button>{#each pages as page}<button class:active={page === currentPage} class="page-btn" disabled={page === '...'} onclick={() => typeof page === 'number' && goPage(page)}>{page}</button>{/each}<button class="page-btn" disabled={currentPage >= totalPages} onclick={() => goPage(currentPage + 1)}>›</button></div>{/if}
 </main>
 
 <footer class="footer"><p>数据来源：<a href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer">卡拉彼丘 Wiki</a> · Powered by MediaWiki API</p></footer>
@@ -921,67 +608,3 @@
 {#if categoryFileDialogOpen}
   <CategoryFileDialog title={categoryDisplayName(categoryFileDialogTitle)} subtitle={activeProfile === 'voiceCategory' ? '音频文件' : '分类文件'} files={categoryFileDialogFiles} loading={categoryFileDialogLoading} error={categoryFileDialogError} onClose={closeCategoryFileDialog} onPreview={openLightbox} />
 {/if}
-
-{#if voiceDialogOpen && voiceDialogCharacter}
-  <VoiceCharacterDialog bind:dialogRef={voiceDialogRef} character={voiceDialogCharacter} initialSection={voiceDialogNavSection} highlightQuery={voiceDialogNavQuery} onClose={() => voiceDialogOpen = false} />
-{/if}
-
-<style>
-  button.mode-trigger,
-  button.mode-option,
-  button.suggest-item {
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    padding: 0;
-  }
-
-  button.mode-trigger {
-    padding: 0 12px 0 20px;
-    border-right: 1px solid var(--border);
-  }
-
-  button.mode-option {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 12px;
-  }
-
-  button.mode-option:hover {
-    background-color: var(--accent);
-  }
-
-  button.mode-option.selected {
-    background-color: var(--primary);
-    color: var(--primary-foreground);
-    font-weight: 600;
-  }
-
-  button.suggest-item {
-    width: 100%;
-    text-align: left;
-    padding: 10px 14px;
-  }
-
-  button.suggest-item:hover,
-  button.suggest-item.highlighted {
-    background-color: var(--accent);
-  }
-
-  @media (max-width: 640px) {
-    button.mode-trigger {
-      padding: 0 8px 0 12px;
-    }
-
-    button.mode-option {
-      padding: 6px 10px;
-    }
-
-    button.suggest-item {
-      padding: 9px 12px;
-    }
-
-  }
-</style>
