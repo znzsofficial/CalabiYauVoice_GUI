@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
+import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
 import util.buildParseUrl
 import util.buildWikiUrl
@@ -79,6 +80,7 @@ object CharacterDetailApi {
         val portraitUrl: String? = null,
         val subPages: List<SubPage>,
         val skills: List<SkillInfo>,
+        val augmentationModes: List<AugmentationMode>,
         val stories: List<StoryEntry>,
         val positionName: String = "",
         val positionDuty: String = "",
@@ -127,7 +129,24 @@ object CharacterDetailApi {
         val name: String,
         val description: String,
         val videoUrl: String?,
-        val iconUrl: String? = null
+        val iconUrl: String? = null,
+        val valueGroups: List<SkillValueGroup> = emptyList()
+    )
+
+    data class SkillValueGroup(
+        val mode: String,
+        val values: List<InfoPair>
+    )
+
+    data class AugmentationMode(
+        val mode: String,
+        val entries: List<AugmentationEntry>
+    )
+
+    data class AugmentationEntry(
+        val group: String,
+        val option: String,
+        val value: String
     )
 
     /** 角色故事/相关剧情条目 */
@@ -177,7 +196,11 @@ object CharacterDetailApi {
                         kind = ErrorKind.PARSE
                     )
 
-                val baseDetail = parseCharacterWikitext(characterName, wikitext)
+                val html = parseObj["text"]
+                    ?.jsonObject?.get("*")
+                    ?.jsonPrimitive?.content
+
+                val baseDetail = parseCharacterWikitext(characterName, wikitext, html)
                     ?: return@withContext ApiResult.Error(
                         "未找到角色信息模板",
                         kind = ErrorKind.NOT_FOUND
@@ -189,9 +212,6 @@ object CharacterDetailApi {
                     ?: CharacterExtraInfo()
 
                 // 从渲染 HTML 解析改动历史
-                val html = parseObj["text"]
-                    ?.jsonObject?.get("*")
-                    ?.jsonPrimitive?.content
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
                 val detail = baseDetail.copy(
                     portraitUrl = html?.let { parseFirstCostumePortraitUrl(characterName, it) }
@@ -255,7 +275,7 @@ object CharacterDetailApi {
     /**
      * 从 wikitext 解析 `{{超弦体|...}}` 或 `{{晶源体|...}}` 模板参数。
      */
-    private fun parseCharacterWikitext(name: String, wikitext: String): CharacterDetail? {
+    private fun parseCharacterWikitext(name: String, wikitext: String, html: String? = null): CharacterDetail? {
         // 先尝试超弦体模板，再尝试晶源体模板
         val isCrystal: Boolean
         val templateContent: String
@@ -275,7 +295,8 @@ object CharacterDetailApi {
         val subPages = if (navContent != null) parseSubPages(navContent) else emptyList()
 
         val avatarUrl = fetchAvatarUrl(name)
-        val skills = parseSkills(name, wikitext, isCrystal)
+        val skills = parseSkills(name, wikitext, isCrystal, html)
+        val augmentationModes = parseAugmentationModes(wikitext, html)
         val stories = parseStories(wikitext)
         val position = parseCharacterPositionFromWikitext(wikitext).orEmpty()
 
@@ -323,6 +344,7 @@ object CharacterDetailApi {
             portraitUrl = null,
             subPages = subPages,
             skills = skills,
+            augmentationModes = augmentationModes,
             stories = stories
         )
     }
@@ -578,8 +600,13 @@ object CharacterDetailApi {
         Triple(4, "E", "战术技能")
     )
 
-    private fun parseSkills(characterName: String, wikitext: String, isCrystal: Boolean = false): List<SkillInfo> {
-        val skills: List<SkillInfo>
+    private fun parseSkills(
+        characterName: String,
+        wikitext: String,
+        isCrystal: Boolean = false,
+        html: String? = null
+    ): List<SkillInfo> {
+        var skills: List<SkillInfo>
         // 技能图片编号映射：超弦体 Q=1,P=2,X=3,E=4；晶源体 Q=1,X=3
         val slotToNum = mapOf("Q" to 1, "P" to 2, "X" to 3, "E" to 4)
 
@@ -601,14 +628,35 @@ object CharacterDetailApi {
             }
             skills = result
         } else {
-            val skillTemplate = extractTemplate(wikitext, "角色技能") ?: return emptyList()
+            val skillTemplate = extractTemplate(wikitext, "角色技能")
+                ?: return html?.let { parseRenderedSkillFallback(characterName, it) }.orEmpty()
             val params = parseTemplateParams(skillTemplate)
             skills = SKILL_SLOTS.mapNotNull { (num, slot, name) ->
                 val desc = clean(params["技能${num}解析"])
                 if (desc.isBlank()) return@mapNotNull null
                 val videoRaw = params["技能${num}视频演示"] ?: ""
                 val videoUrl = Regex("url=([^}]+)").find(videoRaw)?.groupValues?.get(1)?.trim()
-                SkillInfo(slot = slot, name = name, description = desc, videoUrl = videoUrl)
+                SkillInfo(
+                    slot = slot,
+                    name = name,
+                    description = desc,
+                    videoUrl = videoUrl,
+                    valueGroups = parseSkillValueGroups(params["技能${num}数值"])
+                )
+            }
+            if (skills.isEmpty() && html != null) {
+                skills = parseRenderedSkillFallback(characterName, html)
+            }
+            if (skills.isNotEmpty() && html != null) {
+                val renderedNames = parseRenderedSkillNames(characterName, html)
+                if (renderedNames.isNotEmpty()) {
+                    skills = skills.map { skill ->
+                        renderedNames[skill.slot]
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { skill.copy(name = it) }
+                            ?: skill
+                    }
+                }
             }
         }
 
@@ -619,6 +667,262 @@ object CharacterDetailApi {
         return skills.mapIndexed { i, skill ->
             skill.copy(iconUrl = imageUrls[fileNames[i]])
         }
+    }
+
+    private fun parseRenderedSkillFallback(characterName: String, html: String): List<SkillInfo> {
+        val blocks = parseRenderedSkillBlocks(characterName, html)
+        return SKILL_SLOTS.mapNotNull { (_, slot, _) ->
+            val block = blocks[slot]?.takeIf { it.size >= 2 } ?: return@mapNotNull null
+            SkillInfo(
+                slot = slot,
+                name = block.first(),
+                description = block.drop(1).joinToString("\n"),
+                videoUrl = null
+            )
+        }
+    }
+
+    private fun parseRenderedSkillNames(characterName: String, html: String): Map<String, String> {
+        return parseRenderedSkillBlocks(characterName, html)
+            .mapValues { (_, block) -> block.firstOrNull().orEmpty() }
+            .filterValues { it.isNotBlank() }
+    }
+
+    private fun parseRenderedSkillBlocks(characterName: String, html: String): Map<String, List<String>> {
+        val document = Jsoup.parse(html)
+        val headline = document.getElementById("角色技能")
+            ?: document.select(".mw-headline").firstOrNull { it.text().trim() == "角色技能" }
+            ?: return emptyMap()
+        val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
+        val wrapper = Jsoup.parse("<div id='skill-section-wrapper'></div>")
+        val container = wrapper.getElementById("skill-section-wrapper") ?: return emptyMap()
+        generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
+            .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
+            .forEach { container.appendChild(it.clone()) }
+
+        val ignoredLabels = setOf("技能描述", "技能视频演示", "技能解析", "技能数值")
+        val slotLabels = SKILL_SLOTS.map { it.third }.toSet()
+        val markerPattern = Regex("^__SKILL_IMAGE_(\\d+)__$")
+        val chunks = mutableListOf<String>()
+        collectRenderedSkillChunks(container, characterName, chunks)
+
+        return SKILL_SLOTS.mapNotNull { (num, slot, _) ->
+            val marker = "__SKILL_IMAGE_${num}__"
+            val start = chunks.indexOf(marker)
+            if (start == -1) return@mapNotNull null
+            val end = chunks.withIndex()
+                .drop(start + 1)
+                .firstOrNull { markerPattern.matches(it.value) }
+                ?.index ?: chunks.size
+            val block = chunks.subList(start + 1, end)
+                .filterNot { it in ignoredLabels || it in slotLabels }
+                .filterNot { it.startsWith("文件:") }
+                .takeIf { it.size >= 2 && isRenderedSkillDescriptionBlock(it) }
+                ?: return@mapNotNull null
+            slot to block
+        }.toMap()
+    }
+
+    private fun collectRenderedSkillChunks(
+        element: org.jsoup.nodes.Element,
+        characterName: String,
+        chunks: MutableList<String>
+    ) {
+        val imageAltPattern = Regex("^${Regex.escape(characterName)}技能(\\d+)\\.(?:png|jpg|jpeg|webp)$", RegexOption.IGNORE_CASE)
+        element.childNodes().forEach { node ->
+            when (node) {
+                is org.jsoup.nodes.Element -> {
+                    if (node.tagName() == "img") {
+                        imageAltPattern.matchEntire(node.attr("alt").trim())?.let { match ->
+                            chunks += "__SKILL_IMAGE_${match.groupValues[1]}__"
+                        }
+                    }
+                    collectRenderedSkillChunks(node, characterName, chunks)
+                }
+
+                is org.jsoup.nodes.TextNode -> {
+                    node.text()
+                        .replace(Regex("\\s+"), " ")
+                        .trim()
+                        .takeIf { it.isNotBlank() }
+                        ?.let { chunks += it }
+                }
+            }
+        }
+    }
+
+    private fun isRenderedSkillDescriptionBlock(block: List<String>): Boolean {
+        val first = block.firstOrNull().orEmpty()
+        val second = block.getOrNull(1).orEmpty()
+        if (first.isBlank() || second.isBlank()) return false
+        if (first.contains("/") || first.contains("-变化")) return false
+        if (first.endsWith("模式") || first.endsWith("乱斗") || first.endsWith("冲突")) return false
+        if (second in setOf("冷却时间", "点数需求", "触发阈值", "技能数值")) return false
+        return true
+    }
+
+    private fun parseSkillValueGroups(raw: String?): List<SkillValueGroup> {
+        if (raw.isNullOrBlank()) return emptyList()
+        val groups = mutableListOf<SkillValueGroup>()
+        var searchFrom = 0
+        while (true) {
+            val start = raw.indexOf("{{角色技能/数值", searchFrom)
+            if (start == -1) break
+            var depth = 0
+            var i = start
+            var end = -1
+            while (i < raw.length - 1) {
+                when {
+                    raw[i] == '{' && raw[i + 1] == '{' -> {
+                        depth++
+                        i += 2
+                    }
+                    raw[i] == '}' && raw[i + 1] == '}' -> {
+                        depth--
+                        if (depth == 0) {
+                            end = i
+                            break
+                        }
+                        i += 2
+                    }
+                    else -> i++
+                }
+            }
+            if (end == -1) break
+
+            val content = raw.substring(start + "{{角色技能/数值".length, end).trimStart()
+            val params = parseTemplateParams(content)
+            val mode = clean(params["模式"]).ifBlank { "默认" }
+            val values = params
+                .filterKeys { it != "模式" }
+                .mapNotNull { (key, value) ->
+                    val cleaned = cleanSkillValue(value)
+                    if (key.isBlank() || cleaned.isBlank()) null else InfoPair(key, cleaned)
+                }
+            if (values.isNotEmpty()) {
+                groups += SkillValueGroup(mode = mode, values = values)
+            }
+            searchFrom = end + 2
+        }
+        return groups
+    }
+
+    private fun cleanSkillValue(raw: String): String {
+        return clean(raw)
+            .replace(Regex("\\{\\{Color\\|[^|}]*\\|([^}]*?)\\}\\}"), "$1")
+            .replace(Regex("<!--.*?-->", RegexOption.DOT_MATCHES_ALL), "")
+            .trim()
+    }
+
+    private fun parseAugmentationModes(wikitext: String, html: String? = null): List<AugmentationMode> {
+        val tabsTemplate = extractTemplate(wikitext, "弦能增幅网络Tabs") ?: return emptyList()
+        val tabParams = parseTemplateParams(tabsTemplate)
+        val modeNames = tabParams.keys.map { clean(it) }
+        val renderedLabels = html?.let { parseRenderedAugmentationLabels(it, modeNames) }.orEmpty()
+        val explicitModes = tabParams.mapNotNull { (modeName, modeContent) ->
+            val cleanModeName = clean(modeName)
+            val networkTemplate = extractTemplate(modeContent, "弦能增幅网络3") ?: return@mapNotNull null
+            val entries = parseTemplateParams(networkTemplate)
+                .filterKeys { it != "角色" && it != "模式" }
+                .mapNotNull { (key, value) ->
+                    parseAugmentationEntry(key, value, renderedLabels["$cleanModeName|$key"])
+                }
+            if (entries.isEmpty()) null else AugmentationMode(
+                mode = cleanModeName,
+                entries = entries
+            )
+        }
+        return explicitModes + parseEquivalentAugmentationModes(wikitext, explicitModes)
+    }
+
+    private fun parseRenderedAugmentationLabels(html: String, modeNames: List<String>): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        val partsPattern = Regex("^Parts(\\d+)Group(\\d+)Change$")
+        val groupPattern = Regex("^(.+)Group(\\d+)Change$")
+        val sortedModeNames = modeNames.sortedByDescending { it.length }
+        Jsoup.parse(html).select(".upgrade-row[data-target]").forEach { row ->
+            val target = decodeHtmlTarget(row.attr("data-target"))
+                .removePrefix("#mc_collapse-")
+                .trim()
+            val mode = sortedModeNames.firstOrNull { target.startsWith(it) } ?: return@forEach
+            val suffix = target.removePrefix(mode)
+            val key = partsPattern.matchEntire(suffix)?.let { match ->
+                "Parts${match.groupValues[1]}组${match.groupValues[2]}属性变化"
+            } ?: groupPattern.matchEntire(suffix)?.let { match ->
+                "${match.groupValues[1]}组${match.groupValues[2]}属性变化"
+            } ?: return@forEach
+            val label = row.selectFirst(".upgrade-text")?.let { cleanHtml(it.html()) }.orEmpty()
+            if (label.isNotBlank()) {
+                result["$mode|$key"] = label
+            }
+        }
+        return result
+    }
+
+    private fun decodeHtmlTarget(target: String): String {
+        return runCatching { URLDecoder.decode(target, Charsets.UTF_8.name()) }
+            .getOrDefault(target)
+    }
+
+    private fun parseEquivalentAugmentationModes(
+        wikitext: String,
+        explicitModes: List<AugmentationMode>
+    ): List<AugmentationMode> {
+        if (explicitModes.isEmpty()) return emptyList()
+        val existingModes = explicitModes.map { it.mode }.toSet()
+        val additions = mutableListOf<AugmentationMode>()
+        val pattern = Regex("弦能增幅网络((?:【[^】]+】[、，]?)+)完全一致")
+        pattern.findAll(wikitext).forEach { match ->
+            val names = Regex("【([^】]+)】")
+                .findAll(match.groupValues[1])
+                .map { it.groupValues[1] }
+                .toList()
+            val source = names.firstNotNullOfOrNull { mode -> explicitModes.firstOrNull { it.mode == mode } }
+                ?: return@forEach
+            names.filter { it !in existingModes && additions.none { added -> added.mode == it } }
+                .forEach { mode -> additions += source.copy(mode = mode) }
+        }
+        return additions
+    }
+
+    private fun parseAugmentationEntry(key: String, rawValue: String, renderedLabel: String? = null): AugmentationEntry? {
+        val value = cleanSkillValue(rawValue)
+        if (value.isBlank()) return null
+
+        val partsMatch = Regex("^Parts(\\d+)组(\\d+)属性变化$").matchEntire(key)
+        if (partsMatch != null) {
+            return AugmentationEntry(
+                group = augmentationPartLabel(partsMatch.groupValues[1]),
+                option = renderedLabel?.takeIf { it.isNotBlank() } ?: augmentationValueTitle(value),
+                value = value
+            )
+        }
+
+        val skillMatch = Regex("^(.+)组(\\d+)属性变化$").matchEntire(key)
+        if (skillMatch != null) {
+            return AugmentationEntry(
+                group = skillMatch.groupValues[1],
+                option = renderedLabel?.takeIf { it.isNotBlank() } ?: augmentationValueTitle(value),
+                value = value
+            )
+        }
+
+        return AugmentationEntry(group = "其他", option = key, value = value)
+    }
+
+    private fun augmentationPartLabel(part: String): String {
+        return when (part) {
+            "1" -> "核心"
+            "2" -> "暴击"
+            "4" -> "续航"
+            "5" -> "操控"
+            else -> "Parts $part"
+        }
+    }
+
+    private fun augmentationValueTitle(value: String): String {
+        val firstLine = value.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+        return firstLine.substringBefore('：').trim().ifBlank { "属性变化" }
     }
 
     // ────────────────────────────────────────

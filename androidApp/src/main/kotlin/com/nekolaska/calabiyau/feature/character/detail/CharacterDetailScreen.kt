@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -303,6 +304,15 @@ private fun CharacterDetailContent(
         if (detail.observerQuote.isNotBlank()) {
             item(key = "observer_quote") {
                 Box(Modifier.padding(horizontal = 16.dp)) { ObserverQuoteCard(quote = detail.observerQuote) }
+            }
+        }
+
+        // ── 弦能增幅网络 ──
+        if (detail.augmentationModes.isNotEmpty()) {
+            item(key = "augmentation_network") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    AugmentationNetworkCard(modes = detail.augmentationModes)
+                }
             }
         }
 
@@ -1002,6 +1012,7 @@ private fun SubPagesCard(
 
 @Composable
 private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
+    var expandedSlot by remember { mutableStateOf<String?>(null) }
     Card(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier.fillMaxWidth()
@@ -1020,15 +1031,25 @@ private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
                 }
-                SkillItem(skill = skill)
+                SkillItem(
+                    skill = skill,
+                    expanded = expandedSlot == skill.slot,
+                    onToggle = {
+                        expandedSlot = if (expandedSlot == skill.slot) null else skill.slot
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
-    var expanded by remember { mutableStateOf(false) }
+private fun SkillItem(
+    skill: CharacterDetailApi.SkillInfo,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
 
     Column {
         // 技能标题行
@@ -1036,7 +1057,7 @@ private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(smoothCornerShape(12.dp))
-                .clickable { expanded = !expanded }
+                .clickable(onClick = onToggle)
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1087,12 +1108,26 @@ private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            Text(
-                skill.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 48.dp, top = 6.dp, end = 4.dp)
-            )
+            Column(
+                modifier = Modifier.padding(start = 48.dp, top = 6.dp, end = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    skill.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (skill.videoUrl != null) {
+                    FilledTonalButton(onClick = { uriHandler.openUri(skill.videoUrl) }) {
+                        Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("技能视频")
+                    }
+                }
+                if (skill.valueGroups.isNotEmpty()) {
+                    SkillValuesSection(groups = skill.valueGroups)
+                }
+            }
         }
 
         // 折叠时显示预览
@@ -1106,6 +1141,187 @@ private fun SkillItem(skill: CharacterDetailApi.SkillInfo) {
                 modifier = Modifier.padding(start = 48.dp, top = 4.dp, end = 4.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun SkillValuesSection(groups: List<CharacterDetailApi.SkillValueGroup>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            "技能数值",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        groups.forEach { group ->
+            Surface(
+                shape = smoothCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        group.mode,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    group.values.forEach { item ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(
+                                item.label,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.widthIn(min = 84.dp, max = 132.dp)
+                            )
+                            Text(
+                                item.value,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AugmentationNetworkCard(modes: List<CharacterDetailApi.AugmentationMode>) {
+    var selectedMode by remember(modes) { mutableStateOf(modes.firstOrNull()?.mode.orEmpty()) }
+    val selected = modes.firstOrNull { it.mode == selectedMode } ?: modes.first()
+    val groupedEntries = selected.entries.groupBy { it.group }
+    var expandedGroup by remember(selected.mode) { mutableStateOf(groupedEntries.keys.firstOrNull().orEmpty()) }
+
+    Card(
+        shape = smoothCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                SectionTitle(
+                    icon = Icons.Outlined.Tune,
+                    title = "弦能增幅网络"
+                )
+            }
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(modes, key = { it.mode }) { mode ->
+                    FilterChip(
+                        selected = mode.mode == selected.mode,
+                        onClick = { selectedMode = mode.mode },
+                        label = { Text(mode.mode) }
+                    )
+                }
+            }
+
+            groupedEntries.forEach { (group, entries) ->
+                AugmentationGroup(
+                    group = group,
+                    entries = entries,
+                    expanded = expandedGroup == group,
+                    onToggle = { expandedGroup = if (expandedGroup == group) "" else group }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AugmentationGroup(
+    group: String,
+    entries: List<CharacterDetailApi.AugmentationEntry>,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Surface(
+        shape = smoothCornerShape(16.dp),
+        color = if (expanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
+        else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.44f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(smoothCornerShape(16.dp))
+                .clickable(onClick = onToggle)
+                .animateContentSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        group,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (!expanded) {
+                        Text(
+                            augmentationPreview(entries),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Icon(
+                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            if (expanded) {
+                entries.forEachIndexed { index, entry ->
+                    if (index > 0) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            entry.option,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            entry.value,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun augmentationPreview(entries: List<CharacterDetailApi.AugmentationEntry>): String {
+    return entries.joinToString(" / ") { entry ->
+        val firstLine = entry.value.lineSequence().firstOrNull().orEmpty()
+        "${entry.option}: $firstLine"
     }
 }
 
