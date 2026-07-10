@@ -13,6 +13,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
+import org.jsoup.Jsoup
 import util.buildWikiUrl
 import util.wikiPathEncode
 
@@ -226,7 +227,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
             val type = printouts?.get("类型")?.jsonArray
                 ?.firstOrNull()?.jsonPrimitive?.content ?: ""
             val desc = printouts?.get("武器介绍")?.jsonArray
-                ?.firstOrNull()?.jsonPrimitive?.content ?: ""
+                ?.firstOrNull()?.jsonPrimitive?.content?.let(::cleanDescription) ?: ""
             val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
                 ?: "$WIKI_BASE${weaponName.wikiPathEncode()}"
 
@@ -239,6 +240,15 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
                 imageUrl = null
             )
         }.sortedBy { it.name }
+    }
+
+    private fun cleanDescription(raw: String): String {
+        if (raw.isBlank()) return ""
+        val document = Jsoup.parseBodyFragment(raw)
+        document.select(".smwttcontent, .smwtticon").remove()
+        return document.body().text()
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     private suspend fun loadCachedWeaponImages(category: WeaponCategory): Map<String, String> {

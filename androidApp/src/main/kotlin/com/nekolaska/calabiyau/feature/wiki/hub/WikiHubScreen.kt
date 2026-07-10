@@ -46,6 +46,7 @@ import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailScreen
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.character.list.CharacterListScreen
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailScreen
+import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import com.nekolaska.calabiyau.feature.weapon.list.WeaponListScreen
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterScreen
 import com.nekolaska.calabiyau.feature.wiki.achievement.AchievementScreen
@@ -281,6 +282,14 @@ fun WikiHubScreen(
         cachedFetch = { MapListApi.fetchAllModes(cacheOnly = true) },
         fetch = { force -> MapListApi.fetchAllModes(forceRefresh = force) }
     )
+    val shouldLoadWeaponList = backStack.any { it is WikiRoute.Weapons }
+    val weaponState = rememberLoadState(
+        initial = emptyList<WeaponListApi.WeaponCategoryData>(),
+        enabled = shouldLoadWeaponList,
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
+        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) }
+    )
     val factions = characterState.data
     val isLoadingCharacters = characterState.isLoading
     val gameModes = mapState.data
@@ -453,6 +462,7 @@ fun WikiHubScreen(
                     initialTab = weaponListTab,
                     onTabChanged = { weaponListTab = it },
                     gridState = weaponGridState,
+                    loadState = weaponState,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )

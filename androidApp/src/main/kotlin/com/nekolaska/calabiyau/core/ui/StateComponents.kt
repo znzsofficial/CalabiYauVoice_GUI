@@ -291,12 +291,13 @@ class LoadState<T> internal constructor(
 fun <T> rememberLoadState(
     initial: T,
     key: Any? = Unit,
+    enabled: Boolean = true,
     fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
 ): LoadState<T> {
     val scope = rememberCoroutineScope()
     val fetchRef = rememberUpdatedState(fetch)
     val state = remember(scope) { LoadState(initial, scope, fetchRef) }
-    LaunchedEffect(key) { state.reload() }
+    LaunchedEffect(key, enabled) { if (enabled) state.reload() }
     return state
 }
 
@@ -307,6 +308,7 @@ fun <T> rememberLoadState(
 fun <T> rememberLoadState(
     initial: T,
     key: Any? = Unit,
+    enabled: Boolean = true,
     cachedPrefetchDelayMs: Long = 0L,
     cachedFetch: suspend () -> ApiResult<T>,
     fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
@@ -315,7 +317,7 @@ fun <T> rememberLoadState(
     val fetchRef = rememberUpdatedState(fetch)
     val cachedFetchRef = rememberUpdatedState<(suspend () -> ApiResult<T>)?>(cachedFetch)
     val state = remember(scope) { LoadState(initial, scope, fetchRef, cachedFetchRef, cachedPrefetchDelayMs) }
-    LaunchedEffect(key) { state.reload() }
+    LaunchedEffect(key, enabled) { if (enabled) state.reload() }
     return state
 }
 

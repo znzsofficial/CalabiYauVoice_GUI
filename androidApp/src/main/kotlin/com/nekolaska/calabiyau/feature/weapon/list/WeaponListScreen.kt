@@ -19,17 +19,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LoadState
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.hub.LocalHasWallpaper
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 
 // ════════════════════════════════════════════════════════
 //  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
@@ -43,15 +47,19 @@ fun WeaponListScreen(
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null,
     gridState: LazyGridState? = null,
+    loadState: LoadState<List<WeaponListApi.WeaponCategoryData>>? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
-    val state = rememberLoadState(
-        initial = emptyList<WeaponListApi.WeaponCategoryData>(),
-        cachedPrefetchDelayMs = 300L,
-        cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
-        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) }
-    )
+    val localState = if (loadState == null) {
+        rememberLoadState(
+            initial = emptyList<WeaponListApi.WeaponCategoryData>(),
+            cachedPrefetchDelayMs = 300L,
+            cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
+            fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) }
+        )
+    } else null
+    val state = loadState ?: localState!!
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     val hasWallpaper = LocalHasWallpaper.current
     val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
@@ -156,6 +164,7 @@ private fun WeaponCard(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     val hasWallpaper = LocalHasWallpaper.current
+    val context = LocalContext.current
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -190,7 +199,12 @@ private fun WeaponCard(
             ) {
                 if (weapon.imageUrl != null) {
                     AsyncImage(
-                        model = weapon.imageUrl,
+                        model = remember(context, weapon.imageUrl) {
+                            ImageRequest.Builder(context)
+                                .data(weapon.imageUrl)
+                                .crossfade(false)
+                                .build()
+                        },
                         contentDescription = weapon.name,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
@@ -256,7 +270,7 @@ private fun WeaponCard(
                 if (weapon.user.isBlank() && weapon.description.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = weapon.description.replace("<br />", " ").replace("<br/>", " "),
+                        text = weapon.description,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
