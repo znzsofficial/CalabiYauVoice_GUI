@@ -15,8 +15,6 @@ typealias DecorationHtmlSourceResult = WikiHtmlPageSourceResult
 
 object PlayerDecorationRemoteSource {
 
-    private const val API = "https://wiki.biligame.com/klbq/api.php"
-
     suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): DecorationHtmlSourceResult? {
         return fetchWikiHtmlPage(
             pageName = pageName,

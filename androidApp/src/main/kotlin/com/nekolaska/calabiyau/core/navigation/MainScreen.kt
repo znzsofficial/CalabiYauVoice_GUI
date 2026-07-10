@@ -163,12 +163,6 @@ enum class DrawerDestination {
     SETTINGS           // 设置
 }
 
-private fun shortcutTargetToDestination(shortcutTarget: String?): DrawerDestination = when (shortcutTarget) {
-    "downloader" -> DrawerDestination.DOWNLOADER
-    "wiki" -> DrawerDestination.WIKI
-    else -> DrawerDestination.WIKI_HUB
-}
-
 private fun shortcutTargetToHubPage(shortcutTarget: String?): WikiRoute = when (shortcutTarget) {
     "characters" -> WikiRoute.Characters
     else -> WikiRoute.Home

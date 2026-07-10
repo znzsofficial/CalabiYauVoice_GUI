@@ -121,9 +121,6 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
     fun extractDeckNameFromShareInput(rawInput: String): String? =
         BioDeckShareCodecs.extractDeckNameFromShareInput(rawInput)
 
-    fun extractActualShareCode(rawInput: String): String =
-        BioDeckShareCodecs.extractActualShareCode(rawInput)
-
     suspend fun submitDeck(payload: SubmitDeckPayload, cardMap: Map<String, List<DeckCardOption>>): ApiResult<SubmitDeckResult> =
         withContext(Dispatchers.IO) {
             val cookies = BioDeckShareRemoteSource.getWikiCookies()

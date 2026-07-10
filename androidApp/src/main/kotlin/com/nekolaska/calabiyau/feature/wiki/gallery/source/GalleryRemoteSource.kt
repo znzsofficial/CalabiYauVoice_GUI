@@ -11,8 +11,6 @@ typealias GalleryPageSourceResult = WikiHtmlPageSourceResult
 
 object GalleryRemoteSource {
 
-    private const val API = "https://wiki.biligame.com/klbq/api.php"
-
     suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): GalleryPageSourceResult? {
         return fetchWikiHtmlPage(
             pageName = pageName,

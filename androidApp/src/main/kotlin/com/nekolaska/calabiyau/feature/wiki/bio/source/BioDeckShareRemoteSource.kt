@@ -31,7 +31,4 @@ object BioDeckShareRemoteSource {
         ) { httpGet(url) }?.payload
     }
 
-    fun httpGetWithCookies(url: String, cookies: String): String? {
-        return WikiAuthHelper.httpGetWithCookies(url, cookies, expectJson = true)
-    }
 }

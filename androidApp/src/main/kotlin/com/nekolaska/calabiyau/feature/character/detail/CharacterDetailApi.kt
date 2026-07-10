@@ -417,51 +417,6 @@ object CharacterDetailApi {
         )
     }
 
-    private fun parsePositionExtras(html: String): Map<String, CharacterExtraInfo> {
-        if (html.isBlank()) return emptyMap()
-
-        val document = Jsoup.parse(html)
-        val result = mutableMapOf<String, CharacterExtraInfo>()
-        val rootChildren = document.select(".mw-parser-output").firstOrNull()?.children().orEmpty()
-
-        rootChildren.forEachIndexed { index, element ->
-            val headline = element.selectFirst("span.mw-headline") ?: return@forEachIndexed
-            if (!element.tagName().matches(Regex("h[1-6]"))) return@forEachIndexed
-
-            val positionName = headline.text().trim()
-            if (positionName !in POSITION_NAMES) return@forEachIndexed
-
-            val blockElements = rootChildren.drop(index + 1).takeWhile { child ->
-                !child.tagName().matches(Regex("h[1-6]")) &&
-                    child.id() != "toc" &&
-                    !child.hasClass("printfooter") &&
-                    !child.hasClass("catlinks")
-            }
-            val duty = blockElements
-                .flatMap { it.select("li") }
-                .firstOrNull { it.text().contains("定位职责") }
-                ?.text()
-                ?.substringAfter("定位职责：", "")
-                ?.trim()
-                .orEmpty()
-
-            blockElements.flatMap { it.select("a[title]") }.forEach { linkElement ->
-                val displayName = linkElement.attr("title").trim()
-                if (displayName.isBlank() || displayName == positionName || displayName == "编辑") return@forEach
-                if (displayName.contains(':') || displayName.endsWith(".png", ignoreCase = true)) return@forEach
-                val key = normalizeCharacterName(displayName)
-                result[key] = result[key].merge(
-                    CharacterExtraInfo(
-                        positionName = positionName,
-                        positionDuty = duty
-                    )
-                )
-            }
-        }
-
-        return WikiParseLogger.finishMap("CharacterDetailApi.parsePositionExtras", result, html)
-    }
-
     private fun parseCharacterPositionFromWikitext(wikitext: String): String? {
         extractTemplate(wikitext, "超弦体")?.let { templateContent ->
             val position = clean(parseTemplateParams(templateContent)["定位"])
@@ -571,8 +526,6 @@ object CharacterDetailApi {
             .replace("：", ":")
             .trim()
     }
-
-    private val POSITION_NAMES = setOf("决斗", "守护", "支援", "先锋", "控场")
 
     /** 清理 Wiki 标记 */
     private fun clean(raw: String?): String {

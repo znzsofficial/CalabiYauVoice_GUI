@@ -16,7 +16,6 @@ object VotingRemoteSource {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val VOTE_PAGE_URL = "https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8"
-    private const val WIKI_ROOT_URL = "https://wiki.biligame.com"
 
     fun getWikiCookies(): String? {
         return WikiAuthHelper.getWikiCookies()

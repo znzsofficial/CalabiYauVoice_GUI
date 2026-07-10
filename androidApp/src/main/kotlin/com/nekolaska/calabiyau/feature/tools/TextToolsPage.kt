@@ -1003,14 +1003,6 @@ private fun formatSrt(ms: Long): String {
     return "%02d:%02d:%02d,%03d".format(hh, mm, ss, ms3)
 }
 
-private fun formatShortTime(ms: Long): String {
-    val safe = max(0L, ms)
-    val mm = safe / 60_000
-    val ss = (safe % 60_000) / 1_000
-    val cs = (safe % 1_000) / 10
-    return "%02d:%02d.%02d".format(mm, ss, cs)
-}
-
 private fun lrcTime(ms: Long): String {
     val safe = max(0L, ms)
     val mm = safe / 60_000

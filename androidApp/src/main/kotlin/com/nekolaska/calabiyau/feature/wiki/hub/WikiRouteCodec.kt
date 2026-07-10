@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
 import android.net.Uri
-import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 
 private const val ROUTE_SEPARATOR = "|"
@@ -152,9 +151,4 @@ internal val wikiRouteStackSaver = listSaver<List<WikiRoute>, String>(
     restore = { encodedStack ->
         encodedStack.mapNotNull(::decodeRoute).ifEmpty { listOf(WikiRoute.Home) }
     }
-)
-
-internal val wikiRouteSaver = Saver<WikiRoute, String>(
-    save = { it.encode() },
-    restore = { decodeRoute(it) ?: WikiRoute.Home }
 )

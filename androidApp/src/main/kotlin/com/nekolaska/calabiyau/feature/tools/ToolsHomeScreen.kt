@@ -616,41 +616,6 @@ internal fun ToolCard(
 }
 
 @Composable
-internal fun DirectorySelectionActions(
-    onPickInFileManager: () -> Unit,
-    onPickInSystem: () -> Unit,
-    label: String = "选择目录"
-) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilledTonalButton(onClick = onPickInFileManager, shape = smoothCornerShape(24.dp)) {
-            Text(label)
-        }
-        FilledTonalButton(onClick = onPickInSystem, shape = smoothCornerShape(24.dp)) {
-            Text("系统选择器")
-        }
-    }
-}
-
-@Composable
-internal fun CurrentPathPanel(path: String) {
-    Surface(
-        shape = smoothCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest
-    ) {
-        Text(
-            path,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
 private fun ToolResultCard(
     output: ToolOutput,
     onOpenDirectory: () -> Unit,

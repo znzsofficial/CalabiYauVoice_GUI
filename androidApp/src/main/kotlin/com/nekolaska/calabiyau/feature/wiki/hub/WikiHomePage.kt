@@ -483,10 +483,6 @@ internal val defaultQuickEntryIds = listOf(
 )
 internal val quickEntryById = allQuickEntries.associateBy(QuickEntry::id)
 
-// ── 预分配的渐变画笔（避免在 LazyRow item 中反复创建） ──
-private val characterGradient = Brush.verticalGradient(
-    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-)
 private val mapGradient = Brush.verticalGradient(
     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
 )
