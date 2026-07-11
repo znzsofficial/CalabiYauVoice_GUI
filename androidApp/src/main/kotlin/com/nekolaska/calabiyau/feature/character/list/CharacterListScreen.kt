@@ -272,6 +272,7 @@ private object CharacterBirthdays {
         CharacterBirthday("珐格兰丝", 9, 10),
         CharacterBirthday("星绘", 9, 26),
         CharacterBirthday("蕾欧娜", 10, 10),
+        CharacterBirthday("诺诺", 10, 24),
         CharacterBirthday("拉薇", 10, 29),
         CharacterBirthday("艾卡", 11, 11),
         CharacterBirthday("心夏", 12, 12),
