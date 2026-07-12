@@ -1448,13 +1448,13 @@ td .cmp-arrow.down {
     }
 
     .balance-filters {
-        gap: 8px;
-        margin-bottom: 14px;
+        gap: 6px;
+        margin-bottom: 12px;
     }
 
     .filter-row {
         flex-direction: column;
-        gap: 4px;
+        gap: 2px;
     }
 
     .filter-label {
@@ -1462,10 +1462,14 @@ td .cmp-arrow.down {
         padding-top: 0;
         text-align: left;
         font-size: 0.75rem;
+        line-height: 1.2;
     }
 
     .custom-select {
+        flex: none;
+        width: 100%;
         max-width: 100%;
+        align-self: stretch;
     }
 
     .cs-trigger {
@@ -1478,7 +1482,10 @@ td .cmp-arrow.down {
     }
 
     .cs-menu {
-        max-height: 200px;
+        top: calc(100% + 2px);
+        max-height: min(200px, 38vh);
+        transform: translateY(-2px) scale(0.985);
+        transform-origin: top center;
     }
 
     .chip-group::-webkit-scrollbar {
