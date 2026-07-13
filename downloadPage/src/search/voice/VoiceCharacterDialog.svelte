@@ -4,7 +4,7 @@
   import { parseVoiceSections, type VoiceSectionGroup } from './voiceParser';
   import { toError } from '../utils';
   import { downloadBlob, downloadFailuresText, downloadUrlWithRetry, generateZip, uniqueFileName } from '../download';
-  import { mergeMp3Buffers, buildFolderPath, addSubtitlesToZip } from './voiceDownload';
+  import { mergeMp3Buffers, mergeMp3BuffersToWav, mp3BufferToWavBlob, buildFolderPath, addSubtitlesToZip, type AudioExportFormat, type WavBitDepth } from './voiceDownload';
   import AudioPlayButton from './AudioPlayButton.svelte';
 
   type LangKey = 'cn' | 'jp' | 'en';
@@ -37,6 +37,8 @@
   let subtitleFormat = $state('full' as 'full' | 'plain');
   let folderMode = $state('none' as 'none' | 'lang' | 'category' | 'chapter' | 'both');
   let mergeAudio = $state(false);
+  let exportFormat = $state('mp3' as AudioExportFormat);
+  let wavBitDepth = $state(16 as WavBitDepth);
   let selectedIndices = $state(new Set<number>());
   let sectionSelections = $state({} as Record<number, Set<number>>);
   let sectionSelectionCounts = $derived(
@@ -50,6 +52,7 @@
   let downloading = $state(false);
   let downloadProgress = $state('');
   let downloadConcurrency = $state(4);
+  let downloadAbortController = $state(null) as AbortController | null;
   let highlightedLineIndex = $state(undefined) as number | undefined;
 
   const langLabels: Record<LangKey, string> = { cn: '中文', jp: '日文', en: '英文' };
@@ -104,29 +107,40 @@
   }
 
   function toggleLine(index: number): void {
+    if (downloading) return;
+    if (!hasAnyAudio(voiceLines[index])) return;
     const next = new Set(selectedIndices);
     next.has(index) ? next.delete(index) : next.add(index);
     selectedIndices = next;
     syncSectionSelection();
   }
   function toggleGroup(indices: number[]): void {
-    if (indices.length === 0) return;
-    const allSelected = indices.every(i => selectedIndices.has(i));
+    if (downloading) return;
+    const selectable = indices.filter(i => hasAnyAudio(voiceLines[i]));
+    if (selectable.length === 0) return;
+    const allSelected = selectable.every(i => selectedIndices.has(i));
     const next = new Set(selectedIndices);
-    if (allSelected) { for (const i of indices) next.delete(i); }
-    else { for (const i of indices) next.add(i); }
+    if (allSelected) { for (const i of selectable) next.delete(i); }
+    else { for (const i of selectable) next.add(i); }
     selectedIndices = next;
     syncSectionSelection();
   }
   function toggleAll(): void {
+    if (downloading) return;
     const visible = groupedVoiceLines.flatMap(g => g.lines.map(l => l.globalIndex)).filter(i => hasAnyAudio(voiceLines[i]));
     const allVisible = visible.length > 0 && visible.every(i => selectedIndices.has(i));
     selectedIndices = allVisible ? new Set() : new Set(visible);
     syncSectionSelection();
   }
   function toggleLang(lang: LangKey): void {
+    if (downloading) return;
     const next = new Set(downloadLangs);
-    next.has(lang) ? next.delete(lang) : next.add(lang);
+    if (next.has(lang)) {
+      if (next.size <= 1) return;
+      next.delete(lang);
+    } else {
+      next.add(lang);
+    }
     downloadLangs = next;
   }
   function hasAnyAudio(line: VoiceLine): boolean {
@@ -138,45 +152,62 @@
     return text.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_').slice(0, 80) || fallback;
   }
 
+  function audioExt(): string {
+    return exportFormat === 'wav' ? 'wav' : 'mp3';
+  }
+
+  function withAudioExt(name: string): string {
+    const base = name.replace(/\.(mp3|wav|ogg|flac)$/i, '');
+    return `${base}.${audioExt()}`;
+  }
+
   function resolveNameTemplate(line: VoiceLine, lang: LangKey, audioName: string, index: number): string {
     const replacements: Record<string, string> = {
       category: safeFileName(line.category, 'voice'),
       text: safeFileName(getText(line, lang), index.toString()),
       lang,
       index: String(index + 1),
-      original: audioName,
+      original: audioName.replace(/\.(mp3|wav|ogg|flac)$/i, ''),
     };
-    return namingTemplate.replace(/\{(\w+)\}/g, (_, key: string) => replacements[key] ?? _) + '.mp3';
+    return withAudioExt(namingTemplate.replace(/\{(\w+)\}/g, (_, key: string) => replacements[key] ?? _));
   }
 
-  async function downloadOneAudio(audioName: string, retries = 2): Promise<{ ok: true; blob: Blob } | { ok: false; error: string }> {
+  async function toExportBlob(source: Blob | ArrayBuffer): Promise<Blob> {
+    if (exportFormat !== 'wav') {
+      return source instanceof Blob ? source : new Blob([source], { type: 'audio/mpeg' });
+    }
+    const buf = source instanceof Blob ? await source.arrayBuffer() : source;
+    return await mp3BufferToWavBlob(buf, wavBitDepth);
+  }
+
+  async function downloadOneAudio(
+    audioName: string,
+    signal?: AbortSignal,
+    retries = 2,
+  ): Promise<{ ok: true; blob: Blob } | { ok: false; error: string }> {
     const url = `/api/file-download?url=${encodeURIComponent(resolveAudioUrl(audioName))}`;
     try {
-      const blob = await downloadUrlWithRetry(url, { retries });
-      console.log('[voice] dl ok', audioName.slice(0, 40), blob.size);
+      const blob = await downloadUrlWithRetry(url, { retries, signal });
       return { ok: true, blob };
     } catch (err) {
-      const error = toError(err).message || '下载失败';
-      console.warn('[voice] dl exhausted', audioName.slice(0, 40), error);
-      return { ok: false, error };
+      if (err instanceof DOMException && err.name === 'AbortError') return { ok: false, error: '已取消' };
+      return { ok: false, error: toError(err).message || '下载失败' };
     }
   }
 
-  async function downloadOneAudioBuf(audioName: string, retries = 2): Promise<ArrayBuffer | null> {
-    const url = `/api/file-download?url=${encodeURIComponent(resolveAudioUrl(audioName))}`;
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 300 * attempt));
-        const resp = await fetch(url);
-        if (!resp.ok) { console.warn('[voice] dl-buf status', attempt, audioName.slice(0, 40), resp.status); continue; }
-        const buf = await resp.arrayBuffer();
-        if (buf.byteLength === 0) { console.warn('[voice] dl-buf empty', attempt, audioName.slice(0, 40)); continue; }
-        console.log('[voice] dl-buf ok', attempt > 0 ? `retry${attempt}` : '', audioName.slice(0, 40), buf.byteLength);
-        return buf;
-      } catch (err) { console.warn('[voice] dl-buf err', attempt, audioName.slice(0, 40), err); continue; }
-    }
-    console.warn('[voice] dl-buf exhausted', audioName.slice(0, 40));
-    return null;
+  async function downloadOneAudioBuf(
+    audioName: string,
+    signal?: AbortSignal,
+    retries = 2,
+  ): Promise<{ ok: true; buf: ArrayBuffer } | { ok: false; error: string }> {
+    const result = await downloadOneAudio(audioName, signal, retries);
+    if (!result.ok) return result;
+    return { ok: true, buf: await result.blob.arrayBuffer() };
+  }
+
+  function cancelDownload(): void {
+    downloadAbortController?.abort();
+    downloadProgress = '正在取消...';
   }
 
   function chapterName(sectionIdx: number): string {
@@ -196,16 +227,12 @@
       }
     }
 
-    console.log('[voice] dl start',
-      'sections:', sectionGroups.length,
-      'selections:', Object.fromEntries(Object.entries(sectionSelections).map(([k, v]) => [k, v?.size ?? 0])),
-      'currentSec:', activeSectionIdx,
-      'selectedLines:', allSelectedLines.length,
-      'downloadLangs:', [...downloadLangs]
-    );
-
     if (allSelectedLines.length === 0 || downloading) return;
-    downloading = true; downloadProgress = '准备下载...';
+    downloading = true;
+    downloadProgress = '准备下载...';
+    const controller = new AbortController();
+    downloadAbortController = controller;
+    const signal = controller.signal;
     const lines = allSelectedLines.map(l => l.line);
     try {
       const tasks: Array<{ line: VoiceLine; lang: LangKey; audioName: string; sectionIdx: number }> = [];
@@ -215,75 +242,104 @@
           if (audioName) tasks.push({ line, lang, audioName, sectionIdx });
         }
       }
-      console.log('[voice] dl tasks', tasks.length, tasks.map(t => t.audioName.slice(0, 40)));
-      if (tasks.length === 0) { downloading = false; return; }
+      if (tasks.length === 0) return;
 
       const limit = Math.max(1, Math.min(12, downloadConcurrency));
 
       if (mergeAudio) {
         const chunks: ArrayBuffer[] = [];
-        let failed = 0;
+        const failures: Array<{ name: string; error: string; category?: string }> = [];
         for (let i = 0; i < tasks.length; i += limit) {
+          if (signal.aborted) throw new Error('已取消下载');
           const batch = tasks.slice(i, i + limit);
           const results = await Promise.all(batch.map(async task => {
-            return await downloadOneAudioBuf(task.audioName);
+            const result = await downloadOneAudioBuf(task.audioName, signal);
+            return { task, result };
           }));
-          for (const buf of results) {
-            if (buf) chunks.push(buf);
-            else failed++;
+          if (signal.aborted) throw new Error('已取消下载');
+          for (const { task, result } of results) {
+            if (result.ok) chunks.push(result.buf);
+            else failures.push({ name: task.audioName, error: result.error, category: task.line.category });
           }
-          downloadProgress = `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}`;
+          downloadProgress = failures.length > 0
+            ? `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}，失败 ${failures.length}`
+            : `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}`;
         }
         if (chunks.length === 0) {
-          downloadProgress = `下载失败：${failed} 个文件均无法获取`;
+          downloadProgress = `下载失败：${failures.length} 个文件均无法获取`;
           return;
         }
-        downloadProgress = '正在合并 MP3...';
-        const merged = mergeMp3Buffers(chunks);
-        const chunkCount = chunks.length;
-        chunks.length = 0;
         const zip = await generateZip();
-        zip.file(`${character.title}-合并.mp3`, new Blob([merged as BlobPart], { type: 'audio/mpeg' }));
+        const chunkCount = chunks.length;
+        if (exportFormat === 'wav') {
+          downloadProgress = '正在解码并合并为 WAV...';
+          const mergedWav = await mergeMp3BuffersToWav(chunks, wavBitDepth);
+          chunks.length = 0;
+          zip.file(`${character.title}-合并.wav`, mergedWav);
+        } else {
+          downloadProgress = '正在合并 MP3...';
+          const merged = mergeMp3Buffers(chunks);
+          chunks.length = 0;
+          zip.file(`${character.title}-合并.mp3`, new Blob([merged as BlobPart], { type: 'audio/mpeg' }));
+        }
         addSubtitlesToZip(zip, lines, downloadLangs, getText, { subtitleMode, subtitleFormat, folderMode }, uniqueFileName);
         if (exportDetailFiles) addDetailFiles(zip, lines, downloadLangs, uniqueFileName);
+        if (failures.length > 0) zip.file('_download_failed.txt', downloadFailuresText(failures));
+        if (signal.aborted) throw new Error('已取消下载');
         downloadProgress = '正在生成 ZIP...';
         const content = await zip.generateAsync({ type: 'blob' });
         downloadBlob(content, `${character.title}-语音-${new Date().toISOString().slice(0, 10)}.zip`);
-        downloadProgress = failed > 0 ? `已合并 ${chunkCount} 个文件，${failed} 个失败` : `已合并 ${chunkCount} 个文件`;
-        console.log('[voice] dl done merge', { chunkCount, failed, tasksTotal: tasks.length });
+        downloadProgress = failures.length > 0 ? `已合并 ${chunkCount} 个文件，${failures.length} 个失败` : `已合并 ${chunkCount} 个文件`;
       } else {
-        const zip = await generateZip(); const usedNames = new Set<string>();
+        const zip = await generateZip();
+        const usedNames = new Set<string>();
         const catCounters: Record<string, number> = {};
         let finished = 0;
         let failed = 0;
         const failures: Array<{ name: string; error: string; category?: string }> = [];
 
         for (let i = 0; i < tasks.length; i += limit) {
+          if (signal.aborted) throw new Error('已取消下载');
           const batch = tasks.slice(i, i + limit);
           await Promise.all(batch.map(async task => {
-            const result = await downloadOneAudio(task.audioName);
-            if (!result.ok) { failed++; failures.push({ name: task.audioName, error: result.error, category: task.line.category }); return; }
-            const blob = result.blob;
+            const result = await downloadOneAudio(task.audioName, signal);
+            if (!result.ok) {
+              failed++;
+              failures.push({ name: task.audioName, error: result.error, category: task.line.category });
+              return;
+            }
+            let blob: Blob;
+            try {
+              if (exportFormat === 'wav') downloadProgress = `正在转码 WAV ${finished + failed + 1}/${tasks.length}`;
+              blob = await toExportBlob(result.blob);
+            } catch (err) {
+              failed++;
+              failures.push({ name: task.audioName, error: toError(err).message || 'WAV 转码失败', category: task.line.category });
+              return;
+            }
             let name: string;
             if (namingMode === 'both') {
-              name = `${safeFileName(task.line.category, '')}_${safeFileName(getText(task.line, task.lang), task.audioName)}.mp3`;
+              name = withAudioExt(`${safeFileName(task.line.category, '')}_${safeFileName(getText(task.line, task.lang), task.audioName)}`);
             } else if (namingMode === 'category') {
               const key = task.line.category || 'voice';
               catCounters[key] = (catCounters[key] || 0) + 1;
-              name = `${safeFileName(key, '')}_${String(catCounters[key]).padStart(3, '0')}.mp3`;
+              name = withAudioExt(`${safeFileName(key, '')}_${String(catCounters[key]).padStart(3, '0')}`);
             } else if (namingMode === 'subtitle') {
-              name = `${safeFileName(getText(task.line, task.lang), task.audioName)}.mp3`;
+              name = withAudioExt(safeFileName(getText(task.line, task.lang), task.audioName));
             } else if (namingMode === 'template') {
               name = resolveNameTemplate(task.line, task.lang, task.audioName, finished + failed);
             } else {
-              name = task.audioName;
+              name = withAudioExt(task.audioName);
             }
             zip.file(buildFolderPath(folderMode, task.lang, task.line.category, uniqueFileName(name, usedNames), chapterName(task.sectionIdx)), blob);
             finished++;
           }));
-          downloadProgress = `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}`;
+          downloadProgress = failed > 0
+            ? `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}，失败 ${failed}`
+            : `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}`;
         }
 
+        if (signal.aborted) throw new Error('已取消下载');
         if (finished === 0) {
           downloadProgress = `下载失败：${failed} 个文件均无法获取`;
           return;
@@ -296,11 +352,13 @@
         const content = await zip.generateAsync({ type: 'blob' });
         downloadBlob(content, `${character.title}-语音-${new Date().toISOString().slice(0, 10)}.zip`);
         downloadProgress = failed > 0 ? `已打包 ${finished} 个文件，${failed} 个失败` : `已打包 ${finished} 个文件`;
-        console.log('[voice] dl done', { finished, failed, tasksTotal: tasks.length });
       }
     } catch (err) {
       downloadProgress = toError(err).message || '下载失败';
-    } finally { downloading = false; }
+    } finally {
+      downloading = false;
+      downloadAbortController = null;
+    }
   }
 
   function addDetailFiles(
@@ -338,9 +396,21 @@
   async function scrollToLine(index: number | undefined): Promise<void> {
     if (index == null) return;
     highlightedLineIndex = index;
+    // Ensure target row is visible even if highlightQuery filters it out.
+    if (searchQuery.trim()) {
+      const line = voiceLines[index];
+      if (line && !lineMatchesSearch(line, searchQuery.trim().toLowerCase())) {
+        searchQuery = '';
+      }
+    }
     await tick();
     let target = dialogRef?.querySelector(`[data-voice-line="${index}"]`);
     if (!target) {
+      await tick();
+      target = dialogRef?.querySelector(`[data-voice-line="${index}"]`);
+    }
+    if (!target && searchQuery) {
+      searchQuery = '';
       await tick();
       target = dialogRef?.querySelector(`[data-voice-line="${index}"]`);
     }
@@ -381,6 +451,12 @@
 
   let voiceMatchedCount = $derived(
     groupedVoiceLines.reduce((sum, g) => sum + g.lines.length, 0)
+  );
+  let visibleSelectable = $derived(
+    groupedVoiceLines.flatMap(g => g.lines.map(l => l.globalIndex)).filter(i => hasAnyAudio(voiceLines[i]))
+  );
+  let allVisibleSelected = $derived(
+    visibleSelectable.length > 0 && visibleSelectable.every(i => selectedIndices.has(i))
   );
 
   onMount(async () => {
@@ -442,7 +518,7 @@
               <span class="voice-sidebar-label">语言</span>
               <div class="chip-group">
                 {#each ['cn', 'jp', 'en'] as lang (lang)}
-                  <button class:active={downloadLangs.has(lang as LangKey)} class="chip chip-sm" onclick={() => toggleLang(lang as LangKey)}>
+                  <button class:active={downloadLangs.has(lang as LangKey)} class="chip chip-sm" disabled={downloading} onclick={() => toggleLang(lang as LangKey)}>
                     {langLabels[lang as LangKey]}
                   </button>
                 {/each}
@@ -450,15 +526,32 @@
             </div>
             <div class="voice-sidebar-row">
               <label class="voice-toggle">
-                <input type="checkbox" bind:checked={mergeAudio}>
+                <input type="checkbox" bind:checked={mergeAudio} disabled={downloading}>
                 <span class="voice-toggle-track"><span class="voice-toggle-thumb"></span></span>
                 <span class="voice-toggle-label">合并为单文件</span>
               </label>
             </div>
             <div class="voice-sidebar-row">
+              <span class="voice-sidebar-label">格式</span>
+              <div class="chip-group">
+                <button class:active={exportFormat === 'mp3'} class="chip chip-sm" disabled={downloading} onclick={() => exportFormat = 'mp3'}>MP3</button>
+                <button class:active={exportFormat === 'wav'} class="chip chip-sm" disabled={downloading} onclick={() => exportFormat = 'wav'}>WAV</button>
+              </div>
+            </div>
+            {#if exportFormat === 'wav'}
+              <div class="voice-sidebar-row">
+                <span class="voice-sidebar-label">位深</span>
+                <div class="chip-group">
+                  <button class:active={wavBitDepth === 16} class="chip chip-sm" disabled={downloading} onclick={() => wavBitDepth = 16}>16-bit</button>
+                  <button class:active={wavBitDepth === 24} class="chip chip-sm" disabled={downloading} onclick={() => wavBitDepth = 24}>24-bit</button>
+                </div>
+              </div>
+              <div class="voice-sidebar-hint">采样率沿用解码后的原始采样率，不强制重采样</div>
+            {/if}
+            <div class="voice-sidebar-row">
               <span class="voice-sidebar-label">线程数</span>
               <div class="voice-sidebar-inline">
-                <input class="voice-concurrency" type="range" min="1" max="12" bind:value={downloadConcurrency}>
+                <input class="voice-concurrency" type="range" min="1" max="12" bind:value={downloadConcurrency} disabled={downloading}>
                 <span class="voice-concurrency-val">{downloadConcurrency}</span>
               </div>
             </div>
@@ -518,7 +611,7 @@
             </div>
             {#if namingMode === 'template'}
               <div class="voice-sidebar-row">
-                <input class="voice-template-input" type="text" bind:value={namingTemplate} spellcheck="false" autocomplete="off" placeholder="{category}_{text}">
+                <input class="voice-template-input" type="text" bind:value={namingTemplate} spellcheck="false" autocomplete="off" placeholder={'{category}_{text}'}>
               </div>
             {/if}
             <div class="voice-sidebar-row">
@@ -615,9 +708,11 @@
             </div>
           {:else}
             {#each groupedVoiceLines as group, i (i)}
+              {@const groupSelectable = group.lines.map(l => l.globalIndex).filter(gi => hasAnyAudio(voiceLines[gi]))}
+              {@const groupAllSelected = groupSelectable.length > 0 && groupSelectable.every(gi => selectedIndices.has(gi))}
               <div class="voice-group">
-                <button class="voice-group-label" onclick={() => toggleGroup(group.lines.map(l => l.globalIndex))}>
-                  <iconify-icon icon={selectedIndices.size > 0 && group.lines.every(l => selectedIndices.has(l.globalIndex)) ? 'lucide:folder-check' : 'lucide:folder'}></iconify-icon>
+                <button class="voice-group-label" disabled={downloading || groupSelectable.length === 0} onclick={() => toggleGroup(groupSelectable)}>
+                  <iconify-icon icon={groupAllSelected ? 'lucide:folder-check' : 'lucide:folder'}></iconify-icon>
                   {group.category}
                   <span class="voice-group-count">{group.lines.length}</span>
                 </button>
@@ -626,7 +721,7 @@
                   {@const lineHasAudio = hasAnyAudio(line)}
                   <div class:selected={selectedIndices.has(globalIndex)} class:voice-line-muted={!lineHasAudio} class:voice-line-highlighted={highlightedLineIndex === globalIndex} class="voice-line" data-voice-line={globalIndex}>
                     {#if lineHasAudio}
-                      <button class="voice-line-check" onclick={() => toggleLine(globalIndex)} aria-label="选择">
+                      <button class="voice-line-check" disabled={downloading} onclick={() => toggleLine(globalIndex)} aria-label="选择">
                         <iconify-icon icon={selectedIndices.has(globalIndex) ? 'lucide:check-square' : 'lucide:square'}></iconify-icon>
                       </button>
                     {:else}
@@ -663,22 +758,26 @@
 
         {#if status === 'ready' && voiceLines.length > 0}
           <div class="voice-footer">
-            <button class="btn outline" onclick={toggleAll}>
-              <iconify-icon icon={selectedIndices.size === voiceLines.length ? 'lucide:square' : 'lucide:check-square'} style="margin-right:4px;font-size:0.9rem;"></iconify-icon>
-              {selectedIndices.size === voiceLines.length ? '取消全选' : '全选'}
+            <button class="btn outline" disabled={downloading || visibleSelectable.length === 0} onclick={toggleAll}>
+              <iconify-icon icon={allVisibleSelected ? 'lucide:square' : 'lucide:check-square'} style="margin-right:4px;font-size:0.9rem;"></iconify-icon>
+              {allVisibleSelected ? '取消全选' : '全选'}
             </button>
             <span class="voice-footer-info">
               {#if mergeAudio}
-                已选 {totalSelectedLines} 条 · 合并 {totalAudioFileCount} 个文件为 MP3
+                已选 {totalSelectedLines} 条 · 合并 {totalAudioFileCount} 个为 {exportFormat === 'wav' ? `WAV ${wavBitDepth}-bit` : 'MP3'}
               {:else}
-                已选 {totalSelectedLines} 条 · {totalAudioFileCount} 个文件
+                已选 {totalSelectedLines} 条 · {totalAudioFileCount} 个{exportFormat === 'wav' ? ` WAV ${wavBitDepth}-bit` : ' 文件'}
               {/if}
               {#if downloadProgress}<span class="voice-footer-progress"> · {downloadProgress}</span>{/if}
             </span>
-            <button class="btn primary" disabled={totalSelectedLines === 0 || downloading} onclick={handleDownload}>
-              <iconify-icon icon="lucide:download" style="margin-right:6px;"></iconify-icon>
-              {downloading ? '打包中...' : '下载'}
-            </button>
+            {#if downloading}
+              <button class="btn outline" type="button" onclick={cancelDownload}>取消</button>
+            {:else}
+              <button class="btn primary" disabled={totalSelectedLines === 0} onclick={handleDownload}>
+                <iconify-icon icon="lucide:download" style="margin-right:6px;"></iconify-icon>
+                下载
+              </button>
+            {/if}
           </div>
         {/if}
       </div>

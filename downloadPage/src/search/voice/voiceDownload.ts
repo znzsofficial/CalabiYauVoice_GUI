@@ -5,6 +5,8 @@ type LangKey = 'cn' | 'jp' | 'en';
 type SubtitleMode = 'merged' | 'perLine' | 'none';
 type SubtitleFormat = 'full' | 'plain';
 type FolderMode = 'none' | 'lang' | 'category' | 'chapter' | 'both';
+export type AudioExportFormat = 'mp3' | 'wav';
+export type WavBitDepth = 16 | 24;
 
 const langLabels: Record<LangKey, string> = { cn: '中文', jp: '日文', en: '英文' };
 
@@ -20,6 +22,133 @@ export function buildFolderPath(folderMode: FolderMode, langKey: LangKey, catego
   if (folderMode === 'chapter' && chapter) parts.push(safeCategory(chapter));
   parts.push(filename);
   return parts.join('/');
+}
+
+/** Decode MP3 (or other browser-supported audio) to AudioBuffer. Sample rate is the decoded native rate. */
+export async function decodeAudioData(data: ArrayBuffer): Promise<AudioBuffer> {
+  const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new AC();
+  try {
+    // decodeAudioData may detach the buffer; always pass a copy
+    return await ctx.decodeAudioData(data.slice(0));
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+}
+
+function writeString(view: DataView, offset: number, text: string): void {
+  for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+}
+
+function floatToIntSample(sample: number, bitDepth: WavBitDepth): number {
+  const s = Math.max(-1, Math.min(1, sample));
+  if (bitDepth === 16) return s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7fff);
+  // 24-bit
+  return s < 0 ? Math.round(s * 0x800000) : Math.round(s * 0x7fffff);
+}
+
+/** Encode AudioBuffer as PCM WAV. Uses buffer.sampleRate (native decoded rate). */
+export function audioBufferToWav(buffer: AudioBuffer, bitDepth: WavBitDepth = 16): ArrayBuffer {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const numSamples = buffer.length;
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const dataSize = numSamples * blockAlign;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(ab);
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  const channels: Float32Array[] = [];
+  for (let c = 0; c < numChannels; c++) channels.push(buffer.getChannelData(c));
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      const v = floatToIntSample(channels[c][i] || 0, bitDepth);
+      if (bitDepth === 16) {
+        view.setInt16(offset, v, true);
+        offset += 2;
+      } else {
+        view.setUint8(offset, v & 0xff);
+        view.setUint8(offset + 1, (v >> 8) & 0xff);
+        view.setUint8(offset + 2, (v >> 16) & 0xff);
+        offset += 3;
+      }
+    }
+  }
+  return ab;
+}
+
+export async function mp3BufferToWavBlob(data: ArrayBuffer, bitDepth: WavBitDepth = 16): Promise<Blob> {
+  const audio = await decodeAudioData(data);
+  const wav = audioBufferToWav(audio, bitDepth);
+  return new Blob([wav], { type: 'audio/wav' });
+}
+
+/** Concatenate AudioBuffers; resamples later buffers if sample rate/channel count differs from the first. */
+export async function concatAudioBuffers(buffers: AudioBuffer[]): Promise<AudioBuffer> {
+  if (buffers.length === 0) throw new Error('没有可合并的音频');
+  if (buffers.length === 1) return buffers[0];
+
+  const targetRate = buffers[0].sampleRate;
+  const targetChannels = buffers[0].numberOfChannels;
+  const normalized: AudioBuffer[] = [];
+
+  for (const buf of buffers) {
+    if (buf.sampleRate === targetRate && buf.numberOfChannels === targetChannels) {
+      normalized.push(buf);
+      continue;
+    }
+    const duration = buf.duration;
+    const offline = new OfflineAudioContext(targetChannels, Math.ceil(duration * targetRate), targetRate);
+    const src = offline.createBufferSource();
+    src.buffer = buf;
+    src.connect(offline.destination);
+    src.start(0);
+    normalized.push(await offline.startRendering());
+  }
+
+  const totalLength = normalized.reduce((sum, b) => sum + b.length, 0);
+  const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const ctx = new AC({ sampleRate: targetRate });
+  try {
+    const out = ctx.createBuffer(targetChannels, totalLength, targetRate);
+    let offset = 0;
+    for (const buf of normalized) {
+      for (let c = 0; c < targetChannels; c++) {
+        out.getChannelData(c).set(buf.getChannelData(Math.min(c, buf.numberOfChannels - 1)), offset);
+      }
+      offset += buf.length;
+    }
+    return out;
+  } finally {
+    await ctx.close().catch(() => {});
+  }
+}
+
+export async function mergeMp3BuffersToWav(buffers: ArrayBuffer[], bitDepth: WavBitDepth = 16): Promise<Blob> {
+  const decoded: AudioBuffer[] = [];
+  for (const buf of buffers) {
+    if (buf.byteLength === 0) continue;
+    decoded.push(await decodeAudioData(buf));
+  }
+  if (decoded.length === 0) throw new Error('没有可合并的音频');
+  const merged = await concatAudioBuffers(decoded);
+  return new Blob([audioBufferToWav(merged, bitDepth)], { type: 'audio/wav' });
 }
 
 export function mergeMp3Buffers(buffers: ArrayBuffer[]): Uint8Array {

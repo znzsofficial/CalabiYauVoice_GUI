@@ -1468,6 +1468,13 @@
     margin-bottom: 3px;
 }
 
+.voice-sidebar-hint {
+    font-size: 0.625rem;
+    line-height: 1.35;
+    color: var(--muted-foreground);
+    margin: -2px 0 6px;
+}
+
 .voice-sidebar-inline {
     display: flex;
     align-items: center;
@@ -1663,6 +1670,13 @@
     font-size: 0.625rem;
     color: var(--muted-foreground);
     margin-bottom: 3px;
+}
+
+.voice-sidebar-hint {
+    font-size: 0.625rem;
+    line-height: 1.35;
+    color: var(--muted-foreground);
+    margin: -2px 0 6px;
 }
 
 .voice-sidebar-inline {

@@ -13,6 +13,9 @@
   let voiceIndexReady = $state(false);
   let voiceIndexLoading = $state(false);
   let voiceIndexVersion = $state(0);
+  let voiceIndexFailed = $state(0);
+  let voiceIndexDone = $state(0);
+  let voiceIndexTotal = $state(0);
   let voiceSearchIndex: Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>> = new Map();
   let voiceSearchQuery = $state('');
   let voiceDialogOpen = $state(false);
@@ -21,6 +24,7 @@
   let voiceDialogNavSection = $state(0);
   let voiceDialogNavLine = $state(undefined) as number | undefined;
   let voiceDialogNavQuery = $state('');
+  const VOICE_HIT_LIMIT = 30;
 
   let voiceDebounceTimer: ReturnType<typeof setTimeout>;
   $effect(() => {
@@ -33,12 +37,13 @@
   let voiceFilterResult = $derived.by((): {
     characters: CategoryPage[];
     hits: Array<{ character: CategoryPage; sectionIdx: number; sectionTitle: string; lineIdx: number; lineText: string }> | null;
+    hitTotal: number;
   } => {
     void voiceIndexVersion;
     const q = voiceSearchQuery.toLowerCase();
-    if (!q) return { characters: voiceCharacters, hits: null };
-    if (!voiceIndexReady) {
-      return { characters: voiceCharacters.filter(c => c.title.toLowerCase().includes(q)), hits: null };
+    if (!q) return { characters: voiceCharacters, hits: null, hitTotal: 0 };
+    if (!voiceIndexReady && voiceSearchIndex.size === 0) {
+      return { characters: voiceCharacters.filter(c => c.title.toLowerCase().includes(q)), hits: null, hitTotal: 0 };
     }
 
     const matchedChars = new Set<CategoryPage>();
@@ -60,7 +65,7 @@
         }
       }
     }
-    return { characters: [...matchedChars], hits: hits.slice(0, 30) };
+    return { characters: [...matchedChars], hits: hits.slice(0, VOICE_HIT_LIMIT), hitTotal: hits.length };
   });
 
   onMount(() => {
@@ -86,31 +91,51 @@
     await buildVoiceSearchIndex(chars);
   }
 
-  async function buildVoiceSearchIndex(chars: CategoryPage[]): Promise<void> {
-    if (voiceIndexReady || voiceIndexLoading) return;
+  async function buildVoiceSearchIndex(chars: CategoryPage[], force = false): Promise<void> {
+    if (!force && (voiceIndexReady || voiceIndexLoading)) return;
+    if (voiceIndexLoading) return;
     voiceIndexLoading = true;
     try {
-      const idx = new Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>>();
+      const idx = force
+        ? new Map(voiceSearchIndex)
+        : new Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>>();
+      const targets = force ? chars.filter(c => !voiceSearchIndex.has(c.title)) : chars;
+      voiceIndexTotal = targets.length;
+      voiceIndexDone = 0;
       const concurrency = 4;
-      for (let i = 0; i < chars.length; i += concurrency) {
-        const batch = chars.slice(i, i + concurrency);
+      for (let i = 0; i < targets.length; i += concurrency) {
+        const batch = targets.slice(i, i + concurrency);
         await Promise.all(batch.map(async c => {
           try {
             const pt = await fetchVoicePageParsetree(`${c.title}/语音台词`);
+            if (!pt) return;
             const groups = parseVoiceSections(pt);
             idx.set(c.title, groups.map(g => ({
               title: g.title,
               lines: g.lines.map(l => ({ category: l.category, cnText: l.cnText, jpText: l.jpText, enText: l.enText }))
             })));
-          } catch { /* skip character */ }
+          } catch {
+            // leave missing for retry
+          } finally {
+            voiceIndexDone += 1;
+          }
         }));
+        // publish partial index so hits appear while indexing continues
+        voiceSearchIndex = new Map(idx);
+        voiceIndexVersion++;
       }
       voiceSearchIndex = idx;
+      voiceIndexFailed = chars.filter(c => !idx.has(c.title)).length;
       voiceIndexVersion++;
       voiceIndexReady = true;
     } finally {
       voiceIndexLoading = false;
     }
+  }
+
+  function retryFailedVoiceIndex(): void {
+    if (voiceCharacters.length === 0) return;
+    buildVoiceSearchIndex(voiceCharacters, true);
   }
 
   function openVoiceDialog(character: CategoryPage, sectionIdx?: number, query?: string, lineIdx?: number): void {
@@ -168,7 +193,15 @@
       <aside class={`voice-hit-pane ${query.trim() ? 'has-query' : ''}`}>
         <div class="voice-pane-header">
           <strong>台词命中</strong>
-          <span>{voiceFilterResult.hits ? voiceFilterResult.hits.length : 0}</span>
+          <span>
+            {#if voiceFilterResult.hits}
+              {voiceFilterResult.hitTotal > VOICE_HIT_LIMIT
+                ? `前 ${voiceFilterResult.hits.length} / ${voiceFilterResult.hitTotal}`
+                : voiceFilterResult.hits.length}
+            {:else}
+              0
+            {/if}
+          </span>
         </div>
         {#if voiceFilterResult.hits && voiceFilterResult.hits.length > 0}
           <div class="voice-search-hits">
@@ -192,10 +225,13 @@
               </button>
             {/each}
           </div>
+          {#if voiceFilterResult.hitTotal > VOICE_HIT_LIMIT}
+            <div class="voice-index-status">仅显示前 {VOICE_HIT_LIMIT} 条命中，请缩小关键词</div>
+          {/if}
         {:else if query.trim()}
           <div class="voice-pane-empty">
             <iconify-icon icon="lucide:search-x"></iconify-icon>
-            <span>{voiceIndexReady ? '没有匹配台词' : '索引完成后显示台词命中'}</span>
+            <span>{voiceIndexReady || voiceIndexDone > 0 ? '没有匹配台词' : '索引完成后显示台词命中'}</span>
           </div>
         {:else}
           <div class="voice-pane-empty">
@@ -204,7 +240,15 @@
           </div>
         {/if}
         {#if voiceIndexLoading}
-          <div class="voice-index-status"><span class="suggest-spinner"></span>正在索引章节与字幕…</div>
+          <div class="voice-index-status">
+            <span class="suggest-spinner"></span>
+            正在索引章节与字幕… {voiceIndexDone}/{voiceIndexTotal || '…'}
+          </div>
+        {:else if voiceIndexReady && voiceIndexFailed > 0}
+          <div class="voice-index-status">
+            {voiceIndexFailed} 个角色索引失败
+            <button class="suggestion-link" type="button" onclick={retryFailedVoiceIndex}>重试失败项</button>
+          </div>
         {/if}
       </aside>
     </div>
