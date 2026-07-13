@@ -36,7 +36,7 @@
   let subtitleMode = $state('merged' as 'merged' | 'perLine' | 'none');
   let subtitleFormat = $state('full' as 'full' | 'plain');
   let folderMode = $state('none' as 'none' | 'lang' | 'category' | 'chapter' | 'both');
-  let mergeAudio = $state(false);
+  let mergeMode = $state('none' as 'none' | 'byLang' | 'all');
   let exportFormat = $state('mp3' as AudioExportFormat);
   let wavBitDepth = $state(16 as WavBitDepth);
   let selectedIndices = $state(new Set<number>());
@@ -246,8 +246,9 @@
 
       const limit = Math.max(1, Math.min(12, downloadConcurrency));
 
-      if (mergeAudio) {
-        const chunks: ArrayBuffer[] = [];
+      if (mergeMode !== 'none') {
+        const chunksByLang: Record<LangKey, ArrayBuffer[]> = { cn: [], jp: [], en: [] };
+        const allChunks: ArrayBuffer[] = [];
         const failures: Array<{ name: string; error: string; category?: string }> = [];
         for (let i = 0; i < tasks.length; i += limit) {
           if (signal.aborted) throw new Error('已取消下载');
@@ -258,30 +259,79 @@
           }));
           if (signal.aborted) throw new Error('已取消下载');
           for (const { task, result } of results) {
-            if (result.ok) chunks.push(result.buf);
-            else failures.push({ name: task.audioName, error: result.error, category: task.line.category });
+            if (result.ok) {
+              if (mergeMode === 'byLang') chunksByLang[task.lang].push(result.buf);
+              else allChunks.push(result.buf);
+            } else {
+              failures.push({ name: task.audioName, error: result.error, category: task.line.category });
+            }
           }
           downloadProgress = failures.length > 0
             ? `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}，失败 ${failures.length}`
             : `正在下载 ${Math.min(i + limit, tasks.length)}/${tasks.length}`;
         }
-        if (chunks.length === 0) {
-          downloadProgress = `下载失败：${failures.length} 个文件均无法获取`;
-          return;
-        }
+
         const zip = await generateZip();
-        const chunkCount = chunks.length;
-        if (exportFormat === 'wav') {
-          downloadProgress = '正在解码并合并为 WAV...';
-          const mergedWav = await mergeMp3BuffersToWav(chunks, wavBitDepth);
-          chunks.length = 0;
-          zip.file(`${character.title}-合并.wav`, mergedWav);
+        let mergedFileCount = 0;
+        let mergedClipCount = 0;
+
+        if (mergeMode === 'all') {
+          if (allChunks.length === 0) {
+            downloadProgress = `下载失败：${failures.length} 个文件均无法获取`;
+            return;
+          }
+          mergedClipCount = allChunks.length;
+          const fileBase = `${character.title}-合并`;
+          if (exportFormat === 'wav') {
+            downloadProgress = '正在解码并合并为 WAV...';
+            const mergedWav = await mergeMp3BuffersToWav(allChunks, wavBitDepth);
+            allChunks.length = 0;
+            zip.file(`${fileBase}.wav`, mergedWav);
+          } else {
+            downloadProgress = '正在合并 MP3...';
+            const merged = mergeMp3Buffers(allChunks);
+            allChunks.length = 0;
+            zip.file(`${fileBase}.mp3`, new Blob([merged as BlobPart], { type: 'audio/mpeg' }));
+          }
+          mergedFileCount = 1;
         } else {
-          downloadProgress = '正在合并 MP3...';
-          const merged = mergeMp3Buffers(chunks);
-          chunks.length = 0;
-          zip.file(`${character.title}-合并.mp3`, new Blob([merged as BlobPart], { type: 'audio/mpeg' }));
+          // byLang: each selected language becomes its own merged track
+          const langsToMerge = (['cn', 'jp', 'en'] as LangKey[]).filter(lang => chunksByLang[lang].length > 0);
+          if (langsToMerge.length === 0) {
+            downloadProgress = `下载失败：${failures.length} 个文件均无法获取`;
+            return;
+          }
+          for (const lang of langsToMerge) {
+            if (signal.aborted) throw new Error('已取消下载');
+            const chunks = chunksByLang[lang];
+            mergedClipCount += chunks.length;
+            const fileBase = `${character.title}-${langLabels[lang]}-合并`;
+            if (exportFormat === 'wav') {
+              downloadProgress = `正在解码并合并 ${langLabels[lang]} WAV...`;
+              const mergedWav = await mergeMp3BuffersToWav(chunks, wavBitDepth);
+              chunks.length = 0;
+              const filename = `${fileBase}.wav`;
+              if (folderMode === 'lang' || folderMode === 'both') {
+                zip.file(buildFolderPath(folderMode, lang, 'merged', filename), mergedWav);
+              } else {
+                zip.file(filename, mergedWav);
+              }
+            } else {
+              downloadProgress = `正在合并 ${langLabels[lang]} MP3...`;
+              const merged = mergeMp3Buffers(chunks);
+              chunks.length = 0;
+              const filename = `${fileBase}.mp3`;
+              const blob = new Blob([merged as BlobPart], { type: 'audio/mpeg' });
+              if (folderMode === 'lang' || folderMode === 'both') {
+                zip.file(buildFolderPath(folderMode, lang, 'merged', filename), blob);
+              } else {
+                zip.file(filename, blob);
+              }
+            }
+            mergedFileCount += 1;
+          }
         }
+
         addSubtitlesToZip(zip, lines, downloadLangs, getText, { subtitleMode, subtitleFormat, folderMode }, uniqueFileName);
         if (exportDetailFiles) addDetailFiles(zip, lines, downloadLangs, uniqueFileName);
         if (failures.length > 0) zip.file('_download_failed.txt', downloadFailuresText(failures));
@@ -289,7 +339,10 @@
         downloadProgress = '正在生成 ZIP...';
         const content = await zip.generateAsync({ type: 'blob' });
         downloadBlob(content, `${character.title}-语音-${new Date().toISOString().slice(0, 10)}.zip`);
-        downloadProgress = failures.length > 0 ? `已合并 ${chunkCount} 个文件，${failures.length} 个失败` : `已合并 ${chunkCount} 个文件`;
+        const modeLabel = mergeMode === 'all' ? '全部合并' : '按语言合并';
+        downloadProgress = failures.length > 0
+          ? `${modeLabel} ${mergedFileCount} 个文件（${mergedClipCount} 段），${failures.length} 个失败`
+          : `${modeLabel} ${mergedFileCount} 个文件（${mergedClipCount} 段）`;
       } else {
         const zip = await generateZip();
         const usedNames = new Set<string>();
@@ -511,9 +564,7 @@
       {#if status === 'ready'}
         <aside class="voice-sidebar">
           <div class="voice-sidebar-section">
-            <div class="voice-sidebar-heading">
-              <iconify-icon icon="lucide:download"></iconify-icon>下载
-            </div>
+            <div class="voice-sidebar-heading">导出</div>
             <div class="voice-sidebar-row">
               <span class="voice-sidebar-label">语言</span>
               <div class="chip-group">
@@ -525,11 +576,12 @@
               </div>
             </div>
             <div class="voice-sidebar-row">
-              <label class="voice-toggle">
-                <input type="checkbox" bind:checked={mergeAudio} disabled={downloading}>
-                <span class="voice-toggle-track"><span class="voice-toggle-thumb"></span></span>
-                <span class="voice-toggle-label">合并为单文件</span>
-              </label>
+              <span class="voice-sidebar-label">合并</span>
+              <div class="chip-group voice-sidebar-chips-vert">
+                <button class:active={mergeMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'none'}>不合并</button>
+                <button class:active={mergeMode === 'byLang'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'byLang'}>按语言合并</button>
+                <button class:active={mergeMode === 'all'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'all'}>全部合并</button>
+              </div>
             </div>
             <div class="voice-sidebar-row">
               <span class="voice-sidebar-label">格式</span>
@@ -546,95 +598,70 @@
                   <button class:active={wavBitDepth === 24} class="chip chip-sm" disabled={downloading} onclick={() => wavBitDepth = 24}>24-bit</button>
                 </div>
               </div>
-              <div class="voice-sidebar-hint">采样率沿用解码后的原始采样率，不强制重采样</div>
             {/if}
             <div class="voice-sidebar-row">
-              <span class="voice-sidebar-label">线程数</span>
-              <div class="voice-sidebar-inline">
-                <input class="voice-concurrency" type="range" min="1" max="12" bind:value={downloadConcurrency} disabled={downloading}>
-                <span class="voice-concurrency-val">{downloadConcurrency}</span>
-              </div>
+              <span class="voice-sidebar-label">并发 {downloadConcurrency}</span>
+              <input class="voice-concurrency" type="range" min="1" max="12" bind:value={downloadConcurrency} disabled={downloading}>
             </div>
           </div>
 
           <div class="voice-sidebar-section">
-            <div class="voice-sidebar-heading">
-              <iconify-icon icon="lucide:file-text"></iconify-icon>字幕设置
-            </div>
+            <div class="voice-sidebar-heading">字幕</div>
             <div class="voice-sidebar-row">
-              <span class="voice-sidebar-label">导出</span>
-              <div class="chip-group">
-                <button class:active={subtitleMode === 'merged'} class="chip chip-sm" onclick={() => subtitleMode = 'merged'}>合并</button>
-                <button class:active={subtitleMode === 'perLine'} class="chip chip-sm" onclick={() => subtitleMode = 'perLine'}>分离</button>
-                <button class:active={subtitleMode === 'none'} class="chip chip-sm" onclick={() => subtitleMode = 'none'}>不导出</button>
-              </div>
-            </div>
-            <div class="voice-sidebar-row">
-              <span class="voice-sidebar-label">格式</span>
-              <div class="chip-group">
-                <button class:active={subtitleFormat === 'full'} class="chip chip-sm" onclick={() => subtitleFormat = 'full'}>含标签</button>
-                <button class:active={subtitleFormat === 'plain'} class="chip chip-sm" onclick={() => subtitleFormat = 'plain'}>纯文本</button>
-              </div>
-            </div>
-            <div class="voice-sidebar-row">
-              <label class="voice-toggle">
-                <input type="checkbox" bind:checked={exportDetailFiles}>
-                <span class="voice-toggle-track"><span class="voice-toggle-thumb"></span></span>
-                <span class="voice-toggle-label">详情文件</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="voice-sidebar-section">
-            <div class="voice-sidebar-heading">
-              <iconify-icon icon="lucide:folder-tree"></iconify-icon>文件设置
-            </div>
-            <div class="voice-sidebar-row">
-              <span class="voice-sidebar-label">命名</span>
+              <span class="voice-sidebar-label">模式</span>
               <div class="chip-group voice-sidebar-chips-vert">
-                <button class:active={namingMode === 'both'} class="chip chip-sm" onclick={() => namingMode = 'both'}>
-                  <iconify-icon icon="lucide:tag"></iconify-icon>类型+字幕
-                </button>
-                <button class:active={namingMode === 'category'} class="chip chip-sm" onclick={() => namingMode = 'category'}>
-                  <iconify-icon icon="lucide:folder"></iconify-icon>仅类型
-                </button>
-                <button class:active={namingMode === 'subtitle'} class="chip chip-sm" onclick={() => namingMode = 'subtitle'}>
-                  <iconify-icon icon="lucide:message-square-text"></iconify-icon>仅字幕
-                </button>
-                <button class:active={namingMode === 'original'} class="chip chip-sm" onclick={() => namingMode = 'original'}>
-                  <iconify-icon icon="lucide:file"></iconify-icon>原名
-                </button>
-                <button class:active={namingMode === 'template'} class="chip chip-sm" onclick={() => namingMode = 'template'}>
-                  <iconify-icon icon="lucide:braces"></iconify-icon>模板
-                </button>
+                <button class:active={subtitleMode === 'merged'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'merged'}>按语言汇总</button>
+                <button class:active={subtitleMode === 'perLine'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'perLine'}>按台词拆分</button>
+                <button class:active={subtitleMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'none'}>不导出</button>
               </div>
             </div>
-            {#if namingMode === 'template'}
+            {#if subtitleMode !== 'none'}
               <div class="voice-sidebar-row">
-                <input class="voice-template-input" type="text" bind:value={namingTemplate} spellcheck="false" autocomplete="off" placeholder={'{category}_{text}'}>
+                <span class="voice-sidebar-label">内容</span>
+                <div class="chip-group">
+                  <button class:active={subtitleFormat === 'full'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleFormat = 'full'}>含分类</button>
+                  <button class:active={subtitleFormat === 'plain'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleFormat = 'plain'}>纯文本</button>
+                </div>
               </div>
+              <label class="voice-toggle">
+                <input type="checkbox" bind:checked={exportDetailFiles} disabled={downloading}>
+                <span class="voice-toggle-track"><span class="voice-toggle-thumb"></span></span>
+                <span class="voice-toggle-label">导出详情文件</span>
+              </label>
             {/if}
-            <div class="voice-sidebar-row">
-              <span class="voice-sidebar-label">目录</span>
-              <div class="chip-group voice-sidebar-chips-vert">
-                <button class:active={folderMode === 'none'} class="chip chip-sm" onclick={() => folderMode = 'none'}>
-                  <iconify-icon icon="lucide:layers"></iconify-icon>平铺
-                </button>
-                <button class:active={folderMode === 'lang'} class="chip chip-sm" onclick={() => folderMode = 'lang'}>
-                  <iconify-icon icon="lucide:languages"></iconify-icon>按语言
-                </button>
-                <button class:active={folderMode === 'category'} class="chip chip-sm" onclick={() => folderMode = 'category'}>
-                  <iconify-icon icon="lucide:folder-open"></iconify-icon>按分类
-                </button>
-                <button class:active={folderMode === 'chapter'} class="chip chip-sm" onclick={() => folderMode = 'chapter'}>
-                  <iconify-icon icon="lucide:book-open"></iconify-icon>按章节
-                </button>
-                <button class:active={folderMode === 'both'} class="chip chip-sm" onclick={() => folderMode = 'both'}>
-                  <iconify-icon icon="lucide:folder-tree"></iconify-icon>语言+分类
-                </button>
+          </div>
+
+          {#if mergeMode === 'none'}
+            <div class="voice-sidebar-section">
+              <div class="voice-sidebar-heading">文件</div>
+              <div class="voice-sidebar-row">
+                <span class="voice-sidebar-label">命名</span>
+                <div class="chip-group voice-sidebar-chips-vert">
+                  <button class:active={namingMode === 'both'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'both'}>分类 + 字幕</button>
+                  <button class:active={namingMode === 'category'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'category'}>分类</button>
+                  <button class:active={namingMode === 'subtitle'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'subtitle'}>字幕</button>
+                  <button class:active={namingMode === 'original'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'original'}>原始文件名</button>
+                  <button class:active={namingMode === 'template'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'template'}>模板</button>
+                </div>
+              </div>
+              {#if namingMode === 'template'}
+                <div class="voice-sidebar-row">
+                  <input class="voice-template-input" type="text" bind:value={namingTemplate} spellcheck="false" autocomplete="off" placeholder={'{category}_{text}'} disabled={downloading}>
+                  <p class="voice-sidebar-hint">{'{category} · {text} · {lang} · {index} · {original}'}</p>
+                </div>
+              {/if}
+              <div class="voice-sidebar-row">
+                <span class="voice-sidebar-label">目录</span>
+                <div class="chip-group voice-sidebar-chips-vert">
+                  <button class:active={folderMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'none'}>无</button>
+                  <button class:active={folderMode === 'lang'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'lang'}>语言</button>
+                  <button class:active={folderMode === 'category'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'category'}>分类</button>
+                  <button class:active={folderMode === 'chapter'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'chapter'}>章节</button>
+                  <button class:active={folderMode === 'both'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'both'}>语言 / 分类</button>
+                </div>
               </div>
             </div>
-          </div>
+          {/if}
         </aside>
       {/if}
 
@@ -763,10 +790,12 @@
               {allVisibleSelected ? '取消全选' : '全选'}
             </button>
             <span class="voice-footer-info">
-              {#if mergeAudio}
-                已选 {totalSelectedLines} 条 · 合并 {totalAudioFileCount} 个为 {exportFormat === 'wav' ? `WAV ${wavBitDepth}-bit` : 'MP3'}
+              {#if mergeMode === 'byLang'}
+                {totalSelectedLines} 条 · 按语言合并 · {totalAudioFileCount} 段 · {exportFormat === 'wav' ? `WAV ${wavBitDepth}-bit` : 'MP3'}
+              {:else if mergeMode === 'all'}
+                {totalSelectedLines} 条 · 全部合并 · {totalAudioFileCount} 段 · {exportFormat === 'wav' ? `WAV ${wavBitDepth}-bit` : 'MP3'}
               {:else}
-                已选 {totalSelectedLines} 条 · {totalAudioFileCount} 个{exportFormat === 'wav' ? ` WAV ${wavBitDepth}-bit` : ' 文件'}
+                {totalSelectedLines} 条 · {totalAudioFileCount} 个{exportFormat === 'wav' ? ` WAV ${wavBitDepth}-bit` : ' 文件'}
               {/if}
               {#if downloadProgress}<span class="voice-footer-progress"> · {downloadProgress}</span>{/if}
             </span>

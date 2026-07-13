@@ -201,24 +201,32 @@ export function addSubtitlesToZip(
   const plain = opts.subtitleFormat === 'plain';
 
   if (opts.subtitleMode === 'merged') {
-    let txt = '';
-    for (const line of lines) {
-      if (!plain) txt += `[${line.category}]\n`;
-      for (const lang of downloadLangs) {
+    // One subtitle file per language (cn/jp/en), not a mixed multilingual file.
+    for (const lang of downloadLangs) {
+      let txt = '';
+      for (const line of lines) {
         const text = getText(line, lang);
-        if (text) txt += plain ? `${text}\n` : `  ${langLabels[lang]}: ${text}\n`;
+        if (!text) continue;
+        if (!plain) txt += `[${line.category}]\n`;
+        txt += plain ? `${text}\n` : `${text}\n\n`;
       }
-      if (!plain) txt += '\n';
+      if (!txt.trim()) continue;
+      const filename = `subtitles_${langLabels[lang]}.txt`;
+      if (opts.folderMode === 'lang' || opts.folderMode === 'both') {
+        zip.file(buildFolderPath(opts.folderMode, lang, 'subtitles', filename), txt.trim() + '\n');
+      } else {
+        zip.file(filename, txt.trim() + '\n');
+      }
     }
-    zip.file('subtitles.txt', txt);
   } else {
     const usedTxtNames = new Set<string>();
-    let idx = 0;
+    const langCounters: Record<string, number> = {};
     for (const line of lines) {
       for (const lang of downloadLangs) {
         const text = getText(line, lang);
         if (text) {
-          idx++;
+          langCounters[lang] = (langCounters[lang] || 0) + 1;
+          const idx = langCounters[lang];
           const name = uniqueFileName(
             `${String(idx).padStart(3, '0')}${plain ? '' : `_${safeCategory(line.category)}`}_${lang}.txt`,
             usedTxtNames,
