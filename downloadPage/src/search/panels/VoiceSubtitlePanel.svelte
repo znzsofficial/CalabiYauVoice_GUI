@@ -14,9 +14,11 @@
   let voiceIndexLoading = $state(false);
   let voiceIndexVersion = $state(0);
   let voiceIndexFailed = $state(0);
+  let voiceIndexNoVoice = $state(0);
   let voiceIndexDone = $state(0);
   let voiceIndexTotal = $state(0);
   let voiceSearchIndex: Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>> = new Map();
+  let voiceIndexFailedTitles = $state(new Set<string>());
   let voiceSearchQuery = $state('');
   let voiceDialogOpen = $state(false);
   let voiceDialogCharacter = $state(null) as CategoryPage | null;
@@ -99,7 +101,10 @@
       const idx = force
         ? new Map(voiceSearchIndex)
         : new Map<string, Array<{ title: string; lines: Array<{ category: string; cnText: string; jpText: string; enText: string }> }>>();
-      const targets = force ? chars.filter(c => !voiceSearchIndex.has(c.title)) : chars;
+      const failedTitles = force ? new Set(voiceIndexFailedTitles) : new Set<string>();
+      const targets = force
+        ? chars.filter(c => failedTitles.has(c.title) || !voiceSearchIndex.has(c.title))
+        : chars;
       voiceIndexTotal = targets.length;
       voiceIndexDone = 0;
       const concurrency = 4;
@@ -108,14 +113,22 @@
         await Promise.all(batch.map(async c => {
           try {
             const pt = await fetchVoicePageParsetree(`${c.title}/语音台词`);
-            if (!pt) return;
+            // Empty parsetree means the character currently has no voice page / lines.
+            // Count it as indexed (not a network failure) so the UI doesn't keep showing "失败".
+            if (!pt) {
+              idx.set(c.title, []);
+              failedTitles.delete(c.title);
+              return;
+            }
             const groups = parseVoiceSections(pt);
             idx.set(c.title, groups.map(g => ({
               title: g.title,
               lines: g.lines.map(l => ({ category: l.category, cnText: l.cnText, jpText: l.jpText, enText: l.enText }))
             })));
+            failedTitles.delete(c.title);
           } catch {
-            // leave missing for retry
+            failedTitles.add(c.title);
+            idx.delete(c.title);
           } finally {
             voiceIndexDone += 1;
           }
@@ -125,7 +138,9 @@
         voiceIndexVersion++;
       }
       voiceSearchIndex = idx;
-      voiceIndexFailed = chars.filter(c => !idx.has(c.title)).length;
+      voiceIndexFailedTitles = failedTitles;
+      voiceIndexFailed = failedTitles.size;
+      voiceIndexNoVoice = [...idx.values()].filter(sections => sections.length === 0).length;
       voiceIndexVersion++;
       voiceIndexReady = true;
     } finally {
@@ -134,7 +149,7 @@
   }
 
   function retryFailedVoiceIndex(): void {
-    if (voiceCharacters.length === 0) return;
+    if (voiceCharacters.length === 0 || voiceIndexFailedTitles.size === 0) return;
     buildVoiceSearchIndex(voiceCharacters, true);
   }
 
@@ -248,6 +263,10 @@
           <div class="voice-index-status">
             {voiceIndexFailed} 个角色索引失败
             <button class="suggestion-link" type="button" onclick={retryFailedVoiceIndex}>重试失败项</button>
+          </div>
+        {:else if voiceIndexReady && voiceIndexNoVoice > 0}
+          <div class="voice-index-status">
+            {voiceIndexNoVoice} 个角色暂无语音台词
           </div>
         {/if}
       </aside>
