@@ -70,7 +70,11 @@
   let categoryFileDialogFiles = $state([]) as CategoryFile[];
   let categoryFileDialogLoading = $state(false);
   let categoryFileDialogError = $state('');
-  let categoryFilesInFlight = new Map<string, Promise<CategoryFile[]>>();
+  let categoryFilesInFlight = new Map<string, {
+    promise: Promise<CategoryFile[]>;
+    controller: AbortController;
+    waiters: number;
+  }>();
   let nsList = $derived(nsExpanded ? NS_EXTENDED : NS_PRIMARY);
   let totalPages = $derived(Math.ceil(totalHits / PAGE_SIZE));
   let pages = $derived(paginationPages(currentPage, totalPages));
@@ -317,9 +321,10 @@
       try {
         loadedSubcats[category] = await fetchCategoryMembers(category, 14, 'subcat');
       } catch {
-        loadedSubcats[category] = [];
+        // leave unknown so expand can retry instead of treating as empty leaf
       }
     }));
+    if (Object.keys(loadedSubcats).length === 0) return;
     categorySubcats = { ...categorySubcats, ...loadedSubcats };
   }
 
@@ -423,13 +428,14 @@
     categoryFileDialogOpen = true;
     categoryFileDialogTitle = category;
     const audioOnly = activeProfile === 'voiceCategory';
-    const cacheKey = categoryFilesCacheKey(category, audioOnly);
+    const normalized = normalizeCategoryTitle(category);
+    const cacheKey = categoryFilesCacheKey(normalized, audioOnly);
     categoryFileDialogFiles = categoryFilesCache[cacheKey] || [];
     categoryFileDialogError = '';
     if (categoryFilesCache[cacheKey]) return;
     categoryFileDialogLoading = true;
     try {
-      const files = await getCategoryFilesCached(category, audioOnly);
+      const files = await getCategoryFilesCached(normalized, audioOnly);
       if (!categoryFileDialogOpen || categoryFileDialogTitle !== category || (activeProfile === 'voiceCategory') !== audioOnly) return;
       categoryFileDialogFiles = files;
     } catch (error) {
@@ -443,20 +449,45 @@
   }
 
   async function getCategoryFilesCached(category: string, audioOnly: boolean, signal?: AbortSignal): Promise<CategoryFile[]> {
-    const cacheKey = categoryFilesCacheKey(category, audioOnly);
+    const normalized = normalizeCategoryTitle(category);
+    const cacheKey = categoryFilesCacheKey(normalized, audioOnly);
     const cached = categoryFilesCache[cacheKey];
     if (cached) return cached;
-    let request = categoryFilesInFlight.get(cacheKey);
-    if (!request) {
-      request = fetchCategoryFiles(category, audioOnly, signal);
-      categoryFilesInFlight.set(cacheKey, request);
+    if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+
+    let entry = categoryFilesInFlight.get(cacheKey);
+    if (!entry) {
+      const controller = new AbortController();
+      const promise = fetchCategoryFiles(normalized, audioOnly, controller.signal)
+        .then(files => {
+          categoryFilesCache = { ...categoryFilesCache, [cacheKey]: files };
+          return files;
+        })
+        .finally(() => {
+          categoryFilesInFlight.delete(cacheKey);
+        });
+      entry = { promise, controller, waiters: 0 };
+      categoryFilesInFlight.set(cacheKey, entry);
     }
+
+    entry.waiters += 1;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      entry.waiters = Math.max(0, entry.waiters - 1);
+      if (entry.waiters === 0 && !categoryFilesCache[cacheKey]) entry.controller.abort();
+    };
+    const onAbort = () => release();
+    signal?.addEventListener('abort', onAbort, { once: true });
     try {
-      const files = await request;
-      categoryFilesCache = { ...categoryFilesCache, [cacheKey]: files };
-      return files;
+      return await entry.promise;
+    } catch (error) {
+      if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+      throw error;
     } finally {
-      categoryFilesInFlight.delete(cacheKey);
+      signal?.removeEventListener('abort', onAbort);
+      release();
     }
   }
 
@@ -541,7 +572,7 @@
         if (controller.signal.aborted) throw new Error('已取消下载');
         const displayName = categoryDisplayName(category);
         categoryStatusText = `正在读取 ${displayName} (${index + 1}/${categories.length})`;
-        const files = await getCategoryFilesCached(category, audioOnly, controller.signal);
+        const files = await getCategoryFilesCached(normalizeCategoryTitle(category), audioOnly, controller.signal);
         if (controller.signal.aborted) throw new Error('已取消下载');
         if (files.length === 0) continue;
         const folder = zip.folder(fileNameFromTitle(displayName));
@@ -563,7 +594,10 @@
           }
         }
       }
-      if (totalFiles === 0) throw new Error(allFailures.length > 0 ? `下载失败：${allFailures.length} 个文件均无法获取` : '选中分类里没有可下载文件');
+      if (totalFiles === 0) {
+        if (allFailures.length > 0) throw new Error(`下载失败：${allFailures.length} 个文件均无法获取`);
+        throw new Error(audioOnly ? '选中分类里没有可下载音频' : '选中分类里没有可下载文件');
+      }
       if (allFailures.length > 0) zip.file('_download_failed.txt', downloadFailuresText(allFailures));
       categoryStatusText = '正在生成 ZIP';
       const content = await zip.generateAsync({ type: 'blob' });
@@ -687,5 +721,5 @@
 {/if}
 
 {#if categoryFileDialogOpen}
-  <CategoryFileDialog title={categoryDisplayName(categoryFileDialogTitle)} subtitle={activeProfile === 'voiceCategory' ? '音频文件' : '分类文件'} files={categoryFileDialogFiles} loading={categoryFileDialogLoading} error={categoryFileDialogError} onClose={closeCategoryFileDialog} onPreview={openLightbox} />
+  <CategoryFileDialog title={categoryDisplayName(categoryFileDialogTitle)} subtitle={activeProfile === 'voiceCategory' ? '音频文件' : '分类文件'} emptyMessage={activeProfile === 'voiceCategory' ? '该分类下没有可下载音频（可能不是语音分类，或音频未挂到此分类）' : '分类内没有可显示文件'} files={categoryFileDialogFiles} loading={categoryFileDialogLoading} error={categoryFileDialogError} onClose={closeCategoryFileDialog} onPreview={openLightbox} />
 {/if}

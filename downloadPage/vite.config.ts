@@ -5,21 +5,22 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 // These constants must stay in sync with downloadPage/src/api/_worker.js
 const upstream = 'https://klbq-prod-www.idreamsky.com';
+const wikiApiUpstream = 'https://wiki.biligame.com/klbq/api.php';
 const allowedImageHosts = new Set(['wiki.biligame.com', 'patchwiki.biligame.com']);
 
 function balanceApiProxy(): Plugin {
   return {
     name: 'balance-api-proxy',
     configureServer(server) {
-      server.middlewares.use(handleBalanceApiProxy);
+      server.middlewares.use(handleApiProxy);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(handleBalanceApiProxy);
+      server.middlewares.use(handleApiProxy);
     }
   };
 }
 
-async function handleBalanceApiProxy(
+async function handleApiProxy(
   req: IncomingMessage,
   res: ServerResponse,
   next: Connect.NextFunction
@@ -31,7 +32,7 @@ async function handleBalanceApiProxy(
 
   const url = new URL(req.url, 'http://localhost');
 
-  if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/balance/')) {
+  if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/')) {
     writeCorsHeaders(res);
     res.statusCode = 204;
     res.end();
@@ -40,6 +41,11 @@ async function handleBalanceApiProxy(
 
   if (req.method === 'GET' && (url.pathname === '/api/image-download' || url.pathname === '/api/file-download')) {
     await handleFileDownloadProxy(url, res);
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/wiki') {
+    await handleWikiApiProxy(url, res);
     return;
   }
 
@@ -75,6 +81,63 @@ async function handleBalanceApiProxy(
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Proxy request failed' }));
+  }
+}
+
+function wikiProxyErrorMessage(status: number): string {
+  if (status === 429) return '请求过于频繁，请稍后再试';
+  if (status === 403 || status === 567) return 'Wiki 访问被风控拦截，请更换网络/VPN 节点后重试';
+  if (status >= 500) return 'Wiki 上游暂时不可用，请稍后重试';
+  if (status >= 400) return `Wiki 请求失败（HTTP ${status}）`;
+  return 'Wiki 代理请求失败';
+}
+
+async function handleWikiApiProxy(url: URL, res: ServerResponse): Promise<void> {
+  try {
+    const target = new URL(wikiApiUpstream);
+    target.search = url.search;
+    // Drop browser-only CORS param; server-side fetch does not need it.
+    target.searchParams.delete('origin');
+
+    const response = await fetch(target, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json,text/javascript,*/*;q=0.01',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        // EdgeOne WAF blocks bare server-side clients; spoof a normal browser referer.
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Referer: 'https://wiki.biligame.com/klbq/',
+        Origin: 'https://wiki.biligame.com',
+      },
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const body = Buffer.from(await response.arrayBuffer());
+    const looksHtml = contentType.includes('text/html') || body.subarray(0, 32).toString('utf8').trimStart().startsWith('<!');
+    const wafBlocked = response.status === 567 || response.status === 403 || (response.status >= 500 && looksHtml);
+
+    writeCorsHeaders(res);
+    if (!response.ok || looksHtml || wafBlocked) {
+      const status = response.status === 429 ? 429 : wafBlocked || looksHtml ? 502 : response.status >= 400 ? response.status : 502;
+      res.statusCode = status;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(JSON.stringify({
+        error: wikiProxyErrorMessage(response.status === 200 && looksHtml ? 567 : response.status),
+        upstreamStatus: response.status,
+      }));
+      return;
+    }
+
+    res.statusCode = response.status;
+    res.setHeader('Content-Type', contentType || 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=30');
+    res.end(body);
+  } catch (error) {
+    writeCorsHeaders(res);
+    res.statusCode = 502;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Wiki 代理请求失败' }));
   }
 }
 

@@ -3,9 +3,10 @@
 
   type CategoryFile = { name: string; url: string; mime?: string; size?: number };
 
-  let { title = '', subtitle = '', files = [], loading = false, error = '', onClose = () => {}, onPreview = (url: string) => {} }: {
+  let { title = '', subtitle = '', emptyMessage = '分类内没有可显示文件', files = [], loading = false, error = '', onClose = () => {}, onPreview = (url: string) => {} }: {
     title?: string;
     subtitle?: string;
+    emptyMessage?: string;
     files?: CategoryFile[];
     loading?: boolean;
     error?: string;
@@ -109,7 +110,7 @@
       {:else if error}
         <div class="suggest-state">{error}</div>
       {:else if files.length === 0}
-        <div class="suggest-state">分类内没有可显示文件</div>
+        <div class="suggest-state">{emptyMessage}</div>
       {:else}
         {#each files as file (file.url)}
           <div class="category-file-item">
