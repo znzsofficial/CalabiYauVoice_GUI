@@ -1,4 +1,4 @@
-import { httpErrorMessage, type CategoryFile } from '../searchApi';
+import { ensureProxyDownloadUrl, httpErrorMessage, type CategoryFile } from '../searchApi';
 
 export type DownloadProgress = { finished: number; total: number; failed: number; currentName?: string };
 export type DownloadedFile = { ok: true; index: number; name: string; blob: Blob } | { ok: false; index: number; name: string; error: string };
@@ -52,7 +52,7 @@ export async function downloadUrlWithRetry(url: string, options: DownloadRetryOp
 }
 
 async function downloadOneFile(file: CategoryFile, index: number, options: DownloadRetryOptions): Promise<DownloadedFile> {
-  const url = `/api/file-download?url=${encodeURIComponent(file.url)}`;
+  const url = ensureProxyDownloadUrl(file.url);
   try {
     const blob = await downloadUrlWithRetry(url, options);
     return { ok: true, index, name: file.name, blob };

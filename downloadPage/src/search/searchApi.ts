@@ -139,13 +139,14 @@ export async function searchWiki(params: {
   limit: number;
   offset: number;
   sort: string;
+  signal?: AbortSignal;
 }): Promise<SearchResponse> {
   const query = new URLSearchParams({
     action: 'query', list: 'search', srsearch: params.search, srlimit: String(params.limit),
     sroffset: String(params.offset), srnamespace: params.namespace, srinfo: 'totalhits|suggestion',
     srprop: 'snippet|timestamp|wordcount|sectiontitle|redirecttitle|size', srsort: params.sort, format: 'json'
   });
-  return await (await fetchWithTimeout(`${API}?${query}`, 10000)).json() as SearchResponse;
+  return await (await fetchWithTimeout(`${API}?${query}`, 10000, params.signal)).json() as SearchResponse;
 }
 
 export async function fetchPrefixSuggestions(params: {
@@ -165,21 +166,24 @@ export async function fetchPrefixSuggestions(params: {
   }));
 }
 
-export async function fetchFileAssets(titles: string[], nsMap: Record<string, number>): Promise<{ images: Record<string, ResultImage>; files: Record<string, FileAsset> }> {
+export async function fetchFileAssets(titles: string[], nsMap: Record<string, number>, signal?: AbortSignal): Promise<{ images: Record<string, ResultImage>; files: Record<string, FileAsset> }> {
   const images: Record<string, ResultImage> = {};
   const files: Record<string, FileAsset> = {};
   const piThumbs: Record<string, string> = {};
   try {
     const params = new URLSearchParams({ action: 'query', prop: 'pageimages', piprop: 'thumbnail', pithumbnail: '120', pilicense: 'any', titles: titles.join('|'), format: 'json' });
-    const data = await (await fetchWithTimeout(`${API}?${params}`, 8000)).json() as PagesResponse;
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 8000, signal)).json() as PagesResponse;
     for (const page of Object.values(data.query?.pages || {})) if (page.thumbnail?.source) piThumbs[page.title] = page.thumbnail.source;
-  } catch (err) { console.warn('[searchApi] fetchPageImages failed:', err); }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    console.warn('[searchApi] fetchPageImages failed:', err);
+  }
 
   const fileTitles = titles.filter(title => nsMap[title] === 6);
   if (fileTitles.length > 0) {
     try {
       const params = new URLSearchParams({ action: 'query', prop: 'imageinfo', iiprop: 'url|size|mime', iiurlwidth: '120', titles: fileTitles.map(title => 'File:' + title.replace(/^文件:/, '')).join('|'), format: 'json' });
-      const data = await (await fetchWithTimeout(`${API}?${params}`, 8000)).json() as PagesResponse;
+      const data = await (await fetchWithTimeout(`${API}?${params}`, 8000, signal)).json() as PagesResponse;
       for (const page of Object.values(data.query?.pages || {})) {
         const info = page.imageinfo?.[0];
         const origTitle = page.title.replace(/^文件:/, '');
@@ -188,50 +192,61 @@ export async function fetchFileAssets(titles: string[], nsMap: Record<string, nu
           files[page.title] = files[origTitle];
         }
         if (info?.mime?.startsWith('image/')) {
-          images[origTitle] = { thumb: info.thumburl || info.url, full: info.url, size: info.size };
+          images[origTitle] = { thumb: proxyMediaUrl(info.thumburl || info.url), full: proxyMediaUrl(info.url), size: info.size };
           images[page.title] = images[origTitle];
         }
       }
-    } catch (err) { console.warn('[searchApi] fetchImageInfo failed:', err); }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      console.warn('[searchApi] fetchImageInfo failed:', err);
+    }
   }
 
   const missingTitles = titles.filter(title => !images[title] && (nsMap[title] === 0 || nsMap[title] === 14));
   if (missingTitles.length > 0) {
     try {
       const params = new URLSearchParams({ action: 'query', prop: 'revisions', rvprop: 'content', rvslots: 'main', titles: missingTitles.slice(0, 10).join('|'), format: 'json' });
-      const data = await (await fetchWithTimeout(`${API}?${params}`, 8000)).json() as PagesResponse;
+      const data = await (await fetchWithTimeout(`${API}?${params}`, 8000, signal)).json() as PagesResponse;
       for (const page of Object.values(data.query?.pages || {})) {
         const content = page.revisions?.[0]?.slots?.main?.['*'] || '';
         const match = content.match(/\[\[(?:文件|File):([^|\]\]]+)/i);
         if (match) {
-          const fullUrl = WIKI_BASE + 'Special:Redirect/file/' + encodeURIComponent(match[1].trim());
+          const fullUrl = proxyMediaUrl(WIKI_BASE + 'Special:Redirect/file/' + encodeURIComponent(match[1].trim()));
           images[page.title] = { thumb: fullUrl, full: fullUrl };
         }
       }
-    } catch (err) { console.warn('[searchApi] fetchRevisions failed:', err); }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      console.warn('[searchApi] fetchRevisions failed:', err);
+    }
   }
 
-  for (const title of titles) if (!images[title] && piThumbs[title]) images[title] = { thumb: piThumbs[title], full: piThumbs[title] };
+  for (const title of titles) if (!images[title] && piThumbs[title]) {
+    const proxied = proxyMediaUrl(piThumbs[title]);
+    images[title] = { thumb: proxied, full: proxied };
+  }
   return { images, files };
 }
 
-export async function fetchPageExtra(titles: string[]): Promise<Record<string, { categories: string[] }>> {
+export async function fetchPageExtra(titles: string[], signal?: AbortSignal): Promise<Record<string, { categories: string[] }>> {
   try {
     const params = new URLSearchParams({ action: 'query', prop: 'categories', cllimit: '5', clshow: '!hidden', titles: titles.join('|'), format: 'json' });
-    const data = await (await fetchWithTimeout(`${API}?${params}`, 8000)).json() as PagesResponse;
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 8000, signal)).json() as PagesResponse;
     return Object.fromEntries(Object.values(data.query?.pages || {}).map(page => [page.title, { categories: (page.categories || []).map(category => category.title.replace(/^分类:/, '')) }]));
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     return {};
   }
 }
 
-export async function fetchCategoryMembers(category: string, namespace: number, type: 'subcat' | 'file' | 'page'): Promise<string[]> {
+export async function fetchCategoryMembers(category: string, namespace: number, type: 'subcat' | 'file' | 'page', signal?: AbortSignal): Promise<string[]> {
   const output: string[] = [];
   let cmcontinue = '';
   do {
+    if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
     const params = new URLSearchParams({ action: 'query', list: 'categorymembers', cmtitle: category, cmnamespace: String(namespace), cmtype: type, cmlimit: '500', format: 'json' });
     if (cmcontinue) params.set('cmcontinue', cmcontinue);
-    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000)).json() as CategoryMembersResponse;
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000, signal)).json() as CategoryMembersResponse;
     output.push(...(data.query?.categorymembers || []).map(item => item.title));
     cmcontinue = data.continue?.cmcontinue || '';
   } while (cmcontinue);
@@ -284,7 +299,7 @@ export async function fetchCategoryPages(category: string): Promise<CategoryPage
 async function fillPageThumbnails(pages: CategoryPage[]): Promise<void> {
   for (const page of pages) {
     const filename = encodeURIComponent(`${page.title}头像.png`);
-    page.thumbnail = `${WIKI_BASE}Special:Redirect/file/${filename}`;
+    page.thumbnail = proxyMediaUrl(`${WIKI_BASE}Special:Redirect/file/${filename}`);
   }
 }
 
@@ -306,30 +321,33 @@ export function getCachedVoiceParsetree(pageTitle: string): string | undefined {
   return voiceParsetreeCache.get(pageTitle);
 }
 
-export async function fetchVoicePageParsetree(pageTitle: string): Promise<string> {
+export async function fetchVoicePageParsetree(pageTitle: string, signal?: AbortSignal): Promise<string> {
   const cached = voiceParsetreeCache.get(pageTitle);
   if (cached) return cached;
+  if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
 
   const pageUrl = `${API}?action=parse&page=${encodeURIComponent(pageTitle)}&prop=parsetree&format=json`;
   let pageError: unknown;
   try {
-    const data = await (await fetchWithTimeout(pageUrl, 15000)).json() as { parse?: { parsetree?: { '*': string } } };
+    const data = await (await fetchWithTimeout(pageUrl, 15000, signal)).json() as { parse?: { parsetree?: { '*': string } } };
     const parsetree = data.parse?.parsetree?.['*'] || '';
     if (parsetree) {
       voiceParsetreeCache.set(pageTitle, parsetree);
       return parsetree;
     }
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     pageError = err;
   }
 
+  if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
   const pageid = await resolveVoicePageId(pageTitle);
   if (!pageid) {
     if (pageError) throw pageError;
     return '';
   }
   const pageIdUrl = `${API}?action=parse&pageid=${pageid}&prop=parsetree&format=json`;
-  const data = await (await fetchWithTimeout(pageIdUrl, 15000)).json() as { parse?: { parsetree?: { '*': string } } };
+  const data = await (await fetchWithTimeout(pageIdUrl, 15000, signal)).json() as { parse?: { parsetree?: { '*': string } } };
   const parsetree = data.parse?.parsetree?.['*'] || '';
   if (parsetree) voiceParsetreeCache.set(pageTitle, parsetree);
   return parsetree;
@@ -417,8 +435,55 @@ async function resolveVoicePageId(pageTitle: string): Promise<number | null> {
   return null;
 }
 
+function isProxyDownloadPath(url: string): boolean {
+  return url.startsWith('/api/file-download') || url.startsWith('/api/image-download');
+}
+
+/** Rewrite wiki media URLs through same-origin proxy for preview/play (avoids CORS/WAF in browser). */
+export function proxyMediaUrl(url: string): string {
+  if (!url) return '';
+  if (isProxyDownloadPath(url)) return url;
+  try {
+    const absolute = new URL(url, WIKI_BASE);
+    if (absolute.hostname === 'wiki.biligame.com' || absolute.hostname === 'patchwiki.biligame.com') {
+      return `/api/file-download?url=${encodeURIComponent(absolute.href)}`;
+    }
+  } catch {
+    // keep original
+  }
+  return url;
+}
+
+/** Same-origin download fetch URL; idempotent when already proxied. */
+export function ensureProxyDownloadUrl(url: string, endpoint: 'file-download' | 'image-download' = 'file-download'): string {
+  if (!url) return '';
+  if (isProxyDownloadPath(url)) return url;
+  return `/api/${endpoint}?url=${encodeURIComponent(url)}`;
+}
+
+/** Best-effort filename from a wiki or proxied media URL. */
+export function mediaFileNameFromUrl(url: string, fallback = 'wiki-file'): string {
+  try {
+    let current = url;
+    for (let hop = 0; hop < 3; hop++) {
+      const parsed = new URL(current, typeof location !== 'undefined' ? location.href : WIKI_BASE);
+      const nested = parsed.searchParams.get('url');
+      if (nested && (parsed.pathname.includes('/api/file-download') || parsed.pathname.includes('/api/image-download'))) {
+        current = nested;
+        continue;
+      }
+      const name = decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
+      if (name) return name;
+      break;
+    }
+  } catch {
+    // keep fallback
+  }
+  return fallback;
+}
+
 export function resolveAudioUrl(filename: string): string {
   if (!filename) return '';
   const clean = filename.trim().replace(/^文件:|^File:/, '');
-  return WIKI_BASE + 'Special:Redirect/file/' + encodeURIComponent(clean);
+  return proxyMediaUrl(WIKI_BASE + 'Special:Redirect/file/' + encodeURIComponent(clean));
 }

@@ -185,7 +185,8 @@
     signal?: AbortSignal,
     retries = 2,
   ): Promise<{ ok: true; blob: Blob } | { ok: false; error: string }> {
-    const url = `/api/file-download?url=${encodeURIComponent(resolveAudioUrl(audioName))}`;
+    // resolveAudioUrl already rewrites to same-origin /api/file-download
+    const url = resolveAudioUrl(audioName);
     try {
       const blob = await downloadUrlWithRetry(url, { retries, signal });
       return { ok: true, blob };

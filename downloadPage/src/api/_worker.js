@@ -140,19 +140,54 @@ async function proxy(target, original) {
 
 async function proxyFileDownload(url) {
   const rawTarget = url.searchParams.get("url");
-  const target = rawTarget ? new URL(rawTarget) : null;
-
-  if (!target || !ALLOWED_IMAGE_HOSTS.has(target.hostname)) {
-    return Response.json({ error: "Unsupported image URL" }, { status: 400 });
+  let target = null;
+  try {
+    target = rawTarget ? new URL(rawTarget) : null;
+  } catch {
+    target = null;
   }
 
-  const resp = await fetch(target, { headers: { Accept: "*/*" } });
-  const headers = new Headers(resp.headers);
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Cache-Control", "public, max-age=86400");
+  if (!target || !ALLOWED_IMAGE_HOSTS.has(target.hostname)) {
+    return Response.json({ error: "不支持的文件地址" }, { status: 400 });
+  }
 
-  return new Response(resp.body, {
-    status: resp.status,
-    headers,
-  });
+  try {
+    // Follow redirects manually so Special:Redirect and CDN hops work under WAF-friendly headers.
+    let current = target;
+    let resp = null;
+    for (let hop = 0; hop < 5; hop++) {
+      resp = await fetch(current, {
+        method: "GET",
+        redirect: "manual",
+        headers: {
+          Accept: "*/*",
+          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          Referer: "https://wiki.biligame.com/klbq/",
+          Origin: "https://wiki.biligame.com",
+        },
+      });
+      if (![301, 302, 303, 307, 308].includes(resp.status)) break;
+      const location = resp.headers.get("location");
+      if (!location) break;
+      const next = new URL(location, current);
+      if (!ALLOWED_IMAGE_HOSTS.has(next.hostname) && next.hostname !== current.hostname) {
+        return Response.json({ error: "文件重定向目标不受支持" }, { status: 502 });
+      }
+      current = next;
+    }
+    if (!resp || !resp.ok) {
+      return Response.json({ error: `文件请求失败（HTTP ${resp?.status || 0}）` }, { status: 502 });
+    }
+
+    const headers = new Headers(resp.headers);
+    headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("Cache-Control", "public, max-age=86400");
+    return new Response(resp.body, { status: resp.status, headers });
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "文件代理失败" },
+      { status: 502 },
+    );
+  }
 }

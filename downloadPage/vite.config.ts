@@ -143,30 +143,60 @@ async function handleWikiApiProxy(url: URL, res: ServerResponse): Promise<void> 
 
 async function handleFileDownloadProxy(url: URL, res: ServerResponse): Promise<void> {
   const rawTarget = url.searchParams.get('url');
-  const target = rawTarget ? new URL(rawTarget) : null;
+  let target: URL | null = null;
+  try {
+    target = rawTarget ? new URL(rawTarget) : null;
+  } catch {
+    target = null;
+  }
 
   if (!target || !allowedImageHosts.has(target.hostname)) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ error: 'Unsupported image URL' }));
+    res.end(JSON.stringify({ error: '不支持的文件地址' }));
     return;
   }
 
   try {
-    const response = await fetch(target, { headers: { accept: '*/*' } });
-    if (!response.ok && ![302, 303, 307].includes(response.status)) {
-      throw new Error(`File request failed: ${response.status}`);
+    // Follow redirects manually so Special:Redirect and CDN hops work under WAF-friendly headers.
+    let current = target;
+    let response: Response | null = null;
+    for (let hop = 0; hop < 5; hop++) {
+      response = await fetch(current, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: {
+          Accept: '*/*',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          Referer: 'https://wiki.biligame.com/klbq/',
+          Origin: 'https://wiki.biligame.com',
+        },
+      });
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      const location = response.headers.get('location');
+      if (!location) break;
+      const next = new URL(location, current);
+      if (!allowedImageHosts.has(next.hostname) && next.hostname !== current.hostname) {
+        throw new Error('文件重定向目标不受支持');
+      }
+      current = next;
+    }
+    if (!response || !response.ok) {
+      throw new Error(`文件请求失败（HTTP ${response?.status || 0}）`);
     }
 
     res.statusCode = response.status;
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', response.headers.get('content-type') || 'application/octet-stream');
     res.setHeader('Cache-Control', 'public, max-age=86400');
+    const disposition = response.headers.get('content-disposition');
+    if (disposition) res.setHeader('Content-Disposition', disposition);
     res.end(Buffer.from(await response.arrayBuffer()));
   } catch (error) {
     res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'File proxy failed' }));
+    res.end(JSON.stringify({ error: error instanceof Error ? error.message : '文件代理失败' }));
   }
 }
 
