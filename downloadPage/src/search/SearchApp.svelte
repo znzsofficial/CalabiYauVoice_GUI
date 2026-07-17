@@ -3,7 +3,7 @@
   import CategoryFileDialog from './CategoryFileDialog.svelte';
   import Lightbox from './Lightbox.svelte';
   import { downloadBlob, downloadFailuresText, downloadFilesInParallel, fileNameFromTitle, generateZip, uniqueFileName } from './download';
-  import { apiErrorMessage, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, searchWiki, WIKI_BASE, type CategoryFile, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
+  import { apiErrorMessage, ensureProxyDownloadUrl, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, mediaFileNameFromUrl, searchWiki, WIKI_BASE, type CategoryFile, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
   import type { NamespaceOption, ProfileValue, SearchResult, SortValue, Status } from './searchTypes';
   import { toError, categoryDisplayName } from './utils';
   import SearchFilters from './SearchFilters.svelte';
@@ -42,11 +42,14 @@
   let searchModePrefix = $state('');
   let searchModeLabel = $state('内容');
   let searchRequestId = $state(0);
+  let searchAbortController = $state(null) as AbortController | null;
   let status = $state('idle' as Status);
   let errorMessage = $state('');
   let results = $state([]) as SearchResult[];
   let resultSuggestion = $state('');
   let selectedFiles = $state(new Set<string>());
+  /** Keep file assets for cross-page download (title -> asset). */
+  let selectedFileAssets = $state({} as Record<string, FileAsset>);
   let selectedCategoryResults = $state(new Set<string>());
   let zipDownloading = $state(false);
   let zipProgress = $state('');
@@ -59,8 +62,12 @@
   let categoryAbortController = $state(null) as AbortController | null;
   let categoryStatusText = $state('');
   let categoryShowAllResults = $state(false);
+  let categoryIncludeSubcats = $state(false);
   let categoryAllResults = $state([]) as SearchResult[];
+  /** Nested tree nodes the user opened (opt-in). */
   let expandedCategories = $state(new Set<string>());
+  /** Root result cards whose inline subtree is collapsed (default: open). */
+  let collapsedRootCategories = $state(new Set<string>());
   let categorySubcats = $state({}) as Record<string, string[]>;
   let categorySubcatLoading = $state(new Set<string>());
   let categorySubcatErrors = $state({}) as Record<string, string>;
@@ -80,11 +87,13 @@
   let pages = $derived(paginationPages(currentPage, totalPages));
   let fileResults = $derived(results.filter(result => result.ns === 6 && result.file));
   let selectedFileResults = $derived(fileResults.filter(result => selectedFiles.has(result.title)));
-  let fileSelectionEnabled = $derived(activeProfile === 'images' && fileResults.length > 0);
+  let selectedFilesTotal = $derived(selectedFiles.size);
+  let fileSelectionEnabled = $derived(activeProfile === 'images' && (fileResults.length > 0 || selectedFilesTotal > 0));
   let categorySearchActive = $derived(activeProfile === 'voiceCategory' || activeProfile === 'categoryDownload');
   let categoryResults = $derived(results.filter(result => result.ns === 14));
   let selectedCategoryResultItems = $derived(categoryResults.filter(result => selectedCategoryResults.has(result.title)));
-  let categorySelectionEnabled = $derived(categorySearchActive && categoryResults.length > 0);
+  let selectedCategoriesTotal = $derived(selectedCategoryResults.size);
+  let categorySelectionEnabled = $derived(categorySearchActive && (categoryResults.length > 0 || selectedCategoriesTotal > 0));
   let voiceSubtitleActive = $derived(activeProfile === 'voiceSubtitle');
   let downloadBusy = $derived(zipDownloading || categoryDownloading);
   let totalHitsStr = $derived(totalHits.toLocaleString());
@@ -100,17 +109,29 @@
     }
   });
 
+  function abortActiveSearch(): void {
+    searchAbortController?.abort();
+    searchAbortController = null;
+    searchRequestId++;
+  }
+
+  function clearSelections(): void {
+    selectedFiles = new Set();
+    selectedFileAssets = {};
+    selectedCategoryResults = new Set();
+  }
+
   function setProfile(value: ProfileValue): void {
     if (downloadBusy) return;
-    if (activeProfile !== value) searchRequestId++;
+    if (activeProfile !== value) abortActiveSearch();
     activeProfile = value;
     if (value === 'voiceSubtitle') {
       selectedNS = [0];
       nsExpanded = false;
-      selectedFiles = new Set();
-      selectedCategoryResults = new Set();
+      clearSelections();
       categoryAllResults = [];
       expandedCategories = new Set();
+      collapsedRootCategories = new Set();
       categorySubcatErrors = {};
       currentPage = 1;
       totalHits = 0;
@@ -125,10 +146,10 @@
       selectedNS = isCategorySearchProfile(value) ? [14] : [...PROFILE_NS_MAP[value]];
       nsExpanded = false;
     }
-    selectedFiles = new Set();
-    selectedCategoryResults = new Set();
+    clearSelections();
     categoryAllResults = [];
     expandedCategories = new Set();
+    collapsedRootCategories = new Set();
     categorySubcatErrors = {};
     currentPage = 1;
     categoryStatusText = '';
@@ -147,6 +168,7 @@
     if (downloadBusy) return;
     activeSort = value;
     currentPage = 1;
+    clearSelections();
     if (query.trim()) doSearch();
   }
 
@@ -167,6 +189,7 @@
     if (downloadBusy) return;
     selectedNS = selectedNS.includes(id) ? selectedNS.filter(item => item !== id) : [...selectedNS, id];
     currentPage = 1;
+    clearSelections();
     if (query.trim()) doSearch();
   }
 
@@ -177,6 +200,7 @@
       ? selectedNS.filter(id => !nsList.some(ns => ns.id === id))
       : Array.from(new Set([...selectedNS, ...nsList.map(ns => ns.id)]));
     currentPage = 1;
+    clearSelections();
     if (query.trim()) doSearch();
   }
 
@@ -203,26 +227,33 @@
   function handleSearchInputChange(value: string): void {
     if (voiceSubtitleActive) return;
     query = value;
+    // Typing a new query clears cross-page selections for the active mode.
     if (categorySearchActive) {
       selectedCategoryResults = new Set();
       categoryAllResults = [];
       expandedCategories = new Set();
+      collapsedRootCategories = new Set();
       categorySubcatErrors = {};
+    } else if (activeProfile === 'images') {
+      selectedFiles = new Set();
+      selectedFileAssets = {};
     }
     categoryStatusText = '';
   }
 
   function clearSearch(): void {
     if (downloadBusy) return;
+    abortActiveSearch();
     inputValue = '';
     query = '';
     status = 'idle';
     totalHits = 0;
     results = [];
     resultSuggestion = '';
-    selectedCategoryResults = new Set();
+    clearSelections();
     categoryAllResults = [];
     expandedCategories = new Set();
+    collapsedRootCategories = new Set();
     categorySubcatErrors = {};
     categoryFileDialogOpen = false;
     categoryStatusText = '';
@@ -232,11 +263,19 @@
     return await fetchPrefixSuggestions({ search: buildSearchQuery(value, modePrefix), limit: SUGGEST_LIMIT, namespace: getActiveNSParam() || '0', nsNameMap });
   }
 
+  function resetCategoryTreeUi(): void {
+    expandedCategories = new Set();
+    collapsedRootCategories = new Set();
+    categorySubcatErrors = {};
+  }
+
   function submitSearch(value: string): void {
     if (voiceSubtitleActive || downloadBusy) return;
     inputValue = value;
     query = value;
     currentPage = 1;
+    clearSelections();
+    if (categorySearchActive) resetCategoryTreeUi();
     doSearch(value);
   }
 
@@ -245,6 +284,8 @@
     inputValue = value;
     query = value;
     currentPage = 1;
+    clearSelections();
+    if (categorySearchActive) resetCategoryTreeUi();
     doSearch(value);
   }
 
@@ -257,14 +298,25 @@
     const requestSort = activeSort;
     const requestPage = currentPage;
     const requestSearch = getSearchQuery(searchValue);
+    searchAbortController?.abort();
+    const controller = new AbortController();
+    searchAbortController = controller;
     const requestId = ++searchRequestId;
+    const signal = controller.signal;
     status = 'loading';
     errorMessage = '';
     resultSuggestion = '';
 
     try {
-      const data = await searchWiki({ search: requestSearch, limit: PAGE_SIZE, offset: (requestPage - 1) * PAGE_SIZE, namespace: requestNamespace, sort: requestSort });
-      if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
+      const data = await searchWiki({
+        search: requestSearch,
+        limit: PAGE_SIZE,
+        offset: (requestPage - 1) * PAGE_SIZE,
+        namespace: requestNamespace,
+        sort: requestSort,
+        signal,
+      });
+      if (requestId !== searchRequestId || activeProfile !== requestProfile || signal.aborted) return;
       const apiErr = apiErrorMessage(data);
       if (apiErr) throw new Error(apiErr);
 
@@ -273,7 +325,7 @@
       totalHits = info.totalhits || 0;
       resultSuggestion = info.suggestion || '';
       if (search.length === 0) {
-        if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
+        if (requestId !== searchRequestId || activeProfile !== requestProfile || signal.aborted) return;
         results = [];
         categoryAllResults = [];
         status = 'empty';
@@ -283,14 +335,17 @@
       let nextResults: SearchResult[];
       if (requestCategorySearchActive) {
         nextResults = search.map((item, index) => normalizeResult(item, undefined, undefined, undefined, index));
-        await hydrateCategoryHierarchy(nextResults);
+        await hydrateCategoryHierarchy(nextResults, signal);
       } else {
         const titles = search.map(item => item.title);
         const nsMap = Object.fromEntries(search.map(item => [item.title, item.ns]));
-        const [fileAssets, extra] = await Promise.all([fetchFileAssets(titles, nsMap), fetchPageExtra(titles)]);
+        const [fileAssets, extra] = await Promise.all([
+          fetchFileAssets(titles, nsMap, signal),
+          fetchPageExtra(titles, signal),
+        ]);
         nextResults = search.map((item, index) => normalizeResult(item, fileAssets.images[item.title], fileAssets.files[item.title], extra[item.title], index));
       }
-      if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
+      if (requestId !== searchRequestId || activeProfile !== requestProfile || signal.aborted) return;
       if (nextResults.length === 0) {
         results = [];
         categoryAllResults = [];
@@ -299,33 +354,51 @@
       }
       categoryAllResults = requestCategorySearchActive ? nextResults : [];
       results = requestCategorySearchActive ? displayCategoryResults(nextResults) : nextResults;
-      const resultTitles = new Set(nextResults.map(r => r.title));
-      selectedFiles = new Set([...selectedFiles].filter(t => resultTitles.has(t)));
-      selectedCategoryResults = new Set([...selectedCategoryResults].filter(t => resultTitles.has(t)));
-      expandedCategories = new Set([...expandedCategories].filter(t => resultTitles.has(t)));
+      // Refresh cached file assets for any already-selected titles that appear on this page.
+      if (!requestCategorySearchActive) {
+        const nextAssets = { ...selectedFileAssets };
+        for (const result of nextResults) {
+          if (result.file && selectedFiles.has(result.title)) nextAssets[result.title] = result.file;
+        }
+        selectedFileAssets = nextAssets;
+      }
+      // Nested expands are independent of the result page; root cards default open.
       status = 'ready';
     } catch (err) {
       if (requestId !== searchRequestId || activeProfile !== requestProfile) return;
       const error = toError(err);
+      if (error.name === 'AbortError' || signal.aborted) {
+        // Superseded by a newer search/profile switch — keep loading/ready of the latest request.
+        return;
+      }
       status = 'error';
-      errorMessage = error.name === 'AbortError' ? '搜索请求超时，请检查网络或换个关键词重试' : error.message || '搜索出错，请稍后重试';
+      errorMessage = error.message || '搜索出错，请稍后重试';
+    } finally {
+      if (searchAbortController === controller) searchAbortController = null;
     }
   }
 
-  async function hydrateCategoryHierarchy(items: SearchResult[]): Promise<void> {
+  async function hydrateCategoryHierarchy(items: SearchResult[], signal?: AbortSignal): Promise<void> {
     const categories = items.filter(item => item.ns === 14).map(item => item.title);
     if (categories.length === 0) return;
     const loadedSubcats: Record<string, string[]> = {};
+    const failed: Record<string, string> = {};
     await Promise.all(categories.map(async category => {
-      if (categorySubcats[category]) return;
+      if (categorySubcats[category] !== undefined) return;
       try {
-        loadedSubcats[category] = await fetchCategoryMembers(category, 14, 'subcat');
-      } catch {
-        // leave unknown so expand can retry instead of treating as empty leaf
+        loadedSubcats[category] = await fetchCategoryMembers(category, 14, 'subcat', signal);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') throw err;
+        failed[category] = toError(err).message || '加载子分类失败';
       }
     }));
-    if (Object.keys(loadedSubcats).length === 0) return;
-    categorySubcats = { ...categorySubcats, ...loadedSubcats };
+    if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+    if (Object.keys(loadedSubcats).length > 0) {
+      categorySubcats = { ...categorySubcats, ...loadedSubcats };
+    }
+    if (Object.keys(failed).length > 0) {
+      categorySubcatErrors = { ...categorySubcatErrors, ...failed };
+    }
   }
 
   function displayCategoryResults(items: SearchResult[]): SearchResult[] {
@@ -367,14 +440,36 @@
   function toggleFileSelection(title: string): void {
     if (downloadBusy) return;
     const next = new Set(selectedFiles);
-    if (next.has(title)) next.delete(title);
-    else next.add(title);
+    const nextAssets = { ...selectedFileAssets };
+    if (next.has(title)) {
+      next.delete(title);
+      delete nextAssets[title];
+    } else {
+      next.add(title);
+      const asset = fileResults.find(result => result.title === title)?.file;
+      if (asset) nextAssets[title] = asset;
+    }
     selectedFiles = next;
+    selectedFileAssets = nextAssets;
   }
 
   function setAllFileSelection(selected: boolean): void {
     if (downloadBusy) return;
-    selectedFiles = selected ? new Set(fileResults.map(result => result.title)) : new Set();
+    const next = new Set(selectedFiles);
+    const nextAssets = { ...selectedFileAssets };
+    if (selected) {
+      for (const result of fileResults) {
+        next.add(result.title);
+        if (result.file) nextAssets[result.title] = result.file;
+      }
+    } else {
+      for (const result of fileResults) {
+        next.delete(result.title);
+        delete nextAssets[result.title];
+      }
+    }
+    selectedFiles = next;
+    selectedFileAssets = nextAssets;
   }
 
   function toggleCategoryResultSelection(title: string): void {
@@ -387,22 +482,27 @@
 
   function setAllCategoryResultSelection(selected: boolean): void {
     if (downloadBusy) return;
-    selectedCategoryResults = selected ? new Set(categoryResults.map(result => result.title)) : new Set();
+    // Toggle only the current page; keep selections from other pages.
+    const next = new Set(selectedCategoryResults);
+    if (selected) {
+      for (const result of categoryResults) next.add(result.title);
+    } else {
+      for (const result of categoryResults) next.delete(result.title);
+    }
+    selectedCategoryResults = next;
   }
 
-  async function toggleCategoryExpanded(category: string): Promise<void> {
-    if (downloadBusy) return;
-    const next = new Set(expandedCategories);
-    if (next.has(category)) {
-      next.delete(category);
-      expandedCategories = next;
-      return;
-    }
+  function toggleRootCategoryCollapsed(title: string): void {
+    const next = new Set(collapsedRootCategories);
+    if (next.has(title)) next.delete(title);
+    else next.add(title);
+    collapsedRootCategories = next;
+  }
 
-    next.add(category);
-    expandedCategories = next;
-    if (categorySubcats[category] || categorySubcatLoading.has(category)) return;
-
+  async function ensureCategorySubcats(category: string): Promise<void> {
+    if (categorySubcatLoading.has(category)) return;
+    // Allow retry even when a previous error left no data entry.
+    if (categorySubcats[category] !== undefined && !categorySubcatErrors[category]) return;
     const loading = new Set(categorySubcatLoading);
     loading.add(category);
     categorySubcatLoading = loading;
@@ -410,11 +510,9 @@
     try {
       const subcats = await fetchCategoryMembers(category, 14, 'subcat');
       categorySubcats = { ...categorySubcats, [category]: subcats };
-      if (subcats.length === 0) {
-        const collapsed = new Set(expandedCategories);
-        collapsed.delete(category);
-        expandedCategories = collapsed;
-      }
+      const nextErrors = { ...categorySubcatErrors };
+      delete nextErrors[category];
+      categorySubcatErrors = nextErrors;
     } catch (error) {
       categorySubcatErrors = { ...categorySubcatErrors, [category]: toError(error).message || '加载子分类失败' };
     } finally {
@@ -422,6 +520,26 @@
       done.delete(category);
       categorySubcatLoading = done;
     }
+  }
+
+  async function toggleCategoryExpanded(category: string): Promise<void> {
+    // Nested nodes: opt-in expand. Root cards use collapsedRootCategories instead.
+    const isExpanded = expandedCategories.has(category);
+    const hasError = Boolean(categorySubcatErrors[category]);
+    const hasData = categorySubcats[category] !== undefined;
+
+    if (isExpanded && !hasError) {
+      const next = new Set(expandedCategories);
+      next.delete(category);
+      expandedCategories = next;
+      return;
+    }
+
+    if (!isExpanded) {
+      expandedCategories = new Set([...expandedCategories, category]);
+    }
+    if (hasData && !hasError) return;
+    await ensureCategorySubcats(category);
   }
 
   async function openCategoryFileDialog(category: string): Promise<void> {
@@ -500,16 +618,19 @@
   }
 
   async function downloadSelectedFilesZip(): Promise<void> {
-    if (selectedFileResults.length === 0 || zipDownloading) return;
+    const files = [...selectedFiles].flatMap(title => {
+      const asset = selectedFileAssets[title] || fileResults.find(result => result.title === title)?.file;
+      return asset ? [{ name: fileNameFromTitle(title), url: asset.url, mime: asset.mime, size: asset.size }] : [];
+    });
+    if (files.length === 0 || zipDownloading) return;
 
     zipDownloading = true;
     const controller = new AbortController();
     zipAbortController = controller;
-    zipProgress = `准备打包 0/${selectedFileResults.length}`;
+    zipProgress = `准备打包 0/${files.length}`;
     try {
       const zip = await generateZip();
       const usedNames = new Set<string>();
-      const files = selectedFileResults.flatMap(result => result.file ? [{ name: fileNameFromTitle(result.title), url: result.file.url, mime: result.file.mime, size: result.file.size }] : []);
       const downloaded = await downloadFilesInParallel(files, downloadConcurrency, progress => {
         zipProgress = progress.failed > 0 ? `正在下载 ${progress.finished}/${progress.total}，失败 ${progress.failed}` : `正在下载 ${progress.finished}/${progress.total}`;
       }, {
@@ -552,34 +673,90 @@
     return /^(Category:|分类:)/.test(trimmed) ? trimmed : `Category:${trimmed}`;
   }
 
+  async function expandCategoriesWithSubcats(
+    roots: string[],
+    signal?: AbortSignal,
+    onProgress?: (done: number, total: number, name: string) => void,
+  ): Promise<string[]> {
+    const ordered: string[] = [];
+    const seen = new Set<string>();
+    const queue = roots.map(normalizeCategoryTitle).filter(Boolean);
+    let scanned = 0;
+    while (queue.length > 0) {
+      if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+      const category = queue.shift()!;
+      if (seen.has(category)) continue;
+      seen.add(category);
+      ordered.push(category);
+      scanned += 1;
+      onProgress?.(scanned, Math.max(scanned + queue.length, ordered.length), categoryDisplayName(category));
+
+      let subcats = categorySubcats[category];
+      if (!subcats) {
+        // also try raw title key if present
+        const rawKey = roots.find(r => normalizeCategoryTitle(r) === category) || category;
+        subcats = categorySubcats[rawKey] || categorySubcats[categoryDisplayName(category)];
+      }
+      if (!subcats) {
+        try {
+          subcats = await fetchCategoryMembers(category, 14, 'subcat', signal);
+          categorySubcats = { ...categorySubcats, [category]: subcats };
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') throw err;
+          subcats = [];
+        }
+      }
+      for (const sub of subcats) {
+        const normalized = normalizeCategoryTitle(sub);
+        if (normalized && !seen.has(normalized)) queue.push(normalized);
+      }
+    }
+    return ordered;
+  }
+
   async function downloadSelectedCategoriesZip(): Promise<void> {
-    const resultTitles = new Set(categoryResults.map(result => result.title));
-    const selectedResultCategories = selectedCategoryResultItems.map(result => result.title);
-    const selectedSubcategories = [...selectedCategoryResults].filter(category => !resultTitles.has(category));
-    const categories = [...selectedResultCategories, ...selectedSubcategories];
-    if (categories.length === 0 || categoryDownloading) return;
+    // Cross-page selections are stored in selectedCategoryResults (titles only).
+    const rootCategories = [...selectedCategoryResults];
+    if (rootCategories.length === 0 || categoryDownloading) return;
 
     categoryDownloading = true;
     const controller = new AbortController();
     categoryAbortController = controller;
-    categoryStatusText = `准备分类 0/${categories.length}`;
+    categoryStatusText = categoryIncludeSubcats
+      ? `展开子分类 0/${rootCategories.length}`
+      : `准备分类 0/${rootCategories.length}`;
     const audioOnly = activeProfile === 'voiceCategory';
     try {
+      const categories = categoryIncludeSubcats
+        ? await expandCategoriesWithSubcats(rootCategories, controller.signal, (done, total, name) => {
+          categoryStatusText = `展开子分类 ${done}/${total} · ${name}`;
+        })
+        : rootCategories.map(normalizeCategoryTitle).filter(Boolean);
+      if (controller.signal.aborted) throw new Error('已取消下载');
+      if (categories.length === 0) throw new Error('没有可打包的分类');
+
+      categoryStatusText = `准备打包 ${categories.length} 个分类`;
       const zip = await generateZip();
       let totalFiles = 0;
+      const seenFileUrls = new Set<string>();
       const allFailures: Array<{ name: string; error: string; category?: string }> = [];
       for (const [index, category] of categories.entries()) {
         if (controller.signal.aborted) throw new Error('已取消下载');
         const displayName = categoryDisplayName(category);
         categoryStatusText = `正在读取 ${displayName} (${index + 1}/${categories.length})`;
-        const files = await getCategoryFilesCached(normalizeCategoryTitle(category), audioOnly, controller.signal);
+        const files = await getCategoryFilesCached(category, audioOnly, controller.signal);
         if (controller.signal.aborted) throw new Error('已取消下载');
-        if (files.length === 0) continue;
+        const uniqueFiles = files.filter(file => {
+          if (seenFileUrls.has(file.url)) return false;
+          seenFileUrls.add(file.url);
+          return true;
+        });
+        if (uniqueFiles.length === 0) continue;
         const folder = zip.folder(fileNameFromTitle(displayName));
-        const downloaded = await downloadFilesInParallel(files, downloadConcurrency, progress => {
+        const downloaded = await downloadFilesInParallel(uniqueFiles, downloadConcurrency, progress => {
           categoryStatusText = progress.failed > 0
-            ? `正在下载 ${displayName} ${progress.finished}/${progress.total}，失败 ${progress.failed}`
-            : `正在下载 ${displayName} ${progress.finished}/${progress.total}`;
+            ? `正在下载 ${displayName} ${progress.finished}/${progress.total}，失败 ${progress.failed}（分类 ${index + 1}/${categories.length}）`
+            : `正在下载 ${displayName} ${progress.finished}/${progress.total}（分类 ${index + 1}/${categories.length}）`;
         }, {
           signal: controller.signal
         });
@@ -638,10 +815,14 @@
     const nextPage = Math.max(1, Math.min(page, totalPages || 1));
     if (nextPage === currentPage) return;
     currentPage = nextPage;
-    selectedFiles = new Set();
-    selectedCategoryResults = new Set();
+    // Keep cross-page selections; only the visible page changes.
     doSearch();
     document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function clearAllSelections(): void {
+    if (downloadBusy) return;
+    clearSelections();
   }
 
   function openLightbox(src: string): void {
@@ -656,26 +837,17 @@
     document.body.style.overflow = '';
   }
 
-  function lightboxDownloadName(src: string): string {
-    const fallback = 'wiki-image';
-    try {
-      const pathname = new URL(src, location.href).pathname;
-      return decodeURIComponent(pathname.split('/').filter(Boolean).pop() || fallback);
-    } catch {
-      return fallback;
-    }
-  }
-
   async function downloadLightboxImage(): Promise<void> {
     if (!lightboxSrc || lightboxDownloading) return;
 
     lightboxDownloading = true;
+    const fetchUrl = ensureProxyDownloadUrl(lightboxSrc, 'image-download');
     try {
-      const response = await fetch(`/api/image-download?url=${encodeURIComponent(lightboxSrc)}`);
+      const response = await fetch(fetchUrl);
       if (!response.ok) throw new Error(httpErrorMessage(response.status));
 
       const blob = await response.blob();
-      downloadBlob(blob, lightboxDownloadName(lightboxSrc));
+      downloadBlob(blob, mediaFileNameFromUrl(lightboxSrc, 'wiki-image'));
     } catch {
       open(lightboxSrc, '_blank', 'noopener,noreferrer');
     } finally {
@@ -708,9 +880,9 @@
   {/if}
 
   {#if !voiceSubtitleActive && categorySearchActive}
-    <CategoryDownloadPanel activeProfile={activeProfile === 'voiceCategory' ? 'voiceCategory' : 'categoryDownload'} {status} {query} {errorMessage} {results} {categoryResults} {categoryResultsCountStr} {categoryAllResultsCountStr} categoryShowAllResults={categoryShowAllResults} {categorySelectionEnabled} {selectedCategoryResults} {selectedCategoryResultItems} {categoryStatusText} {categoryDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {expandedCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} {pages} {currentPage} {totalPages} onRetry={doSearch} onToggleCategory={toggleCategoryResultSelection} onToggleCategoryExpanded={toggleCategoryExpanded} onOpenCategoryFiles={openCategoryFileDialog} onToggleAllCategories={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onDownloadCategories={downloadSelectedCategoriesZip} onCancelCategories={cancelSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} onSetCategoryShowAllResults={setCategoryShowAllResults} onGoPage={goPage} />
+    <CategoryDownloadPanel activeProfile={activeProfile === 'voiceCategory' ? 'voiceCategory' : 'categoryDownload'} {status} {query} {errorMessage} {results} {categoryResults} {categoryResultsCountStr} {categoryAllResultsCountStr} categoryShowAllResults={categoryShowAllResults} categoryIncludeSubcats={categoryIncludeSubcats} {categorySelectionEnabled} {selectedCategoryResults} {selectedCategoryResultItems} selectedCategoriesTotal={selectedCategoriesTotal} {categoryStatusText} {categoryDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {expandedCategories} {collapsedRootCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} {pages} {currentPage} {totalPages} onRetry={doSearch} onToggleCategory={toggleCategoryResultSelection} onToggleCategoryExpanded={toggleCategoryExpanded} onToggleRootCollapsed={toggleRootCategoryCollapsed} onOpenCategoryFiles={openCategoryFileDialog} onRetryCategorySubcats={ensureCategorySubcats} onToggleAllCategories={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onClearAllSelections={clearAllSelections} onDownloadCategories={downloadSelectedCategoriesZip} onCancelCategories={cancelSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} onSetCategoryShowAllResults={setCategoryShowAllResults} onSetCategoryIncludeSubcats={(value) => { if (!downloadBusy) categoryIncludeSubcats = value; }} onGoPage={goPage} />
   {:else if !voiceSubtitleActive}
-    <WikiSearchPanel {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={doSearch} onSuggestion={searchSuggestion} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
+    <WikiSearchPanel {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} selectedFilesTotal={selectedFilesTotal} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={doSearch} onSuggestion={searchSuggestion} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onClearAllSelections={clearAllSelections} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
   {/if}
 </main>
 
@@ -720,6 +892,16 @@
   <Lightbox src={lightboxSrc} downloading={lightboxDownloading} onClose={closeLightbox} onDownload={downloadLightboxImage} />
 {/if}
 
-{#if categoryFileDialogOpen}
-  <CategoryFileDialog title={categoryDisplayName(categoryFileDialogTitle)} subtitle={activeProfile === 'voiceCategory' ? '音频文件' : '分类文件'} emptyMessage={activeProfile === 'voiceCategory' ? '该分类下没有可下载音频（可能不是语音分类，或音频未挂到此分类）' : '分类内没有可显示文件'} files={categoryFileDialogFiles} loading={categoryFileDialogLoading} error={categoryFileDialogError} onClose={closeCategoryFileDialog} onPreview={openLightbox} />
-{/if}
+  {#if categoryFileDialogOpen}
+    <CategoryFileDialog
+      title={categoryDisplayName(categoryFileDialogTitle)}
+      subtitle={activeProfile === 'voiceCategory' ? '音频文件' : '分类文件'}
+      emptyMessage={activeProfile === 'voiceCategory' ? '该分类下没有可下载音频（可能不是语音分类，或音频未挂到此分类）' : '分类内没有可显示文件'}
+      files={categoryFileDialogFiles}
+      loading={categoryFileDialogLoading}
+      error={categoryFileDialogError}
+      onClose={closeCategoryFileDialog}
+      onPreview={openLightbox}
+      onRetry={() => openCategoryFileDialog(categoryFileDialogTitle)}
+    />
+  {/if}

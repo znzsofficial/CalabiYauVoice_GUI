@@ -1,8 +1,35 @@
 <script lang="ts">
+  import CategoryTreeNode from './CategoryTreeNode.svelte';
   import { highlightMatch, categoryDisplayName } from './utils';
   import type { SearchResult, Status } from './searchTypes';
 
-  let { status = 'idle', query = '', resultSuggestion = '', errorMessage = '', results = [], fileSelectionEnabled = false, categorySelectionEnabled = false, categorySearchActive = false, selectionDisabled = false, selectedFiles = new Set<string>(), selectedCategoryResults = new Set<string>(), expandedCategories = new Set<string>(), categorySubcats = {}, categorySubcatLoading = new Set<string>(), categorySubcatErrors = {}, onRetry = () => {}, onSuggestion = (value: string) => {}, onToggleFile = (title: string) => {}, onToggleCategory = (title: string) => {}, onOpenLightbox = (src: string) => {}, onToggleCategoryExpanded = (title: string) => {}, onOpenCategoryFiles = (title: string) => {} }: {
+  let {
+    status = 'idle' as Status,
+    query = '',
+    resultSuggestion = '',
+    errorMessage = '',
+    results = [] as SearchResult[],
+    fileSelectionEnabled = false,
+    categorySelectionEnabled = false,
+    categorySearchActive = false,
+    selectionDisabled = false,
+    selectedFiles = new Set<string>(),
+    selectedCategoryResults = new Set<string>(),
+    expandedCategories = new Set<string>(),
+    collapsedRootCategories = new Set<string>(),
+    categorySubcats = {} as Record<string, string[]>,
+    categorySubcatLoading = new Set<string>(),
+    categorySubcatErrors = {} as Record<string, string>,
+    onRetry = () => {},
+    onSuggestion = (_value: string) => {},
+    onToggleFile = (_title: string) => {},
+    onToggleCategory = (_title: string) => {},
+    onOpenLightbox = (_src: string) => {},
+    onToggleCategoryExpanded = (_title: string) => {},
+    onToggleRootCollapsed = (_title: string) => {},
+    onOpenCategoryFiles = (_title: string) => {},
+    onRetryCategorySubcats = (_title: string) => {},
+  }: {
     status?: Status;
     query?: string;
     resultSuggestion?: string;
@@ -15,6 +42,7 @@
     selectedFiles?: Set<string>;
     selectedCategoryResults?: Set<string>;
     expandedCategories?: Set<string>;
+    collapsedRootCategories?: Set<string>;
     categorySubcats?: Record<string, string[]>;
     categorySubcatLoading?: Set<string>;
     categorySubcatErrors?: Record<string, string>;
@@ -24,7 +52,9 @@
     onToggleCategory?: (title: string) => void;
     onOpenLightbox?: (src: string) => void;
     onToggleCategoryExpanded?: (title: string) => void;
+    onToggleRootCollapsed?: (title: string) => void;
     onOpenCategoryFiles?: (title: string) => void;
+    onRetryCategorySubcats?: (title: string) => void;
   } = $props();
 
   function cleanSnippet(html: string): string {
@@ -45,54 +75,74 @@
   function resultSnippet(result: SearchResult): string {
     return result.snippet || '';
   }
+
   function handleToggleFileClick(e: MouseEvent): void {
     e.preventDefault(); e.stopPropagation();
     if (selectionDisabled) return;
     const title = (e.currentTarget as HTMLElement).dataset.title;
     if (title) onToggleFile(title);
   }
+
   function handleToggleFileKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); if (selectionDisabled) return; const title = (e.currentTarget as HTMLElement).dataset.title; if (title) onToggleFile(title); }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); e.stopPropagation();
+      if (selectionDisabled) return;
+      const title = (e.currentTarget as HTMLElement).dataset.title;
+      if (title) onToggleFile(title);
+    }
   }
+
   function handleToggleCategoryClick(e: MouseEvent): void {
     e.preventDefault(); e.stopPropagation();
     if (selectionDisabled) return;
     const title = (e.currentTarget as HTMLElement).dataset.title;
     if (title) onToggleCategory(title);
   }
+
   function handleToggleCategoryKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); if (selectionDisabled) return; const title = (e.currentTarget as HTMLElement).dataset.title; if (title) onToggleCategory(title); }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault(); e.stopPropagation();
+      if (selectionDisabled) return;
+      const title = (e.currentTarget as HTMLElement).dataset.title;
+      if (title) onToggleCategory(title);
+    }
   }
+
   function handleLightboxClick(e: MouseEvent, image: { thumb: string; full: string }): void {
-    e.preventDefault(); e.stopPropagation(); onOpenLightbox(imageFull(image));
-  }
-  function handleToggleCategoryExpanded(e: MouseEvent): void {
     e.preventDefault(); e.stopPropagation();
-    if (selectionDisabled) return;
-    const title = (e.currentTarget as HTMLElement).dataset.title;
-    if (title) onToggleCategoryExpanded(title);
+    onOpenLightbox(imageFull(image));
   }
+
+  function handleToggleRootCollapsed(e: MouseEvent): void {
+    e.preventDefault(); e.stopPropagation();
+    const title = (e.currentTarget as HTMLElement).dataset.title;
+    if (title) onToggleRootCollapsed(title);
+  }
+
   function handleOpenCategoryFiles(e: MouseEvent): void {
     e.preventDefault(); e.stopPropagation();
     const title = (e.currentTarget as HTMLElement).dataset.title;
     if (title) onOpenCategoryFiles(title);
   }
-  function handleSubcatClick(e: MouseEvent): void {
+
+  function handleRetryRootSubcats(e: MouseEvent): void {
     e.preventDefault(); e.stopPropagation();
-    if (selectionDisabled) return;
-    const subcat = (e.currentTarget as HTMLElement).dataset.subcat;
-    if (subcat) onToggleCategory(subcat);
+    const title = (e.currentTarget as HTMLElement).dataset.title;
+    if (title) onRetryCategorySubcats(title);
   }
-  function handleSubcatExpandClick(e: MouseEvent): void {
-    e.preventDefault(); e.stopPropagation();
-    if (selectionDisabled) return;
-    const subcat = (e.currentTarget as HTMLElement).dataset.subcat;
-    if (subcat) onToggleCategoryExpanded(subcat);
+
+  function rootChildCount(title: string): number | null {
+    const children = categorySubcats[title];
+    return Array.isArray(children) ? children.length : null;
   }
-  function handleOpenSubcatFiles(e: MouseEvent): void {
-    e.preventDefault(); e.stopPropagation();
-    const subcat = (e.currentTarget as HTMLElement).dataset.subcat;
-    if (subcat) onOpenCategoryFiles(subcat);
+
+  function rootKnownEmpty(title: string): boolean {
+    const children = categorySubcats[title];
+    return Array.isArray(children) && children.length === 0;
+  }
+
+  function rootCollapsed(title: string): boolean {
+    return collapsedRootCategories.has(title);
   }
 </script>
 
@@ -104,7 +154,19 @@
   {:else if status === 'empty'}
     <div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 6 0"/></svg></div><p>未找到「{query}」相关结果</p>{#if resultSuggestion}<p class="empty-hint">你是不是要搜：<button class="suggestion-link" onclick={() => onSuggestion(resultSuggestion)}>{resultSuggestion}</button></p>{:else}<p class="empty-hint">试试换个关键词，或检查拼写</p>{/if}</div>
   {:else if status === 'error'}
-    <div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></div><p>{errorMessage}</p><button class="btn outline" style="margin-top: 12px;" onclick={onRetry}>重试</button></div>
+    <div class="notice-card notice-card-center" role="alert">
+      <div class="notice-card-glow"></div>
+      <div class="notice-card-head">
+        <span class="notice-card-icon error"><iconify-icon icon="lucide:alert-circle"></iconify-icon></span>
+        <span>
+          <strong class="notice-card-title">搜索失败</strong>
+          <small class="notice-card-desc">{errorMessage}</small>
+        </span>
+      </div>
+      <div class="notice-card-actions">
+        <button class="btn outline" type="button" onclick={onRetry}>重试</button>
+      </div>
+    </div>
   {:else}
     {#each results as result (result.title)}
       <article class:category-tree-card={categorySearchActive && result.ns === 14} class="result-card" style={`animation-delay: ${result.delay}`}>
@@ -120,7 +182,17 @@
         {/if}
         {#if result.image}<button type="button" class="result-thumb" onclick={(e) => handleLightboxClick(e, result.image!)}><img src={result.image.thumb} alt="" loading="lazy"></button>{/if}
         <div class="result-body">
-          <div class="result-title-row">{#if result.nsName}<span class="result-ns">{result.nsName}</span>{/if}<h3 class="result-title"><a class="result-title-link" href={result.url} target="_blank" rel="noopener noreferrer">{@html highlightMatch(result.title, query)}</a></h3><a class="result-open-link" href={result.url} target="_blank" rel="noopener noreferrer" aria-label={`打开 ${result.title}`}><iconify-icon icon="lucide:external-link"></iconify-icon></a></div>
+          <div class="result-title-row">
+            {#if result.nsName}<span class="result-ns">{result.nsName}</span>{/if}
+            <h3 class="result-title"><a class="result-title-link" href={result.url} target="_blank" rel="noopener noreferrer">{@html highlightMatch(result.title, query)}</a></h3>
+            <a class="result-open-link" href={result.url} target="_blank" rel="noopener noreferrer" aria-label={`打开 ${result.title}`}><iconify-icon icon="lucide:external-link"></iconify-icon></a>
+            {#if categorySearchActive && result.ns === 14}
+              <button class="category-item-files" type="button" data-title={result.title} onclick={handleOpenCategoryFiles} title="查看文件">
+                <iconify-icon icon="lucide:files"></iconify-icon>
+                <span>查看文件</span>
+              </button>
+            {/if}
+          </div>
           {#if result.redirecttitle}<div class="result-redirect">重定向自：<span>{@html highlightMatch(result.redirecttitle, query)}</span></div>{/if}
           {#if result.sectiontitle}<span class="result-section">§ {result.sectiontitle}</span>{/if}
           {#if !categorySearchActive}
@@ -128,85 +200,62 @@
             <div class="result-meta-row"><span title="最后编辑">{result.dateStr}</span>{#if result.wordCountStr}<span title="字数">{result.wordCountStr} 字</span>{/if}{#if result.fileSize}<span title="文件大小">{result.fileSize}</span>{:else if result.pageSizeKB}<span title="页面大小">{result.pageSizeKB}</span>{/if}</div>
           {/if}
           {#if categorySearchActive && result.ns === 14}
-            <div class="category-tree-actions">
-              {#if !categorySubcats[result.title] || categorySubcats[result.title].length > 0}
-                <button class="category-tree-action" class:active={expandedCategories.has(result.title)} type="button" data-title={result.title} onclick={handleToggleCategoryExpanded}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={expandedCategories.has(result.title) ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'}/></svg>
-                  <span>{expandedCategories.has(result.title) ? '收起' : '子分类'}</span>
-                  {#if categorySubcats[result.title]}<small>{categorySubcats[result.title].length}</small>{/if}
-                </button>
-              {/if}
-              <button class="category-tree-action" type="button" data-title={result.title} onclick={handleOpenCategoryFiles}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-                <span>查看文件</span>
-              </button>
-            </div>
-            {#if expandedCategories.has(result.title)}
-              <div class="subcategory-panel category-tree" role="tree" aria-label={`${categoryDisplayName(result.title)} 子分类`}>
+            {@const isCollapsed = rootCollapsed(result.title)}
+            {@const childCount = rootChildCount(result.title)}
+            {@const knownEmpty = rootKnownEmpty(result.title)}
+            {#if knownEmpty}
+              <div class="category-tree-hint-row">无子分类</div>
+            {:else}
+              <div class="subcategory-panel" class:collapsed={isCollapsed} role="tree" aria-label={`${categoryDisplayName(result.title)} 子分类`}>
                 <div class="subcategory-tree-head">
-                  <span class="subcategory-tree-head-icon"><iconify-icon icon="lucide:git-branch"></iconify-icon></span>
-                  <span class="subcategory-tree-head-title">子分类树</span>
-                  {#if categorySubcats[result.title]}
-                    <span class="subcategory-tree-head-count">{categorySubcats[result.title].length} 项</span>
+                  <span class="subcategory-tree-head-icon"><iconify-icon icon="lucide:folder-tree"></iconify-icon></span>
+                  <span class="subcategory-tree-head-title">直接子分类</span>
+                  {#if childCount != null}
+                    <span class="subcategory-tree-head-count">{childCount} 项</span>
+                  {:else if categorySubcatLoading.has(result.title)}
+                    <span class="subcategory-tree-head-count">加载中…</span>
                   {/if}
+                  <button
+                    class="subcategory-collapse-btn"
+                    type="button"
+                    data-title={result.title}
+                    onclick={handleToggleRootCollapsed}
+                    aria-expanded={!isCollapsed}
+                    title={isCollapsed ? '展开子分类' : '折叠子分类'}
+                  >
+                    <iconify-icon icon={isCollapsed ? 'lucide:chevron-down' : 'lucide:chevron-up'}></iconify-icon>
+                    <span>{isCollapsed ? '展开' : '折叠'}</span>
+                  </button>
                 </div>
-                {#if categorySubcatLoading.has(result.title)}
-                  <div class="subcategory-loading"><span class="suggest-spinner"></span><span>加载子分类…</span></div>
-                {:else if categorySubcatErrors[result.title]}
-                  <span class="subcategory-error">{categorySubcatErrors[result.title]}</span>
-                {:else if categorySubcats[result.title]?.length > 0}
-                  <div class="subcategory-tree-list">
-                    {#each categorySubcats[result.title] as subcat (subcat)}
-                      <div class:checked={selectedCategoryResults.has(subcat)} class="subcategory-tree-row" role="treeitem" aria-selected={selectedCategoryResults.has(subcat)}>
-                        <span class="subcategory-tree-branch" aria-hidden="true"></span>
-                        {#if !categorySubcats[subcat] || categorySubcats[subcat].length > 0}
-                          <button class="subcategory-tree-toggle" class:active={expandedCategories.has(subcat)} type="button" disabled={selectionDisabled} data-subcat={subcat} onclick={handleSubcatExpandClick} aria-label={`${expandedCategories.has(subcat) ? '收起' : '展开'} ${categoryDisplayName(subcat)}`}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d={expandedCategories.has(subcat) ? 'm18 15-6-6-6 6' : 'm9 18 6-6-6-6'}/></svg>
-                          </button>
-                        {:else}
-                          <span class="subcategory-tree-spacer" aria-hidden="true"></span>
-                        {/if}
-                        <button class="subcategory-tree-select" type="button" disabled={selectionDisabled} data-subcat={subcat} onclick={handleSubcatClick}>
-                          <iconify-icon class="subcategory-tree-check" icon={selectedCategoryResults.has(subcat) ? 'lucide:check-square' : 'lucide:square'} aria-hidden="true"></iconify-icon>
-                          <iconify-icon class="subcategory-tree-folder" icon={expandedCategories.has(subcat) ? 'lucide:folder-open' : 'lucide:folder'} aria-hidden="true"></iconify-icon>
-                          <span class="subcategory-tree-name">{categoryDisplayName(subcat)}</span>
-                        </button>
-                        <button class="subcategory-tree-file" type="button" data-subcat={subcat} onclick={handleOpenSubcatFiles} aria-label={`查看 ${categoryDisplayName(subcat)} 文件`}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-                          <span>文件</span>
-                        </button>
-                      </div>
-                      {#if expandedCategories.has(subcat)}
-                        <div class="subcategory-tree-children" role="group">
-                          {#if categorySubcatLoading.has(subcat)}
-                            <div class="subcategory-tree-note"><span class="suggest-spinner"></span><span>加载子分类…</span></div>
-                          {:else if categorySubcatErrors[subcat]}
-                            <span class="subcategory-tree-note error">{categorySubcatErrors[subcat]}</span>
-                          {:else if categorySubcats[subcat]?.length > 0}
-                            {#each categorySubcats[subcat] as child (child)}
-                              <div class:checked={selectedCategoryResults.has(child)} class="subcategory-tree-row child" role="treeitem" aria-selected={selectedCategoryResults.has(child)}>
-                                <span class="subcategory-tree-branch" aria-hidden="true"></span>
-                                <span class="subcategory-tree-spacer" aria-hidden="true"></span>
-                                <button class="subcategory-tree-select" type="button" disabled={selectionDisabled} data-subcat={child} onclick={handleSubcatClick}>
-                                  <iconify-icon class="subcategory-tree-check" icon={selectedCategoryResults.has(child) ? 'lucide:check-square' : 'lucide:square'} aria-hidden="true"></iconify-icon>
-                                  <iconify-icon class="subcategory-tree-folder" icon="lucide:folder" aria-hidden="true"></iconify-icon>
-                                  <span class="subcategory-tree-name">{categoryDisplayName(child)}</span>
-                                </button>
-                                <button class="subcategory-tree-file" type="button" data-subcat={child} onclick={handleOpenSubcatFiles} aria-label={`查看 ${categoryDisplayName(child)} 文件`}>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-                                  <span>文件</span>
-                                </button>
-                              </div>
-                            {/each}
-                          {:else}
-                            <span class="subcategory-tree-note">没有子分类</span>
-                          {/if}
-                        </div>
-                      {/if}
-                    {/each}
-                  </div>
-                {:else}
-                  <span class="subcategory-empty">没有子分类</span>
+                {#if !isCollapsed}
+                  {#if categorySubcatLoading.has(result.title) && !categorySubcats[result.title]}
+                    <div class="subcategory-loading"><span class="suggest-spinner"></span><span>加载子分类…</span></div>
+                  {:else if categorySubcatErrors[result.title]}
+                    <div class="subcategory-error">
+                      <span>{categorySubcatErrors[result.title]}</span>
+                      <button class="category-tree-action" type="button" data-title={result.title} onclick={handleRetryRootSubcats}>重试</button>
+                    </div>
+                  {:else if categorySubcats[result.title]?.length > 0}
+                    <div class="subcategory-tree-list">
+                      {#each categorySubcats[result.title] as subcat (subcat)}
+                        <CategoryTreeNode
+                          title={subcat}
+                          depth={0}
+                          {selectionDisabled}
+                          {selectedCategoryResults}
+                          {expandedCategories}
+                          {categorySubcats}
+                          {categorySubcatLoading}
+                          {categorySubcatErrors}
+                          {onToggleCategory}
+                          {onToggleCategoryExpanded}
+                          {onOpenCategoryFiles}
+                        />
+                      {/each}
+                    </div>
+                  {:else}
+                    <span class="subcategory-empty">没有子分类</span>
+                  {/if}
                 {/if}
               </div>
             {/if}
@@ -220,82 +269,180 @@
 
 <style>
   .category-tree-card { padding-left: 44px; }
-  .category-tree-card::before { content: ''; position: absolute; left: 28px; top: 42px; bottom: 18px; width: 1px; background: linear-gradient(var(--border), color-mix(in srgb, var(--border) 20%, transparent)); }
-  .category-tree-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .category-tree-action { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--muted-foreground); font: inherit; font-size: 12px; cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s, box-shadow 0.2s; }
-  .category-tree-action svg { width: 14px; height: 14px; flex-shrink: 0; }
-  .category-tree-action small { font-size: 11px; opacity: 0.6; }
-  .category-tree-action:hover { border-color: color-mix(in srgb, var(--border) 60%, var(--foreground)); color: var(--foreground); background: var(--accent); box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--foreground) 18%, transparent); }
-  .category-tree-action:active { transform: scale(0.98); }
-  .category-tree-action:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring); }
-  .category-tree-action.active { border-color: var(--primary); color: var(--foreground); background: var(--accent); }
-  .subcategory-panel { margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(180deg, color-mix(in srgb, var(--card) 88%, var(--muted)), color-mix(in srgb, var(--muted) 86%, transparent)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent); }
-  .subcategory-tree-head { display: flex; align-items: center; gap: 8px; min-height: 34px; margin-bottom: 8px; padding: 0 4px 8px; border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent); color: var(--muted-foreground); }
-  .subcategory-tree-head-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 7px; background: var(--background); color: var(--foreground); }
+  .category-tree-card::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 42px;
+    bottom: 18px;
+    width: 1px;
+    background: linear-gradient(var(--border), color-mix(in srgb, var(--border) 20%, transparent));
+  }
+  .category-tree-card .result-title-row {
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .category-tree-card .result-title {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .category-tree-card .result-title-link {
+    display: inline;
+  }
+  .category-item-files {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: filter 0.15s, transform 0.1s;
+  }
+  .category-item-files iconify-icon { font-size: 14px; }
+  .category-item-files:hover { filter: brightness(1.05); }
+  .category-item-files:active { transform: scale(0.98); }
+  .category-item-files:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring); }
+  .category-tree-hint-row {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .category-tree-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--background);
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .category-tree-action:hover {
+    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
+    color: var(--foreground);
+    background: var(--accent);
+  }
+  .subcategory-panel {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--card) 88%, var(--muted)), color-mix(in srgb, var(--muted) 86%, transparent));
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 3%, transparent);
+  }
+  .subcategory-panel.collapsed {
+    padding-bottom: 8px;
+  }
+  .subcategory-tree-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    margin-bottom: 0;
+    padding: 0 2px;
+    color: var(--muted-foreground);
+  }
+  .subcategory-panel:not(.collapsed) .subcategory-tree-head {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  }
+  .subcategory-tree-head-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--background);
+    color: var(--foreground);
+    flex-shrink: 0;
+  }
   .subcategory-tree-head-icon iconify-icon { font-size: 14px; }
   .subcategory-tree-head-title { color: var(--foreground); font-size: 13px; font-weight: 600; }
-  .subcategory-tree-head-count { margin-left: auto; font-size: 12px; }
-  .subcategory-loading, .subcategory-empty, .subcategory-error { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); padding: 4px 0; }
-  .subcategory-loading, .subcategory-empty, .subcategory-error { margin-left: 14px; }
-  .subcategory-tree-list { position: relative; display: flex; flex-direction: column; gap: 4px; }
-  .subcategory-tree-list::before { content: ''; position: absolute; left: 22px; top: 3px; bottom: 20px; width: 1px; background: color-mix(in srgb, var(--border) 86%, transparent); }
-  .subcategory-tree-row { position: relative; display: grid; grid-template-columns: 34px 34px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 44px; padding: 3px 8px 3px 0; border: 1px solid transparent; border-radius: 10px; color: var(--muted-foreground); transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.15s; }
-  .subcategory-tree-row.child { margin-left: 36px; grid-template-columns: 34px 34px minmax(0, 1fr) auto; }
-  .subcategory-tree-row:hover { background: color-mix(in srgb, var(--card) 88%, transparent); border-color: color-mix(in srgb, var(--border) 86%, var(--foreground)); color: var(--foreground); transform: translateX(1px); }
-  .subcategory-tree-row.checked { color: var(--foreground); background: color-mix(in srgb, var(--primary) 8%, var(--card)); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); }
-  .subcategory-tree-branch { position: relative; width: 22px; height: 1px; margin-left: 22px; background: color-mix(in srgb, var(--border) 90%, transparent); }
-  .subcategory-tree-branch::after { content: ''; position: absolute; right: -2px; top: -2px; width: 5px; height: 5px; border-radius: 999px; background: var(--border); }
-  .subcategory-tree-toggle, .subcategory-tree-file, .subcategory-tree-select { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-  .subcategory-tree-toggle, .subcategory-tree-spacer { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; }
-  .subcategory-tree-file { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 58px; height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); font-size: 12px; }
-  .subcategory-tree-toggle svg, .subcategory-tree-file svg { width: 15px; height: 15px; }
-  .subcategory-tree-toggle:hover, .subcategory-tree-file:hover { background: var(--card); border-color: color-mix(in srgb, var(--border) 70%, var(--foreground)); color: var(--foreground); }
-  .subcategory-tree-toggle.active { color: var(--foreground); background: var(--card); box-shadow: inset 0 0 0 1px var(--border); }
-  .subcategory-tree-toggle:disabled, .subcategory-tree-select:disabled { cursor: not-allowed; opacity: 0.55; }
-  .subcategory-tree-select { display: inline-flex; align-items: center; gap: 9px; min-width: 0; height: 36px; padding: 4px 6px; text-align: left; border-radius: 8px; }
-  .subcategory-tree-select:hover { background: color-mix(in srgb, var(--accent) 58%, transparent); }
-  .subcategory-tree-check { flex: 0 0 auto; width: 18px; height: 18px; color: var(--muted-foreground); }
-  .subcategory-tree-folder { flex: 0 0 auto; width: 16px; height: 16px; color: color-mix(in srgb, var(--muted-foreground) 78%, var(--foreground)); }
-  .subcategory-tree-row.checked .subcategory-tree-check { color: var(--primary); }
-  .subcategory-tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
-  .subcategory-tree-children { position: relative; display: flex; flex-direction: column; gap: 4px; margin: 2px 0 4px 36px; }
-  .subcategory-tree-children::before { content: ''; position: absolute; left: 22px; top: 0; bottom: 20px; width: 1px; background: color-mix(in srgb, var(--border) 82%, transparent); }
-  .subcategory-tree-note { display: flex; align-items: center; gap: 6px; min-height: 34px; margin-left: 68px; font-size: 12px; color: var(--muted-foreground); }
-  .subcategory-tree-note.error { color: var(--destructive); }
+  .subcategory-tree-head-count { font-size: 12px; color: var(--muted-foreground); }
+  .subcategory-collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--background);
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .subcategory-collapse-btn iconify-icon { font-size: 14px; }
+  .subcategory-collapse-btn:hover {
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--border) 55%, var(--foreground));
+    background: var(--accent);
+  }
+  .subcategory-collapse-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+  }
+  .subcategory-loading,
+  .subcategory-empty,
+  .subcategory-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    padding: 6px 4px;
+  }
+  .subcategory-error { color: var(--destructive, #dc2626); flex-wrap: wrap; }
+  .subcategory-tree-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: min(420px, 50vh);
+    overflow: auto;
+    padding-right: 2px;
+  }
 
   @media (prefers-color-scheme: dark) {
     .category-tree-action:hover,
     .subcategory-panel {
       border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
     }
-    .subcategory-tree-row:hover {
-      background: color-mix(in srgb, var(--accent) 72%, transparent);
-    }
-    .subcategory-tree-row.checked {
-      background: color-mix(in srgb, var(--primary) 12%, transparent);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .subcategory-tree-row {
-      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-    }
-    .subcategory-tree-row:hover {
-      transform: none;
-    }
   }
 
   @media (max-width: 640px) {
     .category-tree-card { padding-left: 36px; }
     .category-tree-card::before { left: 22px; }
-    .subcategory-panel { padding: 8px 6px 8px 8px; }
-    .subcategory-tree-row { grid-template-columns: 24px 30px minmax(0, 1fr) 34px; min-height: 40px; gap: 4px; }
-    .subcategory-tree-row.child { margin-left: 20px; grid-template-columns: 24px 30px minmax(0, 1fr) 34px; }
-    .subcategory-tree-children { margin-left: 20px; }
-    .subcategory-tree-list::before, .subcategory-tree-children::before { left: 16px; }
-    .subcategory-tree-branch { width: 16px; margin-left: 16px; }
-    .subcategory-tree-file { min-width: 30px; width: 30px; padding: 0; }
-    .subcategory-tree-file span { display: none; }
-    .subcategory-tree-name { font-size: 12.5px; }
+    .subcategory-panel { padding: 8px; }
+    .category-item-files span,
+    .subcategory-collapse-btn span { display: none; }
+    .category-item-files,
+    .subcategory-collapse-btn {
+      width: 30px;
+      padding: 0;
+      justify-content: center;
+    }
   }
 </style>

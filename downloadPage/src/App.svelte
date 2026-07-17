@@ -409,30 +409,11 @@
                 <span style="flex: 1;"><strong>高清素材库</strong><small>官方美术素材资源</small></span>
                 <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
               </a>
-              <div class="creator-tooltip-wrap">
-                <a class="resource-link" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer" aria-describedby="creator-tooltip">
-                  <span class="resource-icon"><iconify-icon icon="lucide:palette"></iconify-icon></span>
-                  <span style="flex: 1;"><strong>创作者中心</strong><small>官方创作者服务平台，获取创作资源与支持。</small></span>
-                  <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
-                </a>
-                <div id="creator-tooltip" class="creator-tooltip" role="tooltip">
-                  <div class="creator-tooltip-inner">
-                    <div class="creator-tooltip-glow"></div>
-                    <div class="creator-tooltip-head">
-                      <span class="creator-tooltip-icon"><iconify-icon icon="lucide:monitor-smartphone"></iconify-icon></span>
-                      <span>
-                        <strong>访问提示</strong>
-                        <small>电脑端原站可能无法提交稿件</small>
-                      </span>
-                    </div>
-                    <p>建议前往移动端反代页面，以获得完整的创作者中心功能。</p>
-                    <div class="creator-tooltip-actions">
-                      <a class="creator-tooltip-primary" href="https://creator.nekolaska.vip/" target="_blank" rel="noopener noreferrer"><iconify-icon icon="lucide:smartphone"></iconify-icon>访问反代</a>
-                      <a class="creator-tooltip-secondary" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer">仍去原站</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <a class="resource-link" href="https://creatorcenter.idreamsky.com" target="_blank" rel="noopener noreferrer">
+                <span class="resource-icon"><iconify-icon icon="lucide:palette"></iconify-icon></span>
+                <span style="flex: 1;"><strong>创作者中心</strong><small>官方创作者服务平台，获取创作资源与支持。</small></span>
+                <iconify-icon icon="lucide:external-link" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+              </a>
             </div>
           </div>
         </section>

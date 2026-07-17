@@ -1,5 +1,25 @@
 <script lang="ts">
-  let { title = '', info = '', progress = '', allSelected = false, disabled = false, downloading = false, concurrency = 4, downloadLabel = '下载 ZIP', downloadingLabel = '打包中...', variant = 'bar' as 'bar' | 'rail', onToggleAll = () => {}, onDownload = () => {}, onCancel = () => {}, onConcurrencyChange = (value: number) => {} }: {
+  let {
+    title = '',
+    info = '',
+    progress = '',
+    allSelected = false,
+    disabled = false,
+    downloading = false,
+    concurrency = 4,
+    downloadLabel = '下载 ZIP',
+    downloadingLabel = '打包中...',
+    variant = 'bar' as 'bar' | 'rail',
+    includeSubcats = false,
+    showIncludeSubcats = false,
+    clearAllEnabled = false,
+    onToggleAll = () => {},
+    onClearAll = () => {},
+    onDownload = () => {},
+    onCancel = () => {},
+    onConcurrencyChange = (value: number) => {},
+    onToggleIncludeSubcats = () => {},
+  }: {
     title?: string;
     info?: string;
     progress?: string;
@@ -10,10 +30,15 @@
     downloadLabel?: string;
     downloadingLabel?: string;
     variant?: 'bar' | 'rail';
+    includeSubcats?: boolean;
+    showIncludeSubcats?: boolean;
+    clearAllEnabled?: boolean;
     onToggleAll?: () => void;
+    onClearAll?: () => void;
     onDownload?: () => void;
     onCancel?: () => void;
     onConcurrencyChange?: (value: number) => void;
+    onToggleIncludeSubcats?: () => void;
   } = $props();
 
   function handleConcurrencyChange(event: Event): void {
@@ -28,16 +53,25 @@
     {#if progress}<span>{progress}</span>{/if}
   </div>
   <div class="bulk-download-actions">
-    <button class="btn outline" type="button" disabled={downloading} onclick={onToggleAll}>{allSelected ? '取消全选' : '全选本页'}</button>
+    <button class="btn outline" type="button" disabled={downloading} onclick={onToggleAll}>{allSelected ? '取消全选本页' : '全选本页'}</button>
+    {#if clearAllEnabled}
+      <button class="btn outline" type="button" disabled={downloading || disabled} onclick={onClearAll}>清空全部</button>
+    {/if}
+    {#if showIncludeSubcats}
+      <label class="include-subcats">
+        <input type="checkbox" checked={includeSubcats} disabled={downloading} onchange={onToggleIncludeSubcats}>
+        <span>含子分类</span>
+      </label>
+    {/if}
     <label class="concurrency-control">
       <span>线程</span>
       {#if variant === 'rail'}
         <div class="concurrency-slider-wrap">
-          <input value={concurrency} type="range" min="1" max="16" step="1" oninput={handleConcurrencyChange}>
+          <input value={concurrency} type="range" min="1" max="16" step="1" disabled={downloading} oninput={handleConcurrencyChange}>
           <strong>{concurrency}</strong>
         </div>
       {:else}
-        <input value={concurrency} type="number" min="1" max="16" step="1" onchange={handleConcurrencyChange}>
+        <input value={concurrency} type="number" min="1" max="16" step="1" disabled={downloading} onchange={handleConcurrencyChange}>
       {/if}
     </label>
     {#if downloading}
@@ -94,6 +128,28 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .include-subcats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  .include-subcats input {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--primary);
+  }
+
+  .include-subcats:has(input:disabled) {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
 
   .concurrency-control {

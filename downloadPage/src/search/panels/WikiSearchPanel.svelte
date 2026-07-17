@@ -13,6 +13,7 @@
     fileSelectionEnabled = false,
     fileResults = [] as SearchResult[],
     selectedFileResults = [] as SearchResult[],
+    selectedFilesTotal = 0,
     selectedFiles = new Set<string>(),
     zipProgress = '',
     zipDownloading = false,
@@ -26,6 +27,7 @@
     onToggleFile = (title: string) => {},
     onOpenLightbox = (src: string) => {},
     onToggleAllFiles = () => {},
+    onClearAllSelections = () => {},
     onDownloadFiles = () => {},
     onCancelFiles = () => {},
     onConcurrencyChange = (value: number) => {},
@@ -40,6 +42,7 @@
     fileSelectionEnabled?: boolean;
     fileResults?: SearchResult[];
     selectedFileResults?: SearchResult[];
+    selectedFilesTotal?: number;
     selectedFiles?: Set<string>;
     zipProgress?: string;
     zipDownloading?: boolean;
@@ -53,11 +56,19 @@
     onToggleFile?: (title: string) => void;
     onOpenLightbox?: (src: string) => void;
     onToggleAllFiles?: () => void;
+    onClearAllSelections?: () => void;
     onDownloadFiles?: () => void;
     onCancelFiles?: () => void;
     onConcurrencyChange?: (value: number) => void;
     onGoPage?: (page: number) => void;
   } = $props();
+
+  let pageAllSelected = $derived(fileResults.length > 0 && selectedFileResults.length === fileResults.length);
+  let selectionInfo = $derived(
+    selectedFilesTotal > 0
+      ? `已选 ${selectedFilesTotal} 个文件${selectedFileResults.length > 0 && selectedFileResults.length !== selectedFilesTotal ? ` · 本页 ${selectedFileResults.length}` : ''}`
+      : `本页 ${fileResults.length} 个文件可选`
+  );
 </script>
 
 <div class={`wiki-workbench ${status === 'ready' && fileSelectionEnabled ? 'has-rail' : ''}`}>
@@ -82,7 +93,7 @@
 
   {#if status === 'ready' && fileSelectionEnabled}
     <aside class="wiki-download-rail">
-      <BulkDownloadBar variant="rail" title="批量下载" info={selectedFileResults.length > 0 ? `已选择 ${selectedFileResults.length} 个文件` : `本页 ${fileResults.length} 个文件可选`} progress={zipProgress} allSelected={selectedFileResults.length === fileResults.length} disabled={selectedFileResults.length === 0} downloading={zipDownloading} concurrency={downloadConcurrency} downloadingLabel="打包中…" onToggleAll={onToggleAllFiles} onDownload={onDownloadFiles} onCancel={onCancelFiles} onConcurrencyChange={onConcurrencyChange} />
+      <BulkDownloadBar variant="rail" title="批量下载" info={selectionInfo} progress={zipProgress} allSelected={pageAllSelected} disabled={selectedFilesTotal === 0} downloading={zipDownloading} concurrency={downloadConcurrency} downloadingLabel="打包中…" clearAllEnabled={selectedFilesTotal > 0} onToggleAll={onToggleAllFiles} onClearAll={onClearAllSelections} onDownload={onDownloadFiles} onCancel={onCancelFiles} onConcurrencyChange={onConcurrencyChange} />
     </aside>
   {/if}
 </div>
