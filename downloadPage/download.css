@@ -69,14 +69,23 @@
         height: 18px;
     }
 
+    .main-content {
+        padding: 20px 12px 32px;
+        gap: 16px;
+    }
+
     .feature-card {
         gap: 12px;
     }
 
     .feature-icon {
-        width: 40px;
-        height: 40px;
-        font-size: 1.25rem;
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+
+    .feature-title {
+        font-size: 0.875rem;
     }
 }
 
@@ -105,16 +114,19 @@
 
 .main-content {
     flex: 1;
-    padding: 24px 16px;
-    max-width: 960px;
+    padding: 28px 16px 40px;
+    max-width: 920px;
     margin: 0 auto;
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
 }
 
 .hero-section {
     position: relative;
-    padding: 34px 38px;
-    margin-bottom: 28px;
+    padding: 32px 36px;
+    margin-bottom: 0;
     overflow: hidden;
 }
 
@@ -347,61 +359,105 @@
 
 .feature-matrix {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 0;
 }
 
 .feature-card {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
+    min-height: 64px;
+    padding: 14px 16px;
     cursor: pointer;
     text-decoration: none;
     text-align: left;
     border: 1px solid var(--border);
     font: inherit;
     color: var(--foreground);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease, background-color 0.18s ease;
+}
+
+.feature-card:hover {
+    border-color: color-mix(in srgb, var(--border) 45%, var(--foreground));
+    box-shadow: 0 10px 24px -16px color-mix(in srgb, var(--foreground) 22%, transparent);
+    transform: translateY(-1px);
+}
+
+.feature-card:active {
+    transform: translateY(0) scale(0.99);
+}
+
+.feature-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
 }
 
 .feature-icon {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     display: grid;
     place-items: center;
-    border-radius: calc(var(--radius) - 2px);
-    font-size: 1.5rem;
+    border-radius: 10px;
+    font-size: 1.2rem;
     flex-shrink: 0;
 }
 
-.wiki-icon { background-color: color-mix(in srgb, #3b82f6 10%, transparent); color: #3b82f6; }
-.video-icon { background-color: color-mix(in srgb, #f59e0b 10%, transparent); color: #f59e0b; }
-.balance-icon { background-color: color-mix(in srgb, #10b981 10%, transparent); color: #10b981; }
+.wiki-icon { background-color: color-mix(in srgb, #3b82f6 12%, transparent); color: #2563eb; }
+.video-icon { background-color: color-mix(in srgb, #f59e0b 12%, transparent); color: #d97706; }
+.balance-icon { background-color: color-mix(in srgb, #10b981 12%, transparent); color: #059669; }
 
-.feature-text h3 {
+.feature-title {
+    min-width: 0;
+    flex: 1 1 auto;
     margin: 0;
     font-size: 0.9375rem;
     font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--foreground);
-}
-
-.feature-text p {
-    margin: 2px 0 0;
-    font-size: 0.8125rem;
-    color: var(--muted-foreground);
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .feature-arrow {
     margin-left: auto;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     color: var(--muted-foreground);
-    opacity: 0.3;
-    transition: transform 0.2s ease, opacity 0.2s ease;
+    opacity: 0.35;
+    flex-shrink: 0;
+    transition: transform 0.2s ease, opacity 0.2s ease, color 0.2s ease;
 }
 
 .feature-card:hover .feature-arrow {
-    transform: translateX(4px);
+    transform: translateX(3px);
     opacity: 1;
+    color: var(--foreground);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wiki-icon { color: #60a5fa; }
+    .video-icon { color: #fbbf24; }
+    .balance-icon { color: #34d399; }
+
+    .feature-card:hover {
+        border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent), 0 12px 28px -18px color-mix(in srgb, var(--primary) 28%, transparent);
+    }
+}
+
+@media (max-width: 720px) {
+    .feature-matrix {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .feature-card {
+        min-height: 56px;
+        padding: 12px 14px;
+    }
 }
 
 /* Suggestion 3: Timeline Update Log */
@@ -507,10 +563,10 @@
 @media (min-width: 768px) {
     .grid-layout {
         grid-template-columns: 5fr 4fr;
-        gap: 24px;
+        gap: 18px;
     }
     .col-left, .col-right {
-        gap: 24px;
+        gap: 18px;
     }
 }
 

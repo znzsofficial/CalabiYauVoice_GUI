@@ -111,14 +111,6 @@
   let canvasEl = $state<HTMLCanvasElement | null>(null);
   let seekTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const nativeIdeas = [
-    '按固定间隔生成 PNG/JPEG/WebP 帧图',
-    '加入音频波形预览，辅助定位画面',
-    '扩展素材信息面板，集中查看尺寸、时长与文件大小',
-    '制作封面套版，统一加入标题或水印',
-    '保存常用导出预设，快速复用比例、尺寸和帧率'
-  ];
-
   const settingsKey = 'downloadPage.video.settings';
   const maxSplitFrames = 240;
   const maxSplitPixels = 80_000_000;
@@ -206,6 +198,11 @@
     splitGifHeight = 0;
   }
 
+  function clearPreviewHistory(): void {
+    previewHistory.forEach(item => revoke(item.url));
+    previewHistory = [];
+  }
+
   function chooseFile(event: Event): void {
     const next = (event.currentTarget as HTMLInputElement).files?.[0] || null;
     setFile(next);
@@ -220,7 +217,10 @@
     rangeEnd = 0;
     timelineMarkers = [];
     status = next ? 'loading' : 'idle';
-    message = next ? '正在整理素材信息' : '';
+    message = next ? '读取中…' : '';
+    if (historyTimer) clearTimeout(historyTimer);
+    historyTimer = null;
+    clearPreviewHistory();
     revoke(videoUrl);
     revoke(previewUrl);
     revoke(gifPreviewUrl);
@@ -241,7 +241,7 @@
   async function parseSplitGif(next: File): Promise<void> {
     clearSplitFrames();
     status = 'loading';
-    message = '正在拆解 GIF';
+    message = '拆解中…';
     try {
       const parsed = parseGIF(await next.arrayBuffer());
       const frames = decompressFrames(parsed, true) as ParsedFrame[];
@@ -252,10 +252,10 @@
       splitGifHeight = parsed.lsd.height;
       splitFrames = await renderGifFrames(frames, parsed.lsd.width, parsed.lsd.height);
       status = 'done';
-      message = `已拆解 ${splitFrames.length} 帧`;
+      message = `${splitFrames.length} 帧`;
     } catch {
       status = 'error';
-      message = 'GIF 拆解未完成，请换一个文件或稍后再试';
+      message = '拆解失败';
     }
   }
 
@@ -303,7 +303,7 @@
     rangeStart = 0;
     rangeEnd = duration;
     status = duration > 0 ? 'idle' : 'error';
-    message = duration > 0 ? '' : '素材信息准备中';
+    message = duration > 0 ? '' : '读取中…';
     seekFrame(0, 0);
   }
 
@@ -324,7 +324,7 @@
     if (timelineMarkers.some(time => Math.abs(time - next) < 0.04)) return;
     timelineMarkers = [...timelineMarkers, next].sort((a, b) => a - b);
     status = 'done';
-    message = `已添加标记 ${formatTime(next)}`;
+    message = `标记 ${formatTime(next)}`;
   }
 
   function removeMarker(marker: number): void {
@@ -419,7 +419,7 @@
   }
 
   function getOutputInfo(): string {
-    if (!videoEl?.videoWidth || !videoEl.videoHeight) return `${formatOptions.find(option => option.value === exportFormat)?.label || 'PNG'} / 等待素材`;
+    if (!videoEl?.videoWidth || !videoEl.videoHeight) return `${formatOptions.find(option => option.value === exportFormat)?.label || 'PNG'} / —`;
     const crop = getCropSource(videoEl.videoWidth, videoEl.videoHeight);
     const size = getOutputSize(crop.width, crop.height);
     const ratio = cropRatio === 'custom' ? `${customRatioWidth}:${customRatioHeight}` : ratioOptions.find(option => option.value === cropRatio)?.label || '原始比例';
@@ -503,11 +503,17 @@
     const blob = await captureFrame();
     if (!blob) return;
     const url = URL.createObjectURL(blob);
+    const previousUrl = previewUrl;
     previewUrl = url;
+    if (previousUrl && !previewHistory.some(item => item.url === previousUrl)) revoke(previousUrl);
     if (historyTimer) clearTimeout(historyTimer);
     historyTimer = setTimeout(() => {
       const info = getOutputInfo();
-      previewHistory = [{ url, info }, ...previewHistory.slice(0, 5)];
+      const nextHistory = [{ url, info }, ...previewHistory.filter(item => item.url !== url)];
+      previewHistory = nextHistory.slice(0, 6);
+      nextHistory.slice(6).forEach(item => {
+        if (item.url !== previewUrl) revoke(item.url);
+      });
     }, 800);
   }
 
@@ -535,6 +541,10 @@
     URL.revokeObjectURL(url);
   }
 
+  function basename(name: string): string {
+    return name.replace(/\.[^.]+$/, '') || 'video';
+  }
+
   function getSampleTimes(): number[] {
     const start = Math.max(0, Math.min(rangeStart, duration || 0));
     const end = Math.max(start, Math.min(rangeEnd || duration || start, duration || start));
@@ -555,29 +565,39 @@
 
   async function seekTo(time: number): Promise<void> {
     if (!videoEl) return;
-    videoEl.currentTime = time;
+    const target = Math.max(0, Math.min(time, duration || time));
+    if (Math.abs(videoEl.currentTime - target) < 0.001 && videoEl.readyState >= 2) return;
     return new Promise(resolve => {
-      const onSeeked = (): void => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
         videoEl?.removeEventListener('seeked', onSeeked);
         resolve();
       };
+      const onSeeked = (): void => {
+        finish();
+      };
       videoEl?.addEventListener('seeked', onSeeked);
+      const timeout = setTimeout(finish, 3000);
+      videoEl!.currentTime = target;
     });
   }
 
   async function copyFrame(): Promise<void> {
     if (!canvasEl || !drawCurrentFrame() || typeof ClipboardItem === 'undefined') return;
     status = 'loading';
-    message = '正在复制到剪贴板';
+    message = '复制中…';
     try {
       const blob = await blobFromCanvas(canvasEl, 'image/png');
       if (!blob) throw new Error('blob failed');
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       status = 'done';
-      message = '已复制截图到剪贴板';
+      message = '已复制';
     } catch {
       status = 'error';
-      message = '无法复制截图，请尝试直接导出';
+      message = '复制失败';
     }
   }
 
@@ -593,20 +613,25 @@
     batchBusy = true;
     status = 'loading';
     try {
+      let exported = 0;
       for (const [index, time] of times.entries()) {
-        message = `正在截取第 ${index + 1}/${times.length} 帧`;
+        message = `${index + 1}/${times.length}`;
         await seekTo(time);
         const blob = await captureFrame();
-        if (blob) zip.file(getFrameName(index, time), blob);
+        if (blob) {
+          zip.file(getFrameName(index, time), blob);
+          exported += 1;
+        }
       }
-      message = '正在打包素材';
+      if (exported === 0) throw new Error('empty export');
+      message = '打包中…';
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, `frames_${file.name.split('.')[0]}.zip`);
+      downloadBlob(content, `frames_${basename(file.name)}.zip`);
       status = 'done';
-      message = `已导出 ${times.length} 张素材图`;
+      message = `已导出 ${exported} 张`;
     } catch {
       status = 'error';
-      message = '批量导出未能完成';
+      message = '导出失败';
     } finally {
       batchBusy = false;
       seekFrame(position, 0);
@@ -619,20 +644,25 @@
     batchBusy = true;
     status = 'loading';
     try {
+      let exported = 0;
       for (const [index, time] of timelineMarkers.entries()) {
-        message = `正在导出标记 ${index + 1}/${timelineMarkers.length}`;
+        message = `标记 ${index + 1}/${timelineMarkers.length}`;
         await seekTo(time);
         const blob = await captureFrame();
-        if (blob) zip.file(getFrameName(index, time), blob);
+        if (blob) {
+          zip.file(getFrameName(index, time), blob);
+          exported += 1;
+        }
       }
-      message = '正在打包标记帧';
+      if (exported === 0) throw new Error('empty export');
+      message = '打包中…';
       const content = await zip.generateAsync({ type: 'blob' });
-      downloadBlob(content, `markers_${file.name.split('.')[0]}.zip`);
+      downloadBlob(content, `markers_${basename(file.name)}.zip`);
       status = 'done';
-      message = `已导出 ${timelineMarkers.length} 张标记素材`;
+      message = `已导出 ${exported} 张`;
     } catch {
       status = 'error';
-      message = '标记导出失败';
+      message = '导出失败';
     } finally {
       batchBusy = false;
       seekFrame(position, 0);
@@ -657,13 +687,14 @@
     batchBusy = true;
     status = 'loading';
     try {
+      let exported = 0;
       ctx.fillStyle = '#18181b';
       ctx.fillRect(0, 0, sheetCanvas.width, sheetCanvas.height);
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 20px system-ui';
-      ctx.fillText(`素材预览表: ${file.name} (${times.length} 帧)`, padding, 40);
+      ctx.fillText(`${file.name} · ${times.length} 帧`, padding, 40);
       for (const [index, time] of times.entries()) {
-        message = `正在处理联系表 ${index + 1}/${times.length}`;
+        message = `联系表 ${index + 1}/${times.length}`;
         await seekTo(time);
         const context = drawCurrentFrame(thumbWidth);
         if (context) {
@@ -675,22 +706,24 @@
           ctx.fillStyle = '#fff';
           ctx.font = '14px tabular-nums system-ui';
           ctx.fillText(formatTime(time), x + 12, y + 22);
+          exported += 1;
         }
       }
+      if (exported === 0) throw new Error('empty export');
       const blob = await blobFromCanvas(sheetCanvas, 'image/jpeg');
-      if (blob) downloadBlob(blob, `sheet_${file.name.split('.')[0]}.jpg`);
+      if (blob) downloadBlob(blob, `sheet_${basename(file.name)}.jpg`);
       status = 'done';
-      message = '已生成素材联系表';
+      message = '联系表已导出';
     } catch {
       status = 'error';
-      message = '联系表生成失败';
+      message = '联系表失败';
     } finally {
       batchBusy = false;
       seekFrame(position, 0);
     }
   }
 
-  function getMotionTimes(frameCount: number, fps: number, requestedSeconds: number): { times: number[]; start: number; seconds: number } {
+  function getMotionTimes(frameCount: number, fps: number, requestedSeconds: number): { times: number[]; seconds: number } {
     const start = Math.max(0, Math.min(rangeStart, duration || 0));
     const end = Math.max(start, Math.min(rangeEnd || duration || start, duration || start));
     const availableSeconds = end - start;
@@ -702,21 +735,21 @@
       if (t > end) break;
       forward.push(t);
     }
-    if (motionDirection === 'reverse') return { times: [...forward].reverse(), start, seconds };
-    if (motionDirection === 'pingpong' && forward.length > 2) return { times: [...forward, ...forward.slice(1, -1).reverse()], start, seconds };
-    return { times: forward, start, seconds };
+    if (motionDirection === 'reverse') return { times: [...forward].reverse(), seconds };
+    if (motionDirection === 'pingpong' && forward.length > 2) return { times: [...forward, ...forward.slice(1, -1).reverse()], seconds };
+    return { times: forward, seconds };
   }
 
   async function exportWebm(): Promise<void> {
     if (!file || !videoEl || !canvasEl || !canvasEl.captureStream || typeof MediaRecorder === 'undefined') {
       status = 'error';
-      message = '短视频生成器正在准备';
+      message = '不可用';
       return;
     }
     const format = resolveMotionVideoFormat();
     if (!format) {
       status = 'error';
-      message = '短视频格式正在准备';
+      message = '格式不可用';
       return;
     }
     const fps = Math.max(2, Math.min(Math.round(Number(gifFps) || 8), 30));
@@ -724,13 +757,13 @@
     const bitrate = Math.max(250, Math.min(Math.round(Number(webmBitrate) || 2500), 12000)) * 1000;
     const requestedSeconds = Math.max(0.5, Math.min(Number(gifSeconds) || 2, 10));
     const frameCount = Math.max(1, Math.min(Math.round(requestedSeconds * fps), 300));
-    const { times, start, seconds } = getMotionTimes(frameCount, fps, requestedSeconds);
+    const { times, seconds } = getMotionTimes(frameCount, fps, requestedSeconds);
     const bitmaps: ImageBitmap[] = [];
     batchBusy = true;
     status = 'loading';
     try {
       for (const [index, time] of times.entries()) {
-        message = `正在准备短视频 ${index + 1}/${times.length}`;
+        message = `短视频 ${index + 1}/${times.length}`;
         await seekTo(time);
         if (!drawCurrentFrame(width)) throw new Error('webm frame failed');
         bitmaps.push(await createImageBitmap(canvasEl));
@@ -757,12 +790,12 @@
       const videoBlob = await recordPromise;
       revoke(webmPreviewUrl);
       webmPreviewUrl = URL.createObjectURL(videoBlob);
-      downloadBlob(videoBlob, `motion_${file.name.split('.')[0]}.${format.extension}`);
+      downloadBlob(videoBlob, `motion_${basename(file.name)}.${format.extension}`);
       status = 'done';
-      message = `已导出短视频片段 (${seconds.toFixed(1)}s)`;
+      message = `短视频 ${seconds.toFixed(1)}s`;
     } catch {
       status = 'error';
-      message = '短视频导出失败';
+      message = '导出失败';
     } finally {
       bitmaps.forEach(b => b.close());
       batchBusy = false;
@@ -782,13 +815,13 @@
     const colors = Math.max(16, Math.min(Math.round(Number(gifColors) || 128), 256));
     const requestedSeconds = Math.max(0.5, Math.min(Number(gifSeconds) || 2, 6));
     const frameCount = Math.max(1, Math.min(Math.round(requestedSeconds * fps), 90));
-    const { times, start, seconds } = getMotionTimes(frameCount, fps, requestedSeconds);
+    const { times, seconds } = getMotionTimes(frameCount, fps, requestedSeconds);
     batchBusy = true;
     status = 'loading';
     try {
       const gif = new (GIFEncoder as any)();
       for (const [index, time] of times.entries()) {
-        message = `正在合成 GIF ${index + 1}/${times.length}`;
+        message = `GIF ${index + 1}/${times.length}`;
         await seekTo(time);
         const context = drawCurrentFrame(width);
         if (context) {
@@ -802,12 +835,12 @@
       const blob = new Blob([gif.bytes()], { type: 'image/gif' });
       revoke(gifPreviewUrl);
       gifPreviewUrl = URL.createObjectURL(blob);
-      downloadBlob(blob, `motion_${file.name.split('.')[0]}.gif`);
+      downloadBlob(blob, `motion_${basename(file.name)}.gif`);
       status = 'done';
-      message = `已导出 GIF 动图 (${seconds.toFixed(1)}s)`;
+      message = `GIF ${seconds.toFixed(1)}s`;
     } catch {
       status = 'error';
-      message = 'GIF 导出失败';
+      message = '导出失败';
     } finally {
       batchBusy = false;
       seekFrame(position, 0);
@@ -844,7 +877,7 @@
       ctx.fillText(formatTime(frame.time / 1000), x + 6, y + 14);
     }
     const blob = await blobFromCanvas(sheetCanvas, 'image/jpeg');
-    if (blob) downloadBlob(blob, `gif_sheet_${splitGifName.split('.')[0]}.jpg`);
+    if (blob) downloadBlob(blob, `gif_sheet_${basename(splitGifName)}.jpg`);
   }
 
   async function exportSplitZip(): Promise<void> {
@@ -854,7 +887,7 @@
       zip.file(`frame_${String(index + 1).padStart(3, '0')}.png`, frame.blob);
     });
     const content = await zip.generateAsync({ type: 'blob' });
-    downloadBlob(content, `gif_frames_${splitGifName.split('.')[0]}.zip`);
+    downloadBlob(content, `gif_frames_${basename(splitGifName)}.zip`);
   }
 
   function toggleSelect(key: string): void {
@@ -993,6 +1026,7 @@
     revoke(previewUrl);
     revoke(gifPreviewUrl);
     revoke(webmPreviewUrl);
+    clearPreviewHistory();
     splitFrames.forEach(frame => revoke(frame.url));
   });
 </script>
@@ -1012,12 +1046,12 @@
 <main class="main native-video-page">
   <section class="workbench-head">
     <div class="workbench-copy">
-      <strong><iconify-icon icon={activeMode === 'video' ? 'lucide:clapperboard' : 'lucide:layers-3'}></iconify-icon>{activeMode === 'video' ? '视频素材工具台' : 'GIF 工具台'}</strong>
-      <span>{activeMode === 'video' ? '从本地视频整理截图、批量帧图、联系表、GIF 和短视频片段。' : '拆解 GIF 为 PNG 帧，或生成带时间码的联系表。'}</span>
+      <strong><iconify-icon icon={activeMode === 'video' ? 'lucide:clapperboard' : 'lucide:layers-3'}></iconify-icon>{activeMode === 'video' ? '视频' : 'GIF'}</strong>
+      <span>{activeMode === 'video' ? '截图、批量抽帧、联系表、GIF、短视频片段' : 'GIF 拆帧、PNG 帧包、时间码联系表'}</span>
     </div>
-    <div class:video={activeMode === 'video'} class:gif={activeMode === 'gif'} class="mode-switch" role="tablist" aria-label="工作模式">
-      <button type="button" class:active={activeMode === 'video'} onclick={() => activeMode = 'video'}><iconify-icon icon="lucide:video"></iconify-icon>视频素材</button>
-      <button type="button" class:active={activeMode === 'gif'} onclick={() => activeMode = 'gif'}><iconify-icon icon="lucide:image-play"></iconify-icon>GIF 工具</button>
+    <div class:video={activeMode === 'video'} class:gif={activeMode === 'gif'} class="mode-switch" role="tablist" aria-label="模式">
+      <button type="button" class:active={activeMode === 'video'} onclick={() => activeMode = 'video'}><iconify-icon icon="lucide:video"></iconify-icon>视频</button>
+      <button type="button" class:active={activeMode === 'gif'} onclick={() => activeMode = 'gif'}><iconify-icon icon="lucide:image-play"></iconify-icon>GIF</button>
     </div>
     {#if message}<div class:error={status === 'error'} class:done={status === 'done'} class:loading={status === 'loading'} class="status-bar"><span>{message}</span></div>{/if}
   </section>
@@ -1025,13 +1059,13 @@
   {#if activeMode === 'video' && !videoUrl}
     <section class="empty-workbench">
       <div class="empty-copy">
-        <strong>把视频整理成可直接使用的素材</strong>
-        <span>适合从录屏、PV 或演示视频里提取画面，并导出封面、短视频、帧图包和联系表。</span>
+        <strong>视频素材导出</strong>
+        <span>定位时间点，裁切画面，调整色彩，导出单帧或批量素材。</span>
       </div>
       <label class="file-drop hero-drop" ondragover={(event) => event.preventDefault()} ondrop={onDrop}>
         <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.ogv" onchange={chooseFile}>
-        <strong><iconify-icon icon="lucide:upload-cloud"></iconify-icon>拖入或选择视频素材</strong>
-        <span>载入后在本地浏览器内预览、定位时间点并导出需要的画面</span>
+        <strong><iconify-icon icon="lucide:upload-cloud"></iconify-icon>选择视频</strong>
+        <span>MP4 / WebM / MOV / M4V / OGV</span>
       </label>
     </section>
   {:else if activeMode === 'video'}
@@ -1120,7 +1154,7 @@
 
           {#if previewHistory.length}
             <section class="history-card">
-              <div class="section-head"><strong><iconify-icon icon="lucide:history"></iconify-icon>最近预览</strong><span>点击可放大查看</span></div>
+              <div class="section-head"><strong><iconify-icon icon="lucide:history"></iconify-icon>预览</strong></div>
               <div class="history-grid">
                 {#each previewHistory as item, index}
                   <div class="history-item" class:active={item.url === previewUrl}>
@@ -1149,39 +1183,39 @@
               <div class="actions preview-actions compact">
                 <button type="button" onclick={updatePreview} disabled={batchBusy} title="刷新预览"><iconify-icon icon="lucide:refresh-cw"></iconify-icon></button>
                 <button type="button" onclick={copyFrame} disabled={status === 'loading' || batchBusy} title="复制图片"><iconify-icon icon="lucide:copy"></iconify-icon></button>
-                <button class="primary" type="button" onclick={exportFrame} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:download"></iconify-icon>导出当前帧</button>
+                <button class="primary" type="button" onclick={exportFrame} disabled={status === 'loading' || batchBusy}><iconify-icon icon="lucide:download"></iconify-icon>导出</button>
               </div>
             </div>
 
             <label class="file-drop compact-drop" ondragover={(event) => event.preventDefault()} ondrop={onDrop}>
               <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v,.ogv" onchange={chooseFile}>
-              <strong><iconify-icon icon="lucide:file-video"></iconify-icon>{file?.name || '选择视频素材'}</strong>
-              <span>更换视频</span>
+              <strong><iconify-icon icon="lucide:file-video"></iconify-icon>{file?.name || '选择视频'}</strong>
+              <span>更换</span>
             </label>
 
             <div class="file-info-card" class:open={fileInfoOpen}>
               <button type="button" class="file-info-trigger" onclick={() => fileInfoOpen = !fileInfoOpen}>
                 <iconify-icon icon="lucide:info"></iconify-icon>
-                <span>素材信息</span>
+                <span>信息</span>
                 <iconify-icon icon="lucide:chevron-down"></iconify-icon>
               </button>
               {#if fileInfoOpen}
                 <div class="file-info-body">
                   {#if file}
                     <span><iconify-icon icon="lucide:hard-drive"></iconify-icon>{formatFileSize(file.size)}</span>
-                    <span><iconify-icon icon="lucide:file-type"></iconify-icon>{file.type || '未知类型'}</span>
-                    <span><iconify-icon icon="lucide:clock-3"></iconify-icon>{duration > 0 ? formatTime(duration) : '读取时长'}</span>
+                    <span><iconify-icon icon="lucide:file-type"></iconify-icon>{file.type || '—'}</span>
+                    <span><iconify-icon icon="lucide:clock-3"></iconify-icon>{duration > 0 ? formatTime(duration) : '—'}</span>
                   {:else}
-                    <span>未载入视频。</span>
+                    <span>—</span>
                   {/if}
                 </div>
               {/if}
             </div>
 
-            <div class:single={activeTool === 'single'} class:batch={activeTool === 'batch'} class:gif={activeTool === 'gif'} class="tabs-header" role="tablist" aria-label="视频素材工具">
+            <div class:single={activeTool === 'single'} class:batch={activeTool === 'batch'} class:gif={activeTool === 'gif'} class="tabs-header" role="tablist" aria-label="工具">
               <button type="button" class:active={activeTool === 'single'} onclick={() => activeTool = 'single'}><iconify-icon icon="lucide:camera"></iconify-icon>截图</button>
               <button type="button" class:active={activeTool === 'batch'} onclick={() => activeTool = 'batch'}><iconify-icon icon="lucide:grid-3x3"></iconify-icon>批量</button>
-              <button type="button" class:active={activeTool === 'gif'} onclick={() => activeTool = 'gif'}><iconify-icon icon="lucide:sparkles"></iconify-icon>动态片段</button>
+              <button type="button" class:active={activeTool === 'gif'} onclick={() => activeTool = 'gif'}><iconify-icon icon="lucide:sparkles"></iconify-icon>动态</button>
             </div>
 
             <section class="global-settings">
@@ -1297,7 +1331,7 @@
 
             <div class="tab-content-inspector">
               {#if activeTool === 'single'}
-                <div class="inspector-note"><iconify-icon icon="lucide:info"></iconify-icon><span>已开启单帧截图模式。</span></div>
+                <div class="inspector-note"><iconify-icon icon="lucide:info"></iconify-icon><span>单帧截图</span></div>
               {:else if activeTool === 'batch'}
                 <div class="inspector-group">
                   <div class="settings-group-title"><iconify-icon icon="lucide:grid-3x3"></iconify-icon><span>批量选项</span></div>
@@ -1374,7 +1408,7 @@
           <label class="file-drop hero-drop">
             <input type="file" accept="image/gif,.gif" onchange={chooseSplitGif}>
             <strong><iconify-icon icon="lucide:image-play"></iconify-icon>{splitGifName || '选择 GIF 文件'}</strong>
-            <span>查看帧序列，下载单帧，也可以导出 PNG 帧包和时间码联系表。</span>
+            <span>帧序列、单帧、帧包、联系表</span>
           </label>
           {#if splitFrames.length}
             <div class="split-preview-grid large">
@@ -1388,7 +1422,7 @@
           {/if}
         </section>
         <aside class="toolbox-area">
-          <div class="section-head"><strong><iconify-icon icon="lucide:layers-3"></iconify-icon>GIF 拆解</strong><span>载入 GIF 后会在本页解析帧信息并生成可用导出项。</span></div>
+          <div class="section-head"><strong><iconify-icon icon="lucide:layers-3"></iconify-icon>GIF 拆解</strong><span>解析 GIF 并导出。</span></div>
           {#if splitFrames.length}
             <div class="file-meta">
               <span><iconify-icon icon="lucide:scan"></iconify-icon>{splitGifWidth} x {splitGifHeight}</span>
@@ -1404,21 +1438,12 @@
               <button class="primary" type="button" onclick={exportSplitZip}><iconify-icon icon="lucide:package-down"></iconify-icon>导出 PNG 帧包</button>
             </div>
           {:else}
-            <div class="gif-empty-note"><iconify-icon icon="lucide:info"></iconify-icon>选择 GIF 后会显示帧网格、尺寸、时长和导出操作。</div>
+            <div class="gif-empty-note"><iconify-icon icon="lucide:info"></iconify-icon>等待 GIF</div>
           {/if}
         </aside>
       </div>
     </section>
   {/if}
-
-  <section class="ideas-card">
-    <div class="section-head"><strong><iconify-icon icon="lucide:wand-sparkles"></iconify-icon>更多素材玩法</strong><span>这些方向可以继续往工作台里加，保持轻量，同时覆盖常见素材整理流程。</span></div>
-    <div class="idea-grid">
-      {#each nativeIdeas as idea}
-        <span><iconify-icon icon="lucide:circle-dot"></iconify-icon>{idea}</span>
-      {/each}
-    </div>
-  </section>
 
   <canvas bind:this={canvasEl} class="hidden-canvas"></canvas>
 </main>

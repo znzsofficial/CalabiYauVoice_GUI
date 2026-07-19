@@ -855,9 +855,6 @@
     }
   }
 
-  function suggestionPath(title: string): string {
-    return `/${title.replace(/ /g, '_')}`;
-  }
 </script>
 
 <header class="header">

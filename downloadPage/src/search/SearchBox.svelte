@@ -123,6 +123,10 @@
     }
     if (event.key === 'Enter') {
       event.preventDefault();
+      if (suggestIdx >= 0 && suggestions[suggestIdx]) {
+        selectSuggestion(suggestions[suggestIdx]);
+        return;
+      }
       closeSuggestions();
       onSubmit(value);
     }

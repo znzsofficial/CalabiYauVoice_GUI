@@ -296,33 +296,23 @@
       </div>
     </section>
 
-    <!-- Suggestion 2: Core Feature Matrix -->
-    <section class="feature-matrix">
+    <nav class="feature-matrix" aria-label="站内工具">
       <a href="/search/" class="card shadow-sm feature-card index-card">
         <div class="feature-icon wiki-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></div>
-        <div class="feature-text">
-          <h3>Wiki 搜索</h3>
-          <p>实时检索角色、武器与地图资料</p>
-        </div>
+        <span class="feature-title">Wiki 搜索</span>
         <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
       </a>
       <a href="/video/" class="card shadow-sm feature-card index-card">
         <div class="feature-icon video-icon"><iconify-icon icon="lucide:scissors"></iconify-icon></div>
-        <div class="feature-text">
-          <h3>视频素材工具台</h3>
-          <p>从本地视频整理截图、封面、GIF 与短视频</p>
-        </div>
+        <span class="feature-title">视频素材</span>
         <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
       </a>
-      <button class="card shadow-sm feature-card index-card" onclick={openBalance}>
+      <button class="card shadow-sm feature-card index-card" type="button" onclick={openBalance}>
         <div class="feature-icon balance-icon"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon></div>
-        <div class="feature-text">
-          <h3>平衡数据</h3>
-          <p>查看全角色赛季胜率与选取率</p>
-        </div>
+        <span class="feature-title">平衡数据</span>
         <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
       </button>
-    </section>
+    </nav>
 
     <div class="grid-layout">
       <div class="col-left">
