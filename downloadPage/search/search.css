@@ -1149,6 +1149,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
     gap: 10px;
+    width: 100%;
 }
 
 .voice-char-item {
@@ -1606,6 +1607,34 @@ button.notice-card {
         gap: 16px;
     }
 
+    .voice-character-pane,
+    .voice-char-section {
+        width: 100%;
+        min-width: 0;
+    }
+
+    /* Force 3+ columns on phones; auto-fill + minmax was collapsing to a single column. */
+    .voice-char-grid,
+    .voice-char-skeleton {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .voice-char-item {
+        min-height: 88px;
+        padding: 10px 4px 8px;
+    }
+
+    .voice-char-avatar {
+        width: 48px;
+        height: 48px;
+    }
+
+    .voice-char-name {
+        font-size: 0.75rem;
+        max-width: 100%;
+    }
+
     .wiki-workbench.has-rail,
     .category-workbench.has-rail {
         display: flex;
@@ -1706,8 +1735,9 @@ button.notice-card {
 
 .voice-char-skeleton {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 10px;
+    width: 100%;
 }
 
 .voice-char-skeleton .voice-char-item {
