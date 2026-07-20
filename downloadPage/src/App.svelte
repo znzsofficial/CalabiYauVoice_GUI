@@ -19,10 +19,12 @@
   type BalanceSettingsResponse = { code: number; msg?: string; data: { value: BalanceSettingsPayload } };
   type RawHero = Partial<Record<SortField, number>> & { id?: number | string; heroName?: string };
   type BalanceDataResponse = { jData?: { iRet?: number | string; sMsg?: string; data1?: { side1?: RawHero[]; side2?: RawHero[] }; data2?: { side1?: CompareData['attackers']; side2?: CompareData['defenders'] } } };
-
   const fallbackApk = '/downloads/CalabiYauVoice-latest.apk';
   const chartId = '338985';
   const ideToken = 'b7FM3m';
+  const qqGroupId = '1037289201';
+  const qqGroupName = 'Kanami开发计划';
+  const qqGroupAvatar = `https://p.qlogo.cn/gh/${qqGroupId}/${qqGroupId}/100`;
 
   let versionName = $state('正在读取...');
   let publishedAt = $state('-');
@@ -32,6 +34,7 @@
   let changelog: string[] | null = $state(null);
   let copied = $state(false);
   let githubStars = $state(0);
+  let qqGroupCopied = $state(false);
 
   let balanceDialogRef: HTMLDialogElement | null = $state(null);
   let balanceStatus: BalanceStatus = $state('idle');
@@ -246,6 +249,23 @@
     }
   }
 
+  async function copyQqGroupId(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(qqGroupId);
+      qqGroupCopied = true;
+      setTimeout(() => qqGroupCopied = false, 1500);
+    } catch {
+      const input = document.createElement('input');
+      input.value = qqGroupId;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      qqGroupCopied = true;
+      setTimeout(() => qqGroupCopied = false, 1500);
+    }
+  }
+
   onMount(() => {
     loadLatestInfo();
     loadGithubStars();
@@ -337,6 +357,26 @@
                   <div class="skeleton-line" style="width: 70%;"></div>
                 </div>
               {/if}
+            </div>
+          </div>
+        </section>
+
+        <section class="card shadow-sm qq-group-card">
+          <div class="card-header">
+            <div class="card-title"><iconify-icon icon="lucide:messages-square"></iconify-icon>QQ 交流群</div>
+            <span class="badge">反馈交流</span>
+          </div>
+          <div class="card-body">
+            <div class="qq-group-panel">
+              <img class="qq-group-avatar" src={qqGroupAvatar} alt={`${qqGroupName} 头像`} loading="lazy" width="56" height="56">
+              <div class="qq-group-meta">
+                <strong class="qq-group-name">{qqGroupName}</strong>
+                <span class="qq-group-id">群号 {qqGroupId}</span>
+              </div>
+              <button class:copied={qqGroupCopied} class="btn outline hero-copy-btn qq-group-copy" type="button" onclick={copyQqGroupId} aria-label="复制群号">
+                <span class="copy-default"><iconify-icon icon="lucide:copy" style="margin-right: 6px;"></iconify-icon>复制群号</span>
+                <span class="copy-success"><iconify-icon icon="lucide:check" style="margin-right: 6px;"></iconify-icon>已复制</span>
+              </button>
             </div>
           </div>
         </section>

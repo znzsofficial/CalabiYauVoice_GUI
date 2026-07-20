@@ -9,7 +9,11 @@
 
 基于 Kotlin Multiplatform 构建的[卡拉彼丘](https://wiki.biligame.com/klbq/) Wiki 资源浏览与下载工具，支持桌面端和 Android 端。
 
-[![下载 Android APK](https://img.shields.io/badge/下载-Android%20APK-3DDC84?logo=android&logoColor=white)](https://calabiyauwiki.pages.dev/)
+[![下载 Android APK](https://img.shields.io/badge/下载-Android%20APK-3DDC84?logo=android&logoColor=white)](https://wiki.nekolaska.vip/)
+[![网页工具](https://img.shields.io/badge/Wiki资源站-0A0A0A?logo=cloudflare&logoColor=white)](https://wiki.nekolaska.vip/search)
+
+**官网入口：** [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)  
+**备用链接：** [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/)
 
 [English](README.md)
 
@@ -39,7 +43,6 @@
 - **🎵 音频播放** — 支持播放 `WAV`、`OGG`、`FLAC`、`MP3` 格式音频。
 - **🖼️ 丰富预览** — 支持 `PNG`、`JPG`、`WebP` 静态图与 `GIF` 逐帧动画预览。
 - **🗂️ 文件选择对话框** — 按分类浏览文件，支持搜索、语言筛选（中/日/英）与图片预览。
-- **🔍 搜索历史** — 搜索记录持久化展示。
 
 ### 🖥️ 桌面端增强（Windows）
 
@@ -69,11 +72,11 @@
 
 | 组件    | 技术                           |
 |-------|------------------------------|
-| 语言    | Kotlin 2.3.21                |
-| 异步    | Kotlin Coroutines            |
-| 网络    | OkHttp 5                     |
-| 序列化   | kotlinx.serialization        |
-| UI 基础 | Compose Multiplatform 1.11.0 |
+| 语言    | Kotlin 2.4.0                 |
+| 异步    | Kotlin Coroutines 1.11       |
+| 网络    | OkHttp 5.4                   |
+| 序列化   | kotlinx.serialization 1.11   |
+| UI 基础 | Compose Multiplatform 1.11.1 |
 
 ### 桌面端
 
@@ -82,17 +85,29 @@
 | UI 框架 | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
 | 音频    | `javax.sound.sampled`、`mp3spi`、`JustFLAC`                                                                                                         |
 | 图像    | `javax.imageio.ImageIO`（GIF 多帧解码）                                                                                                                 |
-| 原生调用  | JNA 5（Windows API）                                                                                                                                |
+| 原生调用  | JNA 5.19（Windows API）                                                                                                                             |
 
 ### Android 端
 
 | 组件    | 技术                           |
 |-------|------------------------------|
 | UI 框架 | Jetpack Compose + Material 3 |
-| 图片加载  | Coil 3（异步加载 + GIF 支持）        |
+| 图片加载  | Coil 3.5（异步加载 + GIF 支持）      |
 | 网页    | Android WebView              |
 | 音频    | Android MediaPlayer          |
 | 架构    | AndroidViewModel + StateFlow |
+| 最低系统  | Android 7.1（API 25）         |
+
+### 下载页 / 网页工具站（`downloadPage/`）
+
+| 组件    | 技术                                      |
+|-------|-----------------------------------------|
+| 前端框架  | Svelte 5 + TypeScript                   |
+| 构建工具  | Vite 8                                  |
+| 部署    | Cloudflare Pages                        |
+| 边缘接口  | Cloudflare Worker（`src/api/_worker.js`） |
+| 媒体处理  | `gifenc`、`gifuct-js`、`jszip`            |
+| 页面    | 首页 / Wiki 搜索 / 视频素材工具台                  |
 
 ---
 
@@ -101,50 +116,75 @@
 ```text
 .
 ├── androidApp/                         # Android 应用模块
-│   ├── build.gradle.kts                #   Android 应用构建、签名、打包、依赖
+│   ├── build.gradle.kts
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── kotlin/com/nekolaska/calabiyau/
-│       │   ├── core/                   #   缓存、媒体、导航、网络、偏好设置、UI、Wiki 工具
+│       │   ├── core/                   #   缓存、媒体、导航、网络、偏好设置、UI 工具
 │       │   ├── feature/                #   Android 页面与功能 API
-│       │   │   ├── character/          #   角色列表/详情、时装、角色选择器
-│       │   │   ├── weapon/             #   武器列表/详情与武器外观筛选
-│       │   │   ├── download/           #   资源搜索、分类浏览、下载、历史记录、立绘查看
+│       │   │   ├── character/          #   角色列表/详情、时装
+│       │   │   ├── weapon/             #   武器列表/详情与外观筛选
+│       │   │   ├── download/           #   资源搜索、分类浏览、下载、历史、立绘
 │       │   │   ├── settings/           #   设置、关于、更新检查、存储管理
-│       │   │   ├── tools/              #   本地文件管理与 Android 工具
-│       │   │   └── wiki/               #   原生 Wiki Hub 页面、WebView 外壳、解析器和数据源
+│       │   │   ├── tools/              #   本地文件管理与工具
+│       │   │   └── wiki/               #   原生 Wiki Hub、WebView、解析器
 │       │   ├── MainActivity.kt
-│       │   ├── CrashHandler.kt         #   Android 崩溃捕获
-│       │   └── NotificationHelper.kt   #   下载/状态通知
-│       └── res/                        #   Android 图片资源、启动图标、主题、快捷方式
+│       │   ├── CrashHandler.kt
+│       │   └── NotificationHelper.kt
+│       └── res/
 ├── desktopApp/                         # 桌面应用模块
-│   ├── build.gradle.kts                #   Compose Desktop 应用、原生分发包、ProGuard
+│   ├── build.gradle.kts
 │   ├── icon.ico
-│   ├── libs/                           #   桌面端专用本地 JAR
+│   ├── libs/
 │   └── src/main/
 │       ├── kotlin/
-│       │   ├── data/                   #   OkHttp 客户端、图片加载器、Cookie、桌面 API 适配
+│       │   ├── data/                   #   OkHttp 客户端、图片加载器、Cookie
 │       │   ├── viewmodel/              #   搜索/下载状态管理
 │       │   ├── ui/screens/             #   桌面端页面
 │       │   ├── ui/components/          #   可复用 Fluent UI 组件
 │       │   ├── util/                   #   音频转换、偏好设置、文件工具
-│       │   ├── jna/windows/            #   Win32 API 绑定与窗口特效
-│       │   └── Main.kt                 #   桌面端入口
-│       └── resources/                  #   桌面图标与打包资源
+│       │   ├── jna/windows/            #   Win32 绑定与窗口特效
+│       │   └── Main.kt
+│       └── resources/
 ├── shared/                             # Kotlin Multiplatform 共享模块
 │   ├── build.gradle.kts
 │   └── src/
-│       ├── commonMain/kotlin/          #   共享业务逻辑
-│       │   ├── data/                   #   Wiki API 核心、数据模型、序列化、共享网络 DTO
-│       │   ├── portrait/               #   立绘解析与分类组织
-│       │   └── util/                   #   文件扩展名工具
-│       ├── commonMain/composeResources/#   共享 Compose 资源
-│       ├── commonTest/                 #   通用测试
-│       ├── jvmTest/                    #   桌面/JVM 测试
-│       └── androidHostTest/            #   Android Host 测试
-├── gradle/libs.versions.toml           # 集中管理插件与依赖版本
-├── build.gradle.kts                    # 根项目插件 alias
-└── settings.gradle.kts                 # 模块 include 与仓库管理
+│       ├── commonMain/kotlin/
+│       │   ├── data/                   #   Wiki API 核心、模型、DTO
+│       │   ├── portrait/               #   立绘解析与组织
+│       │   ├── util/                   #   共享工具
+│       │   └── com/nekolaska/calabiyau/ #   共享媒体 / 偏好设置
+│       ├── commonMain/composeResources/
+│       ├── commonTest/
+│       ├── jvmTest/
+│       └── androidHostTest/
+├── downloadPage/                       # 网页下载站与浏览器端工具
+│   ├── index.html                      #   首页：APK 下载、QQ 群、平衡数据
+│   ├── search/index.html               #   Wiki 搜索 / 分类打包 / 语音字幕
+│   ├── video/index.html                #   本地视频/GIF 素材工具
+│   ├── package.json
+│   ├── vite.config.ts                  #   多页 Vite 构建 + 本地 API 代理
+│   ├── download.css / base.css
+│   ├── downloads/                      #   latest.json 与 APK 资源
+│   └── src/
+│       ├── main.ts                     #   首页入口
+│       ├── App.svelte                  #   首页 UI
+│       ├── BalanceDialog.svelte        #   平衡数据弹窗
+│       ├── CustomSelect.svelte
+│       ├── api/_worker.js              #   CF Worker：GitHub stars、Wiki/图片代理、平衡数据代理
+│       ├── search/                     #   Wiki 搜索、语音索引、批量下载
+│       │   ├── SearchApp.svelte
+│       │   ├── searchApi.ts
+│       │   ├── download/               #   ZIP / 队列 / Blob 工具
+│       │   ├── panels/                 #   Wiki / 分类 / 语音面板
+│       │   └── voice/                  #   语音索引构建与播放 UI
+│       └── video/                      #   本地视频/GIF 工作台
+│           ├── NativeVideoApp.svelte
+│           └── native-video.css
+├── webApp/                             # 可选 Compose/Web 相关模块
+├── gradle/libs.versions.toml           # 集中管理依赖版本
+├── build.gradle.kts
+└── settings.gradle.kts
 ```
 
 ## 🚀 构建与运行
@@ -158,6 +198,12 @@
 
 # 构建 Android APK
 ./gradlew.bat assembleDebug
+
+# 下载页 / 网页工具站
+cd downloadPage
+npm install
+npm run dev
+npm run build
 ```
 
 > macOS / Linux 请使用 `./gradlew` 代替 `./gradlew.bat`。
@@ -165,7 +211,8 @@
 ## ⚠️ 注意事项
 
 - 📡 **API 依赖：** 本应用依赖 Bilibili Wiki 的 API 接口，可用性可能受网络环境影响。
-- 📱 **Android：** 需要 Android 8.0（API 26）或更高版本。
+- 📱 **Android：** 需要 Android 7.1（API 25）或更高版本。
+- 🌐 **网站入口：** 请优先访问 [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)；[calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/) 为 Cloudflare Pages 备用链接。
 
 ## 📄 许可证
 

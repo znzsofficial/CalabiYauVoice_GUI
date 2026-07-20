@@ -9,7 +9,11 @@
 
 A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource browser & downloader, built with Compose for Desktop and Android.
 
-[![Download Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?logo=android&logoColor=white)](https://calabiyauwiki.pages.dev/)
+[![Download Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?logo=android&logoColor=white)](https://wiki.nekolaska.vip/)
+[![Web Tools](https://img.shields.io/badge/Wiki%20Hub-0A0A0A?logo=cloudflare&logoColor=white)](https://wiki.nekolaska.vip/search)
+
+**Website:** [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)  
+**Backup:** [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/)
 
 [简体中文](README_ZH_CN.md)
 
@@ -39,7 +43,6 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **🎵 Audio Playback** — In-app playback for `WAV`, `OGG`, `FLAC`, and `MP3` files.
 - **🖼️ Rich Preview** — Live image previews for `PNG`, `JPG`, `WebP`, and animated `GIF`.
 - **🗂️ File Selection Dialog** — Per-category file picker with search, language filtering (CN/JP/EN), and image preview.
-- **🔍 Search History** — Persistent search suggestions.
 
 ### 🖥️ Desktop Extras (Windows)
 
@@ -69,11 +72,11 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 | Component     | Technology                   |
 |---------------|------------------------------|
-| Language      | Kotlin 2.3.21                |
-| Async         | Kotlin Coroutines            |
-| Network       | OkHttp 5                     |
-| Serialization | kotlinx.serialization        |
-| UI Foundation | Compose Multiplatform 1.11.0 |
+| Language      | Kotlin 2.4.0                 |
+| Async         | Kotlin Coroutines 1.11       |
+| Network       | OkHttp 5.4                   |
+| Serialization | kotlinx.serialization 1.11   |
+| UI Foundation | Compose Multiplatform 1.11.1 |
 
 ### Desktop
 
@@ -82,17 +85,29 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 | UI        | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
 | Audio     | `javax.sound.sampled`, `mp3spi`, `JustFLAC`                                                                                                         |
 | Image     | `javax.imageio.ImageIO` (GIF frame decoding)                                                                                                       |
-| Native    | JNA 5 (Windows API)                                                                                                                                |
+| Native    | JNA 5.19 (Windows API)                                                                                                                             |
 
 ### Android
 
 | Component     | Technology                   |
 |---------------|------------------------------|
 | UI            | Jetpack Compose + Material 3 |
-| Image Loading | Coil 3 (async + GIF)         |
+| Image Loading | Coil 3.5 (async + GIF)       |
 | Web           | Android WebView              |
 | Audio         | Android MediaPlayer          |
 | Architecture  | AndroidViewModel + StateFlow |
+| Min SDK       | Android 7.1 (API 25)         |
+
+### Download Page (`downloadPage/`)
+
+| Component   | Technology                                      |
+|-------------|-------------------------------------------------|
+| Framework   | Svelte 5 + TypeScript                           |
+| Bundler     | Vite 8                                          |
+| Hosting     | Cloudflare Pages                                |
+| Edge API    | Cloudflare Worker (`src/api/_worker.js`)        |
+| Media tools | `gifenc`, `gifuct-js`, `jszip`                  |
+| Pages       | Home / Wiki Search / Video tools                |
 
 ---
 
@@ -101,50 +116,75 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 ```text
 .
 ├── androidApp/                         # Android application module
-│   ├── build.gradle.kts                #   Android app build, signing, packaging, dependencies
+│   ├── build.gradle.kts
 │   └── src/main/
 │       ├── AndroidManifest.xml
 │       ├── kotlin/com/nekolaska/calabiyau/
-│       │   ├── core/                   #   Cache, media, navigation, network, preferences, UI, Wiki helpers
+│       │   ├── core/                   #   Cache, media, navigation, network, preferences, UI helpers
 │       │   ├── feature/                #   Android screens and feature APIs
-│       │   │   ├── character/          #   Character list/detail, costumes, selectors
+│       │   │   ├── character/          #   Character list/detail, costumes
 │       │   │   ├── weapon/             #   Weapon list/detail and skin filters
 │       │   │   ├── download/           #   Search, category browse, downloads, history, portraits
-│       │   │   ├── settings/           #   Settings, about, update checks, storage management
-│       │   │   ├── tools/              #   Local file manager and Android utility tools
-│       │   │   └── wiki/               #   Native Wiki Hub pages, WebView shell, parsers and sources
+│       │   │   ├── settings/           #   Settings, about, update checks, storage
+│       │   │   ├── tools/              #   Local file manager and utilities
+│       │   │   └── wiki/               #   Native Wiki Hub, WebView shell, parsers
 │       │   ├── MainActivity.kt
-│       │   ├── CrashHandler.kt         #   Android crash capture
-│       │   └── NotificationHelper.kt   #   Download/status notifications
-│       └── res/                        #   Android drawables, launcher icons, themes, shortcuts
+│       │   ├── CrashHandler.kt
+│       │   └── NotificationHelper.kt
+│       └── res/
 ├── desktopApp/                         # Desktop application module
-│   ├── build.gradle.kts                #   Compose Desktop app, native distributions, ProGuard
+│   ├── build.gradle.kts
 │   ├── icon.ico
-│   ├── libs/                           #   Desktop-only local JARs
+│   ├── libs/
 │   └── src/main/
 │       ├── kotlin/
-│       │   ├── data/                   #   OkHttp client, image loader, cookies, desktop API glue
-│       │   ├── viewmodel/              #   Search/download state management
+│       │   ├── data/                   #   OkHttp client, image loader, cookies
+│       │   ├── viewmodel/              #   Search/download state
 │       │   ├── ui/screens/             #   Desktop screens
 │       │   ├── ui/components/          #   Reusable Fluent UI components
 │       │   ├── util/                   #   Audio conversion, preferences, file helpers
-│       │   ├── jna/windows/            #   Win32 API bindings and window effects
-│       │   └── Main.kt                 #   Desktop entry point
-│       └── resources/                  #   Desktop icons and packaged resources
+│       │   ├── jna/windows/            #   Win32 bindings and window effects
+│       │   └── Main.kt
+│       └── resources/
 ├── shared/                             # Kotlin Multiplatform shared module
 │   ├── build.gradle.kts
 │   └── src/
-│       ├── commonMain/kotlin/          #   Shared business logic
-│       │   ├── data/                   #   Wiki API core, models, serialization, shared network DTOs
+│       ├── commonMain/kotlin/
+│       │   ├── data/                   #   Wiki API core, models, DTOs
 │       │   ├── portrait/               #   Portrait parsing and organization
-│       │   └── util/                   #   File extension helpers
-│       ├── commonMain/composeResources/#   Shared Compose resources
-│       ├── commonTest/                 #   Common tests
-│       ├── jvmTest/                    #   Desktop/JVM tests
-│       └── androidHostTest/            #   Android host tests
-├── gradle/libs.versions.toml           # Centralized plugin and dependency versions
-├── build.gradle.kts                    # Root plugin aliases
-└── settings.gradle.kts                 # Module includes and repository management
+│       │   ├── util/                   #   Shared helpers
+│       │   └── com/nekolaska/calabiyau/ #   Shared media / preferences utilities
+│       ├── commonMain/composeResources/
+│       ├── commonTest/
+│       ├── jvmTest/
+│       └── androidHostTest/
+├── downloadPage/                       # Web download hub + browser tools
+│   ├── index.html                      #   Home: APK download, QQ group, balance data
+│   ├── search/index.html               #   Wiki search / category download / voice tools
+│   ├── video/index.html                #   Local video/GIF material tools
+│   ├── package.json
+│   ├── vite.config.ts                  #   Multi-page Vite build + local API proxy
+│   ├── download.css / base.css
+│   ├── downloads/                      #   latest.json + APK assets for Pages
+│   └── src/
+│       ├── main.ts                     #   Home entry
+│       ├── App.svelte                  #   Home UI
+│       ├── BalanceDialog.svelte        #   Balance data dialog
+│       ├── CustomSelect.svelte
+│       ├── api/_worker.js              #   Cloudflare Worker: GitHub stars, Wiki/image proxy, balance proxy
+│       ├── search/                     #   Wiki search app, voice index, bulk download
+│       │   ├── SearchApp.svelte
+│       │   ├── searchApi.ts
+│       │   ├── download/               #   ZIP / queue / blob helpers
+│       │   ├── panels/                 #   Wiki / category / voice panels
+│       │   └── voice/                  #   Voice index builder & player UI
+│       └── video/                      #   Native video/GIF workbench
+│           ├── NativeVideoApp.svelte
+│           └── native-video.css
+├── webApp/                             # Optional Compose/Web related module
+├── gradle/libs.versions.toml           # Centralized dependency versions
+├── build.gradle.kts
+└── settings.gradle.kts
 ```
 
 ## 🚀 Build and Run
@@ -158,6 +198,12 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 # Build Android APK
 ./gradlew.bat assembleDebug
+
+# Download page (web tools)
+cd downloadPage
+npm install
+npm run dev
+npm run build
 ```
 
 > For macOS/Linux, use `./gradlew` instead of `./gradlew.bat`.
@@ -165,7 +211,8 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 ## ⚠️ Notes
 
 - 📡 **API Dependency:** The app depends on Bilibili wiki endpoints; availability may vary depending on network conditions.
-- 📱 **Android:** Requires Android 8.0 (API 26) or later.
+- 📱 **Android:** Requires Android 7.1 (API 25) or later.
+- 🌐 **Website:** Prefer [wiki.nekolaska.vip](https://wiki.nekolaska.vip/); [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/) is the Cloudflare Pages backup.
 
 ## 📄 License
 

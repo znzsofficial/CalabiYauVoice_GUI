@@ -722,6 +722,72 @@
     line-height: 1.5;
 }
 
+.qq-group-panel {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--muted) 55%, var(--card));
+}
+
+.qq-group-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: calc(var(--radius) - 2px);
+    border: 1px solid var(--border);
+    background: var(--card);
+    object-fit: cover;
+    flex: 0 0 auto;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.qq-group-meta {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.qq-group-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qq-group-id {
+    color: var(--muted-foreground);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+}
+
+.qq-group-copy {
+    width: auto;
+    height: 2.25rem;
+    min-width: 7.5rem;
+    min-height: 2.25rem;
+    padding-inline: 0.875rem;
+    justify-self: end;
+}
+
+@media (max-width: 520px) {
+    .qq-group-panel {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .qq-group-copy {
+        grid-column: 1 / -1;
+        width: 100%;
+        justify-self: stretch;
+    }
+}
+
 /* ══════════════════════════════════════
    平衡数据对话框
    ══════════════════════════════════════ */
