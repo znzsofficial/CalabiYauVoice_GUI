@@ -3,7 +3,9 @@ package com.nekolaska.calabiyau.core.ui
 import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -15,15 +17,17 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
+import com.materialkolor.DynamicMaterialExpressiveTheme
 import com.materialkolor.PaletteStyle
-import com.materialkolor.rememberDynamicColorScheme
 import com.kyant.capsule.ContinuousRoundedRectangle
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
@@ -43,6 +47,7 @@ val LocalWallpaperSeedColor = staticCompositionLocalOf { mutableIntStateOf(0) }
 /** Palette style index (0–8), maps to materialkolor PaletteStyle enum ordinal. */
 val LocalPaletteStyle = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.paletteStyle) }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
@@ -51,6 +56,8 @@ fun AppTheme(content: @Composable () -> Unit) {
     val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
     val highReadabilityDrawer = remember { mutableStateOf(AppPrefs.highReadabilityDrawer) }
     val paletteStyle = remember { mutableIntStateOf(AppPrefs.paletteStyle) }
+    val currentContent = rememberUpdatedState(content)
+    val movableContent = remember { movableContentOf { currentContent.value() } }
 
     LaunchedEffect(seedColor.intValue) {
         if (seedColor.intValue != AppPrefs.SEED_WALLPAPER) return@LaunchedEffect
@@ -72,16 +79,7 @@ fun AppTheme(content: @Composable () -> Unit) {
         AppPrefs.SEED_WALLPAPER -> wallpaperSeedColor.intValue
         else -> seedColor.intValue
     }
-    val seedScheme = if (effectiveSeed != 0) {
-        rememberDynamicColorScheme(
-            seedColor = Color(effectiveSeed),
-            isDark = darkTheme,
-            style = PaletteStyle.entries[paletteStyle.intValue]
-        )
-    } else {
-        null
-    }
-    val colorScheme = seedScheme ?: when {
+    val fallbackColorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
@@ -115,12 +113,26 @@ fun AppTheme(content: @Composable () -> Unit) {
                 labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium)
             )
         }
-        MaterialExpressiveTheme(
-            colorScheme = colorScheme,
-            shapes = appShapes,
-            typography = appTypography,
-            content = content
-        )
+        if (effectiveSeed != 0) {
+            DynamicMaterialExpressiveTheme(
+                seedColor = Color(effectiveSeed),
+                motionScheme = MotionScheme.expressive(),
+                isDark = darkTheme,
+                style = PaletteStyle.entries[paletteStyle.intValue],
+                shapes = appShapes,
+                typography = appTypography,
+                animate = true,
+                content = movableContent
+            )
+        } else {
+            MaterialExpressiveTheme(
+                colorScheme = fallbackColorScheme,
+                motionScheme = MotionScheme.expressive(),
+                shapes = appShapes,
+                typography = appTypography,
+                content = movableContent
+            )
+        }
     }
 }
 

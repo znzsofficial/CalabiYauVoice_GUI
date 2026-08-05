@@ -1,13 +1,16 @@
 {
-  "versionName": "2.1.3",
-  "versionCode": 33,
+  "versionName": "2.1.4",
+  "versionCode": 34,
   "apkUrl": "/downloads/CalabiYauVoice-latest.apk",
-  "apkSize": 3395870,
+  "apkSize": 3503392,
   "releaseUrl": "/",
   "changelog": [
-    "优化角色详情技能数值和弦能增幅网络展示",
-    "修复武器列表加载时机和武器介绍文本清理",
-    "清理未使用的旧代码入口"
+    "升级 Material 3 Expressive 主题、动态配色和动效体验",
+    "重做 Wiki 首页内联搜索，优化焦点、返回键和搜索索引加载体验",
+    "修复资源搜索、分类扫描和角色立绘加载中的请求竞态",
+    "优化投票与平衡数据刷新状态，修复重复提交和旧数据覆盖问题",
+    "加强 Wiki WebView 导航、Blob 与 data 下载和文件名安全限制",
+    "收紧本机目录写入校验并优化存储缓存统计"
   ],
-  "publishedAt": "2026-07-12"
+  "publishedAt": "2026-08-05"
 }

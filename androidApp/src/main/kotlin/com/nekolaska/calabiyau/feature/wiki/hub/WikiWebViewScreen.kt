@@ -9,8 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.os.Message
 import android.util.Base64
 import android.view.ViewGroup
@@ -54,8 +52,12 @@ import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.WikiUserAgent
 import com.nekolaska.calabiyau.feature.tools.openFile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.UUID
 
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
@@ -79,6 +81,7 @@ private val BLOCKED_HOSTS = listOf(
 )
 
 private val WIKI_BOTTOM_TOOLBAR_SNACKBAR_OFFSET = 88.dp
+private const val MAX_IN_MEMORY_DOWNLOAD_BYTES = 64L * 1024 * 1024
 
 private data class PendingApkDownload(
     val file: File,
@@ -126,8 +129,118 @@ private fun isAllowedWebViewHost(host: String): Boolean {
     }
 }
 
+private fun isAllowedWebViewUrl(url: String): Boolean {
+    val uri = url.toUri()
+    return uri.scheme.equals("https", ignoreCase = true) && isAllowedWebViewHost(uri.host.orEmpty())
+}
+
 private fun ensureWikiSaveDirectory(): File {
     return File(AppPrefs.savePath).apply { mkdirs() }
+}
+
+internal fun normalizeWikiDownloadFileName(fileName: String): String? = fileName
+    .replace('\\', '/')
+    .substringAfterLast('/')
+    .replace(Regex("[\\u0000-\\u001F\\u007F]"), "_")
+    .trim()
+    .takeIf { it.isNotBlank() && it != "." && it != ".." }
+
+internal fun reserveUniqueDownloadFile(directory: File, fileName: String): Pair<File, String>? {
+    val safeFileName = normalizeWikiDownloadFileName(fileName)
+        ?: "download_${System.currentTimeMillis()}"
+    val canonicalDirectory = runCatching {
+        if (!directory.exists() && !directory.mkdirs()) return null
+        directory.canonicalFile
+    }.getOrNull() ?: return null
+    val extensionIndex = safeFileName.lastIndexOf('.').takeIf { it > 0 } ?: safeFileName.length
+    val stem = safeFileName.substring(0, extensionIndex)
+    val extension = safeFileName.substring(extensionIndex)
+
+    repeat(1_000) { index ->
+        val candidateName = if (index == 0) safeFileName else "$stem ($index)$extension"
+        val candidate = runCatching { File(canonicalDirectory, candidateName).canonicalFile }.getOrNull()
+            ?: return@repeat
+        if (candidate.parentFile == canonicalDirectory && runCatching { candidate.createNewFile() }.getOrDefault(false)) {
+            return candidate to candidateName
+        }
+    }
+    return null
+}
+
+private fun saveWikiDownloadBytes(fileName: String, data: ByteArray): String? {
+    val (file, safeFileName) = reserveUniqueDownloadFile(ensureWikiSaveDirectory(), fileName) ?: return null
+    return try {
+        file.outputStream().use { it.write(data) }
+        safeFileName
+    } catch (e: Exception) {
+        file.delete()
+        throw e
+    }
+}
+
+private fun maxBase64EncodedLength(): Long =
+    ((MAX_IN_MEMORY_DOWNLOAD_BYTES + 2L) / 3L) * 4L
+
+internal fun decodePercentEncodedDataUrl(
+    value: String,
+    maxBytes: Long,
+    startIndex: Int = 0
+): ByteArray? {
+    if (maxBytes < 0 || startIndex !in 0..value.length) return null
+    val output = ByteArrayOutputStream(minOf(value.length - startIndex, 8192))
+
+    fun writeByte(value: Int): Boolean {
+        if (output.size().toLong() >= maxBytes) return false
+        output.write(value)
+        return true
+    }
+
+    var index = startIndex
+    while (index < value.length) {
+        val char = value[index]
+        if (char == '%' && index + 2 < value.length) {
+            val high = value[index + 1].digitToIntOrNull(16)
+            val low = value[index + 2].digitToIntOrNull(16)
+            if (high != null && low != null) {
+                if (!writeByte((high shl 4) or low)) return null
+                index += 3
+                continue
+            }
+        }
+
+        val codePoint = when {
+            char.isHighSurrogate() && index + 1 < value.length && value[index + 1].isLowSurrogate() -> {
+                val value = Character.toCodePoint(char, value[index + 1])
+                index += 2
+                value
+            }
+            char.isSurrogate() -> {
+                index++
+                0xFFFD
+            }
+            else -> {
+                index++
+                char.code
+            }
+        }
+        val written = when {
+            codePoint <= 0x7F -> writeByte(codePoint)
+            codePoint <= 0x7FF ->
+                writeByte(0xC0 or (codePoint shr 6)) &&
+                    writeByte(0x80 or (codePoint and 0x3F))
+            codePoint <= 0xFFFF ->
+                writeByte(0xE0 or (codePoint shr 12)) &&
+                    writeByte(0x80 or ((codePoint shr 6) and 0x3F)) &&
+                    writeByte(0x80 or (codePoint and 0x3F))
+            else ->
+                writeByte(0xF0 or (codePoint shr 18)) &&
+                    writeByte(0x80 or ((codePoint shr 12) and 0x3F)) &&
+                    writeByte(0x80 or ((codePoint shr 6) and 0x3F)) &&
+                    writeByte(0x80 or (codePoint and 0x3F))
+        }
+        if (!written) return null
+    }
+    return output.toByteArray()
 }
 
 private fun String.isHttpOrHttpsUrl(): Boolean {
@@ -152,8 +265,13 @@ private fun handleWikiNavigation(
     }
 
     if (url.isHttpOrHttpsUrl()) {
-        loadInWebView(url)
-        return true
+        return if (isAllowedWebViewUrl(url)) {
+            loadInWebView(url)
+            true
+        } else {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            true
+        }
     }
 
     if (scheme.equals("intent", ignoreCase = true)) {
@@ -165,8 +283,7 @@ private fun handleWikiNavigation(
                 ?.let(Uri::decode)
 
         if (!fallbackUrl.isNullOrBlank() && fallbackUrl.isHttpOrHttpsUrl()) {
-            loadInWebView(fallbackUrl)
-            return true
+            return handleWikiNavigation(context, fallbackUrl, loadInWebView)
         }
     }
 
@@ -272,6 +389,18 @@ fun WikiWebViewScreen(
     useTopBarMode: Boolean = false
 ) {
     val context = LocalContext.current
+    val allowedInitialUrl = remember(initialUrl) { initialUrl.takeIf(::isAllowedWebViewUrl) }
+    if (allowedInitialUrl == null) {
+        LaunchedEffect(initialUrl) {
+            val uri = initialUrl.toUri()
+            if (initialUrl.isHttpOrHttpsUrl()) {
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+            }
+            onInitialUrlConsumed?.invoke()
+            onExitWiki?.invoke()
+        }
+        return
+    }
     val webViewBackgroundColor = MaterialTheme.colorScheme.background.toArgb()
 
     // 状态
@@ -390,7 +519,6 @@ fun WikiWebViewScreen(
             snackbarHostState.showSnackbar("请点击网页右上角通知按钮完成登录")
         }
     }
-
     // 长按图片保存
     var longPressImageUrl by remember { mutableStateOf<String?>(null) }
 
@@ -702,6 +830,7 @@ fun WikiWebViewScreen(
                             },
                             onPassportDetected = showLoginReturnSnack,
                             pendingApkDownloads = pendingApkDownloads,
+                            downloadScope = snackbarScope,
                             showSnack = showSnack
                         ).also { wv ->
                             webView = wv
@@ -720,7 +849,7 @@ fun WikiWebViewScreen(
                                     else -> false
                                 }
                             }
-                            wv.loadWikiUrl(initialUrl, null)
+                            wv.loadWikiUrl(allowedInitialUrl, null)
                             onInitialUrlConsumed?.invoke()
                         }
                     },
@@ -1213,11 +1342,13 @@ private fun createWikiWebView(
     onPassportDetected: () -> Unit = {},
     onFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams?) -> Boolean,
     pendingApkDownloads: MutableMap<Long, PendingApkDownload>,
+    downloadScope: CoroutineScope,
     showSnack: (String) -> Unit
 ): WebView {
     // 确保 Cookie 持久化
     val cookieManager = CookieManager.getInstance()
     cookieManager.setAcceptCookie(true)
+    val blobDownloadToken = UUID.randomUUID().toString()
 
     return object : WebView(context) {
         override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
@@ -1247,11 +1378,9 @@ private fun createWikiWebView(
             else
                 WebSettings.LOAD_DEFAULT
 
-            // 允许混合内容（http 资源在 https 页面中加载）
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 
-            // 文件访问
-            allowFileAccess = true
+            allowFileAccess = false
             allowContentAccess = true
 
             // 视口和缩放
@@ -1284,31 +1413,36 @@ private fun createWikiWebView(
         // ── Blob 下载桥接 ──
         addJavascriptInterface(object {
             @JavascriptInterface
-            fun onBlobData(base64Data: String, mimeType: String, fileName: String) {
-                try {
-                    if (base64Data.isBlank()) {
-                        Handler(Looper.getMainLooper()).post {
-                            showSnack("文件保存失败：无法读取文件内容")
-                        }
-                        return
-                    }
+            fun onBlobError(token: String, message: String) {
+                if (token == blobDownloadToken) showSnack(message)
+            }
 
-                    val data = Base64.decode(base64Data, Base64.DEFAULT)
-                    if (data.isEmpty()) {
-                        Handler(Looper.getMainLooper()).post {
-                            showSnack("文件保存失败：文件内容为空")
-                        }
-                        return
-                    }
+            @JavascriptInterface
+            fun onBlobData(token: String, base64Data: String, mimeType: String, fileName: String) {
+                if (token != blobDownloadToken) return
+                if (base64Data.isBlank()) {
+                    showSnack("文件保存失败：无法读取文件内容")
+                    return
+                }
+                if (base64Data.length.toLong() > maxBase64EncodedLength()) {
+                    showSnack("文件保存失败：文件超过 64 MB 限制")
+                    return
+                }
 
-                    val dir = ensureWikiSaveDirectory()
-                    val file = File(dir, fileName)
-                    file.writeBytes(data)
-                    Handler(Looper.getMainLooper()).post {
-                        showSnack("文件已保存：$fileName")
-                    }
-                } catch (e: Exception) {
-                    Handler(Looper.getMainLooper()).post {
+                downloadScope.launch(Dispatchers.IO) {
+                    try {
+                        val data = Base64.decode(base64Data, Base64.DEFAULT)
+                        if (data.isEmpty() || data.size.toLong() > MAX_IN_MEMORY_DOWNLOAD_BYTES) {
+                            showSnack(if (data.isEmpty()) "文件保存失败：文件内容为空" else "文件保存失败：文件超过 64 MB 限制")
+                            return@launch
+                        }
+                        val safeFileName = saveWikiDownloadBytes(fileName, data)
+                            ?: run {
+                                showSnack("文件保存失败：无法创建目标文件")
+                                return@launch
+                            }
+                        showSnack("文件已保存：$safeFileName")
+                    } catch (e: Exception) {
                         showSnack("文件保存失败：${e.message}")
                     }
                 }
@@ -1334,15 +1468,19 @@ private fun createWikiWebView(
                         xhr.open('GET', '${jsEscape(url)}', true);
                         xhr.responseType = 'blob';
                         xhr.onload = function() {
+                            if (!xhr.response || xhr.response.size > $MAX_IN_MEMORY_DOWNLOAD_BYTES) {
+                                _blobDownloader.onBlobError('${jsEscape(blobDownloadToken)}', '文件保存失败：文件超过 64 MB 限制');
+                                return;
+                            }
                             var reader = new FileReader();
                             reader.onloadend = function() {
                                 var base64 = reader.result.split(',')[1] || '';
-                                _blobDownloader.onBlobData(base64, '${jsEscape(safeMime)}', '${jsEscape(guessedName)}');
+                                _blobDownloader.onBlobData('${jsEscape(blobDownloadToken)}', base64, '${jsEscape(safeMime)}', '${jsEscape(guessedName)}');
                             };
                             reader.readAsDataURL(xhr.response);
                         };
                         xhr.onerror = function() {
-                            _blobDownloader.onBlobData('', '${jsEscape(safeMime)}', '${jsEscape(guessedName)}');
+                            _blobDownloader.onBlobError('${jsEscape(blobDownloadToken)}', '文件保存失败：无法读取文件内容');
                         };
                         xhr.send();
                     })();
@@ -1353,23 +1491,43 @@ private fun createWikiWebView(
 
             // data: URL 直接解码保存
             if (url.startsWith("data:")) {
-                try {
-                    val guessedName = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                    val commaIdx = url.indexOf(',')
-                    if (commaIdx > 0) {
-                        val metadata = url.substring(0, commaIdx)
-                        val rawData = url.substring(commaIdx + 1)
-                        val data = if (metadata.contains(";base64", ignoreCase = true)) {
-                            Base64.decode(rawData, Base64.DEFAULT)
-                        } else {
-                            Uri.decode(rawData).toByteArray()
+                downloadScope.launch(Dispatchers.IO) {
+                    try {
+                        val guessedName = URLUtil.guessFileName("data:", contentDisposition, mimeType)
+                        val commaIdx = url.indexOf(',')
+                        if (commaIdx > 0) {
+                            val metadata = url.substring(0, commaIdx)
+                            val data = if (metadata.contains(";base64", ignoreCase = true)) {
+                                val encodedLength = url.length.toLong() - commaIdx - 1L
+                                if (encodedLength > maxBase64EncodedLength()) {
+                                    showSnack("文件保存失败：文件超过 64 MB 限制")
+                                    return@launch
+                                }
+                                Base64.decode(url.substring(commaIdx + 1), Base64.DEFAULT)
+                            } else {
+                                decodePercentEncodedDataUrl(
+                                    value = url,
+                                    maxBytes = MAX_IN_MEMORY_DOWNLOAD_BYTES,
+                                    startIndex = commaIdx + 1
+                                ) ?: run {
+                                    showSnack("文件保存失败：文件超过 64 MB 限制")
+                                    return@launch
+                                }
+                            }
+                            if (data.isEmpty() || data.size.toLong() > MAX_IN_MEMORY_DOWNLOAD_BYTES) {
+                                showSnack(if (data.isEmpty()) "文件保存失败：文件内容为空" else "文件保存失败：文件超过 64 MB 限制")
+                                return@launch
+                            }
+                            val safeFileName = saveWikiDownloadBytes(guessedName, data)
+                                ?: run {
+                                    showSnack("文件保存失败：无法创建目标文件")
+                                    return@launch
+                                }
+                            showSnack("文件已保存：$safeFileName")
                         }
-                        val dir = ensureWikiSaveDirectory()
-                        File(dir, guessedName).writeBytes(data)
-                        showSnack("文件已保存：$guessedName")
+                    } catch (e: Exception) {
+                        showSnack("文件保存失败：${e.message}")
                     }
-                } catch (e: Exception) {
-                    showSnack("文件保存失败：${e.message}")
                 }
                 return@setDownloadListener
             }
@@ -1506,7 +1664,7 @@ private fun createWikiWebView(
                 }
 
                 // 主流程中的网页链接优先留在 WebView，避免登录完成后被外部浏览器接管
-                if (url.isHttpOrHttpsUrl() && isAllowedWebViewHost(host)) {
+                if (isAllowedWebViewUrl(url)) {
                     return false
                 }
 

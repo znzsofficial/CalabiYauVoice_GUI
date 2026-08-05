@@ -82,7 +82,7 @@ import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
-import com.nekolaska.calabiyau.feature.tools.getPathFromUri
+import com.nekolaska.calabiyau.feature.tools.getWritablePathFromTreeUri
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.defaultQuickEntryIds
 import com.nekolaska.calabiyau.feature.wiki.hub.quickEntryById
@@ -115,6 +115,7 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
     var showQuickEntrySheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val showSnack = rememberSnackbarLauncher()
     var storageSnapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
     var isStorageCalculating by remember { mutableStateOf(true) }
     var storageRefreshKey by remember { mutableIntStateOf(0) }
@@ -134,10 +135,13 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         uri?.let {
-            val path = getPathFromUri(it)
+            val path = getWritablePathFromTreeUri(it)
             if (path != null) {
                 savePath = path
                 AppPrefs.savePath = path
+                showSnack("已更新保存目录")
+            } else {
+                showSnack("所选目录不支持直接写入，请选择本机可写目录")
             }
         }
     }
@@ -189,8 +193,6 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
             )
             return@AnimatedContent
         }
-
-        val showSnack = rememberSnackbarLauncher()
 
         Scaffold(
             topBar = {
@@ -586,9 +588,9 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.3"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.4"
                     } catch (_: Exception) {
-                        "2.1.3"
+                        "2.1.4"
                     }
                 }
                 val currentVersionCode = remember {

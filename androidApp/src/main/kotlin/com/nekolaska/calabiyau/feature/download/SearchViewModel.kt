@@ -7,7 +7,11 @@ import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.CharacterGroup
 import data.PortraitRepository
 import data.SearchMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -109,6 +113,13 @@ class SearchViewModel : ViewModel() {
     private val cachedSelectedGroup = mutableMapOf<SearchMode, CharacterGroup?>()
     private val cachedSubCategories = mutableMapOf<SearchMode, List<String>>()
     private val cachedCheckedCategories = mutableMapOf<SearchMode, List<String>>()
+    private val cachedPortraitCharacters = mutableMapOf<SearchMode, List<String>>()
+    private var searchJob: Job? = null
+    private var searchRequestVersion = 0L
+    private var activeSearchMode: SearchMode? = null
+    private var activeSearchKeyword: String? = null
+    private var categoryScanJob: Job? = null
+    private var categoryScanVersion = 0L
 
     /** 供 DownloadViewModel 追加日志 */
     var onLog: ((String) -> Unit)? = null
@@ -133,17 +144,39 @@ class SearchViewModel : ViewModel() {
                 .distinctUntilChanged()
                 .debounce(300.milliseconds)
                 .collect { kw ->
-                    if (_searchMode.value == SearchMode.FILE_SEARCH) return@collect
-                    if (kw == cachedKeywords[_searchMode.value]) return@collect
+                    val mode = _searchMode.value
+                    if (mode == SearchMode.FILE_SEARCH) return@collect
+                    if (kw != _searchKeyword.value) return@collect
+                    if (kw.trim() == cachedKeywords[mode] && mode in hasResultsCache) return@collect
                     performSearch()
                 }
         }
     }
 
-    fun onSearchKeywordChange(value: String) { _searchKeyword.value = value }
+    fun onSearchKeywordChange(value: String) {
+        if (_searchKeyword.value == value) return
+        _searchKeyword.value = value
+        cancelSearch()
+        cancelCategoryScan()
+        _hasSearched.value = false
+        _searchError.value = null
+        hasResultsCache.remove(_searchMode.value)
+        clearResults(_searchMode.value)
+    }
 
     fun onSearchModeChange(mode: SearchMode) {
         val prev = _searchMode.value
+        if (mode == prev) return
+
+        cancelSearch()
+        val wasScanningCategory = categoryScanJob?.isActive == true
+        cancelCategoryScan()
+        if (wasScanningCategory) {
+            _selectedGroup.value = null
+            _subCategories.value = emptyList()
+            _checkedCategories.value = emptyList()
+        }
+        _searchError.value = null
         cachedKeywords[prev] = _searchKeyword.value
 
         if (prev == SearchMode.VOICE_ONLY || prev == SearchMode.ALL_CATEGORIES) {
@@ -152,16 +185,19 @@ class SearchViewModel : ViewModel() {
             cachedSelectedGroup[prev] = _selectedGroup.value
             cachedSubCategories[prev] = _subCategories.value
             cachedCheckedCategories[prev] = _checkedCategories.value
+        } else if (prev == SearchMode.PORTRAIT) {
+            cachedPortraitCharacters[prev] = _portraitCharacters.value
+            cachedCharacterAvatars[prev] = _characterAvatars.value
         }
 
         _searchMode.value = mode
 
         if (mode == SearchMode.FILE_SEARCH) {
             _searchKeyword.value = cachedKeywords[mode] ?: ""
-            if (mode !in hasResultsCache) {
+            _hasSearched.value = mode in hasResultsCache
+            if (!_hasSearched.value) {
                 _fileSearchResults.value = emptyList()
                 _fileSearchSelectedUrls.value = emptySet()
-                _hasSearched.value = false
             }
         } else if (mode == SearchMode.VOICE_ONLY || mode == SearchMode.ALL_CATEGORIES) {
             _searchKeyword.value = cachedKeywords[mode] ?: "角色"
@@ -178,6 +214,8 @@ class SearchViewModel : ViewModel() {
         } else {
             _searchKeyword.value = cachedKeywords[mode] ?: "角色"
             if (mode in hasResultsCache) {
+                _portraitCharacters.value = cachedPortraitCharacters[mode] ?: emptyList()
+                _characterAvatars.value = cachedCharacterAvatars[mode] ?: emptyMap()
                 _hasSearched.value = true
                 return
             }
@@ -186,48 +224,53 @@ class SearchViewModel : ViewModel() {
     }
 
     fun performSearch() {
-        if (_isSearching.value) return
         val keyword = _searchKeyword.value.trim()
         if (keyword.isBlank()) return
+        val mode = _searchMode.value
+        if (searchJob?.isActive == true && activeSearchMode == mode && activeSearchKeyword == keyword) {
+            return
+        }
 
         AppPrefs.addSearchHistory(keyword)
-        hasResultsCache.remove(_searchMode.value)
+        hasResultsCache.remove(mode)
+        cancelSearch()
+        cancelCategoryScan()
+        val requestVersion = ++searchRequestVersion
+        activeSearchMode = mode
+        activeSearchKeyword = keyword
 
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
+            var succeeded = false
             _isSearching.value = true
             _hasSearched.value = false
 
-            when (_searchMode.value) {
-                SearchMode.FILE_SEARCH -> {
-                    _fileSearchResults.value = emptyList()
-                    _fileSearchSelectedUrls.value = emptySet()
-                }
-                else -> {
-                    _selectedGroup.value = null
-                    _subCategories.value = emptyList()
-                    _checkedCategories.value = emptyList()
-                }
-            }
+            clearResults(mode)
 
             _searchError.value = null
 
             try {
-                when (_searchMode.value) {
+                when (mode) {
                     SearchMode.VOICE_ONLY -> {
                         val groups = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly = true)
+                        val avatars = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
+                        currentCoroutineContext().ensureActive()
                         _characterGroups.value = groups
-                        _characterAvatars.value = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
+                        _characterAvatars.value = avatars
                     }
                     SearchMode.ALL_CATEGORIES -> {
                         val groups = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly = false)
+                        val avatars = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
+                        currentCoroutineContext().ensureActive()
                         _characterGroups.value = groups
-                        _characterAvatars.value = WikiEngine.fetchCharacterAvatars(groups.map { it.characterName })
+                        _characterAvatars.value = avatars
                     }
                     SearchMode.PORTRAIT -> {
                         onLog?.invoke("搜索立绘角色: $keyword")
                         val characters = PortraitRepository.searchCharacters(keyword)
+                        val avatars = WikiEngine.fetchCharacterAvatars(characters)
+                        currentCoroutineContext().ensureActive()
                         _portraitCharacters.value = characters
-                        _characterAvatars.value = WikiEngine.fetchCharacterAvatars(characters)
+                        _characterAvatars.value = avatars
                         onLog?.invoke("找到 ${characters.size} 个角色")
                     }
                     SearchMode.FILE_SEARCH -> {
@@ -237,42 +280,111 @@ class SearchViewModel : ViewModel() {
                             audioOnly = false,
                             onLog = { onLog?.invoke(it) }
                         )
+                        currentCoroutineContext().ensureActive()
                         _fileSearchResults.value = results
                         onLog?.invoke("搜索完成，共找到 ${results.size} 个文件")
                     }
                 }
+                succeeded = true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
+                if (requestVersion != searchRequestVersion) return@launch
                 val msg = "搜索失败: ${e.message}"
                 _searchError.value = msg
                 _errorEvent.tryEmit(msg)
                 onLog?.invoke("[错误] 搜索失败: ${e.message}")
             } finally {
-                _isSearching.value = false
-                _hasSearched.value = true
-                hasResultsCache.add(_searchMode.value)
-                cachedKeywords[_searchMode.value] = keyword
+                if (requestVersion == searchRequestVersion) {
+                    _isSearching.value = false
+                    _hasSearched.value = true
+                    if (succeeded) {
+                        hasResultsCache.add(mode)
+                        cachedKeywords[mode] = keyword
+                    } else {
+                        hasResultsCache.remove(mode)
+                    }
+                    searchJob = null
+                    activeSearchMode = null
+                    activeSearchKeyword = null
+                }
+            }
+        }
+    }
+
+    private fun cancelSearch() {
+        searchJob?.cancel()
+        searchJob = null
+        activeSearchMode = null
+        activeSearchKeyword = null
+        searchRequestVersion++
+        _isSearching.value = false
+    }
+
+    private fun clearResults(mode: SearchMode) {
+        when (mode) {
+            SearchMode.VOICE_ONLY, SearchMode.ALL_CATEGORIES -> {
+                _characterGroups.value = emptyList()
+                _characterAvatars.value = emptyMap()
+                _selectedGroup.value = null
+                _subCategories.value = emptyList()
+                _checkedCategories.value = emptyList()
+            }
+            SearchMode.PORTRAIT -> {
+                _portraitCharacters.value = emptyList()
+                _characterAvatars.value = emptyMap()
+            }
+            SearchMode.FILE_SEARCH -> {
+                _fileSearchResults.value = emptyList()
+                _fileSearchSelectedUrls.value = emptySet()
             }
         }
     }
 
     fun onSelectGroup(group: CharacterGroup) {
+        cancelCategoryScan()
+        val scanVersion = ++categoryScanVersion
         _selectedGroup.value = group
+        _subCategories.value = emptyList()
+        _checkedCategories.value = emptyList()
         _isScanningTree.value = true
-        viewModelScope.launch {
+        categoryScanJob = viewModelScope.launch {
             try {
                 val cats = WikiEngine.scanCategoryTree(group.rootCategory)
+                currentCoroutineContext().ensureActive()
+                if (scanVersion != categoryScanVersion || _selectedGroup.value != group) return@launch
                 _subCategories.value = cats
                 _checkedCategories.value = cats.toList()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _errorEvent.tryEmit("扫描分类树失败: ${e.message}")
-                onLog?.invoke("[错误] 扫描分类树失败: ${e.message}")
+                if (scanVersion == categoryScanVersion) {
+                    _errorEvent.tryEmit("扫描分类树失败: ${e.message}")
+                    onLog?.invoke("[错误] 扫描分类树失败: ${e.message}")
+                }
             } finally {
-                _isScanningTree.value = false
+                if (scanVersion == categoryScanVersion) {
+                    _isScanningTree.value = false
+                    categoryScanJob = null
+                }
             }
         }
     }
 
-    fun clearSelectedGroup() { _selectedGroup.value = null }
+    fun clearSelectedGroup() {
+        cancelCategoryScan()
+        _selectedGroup.value = null
+        _subCategories.value = emptyList()
+        _checkedCategories.value = emptyList()
+    }
+
+    private fun cancelCategoryScan() {
+        categoryScanJob?.cancel()
+        categoryScanJob = null
+        categoryScanVersion++
+        _isScanningTree.value = false
+    }
 
     fun setCategoryChecked(cat: String, checked: Boolean) {
         val current = _checkedCategories.value.toMutableList()

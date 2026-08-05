@@ -1,5 +1,14 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
+import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +20,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
@@ -41,26 +52,31 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Style
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Wallpaper
-import androidx.compose.material3.DockedSearchBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
@@ -76,6 +92,7 @@ import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import data.ApiResult
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 private data class HubSearchEntry(
     val id: String,
@@ -218,11 +235,41 @@ internal fun HubSearchPanel(
     isIndexLoading: Boolean = false,
     backdrop: Backdrop = emptyBackdrop(),
 ) {
+    val textFieldState = rememberTextFieldState(query)
+    val focusManager = LocalFocusManager.current
     val normalizedQuery = query.trim()
     var searchActive by remember { mutableStateOf(false) }
     var weaponCategories by remember { mutableStateOf(HubWeaponSearchIndex.cached()) }
     var isLoadingWeapons by remember { mutableStateOf(false) }
     var hasLoadedWeapons by remember { mutableStateOf(weaponCategories.isNotEmpty()) }
+
+    LaunchedEffect(query) {
+        if (textFieldState.text.toString() != query) {
+            textFieldState.edit {
+                replace(0, length, query)
+                selection = TextRange(length)
+            }
+        }
+    }
+    LaunchedEffect(textFieldState) {
+        snapshotFlow { textFieldState.text.toString() }
+            .distinctUntilChanged()
+            .collect(onQueryChange)
+    }
+
+    fun collapseSearch() {
+        focusManager.clearFocus(force = true)
+        searchActive = false
+    }
+
+    fun selectResult(entry: HubSearchEntry) {
+        textFieldState.edit { replace(0, length, "") }
+        onQueryChange("")
+        collapseSearch()
+        onNavigateTo(entry.targetRoute)
+    }
+
+    BackHandler(enabled = searchActive) { collapseSearch() }
 
     LaunchedEffect(searchActive, hasLoadedWeapons) {
         if (!searchActive || hasLoadedWeapons || isLoadingWeapons) return@LaunchedEffect
@@ -244,8 +291,8 @@ internal fun HubSearchPanel(
     val groupedResults = remember(normalizedQuery, dynamicEntries) {
         buildGroupedSearchResults(normalizedQuery, dynamicEntries)
     }
-    val showSearchOptions = searchActive && normalizedQuery.isNotBlank()
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val liquidGlass = LocalLiquidGlassEnabled.current.value &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val hasWallpaper = LocalHasWallpaper.current
     val shape = smoothCornerShape(28.dp)
     val surfaceColor = when {
@@ -254,36 +301,9 @@ internal fun HubSearchPanel(
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
 
-    DockedSearchBar(
-        inputField = {
-            SearchBarDefaults.InputField(
-                query = query,
-                onQueryChange = {
-                    onQueryChange(it)
-                    searchActive = true
-                },
-                onSearch = { },
-                expanded = searchActive,
-                onExpandedChange = { expanded ->
-                    searchActive = expanded
-                },
-                placeholder = { Text("搜索入口、角色、武器、地图") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = if (query.isNotBlank()) {
-                    {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "清空")
-                        }
-                    }
-                } else null,
-            )
-        },
-        expanded = showSearchOptions,
-        onExpandedChange = { expanded ->
-            if (!expanded) searchActive = false
-        },
+    Surface(
         shape = shape,
-        colors = SearchBarDefaults.colors(containerColor = surfaceColor),
+        color = surfaceColor,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
@@ -294,44 +314,85 @@ internal fun HubSearchPanel(
                 surfaceAlpha = 0.22f
             )
     ) {
-        Column(
-            modifier = Modifier.padding(PaddingValues(start = 14.dp, end = 14.dp, bottom = 12.dp)),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            if (isLoadingWeapons && groupedResults.isEmpty) {
-                Text(
-                    "正在加载武器索引",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            } else if (groupedResults.isEmpty) {
-                Text(
-                    "没有匹配的入口",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            } else {
-                SearchResultSection("角色", groupedResults.characters) { entry ->
-                    onQueryChange("")
-                    searchActive = false
-                    onNavigateTo(entry.targetRoute)
-                }
-                SearchResultSection("相关武器", groupedResults.relatedWeapons) { entry ->
-                    onQueryChange("")
-                    searchActive = false
-                    onNavigateTo(entry.targetRoute)
-                }
-                SearchResultSection("地图", groupedResults.maps) { entry ->
-                    onQueryChange("")
-                    searchActive = false
-                    onNavigateTo(entry.targetRoute)
-                }
-                SearchResultSection("入口", groupedResults.entries) { entry ->
-                    onQueryChange("")
-                    searchActive = false
-                    onNavigateTo(entry.targetRoute)
+        Column {
+            TextField(
+                state = textFieldState,
+                placeholder = { Text("搜索入口、角色、武器、地图") },
+                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                trailingIcon = if (query.isNotBlank()) {
+                    {
+                        IconButton(
+                            onClick = { textFieldState.edit { replace(0, length, "") } }
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "清空")
+                        }
+                    }
+                } else null,
+                lineLimits = TextFieldLineLimits.SingleLine,
+                shape = shape,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { if (it.isFocused) searchActive = true }
+            )
+
+            AnimatedVisibility(
+                visible = searchActive,
+                enter = expandVertically(
+                    expandFrom = Alignment.Top,
+                    animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(durationMillis = 220)),
+                exit = shrinkVertically(
+                    shrinkTowards = Alignment.Top,
+                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(durationMillis = 160)),
+            ) {
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Column(
+                        modifier = Modifier.padding(
+                            PaddingValues(start = 14.dp, end = 14.dp, bottom = 12.dp)
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        when {
+                            normalizedQuery.isBlank() -> {
+                                Text(
+                                    "输入关键词以搜索 Wiki 内容",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                                )
+                            }
+                            (isIndexLoading || isLoadingWeapons) && groupedResults.isEmpty -> {
+                                Text(
+                                    "正在加载搜索索引",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                            groupedResults.isEmpty -> {
+                                Text(
+                                    "没有匹配的入口",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                            else -> {
+                                SearchResultSection("角色", groupedResults.characters, ::selectResult)
+                                SearchResultSection("相关武器", groupedResults.relatedWeapons, ::selectResult)
+                                SearchResultSection("地图", groupedResults.maps, ::selectResult)
+                                SearchResultSection("入口", groupedResults.entries, ::selectResult)
+                            }
+                        }
+                    }
                 }
             }
         }

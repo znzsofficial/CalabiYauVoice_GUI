@@ -88,13 +88,13 @@ fun ToolsHomeScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
         uri?.let {
-            val path = getPathFromUri(it)
+            val path = getWritablePathFromTreeUri(it)
             if (path != null) {
                 outputPath = path
                 AppPrefs.toolsOutputPath = path
                 showSnack("已更新默认输出目录")
             } else {
-                showSnack("无法解析所选目录")
+                showSnack("所选目录不支持直接写入，请选择本机可写目录")
             }
         }
     }

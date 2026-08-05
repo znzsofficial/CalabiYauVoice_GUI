@@ -1071,9 +1071,9 @@ private fun makeWritableRecursively(file: File) {
 }
 
 private fun makeWritable(file: File) {
-    runCatching { file.setWritable(true, false) }
+    runCatching { file.setWritable(true, true) }
     if (file.isDirectory) {
-        runCatching { file.setExecutable(true, false) }
+        runCatching { file.setExecutable(true, true) }
     }
 }
 

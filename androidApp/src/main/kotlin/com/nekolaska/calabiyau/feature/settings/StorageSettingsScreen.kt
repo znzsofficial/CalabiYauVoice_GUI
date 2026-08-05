@@ -71,6 +71,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 data class DirSizeInfo(
     val name: String,
@@ -382,7 +383,7 @@ private fun StorageUsageChart(segments: List<StorageSegment>) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    "${formatFileSize(segment.size)} · ${String.format("%.1f", percent)}%",
+                    "${formatFileSize(segment.size)} · ${String.format(Locale.ROOT, "%.1f", percent)}%",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -640,12 +641,17 @@ private fun calculateWebViewCacheSize(context: Context): Long {
     var total = 0L
     val dataDir = context.dataDir
     val cacheDirs = listOf(
+        File(context.cacheDir, "WebView"),
+        File(context.codeCacheDir, "WebView"),
         File(dataDir, "app_webview/Cache"),
+        File(dataDir, "app_webview/Code Cache"),
         File(dataDir, "app_webview/Default/Cache"),
+        File(dataDir, "app_webview/Default/HTTP Cache"),
         File(dataDir, "app_webview/Default/Code Cache"),
         File(dataDir, "app_webview/GPUCache"),
-        context.cacheDir
-    )
+        File(dataDir, "app_webview/Default/GPUCache")
+    ).mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
+        .distinctBy { it.path }
     for (dir in cacheDirs) {
         if (dir.exists() && dir.isDirectory) {
             total += dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }

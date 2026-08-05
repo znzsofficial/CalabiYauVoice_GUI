@@ -53,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -111,7 +112,11 @@ fun BalanceDataScreen(
     var balanceResult by remember { mutableStateOf<BalanceResult?>(null) }
     var isLoadingSettings by remember { mutableStateOf(true) }
     var isLoadingData by remember { mutableStateOf(false) }
-    var errorResult by remember { mutableStateOf<ApiResult.Error?>(null) }
+    var settingsError by remember { mutableStateOf<ApiResult.Error?>(null) }
+    var dataError by remember { mutableStateOf<ApiResult.Error?>(null) }
+    var settingsRetryTrigger by remember { mutableIntStateOf(0) }
+    var forceSettingsRefresh by remember { mutableStateOf(false) }
+    var dataRetryTrigger by remember { mutableIntStateOf(0) }
 
     // 筛选状态
     var selectedMode by remember { mutableStateOf<FilterOption?>(null) }
@@ -127,8 +132,6 @@ fun BalanceDataScreen(
     var sortField by remember { mutableStateOf(SortField.WIN_RATE) }
     var sortOrder by remember { mutableStateOf(SortOrder.DESC) }
 
-    val scope = rememberCoroutineScope()
-
     // 角色元信息映射 (id → CharacterMeta)
     val characterMap = remember(settings) {
         settings?.characters?.associateBy { it.code.toIntOrNull() ?: 0 } ?: emptyMap()
@@ -139,61 +142,62 @@ fun BalanceDataScreen(
 
     // ── 加载设置 ──
     fun loadSettings(forceRefresh: Boolean = false) {
-        scope.launch {
-            isLoadingSettings = true
-            errorResult = null
-            when (val result = BalanceDataApi.fetchSettings(forceRefresh)) {
-                is ApiResult.Success -> {
-                    val s = result.value
-                    settings = s
-                    // 默认选中：排位爆破、全选地图、全选段位、最新赛季
-                    selectedMode = s.modes.find { it.name == "排位爆破" } ?: s.modes.firstOrNull()
-                    selectedMap = null // null 表示全选
-                    selectedSeason = s.seasons.firstOrNull()
-                    selectedSeason2 = null
-                    selectedRanks = emptyList() // 空表示全选
-                }
-                is ApiResult.Error -> errorResult = result
-            }
-            isLoadingSettings = false
-        }
+        forceSettingsRefresh = forceSettingsRefresh || forceRefresh
+        settingsRetryTrigger++
     }
 
-    // ── 加载平衡数据 ──
-    fun loadBalanceData() {
-        val mode = selectedMode ?: return
-        val season = selectedSeason ?: return
-        scope.launch {
-            isLoadingData = true
-            val rankCodes = if (selectedRanks.isEmpty()) listOf("-255")
-            else selectedRanks.map { it.code }
-            val mapCode = selectedMap?.code ?: "-255"
-
-            when (val result = BalanceDataApi.fetchBalanceData(
-                modeCode = mode.code,
-                mapCode = mapCode,
-                rankCodes = rankCodes,
-                season1Code = season.code,
-                season2Code = selectedSeason2?.code ?: "0"
-            )) {
-                is ApiResult.Success -> {
-                    balanceResult = result.value
-                    errorResult = null
-                }
-                is ApiResult.Error -> errorResult = result
+    LaunchedEffect(settingsRetryTrigger) {
+        val forceRefresh = forceSettingsRefresh
+        forceSettingsRefresh = false
+        isLoadingSettings = true
+        settingsError = null
+        when (val result = BalanceDataApi.fetchSettings(forceRefresh)) {
+            is ApiResult.Success -> {
+                val s = result.value
+                settings = s
+                // 默认选中：排位爆破、全选地图、全选段位、最新赛季
+                selectedMode = s.modes.find { it.name == "排位爆破" } ?: s.modes.firstOrNull()
+                selectedMap = null // null 表示全选
+                selectedSeason = s.seasons.firstOrNull()
+                selectedSeason2 = null
+                selectedRanks = emptyList() // 空表示全选
+                dataRetryTrigger++
             }
-            isLoadingData = false
+            is ApiResult.Error -> settingsError = result
         }
+        isLoadingSettings = false
     }
-
-    // 初始加载
-    LaunchedEffect(Unit) { loadSettings() }
 
     // 设置变化时自动刷新数据
-    LaunchedEffect(selectedMode, selectedMap, selectedSeason, selectedSeason2, selectedRanks) {
-        if (settings != null && selectedMode != null && selectedSeason != null) {
-            loadBalanceData()
+    LaunchedEffect(selectedMode, selectedMap, selectedSeason, selectedSeason2, selectedRanks, dataRetryTrigger) {
+        val mode = selectedMode
+        val season = selectedSeason
+        if (settings == null || mode == null || season == null) {
+            isLoadingData = false
+            balanceResult = null
+            return@LaunchedEffect
         }
+
+        isLoadingData = true
+        dataError = null
+        val rankCodes = if (selectedRanks.isEmpty()) listOf("-255") else selectedRanks.map { it.code }
+        when (val result = BalanceDataApi.fetchBalanceData(
+            modeCode = mode.code,
+            mapCode = selectedMap?.code ?: "-255",
+            rankCodes = rankCodes,
+            season1Code = season.code,
+            season2Code = selectedSeason2?.code ?: "0"
+        )) {
+            is ApiResult.Success -> {
+                balanceResult = result.value
+                settingsError = null
+            }
+            is ApiResult.Error -> {
+                balanceResult = null
+                dataError = result
+            }
+        }
+        isLoadingData = false
     }
 
     // 排序后的列表
@@ -234,10 +238,10 @@ fun BalanceDataScreen(
             isLoadingSettings && settings == null -> {
                 LoadingState(Modifier.padding(padding), "正在加载平衡数据…")
             }
-            errorResult != null && settings == null -> {
+            settingsError != null && settings == null -> {
                 ErrorState(
-                    message = errorResult!!.message,
-                    kind = errorResult!!.kind,
+                    message = settingsError!!.message,
+                    kind = settingsError!!.kind,
                     onRetry = { loadSettings(forceRefresh = true) },
                     modifier = Modifier.padding(padding)
                 )
@@ -291,6 +295,20 @@ fun BalanceDataScreen(
                         Box(Modifier.fillMaxSize()) {
                             if (isLoadingData && balanceResult == null) {
                                 CircularProgressIndicator(Modifier.align(Alignment.Center))
+                            } else if (dataError != null && balanceResult == null) {
+                                ErrorState(
+                                    message = dataError!!.message,
+                                    kind = dataError!!.kind,
+                                    onRetry = { dataRetryTrigger++ },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else if (settingsError != null && balanceResult == null) {
+                                ErrorState(
+                                    message = settingsError!!.message,
+                                    kind = settingsError!!.kind,
+                                    onRetry = { loadSettings(forceRefresh = true) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             } else if (sortedList.isEmpty() && !isLoadingData) {
                                 Text(
                                     "暂无数据",

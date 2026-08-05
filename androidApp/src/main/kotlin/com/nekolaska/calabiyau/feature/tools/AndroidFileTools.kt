@@ -140,25 +140,51 @@ fun resolveOutputDirectory(basePath: String = AppPrefs.toolsOutputPath, child: S
 }
 
 fun getPathFromUri(uri: Uri): String? {
+    if (uri.authority !in LOCAL_TREE_AUTHORITIES) return null
     val docId = try {
         DocumentsContract.getTreeDocumentId(uri)
     } catch (_: Exception) {
-        return uri.path
+        return null
     }
 
-    val split = docId.split(":")
-    return when (split.size) {
-        2 -> {
-            val volume = split[0]
-            val relPath = split[1]
-            if (volume.equals("primary", ignoreCase = true)) {
-                "${Environment.getExternalStorageDirectory().absolutePath}/$relPath"
-            } else {
-                "/storage/$volume/$relPath"
-            }
-        }
-        else -> uri.path
+    if (docId.startsWith("raw:")) return docId.removePrefix("raw:").takeIf { it.isNotBlank() }
+
+    val separator = docId.indexOf(':')
+    if (separator <= 0) return null
+    val volume = docId.substring(0, separator)
+    val relativePath = docId.substring(separator + 1).trimStart('/')
+    if (!volume.equals("primary", ignoreCase = true) && !volume.matches(Regex("[A-Za-z0-9_-]+"))) {
+        return null
     }
+    return runCatching {
+        val root = if (volume.equals("primary", ignoreCase = true)) {
+            Environment.getExternalStorageDirectory()
+        } else {
+            File("/storage", volume)
+        }.canonicalFile
+        val target = File(root, relativePath).canonicalFile
+        target.absolutePath.takeIf {
+            target == root || target.path.startsWith(root.path + File.separator)
+        }
+    }.getOrNull()
+}
+
+private val LOCAL_TREE_AUTHORITIES = setOf(
+    "com.android.externalstorage.documents",
+    "com.android.providers.downloads.documents"
+)
+
+fun getWritablePathFromTreeUri(uri: Uri): String? {
+    val path = getPathFromUri(uri) ?: return null
+    val directory = runCatching { File(path).canonicalFile }.getOrNull() ?: return null
+    if ((!directory.exists() && !directory.mkdirs()) || !directory.isDirectory) return null
+
+    val probe = File(directory, ".calabiyau_write_probe_${System.nanoTime()}")
+    return runCatching {
+        probe.outputStream().use { }
+        if (!probe.delete()) return@runCatching null
+        directory.absolutePath
+    }.getOrNull()
 }
 
 fun Context.queryDisplayName(uri: Uri): String? {
