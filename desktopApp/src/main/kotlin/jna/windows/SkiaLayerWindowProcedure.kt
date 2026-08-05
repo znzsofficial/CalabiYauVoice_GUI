@@ -31,7 +31,16 @@ class SkiaLayerWindowProcedure(
     internal val contentHandle = HWND(skiaLayer.canvas.let(Native::getComponentPointer))
     private val defaultWindowProcedure = User32Extend.instance?.setWindowLong(contentHandle, WinUser.GWL_WNDPROC, this) ?: BaseTSD.LONG_PTR(-1)
 
+    private var disposed = false
+
     private var hitResult = 1
+
+    @Synchronized
+    fun dispose() {
+        if (disposed) return
+        User32Extend.instance?.setWindowLong(contentHandle, WinUser.GWL_WNDPROC, defaultWindowProcedure)
+        disposed = true
+    }
 
      override fun callback(
         hwnd: HWND,

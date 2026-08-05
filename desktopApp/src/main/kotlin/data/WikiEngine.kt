@@ -1,13 +1,18 @@
 package data
 
 import androidx.compose.ui.graphics.ImageBitmap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
@@ -109,6 +114,10 @@ object WikiEngine {
             list.removeIf { it.name == newCookie.name }
         }
         list.addAll(cookies)
+    }
+
+    internal fun clearCookies(url: HttpUrl) {
+        cookieStore.remove(url.host)
     }
 
     // 暴露给外部的 Client
@@ -219,9 +228,12 @@ object WikiEngine {
         repeat(2) { attempt ->
             try {
                 val result = client.executeGetString(url)
+                currentCoroutineContext().ensureActive()
                 if (result != null) return@withContext result
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) { }
-            if (attempt == 0) Thread.sleep(500)
+            if (attempt == 0) delay(500)
         }
         null
     }
@@ -229,10 +241,23 @@ object WikiEngine {
     private fun downloadFile(url: String, targetFile: File) {
         if (targetFile.exists() && targetFile.length() > 0) return
         client.executeGet(url).use { response ->
-            if (response.isSuccessful) {
-                val tmp = File(targetFile.parent, targetFile.name + ".tmp")
+            if (!response.isSuccessful) {
+                throw IOException("HTTP ${response.code}: ${response.message}")
+            }
+            if (response.body.contentLength() == 0L) {
+                throw IOException("Empty response body for $url")
+            }
+
+            val parent = targetFile.absoluteFile.parentFile
+                ?: throw IOException("Target file has no parent: $targetFile")
+            Files.createDirectories(parent.toPath())
+            val tmp = Files.createTempFile(parent.toPath(), "wiki-download-", ".tmp").toFile()
+            try {
                 response.bodyToFile(tmp)
-                if (tmp.exists()) Files.move(tmp.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                if (tmp.length() == 0L) throw IOException("Empty response body for $url")
+                Files.move(tmp.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } finally {
+                Files.deleteIfExists(tmp.toPath())
             }
         }
     }

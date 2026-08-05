@@ -157,6 +157,11 @@ class MainViewModel(
     private var searchJob: Job? = null
     private var scanJob: Job? = null
     private var portraitJob: Job? = null
+    private var fileDialogJob: Job? = null
+    private var searchRequestId = 0L
+    private var scanRequestId = 0L
+    private var portraitRequestId = 0L
+    private var fileDialogRequestId = 0L
 
     // 每个模式缓存的搜索关键词，用于切换 tab 时恢复
     private val cachedKeywords = mutableMapOf<SearchMode, String>(
@@ -191,6 +196,19 @@ class MainViewModel(
     fun onSearchModeChange(mode: SearchMode) {
         val prev = _searchMode.value
         if (prev == mode) return
+
+        searchRequestId++
+        searchJob?.cancel()
+        searchJob = null
+        _isSearching.value = false
+        scanRequestId++
+        scanJob?.cancel()
+        scanJob = null
+        _isScanningTree.value = false
+        portraitRequestId++
+        portraitJob?.cancel()
+        portraitJob = null
+        _isPortraitLoading.value = false
 
         // 先保存当前模式的关键词
         cachedKeywords[prev] = _searchKeyword.value
@@ -236,11 +254,20 @@ class MainViewModel(
     fun performSearch() {
         val mode = _searchMode.value
         val keyword = _searchKeyword.value.trim()
+        val requestId = ++searchRequestId
+        searchJob?.cancel()
+        searchJob = null
+        _isSearching.value = false
         if (mode != SearchMode.PORTRAIT && keyword.isBlank()) return
 
-        searchJob?.cancel()
+        scanRequestId++
         scanJob?.cancel()
+        scanJob = null
+        _isScanningTree.value = false
+        portraitRequestId++
         portraitJob?.cancel()
+        portraitJob = null
+        _isPortraitLoading.value = false
 
         // 手动搜索时，清除当前模式的旧缓存标记
         hasResultsCache.remove(mode)
@@ -274,6 +301,8 @@ class MainViewModel(
                     SearchMode.FILE_SEARCH -> {
                         addLog("正在搜索文件: $keyword …")
                         val results = WikiEngine.searchFiles(keyword, audioOnly = false)
+                        currentCoroutineContext().ensureActive()
+                        if (requestId != searchRequestId) return@launch
                         _fileSearchResults.value = results
                         _fileSearchSelectedUrls.value = results.map { it.second }.toSet()
                         addLog("搜索完成，找到 ${results.size} 个文件。")
@@ -281,6 +310,8 @@ class MainViewModel(
                     SearchMode.PORTRAIT -> {
                         addLog("正在搜索角色立绘列表…")
                         val results = PortraitRepository.searchCharacters(keyword)
+                        currentCoroutineContext().ensureActive()
+                        if (requestId != searchRequestId) return@launch
                         _portraitCharacters.value = results
                         addLog("搜索完成，找到 ${results.size} 个可预览角色。")
                         results.firstOrNull()?.let { onSelectPortraitCharacter(it) }
@@ -289,18 +320,23 @@ class MainViewModel(
                         val voiceOnly = mode == SearchMode.VOICE_ONLY
                         addLog("正在搜索: $keyword ${if (voiceOnly) "(仅语音)" else "(全部类型)"}...")
                         val res = WikiEngine.searchAndGroupCharacters(keyword, voiceOnly)
+                        currentCoroutineContext().ensureActive()
+                        if (requestId != searchRequestId) return@launch
                         _characterGroups.value = res
                         addLog("搜索完成，找到 ${res.size} 个角色。")
                     }
                 }
-            } catch (_: CancellationException) {
-            } catch (e: Exception) {
-                addLog("搜索失败: ${e.message}")
-            } finally {
-                _isSearching.value = false
-                // 标记当前模式已有结果缓存
+
                 hasResultsCache.add(mode)
                 cachedKeywords[mode] = keyword
+            } catch (_: CancellationException) {
+            } catch (e: Exception) {
+                if (requestId == searchRequestId) addLog("搜索失败: ${e.message}")
+            } finally {
+                if (requestId == searchRequestId) {
+                    _isSearching.value = false
+                    searchJob = null
+                }
             }
         }
     }
@@ -322,6 +358,7 @@ class MainViewModel(
     fun onSelectPortraitCharacter(characterName: String) {
         if (_selectedPortraitCharacter.value == characterName && _portraitCostumes.value.isNotEmpty()) return
 
+        val requestId = ++portraitRequestId
         portraitJob?.cancel()
         _selectedPortraitCharacter.value = characterName
         _portraitCostumes.value = emptyList()
@@ -332,14 +369,19 @@ class MainViewModel(
             try {
                 addLog("正在加载 [$characterName] 的立绘与时装预览…")
                 val catalog = PortraitRepository.loadCharacterPortraitCatalog(characterName)
+                currentCoroutineContext().ensureActive()
+                if (requestId != portraitRequestId) return@launch
                 _portraitCostumes.value = catalog.costumes
                 _selectedPortraitCostumeKey.value = catalog.costumes.firstOrNull()?.key
                 addLog("加载完成，找到 ${catalog.costumes.size} 套时装。")
             } catch (_: CancellationException) {
             } catch (e: Exception) {
-                addLog("加载立绘失败: ${e.message}")
+                if (requestId == portraitRequestId) addLog("加载立绘失败: ${e.message}")
             } finally {
-                _isPortraitLoading.value = false
+                if (requestId == portraitRequestId) {
+                    _isPortraitLoading.value = false
+                    portraitJob = null
+                }
             }
         }
     }
@@ -354,7 +396,10 @@ class MainViewModel(
     fun onSelectGroup(group: CharacterGroup) {
         if (_isDownloading.value) return
 
+        val requestId = ++scanRequestId
         scanJob?.cancel()
+        scanJob = null
+        _isScanningTree.value = false
         _selectedGroup.value = group
         _subCategories.value = emptyList()
         _checkedCategories.value = emptyList()
@@ -369,6 +414,8 @@ class MainViewModel(
                 try {
                     addLog("正在获取 [${group.characterName}] 的所有分类...")
                     val tree = WikiEngine.scanCategoryTree(group.rootCategory)
+                    currentCoroutineContext().ensureActive()
+                    if (requestId != scanRequestId) return@launch
                     categoryCache[group.rootCategory] = tree
                     _subCategories.value = tree
                     _checkedCategories.value = tree
@@ -385,9 +432,12 @@ class MainViewModel(
                 } catch (_: CancellationException) {
                     // 忽略取消
                 } catch (e: Exception) {
-                    addLog("获取分类失败: ${e.message}")
+                    if (requestId == scanRequestId) addLog("获取分类失败: ${e.message}")
                 } finally {
-                    _isScanningTree.value = false
+                    if (requestId == scanRequestId) {
+                        _isScanningTree.value = false
+                        scanJob = null
+                    }
                 }
             }
         }
@@ -411,40 +461,56 @@ class MainViewModel(
     // 文件弹窗
     // =========================================================
     fun openFileDialog(cat: String) {
+        val requestId = ++fileDialogRequestId
+        fileDialogJob?.cancel()
         _dialogCategoryName.value = cat
         _dialogFileList.value = emptyList()
         _dialogInitialSelection.value = emptyList()
         _showFileDialog.value = true
         _dialogIsLoading.value = true
+        val audioOnly = _searchMode.value == SearchMode.VOICE_ONLY
 
-        scope.launch {
+        fileDialogJob = scope.launch {
             try {
-                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = audioOnly)
+                currentCoroutineContext().ensureActive()
+                if (requestId != fileDialogRequestId) return@launch
                 _dialogFileList.value = files
                 _categoryTotalCountMap.value += (cat to files.size)
 
                 val manual = _manualSelectionMap.value[cat]
                 _dialogInitialSelection.value = manual?.map { it.second } ?: files.map { it.second }
+            } catch (_: CancellationException) {
             } catch (e: Exception) {
-                addLog("加载失败: ${e.message}")
+                if (requestId == fileDialogRequestId) addLog("加载失败: ${e.message}")
             } finally {
-                _dialogIsLoading.value = false
+                if (requestId == fileDialogRequestId) {
+                    _dialogIsLoading.value = false
+                    fileDialogJob = null
+                }
             }
         }
     }
 
-    fun closeFileDialog() { _showFileDialog.value = false }
+    fun closeFileDialog() {
+        fileDialogRequestId++
+        fileDialogJob?.cancel()
+        fileDialogJob = null
+        _showFileDialog.value = false
+        _dialogIsLoading.value = false
+    }
 
     fun confirmFileDialog(selectedFiles: List<Pair<String, String>>) {
         val cat = _dialogCategoryName.value
-        _showFileDialog.value = false
+        val totalCount = _dialogFileList.value.size
+        closeFileDialog()
 
         val newMap = _manualSelectionMap.value.toMutableMap()
         newMap[cat] = selectedFiles
         _manualSelectionMap.value = newMap
 
         val newCountMap = _categoryTotalCountMap.value.toMutableMap()
-        newCountMap[cat] = _dialogFileList.value.size
+        newCountMap[cat] = totalCount
         _categoryTotalCountMap.value = newCountMap
 
         val checked = _checkedCategories.value.toMutableList()
@@ -460,7 +526,9 @@ class MainViewModel(
     fun onSavePathChange(value: String) { _savePath.value = value; util.AppPrefs.savePath = value }
 
     fun onMaxConcurrencyChange(value: String) {
-        if (value.all { it.isDigit() }) _maxConcurrencyStr.value = value
+        if (value.isEmpty() || value.toIntOrNull()?.let { it in 1..32 } == true) {
+            _maxConcurrencyStr.value = value
+        }
     }
 
     fun onConvertAfterDownloadChange(value: Boolean) { _convertAfterDownload.value = value }
@@ -495,7 +563,7 @@ class MainViewModel(
             }
 
             _isDownloading.value = true
-            val concurrency = _maxConcurrencyStr.value.toIntOrNull() ?: 16
+            val concurrency = (_maxConcurrencyStr.value.toIntOrNull() ?: 16).coerceIn(1, 32)
 
             // Build asset list
             val assets = buildList {
@@ -552,7 +620,7 @@ class MainViewModel(
         val folderName = if (isFileSearch) _searchKeyword.value
             else sanitizeFileName(_selectedGroup.value?.characterName ?: "Unknown")
         val targetDir = File(_savePath.value, sanitizeFileName(folderName))
-        val concurrency = _maxConcurrencyStr.value.toIntOrNull() ?: 16
+        val concurrency = (_maxConcurrencyStr.value.toIntOrNull() ?: 16).coerceIn(1, 32)
 
         scope.launch {
             try {
@@ -647,9 +715,8 @@ class MainViewModel(
     // 日志
     // =========================================================
     fun addLog(msg: String) {
-        val current = _logLines.value.toMutableList()
-        current.add(msg)
-        if (current.size > 100) current.removeAt(0)
-        _logLines.value = current
+        _logLines.update { current ->
+            (current + msg).takeLast(100)
+        }
     }
 }

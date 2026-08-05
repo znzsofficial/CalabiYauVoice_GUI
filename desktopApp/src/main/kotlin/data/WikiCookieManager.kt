@@ -50,6 +50,7 @@ object WikiCookieManager {
 
         val url = WIKI_URL.toHttpUrl()
         importedCookies.addAll(parseCookies(preview.normalizedCookieString))
+        WikiEngine.clearCookies(url)
         WikiEngine.injectCookies(url, importedCookies)
         return importedCookies.size
     }
@@ -75,7 +76,7 @@ object WikiCookieManager {
     fun clearCookies() {
         rawCookieString = ""
         importedCookies.clear()
-        WikiEngine.injectCookies(WIKI_URL.toHttpUrl(), emptyList())
+        WikiEngine.clearCookies(WIKI_URL.toHttpUrl())
     }
 
     /**

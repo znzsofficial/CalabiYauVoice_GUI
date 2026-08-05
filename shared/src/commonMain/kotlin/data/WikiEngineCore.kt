@@ -1,8 +1,10 @@
 package data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -13,6 +15,7 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
@@ -97,8 +100,10 @@ object WikiEngineCore {
                 val filteredList = if (voiceOnly) rawList.filter { it.endsWith("语音") } else rawList
                 val result = groupCategories(filteredList, voiceOnly, fetchStringFn, jsonParser, nameCache)
                 if (result.isNotEmpty()) return@withContext result
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
-                if (attempt < 2) Thread.sleep(1000L + Random.nextLong(2000))
+                if (attempt < 2) delay(1000L + Random.nextLong(2000))
             }
         }
         return@withContext emptyList()
@@ -218,31 +223,56 @@ object WikiEngineCore {
         onProgress: (Int, Int, String) -> Unit,
         downloadFileFn: (String, File) -> Unit
     ) = withContext(Dispatchers.IO) {
+        require(maxConcurrency > 0) { "maxConcurrency must be greater than 0" }
         val total = files.size
         if (total == 0) return@withContext
         if (!saveDir.exists()) saveDir.mkdirs()
+
+        val usedNames = HashSet<String>()
+        val downloads = files.map { (name, url) ->
+            var safeName = sanitizeFileName(name)
+            if (!safeName.contains('.')) {
+                val ext = url.substringBefore('?').substringAfterLast('.', "").lowercase().takeIf { it.isNotEmpty() }
+                if (ext != null) safeName += ".$ext"
+            }
+
+            val dotIndex = safeName.lastIndexOf('.').takeIf { it > 0 } ?: safeName.length
+            val baseName = safeName.substring(0, dotIndex)
+            val extension = safeName.substring(dotIndex)
+            var targetName = safeName
+            var suffix = 2
+            while (!usedNames.add(targetName.lowercase())) {
+                targetName = "$baseName ($suffix)$extension"
+                suffix++
+            }
+            url to targetName
+        }
+
         val semaphore = Semaphore(maxConcurrency)
         val counter = AtomicInteger(0)
-        files.map { (name, url) ->
+        val failures = ConcurrentLinkedQueue<String>()
+        downloads.map { (url, safeName) ->
             launch(Dispatchers.IO) {
                 semaphore.acquire()
                 try {
-                    var safeName = sanitizeFileName(name)
-                    if (!safeName.contains('.')) {
-                        val ext = url.substringBefore('?').substringAfterLast('.', "").lowercase().takeIf { it.isNotEmpty() }
-                        if (ext != null) safeName += ".$ext"
-                    }
                     val targetFile = File(saveDir, safeName)
                     downloadFileFn(url, targetFile)
                     val current = counter.incrementAndGet()
                     onProgress(current, total, safeName)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    onLog("[错误] ${e.message}")
+                    val message = e.message ?: e::class.simpleName.orEmpty()
+                    failures.add("$safeName: $message")
+                    onLog("[错误] $safeName: $message")
                 } finally {
                     semaphore.release()
                 }
             }
         }.joinAll()
+        if (failures.isNotEmpty()) {
+            throw IOException("${failures.size} of $total downloads failed")
+        }
     }
 
     // ========== 内部工具函数 ==========

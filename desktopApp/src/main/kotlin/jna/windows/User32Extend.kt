@@ -20,9 +20,11 @@ import com.sun.jna.win32.W32APIOptions
 @Suppress("FunctionName")
 internal interface User32Extend : User32 {
 
-    fun SetWindowLong(hWnd: HWND, nIndex: Int, wndProc: WindowProc): LONG_PTR
+    fun SetWindowLong(hWnd: HWND, nIndex: Int, wndProc: WindowProc): Int
 
     fun SetWindowLongPtr(hWnd: HWND, nIndex: Int, wndProc: WindowProc): LONG_PTR
+
+    fun SetWindowLongPtr(hWnd: HWND, nIndex: Int, wndProc: LONG_PTR): LONG_PTR
 
     fun CallWindowProc(
         proc: LONG_PTR,
@@ -67,7 +69,15 @@ internal fun User32Extend.setWindowLong(hWnd: HWND, nIndex: Int, procedure: Wind
     return if (Platform.is64Bit()) {
         SetWindowLongPtr(hWnd, nIndex, procedure)
     } else {
-        SetWindowLong(hWnd, nIndex, procedure)
+        LONG_PTR(SetWindowLong(hWnd, nIndex, procedure).toLong())
+    }
+}
+
+internal fun User32Extend.setWindowLong(hWnd: HWND, nIndex: Int, procedure: LONG_PTR): LONG_PTR {
+    return if (Platform.is64Bit()) {
+        SetWindowLongPtr(hWnd, nIndex, procedure)
+    } else {
+        LONG_PTR(SetWindowLong(hWnd, nIndex, procedure.toInt()).toLong())
     }
 }
 

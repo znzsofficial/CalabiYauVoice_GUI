@@ -32,7 +32,8 @@ import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.*
 import io.github.composefluent.surface.Card
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import ui.components.ComboBox
 import ui.components.StyledWindow
 
@@ -77,6 +78,15 @@ private enum class SortField(val label: String) {
 
 private enum class SortOrder { ASC, DESC }
 
+private data class BalanceDataRequest(
+    val settingsVersion: Int,
+    val filterVersion: Int,
+    val modeCode: String,
+    val mapCode: String,
+    val rankCodes: List<String>,
+    val seasonCode: String
+)
+
 // ────────────────────────────────────────────
 //  主内容
 // ────────────────────────────────────────────
@@ -84,14 +94,14 @@ private enum class SortOrder { ASC, DESC }
 @OptIn(ExperimentalFluentApi::class)
 @Composable
 private fun BalanceDataContent(modifier: Modifier = Modifier) {
-    val scope = rememberCoroutineScope()
-
     // ── 状态 ──
     var isLoadingSettings by remember { mutableStateOf(true) }
     var isLoadingData by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf<BalanceDataApi.BalanceSettings?>(null) }
     var balanceResult by remember { mutableStateOf<BalanceDataApi.BalanceResult?>(null) }
+    var settingsVersion by remember { mutableIntStateOf(0) }
+    var filterVersion by remember { mutableIntStateOf(0) }
 
     // 筛选
     var selectedModeIndex by remember { mutableIntStateOf(-1) }
@@ -117,61 +127,89 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
         listOf("全选") + (settings?.maps?.map { it.name } ?: emptyList())
     }
 
+    fun reloadSettings() {
+        settingsVersion++
+        isLoadingSettings = true
+        isLoadingData = false
+        errorMessage = null
+        settings = null
+        balanceResult = null
+    }
+
     // ── 加载设置 ──
-    fun loadSettings() {
-        scope.launch {
-            isLoadingSettings = true
-            errorMessage = null
-            when (val result = BalanceDataApi.fetchSettings()) {
+    LaunchedEffect(settingsVersion) {
+        val requestVersion = settingsVersion
+        try {
+            when (val result = BalanceDataApi.fetchSettings(forceRefresh = requestVersion > 0)) {
                 is ApiResult.Success -> {
+                    currentCoroutineContext().ensureActive()
+                    if (requestVersion != settingsVersion) return@LaunchedEffect
                     val s = result.data
-                    settings = s
                     selectedModeIndex = s.modes.indexOfFirst { it.name == "排位爆破" }
                         .takeIf { it >= 0 } ?: 0
                     selectedSeasonIndex = 0
                     selectedMapIndex = 0
                     selectedRankIndices = emptySet()
+                    filterVersion++
+                    settings = s
                 }
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> {
+                    currentCoroutineContext().ensureActive()
+                    if (requestVersion == settingsVersion) errorMessage = result.message
+                }
             }
-            isLoadingSettings = false
+        } finally {
+            if (requestVersion == settingsVersion) isLoadingSettings = false
         }
     }
+
+    fun currentDataRequest(): BalanceDataRequest? {
+        val s = settings?.takeUnless { isLoadingSettings } ?: return null
+        val mode = s.modes.getOrNull(selectedModeIndex) ?: return null
+        val season = s.seasons.getOrNull(selectedSeasonIndex) ?: return null
+        return BalanceDataRequest(
+            settingsVersion = settingsVersion,
+            filterVersion = filterVersion,
+            modeCode = mode.code,
+            mapCode = if (selectedMapIndex == 0) "-255"
+            else s.maps.getOrNull(selectedMapIndex - 1)?.code ?: "-255",
+            rankCodes = if (selectedRankIndices.isEmpty()) listOf("-255")
+            else selectedRankIndices.sorted().mapNotNull { s.ranks.getOrNull(it)?.code },
+            seasonCode = season.code
+        )
+    }
+    val dataRequest = currentDataRequest()
 
     // ── 加载数据 ──
-    fun loadBalanceData() {
-        val s = settings ?: return
-        if (selectedModeIndex < 0 || selectedSeasonIndex < 0) return
-        scope.launch {
-            isLoadingData = true
-            val mode = s.modes[selectedModeIndex]
-            val season = s.seasons[selectedSeasonIndex]
-            val mapCode = if (selectedMapIndex == 0) "-255"
-            else s.maps.getOrNull(selectedMapIndex - 1)?.code ?: "-255"
-            val rankCodes = if (selectedRankIndices.isEmpty()) listOf("-255")
-            else selectedRankIndices.map { s.ranks[it].code }
+    LaunchedEffect(dataRequest) {
+        val request = dataRequest
+        if (request == null) {
+            isLoadingData = false
+            return@LaunchedEffect
+        }
 
+        isLoadingData = true
+        balanceResult = null
+        errorMessage = null
+        try {
             when (val result = BalanceDataApi.fetchBalanceData(
-                modeCode = mode.code,
-                mapCode = mapCode,
-                rankCodes = rankCodes,
-                season1Code = season.code
+                modeCode = request.modeCode,
+                mapCode = request.mapCode,
+                rankCodes = request.rankCodes,
+                season1Code = request.seasonCode
             )) {
                 is ApiResult.Success -> {
+                    currentCoroutineContext().ensureActive()
+                    if (request != currentDataRequest()) return@LaunchedEffect
                     balanceResult = result.data
-                    errorMessage = null
                 }
-                is ApiResult.Error -> errorMessage = result.message
+                is ApiResult.Error -> {
+                    currentCoroutineContext().ensureActive()
+                    if (request == currentDataRequest()) errorMessage = result.message
+                }
             }
-            isLoadingData = false
-        }
-    }
-
-    LaunchedEffect(Unit) { loadSettings() }
-
-    LaunchedEffect(selectedModeIndex, selectedMapIndex, selectedSeasonIndex, selectedRankIndices) {
-        if (settings != null && selectedModeIndex >= 0 && selectedSeasonIndex >= 0) {
-            loadBalanceData()
+        } finally {
+            if (request == currentDataRequest()) isLoadingData = false
         }
     }
 
@@ -212,7 +250,7 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.weight(1f))
             Button(
-                onClick = { loadSettings() },
+                onClick = { reloadSettings() },
                 disabled = isLoadingSettings || isLoadingData
             ) {
                 Icon(Icons.Regular.ArrowSync, contentDescription = null, modifier = Modifier.size(14.dp))
@@ -254,7 +292,7 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                             color = FluentTheme.colors.text.text.secondary
                         )
                         Spacer(Modifier.height(4.dp))
-                        Button(onClick = { loadSettings() }) { Text("重试") }
+                        Button(onClick = { reloadSettings() }) { Text("重试") }
                     }
                 }
             }
@@ -276,19 +314,28 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                                 header = "模式",
                                 items = s.modes.map { it.name },
                                 selected = selectedModeIndex.takeIf { it >= 0 },
-                                onSelectionChange = { idx, _ -> selectedModeIndex = idx }
+                                onSelectionChange = { idx, _ ->
+                                    filterVersion++
+                                    selectedModeIndex = idx
+                                }
                             )
                             ComboBox(
                                 header = "赛季",
                                 items = s.seasons.map { it.name },
                                 selected = selectedSeasonIndex.takeIf { it >= 0 },
-                                onSelectionChange = { idx, _ -> selectedSeasonIndex = idx }
+                                onSelectionChange = { idx, _ ->
+                                    filterVersion++
+                                    selectedSeasonIndex = idx
+                                }
                             )
                             ComboBox(
                                 header = "地图",
                                 items = mapOptions,
                                 selected = selectedMapIndex,
-                                onSelectionChange = { idx, _ -> selectedMapIndex = idx }
+                                onSelectionChange = { idx, _ ->
+                                    filterVersion++
+                                    selectedMapIndex = idx
+                                }
                             )
                         }
 
@@ -303,7 +350,10 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                                 // 全选按钮
                                 ToggleButton(
                                     checked = selectedRankIndices.isEmpty(),
-                                    onCheckedChanged = { selectedRankIndices = emptySet() }
+                                    onCheckedChanged = {
+                                        filterVersion++
+                                        selectedRankIndices = emptySet()
+                                    }
                                 ) {
                                     Text("全选", fontSize = 11.sp)
                                 }
@@ -311,6 +361,7 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                                     ToggleButton(
                                         checked = idx in selectedRankIndices,
                                         onCheckedChanged = {
+                                            filterVersion++
                                             selectedRankIndices = if (idx in selectedRankIndices)
                                                 selectedRankIndices - idx
                                             else selectedRankIndices + idx

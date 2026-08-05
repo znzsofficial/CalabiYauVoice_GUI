@@ -56,7 +56,7 @@ compose.desktop {
                 menuGroup = "CalabiYauVoice_GUI"
                 upgradeUuid = "20CC6535-B192-4E61-9F4A-6EC79565C1A2"
             }
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Exe)
+            targetFormats(TargetFormat.Msi, TargetFormat.Exe)
         }
 
         buildTypes {

@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
+import java.security.MessageDigest
+import java.util.LinkedHashMap
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 import javax.imageio.metadata.IIOMetadataNode
@@ -32,80 +35,181 @@ private data class GifFrame(
 // 全局 GIF 帧解码缓存（IO 线程异步解码，按 ByteArray 标识去重）
 // ---------------------------------------------------------------------------
 
-private val gifFrameCache = ConcurrentHashMap<ByteArray, List<GifFrame>?>()
+private sealed interface CachedGif {
+    class Frames(val value: List<GifFrame>) : CachedGif
+    data object NoFrames : CachedGif
+}
+
+private class GifCacheKey private constructor(private val digest: ByteArray) {
+    private val hashCode = digest.contentHashCode()
+
+    override fun equals(other: Any?): Boolean =
+        other is GifCacheKey && digest.contentEquals(other.digest)
+
+    override fun hashCode(): Int = hashCode
+
+    companion object {
+        fun from(bytes: ByteArray) = GifCacheKey(MessageDigest.getInstance("SHA-256").digest(bytes))
+    }
+}
+
+private object GifFrameCache {
+    private const val MAX_ENTRIES = 32
+    private const val MAX_ESTIMATED_BYTES = 64L * 1024L * 1024L
+    private const val ENTRY_OVERHEAD_BYTES = 256L
+
+    private data class Entry(val value: CachedGif, val estimatedBytes: Long)
+
+    private val lock = Any()
+    private val entries = object : LinkedHashMap<GifCacheKey, Entry>(16, 0.75f, true) {}
+    private val inFlight = ConcurrentHashMap<GifCacheKey, CompletableFuture<CachedGif>>()
+    private var estimatedBytes = 0L
+
+    fun getOrDecode(key: GifCacheKey, decode: () -> CachedGif): CachedGif {
+        get(key)?.let { return it }
+
+        val pending = CompletableFuture<CachedGif>()
+        val existing = inFlight.putIfAbsent(key, pending)
+        if (existing != null) return existing.join()
+
+        try {
+            get(key)?.let {
+                pending.complete(it)
+                return it
+            }
+
+            val decoded = decode()
+            put(key, decoded)
+            pending.complete(decoded)
+            return decoded
+        } catch (error: Throwable) {
+            pending.completeExceptionally(error)
+            throw error
+        } finally {
+            inFlight.remove(key, pending)
+        }
+    }
+
+    private fun get(key: GifCacheKey): CachedGif? = synchronized(lock) {
+        entries[key]?.value
+    }
+
+    private fun put(key: GifCacheKey, value: CachedGif) = synchronized(lock) {
+        val entryBytes = estimateBytes(value)
+        if (entryBytes > MAX_ESTIMATED_BYTES) return@synchronized
+
+        entries.put(key, Entry(value, entryBytes))?.let { estimatedBytes -= it.estimatedBytes }
+        estimatedBytes += entryBytes
+
+        val iterator = entries.entries.iterator()
+        while ((entries.size > MAX_ENTRIES || estimatedBytes > MAX_ESTIMATED_BYTES) && iterator.hasNext()) {
+            estimatedBytes -= iterator.next().value.estimatedBytes
+            iterator.remove()
+        }
+    }
+
+    private fun estimateBytes(value: CachedGif): Long {
+        if (value === CachedGif.NoFrames) return ENTRY_OVERHEAD_BYTES
+
+        return (value as CachedGif.Frames).value.fold(ENTRY_OVERHEAD_BYTES) { total, frame ->
+            val bitmapBytes = frame.bitmap.width.toLong() * frame.bitmap.height.toLong() * 4L
+            if (Long.MAX_VALUE - total < bitmapBytes) Long.MAX_VALUE else total + bitmapBytes
+        }
+    }
+}
 
 /**
  * 在 IO 线程解码 GIF 所有帧并合成完整画面。
- * - 单帧 GIF 返回 null，由调用方回退到静态图
- * - 结果按 ByteArray 对象引用缓存（上层 ImageLoader 已保证同 URL 复用同一 ByteArray）
+ * - 单帧或解码失败使用负缓存，由调用方回退到静态图
+ * - 缓存使用内容摘要作为键，避免缓存帧时同时长期保留原始字节
  */
 private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
     withContext(Dispatchers.IO) {
-        gifFrameCache[bytes]?.let { return@withContext it }
+        val key = GifCacheKey.from(bytes)
+        val cached = GifFrameCache.getOrDecode(key) {
+            try {
+                val stream = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
+                    ?: return@getOrDecode CachedGif.NoFrames
 
-        val result = runCatching {
-            val stream = ImageIO.createImageInputStream(ByteArrayInputStream(bytes))
-            val reader = ImageIO.getImageReadersByFormatName("gif").next()
-                ?: return@runCatching null
-            reader.input = stream
+                stream.use {
+                    val readers = ImageIO.getImageReadersByFormatName("gif")
+                    if (!readers.hasNext()) return@getOrDecode CachedGif.NoFrames
 
-            val frameCount = reader.getNumImages(true)
-            if (frameCount <= 1) return@runCatching null
+                    val reader = readers.next()
+                    try {
+                        reader.input = stream
+                        val frameCount = reader.getNumImages(true)
+                        if (frameCount <= 1) return@getOrDecode CachedGif.NoFrames
 
-            val frames = mutableListOf<GifFrame>()
-            var canvas: BufferedImage? = null
+                        val frames = mutableListOf<GifFrame>()
+                        var canvas: BufferedImage? = null
 
-            for (i in 0 until frameCount) {
-                val frame = reader.read(i)
-                val meta = reader.getImageMetadata(i)
+                        for (i in 0 until frameCount) {
+                            val frame = reader.read(i)
+                            val meta = reader.getImageMetadata(i)
 
-                var delayCs = 10
-                var offsetX = 0
-                var offsetY = 0
-                var disposalMethod = "none"
+                            var delayCs = 10
+                            var offsetX = 0
+                            var offsetY = 0
+                            var disposalMethod = "none"
 
-                val root = meta.getAsTree(meta.nativeMetadataFormatName) as? IIOMetadataNode
-                if (root != null) {
-                    val gce = root.getElementsByTagName("GraphicControlExtension")
-                    if (gce.length > 0) {
-                        val node = gce.item(0) as IIOMetadataNode
-                        delayCs = node.getAttribute("delayTime").toIntOrNull() ?: 10
-                        disposalMethod = node.getAttribute("disposalMethod") ?: "none"
+                            val root = meta.getAsTree(meta.nativeMetadataFormatName) as? IIOMetadataNode
+                            if (root != null) {
+                                val gce = root.getElementsByTagName("GraphicControlExtension")
+                                if (gce.length > 0) {
+                                    val node = gce.item(0) as IIOMetadataNode
+                                    delayCs = node.getAttribute("delayTime").toIntOrNull() ?: 10
+                                    disposalMethod = node.getAttribute("disposalMethod") ?: "none"
+                                }
+                                val iDesc = root.getElementsByTagName("ImageDescriptor")
+                                if (iDesc.length > 0) {
+                                    val node = iDesc.item(0) as IIOMetadataNode
+                                    offsetX = node.getAttribute("imageLeftPosition").toIntOrNull() ?: 0
+                                    offsetY = node.getAttribute("imageTopPosition").toIntOrNull() ?: 0
+                                }
+                            }
+
+                            val delayMs = maxOf(delayCs * 10L, 20L)
+                            if (canvas == null) {
+                                canvas = BufferedImage(
+                                    reader.getWidth(0),
+                                    reader.getHeight(0),
+                                    BufferedImage.TYPE_INT_ARGB
+                                )
+                            }
+
+                            val graphics = canvas.createGraphics()
+                            try {
+                                graphics.drawImage(frame, offsetX, offsetY, null)
+                            } finally {
+                                graphics.dispose()
+                            }
+
+                            frames.add(GifFrame(canvas.toComposeImageBitmap(), delayMs))
+
+                            if (disposalMethod == "restoreToBackgroundColor") {
+                                val disposalGraphics = canvas.createGraphics()
+                                try {
+                                    disposalGraphics.clearRect(offsetX, offsetY, frame.width, frame.height)
+                                } finally {
+                                    disposalGraphics.dispose()
+                                }
+                            }
+                        }
+
+                        if (frames.isEmpty()) CachedGif.NoFrames else CachedGif.Frames(frames)
+                    } finally {
+                        reader.dispose()
                     }
-                    val iDesc = root.getElementsByTagName("ImageDescriptor")
-                    if (iDesc.length > 0) {
-                        val node = iDesc.item(0) as IIOMetadataNode
-                        offsetX = node.getAttribute("imageLeftPosition").toIntOrNull() ?: 0
-                        offsetY = node.getAttribute("imageTopPosition").toIntOrNull() ?: 0
-                    }
                 }
-
-                val delayMs = maxOf(delayCs * 10L, 20L)
-
-                if (canvas == null) {
-                    canvas = BufferedImage(reader.getWidth(0), reader.getHeight(0), BufferedImage.TYPE_INT_ARGB)
-                }
-
-                val g = canvas.createGraphics()
-                g.drawImage(frame, offsetX, offsetY, null)
-                g.dispose()
-
-                frames.add(GifFrame(canvas.toComposeImageBitmap(), delayMs))
-
-                if (disposalMethod == "restoreToBackgroundColor") {
-                    val g2 = canvas.createGraphics()
-                    g2.clearRect(offsetX, offsetY, frame.width, frame.height)
-                    g2.dispose()
-                }
+            } catch (_: Exception) {
+                CachedGif.NoFrames
             }
-
-            reader.dispose()
-            stream.close()
-            frames.takeIf { it.isNotEmpty() }
-        }.getOrNull()
-
-        gifFrameCache[bytes] = result
-        result
+        }
+        when (cached) {
+            is CachedGif.Frames -> cached.value
+            CachedGif.NoFrames -> null
+        }
     }
 
 // ---------------------------------------------------------------------------

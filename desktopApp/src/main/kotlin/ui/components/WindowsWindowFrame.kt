@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
@@ -95,6 +96,10 @@ fun rememberWindowsWindowFrameState(
             hitTest = hitTest,
             onWindowInsetUpdate = { paddingInset.insets = it }
         )
+    }
+
+    DisposableEffect(windowProcedure) {
+        onDispose(windowProcedure::dispose)
     }
 
     return remember(windowProcedure) {

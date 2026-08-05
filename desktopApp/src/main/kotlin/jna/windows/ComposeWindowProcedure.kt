@@ -80,7 +80,9 @@ class ComposeWindowProcedure(
     )
 
     //     The default window procedure to call its methods when the default method behaviour is desired/sufficient
-    private var defaultWindowProcedure = User32Extend.instance?.setWindowLong(windowHandle, WinUser.GWL_WNDPROC, this) ?: LONG_PTR(-1)
+    private val defaultWindowProcedure = User32Extend.instance?.setWindowLong(windowHandle, WinUser.GWL_WNDPROC, this) ?: LONG_PTR(-1)
+
+    private var disposed = false
 
     private var dpi = UINT(0)
     private var width = 0
@@ -134,6 +136,14 @@ class ComposeWindowProcedure(
     init {
         enableResizability()
         enableBorderAndShadow()
+    }
+
+    @Synchronized
+    fun dispose() {
+        if (disposed) return
+        skiaLayerProcedure?.dispose()
+        User32Extend.instance?.setWindowLong(windowHandle, WinUser.GWL_WNDPROC, defaultWindowProcedure)
+        disposed = true
     }
 
     override fun callback(hWnd: HWND, uMsg: Int, wParam: WPARAM, lParam: LPARAM): LRESULT {
