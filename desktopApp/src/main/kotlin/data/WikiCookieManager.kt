@@ -30,10 +30,10 @@ object WikiCookieManager {
     private val importedCookies = mutableListOf<Cookie>()
 
     /** 是否已导入 Cookie */
-    val hasCookies: Boolean get() = importedCookies.isNotEmpty()
+    val hasCookies: Boolean get() = synchronized(this) { importedCookies.isNotEmpty() }
 
     /** 获取当前 Cookie 字符串（用于 UI 回显） */
-    val currentCookieString: String get() = rawCookieString
+    val currentCookieString: String get() = synchronized(this) { rawCookieString }
 
     /**
      * 导入 Cookie 字符串，解析并注入到 WikiEngine 的 OkHttpClient。
@@ -41,17 +41,15 @@ object WikiCookieManager {
      * @param cookieStr 格式为 `key=value; key2=value2` 的 Cookie 字符串
      * @return 成功解析的 Cookie 数量
      */
+    @Synchronized
     fun importCookies(cookieStr: String): Int {
         val preview = previewCookieImport(cookieStr)
+        val url = WIKI_URL.toHttpUrl()
+        val parsed = if (preview.hasCookies) parseCookies(preview.normalizedCookieString) else emptyList()
+        WikiEngine.replaceCookies(url, parsed)
         rawCookieString = preview.normalizedCookieString
         importedCookies.clear()
-
-        if (!preview.hasCookies) return 0
-
-        val url = WIKI_URL.toHttpUrl()
-        importedCookies.addAll(parseCookies(preview.normalizedCookieString))
-        WikiEngine.clearCookies(url)
-        WikiEngine.injectCookies(url, importedCookies)
+        importedCookies.addAll(parsed)
         return importedCookies.size
     }
 
@@ -73,10 +71,11 @@ object WikiCookieManager {
     }
 
     /** 清除所有导入的 Cookie */
+    @Synchronized
     fun clearCookies() {
         rawCookieString = ""
         importedCookies.clear()
-        WikiEngine.clearCookies(WIKI_URL.toHttpUrl())
+        WikiEngine.replaceCookies(WIKI_URL.toHttpUrl(), emptyList())
     }
 
     /**
@@ -84,15 +83,16 @@ object WikiCookieManager {
      * 供直接构造请求时使用。
      */
     @Suppress("unused")
-    fun getCookieHeader(): String =
+    fun getCookieHeader(): String = synchronized(this) {
         importedCookies.joinToString("; ") { "${it.name}=${it.value}" }
+    }
 
     /** 尝试从 Cookie 中提取用户名（klbqwiki_UserName） */
-    fun extractUserNameFromCookies(): String? = extractUserName(importedCookies)
+    fun extractUserNameFromCookies(): String? = synchronized(this) { extractUserName(importedCookies) }
 
     /** 尝试从 Cookie 中提取用户 ID（klbqwiki_UserID） */
     @Suppress("unused")
-    fun extractUserIdFromCookies(): String? = extractUserId(importedCookies)
+    fun extractUserIdFromCookies(): String? = synchronized(this) { extractUserId(importedCookies) }
 
     private fun normalizeCookieInput(cookieStr: String): String {
         val trimmed = cookieStr.trim()

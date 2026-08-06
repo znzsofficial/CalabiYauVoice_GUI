@@ -9,24 +9,23 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.security.MessageDigest
 import java.util.LinkedHashMap
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 import javax.imageio.metadata.IIOMetadataNode
+
+private const val MAX_GIF_FRAME_COUNT = 500
+private const val MAX_GIF_CANVAS_PIXELS = 16_000_000L
 
 // ---------------------------------------------------------------------------
 // 数据模型
 // ---------------------------------------------------------------------------
 
 /** GIF 的单帧数据 */
-private data class GifFrame(
+internal data class GifFrame(
     val bitmap: ImageBitmap,
     val delayMs: Long       // 帧延迟，毫秒（最低 20ms）
 )
@@ -62,15 +61,15 @@ private object GifFrameCache {
 
     private val lock = Any()
     private val entries = object : LinkedHashMap<GifCacheKey, Entry>(16, 0.75f, true) {}
-    private val inFlight = ConcurrentHashMap<GifCacheKey, CompletableFuture<CachedGif>>()
+    private val inFlight = ConcurrentHashMap<GifCacheKey, CompletableDeferred<CachedGif>>()
     private var estimatedBytes = 0L
 
-    fun getOrDecode(key: GifCacheKey, decode: () -> CachedGif): CachedGif {
+    suspend fun getOrDecode(key: GifCacheKey, decode: suspend () -> CachedGif): CachedGif {
         get(key)?.let { return it }
 
-        val pending = CompletableFuture<CachedGif>()
+        val pending = CompletableDeferred<CachedGif>()
         val existing = inFlight.putIfAbsent(key, pending)
-        if (existing != null) return existing.join()
+        if (existing != null) return existing.await()
 
         try {
             get(key)?.let {
@@ -116,6 +115,14 @@ private object GifFrameCache {
             if (Long.MAX_VALUE - total < bitmapBytes) Long.MAX_VALUE else total + bitmapBytes
         }
     }
+
+    fun isWithinDecodeBudget(width: Int, height: Int, frameCount: Int): Boolean =
+        isGifDecodeBudgetAllowed(width, height, frameCount)
+}
+
+internal fun isGifDecodeBudgetAllowed(width: Int, height: Int, frameCount: Int): Boolean {
+    if (width <= 0 || height <= 0 || frameCount !in 2..MAX_GIF_FRAME_COUNT) return false
+    return width.toLong() * height.toLong() <= MAX_GIF_CANVAS_PIXELS
 }
 
 /**
@@ -123,7 +130,7 @@ private object GifFrameCache {
  * - 单帧或解码失败使用负缓存，由调用方回退到静态图
  * - 缓存使用内容摘要作为键，避免缓存帧时同时长期保留原始字节
  */
-private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
+internal suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
     withContext(Dispatchers.IO) {
         val key = GifCacheKey.from(bytes)
         val cached = GifFrameCache.getOrDecode(key) {
@@ -140,12 +147,16 @@ private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
                         reader.input = stream
                         val frameCount = reader.getNumImages(true)
                         if (frameCount <= 1) return@getOrDecode CachedGif.NoFrames
+                        val (canvasWidth, canvasHeight) = readGifCanvasSize(reader)
+                        if (!GifFrameCache.isWithinDecodeBudget(canvasWidth, canvasHeight, frameCount)) {
+                            return@getOrDecode CachedGif.NoFrames
+                        }
 
                         val frames = mutableListOf<GifFrame>()
                         var canvas: BufferedImage? = null
 
                         for (i in 0 until frameCount) {
-                            val frame = reader.read(i)
+                            currentCoroutineContext().ensureActive()
                             val meta = reader.getImageMetadata(i)
 
                             var delayCs = 10
@@ -153,27 +164,34 @@ private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
                             var offsetY = 0
                             var disposalMethod = "none"
 
-                            val root = meta.getAsTree(meta.nativeMetadataFormatName) as? IIOMetadataNode
-                            if (root != null) {
-                                val gce = root.getElementsByTagName("GraphicControlExtension")
-                                if (gce.length > 0) {
-                                    val node = gce.item(0) as IIOMetadataNode
-                                    delayCs = node.getAttribute("delayTime").toIntOrNull() ?: 10
-                                    disposalMethod = node.getAttribute("disposalMethod") ?: "none"
-                                }
-                                val iDesc = root.getElementsByTagName("ImageDescriptor")
-                                if (iDesc.length > 0) {
-                                    val node = iDesc.item(0) as IIOMetadataNode
-                                    offsetX = node.getAttribute("imageLeftPosition").toIntOrNull() ?: 0
-                                    offsetY = node.getAttribute("imageTopPosition").toIntOrNull() ?: 0
-                                }
+                            val root = meta.getAsTree("javax_imageio_gif_image_1.0") as? IIOMetadataNode
+                            val gce = root?.childElements()?.firstOrNull { it.nodeName == "GraphicControlExtension" }
+                            if (gce != null) {
+                                delayCs = gce.getAttribute("delayTime").toIntOrNull() ?: 10
+                                disposalMethod = gce.getAttribute("disposalMethod").ifBlank { "none" }
                             }
+                            val descriptor = root?.childElements()?.firstOrNull { it.nodeName == "ImageDescriptor" }
+                            if (descriptor != null) {
+                                offsetX = descriptor.getAttribute("imageLeftPosition").toIntOrNull() ?: 0
+                                offsetY = descriptor.getAttribute("imageTopPosition").toIntOrNull() ?: 0
+                            }
+
+                            val frameWidth = reader.getWidth(i)
+                            val frameHeight = reader.getHeight(i)
+                            val framePixels = frameWidth.toLong() * frameHeight.toLong()
+                            if (frameWidth <= 0 || frameHeight <= 0 || framePixels > MAX_GIF_CANVAS_PIXELS ||
+                                offsetX < 0 || offsetY < 0 || offsetX.toLong() + frameWidth > canvasWidth ||
+                                offsetY.toLong() + frameHeight > canvasHeight
+                            ) {
+                                return@getOrDecode CachedGif.NoFrames
+                            }
+                            val frame = reader.read(i)
 
                             val delayMs = maxOf(delayCs * 10L, 20L)
                             if (canvas == null) {
                                 canvas = BufferedImage(
-                                    reader.getWidth(0),
-                                    reader.getHeight(0),
+                                    canvasWidth,
+                                    canvasHeight,
                                     BufferedImage.TYPE_INT_ARGB
                                 )
                             }
@@ -202,6 +220,8 @@ private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
                         reader.dispose()
                     }
                 }
+            } catch (error: CancellationException) {
+                throw error
             } catch (_: Exception) {
                 CachedGif.NoFrames
             }
@@ -212,27 +232,19 @@ private suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
         }
     }
 
-// ---------------------------------------------------------------------------
-// 全局 GIF 动画调度器
-// 所有 AnimatedGifImage 实例共用一个协程 tick，避免 N 个独立 delay 协程堆积。
-// ---------------------------------------------------------------------------
-
-private object GifAnimationClock {
-    // 当前全局时间戳（毫秒），每 ~16ms 更新一次（≈60fps 上限）
-    private val _tickMs = MutableStateFlow(System.currentTimeMillis())
-    val tickMs: StateFlow<Long> = _tickMs.asStateFlow()
-
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    init {
-        scope.launch {
-            while (true) {
-                delay(16L)
-                _tickMs.value = System.currentTimeMillis()
-            }
-        }
-    }
+private fun readGifCanvasSize(reader: javax.imageio.ImageReader): Pair<Int, Int> {
+    val root = reader.streamMetadata
+        ?.getAsTree("javax_imageio_gif_stream_1.0") as? IIOMetadataNode
+    val descriptor = root?.childElements()?.firstOrNull { it.nodeName == "LogicalScreenDescriptor" }
+    val width = descriptor?.getAttribute("logicalScreenWidth")?.toIntOrNull()
+        ?.takeIf { it > 0 } ?: reader.getWidth(0)
+    val height = descriptor?.getAttribute("logicalScreenHeight")?.toIntOrNull()
+        ?.takeIf { it > 0 } ?: reader.getHeight(0)
+    return width to height
 }
+
+private fun IIOMetadataNode.childElements(): List<IIOMetadataNode> =
+    (0 until childNodes.length).mapNotNull { childNodes.item(it) as? IIOMetadataNode }
 
 // ---------------------------------------------------------------------------
 // Composable
@@ -264,8 +276,13 @@ fun AnimatedGifImage(
 
     val frameList = frames!!
 
-    // 用全局 tick 驱动帧索引（不再需要每个 GIF 独立 delay）
-    val tickMs by GifAnimationClock.tickMs.collectAsState()
+    // The ticker exists only while this GIF is in composition.
+    val tickMs by produceState(System.currentTimeMillis(), frameList) {
+        while (true) {
+            delay(16L)
+            value = System.currentTimeMillis()
+        }
+    }
     val frameIndex by remember(frameList) {
         // 计算累计帧时间边界，用于从全局时间戳定位当前帧
         val totalMs = frameList.sumOf { it.delayMs }

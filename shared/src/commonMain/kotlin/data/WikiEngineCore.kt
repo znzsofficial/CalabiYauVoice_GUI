@@ -8,6 +8,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
@@ -21,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 import util.buildWikiUrl
 import util.executeGet
+import util.atomicReplaceFile
 
 /**
  * Wiki API 核心业务逻辑 —— 纯函数集合，不持有状态。
@@ -31,6 +34,9 @@ import util.executeGet
 object WikiEngineCore {
 
     const val API_BASE_URL = "https://wiki.biligame.com/klbq/api.php"
+
+    private val downloadDirectoryLocks = ConcurrentHashMap<String, Mutex>()
+    private const val DOWNLOAD_MANIFEST = ".calabiyau-downloads.tsv"
 
     // ========== 角色名缓存（双平台共享语义，但各自持有实例） ==========
 
@@ -221,60 +227,123 @@ object WikiEngineCore {
         maxConcurrency: Int,
         onLog: (String) -> Unit,
         onProgress: (Int, Int, String) -> Unit,
-        downloadFileFn: (String, File) -> Unit
+        downloadFileFn: suspend (String, File) -> Unit
     ): List<File> = withContext(Dispatchers.IO) {
         require(maxConcurrency > 0) { "maxConcurrency must be greater than 0" }
-        val total = files.size
+        val uniqueFiles = files.distinctBy { it.second }
+        val total = uniqueFiles.size
         if (total == 0) return@withContext emptyList()
-        if (!saveDir.exists()) saveDir.mkdirs()
+        val normalizedDir = saveDir.absoluteFile.normalize()
+        val directoryLock = downloadDirectoryLocks.computeIfAbsent(normalizedDir.path.lowercase()) { Mutex() }
 
-        val usedNames = saveDir.listFiles()
-            ?.mapTo(HashSet()) { it.name.lowercase() }
-            ?: HashSet()
-        val downloads = files.map { (name, url) ->
-            var safeName = sanitizeFileName(name)
-            if (!safeName.contains('.')) {
-                val ext = url.substringBefore('?').substringAfterLast('.', "").lowercase().takeIf { it.isNotEmpty() }
-                if (ext != null) safeName += ".$ext"
+        directoryLock.withLock {
+            if (!normalizedDir.exists() && !normalizedDir.mkdirs()) {
+                throw IOException("Could not create download directory: $normalizedDir")
             }
+            if (!normalizedDir.isDirectory) throw IOException("Download target is not a directory: $normalizedDir")
 
-            val dotIndex = safeName.lastIndexOf('.').takeIf { it > 0 } ?: safeName.length
-            val baseName = safeName.substring(0, dotIndex)
-            val extension = safeName.substring(dotIndex)
-            var targetName = safeName
-            var suffix = 2
-            while (!usedNames.add(targetName.lowercase())) {
-                targetName = "$baseName ($suffix)$extension"
-                suffix++
-            }
-            url to File(saveDir, targetName)
-        }
-
-        val semaphore = Semaphore(maxConcurrency)
-        val counter = AtomicInteger(0)
-        val failures = ConcurrentLinkedQueue<String>()
-        downloads.map { (url, targetFile) ->
-            launch(Dispatchers.IO) {
-                semaphore.acquire()
-                try {
-                    downloadFileFn(url, targetFile)
-                    val current = counter.incrementAndGet()
-                    onProgress(current, total, targetFile.name)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    val message = e.message ?: e::class.simpleName.orEmpty()
-                    failures.add("${targetFile.name}: $message")
-                    onLog("[错误] ${targetFile.name}: $message")
-                } finally {
-                    semaphore.release()
+            val manifest = readDownloadManifest(normalizedDir)
+            val usedNames = normalizedDir.listFiles()
+                ?.mapTo(HashSet()) { it.name.lowercase() }
+                ?: HashSet()
+            val downloads = uniqueFiles.map { (name, url) ->
+                manifest[url]?.let { mappedName ->
+                    val mappedTarget = File(normalizedDir, mappedName).absoluteFile.normalize()
+                    if (mappedTarget.parentFile == normalizedDir) {
+                        usedNames.add(mappedTarget.name.lowercase())
+                        return@map url to mappedTarget
+                    }
+                    manifest.remove(url)
                 }
+
+                var safeName = sanitizeFileName(name)
+                if (!safeName.contains('.')) {
+                    val ext = url.substringBefore('?').substringAfterLast('.', "").lowercase()
+                        .takeIf { it.matches(Regex("[a-z0-9]{1,10}")) }
+                    if (ext != null) safeName += ".$ext"
+                }
+
+                val dotIndex = safeName.lastIndexOf('.').takeIf { it > 0 } ?: safeName.length
+                val baseName = safeName.substring(0, dotIndex)
+                val extension = safeName.substring(dotIndex)
+                var targetName = safeName
+                var suffix = 2
+                while (!usedNames.add(targetName.lowercase())) {
+                    targetName = "$baseName ($suffix)$extension"
+                    suffix++
+                }
+                val target = File(normalizedDir, targetName).absoluteFile.normalize()
+                if (target.parentFile != normalizedDir) throw IOException("Unsafe download target: $targetName")
+                manifest[url] = target.name
+                url to target
             }
-        }.joinAll()
-        if (failures.isNotEmpty()) {
-            throw IOException("${failures.size} of $total downloads failed")
+            writeDownloadManifest(normalizedDir, manifest)
+
+            val semaphore = Semaphore(maxConcurrency)
+            val counter = AtomicInteger(0)
+            val failures = ConcurrentLinkedQueue<String>()
+            downloads.map { (url, targetFile) ->
+                launch(Dispatchers.IO) {
+                    semaphore.acquire()
+                    try {
+                        if (!targetFile.isFile || targetFile.length() == 0L) {
+                            if (targetFile.exists() && !targetFile.delete()) {
+                                throw IOException("Could not replace incomplete file: ${targetFile.name}")
+                            }
+                            downloadFileFn(url, targetFile)
+                        }
+                        val current = counter.incrementAndGet()
+                        onProgress(current, total, targetFile.name)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        val message = e.message ?: e::class.simpleName.orEmpty()
+                        failures.add("${targetFile.name}: $message")
+                        onLog("[错误] ${targetFile.name}: $message")
+                    } finally {
+                        semaphore.release()
+                    }
+                }
+            }.joinAll()
+            if (failures.isNotEmpty()) {
+                throw IOException("${failures.size} of $total downloads failed")
+            }
+            downloads.map { it.second }
         }
-        downloads.map { it.second }
+    }
+
+    private fun readDownloadManifest(directory: File): LinkedHashMap<String, String> {
+        val result = LinkedHashMap<String, String>()
+        val file = File(directory, DOWNLOAD_MANIFEST)
+        if (!file.isFile) return result
+        runCatching {
+            file.forEachLine { line ->
+                val separator = line.indexOf('\t')
+                if (separator <= 0 || separator == line.lastIndex) return@forEachLine
+                val targetName = line.substring(0, separator)
+                val url = line.substring(separator + 1)
+                if (sanitizeFileName(targetName) == targetName && url.isNotBlank()) result[url] = targetName
+            }
+        }
+        return result
+    }
+
+    private fun writeDownloadManifest(directory: File, manifest: Map<String, String>) {
+        val file = File(directory, DOWNLOAD_MANIFEST)
+        val temp = File(directory, "$DOWNLOAD_MANIFEST.tmp")
+        val content = manifest.entries
+            .sortedBy { it.key }
+            .joinToString("\n", postfix = if (manifest.isEmpty()) "" else "\n") { (url, target) ->
+                require(!url.contains('\t') && !url.contains('\r') && !url.contains('\n')) { "Invalid download URL" }
+                "$target\t$url"
+        }
+        temp.writeText(content)
+        try {
+            atomicReplaceFile(temp, file)
+        } catch (error: IOException) {
+            temp.delete()
+            throw IOException("Could not publish download manifest", error)
+        }
     }
 
     // ========== 内部工具函数 ==========

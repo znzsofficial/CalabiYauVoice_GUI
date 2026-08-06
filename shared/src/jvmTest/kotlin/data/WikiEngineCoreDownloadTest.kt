@@ -1,6 +1,8 @@
 package data
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
@@ -10,6 +12,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WikiEngineCoreDownloadTest {
+
+    @Test
+    fun sanitizesDotSegmentsAndWindowsDeviceNames() {
+        assertEquals("_", sanitizeFileName(".."))
+        assertEquals("_", sanitizeFileName("."))
+        assertEquals("_CON", sanitizeFileName("CON"))
+        assertEquals("name", sanitizeFileName("name...  "))
+    }
 
     @Test
     fun rejectsNonPositiveConcurrencyBeforeEmptyListReturn() {
@@ -58,11 +68,35 @@ class WikiEngineCoreDownloadTest {
     }
 
     @Test
-    fun doesNotReusePreExistingTargetFiles() = runBlocking {
+    fun duplicateUrlsUseDeduplicatedProgressTotal() = runBlocking {
+        val saveDir = Files.createTempDirectory("wiki-download-duplicate-test").toFile()
+        val progress = mutableListOf<Pair<Int, Int>>()
+        try {
+            val results = WikiEngineCore.downloadSpecificFiles(
+                files = listOf(
+                    "first.wav" to "https://example.test/voice.wav",
+                    "duplicate.wav" to "https://example.test/voice.wav"
+                ),
+                saveDir = saveDir,
+                maxConcurrency = 1,
+                onLog = {},
+                onProgress = { current, total, _ -> progress += current to total },
+                downloadFileFn = { _, target -> target.writeText("complete") }
+            )
+
+            assertEquals(1, results.size)
+            assertEquals(listOf(1 to 1), progress)
+        } finally {
+            saveDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun preservesUntrackedFileAndReusesTrackedTargetOnRetry() = runBlocking {
         val saveDir = Files.createTempDirectory("wiki-download-existing-test").toFile()
         val existing = File(saveDir, "voice.wav").apply { writeText("existing") }
         try {
-            val downloadedFiles = WikiEngineCore.downloadSpecificFiles(
+            val firstDownload = WikiEngineCore.downloadSpecificFiles(
                 files = listOf("voice.wav" to "https://example.test/new.wav"),
                 saveDir = saveDir,
                 maxConcurrency = 1,
@@ -72,8 +106,18 @@ class WikiEngineCoreDownloadTest {
             )
 
             assertEquals("existing", existing.readText())
-            assertEquals("voice (2).wav", downloadedFiles.single().name)
-            assertEquals("new", downloadedFiles.single().readText())
+            assertEquals("voice (2).wav", firstDownload.single().name)
+            assertEquals("new", firstDownload.single().readText())
+
+            val retry = WikiEngineCore.downloadSpecificFiles(
+                files = listOf("voice.wav" to "https://example.test/new.wav"),
+                saveDir = saveDir,
+                maxConcurrency = 1,
+                onLog = {},
+                onProgress = { _, _, _ -> },
+                downloadFileFn = { _, _ -> error("tracked target must not be downloaded again") }
+            )
+            assertEquals(firstDownload.single().canonicalFile, retry.single().canonicalFile)
         } finally {
             saveDir.deleteRecursively()
         }
@@ -99,6 +143,79 @@ class WikiEngineCoreDownloadTest {
 
             assertEquals("1 of 1 downloads failed", error.message)
             assertTrue(logs.any { it.contains("broken.wav") && it.contains("HTTP 404") })
+        } finally {
+            saveDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairsTrackedZeroByteTargetOnRetry() = runBlocking {
+        val saveDir = Files.createTempDirectory("wiki-download-zero-byte-test").toFile()
+        try {
+            val url = "https://example.test/voice.wav"
+            val first = WikiEngineCore.downloadSpecificFiles(
+                files = listOf("voice.wav" to url),
+                saveDir = saveDir,
+                maxConcurrency = 1,
+                onLog = {},
+                onProgress = { _, _, _ -> },
+                downloadFileFn = { _, target -> target.writeText("complete") }
+            ).single()
+            first.writeBytes(byteArrayOf())
+
+            var downloads = 0
+            val repaired = WikiEngineCore.downloadSpecificFiles(
+                files = listOf("voice.wav" to url),
+                saveDir = saveDir,
+                maxConcurrency = 1,
+                onLog = {},
+                onProgress = { _, _, _ -> },
+                downloadFileFn = { _, target ->
+                    downloads++
+                    target.writeText("repaired")
+                }
+            ).single()
+
+            assertEquals(first.canonicalFile, repaired.canonicalFile)
+            assertEquals(1, downloads)
+            assertEquals("repaired", repaired.readText())
+        } finally {
+            saveDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun serializesConcurrentBatchesTargetingSameDirectory() = runBlocking {
+        val saveDir = Files.createTempDirectory("wiki-download-concurrent-test").toFile()
+        try {
+            val results = listOf(
+                async {
+                    WikiEngineCore.downloadSpecificFiles(
+                        files = listOf("voice.wav" to "https://example.test/a.wav"),
+                        saveDir = saveDir,
+                        maxConcurrency = 1,
+                        onLog = {},
+                        onProgress = { _, _, _ -> },
+                        downloadFileFn = { url, target -> target.writeText(url) }
+                    ).single()
+                },
+                async {
+                    WikiEngineCore.downloadSpecificFiles(
+                        files = listOf("voice.wav" to "https://example.test/b.wav"),
+                        saveDir = saveDir,
+                        maxConcurrency = 1,
+                        onLog = {},
+                        onProgress = { _, _, _ -> },
+                        downloadFileFn = { url, target -> target.writeText(url) }
+                    ).single()
+                }
+            ).awaitAll()
+
+            assertEquals(2, results.map { it.name.lowercase() }.toSet().size)
+            assertEquals(
+                setOf("https://example.test/a.wav", "https://example.test/b.wav"),
+                results.map { it.readText() }.toSet()
+            )
         } finally {
             saveDir.deleteRecursively()
         }

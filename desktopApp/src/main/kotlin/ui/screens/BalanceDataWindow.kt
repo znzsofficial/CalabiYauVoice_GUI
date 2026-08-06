@@ -189,7 +189,6 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
         }
 
         isLoadingData = true
-        balanceResult = null
         errorMessage = null
         try {
             when (val result = BalanceDataApi.fetchBalanceData(
@@ -454,10 +453,26 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                         // 数据列表
                         if (sortedList.isEmpty() && !isLoadingData) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("暂无数据", fontSize = 13.sp, color = FluentTheme.colors.text.text.secondary)
+                                Text(
+                                    errorMessage ?: "暂无数据",
+                                    fontSize = 13.sp,
+                                    color = if (errorMessage != null) Color(0xFFE57373) else FluentTheme.colors.text.text.secondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(24.dp)
+                                )
                             }
                         } else {
-                            LazyColumn(Modifier.fillMaxSize()) {
+                            Column(Modifier.fillMaxSize()) {
+                                if (errorMessage != null) {
+                                    Text(
+                                        errorMessage!!,
+                                        color = Color(0xFFE57373),
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                                 itemsIndexed(sortedList, key = { _, item -> item.id }) { index, hero ->
                                     val meta = characterMap[hero.id]
                                     val position = meta?.let { positionMap[it.positionCode] }
@@ -473,6 +488,7 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                                     if (index < sortedList.lastIndex) {
                                         Divider(Modifier.padding(horizontal = 16.dp))
                                     }
+                                }
                                 }
                             }
                         }

@@ -1,14 +1,15 @@
 package data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
-import util.executeGet
-import util.executeRequest
+import util.awaitGet
+import util.awaitRequest
 
 /**
  * 官网平衡数据 API（Desktop）。
@@ -95,7 +96,7 @@ object BalanceDataApi {
         return withContext(Dispatchers.IO) {
             try {
                 val url = "$BASE_URL/api/pages/KLBQ_BALANCE/index"
-                val body = client.executeGet(url).use { resp ->
+                val body = client.awaitGet(url).use { resp ->
                     if (!resp.isSuccessful) return@withContext ApiResult.Error("HTTP ${resp.code}")
                     resp.body.string()
                 }
@@ -151,6 +152,8 @@ object BalanceDataApi {
                 val result = BalanceSettings(modes, maps, ranks, seasons, positions, characters)
                 cachedSettings = result
                 ApiResult.Success(result)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 ApiResult.Error(e.message ?: "网络错误")
             }
@@ -176,7 +179,7 @@ object BalanceDataApi {
                 put("season2", season2Code)
             }
 
-            val body = client.executeRequest("$BASE_URL/api/common/ide") {
+            val body = client.awaitRequest("$BASE_URL/api/common/ide") {
                 post(payload.toString().toRequestBody(JSON_MEDIA))
             }.use { resp ->
                 if (!resp.isSuccessful) return@withContext ApiResult.Error("HTTP ${resp.code}")
@@ -211,6 +214,8 @@ object BalanceDataApi {
             val side2 = data1["side2"]?.jsonArray?.let { parseHeroList(it) } ?: emptyList()
 
             ApiResult.Success(BalanceResult(attackers = side1, defenders = side2))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error(e.message ?: "网络错误")
         }

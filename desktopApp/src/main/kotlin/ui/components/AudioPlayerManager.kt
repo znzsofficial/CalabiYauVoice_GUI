@@ -1,15 +1,20 @@
 package ui.components
 
 import jna.flac.openNativeFlacPcmStream
+import util.downmixToStereo
+import util.openDesktopStreamingAudioInputStream
 import java.io.BufferedInputStream
 import java.io.Closeable
-import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
+import okhttp3.Call
+import okhttp3.Request
+import data.WikiEngine
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.DataLine
 import javax.sound.sampled.SourceDataLine
+import javax.sound.sampled.UnsupportedAudioFileException
 
 /**
  * 全局单例音频播放器，供多处 UI 共享。
@@ -25,9 +30,14 @@ object AudioPlayerManager {
         @Volatile var thread: Thread? = null
 
         private val resourceLock = Any()
+        private var networkCall: Call? = null
         private var inputStream: Closeable? = null
         private var decodedStream: AudioInputStream? = null
         private var line: SourceDataLine? = null
+
+        fun registerNetworkCall(call: Call): Boolean = synchronized(resourceLock) {
+            if (stopRequested.get()) false else true.also { networkCall = call }
+        }
 
         fun registerInputStream(stream: Closeable): Boolean = synchronized(resourceLock) {
             if (stopRequested.get()) false else true.also { inputStream = stream }
@@ -53,19 +63,21 @@ object AudioPlayerManager {
 
         fun closeResources() {
             val resources = synchronized(resourceLock) {
-                val result = Triple(line, decodedStream, inputStream)
+                val result = arrayOf(networkCall, line, decodedStream, inputStream)
+                networkCall = null
                 line = null
                 decodedStream = null
                 inputStream = null
                 result
             }
 
-            resources.first?.let {
+            (resources[0] as? Call)?.cancel()
+            (resources[1] as? SourceDataLine)?.let {
                 runCatching { it.stop() }
                 runCatching { it.close() }
             }
-            runCatching { resources.second?.close() }
-            runCatching { resources.third?.close() }
+            runCatching { (resources[2] as? AudioInputStream)?.close() }
+            runCatching { (resources[3] as? Closeable)?.close() }
         }
     }
 
@@ -124,24 +136,26 @@ object AudioPlayerManager {
 
     private fun playSession(session: PlaybackSession, fileName: String?) {
         try {
-            val url = URI(session.url).toURL()
-            val isFlac = (fileName ?: url.path.substringAfterLast('/')).substringBefore('?')
+            val call = WikiEngine.client.newCall(Request.Builder().url(session.url).build())
+            if (!session.registerNetworkCall(call)) return
+            val response = call.execute()
+            if (!response.isSuccessful) {
+                response.close()
+                throw IllegalStateException("HTTP ${response.code}: ${response.message}")
+            }
+            if (!session.registerInputStream(response)) {
+                response.close()
+                return
+            }
+            val source = BufferedInputStream(response.body.byteStream())
+            val effectiveFileName = fileName ?: session.url.substringAfterLast('/')
+            val isFlac = effectiveFileName.substringBefore('?')
                 .substringAfterLast('.', "")
                 .equals("flac", ignoreCase = true)
             val inputStream = if (isFlac) {
-                val source = BufferedInputStream(url.openStream())
-                if (!session.registerInputStream(source)) {
-                    source.close()
-                    return
-                }
                 openNativeFlacPcmStream(source, outputBits = 16)
             } else {
-                AudioSystem.getAudioInputStream(url).also {
-                    if (!session.registerInputStream(it)) {
-                        it.close()
-                        return
-                    }
-                }
+                openDesktopStreamingAudioInputStream(source, effectiveFileName)
             }
 
             val baseFormat = inputStream.format
@@ -162,19 +176,21 @@ object AudioPlayerManager {
                 baseFormat.channels, baseFormat.channels * 2,
                 baseFormat.sampleRate, false
             )
-            val decodedStream = if (providerFormat.isBigEndian) {
+            val pcmStream = if (providerFormat.isBigEndian) {
                 AudioSystem.getAudioInputStream(decodedFormat, providerStream)
             } else {
                 providerStream
             }
+            val decodedStream = if (pcmStream.format.channels > 2) pcmStream.downmixToStereo() else pcmStream
             if (!session.registerDecodedStream(decodedStream)) {
                 decodedStream.close()
                 return
             }
 
-            val info = DataLine.Info(SourceDataLine::class.java, decodedFormat)
+            val playbackFormat = decodedStream.format
+            val info = DataLine.Info(SourceDataLine::class.java, playbackFormat)
             val sourceLine = AudioSystem.getLine(info) as SourceDataLine
-            if (!session.openLine(sourceLine, decodedFormat)) {
+            if (!session.openLine(sourceLine, playbackFormat)) {
                 sourceLine.close()
                 return
             }
@@ -190,7 +206,14 @@ object AudioPlayerManager {
             if (!session.stopRequested.get()) sourceLine.drain()
         } catch (e: Exception) {
             if (!session.stopRequested.get()) {
-                System.err.println("[AudioPlayerManager] 播放失败: ${e::class.simpleName}: ${e.message}")
+                val isUnsupportedAacProfile = e::class.simpleName == "AACException" &&
+                    e.message?.contains("unsupported profile", ignoreCase = true) == true
+                val message = if (isUnsupportedAacProfile) {
+                    "AAC SSR profile is not supported by the bundled JavaSound AAC decoder"
+                } else {
+                    "${e::class.simpleName}: ${e.message}"
+                }
+                System.err.println("[AudioPlayerManager] Playback failed: $message")
             }
         } finally {
             session.closeResources()

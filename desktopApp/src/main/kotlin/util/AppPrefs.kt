@@ -38,13 +38,13 @@ object AppPrefs {
         json.decodeFromString<PrefsData>(file.readText())
     }.getOrDefault(PrefsData())
 
-    private fun save() {
+    private fun save(snapshot: PrefsData) {
         val target = file.toPath().toAbsolutePath()
         val parent = target.parent
         Files.createDirectories(parent)
         val temp = Files.createTempFile(parent, "${file.name}.", ".tmp")
         try {
-            Files.writeString(temp, json.encodeToString(data))
+            Files.writeString(temp, json.encodeToString(snapshot))
             try {
                 Files.move(
                     temp,
@@ -70,8 +70,10 @@ object AppPrefs {
 
         override fun setValue(thisRef: Any?, property: kotlin.reflect.KProperty<*>, value: T) {
             synchronized(lock) {
-                setter(data, value)
-                save()
+                val candidate = data.copy()
+                setter(candidate, value)
+                save(candidate)
+                data = candidate
             }
         }
     }
@@ -89,8 +91,9 @@ object AppPrefs {
         }
         set(value) {
             synchronized(lock) {
-                data.recentWikiIdLookupValues = value
-                save()
+                val candidate = data.copy(recentWikiIdLookupValues = value)
+                save(candidate)
+                data = candidate
             }
         }
 }

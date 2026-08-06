@@ -25,6 +25,7 @@ import io.github.composefluent.component.Switcher
 import io.github.composefluent.component.Text
 import io.github.composefluent.component.TextField
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
@@ -92,13 +93,15 @@ internal fun AudioToolsTab(
     var spectrogramPalette by remember { mutableStateOf(SpectrogramPaletteOption.Ocean) }
     val audioPreviewWorkDir = remember { File(System.getProperty("java.io.tmpdir"), "CalabiYauVoice/audio_tool_current_${System.nanoTime()}") }
     val audioHistory = remember { DesktopAudioHistoryController(audioPreviewWorkDir) }
-    val currentIsBusy by rememberUpdatedState(isBusy)
+    val currentInput by rememberUpdatedState(input)
 
     DisposableEffect(Unit) {
         onDispose {
-            val canDeleteWorkFiles = !currentIsBusy
             onBusyChange(false)
-            if (canDeleteWorkFiles) audioHistory.cleanup(input)
+            val inputAtDisposal = currentInput
+            scope.coroutineContext[Job]?.invokeOnCompletion {
+                audioHistory.cleanup(inputAtDisposal)
+            } ?: audioHistory.cleanup(inputAtDisposal)
         }
     }
 

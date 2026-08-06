@@ -1,11 +1,18 @@
 package util
 
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.CancellableContinuation
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.IOException
 import java.io.File
 import java.net.URLEncoder
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * 发起简单 GET 请求，返回 [Response]。
@@ -13,6 +20,68 @@ import java.net.URLEncoder
  */
 fun OkHttpClient.executeGet(url: String): Response {
     return newCall(Request.Builder().url(url).build()).execute()
+}
+
+/** Executes a GET request and cancels the underlying OkHttp call with the coroutine. */
+suspend fun OkHttpClient.awaitGet(url: String): Response = suspendCancellableCoroutine { continuation ->
+    awaitCall(Request.Builder().url(url).build(), continuation)
+}
+
+suspend fun OkHttpClient.awaitRequest(
+    url: String,
+    block: Request.Builder.() -> Unit
+): Response = suspendCancellableCoroutine { continuation ->
+    awaitCall(Request.Builder().url(url).apply(block).build(), continuation)
+}
+
+/** Streams a response body into [file] while keeping cancellation attached to the OkHttp call. */
+suspend fun OkHttpClient.awaitGetToFile(url: String, file: File): Boolean =
+    suspendCancellableCoroutine { continuation ->
+        val call = newCall(Request.Builder().url(url).build())
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                file.delete()
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    response.use {
+                        if (!it.isSuccessful) {
+                            if (continuation.isActive) continuation.resume(false)
+                            return
+                        }
+                        it.body.byteStream().use { input ->
+                            file.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    }
+                    if (continuation.isActive) continuation.resume(true)
+                    else file.delete()
+                } catch (error: IOException) {
+                    file.delete()
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                }
+            }
+        })
+    }
+
+private fun OkHttpClient.awaitCall(
+    request: Request,
+    continuation: CancellableContinuation<Response>
+) {
+    val call = newCall(request)
+    continuation.invokeOnCancellation { call.cancel() }
+    call.enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            if (continuation.isActive) continuation.resumeWithException(e)
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            if (continuation.isActive) continuation.resume(response) { _, value, _ -> value.close() }
+            else response.close()
+        }
+    })
 }
 
 /**

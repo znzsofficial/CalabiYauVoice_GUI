@@ -158,6 +158,7 @@ class MainViewModel(
     private var scanJob: Job? = null
     private var portraitJob: Job? = null
     private var fileDialogJob: Job? = null
+    private var savePathPersistJob: Job? = null
     private var searchRequestId = 0L
     private var scanRequestId = 0L
     private var portraitRequestId = 0L
@@ -523,7 +524,15 @@ class MainViewModel(
     // =========================================================
     // 下载配置
     // =========================================================
-    fun onSavePathChange(value: String) { _savePath.value = value; util.AppPrefs.savePath = value }
+    fun onSavePathChange(value: String) {
+        _savePath.value = value
+        savePathPersistJob?.cancel()
+        savePathPersistJob = scope.launch {
+            delay(400)
+            runCatching { withContext(Dispatchers.IO) { util.AppPrefs.savePath = value } }
+                .onFailure { addLog("保存路径设置失败: ${it.message}") }
+        }
+    }
 
     fun onMaxConcurrencyChange(value: String) {
         if (value.isEmpty() || value.toIntOrNull()?.let { it in 1..32 } == true) {
@@ -551,8 +560,20 @@ class MainViewModel(
     // 下载
     // =========================================================
     fun startDownload() {
+        if (_isDownloading.value) return
+        val mode = _searchMode.value
+        val saveRoot = _savePath.value
+        val concurrency = (_maxConcurrencyStr.value.toIntOrNull() ?: 16).coerceIn(1, 32)
+        val convertAfterDownload = _convertAfterDownload.value
+        val deleteOriginal = _deleteOriginalMp3.value
+        val targetSampleRate = util.SAMPLE_RATE_OPTIONS.getOrNull(_targetSampleRateIndex.value)
+        val targetBitDepth = bitDepthOptionAt(_targetBitDepthIndex.value).target
+        val enableDither = _enableDitherOnDownsample.value
+        val mergeWav = _mergeWav.value
+        val mergeWavMaxCount = _mergeWavMaxCountStr.value.toIntOrNull() ?: 0
+
         // Handle Portrait Download
-        if (_searchMode.value == SearchMode.PORTRAIT) {
+        if (mode == SearchMode.PORTRAIT) {
             val charName = _selectedPortraitCharacter.value
             val costumeKey = _selectedPortraitCostumeKey.value
             val costume = _portraitCostumes.value.find { it.key == costumeKey }
@@ -563,8 +584,6 @@ class MainViewModel(
             }
 
             _isDownloading.value = true
-            val concurrency = (_maxConcurrencyStr.value.toIntOrNull() ?: 16).coerceIn(1, 32)
-
             // Build asset list
             val assets = buildList {
                 add(costume.illustration)
@@ -579,7 +598,7 @@ class MainViewModel(
                 return
             }
 
-            val targetDir = File(File(_savePath.value, "立绘"), sanitizeFileName(charName))
+            val targetDir = File(File(saveRoot, "立绘"), sanitizeFileName(charName))
             val saveDir = File(targetDir, sanitizeFileName(costume.name))
             val files = assets.map { it.title to it.url }
 
@@ -597,6 +616,8 @@ class MainViewModel(
                         }
                     )
                     addLog("下载完成！保存至: ${saveDir.absolutePath}")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     addLog("下载失败: ${e.message}")
                 } finally {
@@ -608,7 +629,7 @@ class MainViewModel(
             return
         }
 
-        val isFileSearch = _searchMode.value == SearchMode.FILE_SEARCH
+        val isFileSearch = mode == SearchMode.FILE_SEARCH
 
         if (isFileSearch) {
             if (_fileSearchSelectedUrls.value.isEmpty()) return
@@ -619,8 +640,12 @@ class MainViewModel(
         _isDownloading.value = true
         val folderName = if (isFileSearch) _searchKeyword.value
             else sanitizeFileName(_selectedGroup.value?.characterName ?: "Unknown")
-        val targetDir = File(_savePath.value, sanitizeFileName(folderName))
-        val concurrency = (_maxConcurrencyStr.value.toIntOrNull() ?: 16).coerceIn(1, 32)
+        val targetDir = File(saveRoot, sanitizeFileName(folderName))
+        val selectedUrls = _fileSearchSelectedUrls.value
+        val searchResults = _fileSearchResults.value
+        val checkedCategories = _checkedCategories.value
+        val manualSelections = _manualSelectionMap.value
+        val audioOnly = mode == SearchMode.VOICE_ONLY
 
         scope.launch {
             try {
@@ -628,20 +653,18 @@ class MainViewModel(
                 val finalDownloadList: List<Pair<String, String>>
 
                 if (isFileSearch) {
-                    val selected = _fileSearchSelectedUrls.value
-                    finalDownloadList = _fileSearchResults.value.filter { it.second in selected }
+                    finalDownloadList = searchResults.filter { it.second in selectedUrls }
                     addLog("文件搜索模式：共 ${finalDownloadList.size} 个文件")
                 } else {
-                    val checked = _checkedCategories.value
                     val list = mutableListOf<Pair<String, String>>()
-                    for (cat in checked) {
-                        val manual = _manualSelectionMap.value[cat]
+                    for (cat in checkedCategories) {
+                        val manual = manualSelections[cat]
                         if (manual != null) {
                             list.addAll(manual)
                             addLog("[${cat.replace("Category:", "")}] 使用手动选择 (${manual.size}项)")
                         } else {
                             addLog("正在扫描 [${cat.replace("Category:", "")}] ...")
-                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                            val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = audioOnly)
                             list.addAll(files)
                         }
                     }
@@ -665,18 +688,16 @@ class MainViewModel(
                     addLog("全部下载完成！")
 
                     // 批量 MP3/FLAC → WAV 转换（可选）
-                    if (_convertAfterDownload.value) {
+                    if (convertAfterDownload) {
                         addLog("开始批量转换 MP3/FLAC → WAV…")
                         _progressText.value = "正在转换…"
-                        val sampleRate = util.SAMPLE_RATE_OPTIONS[_targetSampleRateIndex.value]
-                        val bitDepthOption = bitDepthOptionAt(_targetBitDepthIndex.value)
                         val convertedWavFiles = batchConvertAudioToWav(
                             dir = targetDir,
                             sourceFiles = downloadedFiles,
-                            deleteOriginal = _deleteOriginalMp3.value,
-                            targetSampleRate = sampleRate,
-                            targetBitDepth = bitDepthOption.target,
-                            enableDitherOnDownsample = _enableDitherOnDownsample.value,
+                            deleteOriginal = deleteOriginal,
+                            targetSampleRate = targetSampleRate,
+                            targetBitDepth = targetBitDepth,
+                            enableDitherOnDownsample = enableDither,
                             onLog = { addLog(it) },
                             onProgress = { current, total, name ->
                                 _progress.value = if (total > 0) current.toFloat() / total else 0f
@@ -685,14 +706,13 @@ class MainViewModel(
                         )
 
                         // 合并 WAV（可选）
-                        if (_mergeWav.value) {
+                        if (mergeWav) {
                             addLog("开始合并 WAV 文件…")
                             _progressText.value = "正在合并…"
-                            val maxCount = _mergeWavMaxCountStr.value.toIntOrNull() ?: 0
                             mergeWavFiles(
                                 dir = targetDir,
                                 sourceFiles = downloadedFiles.filter { it.extension.equals("wav", ignoreCase = true) } + convertedWavFiles,
-                                maxPerFile = maxCount,
+                                maxPerFile = mergeWavMaxCount,
                                 deleteOriginal = true,
                                 onLog = { addLog(it) },
                                 onProgress = { current, total, name ->
@@ -703,6 +723,8 @@ class MainViewModel(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 addLog("中断: ${e.message}")
             } finally {

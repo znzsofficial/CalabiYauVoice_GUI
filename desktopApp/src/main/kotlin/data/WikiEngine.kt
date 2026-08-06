@@ -14,14 +14,13 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
-import util.bodyToFile
+import util.awaitGet
+import util.awaitGetToFile
 import util.executeGet
-import util.executeGetString
 
 object WikiEngine {
 
@@ -86,19 +85,23 @@ object WikiEngine {
 
     // 可注入 Cookie 的 CookieJar 实现
     private val cookieStore = ConcurrentHashMap<String, CopyOnWriteArrayList<Cookie>>()
+    private val cookieLock = Any()
     private val cookieJar = object : CookieJar {
         override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            val key = url.host
-            val list = cookieStore.getOrPut(key) { CopyOnWriteArrayList() }
-            // 更新或追加
-            cookies.forEach { newCookie ->
-                list.removeIf { it.name == newCookie.name && it.path == newCookie.path }
-                list.add(newCookie)
+            synchronized(cookieLock) {
+                val key = url.host
+                val list = cookieStore.getOrPut(key) { CopyOnWriteArrayList() }
+                cookies.forEach { newCookie ->
+                    list.removeIf { it.name == newCookie.name && it.path == newCookie.path }
+                    list.add(newCookie)
+                }
             }
         }
 
         override fun loadForRequest(url: HttpUrl): List<Cookie> {
-            return cookieStore[url.host]?.filter { it.matches(url) } ?: emptyList()
+            return synchronized(cookieLock) {
+                cookieStore[url.host]?.filter { it.matches(url) } ?: emptyList()
+            }
         }
     }
 
@@ -106,18 +109,15 @@ object WikiEngine {
      * 向指定域的 CookieJar 注入 Cookie 列表。
      * 由 WikiCookieManager 调用，外部请勿直接调用。
      */
-    fun injectCookies(url: HttpUrl, cookies: List<Cookie>) {
-        val key = url.host
-        val list = cookieStore.getOrPut(key) { CopyOnWriteArrayList() }
-        // 先移除同名 Cookie，再追加
-        cookies.forEach { newCookie ->
-            list.removeIf { it.name == newCookie.name }
+    fun replaceCookies(url: HttpUrl, cookies: List<Cookie>) {
+        synchronized(cookieLock) {
+            if (cookies.isEmpty()) cookieStore.remove(url.host)
+            else cookieStore[url.host] = CopyOnWriteArrayList(cookies)
         }
-        list.addAll(cookies)
     }
 
     internal fun clearCookies(url: HttpUrl) {
-        cookieStore.remove(url.host)
+        replaceCookies(url, emptyList())
     }
 
     // 暴露给外部的 Client
@@ -163,7 +163,13 @@ object WikiEngine {
                 response.close()
                 // 指数退避 + 随机抖动，避免多线程同时重试
                 val backoff = (1000L shl tryCount) + Random.nextLong(0, 500)
-                Thread.sleep(backoff)
+                var remaining = backoff
+                while (remaining > 0) {
+                    if (chain.call().isCanceled()) throw IOException("HTTP request cancelled")
+                    val pause = minOf(remaining, 100L)
+                    Thread.sleep(pause)
+                    remaining -= pause
+                }
                 response = chain.proceed(chain.request())
             }
             response
@@ -227,7 +233,7 @@ object WikiEngine {
     private suspend fun fetchString(url: String): String? = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
             try {
-                val result = client.executeGetString(url)
+                val result = client.awaitGet(url).use { if (it.isSuccessful) it.body.string() else null }
                 currentCoroutineContext().ensureActive()
                 if (result != null) return@withContext result
             } catch (e: CancellationException) {
@@ -238,27 +244,19 @@ object WikiEngine {
         null
     }
 
-    private fun downloadFile(url: String, targetFile: File) {
+    private suspend fun downloadFile(url: String, targetFile: File) {
         if (targetFile.exists() && targetFile.length() > 0) return
-        client.executeGet(url).use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("HTTP ${response.code}: ${response.message}")
-            }
-            if (response.body.contentLength() == 0L) {
-                throw IOException("Empty response body for $url")
-            }
-
-            val parent = targetFile.absoluteFile.parentFile
-                ?: throw IOException("Target file has no parent: $targetFile")
-            Files.createDirectories(parent.toPath())
-            val tmp = Files.createTempFile(parent.toPath(), "wiki-download-", ".tmp").toFile()
-            try {
-                response.bodyToFile(tmp)
-                if (tmp.length() == 0L) throw IOException("Empty response body for $url")
-                Files.move(tmp.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            } finally {
-                Files.deleteIfExists(tmp.toPath())
-            }
+        val parent = targetFile.absoluteFile.parentFile
+            ?: throw IOException("Target file has no parent: $targetFile")
+        Files.createDirectories(parent.toPath())
+        val tmp = Files.createTempFile(parent.toPath(), "wiki-download-", ".tmp").toFile()
+        try {
+            if (!client.awaitGetToFile(url, tmp)) throw IOException("HTTP download failed for $url")
+            if (tmp.length() == 0L) throw IOException("Empty response body for $url")
+            currentCoroutineContext().ensureActive()
+            Files.move(tmp.toPath(), targetFile.toPath())
+        } finally {
+            Files.deleteIfExists(tmp.toPath())
         }
     }
 }

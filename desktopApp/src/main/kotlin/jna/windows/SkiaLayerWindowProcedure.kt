@@ -29,7 +29,8 @@ class SkiaLayerWindowProcedure(
 
     private val windowHandle = HWND(Pointer(skiaLayer.windowHandle))
     internal val contentHandle = HWND(skiaLayer.canvas.let(Native::getComponentPointer))
-    private val defaultWindowProcedure = User32Extend.instance?.setWindowLong(contentHandle, WinUser.GWL_WNDPROC, this) ?: BaseTSD.LONG_PTR(-1)
+    private val windowProcedureHook = User32Extend.instance?.installWindowProcedure(contentHandle, this)
+    private val defaultWindowProcedure = windowProcedureHook?.original ?: BaseTSD.LONG_PTR(0)
 
     private var disposed = false
 
@@ -38,7 +39,7 @@ class SkiaLayerWindowProcedure(
     @Synchronized
     fun dispose() {
         if (disposed) return
-        User32Extend.instance?.setWindowLong(contentHandle, WinUser.GWL_WNDPROC, defaultWindowProcedure)
+        windowProcedureHook?.let { User32Extend.instance?.restoreWindowProcedure(contentHandle, it) }
         disposed = true
     }
 

@@ -53,5 +53,14 @@ data class AiResponse(
 // === 正则与工具函数 ===
 val categoryPrefixRegex = Regex("^(Category:|分类:)")
 val filePrefixRegex = Regex("^(File:|文件:)")
-private val sanitizeRegex = Regex("[\\\\/:*?\"<>|]")
-fun sanitizeFileName(name: String) = name.replace(sanitizeRegex, "_").trim()
+private val sanitizeRegex = Regex("[\\u0000-\\u001f\\\\/:*?\"<>|]")
+private val windowsDeviceNames = Regex("(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\..*)?$")
+
+fun sanitizeFileName(name: String): String {
+    val sanitized = name.replace(sanitizeRegex, "_").trim().trimEnd('.', ' ')
+    return when {
+        sanitized.isBlank() || sanitized == "." || sanitized == ".." -> "_"
+        windowsDeviceNames.matches(sanitized) -> "_$sanitized"
+        else -> sanitized.take(180).trimEnd('.', ' ').ifBlank { "_" }
+    }
+}

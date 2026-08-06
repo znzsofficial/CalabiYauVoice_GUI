@@ -3,15 +3,21 @@ package com.nekolaska.calabiyau.core.wiki
 import com.nekolaska.calabiyau.CalabiYauApplication
 import com.nekolaska.calabiyau.CrashContextStore
 import data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import util.buildWikiUrl
-import util.bodyToFile
+import util.awaitGet
+import util.awaitGetToFile
 import util.executeGet
 
 object WikiEngine {
@@ -230,25 +236,31 @@ object WikiEngine {
     private suspend fun fetchString(url: String, onError: ((String) -> Unit)? = null): String? = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
             try {
-                val response = client.executeGet(url)
+                val response = client.awaitGet(url)
                 val result = response.use { if (it.isSuccessful) it.body.string() else { onError?.invoke("HTTP ${it.code}: ${it.message}"); null } }
                 if (result != null) return@withContext result
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 onError?.invoke("网络异常: ${e.javaClass.simpleName}: ${e.message}")
             }
-            if (attempt == 0) Thread.sleep(500)
+            if (attempt == 0) delay(500)
         }
         null
     }
 
-    private fun downloadFile(url: String, targetFile: File) {
+    private suspend fun downloadFile(url: String, targetFile: File) {
         if (targetFile.exists() && targetFile.length() > 0) return
-        client.executeGet(url).use { response ->
-            if (response.isSuccessful) {
-                val tmp = File(targetFile.parent, targetFile.name + ".tmp")
-                response.bodyToFile(tmp)
-                if (tmp.exists()) tmp.renameTo(targetFile)
+        val tmp = File.createTempFile("wiki-download-", ".tmp", targetFile.parentFile)
+        try {
+            if (!client.awaitGetToFile(url, tmp)) throw IOException("HTTP download failed for $url")
+            currentCoroutineContext().ensureActive()
+            if (tmp.length() == 0L) throw IOException("Empty response body for $url")
+            if (targetFile.exists() || !tmp.renameTo(targetFile)) {
+                throw IOException("Could not publish download: ${targetFile.name}")
             }
+        } finally {
+            tmp.delete()
         }
     }
 }

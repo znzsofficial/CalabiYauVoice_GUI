@@ -80,7 +80,8 @@ class ComposeWindowProcedure(
     )
 
     //     The default window procedure to call its methods when the default method behaviour is desired/sufficient
-    private val defaultWindowProcedure = User32Extend.instance?.setWindowLong(windowHandle, WinUser.GWL_WNDPROC, this) ?: LONG_PTR(-1)
+    private val windowProcedureHook = User32Extend.instance?.installWindowProcedure(windowHandle, this)
+    private val defaultWindowProcedure = windowProcedureHook?.original ?: LONG_PTR(0)
 
     private var disposed = false
 
@@ -142,7 +143,7 @@ class ComposeWindowProcedure(
     fun dispose() {
         if (disposed) return
         skiaLayerProcedure?.dispose()
-        User32Extend.instance?.setWindowLong(windowHandle, WinUser.GWL_WNDPROC, defaultWindowProcedure)
+        windowProcedureHook?.let { User32Extend.instance?.restoreWindowProcedure(windowHandle, it) }
         disposed = true
     }
 
