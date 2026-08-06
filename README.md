@@ -46,7 +46,8 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 ### 🖥️ Desktop Extras (Windows)
 
-- **🔄 MP3/FLAC → WAV Conversion** — Batch-convert downloaded audio to WAV with configurable sample rate and bit depth. Optional WAV merging.
+- **🔄 Audio → WAV Conversion** — Batch-convert `MP3`, `FLAC`, `OGG`, `AAC`, and `M4A` files to WAV with configurable sample rate, bit depth, dithering, and optional WAV merging.
+- **🧰 Asset Workbench** — Process images and subtitle timelines, or edit audio with silence trimming, channel conversion, gain/normalization, noise gate, fades, phase tools, undo/redo, and spectrogram preview/export.
 - **⌨️ Keyboard Shortcuts** — `Ctrl+F` focus search, `F5` re-search, `Ctrl+D` download, `Ctrl+A` / `Ctrl+Shift+A` select / deselect all, `Ctrl+1~4` switch modes, `↑↓` navigate, and more.
 - **🎛️ Windows Backdrop** — Switch between Mica, Tabbed, Acrylic, Aero, and other Windows 11 backdrop styles at runtime.
 - **🪟 Custom Title Bar** — Borderless native window with custom caption buttons and drag-to-move support.
@@ -72,7 +73,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 | Component     | Technology                   |
 |---------------|------------------------------|
-| Language      | Kotlin 2.4.0                 |
+| Language      | Kotlin 2.4.10                |
 | Async         | Kotlin Coroutines 1.11       |
 | Network       | OkHttp 5.4                   |
 | Serialization | kotlinx.serialization 1.11   |
@@ -83,9 +84,9 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 | Component | Technology                                                                                                                                         |
 |-----------|----------------------------------------------------------------------------------------------------------------------------------------------------|
 | UI        | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
-| Audio     | `javax.sound.sampled`, `mp3spi`, official `libFLAC` 1.5.0 via JNA                                                                                     |
+| Audio     | Java Sound SPI (`MP3` / `OGG` / `AAC` / `M4A`), official `libFLAC` 1.5.0 via JNA                                                                   |
 | Image     | `javax.imageio.ImageIO` (GIF frame decoding)                                                                                                       |
-| Native    | JNA 5.19 (Windows API)                                                                                                                             |
+| Native    | JNA 5.19.1 (Windows API and native FLAC decoding)                                                                                                  |
 
 ### Android
 
@@ -189,6 +190,13 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 ## 🚀 Build and Run
 
+### Requirements
+
+- JDK 21 (the Gradle toolchain can provision the configured Amazon Corretto JDK)
+- Android SDK for Android builds
+- Node.js and npm for `downloadPage/`
+- Windows x64 for desktop FLAC playback/conversion; the official `libFLAC.dll` 1.5.0 is bundled and verified by SHA-256 before loading
+
 ```powershell
 # Build the project
 ./gradlew.bat build
@@ -212,6 +220,7 @@ npm run build
 
 - 📡 **API Dependency:** The app depends on Bilibili wiki endpoints; availability may vary depending on network conditions.
 - 📱 **Android:** Requires Android 7.1 (API 25) or later.
+- 🖥️ **Desktop FLAC:** Native FLAC decoding currently supports Windows x64. Packaged desktop distributions include the required DLL and third-party notices.
 - 🌐 **Website:** Prefer [wiki.nekolaska.vip](https://wiki.nekolaska.vip/); [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/) is the Cloudflare Pages backup.
 
 ## 📄 License

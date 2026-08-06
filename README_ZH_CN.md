@@ -46,7 +46,8 @@
 
 ### 🖥️ 桌面端增强（Windows）
 
-- **🔄 MP3/FLAC 转 WAV** — 下载后批量将 `MP3` 或 `FLAC` 转换为 `WAV`，支持自定义采样率与位深，可选合并 WAV。
+- **🔄 音频转 WAV** — 批量将 `MP3`、`FLAC`、`OGG`、`AAC`、`M4A` 转换为 WAV，支持自定义采样率、位深、抖动处理与可选 WAV 合并。
+- **🧰 素材工作库** — 集中处理图片和字幕时间轴；音频工具支持静音裁剪、声道转换、增益/标准化、噪声门、淡入淡出、相位处理、撤销/重做以及频谱图预览与导出。
 - **⌨️ 键盘快捷键** — `Ctrl+F` 聚焦搜索，`F5` 重新搜索，`Ctrl+D` 开始下载，`Ctrl+A` / `Ctrl+Shift+A` 全选 / 取消全选，`Ctrl+1~4` 切换模式，`↑↓` 导航列表等。
 - **🎛️ 窗口特效** — 运行时动态切换 Mica、Tabbed、Acrylic、Aero 等 Windows 11 背景特效。
 - **🪟 自定义标题栏** — 无边框原生窗口，自定义标题栏按钮，支持拖拽移动。
@@ -72,7 +73,7 @@
 
 | 组件    | 技术                           |
 |-------|------------------------------|
-| 语言    | Kotlin 2.4.0                 |
+| 语言    | Kotlin 2.4.10                |
 | 异步    | Kotlin Coroutines 1.11       |
 | 网络    | OkHttp 5.4                   |
 | 序列化   | kotlinx.serialization 1.11   |
@@ -83,9 +84,9 @@
 | 组件    | 技术                                                                                                                                                |
 |-------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | UI 框架 | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
-| 音频    | `javax.sound.sampled`、`mp3spi`、通过 JNA 接入的官方 `libFLAC` 1.5.0                                                                               |
+| 音频    | Java Sound SPI（`MP3` / `OGG` / `AAC` / `M4A`）、通过 JNA 接入的官方 `libFLAC` 1.5.0                                                               |
 | 图像    | `javax.imageio.ImageIO`（GIF 多帧解码）                                                                                                                 |
-| 原生调用  | JNA 5.19（Windows API）                                                                                                                             |
+| 原生调用  | JNA 5.19.1（Windows API 与原生 FLAC 解码）                                                                                                               |
 
 ### Android 端
 
@@ -189,6 +190,13 @@
 
 ## 🚀 构建与运行
 
+### 环境要求
+
+- JDK 21（Gradle toolchain 可自动配置项目指定的 Amazon Corretto JDK）
+- 构建 Android 应用时需要 Android SDK
+- 构建 `downloadPage/` 时需要 Node.js 与 npm
+- 桌面端 FLAC 播放/转换目前需要 Windows x64；项目已内置官方 `libFLAC.dll` 1.5.0，并在加载前校验 SHA-256
+
 ```powershell
 # 构建项目
 ./gradlew.bat build
@@ -212,6 +220,7 @@ npm run build
 
 - 📡 **API 依赖：** 本应用依赖 Bilibili Wiki 的 API 接口，可用性可能受网络环境影响。
 - 📱 **Android：** 需要 Android 7.1（API 25）或更高版本。
+- 🖥️ **桌面端 FLAC：** 原生 FLAC 解码目前支持 Windows x64；桌面发行包已包含所需 DLL 与第三方许可声明。
 - 🌐 **网站入口：** 请优先访问 [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)；[calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/) 为 Cloudflare Pages 备用链接。
 
 ## 📄 许可证

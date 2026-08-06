@@ -44,7 +44,7 @@ compose.desktop {
 
         jvmArgs += "--enable-native-access=ALL-UNNAMED"
         jvmArgs += listOf(
-            "-Dskiko.renderApi=OPENGL",
+            //"-Dskiko.renderApi=OPENGL",
             //"-Dskiko.verbose=true" // 开启详细日志，方便验证
         )
         nativeDistributions {
