@@ -207,7 +207,7 @@ fun AssetToolsWindow(onCloseRequest: () -> Unit) {
                     when (currentTab) {
                         AssetToolTab.IMAGE -> ImageToolsTab(outputPath, isBusy, { isBusy = it }, ::log, scope)
                         AssetToolTab.TEXT -> TextToolsTab(outputPath, isBusy, { isBusy = it }, ::log, scope)
-                        AssetToolTab.AUDIO -> AudioToolsTab(outputPath, isBusy, { isBusy = it }, ::log, scope)
+                        AssetToolTab.AUDIO -> AudioToolsTab(outputPath, isBusy, { isBusy = it }, ::log)
                     }
                 }
 

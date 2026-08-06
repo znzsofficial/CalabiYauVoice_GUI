@@ -652,7 +652,7 @@ class MainViewModel(
                     addLog("没有文件需要下载。")
                 } else {
                     addLog("共 ${finalDownloadList.size} 个文件，开始下载...")
-                    WikiEngine.downloadSpecificFiles(
+                    val downloadedFiles = WikiEngine.downloadSpecificFiles(
                         files = finalDownloadList,
                         saveDir = targetDir,
                         maxConcurrency = concurrency,
@@ -670,8 +670,9 @@ class MainViewModel(
                         _progressText.value = "正在转换…"
                         val sampleRate = util.SAMPLE_RATE_OPTIONS[_targetSampleRateIndex.value]
                         val bitDepthOption = bitDepthOptionAt(_targetBitDepthIndex.value)
-                        batchConvertAudioToWav(
+                        val convertedWavFiles = batchConvertAudioToWav(
                             dir = targetDir,
+                            sourceFiles = downloadedFiles,
                             deleteOriginal = _deleteOriginalMp3.value,
                             targetSampleRate = sampleRate,
                             targetBitDepth = bitDepthOption.target,
@@ -690,6 +691,7 @@ class MainViewModel(
                             val maxCount = _mergeWavMaxCountStr.value.toIntOrNull() ?: 0
                             mergeWavFiles(
                                 dir = targetDir,
+                                sourceFiles = downloadedFiles.filter { it.extension.equals("wav", ignoreCase = true) } + convertedWavFiles,
                                 maxPerFile = maxCount,
                                 deleteOriginal = true,
                                 onLog = { addLog(it) },

@@ -21,6 +21,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.awt.image.BufferedImage
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 enum class DesktopWavTrimMode(val label: String) {
     BOTH("裁剪头尾"),
@@ -290,30 +293,51 @@ private fun writePcmWav(
     sampleRate: Int,
     bitsPerSample: Int
 ) {
-    file.parentFile?.mkdirs()
-    val byteRate = sampleRate * channels * bitsPerSample / 8
+    val parent = file.absoluteFile.parentFile ?: error("输出文件没有父目录")
+    parent.mkdirs()
     val blockAlign = channels * bitsPerSample / 8
     require(expectedPcmBlockAlign(channels, bitsPerSample) == blockAlign && sampleRate > 0) { "无效的 PCM WAV 参数" }
+    val byteRate = sampleRate.toLong() * blockAlign
+    require(byteRate <= Int.MAX_VALUE) { "PCM WAV byteRate 超出支持范围" }
     require(offset >= 0 && length >= 0 && offset + length <= pcmData.size && length % blockAlign == 0) { "PCM 数据不是完整采样帧" }
     val riffSize = 36L + length.toLong()
     require(riffSize <= 0xFFFF_FFFFL) { "WAV 文件过大，RIFF size 超过 4GB" }
-    FileOutputStream(file).use { fileOut ->
-        val out = ByteArrayOutputStream(44)
-        out.writeAscii("RIFF")
-        out.writeLittleInt(riffSize.toInt())
-        out.writeAscii("WAVE")
-        out.writeAscii("fmt ")
-        out.writeLittleInt(16)
-        out.writeLittleShort(1)
-        out.writeLittleShort(channels)
-        out.writeLittleInt(sampleRate)
-        out.writeLittleInt(byteRate)
-        out.writeLittleShort(blockAlign)
-        out.writeLittleShort(bitsPerSample)
-        out.writeAscii("data")
-        out.writeLittleInt(length)
-        fileOut.write(out.toByteArray())
-        fileOut.write(pcmData, offset, length)
+    val temp = Files.createTempFile(parent.toPath(), ".${file.name}-", ".tmp").toFile()
+    try {
+        FileOutputStream(temp).use { fileOut ->
+            val out = ByteArrayOutputStream(44)
+            out.writeAscii("RIFF")
+            out.writeLittleInt(riffSize.toInt())
+            out.writeAscii("WAVE")
+            out.writeAscii("fmt ")
+            out.writeLittleInt(16)
+            out.writeLittleShort(1)
+            out.writeLittleShort(channels)
+            out.writeLittleInt(sampleRate)
+            out.writeLittleInt(byteRate.toInt())
+            out.writeLittleShort(blockAlign)
+            out.writeLittleShort(bitsPerSample)
+            out.writeAscii("data")
+            out.writeLittleInt(length)
+            fileOut.write(out.toByteArray())
+            fileOut.write(pcmData, offset, length)
+        }
+        replaceDesktopWavFile(temp, file)
+    } finally {
+        Files.deleteIfExists(temp.toPath())
+    }
+}
+
+private fun replaceDesktopWavFile(temp: File, target: File) {
+    try {
+        Files.move(
+            temp.toPath(),
+            target.toPath(),
+            StandardCopyOption.REPLACE_EXISTING,
+            StandardCopyOption.ATOMIC_MOVE
+        )
+    } catch (_: IOException) {
+        Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
 }
 

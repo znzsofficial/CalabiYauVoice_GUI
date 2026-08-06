@@ -29,14 +29,18 @@ data class SpectrogramPixels(
     val argb: IntArray
 )
 
+const val MAX_SPECTROGRAM_PIXELS = 8_000_000
+private const val MAX_SPECTROGRAM_TIME_BINS = 128_000
+private const val MAX_SPECTROGRAM_FREQUENCY_BINS = 4_096
+
 fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = SpectrogramConfig()): SpectrogramPixels {
     val frameCount = pcmFrameCount(wav)
     if (frameCount <= 0) return SpectrogramPixels(1, 1, IntArray(1))
 
     val windowSize = normalizeSpectrogramWindowSize(config.windowSize)
     val hopRatio = config.hopRatio.coerceIn(0.05f, 1.0f)
-    val maxTimeBins = config.maxTimeBins.coerceAtLeast(1)
-    val maxFrequencyBins = config.maxFrequencyBins.coerceAtLeast(1)
+    val requestedTimeBins = config.maxTimeBins.coerceIn(1, MAX_SPECTROGRAM_TIME_BINS)
+    val maxFrequencyBins = config.maxFrequencyBins.coerceIn(1, MAX_SPECTROGRAM_FREQUENCY_BINS)
     val nyquist = (wav.sampleRate / 2.0).coerceAtLeast(1.0)
     val displayMaxHz = config.cutoffFrequencyHz
         .takeIf { it > 0 }
@@ -45,8 +49,10 @@ fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = Spectrog
         ?: nyquist
     val rawHop = max(1, (windowSize * hopRatio).toInt())
     val totalWindows = max(1, 1 + max(0, frameCount - windowSize) / rawHop)
-    val hop = max(1, rawHop * max(1, totalWindows / maxTimeBins))
-    val timeBins = min(maxTimeBins, totalWindows)
+    val height = maxFrequencyBins * wav.channels
+    val maxTimeBinsForPixelBudget = (MAX_SPECTROGRAM_PIXELS / height).coerceAtLeast(1)
+    val timeBins = min(min(requestedTimeBins, totalWindows), maxTimeBinsForPixelBudget)
+    val lastWindowStart = max(0, frameCount - windowSize)
     val fftFrequencyBins = (windowSize / 2).coerceAtLeast(1)
     val frequencyScaleDenominator = (maxFrequencyBins - 1).coerceAtLeast(1)
     val window = DoubleArray(windowSize) { index ->
@@ -56,7 +62,6 @@ fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = Spectrog
     val maxAmp = maxAmplitude(wav.bitsPerSample).coerceAtLeast(1.0)
 
     val width = timeBins
-    val height = maxFrequencyBins * wav.channels
     val pixels = IntArray(width * height)
     val real = DoubleArray(windowSize)
     val imag = DoubleArray(windowSize)
@@ -66,7 +71,11 @@ fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = Spectrog
         for (timeIndex in 0 until timeBins) {
             real.fill(0.0)
             imag.fill(0.0)
-            val startFrame = timeIndex * hop
+            val startFrame = when {
+                timeBins <= 1 -> 0
+                timeBins == totalWindows -> min(timeIndex * rawHop, lastWindowStart)
+                else -> (timeIndex.toLong() * lastWindowStart / (timeBins - 1)).toInt()
+            }
             for (i in 0 until windowSize) {
                 real[i] = (sampleValue(wav, startFrame + i, channel) / maxAmp) * window[i]
             }

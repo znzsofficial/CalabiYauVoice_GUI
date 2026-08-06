@@ -8,6 +8,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,29 +24,22 @@ import io.github.composefluent.component.ComboBox
 import io.github.composefluent.component.Switcher
 import io.github.composefluent.component.Text
 import io.github.composefluent.component.TextField
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 import util.*
 import java.awt.image.BufferedImage
 import java.io.File
-import java.util.concurrent.Callable
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 import javax.imageio.ImageIO
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-private val assetAudioDecodeExecutor: ExecutorService by lazy {
-    Executors.newSingleThreadExecutor { task ->
-        Thread(task, "asset-tools-audio-decode").apply { isDaemon = true }
-    }
-}
 
 internal enum class SpectrogramPaletteOption(
     val label: String,
@@ -65,9 +60,9 @@ internal fun AudioToolsTab(
     outputPath: String,
     isBusy: Boolean,
     onBusyChange: (Boolean) -> Unit,
-    onLog: (String) -> Unit,
-    scope: CoroutineScope
+    onLog: (String) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var input by remember { mutableStateOf<AudioToolInput?>(null) }
     var meta by remember { mutableStateOf<DesktopWavMeta?>(null) }
     var trimThreshold by remember { mutableStateOf("1.5") }
@@ -97,12 +92,13 @@ internal fun AudioToolsTab(
     var spectrogramPalette by remember { mutableStateOf(SpectrogramPaletteOption.Ocean) }
     val audioPreviewWorkDir = remember { File(System.getProperty("java.io.tmpdir"), "CalabiYauVoice/audio_tool_current_${System.nanoTime()}") }
     val audioHistory = remember { DesktopAudioHistoryController(audioPreviewWorkDir) }
+    val currentIsBusy by rememberUpdatedState(isBusy)
 
     DisposableEffect(Unit) {
         onDispose {
-            audioHistory.cleanup(input)
-            runCatching { File(outputPath, "音频工具/_preview").takeIf { it.isDirectory }?.deleteRecursively() }
-            runCatching { File(System.getProperty("java.io.tmpdir"), "CalabiYauVoice/audio_tool_preview").takeIf { it.isDirectory }?.deleteRecursively() }
+            val canDeleteWorkFiles = !currentIsBusy
+            onBusyChange(false)
+            if (canDeleteWorkFiles) audioHistory.cleanup(input)
         }
     }
 
@@ -225,7 +221,7 @@ internal fun AudioToolsTab(
             onBusyChange(true)
             runCatchingCancellable {
                 withContext(Dispatchers.Default) {
-                    val prepared = prepareAudioInput(file, File(outputPath, "音频工具/_preview"))
+                    val prepared = prepareAudioInput(file, File(audioPreviewWorkDir, "decode"))
                     val nextMeta = inspectDesktopWav(prepared.wavData)
                     Triple(prepared, nextMeta, nextMeta)
                 }
@@ -249,7 +245,7 @@ internal fun AudioToolsTab(
             var nextWav: PcmWavData? = null
             runCatchingCancellable {
                 withContext(Dispatchers.Default) {
-                    val output = block(source.wavFile, File(System.getProperty("java.io.tmpdir"), "CalabiYauVoice/audio_tool_preview/$action").also { it.mkdirs() })
+                    val output = block(source.wavFile, File(audioPreviewWorkDir, "operations/$action").also { it.mkdirs() })
                     val loadedWav = readPcmWav(output) ?: error("仅支持 PCM WAV")
                     nextWav = loadedWav
                     Pair(output, inspectDesktopWav(loadedWav))
@@ -435,7 +431,7 @@ internal fun AudioToolsTab(
     }
 }
 
-private fun prepareAudioInput(file: File, tempDir: File): AudioToolInput {
+private suspend fun prepareAudioInput(file: File, tempDir: File): AudioToolInput {
     require(file.isFile) { "音频文件不存在" }
     val ext = file.extension.lowercase()
     require(ext in setOf("wav", "mp3", "flac")) { "不支持的音频格式：${file.extension}" }
@@ -456,13 +452,28 @@ private fun prepareAudioInput(file: File, tempDir: File): AudioToolInput {
     return AudioToolInput(file, wav, true, wavData)
 }
 
-private fun runAudioDecodeWithTimeout(block: () -> Unit) {
-    val future = assetAudioDecodeExecutor.submit(Callable { block() })
+private suspend fun runAudioDecodeWithTimeout(block: () -> Unit) {
+    val executor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "asset-tools-audio-decode").apply { isDaemon = true }
+    }
     try {
-        future.get(AUDIO_DECODE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-    } catch (_: TimeoutException) {
-        future.cancel(true)
-        error("音频解码超时，请尝试先用音频转换工具转为 WAV")
+        withTimeout(AUDIO_DECODE_TIMEOUT_SECONDS * 1_000L) {
+            suspendCancellableCoroutine<Unit> { continuation ->
+                val future = executor.submit {
+                    try {
+                        block()
+                        if (continuation.isActive) continuation.resume(Unit)
+                    } catch (error: Throwable) {
+                        if (continuation.isActive) continuation.resumeWithException(error)
+                    }
+                }
+                continuation.invokeOnCancellation { future.cancel(true) }
+            }
+        }
+    } catch (error: kotlinx.coroutines.TimeoutCancellationException) {
+        throw IllegalStateException("音频解码超时，请尝试先用音频转换工具转为 WAV", error)
+    } finally {
+        executor.shutdownNow()
     }
 }
 

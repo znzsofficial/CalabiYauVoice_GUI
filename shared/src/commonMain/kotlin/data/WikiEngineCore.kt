@@ -222,13 +222,15 @@ object WikiEngineCore {
         onLog: (String) -> Unit,
         onProgress: (Int, Int, String) -> Unit,
         downloadFileFn: (String, File) -> Unit
-    ) = withContext(Dispatchers.IO) {
+    ): List<File> = withContext(Dispatchers.IO) {
         require(maxConcurrency > 0) { "maxConcurrency must be greater than 0" }
         val total = files.size
-        if (total == 0) return@withContext
+        if (total == 0) return@withContext emptyList()
         if (!saveDir.exists()) saveDir.mkdirs()
 
-        val usedNames = HashSet<String>()
+        val usedNames = saveDir.listFiles()
+            ?.mapTo(HashSet()) { it.name.lowercase() }
+            ?: HashSet()
         val downloads = files.map { (name, url) ->
             var safeName = sanitizeFileName(name)
             if (!safeName.contains('.')) {
@@ -245,26 +247,25 @@ object WikiEngineCore {
                 targetName = "$baseName ($suffix)$extension"
                 suffix++
             }
-            url to targetName
+            url to File(saveDir, targetName)
         }
 
         val semaphore = Semaphore(maxConcurrency)
         val counter = AtomicInteger(0)
         val failures = ConcurrentLinkedQueue<String>()
-        downloads.map { (url, safeName) ->
+        downloads.map { (url, targetFile) ->
             launch(Dispatchers.IO) {
                 semaphore.acquire()
                 try {
-                    val targetFile = File(saveDir, safeName)
                     downloadFileFn(url, targetFile)
                     val current = counter.incrementAndGet()
-                    onProgress(current, total, safeName)
+                    onProgress(current, total, targetFile.name)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     val message = e.message ?: e::class.simpleName.orEmpty()
-                    failures.add("$safeName: $message")
-                    onLog("[错误] $safeName: $message")
+                    failures.add("${targetFile.name}: $message")
+                    onLog("[错误] ${targetFile.name}: $message")
                 } finally {
                     semaphore.release()
                 }
@@ -273,6 +274,7 @@ object WikiEngineCore {
         if (failures.isNotEmpty()) {
             throw IOException("${failures.size} of $total downloads failed")
         }
+        downloads.map { it.second }
     }
 
     // ========== 内部工具函数 ==========

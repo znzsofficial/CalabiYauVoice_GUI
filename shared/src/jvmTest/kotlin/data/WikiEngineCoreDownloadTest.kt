@@ -32,7 +32,7 @@ class WikiEngineCoreDownloadTest {
         val saveDir = Files.createTempDirectory("wiki-download-test").toFile()
         val targetsByUrl = ConcurrentHashMap<String, String>()
         try {
-            WikiEngineCore.downloadSpecificFiles(
+            val downloadedFiles = WikiEngineCore.downloadSpecificFiles(
                 files = listOf(
                     "voice/a.wav" to "https://example.test/1.wav",
                     "voice:a.wav" to "https://example.test/2.wav",
@@ -48,6 +48,32 @@ class WikiEngineCoreDownloadTest {
             assertEquals("voice_a.wav", targetsByUrl["https://example.test/1.wav"])
             assertEquals("voice_a (2).wav", targetsByUrl["https://example.test/2.wav"])
             assertEquals("VOICE_A (3).WAV", targetsByUrl["https://example.test/3.wav"])
+            assertEquals(
+                listOf("voice_a.wav", "voice_a (2).wav", "VOICE_A (3).WAV"),
+                downloadedFiles.map(File::getName)
+            )
+        } finally {
+            saveDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun doesNotReusePreExistingTargetFiles() = runBlocking {
+        val saveDir = Files.createTempDirectory("wiki-download-existing-test").toFile()
+        val existing = File(saveDir, "voice.wav").apply { writeText("existing") }
+        try {
+            val downloadedFiles = WikiEngineCore.downloadSpecificFiles(
+                files = listOf("voice.wav" to "https://example.test/new.wav"),
+                saveDir = saveDir,
+                maxConcurrency = 1,
+                onLog = {},
+                onProgress = { _, _, _ -> },
+                downloadFileFn = { _, target -> target.writeText("new") }
+            )
+
+            assertEquals("existing", existing.readText())
+            assertEquals("voice (2).wav", downloadedFiles.single().name)
+            assertEquals("new", downloadedFiles.single().readText())
         } finally {
             saveDir.deleteRecursively()
         }

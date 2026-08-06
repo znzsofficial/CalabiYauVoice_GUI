@@ -61,7 +61,7 @@ private enum class ConverterHelpTopic(val title: String, val lines: List<String>
     Merge(
         "合并导出 WAV",
         listOf(
-            "会先把每个源文件转为 WAV，再按文件列表顺序合并。",
+            "会先把每个源文件转为 WAV，再按拖入顺序合并。",
             "合并时需要统一格式，所以不能使用“原位深”。",
             "每组文件上限为 0 时，表示全部合并为一个文件。"
         )
@@ -605,8 +605,9 @@ fun Mp3ConverterWindow(
                                             enableDitherOnDownsample = enableDitherOnDownsample
                                         )
 
-                                        batchConvertAudioToWav(
+                                        val convertedWavFiles = batchConvertAudioToWav(
                                             dir = tempDir,
+                                            sourceFiles = stagedFiles.map { it.stagedSourceFile },
                                             deleteOriginal = false,
                                             targetSampleRate = sampleRate,
                                             targetBitDepth = selectedBitDepthOption.target,
@@ -622,6 +623,7 @@ fun Mp3ConverterWindow(
                                         if (doMerge) {
                                             mergeWavFiles(
                                                 dir = tempDir,
+                                                sourceFiles = convertedWavFiles,
                                                 maxPerFile = mergeCount,
                                                 deleteOriginal = doDeleteWavAfterMerge,
                                                 onLog = { msg -> coroutineScope.launch(Dispatchers.Main) { logLines = logLines + msg } }
