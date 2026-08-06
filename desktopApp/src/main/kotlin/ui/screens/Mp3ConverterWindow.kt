@@ -605,16 +605,23 @@ fun Mp3ConverterWindow(
                                             enableDitherOnDownsample = enableDitherOnDownsample
                                         )
 
-                                        val convertedWavFiles = batchConvertAudioToWav(
-                                            dir = tempDir,
-                                            sourceFiles = stagedFiles.map { it.stagedSourceFile },
-                                            deleteOriginal = false,
-                                            targetSampleRate = sampleRate,
-                                            targetBitDepth = selectedBitDepthOption.target,
-                                            enableDitherOnDownsample = enableDitherOnDownsample,
-                                            onLog = { msg -> coroutineScope.launch(Dispatchers.Main) { logLines = logLines + msg } },
-                                            onProgress = { done, total, name -> coroutineScope.launch(Dispatchers.Main) { progressText = "$done / $total  $name" } }
-                                        )
+                                        val convertedWavFiles = try {
+                                            batchConvertAudioToWav(
+                                                dir = tempDir,
+                                                sourceFiles = stagedFiles.map { it.stagedSourceFile },
+                                                deleteOriginal = false,
+                                                targetSampleRate = sampleRate,
+                                                targetBitDepth = selectedBitDepthOption.target,
+                                                enableDitherOnDownsample = enableDitherOnDownsample,
+                                                onLog = { msg -> coroutineScope.launch(Dispatchers.Main) { logLines = logLines + msg } },
+                                                onProgress = { done, total, name -> coroutineScope.launch(Dispatchers.Main) { progressText = "$done / $total  $name" } }
+                                            )
+                                        } catch (e: BatchAudioConversionException) {
+                                            coroutineScope.launch(Dispatchers.Main) {
+                                                logLines = logLines + "[部分成功] ${e.convertedFiles.size} 个文件已转换，${e.failedCount} 个文件失败，继续导出成功结果。"
+                                            }
+                                            e.convertedFiles
+                                        }
 
                                         val convertedOriginalFiles = stagedFiles
                                             .filter { it.stagedWavFile.isFile }

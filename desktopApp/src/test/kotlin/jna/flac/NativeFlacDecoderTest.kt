@@ -48,6 +48,18 @@ class NativeFlacDecoderTest {
     }
 
     @Test
+    fun skipsLeadingId3Tag() {
+        val id3Header = byteArrayOf(
+            'I'.code.toByte(), 'D'.code.toByte(), '3'.code.toByte(), 4, 0, 0, 0, 0, 0, 0
+        )
+        val encoded = id3Header + Base64.getDecoder().decode(fixtures[0].encoded)
+
+        openNativeFlacPcmStream(ByteArrayInputStream(encoded)).use { pcm ->
+            assertContentEquals(expectedPcm(64 * 2), pcm.readAllBytes())
+        }
+    }
+
+    @Test
     fun truncatedFrameFailsWithIOException() {
         val encoded = Base64.getDecoder().decode(fixtures[1].encoded)
         val truncated = encoded.copyOf(encoded.size / 2)

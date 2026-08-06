@@ -6,6 +6,7 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
+import java.io.PushbackInputStream
 import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.Locale
@@ -22,10 +23,11 @@ private const val WRITE_CONTINUE = 0
 private const val WRITE_ABORT = 1
 
 internal fun openNativeFlacPcmStream(source: InputStream, outputBits: Int? = null): AudioInputStream {
+    val flacSource = skipLeadingId3Tags(source)
     val decoded = try {
-        NativeFlacPcmInputStream(source, outputBits)
+        NativeFlacPcmInputStream(flacSource, outputBits)
     } catch (error: Throwable) {
-        runCatching { source.close() }
+        runCatching { flacSource.close() }
         throw error
     }
     return try {
@@ -33,6 +35,37 @@ internal fun openNativeFlacPcmStream(source: InputStream, outputBits: Int? = nul
     } catch (error: Throwable) {
         decoded.close()
         throw error
+    }
+}
+
+private fun skipLeadingId3Tags(source: InputStream): InputStream {
+    val input = PushbackInputStream(source.buffered(), 10)
+    while (true) {
+        val header = input.readNBytes(10)
+        if (header.size < 10 || header[0] != 'I'.code.toByte() || header[1] != 'D'.code.toByte() || header[2] != '3'.code.toByte()) {
+            input.unread(header)
+            return input
+        }
+        val tagSize = (header[6].toInt() and 0x7f shl 21) or
+            (header[7].toInt() and 0x7f shl 14) or
+            (header[8].toInt() and 0x7f shl 7) or
+            (header[9].toInt() and 0x7f)
+        val footerSize = if ((header[5].toInt() and 0x10) != 0) 10 else 0
+        input.skipFully(tagSize.toLong() + footerSize)
+    }
+}
+
+private fun InputStream.skipFully(bytes: Long) {
+    var remaining = bytes
+    while (remaining > 0) {
+        val skipped = skip(remaining)
+        if (skipped > 0) {
+            remaining -= skipped
+        } else if (read() < 0) {
+            throw IOException("FLAC metadata tag is truncated")
+        } else {
+            remaining--
+        }
     }
 }
 
@@ -148,7 +181,7 @@ private class NativeFlacPcmInputStream(
                 throw IOException("libFLAC metadata decode failed: ${native.FLAC__stream_decoder_get_resolved_state_string(decoder)}")
             }
             callbackFailure?.let { throw it }
-            decoderError?.let { throw IOException("libFLAC rejected the metadata (error status $it)") }
+            decoderError?.takeIf { it != 0 }?.let { throw IOException("libFLAC rejected the metadata (error status $it)") }
             expectedSamples = native.FLAC__stream_decoder_get_total_samples(decoder)
             processNextFrame()
             if (sourceBits !in 4..32 || channels !in 1..8 || sampleRate <= 0) {
@@ -219,7 +252,7 @@ private class NativeFlacPcmInputStream(
         }
         callbackFailure?.let { throw it }
         checkInterrupted()
-        decoderError?.let { throw IOException("libFLAC rejected the stream (error status $it)") }
+        decoderError?.takeIf { it != 0 }?.let { throw IOException("libFLAC rejected the stream (error status $it)") }
         when (native.FLAC__stream_decoder_get_state(decoder)) {
             STATE_END_OF_STREAM -> finishAtEnd()
             STATE_ABORTED -> throw IOException("libFLAC decoding was aborted")

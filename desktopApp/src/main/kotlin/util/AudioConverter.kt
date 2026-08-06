@@ -57,6 +57,12 @@ private const val AUDIO_RATE_TOLERANCE = 0.5f
 private const val RIFF_MAX_CHUNK_SIZE = 0xFFFF_FFFFL
 private const val WAVE_HEADER_BYTES_BEFORE_DATA = 36L
 
+class BatchAudioConversionException(
+    val convertedFiles: List<File>,
+    val failedCount: Int,
+    totalCount: Int
+) : IOException("$failedCount of $totalCount audio conversions failed")
+
 fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" else "${rate.toInt()} Hz"
 fun bitDepthLabel(target: BitDepthTarget): String = target.label
 fun bitDepthOptionAt(index: Int): BitDepthOption =
@@ -206,7 +212,7 @@ suspend fun batchConvertAudioToWav(
     onProgress(filesToConvert.size, filesToConvert.size, "")
     onLog("转换完成：成功 $successCount 个，失败 $failCount 个。")
     if (failCount > 0) {
-        throw IOException("$failCount of ${filesToConvert.size} audio conversions failed")
+        throw BatchAudioConversionException(convertedFiles.toList(), failCount, filesToConvert.size)
     }
     convertedFiles
 }
