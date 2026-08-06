@@ -181,7 +181,8 @@ object AudioPlayerManager {
             } else {
                 providerStream
             }
-            val decodedStream = if (pcmStream.format.channels > 2) pcmStream.downmixToStereo() else pcmStream
+            val channelNormalizedStream = if (pcmStream.format.channels > 2) pcmStream.downmixToStereo() else pcmStream
+            val decodedStream = selectPlaybackStream(channelNormalizedStream)
             if (!session.registerDecodedStream(decodedStream)) {
                 decodedStream.close()
                 return
@@ -249,6 +250,42 @@ object AudioPlayerManager {
         val session = activeSession
         return session?.url == url && session.loading.get()
     }
+}
+
+private fun selectPlaybackStream(source: AudioInputStream): AudioInputStream {
+    val sourceFormat = source.format
+    val rates = buildList {
+        add(sourceFormat.sampleRate)
+        add(48_000f)
+        add(44_100f)
+        add(22_050f)
+    }.filter { it.isFinite() && it > 0f }.distinct()
+
+    var lastConversionError: Exception? = null
+    for (rate in rates) {
+        val target = AudioFormat(
+            AudioFormat.Encoding.PCM_SIGNED,
+            rate,
+            16,
+            sourceFormat.channels,
+            sourceFormat.channels * 2,
+            rate,
+            false
+        )
+        val lineInfo = DataLine.Info(SourceDataLine::class.java, target)
+        if (!AudioSystem.isLineSupported(lineInfo)) continue
+        if (sourceFormat.matches(target)) return source
+        try {
+            return AudioSystem.getAudioInputStream(target, source)
+        } catch (error: Exception) {
+            lastConversionError = error
+        }
+    }
+
+    throw IllegalArgumentException(
+        "No compatible audio output format for ${sourceFormat.sampleRate} Hz, ${sourceFormat.channels} channels",
+        lastConversionError
+    )
 }
 
 private fun AudioFormat.matches(other: AudioFormat): Boolean =

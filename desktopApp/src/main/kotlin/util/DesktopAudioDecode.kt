@@ -1,6 +1,7 @@
 package util
 
 import jna.flac.openNativeFlacPcmStream
+import javazoom.spi.mpeg.sampled.file.MpegAudioFileReader
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
@@ -35,6 +36,9 @@ internal fun decodeDesktopAudioToPcmWav(source: File, target: File) {
     try {
         writeDecodedDesktopPcmTransactional(source, pcmFormat, target)
     } catch (firstError: Throwable) {
+        if (firstError is InterruptedIOException || Thread.currentThread().isInterrupted) {
+            throw firstError
+        }
         val fallback = AudioFormat(
             AudioFormat.Encoding.PCM_SIGNED,
             sampleRate,
@@ -56,6 +60,8 @@ internal fun decodeDesktopAudioToPcmWav(source: File, target: File) {
 internal fun openDesktopAudioInputStream(source: File) =
     if (source.extension.equals("flac", ignoreCase = true)) {
         openNativeFlacPcmStream(source.inputStream().buffered())
+    } else if (source.extension.equals("mp3", ignoreCase = true)) {
+        MpegAudioFileReader().getAudioInputStream(source)
     } else {
         AudioSystem.getAudioInputStream(source)
     }

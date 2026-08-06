@@ -326,6 +326,9 @@ fun convertAudioToWav(
             }
             if (Thread.currentThread().isInterrupted) throw InterruptedIOException("Audio conversion was interrupted")
             replaceFile(tempFile, wavFile)
+        } catch (e: InterruptedIOException) {
+            cleanupFileQuietly(tempFile)
+            throw e
         } catch (e: Exception) {
             cleanupFileQuietly(tempFile)
             throw e

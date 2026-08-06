@@ -2,7 +2,10 @@ package util
 
 import java.io.BufferedInputStream
 import java.io.ByteArrayInputStream
+import java.nio.file.Files
+import javax.sound.sampled.UnsupportedAudioFileException
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -27,6 +30,18 @@ class DesktopStreamingAudioTest {
     fun rejectsAacAdtsSignature() {
         BufferedInputStream(ByteArrayInputStream(byteArrayOf(0xff.toByte(), 0xf1.toByte(), 0x50.toByte()))).use {
             assertFalse(it.hasMp3Signature())
+        }
+    }
+
+    @Test
+    fun localMp3FilesUseMpegReaderInsteadOfServiceLoaderGuessing() {
+        val file = Files.createTempFile("audio-route", ".mp3").toFile()
+        try {
+            assertFailsWith<UnsupportedAudioFileException> {
+                openDesktopAudioInputStream(file)
+            }
+        } finally {
+            file.delete()
         }
     }
 }
