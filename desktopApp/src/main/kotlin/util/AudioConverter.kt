@@ -1,12 +1,14 @@
 package util
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
+import java.io.InterruptedIOException
 import java.io.SequenceInputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -48,10 +50,12 @@ val BIT_DEPTH_OPTION_LABELS: List<String> = BIT_DEPTH_OPTIONS.map(BitDepthOption
 /** 默认位深索引（原位深） */
 const val DEFAULT_BIT_DEPTH_INDEX = 0
 
-val SUPPORTED_AUDIO_SOURCE_EXTENSIONS: Set<String> = setOf("mp3", "flac")
-private const val SUPPORTED_AUDIO_SOURCE_LABEL = "MP3/FLAC"
+val SUPPORTED_AUDIO_SOURCE_EXTENSIONS: Set<String> = setOf("mp3", "flac", "ogg", "aac", "m4a")
+private const val SUPPORTED_AUDIO_SOURCE_LABEL = "MP3/FLAC/OGG/AAC/M4A"
 private const val GENERATED_MERGED_TAG = "_merged"
 private const val AUDIO_RATE_TOLERANCE = 0.5f
+private const val RIFF_MAX_CHUNK_SIZE = 0xFFFF_FFFFL
+private const val WAVE_HEADER_BYTES_BEFORE_DATA = 36L
 
 fun sampleRateLabel(rate: Float?): String = if (rate == null) "原采样率" else "${rate.toInt()} Hz"
 fun bitDepthLabel(target: BitDepthTarget): String = target.label
@@ -108,7 +112,7 @@ private fun resolveOutputAudioParams(
     targetBitDepth: BitDepthTarget,
     enableDitherOnDownsample: Boolean
 ): OutputAudioParams {
-    AudioSystem.getAudioInputStream(source).use { sourceStream ->
+    openDesktopAudioInputStream(source).use { sourceStream ->
         val baseFormat = sourceStream.format
         val naturalBits = baseFormat.sampleSizeInBits.takeIf { it > 0 } ?: 16
         val naturalRate = baseFormat.sampleRate.takeIf { it.isFinite() && it > 0f } ?: 44100f
@@ -137,7 +141,7 @@ private fun BitDepthTarget.toLegacyBitDepth(): Int? = when (this) {
 fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.lowercase() in SUPPORTED_AUDIO_SOURCE_EXTENSIONS
 
 /**
- * 使用 Java Sound SPI 将目录下所有 MP3/FLAC 文件批量转换为 WAV。
+ * 使用 libFLAC 或 Java Sound SPI 将目录下所有受支持的压缩音频文件批量转换为 WAV。
  *
  * @param dir              需要扫描的根目录（递归子目录）
  * @param deleteOriginal   转换成功后是否删除原始音频，默认 true
@@ -148,62 +152,69 @@ fun isSupportedAudioSource(file: File): Boolean = file.isFile && file.extension.
  */
 suspend fun batchConvertAudioToWav(
     dir: File,
+    sourceFiles: List<File>? = null,
     deleteOriginal: Boolean = true,
     targetSampleRate: Float? = null,
     targetBitDepth: BitDepthTarget = BitDepthTarget.ORIGINAL,
     enableDitherOnDownsample: Boolean = false,
     onLog: (String) -> Unit = {},
     onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
-) = withContext(Dispatchers.IO) {
+): List<File> = withContext(Dispatchers.IO) {
     validateTargetFormat(targetSampleRate)
 
-    val sourceFiles = dir.walkTopDown()
+    val filesToConvert = (sourceFiles ?: dir.walkTopDown().toList())
         .filter(::isSupportedAudioSource)
-        .toList()
+        .distinctBy { it.absoluteFile.normalize().path.lowercase() }
 
-    if (sourceFiles.isEmpty()) {
+    if (filesToConvert.isEmpty()) {
         onLog("未找到需要转换的 $SUPPORTED_AUDIO_SOURCE_LABEL 文件。")
-        return@withContext
+        return@withContext emptyList()
     }
 
     val rateDesc = sampleRateLabel(targetSampleRate)
     val depthDesc = bitDepthLabel(targetBitDepth)
     val ditherDesc = if (enableDitherOnDownsample) " / 降位深音质保护" else ""
-    onLog("找到 ${sourceFiles.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc$ditherDesc)…")
+    onLog("找到 ${filesToConvert.size} 个 $SUPPORTED_AUDIO_SOURCE_LABEL 文件，开始批量转换为 WAV ($rateDesc / $depthDesc$ditherDesc)…")
     var successCount = 0
     var failCount = 0
+    val convertedFiles = mutableListOf<File>()
 
-    sourceFiles.forEachIndexed { index, sourceFile ->
-        if (!isActive) return@withContext
+    filesToConvert.forEachIndexed { index, sourceFile ->
+        ensureActive()
 
-        val wavFile = File(
-            sourceFile.parentFile ?: dir,
-            convertedWavFileName(sourceFile, targetSampleRate, targetBitDepth, enableDitherOnDownsample)
-        )
-        onProgress(index, sourceFiles.size, sourceFile.name)
+        onProgress(index, filesToConvert.size, sourceFile.name)
 
         try {
+            val wavFile = File(
+                sourceFile.parentFile ?: dir,
+                convertedWavFileName(sourceFile, targetSampleRate, targetBitDepth, enableDitherOnDownsample)
+            ).let(::uniqueSiblingFile)
             convertAudioToWav(sourceFile, wavFile, targetSampleRate, targetBitDepth, enableDitherOnDownsample)
+            convertedFiles += wavFile
             successCount++
             if (deleteOriginal && !sourceFile.delete()) {
                 onLog("[删除失败] ${sourceFile.name}")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failCount++
             onLog("[转换失败] ${sourceFile.name}: ${e.message}")
-            cleanupFileQuietly(wavFile)
-            cleanupFileQuietly(tempSiblingOf(wavFile))
         }
     }
 
-    onProgress(sourceFiles.size, sourceFiles.size, "")
+    onProgress(filesToConvert.size, filesToConvert.size, "")
     onLog("转换完成：成功 $successCount 个，失败 $failCount 个。")
+    if (failCount > 0) {
+        throw IOException("$failCount of ${filesToConvert.size} audio conversions failed")
+    }
+    convertedFiles
 }
 
 
 /**
- * 将单个 MP3/FLAC 文件转换为 WAV 文件。
- * 使用 Java Sound SPI 提供的解码器（通过 SPI 自动注册）。
+ * 将单个受支持的压缩音频文件转换为 WAV 文件。
+ * FLAC 使用 libFLAC；其他压缩格式使用通过 SPI 注册的 Java Sound 解码器。
  *
  * @param targetSampleRate 目标采样率；null = 保留原始
  * @param targetBitDepth   目标位深，默认保留原位深；FLOAT_32 表示 32-bit float
@@ -221,8 +232,8 @@ fun convertAudioToWav(
     validateTargetFormat(targetSampleRate)
     wavFile.parentFile?.mkdirs()
 
-    // 1. 打开音频输入流（mp3spi/JustFLAC SPI 自动接管）
-    AudioSystem.getAudioInputStream(sourceFile).use { sourceStream ->
+    // 1. FLAC 由 libFLAC 解码，其他压缩格式由 Java Sound SPI 接管。
+    openDesktopAudioInputStream(sourceFile).use { sourceStream ->
         val baseFormat = sourceStream.format
 
         // mp3spi 对压缩格式报告的 sampleSizeInBits 为 NOT_SPECIFIED (-1)，
@@ -245,6 +256,10 @@ fun convertAudioToWav(
         // 第一步：将压缩流解码为 PCM_SIGNED LE（固定用源采样率）。
         // mp3spi 只支持 PCM_SIGNED 16-bit 输出，不在此步骤指定目标格式，
         // 避免 SPI 因不支持的格式抛出异常。
+        val providerFmt = AudioFormat(
+            AudioFormat.Encoding.PCM_SIGNED, naturalRate, naturalBits,
+            channels, channels * (naturalBits / 8), naturalRate, baseFormat.isBigEndian
+        )
         val naturalFmt = AudioFormat(
             AudioFormat.Encoding.PCM_SIGNED, naturalRate, naturalBits,
             channels, channels * (naturalBits / 8), naturalRate, false
@@ -253,7 +268,18 @@ fun convertAudioToWav(
         val tempFile = tempSiblingOf(wavFile)
         cleanupFileQuietly(tempFile)
         try {
-            AudioSystem.getAudioInputStream(naturalFmt, sourceStream).use { pcm ->
+            val providerPcm = if (sourceStream.format.matches(providerFmt)) {
+                sourceStream
+            } else {
+                AudioSystem.getAudioInputStream(providerFmt, sourceStream)
+            }
+            providerPcm.use {
+                val pcm = if (providerFmt.isBigEndian && naturalBits > 8) {
+                    AudioSystem.getAudioInputStream(naturalFmt, providerPcm)
+                } else {
+                    providerPcm
+                }
+                pcm.use {
                 val sameRate  = approximatelyEquals(outRate, naturalRate)
                 // 降位深：源高于目标且目标不是浮点 → 用算术右移缩放，避免溢出
                 // Manual bit depth conversion logic (handle both up/down scaling)
@@ -276,11 +302,11 @@ fun convertAudioToWav(
                                 AudioFormat.Encoding.PCM_SIGNED, outRate, naturalBits,
                                 channels, channels * (naturalBits / 8), outRate, false
                             )
-                            AudioSystem.getAudioInputStream(rsFmt, pcm).use { resampled ->
+                            AudioSystem.getAudioInputStream(rsFmt, it).use { resampled ->
                                 writeBitDepthConvertedWav(resampled, naturalBits, outBits, useDither, targetFmt, tempFile)
                             }
                         } else {
-                            writeBitDepthConvertedWav(pcm, naturalBits, outBits, useDither, targetFmt, tempFile)
+                            writeBitDepthConvertedWav(it, naturalBits, outBits, useDither, targetFmt, tempFile)
                         }
                     }
 
@@ -291,12 +317,14 @@ fun convertAudioToWav(
                             enc, outRate, outBits,
                             channels, channels * (outBits / 8), outRate, false
                         )
-                        AudioSystem.getAudioInputStream(tgtFmt, pcm).use { conv ->
+                        AudioSystem.getAudioInputStream(tgtFmt, it).use { conv ->
                             AudioSystem.write(conv, AudioFileFormat.Type.WAVE, tempFile)
                         }
                     }
                 }
             }
+            }
+            if (Thread.currentThread().isInterrupted) throw InterruptedIOException("Audio conversion was interrupted")
             replaceFile(tempFile, wavFile)
         } catch (e: Exception) {
             cleanupFileQuietly(tempFile)
@@ -317,17 +345,24 @@ fun convertAudioToWav(
  */
 suspend fun mergeWavFiles(
     dir: File,
+    sourceFiles: List<File>? = null,
     maxPerFile: Int = 0,
     deleteOriginal: Boolean = false,
     onLog: (String) -> Unit = {},
     onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
-) = withContext(Dispatchers.IO) {
-    val allWavFiles = dir.walkTopDown()
-        .filter { it.isFile && it.extension.lowercase() == "wav" }
-        .sortedBy { it.name.lowercase() }
-        .toList()
+): List<File> = withContext(Dispatchers.IO) {
+    val allWavFiles = if (sourceFiles == null) {
+        dir.walkTopDown()
+            .filter { it.isFile && it.extension.lowercase() == "wav" }
+            .sortedBy { it.name.lowercase() }
+            .toList()
+    } else {
+        sourceFiles
+            .filter { it.isFile && it.extension.lowercase() == "wav" }
+            .distinctBy { it.absoluteFile.normalize().path.lowercase() }
+    }
 
-    val wavFiles = allWavFiles.filterNot(::isGeneratedMergedWav)
+    val wavFiles = allWavFiles.filterNot { isGeneratedMergedWav(it, dir) }
     val skippedMergedCount = allWavFiles.size - wavFiles.size
     if (skippedMergedCount > 0) {
         onLog("已跳过 $skippedMergedCount 个已生成的合并 WAV 文件。")
@@ -335,37 +370,54 @@ suspend fun mergeWavFiles(
 
     if (wavFiles.isEmpty()) {
         onLog("未找到需要合并的 WAV 文件。")
-        return@withContext
+        return@withContext emptyList()
     }
 
     val chunkSize = if (maxPerFile > 0) maxPerFile else wavFiles.size
     val chunks = wavFiles.chunked(chunkSize)
     onLog("共 ${wavFiles.size} 个 WAV，将合并为 ${chunks.size} 个文件（每组最多 $chunkSize 个）…")
+    val mergedFiles = mutableListOf<File>()
+    var failCount = 0
+    val outputFiles = reserveMergeOutputFiles(dir, chunks.size)
 
-    chunks.forEachIndexed { idx, chunk ->
-        if (!isActive) return@withContext
+    try {
+        chunks.forEachIndexed { idx, chunk ->
+            ensureActive()
 
-        val suffix = if (chunks.size > 1) "${GENERATED_MERGED_TAG}_${idx + 1}" else GENERATED_MERGED_TAG
-        val outFile = File(dir, "${dir.name}$suffix.wav")
-        onProgress(idx, chunks.size, outFile.name)
+            val outFile = outputFiles[idx]
+            onProgress(idx, chunks.size, outFile.name)
 
-        try {
-            mergeWavChunk(chunk, outFile)
-            onLog("已合并 → ${outFile.name}（${chunk.size} 个文件）")
-            if (deleteOriginal) {
-                chunk.forEach { wav ->
-                    if (!wav.delete()) onLog("[删除失败] ${wav.name}")
-                }
+            try {
+                mergeWavChunk(chunk, outFile)
+                mergedFiles += outFile
+                onLog("已合并 → ${outFile.name}（${chunk.size} 个文件）")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failCount++
+                onLog("[合并失败] ${outFile.name}: ${e.message}")
+                cleanupFileQuietly(tempSiblingOf(outFile))
             }
-        } catch (e: Exception) {
-            onLog("[合并失败] ${outFile.name}: ${e.message}")
-            cleanupFileQuietly(outFile)
-            cleanupFileQuietly(tempSiblingOf(outFile))
         }
+    } catch (e: CancellationException) {
+        mergedFiles.forEach(::cleanupFileQuietly)
+        outputFiles.forEach { cleanupFileQuietly(tempSiblingOf(it)) }
+        throw e
     }
 
     onProgress(chunks.size, chunks.size, "")
-    onLog("合并完成。")
+    if (failCount > 0) {
+        mergedFiles.forEach(::cleanupFileQuietly)
+        onLog("合并完成：成功 ${mergedFiles.size} 个，失败 $failCount 个。")
+        throw IOException("$failCount of ${chunks.size} WAV merges failed")
+    }
+    if (deleteOriginal) {
+        wavFiles.forEach { wav ->
+            if (!wav.delete()) onLog("[删除失败] ${wav.name}")
+        }
+    }
+    onLog("合并完成：成功 ${mergedFiles.size} 个。")
+    mergedFiles
 }
 
 /**
@@ -395,12 +447,18 @@ private fun mergeWavChunk(files: List<File>, outFile: File) {
             }
         }
 
-        val totalFrames = streams.fold(0L) { acc, stream ->
-            if (acc == AudioSystem.NOT_SPECIFIED.toLong() || stream.frameLength == AudioSystem.NOT_SPECIFIED.toLong()) {
-                AudioSystem.NOT_SPECIFIED.toLong()
-            } else {
-                acc + stream.frameLength
+        require(format.frameSize > 0) { "WAV 帧大小无效：${format.frameSize}" }
+        val maxDataBytes = RIFF_MAX_CHUNK_SIZE - WAVE_HEADER_BYTES_BEFORE_DATA
+        val maxFrames = maxDataBytes / format.frameSize
+        val totalFrames = files.zip(streams).fold(0L) { acc, (file, stream) ->
+            val frames = stream.frameLength
+            require(frames != AudioSystem.NOT_SPECIFIED.toLong()) {
+                "无法确定 ${file.name} 的长度，不能安全写入 RIFF/WAV"
             }
+            require(frames <= maxFrames - acc) {
+                "合并结果超过 RIFF/WAV 4 GiB 上限"
+            }
+            acc + frames
         }
 
         val combinedInput = SequenceInputStream(Collections.enumeration(streams))
@@ -412,6 +470,7 @@ private fun mergeWavChunk(files: List<File>, outFile: File) {
             combined.use {
                 AudioSystem.write(it, AudioFileFormat.Type.WAVE, tempFile)
             }
+            if (Thread.currentThread().isInterrupted) throw InterruptedIOException("Audio merge was interrupted")
             replaceFile(tempFile, outFile)
         } catch (e: Exception) {
             cleanupFileQuietly(tempFile)
@@ -466,9 +525,24 @@ private fun approximatelyEquals(a: Float, b: Float): Boolean {
     return abs(a - b) < AUDIO_RATE_TOLERANCE
 }
 
-private fun isGeneratedMergedWav(file: File): Boolean {
-    val lowerName = file.name.lowercase()
-    return lowerName.endsWith(".wav") && lowerName.contains(GENERATED_MERGED_TAG)
+private fun isGeneratedMergedWav(file: File, mergeDir: File): Boolean {
+    if (file.parentFile?.absoluteFile?.normalize() != mergeDir.absoluteFile.normalize()) return false
+    val expectedPrefix = Regex.escape("${mergeDir.name}$GENERATED_MERGED_TAG")
+    return Regex("^$expectedPrefix(?:_[1-9]\\d*)?(?: \\((?:[2-9]|[1-9]\\d+)\\))?\\.wav$", RegexOption.IGNORE_CASE)
+        .matches(file.name)
+}
+
+private fun reserveMergeOutputFiles(dir: File, count: Int): List<File> {
+    var collisionIndex = 1
+    while (true) {
+        val collisionSuffix = if (collisionIndex == 1) "" else " ($collisionIndex)"
+        val candidates = List(count) { index ->
+            val chunkSuffix = if (count == 1) "" else "_${index + 1}"
+            File(dir, "${dir.name}$GENERATED_MERGED_TAG$chunkSuffix$collisionSuffix.wav")
+        }
+        if (candidates.none(File::exists)) return candidates
+        collisionIndex++
+    }
 }
 
 private fun sampleRateFileSuffix(sampleRate: Float): String {
@@ -481,6 +555,16 @@ private fun bitDepthFileSuffix(bits: Int, float: Boolean): String =
 
 private fun tempSiblingOf(file: File): File =
     File(file.parentFile ?: File("."), ".${file.name}.tmp")
+
+private fun uniqueSiblingFile(file: File): File {
+    if (!file.exists()) return file
+    var index = 2
+    while (true) {
+        val candidate = File(file.parentFile ?: File("."), "${file.nameWithoutExtension} ($index).${file.extension}")
+        if (!candidate.exists()) return candidate
+        index++
+    }
+}
 
 private fun cleanupFileQuietly(file: File) {
     if (file.exists()) runCatching { Files.deleteIfExists(file.toPath()) }

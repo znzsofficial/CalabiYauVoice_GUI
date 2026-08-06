@@ -773,7 +773,7 @@ fun NewDownloaderContent() {
                                                             AudioPlayerManager.stop()
                                                             fileSearchPlayingUrl = null
                                                         } else {
-                                                            AudioPlayerManager.play(u)
+                                                            AudioPlayerManager.play(u, name)
                                                             fileSearchPlayingUrl = u
                                                         }
                                                     },

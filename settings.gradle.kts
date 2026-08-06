@@ -41,7 +41,6 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://packages.jetbrains.team/maven/p/kpm/public/")
         maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
-        maven("https://jitpack.io")
     }
 }
 

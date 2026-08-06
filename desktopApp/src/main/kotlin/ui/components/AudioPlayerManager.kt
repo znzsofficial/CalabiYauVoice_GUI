@@ -1,5 +1,8 @@
 package ui.components
 
+import jna.flac.openNativeFlacPcmStream
+import java.io.BufferedInputStream
+import java.io.Closeable
 import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.sound.sampled.AudioFormat
@@ -22,11 +25,11 @@ object AudioPlayerManager {
         @Volatile var thread: Thread? = null
 
         private val resourceLock = Any()
-        private var inputStream: AudioInputStream? = null
+        private var inputStream: Closeable? = null
         private var decodedStream: AudioInputStream? = null
         private var line: SourceDataLine? = null
 
-        fun registerInputStream(stream: AudioInputStream): Boolean = synchronized(resourceLock) {
+        fun registerInputStream(stream: Closeable): Boolean = synchronized(resourceLock) {
             if (stopRequested.get()) false else true.also { inputStream = stream }
         }
 
@@ -90,13 +93,13 @@ object AudioPlayerManager {
     private fun notifyLoading(url: String, loading: Boolean) =
         synchronized(loadingListeners) { loadingListeners.toList() }.forEach { it(url, loading) }
 
-    fun play(url: String) {
+    fun play(url: String, fileName: String? = null) {
         synchronized(controlLock) {
             val current = activeSession
             if (current?.url == url && current.thread?.isAlive == true && !current.stopRequested.get()) return
 
             val session = PlaybackSession(url)
-            val thread = Thread { playSession(session) }.apply { isDaemon = true }
+            val thread = Thread { playSession(session, fileName) }.apply { isDaemon = true }
             session.thread = thread
             activeSession = session
 
@@ -119,22 +122,51 @@ object AudioPlayerManager {
         }
     }
 
-    private fun playSession(session: PlaybackSession) {
+    private fun playSession(session: PlaybackSession, fileName: String?) {
         try {
-            val inputStream = AudioSystem.getAudioInputStream(URI(session.url).toURL())
-            if (!session.registerInputStream(inputStream)) {
-                inputStream.close()
-                return
+            val url = URI(session.url).toURL()
+            val isFlac = (fileName ?: url.path.substringAfterLast('/')).substringBefore('?')
+                .substringAfterLast('.', "")
+                .equals("flac", ignoreCase = true)
+            val inputStream = if (isFlac) {
+                val source = BufferedInputStream(url.openStream())
+                if (!session.registerInputStream(source)) {
+                    source.close()
+                    return
+                }
+                openNativeFlacPcmStream(source, outputBits = 16)
+            } else {
+                AudioSystem.getAudioInputStream(url).also {
+                    if (!session.registerInputStream(it)) {
+                        it.close()
+                        return
+                    }
+                }
             }
 
             val baseFormat = inputStream.format
+            val providerFormat = AudioFormat(
+                AudioFormat.Encoding.PCM_SIGNED,
+                baseFormat.sampleRate, 16,
+                baseFormat.channels, baseFormat.channels * 2,
+                baseFormat.sampleRate, baseFormat.isBigEndian
+            )
+            val providerStream = if (inputStream.format.matches(providerFormat)) {
+                inputStream
+            } else {
+                AudioSystem.getAudioInputStream(providerFormat, inputStream)
+            }
             val decodedFormat = AudioFormat(
                 AudioFormat.Encoding.PCM_SIGNED,
                 baseFormat.sampleRate, 16,
                 baseFormat.channels, baseFormat.channels * 2,
                 baseFormat.sampleRate, false
             )
-            val decodedStream = AudioSystem.getAudioInputStream(decodedFormat, inputStream)
+            val decodedStream = if (providerFormat.isBigEndian) {
+                AudioSystem.getAudioInputStream(decodedFormat, providerStream)
+            } else {
+                providerStream
+            }
             if (!session.registerDecodedStream(decodedStream)) {
                 decodedStream.close()
                 return
@@ -195,3 +227,12 @@ object AudioPlayerManager {
         return session?.url == url && session.loading.get()
     }
 }
+
+private fun AudioFormat.matches(other: AudioFormat): Boolean =
+    encoding == other.encoding &&
+        sampleRate == other.sampleRate &&
+        sampleSizeInBits == other.sampleSizeInBits &&
+        channels == other.channels &&
+        frameSize == other.frameSize &&
+        frameRate == other.frameRate &&
+        isBigEndian == other.isBigEndian

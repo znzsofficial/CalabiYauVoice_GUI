@@ -32,7 +32,8 @@ androidx-graphics-path = "1.1.0"
 androidx-palette = "1.0.0"
 androidx-core-splashscreen = "1.2.0"
 androidx-webkit = "1.16.0"
-justflac = "master-SNAPSHOT"
+javasound-aac = "0.9.8"
+javasound-vorbis = "2.1.0"
 kyant-backdrop = "2.0.0"
 kyant-capsule = "2.1.3"
 mp3spi = "1.9.5.4"
@@ -88,7 +89,8 @@ jna-jpms = { module = "net.java.dev.jna:jna-jpms", version.ref = "jna" }
 jna-platform-jpms = { module = "net.java.dev.jna:jna-platform-jpms", version.ref = "jna" }
 flatlaf = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
 mp3spi = { module = "com.googlecode.soundlibs:mp3spi", version.ref = "mp3spi" }
-justflac = { module = "com.github.drogatkin:JustFLAC", version.ref = "justflac" }
+javasound-aac = { module = "com.tianscar.javasound:javasound-aac", version.ref = "javasound-aac" }
+javasound-vorbis = { module = "com.tianscar.javasound:javasound-vorbis", version.ref = "javasound-vorbis" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

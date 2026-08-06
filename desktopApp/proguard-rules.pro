@@ -77,6 +77,8 @@
     <methods>;
 }
 -keep class jna.windows.structure.** { <fields>; }
+-keep interface jna.flac.** { *; }
+-keep class jna.flac.** { *; }
 -keepclasseswithmembers class * { native <methods>; }
 
 # ---------- ComposeWebView (Uniffi/JNA 绑定) ----------
@@ -92,7 +94,6 @@
 -keepnames class javazoom.spi.** {}
 -keepnames class javazoom.jl.decoder.** {}
 -keepnames class org.tritonus.** {}
--keepnames class org.kc7bfi.jflac.** {}
 
 # ---------- App 数据模型 ----------
 -keepclassmembers class data.** { <fields>; }

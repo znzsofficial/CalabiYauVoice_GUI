@@ -24,9 +24,15 @@ dependencies {
     implementation(libs.flatlaf)
     implementation(libs.okhttp.urlconnection)
     implementation(libs.mp3spi)
-    implementation(libs.justflac)
+    implementation(libs.javasound.aac)
+    implementation(libs.javasound.vorbis)
     implementation(libs.kotlinx.coroutinesSwing)
-    implementation(libs.composewebview)
+    implementation(libs.composewebview) {
+        exclude(group = "net.java.dev.jna", module = "jna")
+    }
+
+    testImplementation(libs.kotlin.testJunit)
+    testImplementation(libs.junit)
 
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.uiToolingPreview)
@@ -48,6 +54,7 @@ compose.desktop {
             copyright = "Apache License, Version 2.0"
             vendor = "NekoLaska"
             licenseFile.set(rootProject.file("LICENSE.txt"))
+            appResourcesRootDir.set(project.layout.projectDirectory.dir("appResources"))
 
             windows {
                 iconFile.set(project.file("icon.ico"))

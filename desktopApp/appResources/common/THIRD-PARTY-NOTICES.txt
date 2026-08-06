@@ -1,0 +1,91 @@
+CalabiYauVoice_GUI Third-Party Notices
+======================================
+
+This distribution includes the unmodified third-party components listed
+below. License texts are provided next to this file.
+
+libFLAC 1.5.0
+-------------
+
+This application distributes the official Win64 libFLAC.dll from FLAC 1.5.0.
+
+Release: https://github.com/xiph/flac/releases/tag/1.5.0
+Archive: https://github.com/xiph/flac/releases/download/1.5.0/flac-1.5.0-win.zip
+Archive SHA-256: 53f1500f0d6e7c61379d7fee50d4a9f7f504c650009506d9ba015530d76c0dde
+Distributed binary: Win64/libFLAC.dll
+Binary SHA-256: f93499172875fc2c0df80b57086f32e3f39e835283952ee2a59a3d4ffb097644
+License: Xiph.Org BSD-style license (see THIRD-PARTY-XIPH-BSD-LICENSE.txt)
+
+javasound-vorbis 2.1.0
+----------------------
+
+Java port of the Ogg Vorbis codec distributed as part of this application.
+
+Project: https://github.com/Tianscar/javasound-vorbis
+Binary coordinates: com.tianscar.javasound:javasound-vorbis:2.1.0
+Corresponding source:
+https://repo1.maven.org/maven2/com/tianscar/javasound/javasound-vorbis/2.1.0/javasound-vorbis-2.1.0-sources.jar
+Source SHA-256: bd7f991af1a1564fafb53ed5c9580792853cbe51f929abba5c8f38c46a664866
+Distributed under the Xiph.Org BSD-style license.
+See THIRD-PARTY-XIPH-BSD-LICENSE.txt.
+
+javasound-aac 0.9.8
+-------------------
+
+Java AAC decoder and MP4 demultiplexer distributed as part of this
+application.
+
+Project: https://github.com/Tianscar/javasound-aac
+Binary coordinates: com.tianscar.javasound:javasound-aac:0.9.8
+Corresponding source:
+https://repo1.maven.org/maven2/com/tianscar/javasound/javasound-aac/0.9.8/javasound-aac-0.9.8-sources.jar
+Source SHA-256: 80064eed0a588acea25a814762d47352cca577dacd7159f7c88db7e80587a605
+License: Apache License 2.0 (see THIRD-PARTY-APACHE-2.0-LICENSE.txt)
+
+javasound-resloader 0.1.3
+-------------------------
+
+JavaSound resource loader SPI, included as a runtime dependency of
+javasound-aac.
+
+Project: https://github.com/Tianscar/javasound-resloader
+Binary coordinates: com.tianscar.javasound:javasound-resloader:0.1.3
+Corresponding source:
+https://repo1.maven.org/maven2/com/tianscar/javasound/javasound-resloader/0.1.3/javasound-resloader-0.1.3-sources.jar
+Source SHA-256: 7b2740b2ff0417a3ff79d48b51a30b2c3de4414d18761e6b4ff85081050accf5
+License: MIT License (see THIRD-PARTY-MIT-LICENSE.txt)
+
+Copyright (c) Karstian Lee
+
+libFLAC License Notice
+----------------------
+
+Copyright (C) 2000-2009  Josh Coalson
+Copyright (C) 2011-2025  Xiph.Org Foundation
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+- Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+
+- Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+
+- Neither the name of the Xiph.Org Foundation nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

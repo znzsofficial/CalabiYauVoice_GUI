@@ -1,6 +1,11 @@
 package util
 
+import jna.flac.openNativeFlacPcmStream
 import java.io.File
+import java.io.IOException
+import java.io.InterruptedIOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import javax.sound.sampled.AudioFileFormat
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
@@ -25,11 +30,11 @@ internal fun decodeDesktopAudioToPcmWav(source: File, target: File) {
         channels,
         channels * (bits / 8),
         sampleRate,
-        false
+        sourceFormat.isBigEndian
     )
-    runCatching {
-        writeDecodedDesktopPcm(source, pcmFormat, target)
-    }.getOrElse { firstError ->
+    try {
+        writeDecodedDesktopPcmTransactional(source, pcmFormat, target)
+    } catch (firstError: Throwable) {
         val fallback = AudioFormat(
             AudioFormat.Encoding.PCM_SIGNED,
             sampleRate,
@@ -37,16 +42,23 @@ internal fun decodeDesktopAudioToPcmWav(source: File, target: File) {
             channels,
             channels * 2,
             sampleRate,
-            false
+            sourceFormat.isBigEndian
         )
-        runCatching { target.delete() }
-        runCatching {
-            writeDecodedDesktopPcm(source, fallback, target)
-        }.getOrElse { throw firstError }
+        try {
+            writeDecodedDesktopPcmTransactional(source, fallback, target)
+        } catch (fallbackError: Throwable) {
+            fallbackError.addSuppressed(firstError)
+            throw fallbackError
+        }
     }
 }
 
-internal fun openDesktopAudioInputStream(source: File) = AudioSystem.getAudioInputStream(source)
+internal fun openDesktopAudioInputStream(source: File) =
+    if (source.extension.equals("flac", ignoreCase = true)) {
+        openNativeFlacPcmStream(source.inputStream().buffered())
+    } else {
+        AudioSystem.getAudioInputStream(source)
+    }
 
 internal fun writeWavStream(stream: javax.sound.sampled.AudioInputStream, target: File) {
     target.parentFile?.mkdirs()
@@ -67,8 +79,59 @@ internal fun uniqueSiblingFile(directory: File, baseName: String, extension: Str
 
 private fun writeDecodedDesktopPcm(source: File, format: AudioFormat, target: File) {
     openDesktopAudioInputStream(source).use { input ->
-        AudioSystem.getAudioInputStream(format, input).use { pcm ->
-            writeWavStream(pcm, target)
+        val decoded = if (input.format.matches(format)) input else AudioSystem.getAudioInputStream(format, input)
+        decoded.use {
+            if (format.isBigEndian && format.sampleSizeInBits > 8) {
+                val littleEndian = AudioFormat(
+                    format.encoding,
+                    format.sampleRate,
+                    format.sampleSizeInBits,
+                    format.channels,
+                    format.frameSize,
+                    format.frameRate,
+                    false
+                )
+                AudioSystem.getAudioInputStream(littleEndian, decoded).use { pcm ->
+                    writeWavStream(pcm, target)
+                }
+            } else {
+                writeWavStream(decoded, target)
+            }
         }
+    }
+}
+
+internal fun AudioFormat.matches(other: AudioFormat): Boolean =
+    encoding == other.encoding &&
+        sampleRate == other.sampleRate &&
+        sampleSizeInBits == other.sampleSizeInBits &&
+        channels == other.channels &&
+        frameSize == other.frameSize &&
+        frameRate == other.frameRate &&
+        isBigEndian == other.isBigEndian
+
+private fun writeDecodedDesktopPcmTransactional(source: File, format: AudioFormat, target: File) {
+    val parent = target.absoluteFile.parentFile ?: error("输出文件没有父目录")
+    parent.mkdirs()
+    val temp = Files.createTempFile(parent.toPath(), ".${target.name}-", ".tmp").toFile()
+    try {
+        writeDecodedDesktopPcm(source, format, temp)
+        if (Thread.currentThread().isInterrupted) throw InterruptedIOException("Audio decoding was interrupted")
+        replaceDesktopAudioFile(temp, target)
+    } finally {
+        Files.deleteIfExists(temp.toPath())
+    }
+}
+
+private fun replaceDesktopAudioFile(temp: File, target: File) {
+    try {
+        Files.move(
+            temp.toPath(),
+            target.toPath(),
+            StandardCopyOption.REPLACE_EXISTING,
+            StandardCopyOption.ATOMIC_MOVE
+        )
+    } catch (_: IOException) {
+        Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
 }

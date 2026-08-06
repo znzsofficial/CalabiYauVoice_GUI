@@ -236,7 +236,7 @@ fun FileSelectionDialog(
                                                 AudioPlayerManager.stop()
                                                 playingUrl = null
                                             } else {
-                                                AudioPlayerManager.play(u)
+                                                AudioPlayerManager.play(u, name)
                                                 playingUrl = u
                                             }
                                         },
