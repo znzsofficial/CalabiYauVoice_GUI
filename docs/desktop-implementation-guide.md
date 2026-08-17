@@ -2,7 +2,7 @@
 
 本文记录 `desktopApp` 的当前实现结构、关键调用链、平台边界和静态审阅结论，供后续维护、重构和排障使用。
 
-- 记录日期：2026-08-17
+- 记录日期：2026-08-18
 - 分析范围：`desktopApp/`、与桌面端直接相关的 `shared/` 代码及根 Gradle 配置
 - 分析方式：静态阅读代码；风险项除特别说明外不代表已经运行复现
 - 代码引用：均相对于仓库根目录，行号对应记录时版本，后续修改可能产生偏移
@@ -841,13 +841,57 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 - 长任务应明确拥有者、取消入口、临时文件清理和窗口关闭行为。
 - 升级 Compose、Skiko、JNA、Window Styler 或 ProGuard 规则时，必须验证自定义窗口链。
 - 修改媒体算法时，优先补充小型 fixture 和资源生命周期测试，再扩展 UI。
-- Fluent 控件坐标已切到 Nucleus fork；窗口栈在完成第 17 节检查清单前不要一起迁。
+- `master` 使用上游 Compose Fluent 和原有 Compose Desktop 窗口栈；Tao 窗口迁移保存在独立的 `feature/tao-backend` 分支。
 
-## 17. Nucleus Fluent / 窗口迁移
+## 17. 分支实现与维护边界
 
-目标库：[NucleusFramework/compose-fluent-ui](https://github.com/NucleusFramework/compose-fluent-ui)。不要把控件升级和窗口替换绑成一次改动。
+桌面窗口迁移没有合并到同一条历史。当前仓库保留两个有意分开的实现：`master` 是日常维护和 Windows 发布基线，`feature/tao-backend` 是 Tao 后端实验实现。Tao 分支从 `master` 的 `df249af` 创建，当前迁移快照为 `eb1d6f8`；提交号变化后仍以分支历史为准。
 
-### 17.1 已完成
+### 17.1 分支差异
+
+| 项 | `master` | `feature/tao-backend` |
+|---|---|---|
+| 定位 | 主线、日常维护和 Windows 发布基线 | Tao 窗口/WebView 实验实现，暂不作为发布基线 |
+| Fluent 坐标 | 上游 `io.github.compose-fluent:fluent` 和 `fluent-icons-extended`，版本 `v0.1.0` | Nucleus fork `dev.nucleusframework.composefluent`，版本 `1.0.0` |
+| 应用入口 | Compose Desktop `application {}` | `nucleusApplication(backend = NucleusBackend.Tao)` |
+| 窗口实现 | `WindowsWindowFrame`、Window Styler 和窗口 JNA | `FluentDecoratedWindow`、Nucleus Tao 原生标题栏和 DWM backdrop |
+| WebView | `io.github.kdroidfilter:composewebview:1.0.0-beta-02` | `dev.nucleusframework:composewebview:1.0.1`，由 Tao `NativeView` 管理 |
+| 文件对话框 | FlatLaf `SystemFileChooser` | FileKit 对话框 |
+| 原生 JNA | 窗口 WndProc 和 FLAC 都使用 JNA | 只保留 FLAC JNA，删除窗口 WndProc |
+| 发布状态 | 当前唯一发布和回归主线 | 已验证编译和测试，但未通过完整的窗口手工验收 |
+
+### 17.2 Tao 分支已知状态
+
+Tao 分支保存了本轮迁移结果，目的只是保留实现和后续对照，不代表问题已经解决。迁移过程中实际观察到或尚未完成验收的项目包括：
+
+- 二级浏览器窗口的系统关闭按钮、焦点切换后的主题同步和主窗口退出黑闪。
+- Wiki 与创作者中心的 WebView2 加载、销毁、Cookie 和原生窗口生命周期。
+- Tao 下 AWT 异常对话框、剪贴板、`Desktop.open/browse` 以及拖放边界的完整回归。
+- `:desktopApp:createReleaseDistributable`、ProGuard、WebView2 运行时资源和 native DLL 发布包。
+
+因此不要把 Tao 分支标记为稳定实现，也不要在没有重新完成上述验收前把它合并回 `master`。
+
+### 17.3 维护规则
+
+1. 日常业务修复、依赖安全更新、发布版本和文档基线只在 `master` 进行。
+2. Tao 专属窗口、Nucleus 依赖和 WebView 改动只在 `feature/tao-backend` 进行；不要在两个分支之间混用窗口依赖。
+3. 同时影响业务逻辑的修改，先在 `master` 完成并测试，再按需要将单个提交移植到 Tao 分支；不要直接合并整条窗口迁移历史。
+4. 修改 `master` 的 Compose Fluent、Window Styler、Wry 或 FlatLaf 依赖时，必须保留对应的窗口 JNA、ProGuard 和资源配置，不能套用 Tao 分支的删除清单。
+5. 修改 Tao 分支时，Nucleus application、Tao window、ComposeWebView 和 NativeView 版本必须整体对齐；不能只升级其中一个模块。
+6. 切换分支前先确认 `git status --short` 为空，避免把一个分支的窗口实现或 Gradle 版本带入另一个分支。
+7. 主线最低验证为 `./gradlew.bat :desktopApp:compileKotlin`、`./gradlew.bat :desktopApp:test` 和 Windows 发布包启动检查；Tao 分支还必须执行 WebView、子窗口系统按钮、主题/backdrop 和关闭生命周期手工回归。
+
+### 17.4 后续决策
+
+当前不安排 Tao 合并。若以后重新评估，应先在独立变更中解决 Tao 分支的窗口关闭、主题、退出渲染和发布资源问题，再以完整的回归结果决定是否替换 `master` 的窗口栈。没有明确替换决定时，继续维护 `master` 的上游 Fluent + Compose Desktop 实现。
+
+## 18. Nucleus Fluent / 窗口迁移历史
+
+以下内容是 Tao 分支的迁移设计和实验记录。当前主线状态以第 17 节为准，不要把本节的目标方案当成 `master` 的现状。
+
+目标库：[NucleusFramework/compose-fluent-ui](https://github.com/NucleusFramework/compose-fluent-ui)。控件升级和窗口替换应保持为可独立回退的变更。
+
+### 18.1 历史记录
 
 2026-08-17 只替换了 Fluent 控件坐标，窗口栈未动。
 
@@ -862,7 +906,7 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 
 已验证：`:desktopApp:compileKotlin` 通过。当时只有既有的 `painterResource` 弃用警告，没有新的 Fluent API 编译错误。
 
-当前仍保留：
+`master` 当前仍保留：
 
 - Compose Desktop `application {}`
 - `StyledWindow` / `WindowsWindowFrame`
@@ -870,7 +914,7 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 - `desktopApp/libs/window-styler-jvm-0.3.3-SNAPSHOT.jar`
 - `io.github.kdroidfilter:composewebview`
 
-### 17.2 不要一次做完的原因
+### 18.2 不要一次做完的原因
 
 `FluentDecoratedWindow` 是 `NucleusApplicationScope` 的扩展，必须放进 `nucleusApplication {}`，不能继续塞进现有 `application {}`。
 
@@ -882,7 +926,7 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 4. Backdrop 不是 1:1。现有 `Tabbed` / `Aero` / `Transparent` 没有严格对应；Nucleus 是 `Mica` / `MicaAlt` / `Acrylic`。
 5. 现有发布链是 Compose Desktop jpackage MSI/EXE + ProGuard，不是 Nucleus Gradle 插件。
 
-### 17.3 后续阶段
+### 18.3 后续阶段
 
 按顺序做，前一阶段通过后再开下一阶段。
 
@@ -1005,7 +1049,7 @@ nucleusApplication
 - 不要假设删掉 JNA 就算跨平台完成。FLAC 仍然要原生库或解码回退。
 - 不要在 Tao 落地前继续往页面里加 AWT/`User32` 调用。
 
-### 17.4 回归清单
+### 18.4 回归清单
 
 每次窗口或后端改动后至少检查：
 
