@@ -22,4 +22,11 @@ class WikiCookieManagerTest {
         assertEquals("", WikiCookieManager.currentCookieString)
         assertEquals("", WikiCookieManager.getCookieHeader())
     }
+
+    @Test
+    fun malformedUserNamePercentEncodingDoesNotThrow() {
+        val preview = WikiCookieManager.previewCookieImport("klbqwiki_UserName=%E4%B8%AD%; session=abc")
+        assertEquals(2, preview.cookieCount)
+        assertEquals("%E4%B8%AD%", preview.detectedUserName)
+    }
 }

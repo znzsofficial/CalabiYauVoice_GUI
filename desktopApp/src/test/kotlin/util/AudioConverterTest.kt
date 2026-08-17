@@ -100,6 +100,13 @@ class AudioConverterTest {
     }
 
     @Test
+    fun converterTempDirectoryUsesParentFolderName() {
+        val tempDir = File("converted/_mp3conv_tmp_123_卡拉彼丘资源")
+        assertEquals("卡拉彼丘资源", mergeOutputBaseName(tempDir))
+        assertEquals("normal", mergeOutputBaseName(File("normal")))
+    }
+
+    @Test
     fun successfulRerunDoesNotOverwriteExistingMergedOutput() = withTempDir("audio-merge-collision") { dir ->
         val source = writeMonoWav(File(dir, "source.wav"), byteArrayOf(1, 0))
         val existingOutput = File(dir, "${dir.name}_merged.wav").apply { writeText("existing") }

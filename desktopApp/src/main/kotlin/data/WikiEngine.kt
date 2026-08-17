@@ -100,7 +100,10 @@ object WikiEngine {
 
         override fun loadForRequest(url: HttpUrl): List<Cookie> {
             return synchronized(cookieLock) {
-                cookieStore[url.host]?.filter { it.matches(url) } ?: emptyList()
+                val now = System.currentTimeMillis()
+                cookieStore[url.host]
+                    ?.filter { it.expiresAt >= now && it.matches(url) }
+                    ?: emptyList()
             }
         }
     }
@@ -198,7 +201,7 @@ object WikiEngine {
     ) = WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, ::downloadFile)
 
     suspend fun searchAndGroupCharacters(keyword: String, voiceOnly: Boolean = true): List<CharacterGroup> =
-        WikiEngineCore.searchAndGroupCharacters(keyword, voiceOnly, client, ::fetchString, jsonParser, nameCache)
+        WikiEngineCore.searchAndGroupCharacters(keyword, voiceOnly, ::fetchString, jsonParser, nameCache)
 
     suspend fun scanCategoryTree(rootCategory: String): List<String> =
         WikiEngineCore.scanCategoryTree(rootCategory, ::fetchString, jsonParser)

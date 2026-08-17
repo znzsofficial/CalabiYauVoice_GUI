@@ -137,7 +137,9 @@ object WikiCookieManager {
 
     private fun extractUserName(cookies: List<Cookie>): String? =
         cookies.firstOrNull { it.name.endsWith("UserName") || it.name == "UserName" }?.value
-            ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+            ?.let { raw ->
+                runCatching { java.net.URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
+            }
 
     private fun extractUserId(cookies: List<Cookie>): String? =
         cookies.firstOrNull { it.name.endsWith("UserID") || it.name == "UserID" }?.value

@@ -185,6 +185,19 @@ class WikiEngineCoreDownloadTest {
     }
 
     @Test
+    fun looksLikeHtmlFileDetectsDoctypePrefix() {
+        val file = Files.createTempFile("wiki-html-detect", ".wav").toFile()
+        try {
+            file.writeText("<!DOCTYPE html><html><body>blocked</body></html>")
+            assertTrue(util.looksLikeHtmlFile(file))
+            file.writeText("RIFF")
+            assertTrue(!util.looksLikeHtmlFile(file))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun serializesConcurrentBatchesTargetingSameDirectory() = runBlocking {
         val saveDir = Files.createTempDirectory("wiki-download-concurrent-test").toFile()
         try {

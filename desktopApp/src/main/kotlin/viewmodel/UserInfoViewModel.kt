@@ -247,50 +247,21 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     fun importAndFetch() {
         if (_cookieInput.value.isBlank() && !WikiCookieManager.hasCookies) return
 
-        fetchUserInfoJob?.cancel()
-        fetchUserInfoJob = scope.launch {
-            _isLoadingInfo.value = true
-            _statusMessage.value = ""
-            // 重置本地可能缓存的状态，不直接操作 WikiUserApi，因为那是全局的
-            // 不过如果是重新导入，通常意味着之前的无效化，可以在这里清理一下
-            WikiUserApi.clearCurrentUser()
+        _statusMessage.value = ""
+        WikiUserApi.clearCurrentUser()
 
-            // 只有当输入框有内容时才重新导入，否则只使用内存中已有的
-            if (_cookieInput.value.isNotBlank()) {
-                val count = WikiCookieManager.importCookies(_cookieInput.value)
-                if (count == 0) {
-                    _statusMessage.value = "⚠️ 未能识别到有效的 Cookie"
-                    _isLoadingInfo.value = false
-                    return@launch
-                }
-            } else if (!WikiCookieManager.hasCookies) {
-                 _statusMessage.value = "⚠️ 此时无 Cookie"
-                 _isLoadingInfo.value = false
-                 return@launch
+        if (_cookieInput.value.isNotBlank()) {
+            val count = WikiCookieManager.importCookies(_cookieInput.value)
+            if (count == 0) {
+                _statusMessage.value = "⚠️ 未能识别到有效的 Cookie"
+                return
             }
-
-            currentUserRequestToken++
-            val token = currentUserRequestToken
-            when (val userResult = WikiUserApi.fetchCurrentUserInfoResult()) {
-                is ApiResult.Success -> {
-                    if (token == currentUserRequestToken) {
-                        WikiUserApi.updateCurrentUser(userResult.value)
-                        val info = userResult.value
-                        if (info != null && info.isLoggedIn) {
-                            _statusMessage.value = "✅ 已登录：${info.name}"
-                        } else {
-                            _statusMessage.value = "⚠️ Cookie 无效，未登录"
-                        }
-                    }
-                }
-                is ApiResult.Error -> {
-                    if (token == currentUserRequestToken) {
-                        _statusMessage.value = "❌ ${userResult.message}"
-                    }
-                }
-            }
-            _isLoadingInfo.value = false
+        } else if (!WikiCookieManager.hasCookies) {
+            _statusMessage.value = "⚠️ 此时无 Cookie"
+            return
         }
+
+        fetchUserInfo()
     }
 
     /**

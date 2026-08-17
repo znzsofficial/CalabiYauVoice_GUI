@@ -83,7 +83,7 @@
 
 | 组件    | 技术                                                                                                                                                |
 |-------|---------------------------------------------------------------------------------------------------------------------------------------------------|
-| UI 框架 | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
+| UI 框架 | [Compose Fluent UI](https://github.com/NucleusFramework/compose-fluent-ui)、[ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
 | 音频    | Java Sound SPI（`MP3` / `OGG` / `AAC` / `M4A`）、通过 JNA 接入的官方 `libFLAC` 1.5.0                                                               |
 | 图像    | `javax.imageio.ImageIO`（GIF 多帧解码）                                                                                                                 |
 | 原生调用  | JNA 5.19.1（Windows API 与原生 FLAC 解码）                                                                                                               |

@@ -31,6 +31,7 @@ import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.*
 import io.github.composefluent.surface.Card
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ui.components.ComboBox
@@ -39,6 +40,7 @@ import util.*
 import util.AppPrefs
 import java.awt.datatransfer.DataFlavor
 import java.io.File
+import java.io.IOException
 
 private enum class ConverterHelpTopic(val title: String, val lines: List<String>) {
     Format(
@@ -593,7 +595,7 @@ fun Mp3ConverterWindow(
                                     val doMerge = mergeWav
                                     val doDeleteOriginalMp3 = deleteOriginalMp3
                                     val doDeleteWavAfterMerge = deleteWavAfterMerge
-                                    val tempDir = File(outDir, "_mp3conv_tmp_${System.currentTimeMillis()}")
+                                    val tempDir = File(outDir, "_mp3conv_tmp_${System.currentTimeMillis()}_${outDir.name}")
 
                                     try {
                                         tempDir.mkdirs()
@@ -621,6 +623,10 @@ fun Mp3ConverterWindow(
                                                 logLines = logLines + "[部分成功] ${e.convertedFiles.size} 个文件已转换，${e.failedCount} 个文件失败，继续导出成功结果。"
                                             }
                                             e.convertedFiles
+                                        }
+
+                                        if (convertedWavFiles.isEmpty()) {
+                                            throw IOException("没有文件转换成功")
                                         }
 
                                         val convertedOriginalFiles = stagedFiles
@@ -651,6 +657,8 @@ fun Mp3ConverterWindow(
                                             isConverting = false
                                             progressText = "完成"
                                         }
+                                    } catch (e: CancellationException) {
+                                        throw e
                                     } catch (e: Exception) {
                                         coroutineScope.launch(Dispatchers.Main) {
                                             isConverting = false

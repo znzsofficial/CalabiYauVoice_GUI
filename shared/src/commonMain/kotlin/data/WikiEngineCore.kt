@@ -13,7 +13,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -22,7 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 import util.buildWikiUrl
-import util.executeGet
 import util.atomicReplaceFile
 
 /**
@@ -31,6 +29,8 @@ import util.atomicReplaceFile
  * 每个函数接收 [client] / [jsonParser] / [fetchStringFn] 等参数，
  * 由各平台的 WikiEngine 负责提供具体实现。
  */
+class WikiQueryFailure(message: String, cause: Throwable? = null) : IOException(message, cause)
+
 object WikiEngineCore {
 
     const val API_BASE_URL = "https://wiki.biligame.com/klbq/api.php"
@@ -88,31 +88,27 @@ object WikiEngineCore {
     suspend fun searchAndGroupCharacters(
         keyword: String,
         voiceOnly: Boolean = true,
-        client: OkHttpClient,
         fetchStringFn: suspend (String) -> String?,
         jsonParser: Json,
         nameCache: CharacterNameCache
     ): List<CharacterGroup> = withContext(Dispatchers.IO) {
         val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "search", "srsearch" to keyword, "srnamespace" to "14", "format" to "json", "srlimit" to "200")
 
+        var lastError: Exception? = null
         repeat(3) { attempt ->
             try {
-                val responseString = client.executeGet(url).use { response ->
-                    if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-                    response.body.string()
-                }
-                if (responseString.trimStart().startsWith("<")) throw IOException("Blocked by WAF")
+                val responseString = requireWikiJson(fetchStringFn(url), "搜索")
                 val rawList = jsonParser.decodeFromString<WikiResponse>(responseString).query?.search?.map { it.title } ?: emptyList()
                 val filteredList = if (voiceOnly) rawList.filter { it.endsWith("语音") } else rawList
-                val result = groupCategories(filteredList, voiceOnly, fetchStringFn, jsonParser, nameCache)
-                if (result.isNotEmpty()) return@withContext result
+                return@withContext groupCategories(filteredList, voiceOnly, fetchStringFn, jsonParser, nameCache)
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                lastError = e
                 if (attempt < 2) delay(1000L + Random.nextLong(2000))
             }
         }
-        return@withContext emptyList()
+        throw lastError ?: WikiQueryFailure("搜索失败")
     }
 
     /**
@@ -158,15 +154,18 @@ object WikiEngineCore {
         var aicontinue: String? = null
         do {
             val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "allimages", "aiprefix" to keyword, "aiprop" to "url|mime", "ailimit" to "500", "format" to "json", *(if (aicontinue != null) arrayOf("aicontinue" to aicontinue) else emptyArray()))
-            val json = fetchStringFn(url) ?: break
-            if (json.trimStart().startsWith("<")) break
+            val json = requireWikiJson(fetchStringFn(url), "文件前缀搜索")
             try {
                 val res = jsonParser.decodeFromString<AiResponse>(json)
                 res.query?.allimages?.forEach { item ->
                     if (item.url != null && matchesFilter(item.url, item.mime)) path1[item.name] = item.url
                 }
                 aicontinue = res.continuation?.get("aicontinue")?.jsonPrimitive?.content
-            } catch (_: Exception) { break }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw WikiQueryFailure("文件前缀搜索解析失败", e)
+            }
         } while (aicontinue != null)
 
         // --- 路径 2：search 全文搜索 ---
@@ -174,8 +173,7 @@ object WikiEngineCore {
         var sroffset = 0
         do {
             val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "search", "srsearch" to keyword, "srnamespace" to "6", "format" to "json", "srlimit" to "100", "sroffset" to sroffset.toString())
-            val json = fetchStringFn(url) ?: break
-            if (json.trimStart().startsWith("<")) break
+            val json = requireWikiJson(fetchStringFn(url), "文件全文搜索")
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
                 val titles = res.query?.search?.map { it.title } ?: emptyList()
@@ -183,21 +181,25 @@ object WikiEngineCore {
                 titles.chunked(50).forEach { chunk ->
                     val titlesParam = chunk.joinToString("|")
                     val infoUrl = buildWikiUrl(API_BASE_URL, "action" to "query", "titles" to titlesParam, "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json")
-                    val infoJson = fetchStringFn(infoUrl) ?: return@forEach
-                    try {
-                        val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
-                        infoRes.query?.pages?.values?.forEach { page ->
-                            val info = page.imageinfo?.firstOrNull()
-                            if (info?.url != null && matchesFilter(info.url, info.mime)) {
-                                path2.putIfAbsent(page.title.replace(filePrefixRegex, ""), info.url)
-                            }
+                    val infoJson = requireWikiJson(fetchStringFn(infoUrl), "文件详情")
+                    val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
+                    infoRes.query?.pages?.values?.forEach { page ->
+                        val info = page.imageinfo?.firstOrNull()
+                        if (info?.url != null && matchesFilter(info.url, info.mime)) {
+                            path2.putIfAbsent(page.title.replace(filePrefixRegex, ""), info.url)
                         }
-                    } catch (_: Exception) {}
+                    }
                 }
                 val nextOffset = res.continuation?.get("sroffset")?.jsonPrimitive?.content?.toIntOrNull()
                 if (nextOffset == null || nextOffset <= sroffset) break
                 sroffset = nextOffset
-            } catch (_: Exception) { break }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: WikiQueryFailure) {
+                throw e
+            } catch (e: Exception) {
+                throw WikiQueryFailure("文件全文搜索解析失败", e)
+            }
         } while (path2.size < 1000)
 
         val merged = LinkedHashMap<String, String>(path1)
@@ -394,12 +396,16 @@ object WikiEngineCore {
         var token: String? = null
         do {
             val url = buildWikiUrl(API_BASE_URL, "action" to "query", "list" to "categorymembers", "cmtitle" to category, "cmnamespace" to namespace.toString(), "cmtype" to cmtype, "cmlimit" to "500", "format" to "json", *(if (token != null) arrayOf("cmcontinue" to token) else emptyArray()))
-            val json = fetchStringFn(url) ?: break
+            val json = requireWikiJson(fetchStringFn(url), "分类成员")
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
                 res.query?.categorymembers?.forEach { list.add(it.title) }
                 token = res.continuation?.get("cmcontinue")?.jsonPrimitive?.content
-            } catch (_: Exception) { break }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw WikiQueryFailure("分类成员解析失败: $category", e)
+            }
         } while (token != null)
         return list
     }
@@ -422,7 +428,7 @@ object WikiEngineCore {
         var token: String? = null
         do {
             val url = buildWikiUrl(API_BASE_URL, "action" to "query", "generator" to "categorymembers", "gcmtitle" to category, "gcmnamespace" to "6", "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json", "gcmlimit" to "500", *(if (token != null) arrayOf("gcmcontinue" to token) else emptyArray()))
-            val json = fetchStringFn(url) ?: break
+            val json = requireWikiJson(fetchStringFn(url), "分类文件")
             try {
                 val res = jsonParser.decodeFromString<WikiResponse>(json)
                 res.query?.pages?.values?.forEach { p ->
@@ -435,9 +441,19 @@ object WikiEngineCore {
                     }
                 }
                 token = res.continuation?.get("gcmcontinue")?.jsonPrimitive?.content
-            } catch (_: Exception) { break }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw WikiQueryFailure("分类文件解析失败: $category", e)
+            }
         } while (token != null)
         val seenUrls = HashSet<String>()
         return list.filter { seenUrls.add(it.second) }
+    }
+
+    private fun requireWikiJson(body: String?, action: String): String {
+        if (body.isNullOrBlank()) throw WikiQueryFailure("${action}请求失败")
+        if (body.trimStart().startsWith("<")) throw WikiQueryFailure("${action}被拦截")
+        return body
     }
 }

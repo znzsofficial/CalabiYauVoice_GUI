@@ -31,6 +31,9 @@ class MainViewModel(
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+    private val _searchError = MutableStateFlow<String?>(null)
+    val searchError: StateFlow<String?> = _searchError.asStateFlow()
+
     private val _characterGroups = MutableStateFlow<List<CharacterGroup>>(emptyList())
     val characterGroups: StateFlow<List<CharacterGroup>> = _characterGroups.asStateFlow()
 
@@ -98,6 +101,9 @@ class MainViewModel(
     private val _categoryTotalCountMap = MutableStateFlow<Map<String, Int>>(emptyMap())
     val categoryTotalCountMap: StateFlow<Map<String, Int>> = _categoryTotalCountMap.asStateFlow()
 
+    private val manualSelectionsByMode = mutableMapOf<SearchMode, MutableMap<String, List<Pair<String, String>>>>()
+    private val categoryTotalsByMode = mutableMapOf<SearchMode, MutableMap<String, Int>>()
+
     // =========================================================
     // 下载状态
     // =========================================================
@@ -158,6 +164,7 @@ class MainViewModel(
     private var scanJob: Job? = null
     private var portraitJob: Job? = null
     private var fileDialogJob: Job? = null
+    private var downloadJob: Job? = null
     private var savePathPersistJob: Job? = null
     private var searchRequestId = 0L
     private var scanRequestId = 0L
@@ -202,6 +209,7 @@ class MainViewModel(
         searchJob?.cancel()
         searchJob = null
         _isSearching.value = false
+        _searchError.value = null
         scanRequestId++
         scanJob?.cancel()
         scanJob = null
@@ -210,9 +218,15 @@ class MainViewModel(
         portraitJob?.cancel()
         portraitJob = null
         _isPortraitLoading.value = false
+        fileDialogRequestId++
+        fileDialogJob?.cancel()
+        fileDialogJob = null
+        _showFileDialog.value = false
+        _dialogIsLoading.value = false
 
         // 先保存当前模式的关键词
         cachedKeywords[prev] = _searchKeyword.value
+        persistManualSelections(prev)
 
         // 保存语音/分类模式的搜索结果缓存
         if (prev == SearchMode.VOICE_ONLY || prev == SearchMode.ALL_CATEGORIES) {
@@ -234,6 +248,7 @@ class MainViewModel(
         } else if (mode == SearchMode.VOICE_ONLY || mode == SearchMode.ALL_CATEGORIES) {
             // 语音/分类页：恢复各自独立的缓存
             _searchKeyword.value = cachedKeywords[mode] ?: "角色"
+            restoreManualSelections(mode)
             if (mode in hasResultsCache) {
                 _characterGroups.value = cachedCharacterGroups[mode] ?: emptyList()
                 _selectedGroup.value = cachedSelectedGroup[mode]
@@ -274,6 +289,7 @@ class MainViewModel(
         hasResultsCache.remove(mode)
 
         _isSearching.value = true
+        _searchError.value = null
 
         // 只清除当前模式相关的状态，不影响其他模式的缓存
         when (mode) {
@@ -332,7 +348,11 @@ class MainViewModel(
                 cachedKeywords[mode] = keyword
             } catch (_: CancellationException) {
             } catch (e: Exception) {
-                if (requestId == searchRequestId) addLog("搜索失败: ${e.message}")
+                if (requestId == searchRequestId) {
+                    val message = e.message ?: e::class.simpleName.orEmpty()
+                    _searchError.value = message
+                    addLog("搜索失败: $message")
+                }
             } finally {
                 if (requestId == searchRequestId) {
                     _isSearching.value = false
@@ -469,7 +489,8 @@ class MainViewModel(
         _dialogInitialSelection.value = emptyList()
         _showFileDialog.value = true
         _dialogIsLoading.value = true
-        val audioOnly = _searchMode.value == SearchMode.VOICE_ONLY
+        val selectionMode = _searchMode.value
+        val audioOnly = selectionMode == SearchMode.VOICE_ONLY
 
         fileDialogJob = scope.launch {
             try {
@@ -477,9 +498,11 @@ class MainViewModel(
                 currentCoroutineContext().ensureActive()
                 if (requestId != fileDialogRequestId) return@launch
                 _dialogFileList.value = files
-                _categoryTotalCountMap.value += (cat to files.size)
+                val totals = categoryTotalsByMode.getOrPut(selectionMode) { mutableMapOf() }
+                totals[cat] = files.size
+                _categoryTotalCountMap.value = totals.toMap()
 
-                val manual = _manualSelectionMap.value[cat]
+                val manual = manualSelectionsByMode[selectionMode]?.get(cat)
                 _dialogInitialSelection.value = manual?.map { it.second } ?: files.map { it.second }
             } catch (_: CancellationException) {
             } catch (e: Exception) {
@@ -504,21 +527,33 @@ class MainViewModel(
     fun confirmFileDialog(selectedFiles: List<Pair<String, String>>) {
         val cat = _dialogCategoryName.value
         val totalCount = _dialogFileList.value.size
+        val selectionMode = _searchMode.value
         closeFileDialog()
 
-        val newMap = _manualSelectionMap.value.toMutableMap()
-        newMap[cat] = selectedFiles
-        _manualSelectionMap.value = newMap
+        val selections = manualSelectionsByMode.getOrPut(selectionMode) { mutableMapOf() }
+        selections[cat] = selectedFiles
+        _manualSelectionMap.value = selections.toMap()
 
-        val newCountMap = _categoryTotalCountMap.value.toMutableMap()
-        newCountMap[cat] = totalCount
-        _categoryTotalCountMap.value = newCountMap
+        val totals = categoryTotalsByMode.getOrPut(selectionMode) { mutableMapOf() }
+        totals[cat] = totalCount
+        _categoryTotalCountMap.value = totals.toMap()
 
         val checked = _checkedCategories.value.toMutableList()
         if (selectedFiles.isNotEmpty() && !checked.contains(cat)) {
             checked.add(cat)
             _checkedCategories.value = checked
         }
+    }
+
+    private fun persistManualSelections(mode: SearchMode) {
+        if (mode != SearchMode.VOICE_ONLY && mode != SearchMode.ALL_CATEGORIES) return
+        manualSelectionsByMode[mode] = _manualSelectionMap.value.toMutableMap()
+        categoryTotalsByMode[mode] = _categoryTotalCountMap.value.toMutableMap()
+    }
+
+    private fun restoreManualSelections(mode: SearchMode) {
+        _manualSelectionMap.value = manualSelectionsByMode[mode]?.toMap().orEmpty()
+        _categoryTotalCountMap.value = categoryTotalsByMode[mode]?.toMap().orEmpty()
     }
 
     // =========================================================
@@ -559,6 +594,16 @@ class MainViewModel(
     // =========================================================
     // 下载
     // =========================================================
+    fun cancelDownload() {
+        if (!_isDownloading.value && downloadJob == null) return
+        downloadJob?.cancel()
+        downloadJob = null
+        _isDownloading.value = false
+        _progress.value = 0f
+        _progressText.value = ""
+        addLog("已取消下载。")
+    }
+
     fun startDownload() {
         if (_isDownloading.value) return
         val mode = _searchMode.value
@@ -602,7 +647,7 @@ class MainViewModel(
             val saveDir = File(targetDir, sanitizeFileName(costume.name))
             val files = assets.map { it.title to it.url }
 
-            scope.launch {
+            downloadJob = scope.launch {
                 try {
                     addLog("开始下载 [${charName}/${costume.name}] 的 ${files.size} 个资产...")
                     WikiEngine.downloadSpecificFiles(
@@ -617,13 +662,14 @@ class MainViewModel(
                     )
                     addLog("下载完成！保存至: ${saveDir.absolutePath}")
                 } catch (e: CancellationException) {
-                    throw e
+                    addLog("下载已取消。")
                 } catch (e: Exception) {
                     addLog("下载失败: ${e.message}")
                 } finally {
                     _isDownloading.value = false
                     _progress.value = 0f
                     _progressText.value = ""
+                    downloadJob = null
                 }
             }
             return
@@ -644,10 +690,10 @@ class MainViewModel(
         val selectedUrls = _fileSearchSelectedUrls.value
         val searchResults = _fileSearchResults.value
         val checkedCategories = _checkedCategories.value
-        val manualSelections = _manualSelectionMap.value
+        val manualSelections = manualSelectionsByMode[mode]?.toMap().orEmpty()
         val audioOnly = mode == SearchMode.VOICE_ONLY
 
-        scope.launch {
+        downloadJob = scope.launch {
             try {
                 addLog("开始处理下载任务...")
                 val finalDownloadList: List<Pair<String, String>>
@@ -724,13 +770,14 @@ class MainViewModel(
                     }
                 }
             } catch (e: CancellationException) {
-                throw e
+                addLog("下载已取消。")
             } catch (e: Exception) {
                 addLog("中断: ${e.message}")
             } finally {
                 _isDownloading.value = false
                 _progress.value = 0f
                 _progressText.value = ""
+                downloadJob = null
             }
         }
     }

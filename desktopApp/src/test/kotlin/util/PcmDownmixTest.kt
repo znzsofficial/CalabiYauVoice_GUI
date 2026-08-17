@@ -3,6 +3,7 @@ package util
 import java.io.ByteArrayInputStream
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioInputStream
+import javax.sound.sampled.AudioSystem
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -23,6 +24,21 @@ class PcmDownmixTest {
                     byteArrayOf(0xD0.toByte(), 0x07, 0xB8.toByte(), 0x0B, 0x30, 0xF8.toByte(), 0x48, 0xF4.toByte()),
                     downmixed.readAllBytes()
                 )
+            }
+        }
+    }
+
+    @Test
+    fun unspecifiedLengthEndsOnCleanEof() {
+        val sourceFormat = AudioFormat(48_000f, 16, 4, true, false)
+        val sourceBytes = byteArrayOf(
+            0xE8.toByte(), 0x03, 0xD0.toByte(), 0x07, 0xB8.toByte(), 0x0B, 0xA0.toByte(), 0x0F
+        )
+        AudioInputStream(ByteArrayInputStream(sourceBytes), sourceFormat, AudioSystem.NOT_SPECIFIED.toLong()).use { source ->
+            source.downmixToStereo().use { downmixed ->
+                val first = ByteArray(4)
+                assertEquals(4, downmixed.read(first))
+                assertEquals(-1, downmixed.read(ByteArray(4)))
             }
         }
     }

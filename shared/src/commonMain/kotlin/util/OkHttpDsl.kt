@@ -52,9 +52,16 @@ suspend fun OkHttpClient.awaitGetToFile(url: String, file: File): Boolean =
                             if (continuation.isActive) continuation.resume(false)
                             return
                         }
+                        val contentType = it.header("Content-Type").orEmpty().lowercase()
+                        if (contentType.contains("text/html") || contentType.contains("application/xhtml")) {
+                            throw IOException("Unexpected HTML response for $url")
+                        }
                         it.body.byteStream().use { input ->
                             file.outputStream().use { output -> input.copyTo(output) }
                         }
+                    }
+                    if (looksLikeHtmlFile(file)) {
+                        throw IOException("Downloaded HTML instead of a media file for $url")
                     }
                     if (continuation.isActive) continuation.resume(true)
                     else file.delete()
@@ -167,6 +174,17 @@ fun buildParseUrl(api: String, page: String, prop: String, vararg extra: Pair<St
 /**
  * 发起 GET 请求并返回响应体字符串，失败返回 null。
  */
+fun looksLikeHtmlFile(file: File): Boolean {
+    if (!file.isFile || file.length() == 0L) return false
+    val prefix = file.inputStream().use { input ->
+        val buffer = ByteArray(64)
+        val read = input.read(buffer)
+        if (read <= 0) return false
+        buffer.copyOf(read).toString(Charsets.UTF_8)
+    }.trimStart().lowercase()
+    return prefix.startsWith("<!doctype html") || prefix.startsWith("<html")
+}
+
 fun OkHttpClient.executeGetString(url: String): String? =
     executeGet(url).use { if (it.isSuccessful) it.body.string() else null }
 

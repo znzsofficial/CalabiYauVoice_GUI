@@ -53,6 +53,7 @@ const val DEFAULT_BIT_DEPTH_INDEX = 0
 val SUPPORTED_AUDIO_SOURCE_EXTENSIONS: Set<String> = setOf("mp3", "flac", "ogg", "aac", "m4a")
 private const val SUPPORTED_AUDIO_SOURCE_LABEL = "MP3/FLAC/OGG/AAC/M4A"
 private const val GENERATED_MERGED_TAG = "_merged"
+private val TEMP_MERGE_DIR_NAME = Regex("^_mp3conv_tmp_\\d+(?:_(.+))?$")
 private const val AUDIO_RATE_TOLERANCE = 0.5f
 private const val RIFF_MAX_CHUNK_SIZE = 0xFFFF_FFFFL
 private const val WAVE_HEADER_BYTES_BEFORE_DATA = 36L
@@ -536,22 +537,30 @@ private fun approximatelyEquals(a: Float, b: Float): Boolean {
 
 private fun isGeneratedMergedWav(file: File, mergeDir: File): Boolean {
     if (file.parentFile?.absoluteFile?.normalize() != mergeDir.absoluteFile.normalize()) return false
-    val expectedPrefix = Regex.escape("${mergeDir.name}$GENERATED_MERGED_TAG")
+    val expectedPrefix = Regex.escape("${mergeOutputBaseName(mergeDir)}$GENERATED_MERGED_TAG")
     return Regex("^$expectedPrefix(?:_[1-9]\\d*)?(?: \\((?:[2-9]|[1-9]\\d+)\\))?\\.wav$", RegexOption.IGNORE_CASE)
         .matches(file.name)
 }
 
 private fun reserveMergeOutputFiles(dir: File, count: Int): List<File> {
+    val baseName = mergeOutputBaseName(dir)
     var collisionIndex = 1
     while (true) {
         val collisionSuffix = if (collisionIndex == 1) "" else " ($collisionIndex)"
         val candidates = List(count) { index ->
             val chunkSuffix = if (count == 1) "" else "_${index + 1}"
-            File(dir, "${dir.name}$GENERATED_MERGED_TAG$chunkSuffix$collisionSuffix.wav")
+            File(dir, "$baseName$GENERATED_MERGED_TAG$chunkSuffix$collisionSuffix.wav")
         }
         if (candidates.none(File::exists)) return candidates
         collisionIndex++
     }
+}
+
+internal fun mergeOutputBaseName(dir: File): String {
+    val name = dir.name
+    return TEMP_MERGE_DIR_NAME.matchEntire(name)?.groupValues?.get(1)
+        ?.takeIf { it.isNotBlank() }
+        ?: name
 }
 
 private fun sampleRateFileSuffix(sampleRate: Float): String {

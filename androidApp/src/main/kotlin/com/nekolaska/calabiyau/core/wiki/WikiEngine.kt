@@ -118,7 +118,7 @@ object WikiEngine {
         WikiEngineCore.getAllCharacterNames(::fetchStringSimple, jsonParser)
 
     suspend fun searchAndGroupCharacters(keyword: String, voiceOnly: Boolean = true): List<CharacterGroup> =
-        WikiEngineCore.searchAndGroupCharacters(keyword, voiceOnly, client, ::fetchStringSimple, jsonParser, nameCache)
+        WikiEngineCore.searchAndGroupCharacters(keyword, voiceOnly, ::fetchStringSimple, jsonParser, nameCache)
 
     suspend fun scanCategoryTree(rootCategory: String): List<String> =
         WikiEngineCore.scanCategoryTree(rootCategory, ::fetchStringSimple, jsonParser)

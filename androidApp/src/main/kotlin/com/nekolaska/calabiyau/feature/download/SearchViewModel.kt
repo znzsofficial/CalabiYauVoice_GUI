@@ -95,6 +95,7 @@ class SearchViewModel : ViewModel() {
     // 手动选择的文件映射 (分类名 -> 选中的文件列表)
     private val _manualSelectionMap = MutableStateFlow<Map<String, List<Pair<String, String>>>>(emptyMap())
     val manualSelectionMap: StateFlow<Map<String, List<Pair<String, String>>>> = _manualSelectionMap.asStateFlow()
+    private val manualSelectionsByMode = mutableMapOf<SearchMode, MutableMap<String, List<Pair<String, String>>>>()
 
     // 立绘角色列表（搜索结果）
     private val _portraitCharacters = MutableStateFlow<List<String>>(emptyList())
@@ -178,6 +179,7 @@ class SearchViewModel : ViewModel() {
         }
         _searchError.value = null
         cachedKeywords[prev] = _searchKeyword.value
+        persistManualSelections(prev)
 
         if (prev == SearchMode.VOICE_ONLY || prev == SearchMode.ALL_CATEGORIES) {
             cachedCharacterGroups[prev] = _characterGroups.value
@@ -201,6 +203,7 @@ class SearchViewModel : ViewModel() {
             }
         } else if (mode == SearchMode.VOICE_ONLY || mode == SearchMode.ALL_CATEGORIES) {
             _searchKeyword.value = cachedKeywords[mode] ?: "角色"
+            restoreManualSelections(mode)
             if (mode in hasResultsCache) {
                 _characterGroups.value = cachedCharacterGroups[mode] ?: emptyList()
                 _characterAvatars.value = cachedCharacterAvatars[mode] ?: emptyMap()
@@ -423,11 +426,12 @@ class SearchViewModel : ViewModel() {
         _dialogSelectedUrls.value = emptySet()
         _showFileDialog.value = true
         _dialogIsLoading.value = true
+        val selectionMode = _searchMode.value
         viewModelScope.launch {
             try {
-                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = _searchMode.value == SearchMode.VOICE_ONLY)
+                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = selectionMode == SearchMode.VOICE_ONLY)
                 _dialogFileList.value = files
-                val manual = _manualSelectionMap.value[cat]
+                val manual = manualSelectionsByMode[selectionMode]?.get(cat)
                 _dialogSelectedUrls.value = manual?.map { it.second }?.toSet()
                     ?: files.map { it.second }.toSet()
             } catch (e: Exception) {
@@ -463,16 +467,26 @@ class SearchViewModel : ViewModel() {
     fun confirmFileDialog() {
         val cat = _dialogCategoryName.value
         val selectedFiles = _dialogFileList.value.filter { it.second in _dialogSelectedUrls.value }
+        val selectionMode = _searchMode.value
         _showFileDialog.value = false
 
-        val newMap = _manualSelectionMap.value.toMutableMap()
-        newMap[cat] = selectedFiles
-        _manualSelectionMap.value = newMap
+        val selections = manualSelectionsByMode.getOrPut(selectionMode) { mutableMapOf() }
+        selections[cat] = selectedFiles
+        _manualSelectionMap.value = selections.toMap()
 
         val checked = _checkedCategories.value.toMutableList()
         if (selectedFiles.isNotEmpty() && cat !in checked) {
             checked.add(cat)
             _checkedCategories.value = checked
         }
+    }
+
+    private fun persistManualSelections(mode: SearchMode) {
+        if (mode != SearchMode.VOICE_ONLY && mode != SearchMode.ALL_CATEGORIES) return
+        manualSelectionsByMode[mode] = _manualSelectionMap.value.toMutableMap()
+    }
+
+    private fun restoreManualSelections(mode: SearchMode) {
+        _manualSelectionMap.value = manualSelectionsByMode[mode]?.toMap().orEmpty()
     }
 }

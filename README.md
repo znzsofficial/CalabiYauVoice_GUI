@@ -83,7 +83,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 | Component | Technology                                                                                                                                         |
 |-----------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| UI        | [Compose Fluent UI](https://github.com/composefluent/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
+| UI        | [Compose Fluent UI](https://github.com/NucleusFramework/compose-fluent-ui), [ComposeWindowStyler](https://github.com/mayakapps/compose-window-styler) |
 | Audio     | Java Sound SPI (`MP3` / `OGG` / `AAC` / `M4A`), official `libFLAC` 1.5.0 via JNA                                                                   |
 | Image     | `javax.imageio.ImageIO` (GIF frame decoding)                                                                                                       |
 | Native    | JNA 5.19.1 (Windows API and native FLAC decoding)                                                                                                  |

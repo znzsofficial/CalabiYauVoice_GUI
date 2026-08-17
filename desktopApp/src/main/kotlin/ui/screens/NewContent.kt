@@ -66,6 +66,7 @@ fun NewDownloaderContent() {
     // --- 状态管理 (来自 ViewModel) ---
     val searchKeyword by viewModel.searchKeyword.collectAsState()
     val isSearching by viewModel.isSearching.collectAsState()
+    val searchError by viewModel.searchError.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
 
     val characterGroups by viewModel.characterGroups.collectAsState()
@@ -325,7 +326,12 @@ fun NewDownloaderContent() {
                     }
                     // Ctrl+D → 开始下载
                     ctrl && keyEvent.key == Key.D -> {
-                        if (!isDownloading && !isScanningTree) viewModel.startDownload()
+                        if (isDownloading) viewModel.cancelDownload()
+                        else if (!isScanningTree) viewModel.startDownload()
+                        true
+                    }
+                    keyEvent.key == Key.Escape && isDownloading -> {
+                        viewModel.cancelDownload()
                         true
                     }
                     // Ctrl+A → 全选
@@ -489,10 +495,13 @@ fun NewDownloaderContent() {
                 content = { Text("下载") },
                 items = {
                     MenuFlyoutItem(
-                        onClick = { if (!isDownloading && !isScanningTree) viewModel.startDownload() },
-                        icon = { Icon(Icons.Regular.ArrowDownload, contentDescription = null) },
-                        text = { Text("开始下载") },
-                        trailing = { Text("Ctrl+D", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
+                        onClick = {
+                            if (isDownloading) viewModel.cancelDownload()
+                            else if (!isScanningTree) viewModel.startDownload()
+                        },
+                        icon = { Icon(if (isDownloading) Icons.Regular.Dismiss else Icons.Regular.ArrowDownload, contentDescription = null) },
+                        text = { Text(if (isDownloading) "取消下载" else "开始下载") },
+                        trailing = { Text(if (isDownloading) "Esc" else "Ctrl+D", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary) }
                     )
                     MenuFlyoutSeparator()
                     MenuFlyoutItem(
@@ -718,7 +727,11 @@ fun NewDownloaderContent() {
 
                     if (searchMode == SearchMode.FILE_SEARCH) {
                         // 文件搜索结果列表
-                        if (fileSearchResults.isEmpty() && !isSearching) {
+                        if (searchError != null && fileSearchResults.isEmpty() && !isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("搜索失败：$searchError", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else if (fileSearchResults.isEmpty() && !isSearching) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("输入关键词后搜索", color = Color.Gray, fontSize = 12.sp)
                             }
@@ -791,7 +804,11 @@ fun NewDownloaderContent() {
                             }
                         }
                     } else if (searchMode == SearchMode.PORTRAIT) {
-                        if (portraitCharacters.isEmpty() && !isSearching) {
+                        if (searchError != null && portraitCharacters.isEmpty() && !isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("搜索失败：$searchError", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else if (portraitCharacters.isEmpty() && !isSearching) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("未找到可预览角色", color = Color.Gray, fontSize = 12.sp)
                             }
@@ -815,7 +832,11 @@ fun NewDownloaderContent() {
                             }
                         }
                     } else {
-                        if (characterGroups.isEmpty() && !isSearching) {
+                        if (searchError != null && characterGroups.isEmpty() && !isSearching) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("搜索失败：$searchError", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        } else if (characterGroups.isEmpty() && !isSearching) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("无数据", color = Color.Gray, fontSize = 12.sp)
                             }
@@ -1259,6 +1280,10 @@ fun NewDownloaderContent() {
                                 content = {
                                     Button(
                                         onClick = {
+                                            if (isDownloading) {
+                                                viewModel.cancelDownload()
+                                                return@Button
+                                            }
                                             if (convertAfterDownload && mergeWav && bitDepthOptionAt(targetBitDepthIndex).target == BitDepthTarget.ORIGINAL) {
                                                 isFlyoutVisible = true
                                                 return@Button
@@ -1267,11 +1292,11 @@ fun NewDownloaderContent() {
                                             viewModel.startDownload()
                                         },
                                         modifier = Modifier.fillMaxWidth().height(40.dp),
-                                        disabled = isDownloading || isScanningTree || !canDownload
+                                        disabled = (!isDownloading && (isScanningTree || !canDownload))
                                     ) {
                                         Text(
                                             when {
-                                                isDownloading -> "正在下载中..."
+                                                isDownloading -> "取消下载"
                                                 isFileSearch -> "开始下载 (${fileSearchSelectedUrls.size} 个文件)"
                                                 else -> "开始下载 (${checkedCategories.size} 个分类)"
                                             },
@@ -1318,7 +1343,7 @@ private fun KeyboardShortcutsDialog(onClose: () -> Unit) {
                 "Ctrl + F" to "聚焦搜索框",
                 "Enter" to "执行搜索（搜索框聚焦时）",
                 "F5" to "重新搜索",
-                "Ctrl + D" to "开始下载",
+                "Ctrl + D" to "开始 / 取消下载",
                 "Ctrl + A" to "全选分类 / 全选文件",
                 "Ctrl + Shift + A" to "取消全选",
                 "Ctrl + T" to "切换深色 / 浅色主题",

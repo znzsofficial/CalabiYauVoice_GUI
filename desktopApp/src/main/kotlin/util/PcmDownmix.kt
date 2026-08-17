@@ -63,7 +63,7 @@ private class PcmDownmixInputStream(
         var received = 0
         while (received < sourceFrame.size) {
             val count = source.read(sourceFrame, received, sourceFrame.size - received)
-            if (count == -1) return received == 0
+            if (count == -1) return false
             if (count == 0) continue
             received += count
         }

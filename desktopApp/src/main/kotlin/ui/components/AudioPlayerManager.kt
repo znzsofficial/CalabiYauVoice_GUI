@@ -47,6 +47,12 @@ object AudioPlayerManager {
             if (stopRequested.get()) false else true.also { decodedStream = stream }
         }
 
+        fun replaceDecodedStream(stream: AudioInputStream): Boolean = synchronized(resourceLock) {
+            if (stopRequested.get()) return@synchronized false
+            decodedStream = stream
+            true
+        }
+
         fun openLine(sourceLine: SourceDataLine, format: AudioFormat): Boolean = synchronized(resourceLock) {
             if (stopRequested.get()) return@synchronized false
             line = sourceLine
@@ -157,6 +163,10 @@ object AudioPlayerManager {
             } else {
                 openDesktopStreamingAudioInputStream(source, effectiveFileName)
             }
+            if (!session.registerDecodedStream(inputStream)) {
+                inputStream.close()
+                return
+            }
 
             val baseFormat = inputStream.format
             val providerFormat = AudioFormat(
@@ -183,7 +193,7 @@ object AudioPlayerManager {
             }
             val channelNormalizedStream = if (pcmStream.format.channels > 2) pcmStream.downmixToStereo() else pcmStream
             val decodedStream = selectPlaybackStream(channelNormalizedStream)
-            if (!session.registerDecodedStream(decodedStream)) {
+            if (decodedStream !== inputStream && !session.replaceDecodedStream(decodedStream)) {
                 decodedStream.close()
                 return
             }
