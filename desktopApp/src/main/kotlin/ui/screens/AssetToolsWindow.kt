@@ -32,7 +32,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
 import com.nekolaska.calabiyau.core.media.gif.AnimatedGifEncoder
-import com.formdev.flatlaf.util.SystemFileChooser
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.dialogs.FileKitMode
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.openFilePicker
+import io.github.vinceglb.filekit.path
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
 import io.github.composefluent.component.*
@@ -180,11 +185,13 @@ fun AssetToolsWindow(onCloseRequest: () -> Unit) {
                         )
                         Button(
                             iconOnly = true,
-                            onClick = { 
-                                chooseDirectory(outputPath)?.let { 
-                                    outputPath = it.absolutePath
-                                    AppPrefs.assetToolsOutputPath = it.absolutePath 
-                                } 
+                            onClick = {
+                                scope.launch {
+                                    pickDirectory(outputPath)?.let {
+                                        outputPath = it.absolutePath
+                                        AppPrefs.assetToolsOutputPath = it.absolutePath
+                                    }
+                                }
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -328,7 +335,16 @@ private fun ImageToolsTab(
                     TextField(value = cropRatio, onValueChange = { cropRatio = it }, header = { Text("比例", fontSize = 12.sp) }, modifier = Modifier.width(120.dp), singleLine = true)
                 }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = { chooseFiles(imageExts, multi = true)?.let { files = (files + it).distinctBy(File::getAbsolutePath) } }, disabled = isBusy) { Text("选择图片") }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            chooseFiles(imageExts, multi = true)?.let {
+                                files = (files + it).distinctBy(File::getAbsolutePath)
+                            }
+                        }
+                    },
+                    disabled = isBusy,
+                ) { Text("选择图片") }
                 Button(onClick = ::runImageTool, disabled = isBusy || files.isEmpty()) { Text("开始处理") }
             }
             if (mode == ImageToolMode.GIF_COMPOSE) {
@@ -413,7 +429,16 @@ private fun TextToolsTab(
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ToolSectionCard(title = "时间轴转换", subtitle = "导入字幕或时间轴后可统一调整并导出") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
-                Button(onClick = { chooseFiles(setOf("srt", "lrc", "vtt", "ass", "ssa"), multi = false)?.firstOrNull()?.let(::importTimeline) }, disabled = isBusy) { Text("导入字幕/时间轴") }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            chooseFiles(setOf("srt", "lrc", "vtt", "ass", "ssa"), multi = false)
+                                ?.firstOrNull()
+                                ?.let(::importTimeline)
+                        }
+                    },
+                    disabled = isBusy,
+                ) { Text("导入字幕/时间轴") }
                 ComboBox(header = "导出格式", items = TimelineExportFormat.entries.map { it.label }, selected = format.ordinal, onSelectionChange = { i, _ -> format = TimelineExportFormat.entries[i] })
                 TextField(value = shiftMs, onValueChange = { if (it.matches(Regex("-?\\d*"))) shiftMs = it }, header = { Text("整体偏移 ms", fontSize = 12.sp) }, modifier = Modifier.width(140.dp), singleLine = true)
                 Spacer(Modifier.weight(1f))
@@ -536,16 +561,14 @@ private fun LogPanel(logLines: List<String>, onClear: () -> Unit) {
     }
 }
 
-private fun chooseDirectory(initialPath: String): File? = SystemFileChooser(initialPath.ifBlank { home }).apply {
-    fileSelectionMode = SystemFileChooser.DIRECTORIES_ONLY
-}.takeIf { it.showOpenDialog(null) == SystemFileChooser.APPROVE_OPTION }?.selectedFile
-
-internal fun chooseFiles(exts: Set<String>, multi: Boolean): List<File>? = SystemFileChooser(home).apply {
-    fileSelectionMode = SystemFileChooser.FILES_ONLY
-    isMultiSelectionEnabled = multi
-}.takeIf { it.showOpenDialog(null) == SystemFileChooser.APPROVE_OPTION }?.let { chooser ->
-    val files = if (multi) chooser.selectedFiles.toList() else listOf(chooser.selectedFile)
-    files.filter { it.isFile && it.extension.lowercase() in exts }
+internal suspend fun chooseFiles(exts: Set<String>, multi: Boolean): List<File>? {
+    val type = FileKitType.File(exts.sorted())
+    return if (multi) {
+        FileKit.openFilePicker(type = type, mode = FileKitMode.Multiple())
+            ?.map { File(it.path) }
+    } else {
+        FileKit.openFilePicker(type = type)?.path?.let { listOf(File(it)) }
+    }
 }
 
 private fun collectFiles(files: List<File>, exts: Set<String>): List<File> = files.flatMap { file ->

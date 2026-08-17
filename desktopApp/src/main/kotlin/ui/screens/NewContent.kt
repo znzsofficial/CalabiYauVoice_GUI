@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
-import com.mayakapps.compose.windowstyler.WindowBackdrop
+import AppBackdrop
 import portrait.*
 import data.WikiEngine
 import data.WikiUserApi
@@ -149,30 +149,16 @@ fun NewDownloaderContent() {
     val appStore = LocalAppStore.current
     val darkMode = appStore.darkMode
     val backdropType = appStore.backdropType
-    val isWin11 = appStore.isWin11
-    val canUseNonWin11Backdrop = appStore.canUseNonWin11Backdrop
+    val isWindows = appStore.isWindows
 
-    // backdrop 选项列表：名称 → 值（null 表示恢复默认渐变背景）
-    val backdropOptions: List<Pair<String, WindowBackdrop?>> = remember(isWin11, canUseNonWin11Backdrop) {
-        when {
-            isWin11 -> listOf(
-                "Tabbed" to WindowBackdrop.Tabbed,
-                "Mica" to WindowBackdrop.Mica,
-                "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
-                "Aero" to WindowBackdrop.Aero,
-                "Transparent" to WindowBackdrop.Transparent,
-                "默认" to null,
-            )
-
-            canUseNonWin11Backdrop -> listOf(
-                "Acrylic" to WindowBackdrop.Acrylic(Color.Transparent),
-                "Aero" to WindowBackdrop.Aero,
-                "Transparent" to WindowBackdrop.Transparent,
-                "默认" to null,
-            )
-
-            else -> emptyList()
-        }
+    val backdropOptions: List<Pair<String, AppBackdrop>> = remember(isWindows) {
+        if (!isWindows) emptyList()
+        else listOf(
+            "Mica Alt" to AppBackdrop.MicaAlt,
+            "Mica" to AppBackdrop.Mica,
+            "Acrylic" to AppBackdrop.Acrylic,
+            "默认" to AppBackdrop.None,
+        )
     }
 
     // === 文件选择弹窗 ===
@@ -225,7 +211,9 @@ fun NewDownloaderContent() {
     }
 
     fun savePortraitAssetAs(asset: PortraitAsset) {
-        jChoose { directory -> savePortraitAsset(asset, directory) }
+        coroutineScope.launch {
+            pickDirectory(savePath)?.let { directory -> savePortraitAsset(asset, directory) }
+        }
     }
 
     fun refreshCurrentUser() {
@@ -455,12 +443,9 @@ fun NewDownloaderContent() {
                             text = { Text("窗口效果") },
                             items = {
                                 backdropOptions.forEach { (label, backdrop) ->
-                                    val current = backdropType.value
-                                    val isCurrent = if (backdrop == null) current == null
-                                    else current != null && current::class == backdrop::class
                                     MenuFlyoutItem(
                                         text = { Text(label) },
-                                        selected = isCurrent,
+                                        selected = backdropType.value == backdrop,
                                         onSelectedChanged = { backdropType.value = backdrop },
                                         selectionType = ListItemSelectionType.Radio,
                                         colors = ListItemDefaults.defaultListItemColors()
@@ -1108,7 +1093,13 @@ fun NewDownloaderContent() {
                                 ) {
                                     Button(
                                         iconOnly = true,
-                                        onClick = { jChoose { viewModel.onSavePathChange(it.absolutePath) } },
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                pickDirectory(savePath)?.let {
+                                                    viewModel.onSavePathChange(it.absolutePath)
+                                                }
+                                            }
+                                        },
                                     ) {
                                         Image(
                                             painter = rememberVectorPainter(Icons.Regular.FolderOpen),

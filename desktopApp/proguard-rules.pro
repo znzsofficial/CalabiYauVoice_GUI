@@ -76,16 +76,12 @@
     <fields>;
     <methods>;
 }
--keep class jna.windows.structure.** { <fields>; }
 -keep interface jna.flac.** { *; }
 -keep class jna.flac.** { *; }
 -keepclasseswithmembers class * { native <methods>; }
 
-# ---------- ComposeWebView (Uniffi/JNA 绑定) ----------
--keep,includedescriptorclasses class io.github.kdroidfilter.webview.wry.** { *; }
-
-# ---------- Window Styler（反射调用 Windows API） ----------
--keep class com.mayakapps.compose.windowstyler.** { *; }
+# ---------- Nucleus ComposeNativeWebView ----------
+-keep,includedescriptorclasses class dev.nucleusframework.webview.** { *; }
 
 # ---------- Java Sound SPI（ServiceLoader 动态加载） ----------
 -keep class * implements javax.sound.sampled.spi.AudioFileReader { *; }

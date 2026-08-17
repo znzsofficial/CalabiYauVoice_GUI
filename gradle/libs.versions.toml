@@ -13,8 +13,10 @@ androidx-testExt = "1.3.0"
 coil = "3.5.0"
 composeMultiplatform = "1.11.1"
 compose-fluent = "1.0.0"
-composewebview = "1.0.0-beta-02"
+nucleus = "2.3.2"
+composewebview = "1.0.1"
 flatlaf = "3.7.2"
+filekit = "0.14.2"
 foojay-resolver = "1.0.0"
 jna = "5.19.1"
 jsoup = "1.23.1"
@@ -62,7 +64,11 @@ compose-foundation-desktop = { module = "org.jetbrains.compose.foundation:founda
 compose-ui-desktop = { module = "org.jetbrains.compose.ui:ui-desktop", version.ref = "composeMultiplatform" }
 compose-fluent = { module = "dev.nucleusframework.composefluent:fluent", version.ref = "compose-fluent" }
 compose-fluent-iconsExtended = { module = "dev.nucleusframework.composefluent:fluent-icons-extended", version.ref = "compose-fluent" }
-composewebview = { module = "io.github.kdroidfilter:composewebview", version.ref = "composewebview" }
+compose-fluent-window = { module = "dev.nucleusframework.composefluent:decorated-window-fluent", version.ref = "compose-fluent" }
+nucleus-application = { module = "dev.nucleusframework:nucleus.nucleus-application", version.ref = "nucleus" }
+nucleus-window-tao = { module = "dev.nucleusframework:nucleus.decorated-window-tao", version.ref = "nucleus" }
+nucleus-window-jni = { module = "dev.nucleusframework:nucleus.decorated-window-jni", version.ref = "nucleus" }
+composewebview = { module = "dev.nucleusframework:composewebview", version.ref = "composewebview" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "androidx-compose-material3" }
 androidx-compose-material3-windowSizeClass = { module = "androidx.compose.material3:material3-window-size-class", version.ref = "androidx-compose-material3-window-size" }
 androidx-compose-material-iconsExtended = { module = "androidx.compose.material:material-icons-extended", version.ref = "androidx-compose-material-icons-extended" }
@@ -87,7 +93,7 @@ jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 material-kolor = { module = "com.materialkolor:material-kolor", version.ref = "material-kolor" }
 jna-jpms = { module = "net.java.dev.jna:jna-jpms", version.ref = "jna" }
 jna-platform-jpms = { module = "net.java.dev.jna:jna-platform-jpms", version.ref = "jna" }
-flatlaf = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
+filekit-dialogs = { module = "io.github.vinceglb:filekit-dialogs", version.ref = "filekit" }
 mp3spi = { module = "com.googlecode.soundlibs:mp3spi", version.ref = "mp3spi" }
 javasound-aac = { module = "com.tianscar.javasound:javasound-aac", version.ref = "javasound-aac" }
 javasound-vorbis = { module = "com.tianscar.javasound:javasound-vorbis", version.ref = "javasound-vorbis" }

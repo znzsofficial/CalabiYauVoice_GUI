@@ -297,7 +297,16 @@ internal fun AudioToolsTab(
     ) {
         ToolSectionCard(title = "音频输入", subtitle = "支持 WAV / MP3 / FLAC，自动转为临时 WAV 进行处理") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { chooseFiles(setOf("wav", "mp3", "flac"), multi = false)?.firstOrNull()?.let(::load) }, disabled = isBusy) { Text("选择音频") }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            chooseFiles(setOf("wav", "mp3", "flac"), multi = false)
+                                ?.firstOrNull()
+                                ?.let(::load)
+                        }
+                    },
+                    disabled = isBusy,
+                ) { Text("选择音频") }
                 Button(onClick = ::exportCurrentAudio, disabled = isBusy || input == null) { Text("导出音频") }
                 Text(input?.source?.absolutePath ?: "未选择 WAV/MP3/FLAC", modifier = Modifier.weight(1f), fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

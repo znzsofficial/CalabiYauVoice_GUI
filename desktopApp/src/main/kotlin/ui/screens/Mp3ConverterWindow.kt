@@ -338,9 +338,11 @@ fun Mp3ConverterWindow(
                                 TooltipBox(tooltip = { Text("选择文件夹") }) {
                                     Button(
                                         onClick = {
-                                            jChoose {
-                                                savePath = it.absolutePath
-                                                AppPrefs.converterSavePath = it.absolutePath
+                                            coroutineScope.launch {
+                                                pickDirectory(savePath)?.let {
+                                                    savePath = it.absolutePath
+                                                    AppPrefs.converterSavePath = it.absolutePath
+                                                }
                                             }
                                         }
                                     ) {

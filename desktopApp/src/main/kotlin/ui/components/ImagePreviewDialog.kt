@@ -23,8 +23,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogWindow
+import LocalNucleusAppScope
 import androidx.compose.ui.window.rememberDialogState
+import dev.nucleusframework.window.fluent.FluentDecoratedDialog
+import dev.nucleusframework.window.fluent.FluentDialogTitleBar
 import data.WikiEngine
 import io.github.composefluent.component.*
 import io.github.composefluent.icons.Icons
@@ -87,12 +89,14 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
     var flyoutVisible by remember { mutableStateOf(false) }
     var flyoutExpanded by remember { mutableStateOf(false) }
 
-    DialogWindow(
+    with(LocalNucleusAppScope.current) {
+    FluentDecoratedDialog(
         onCloseRequest = onClose,
         title = name,
         state = rememberDialogState(width = 900.dp, height = 700.dp),
+        resizable = true,
         onKeyEvent = { keyEvent ->
-            if (keyEvent.type != KeyEventType.KeyDown) return@DialogWindow false
+            if (keyEvent.type != KeyEventType.KeyDown) return@FluentDecoratedDialog false
             when (keyEvent.key) {
                 Key.Escape -> {
                     onClose(); true
@@ -110,9 +114,12 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
             }
         }
     ) {
+        Column(Modifier.fillMaxSize()) {
+        FluentDialogTitleBar { Text(name) }
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .background(Color(0xDD000000))
                 // 背景直接用 clickable，无延迟；缩放后点背景不关闭，避免误触
                 .clickable(
@@ -314,5 +321,7 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
                 }
             }
         }
+        }
+    }
     }
 }

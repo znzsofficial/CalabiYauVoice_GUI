@@ -849,7 +849,7 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 
 ### 17.1 已完成
 
-2026-08-17 只替换了 Fluent 控件坐标，窗口栈未动。
+2026-08-17 只替换了 Fluent 控件坐标。随后阶段 A 已落地：入口改为 `nucleusApplication(backend = NucleusBackend.Awt, enableSingleInstance = false)`，主窗口和 `StyledWindow` 走 `FluentDecoratedWindow`，图片预览走 `FluentDecoratedDialog`。旧 WndProc、Window Styler SNAPSHOT 和 `jna-platform` 已删除。FLAC 仍用 JNA。`decorated-window-fluent` 传递引入的 Tao 后端必须在 Gradle 中排除，否则 Tao 会取代 Swing 的 `Dispatchers.Main`，导致 Compose Desktop Lifecycle 主线程检查失败。AWT 阶段没有原生 Mica/Acrylic API，Backdrop 菜单只保留选项；真正的 DWM 材质等 Tao 阶段再接。
 
 | 项 | 旧值 | 新值 |
 |---|---|---|
@@ -862,13 +862,7 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 
 已验证：`:desktopApp:compileKotlin` 通过。当时只有既有的 `painterResource` 弃用警告，没有新的 Fluent API 编译错误。
 
-当前仍保留：
-
-- Compose Desktop `application {}`
-- `StyledWindow` / `WindowsWindowFrame`
-- 自写 JNA WndProc 与命中测试
-- `desktopApp/libs/window-styler-jvm-0.3.3-SNAPSHOT.jar`
-- `io.github.kdroidfilter:composewebview`
+阶段 A 仍保留 `io.github.kdroidfilter:composewebview` 和其他 AWT 集成；旧 `application {}`、`WindowsWindowFrame`、窗口 JNA 和 Window Styler 已移除。
 
 ### 17.2 不要一次做完的原因
 
@@ -890,7 +884,7 @@ DLL 缺失、哈希不一致或 ABI 加载失败会同时影响播放、素材�
 
 目标：删掉自写标题栏和 Window Styler，但先保住现有 AWT 集成。
 
-1. 增加 `decorated-window-fluent:1.0.0`。它会带上 Nucleus application / Tao 运行时；入口必须显式 `NucleusBackend.Awt`，不要用 `Auto`。
+1. 增加 `decorated-window-fluent:1.0.0`。它会带上 Nucleus application / Tao 运行时；AWT 阶段必须从该依赖排除 `nucleus.decorated-window-tao`，并在入口显式使用 `NucleusBackend.Awt`，不要用 `Auto`。
 2. 把 `Main.kt` 的 `application {}` 换成 `nucleusApplication(backend = NucleusBackend.Awt, enableSingleInstance = false)`。当前产品没有单实例锁。
 3. 把 `FluentTheme` 提到 decorated window 外层。Tao 以后每个窗口是独立 Compose scene；现在外提可以避免后面再拆一次。
 4. 用 `FluentDecoratedWindow` + `FluentTitleBar` 替换 `Main.kt` 和 `StyledWindow`。保留现有 `WindowState`、图标、`resizable`、`onKeyEvent`。

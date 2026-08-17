@@ -1,128 +1,94 @@
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
+import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.rememberWindowState
-import com.mayakapps.compose.windowstyler.WindowBackdrop
-import com.mayakapps.compose.windowstyler.WindowStyle
+import dev.nucleusframework.application.NucleusBackend
+import dev.nucleusframework.application.nucleusApplication
+import dev.nucleusframework.window.fluent.FluentDecoratedWindow
 import io.github.composefluent.ExperimentalFluentApi
 import io.github.composefluent.FluentTheme
+import io.github.composefluent.FluentThemeConfiguration
+import io.github.composefluent.component.ContentDialogHostState
 import io.github.composefluent.darkColors
 import io.github.composefluent.lightColors
-import jna.windows.structure.isWindows11OrLater
-import org.jetbrains.skiko.GraphicsApi
-import org.jetbrains.skiko.SkikoProperties
-import ui.components.WindowsWindowFrame
-import ui.components.rememberWindowsWindowFrameState
+import org.jetbrains.skiko.hostOs
+import ui.components.AppWindowChrome
 import ui.screens.NewDownloaderContent
-import util.getNonWin11BackgroundGradient
-import util.rememberTransparentSkiaLayerReady
 import java.awt.Button
 import java.awt.FlowLayout
 import java.awt.Frame
 import java.awt.Label
 
-
-@OptIn(ExperimentalFluentApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFluentApi::class)
 fun main() {
-    // 在 Compose 启动前初始化共享立绘仓库
     data.PortraitRepository.init(
         fetchFilesInCategory = { cat, audio -> data.WikiEngine.fetchFilesInCategory(cat, audio) },
         searchFilesFn = { kw, audio -> data.WikiEngine.searchFiles(kw, audio) },
         getAllCharacterNames = { data.WikiEngine.getAllCharacterNames() }
     )
 
-    application {
-        setupGlobalExceptionHandler()
-        val windowState = rememberWindowState(width = 1280.dp, height = 900.dp)
-
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "卡拉彼丘 WiKi 资源下载器",
-        icon = painterResource("icon.png"),
-        state = windowState
+    nucleusApplication(
+        backend = NucleusBackend.Tao,
+        enableSingleInstance = false,
     ) {
-//        在 Window 内部获取实际使用的渲染 API
-//        LaunchedEffect(Unit) {
-//            val actualApi = SkikoProperties.renderApi
-//            println("实际使用的渲染后端: $actualApi")
-//            println("支持的后端: ${GraphicsApi.entries.joinToString()}")
-//        }
-
+        setupGlobalExceptionHandler()
+        val windowState = rememberWindowState(
+            position = WindowPosition.Aligned(androidx.compose.ui.Alignment.Center),
+            size = DpSize(1280.dp, 900.dp),
+        )
         val systemDark = isSystemInDarkTheme()
         val darkMode = remember { mutableStateOf(systemDark) }
-        val windowFrameState = rememberWindowsWindowFrameState(window)
-        val skiaLayerReady = rememberTransparentSkiaLayerReady(window)
-        val isWin11 = remember { isWindows11OrLater() }
-        // 非Win11但支持 skia：可以应用 Acrylic/Aero/Transparent，null 表示使用渐变背景
-        val canUseNonWin11Backdrop = skiaLayerReady && !isWin11
-        // Win11 默认 Tabbed；非Win11 默认 null（渐变背景）
-        val backdropType = remember { mutableStateOf<WindowBackdrop?>(if (isWin11) WindowBackdrop.Tabbed else null) }
-
-        val backgroundBrush = remember(darkMode.value) {
-            getNonWin11BackgroundGradient(darkMode.value)
+        val isWindows = hostOs.isWindows
+        val backdropType = remember {
+            mutableStateOf(if (isWindows) AppBackdrop.MicaAlt else AppBackdrop.None)
         }
-
-        val appState = remember(canUseNonWin11Backdrop, isWin11) {
+        val appState = remember(isWindows) {
             AppState(
                 darkMode = darkMode,
                 backdropType = backdropType,
-                isWin11 = isWin11,
-                canUseNonWin11Backdrop = canUseNonWin11Backdrop,
+                isWindows = isWindows,
             )
         }
-        CompositionLocalProvider(LocalAppStore provides appState) {
-            FluentTheme(colors = if (darkMode.value) darkColors() else lightColors(), useAcrylicPopup = true) {
-                val currentBackdrop = backdropType.value
-                // skiaLayerReady 已是前提，只要选了非 null backdrop 就应用 WindowStyle
-                if (skiaLayerReady && currentBackdrop != null) {
-                    WindowStyle(
-                        isDarkTheme = darkMode.value,
-                        backdropType = currentBackdrop
-                    )
-                }
-                // 是否使用任何 Backdrop 效果（非默认渐变）
-                val useBackdropEffect = skiaLayerReady && currentBackdrop != null
-                WindowsWindowFrame(
-                    title = "卡拉彼丘 WiKi 资源下载器",
+        val icon = painterResource("icon.png")
+        val title = "卡拉彼丘 WiKi 资源下载器"
+
+        CompositionLocalProvider(
+            LocalAppStore provides appState,
+            LocalNucleusAppScope provides this,
+        ) {
+            FluentThemeConfiguration(
+                colors = if (darkMode.value) darkColors() else lightColors(),
+                contentDialogHostState = remember { ContentDialogHostState() },
+            ) {
+                FluentDecoratedWindow(
                     onCloseRequest = ::exitApplication,
                     state = windowState,
-                    frameState = windowFrameState,
-                    isDarkTheme = darkMode.value,
-                    captionBarHeight = 48.dp,
-                    captionBarBackground = if (useBackdropEffect) null else backgroundBrush,
-                ) { windowInset, _ ->
-                    val contentModifier = remember(windowFrameState.paddingInset, windowInset) {
-                        Modifier
-                            .windowInsetsPadding(windowFrameState.paddingInset)
-                            .windowInsetsPadding(windowInset)
-                    }
-                    // useBackdropEffect 变化时重算；backgroundBrush 已在外层按 darkMode 缓存
-                    val bgModifier = if (useBackdropEffect) Modifier else Modifier.background(backgroundBrush)
-                    Box(modifier = contentModifier.then(bgModifier)) {
-                        NewDownloaderContent()
+                    title = title,
+                    icon = icon,
+                    minimumSize = DpSize(800.dp, 600.dp),
+                ) {
+                    FluentTheme(colors = if (darkMode.value) darkColors() else lightColors(), useAcrylicPopup = true) {
+                        AppWindowChrome(title = title) {
+                            NewDownloaderContent()
+                        }
                     }
                 }
             }
         }
-    } // Window
-    } // application
-} // main
+    }
+}
 
-/**
- * 全局异常处理器
- */
 private fun setupGlobalExceptionHandler() {
     Thread.setDefaultUncaughtExceptionHandler { _, e ->
         java.awt.Dialog(Frame(), e.message ?: "程序异常").apply {
             layout = FlowLayout()
             add(Label("异常信息：${e.message ?: "未知异常"}"))
-            add(Label("堆栈信息：\n${e.stackTraceToString().take(500)}")) // 限制长度避免窗口过大
+            add(Label("堆栈信息：\n${e.stackTraceToString().take(500)}"))
             add(Button("确认").apply {
                 addActionListener { dispose() }
             })

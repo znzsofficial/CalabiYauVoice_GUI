@@ -11,25 +11,24 @@ dependencies {
     implementation(projects.shared)
     implementation(libs.compose.fluent)
     implementation(libs.compose.fluent.iconsExtended)
-    implementation(fileTree("libs") {
-        include("*.jar")
-    })
+    // FluentDecoratedWindow uses Tao here so Nucleus can apply the native DWM backdrop.
+    implementation(libs.compose.fluent.window)
+    // 2.3.2 fixes secondary Tao scenes targeting their parent window controls.
+    implementation(libs.nucleus.application)
+    implementation(libs.nucleus.window.tao)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.okio)
     implementation(libs.compose.foundation.desktop)
     implementation(libs.compose.ui.desktop)
     implementation(libs.jna.jpms)
-    implementation(libs.jna.platform.jpms)
-    implementation(libs.flatlaf)
+    implementation(libs.filekit.dialogs)
     implementation(libs.okhttp.urlconnection)
     implementation(libs.mp3spi)
     implementation(libs.javasound.aac)
     implementation(libs.javasound.vorbis)
     implementation(libs.kotlinx.coroutinesSwing)
-    implementation(libs.composewebview) {
-        exclude(group = "net.java.dev.jna", module = "jna")
-    }
+    implementation(libs.composewebview)
 
     testImplementation(libs.kotlin.testJunit)
     testImplementation(libs.junit)
