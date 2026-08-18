@@ -23,14 +23,18 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
 
     val GAME_MODES: List<Pair<String, String>> = listOf(
         "爆破/团队乱斗" to "一般爆破",
+        "排位爆破" to "排位爆破",
+        "个人乱斗" to "个人乱斗",
         "无限团竞" to "无限团竞",
         "极限推进" to "极限推进",
+        "超弦推进" to "超弦推进",
         "大头乱斗" to "大头乱斗",
         "晶源感染" to "晶源感染",
         "极限刀战" to "极限刀战",
         "弦区争夺" to "弦区争夺",
         "枪王乱斗" to "枪王乱斗",
         "晶能冲突" to "晶能冲突",
+        "炸弹派对" to "炸弹派对",
     )
 
     suspend fun fetchAllModes(

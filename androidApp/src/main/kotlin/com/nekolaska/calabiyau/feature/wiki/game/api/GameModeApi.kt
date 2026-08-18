@@ -24,14 +24,18 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
     val MODES = listOf(
         ModeEntry("一般爆破", "战斗模式/一般爆破"),
         ModeEntry("团队乱斗", "战斗模式/团队乱斗"),
+        ModeEntry("排位爆破", "战斗模式/排位爆破"),
+        ModeEntry("个人乱斗", "战斗模式/个人乱斗"),
         ModeEntry("无限团竞", "战斗模式/无限团竞"),
         ModeEntry("极限推进", "战斗模式/极限推进"),
+        ModeEntry("超弦推进", "战斗模式/超弦推进"),
         ModeEntry("晶源感染", "战斗模式/晶源感染"),
         ModeEntry("极限刀战", "战斗模式/极限刀战"),
         ModeEntry("枪王乱斗", "战斗模式/枪王乱斗"),
         ModeEntry("晶能冲突", "战斗模式/晶能冲突"),
         ModeEntry("弦区争夺", "战斗模式/弦区争夺"),
         ModeEntry("大头乱斗", "战斗模式/大头乱斗"),
+        ModeEntry("炸弹派对", "战斗模式/炸弹派对"),
     )
 
     suspend fun fetchAllModes(

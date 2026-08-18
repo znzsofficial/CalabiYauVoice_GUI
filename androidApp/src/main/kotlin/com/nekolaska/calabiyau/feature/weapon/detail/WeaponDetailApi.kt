@@ -188,15 +188,26 @@ object WeaponDetailApi {
         // 构建伤害表
         val damageTable = mutableListOf<DamageRow>()
         
-        // 1. 尝试从模板解析 (PC)
+        // 1. 尝试从模板解析 (PC / 霰弹枪单值)
         if (damageParams.isNotEmpty()) {
-            val distances = listOf("10", "20", "30", "40", "50")
+            val distances = listOf("10", "15", "20", "25", "30", "40", "50")
             distances.forEach { d ->
                 val head = damageParams["${d}米头部"]
                 val upper = damageParams["${d}米上肢"]
                 val lower = damageParams["${d}米下肢"]
                 if (head != null || upper != null || lower != null) {
                     damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
+                    return@forEach
+                }
+                val pellet = damageParams["${d}米"]
+                if (!pellet.isNullOrBlank()) {
+                    damageTable.add(DamageRow("${d}米", pellet, "", ""))
+                }
+            }
+            distances.forEach { d ->
+                val pellet = damageParams["移动端${d}米"]
+                if (!pellet.isNullOrBlank()) {
+                    damageTable.add(DamageRow("移动端·${d}米", pellet, "", ""))
                 }
             }
         }

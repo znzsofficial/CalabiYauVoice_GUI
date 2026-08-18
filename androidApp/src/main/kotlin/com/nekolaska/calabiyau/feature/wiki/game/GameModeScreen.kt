@@ -274,14 +274,18 @@ private fun modeIcon(name: String): ImageVector {
     return when (name) {
         "一般爆破" -> Icons.Outlined.LocalFireDepartment
         "团队乱斗" -> Icons.Outlined.Groups
+        "排位爆破" -> Icons.Outlined.EmojiEvents
+        "个人乱斗" -> Icons.Outlined.Person
         "无限团竞" -> Icons.Outlined.AllInclusive
         "极限推进" -> Icons.Outlined.RocketLaunch
+        "超弦推进" -> Icons.Outlined.PhoneAndroid
         "晶源感染" -> Icons.Outlined.Coronavirus
         "极限刀战" -> Icons.Outlined.ContentCut
         "枪王乱斗" -> Icons.Outlined.GpsFixed
         "晶能冲突" -> Icons.Outlined.Bolt
         "弦区争夺" -> Icons.Outlined.Flag
         "大头乱斗" -> Icons.Outlined.Face
+        "炸弹派对" -> Icons.Outlined.Whatshot
         else -> Icons.Outlined.SportsEsports
     }
 }

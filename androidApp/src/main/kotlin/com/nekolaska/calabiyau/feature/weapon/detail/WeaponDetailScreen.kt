@@ -198,8 +198,13 @@ private fun WeaponDetailContent(
         }
 
         // ── 伤害数据 ──
-        val distanceRows = detail.damageTable.filter { it.upper.isNotBlank() || it.lower.isNotBlank() }
-        val simpleRows = detail.damageTable.filter { it.upper.isBlank() && it.lower.isBlank() }
+        val distanceRows = detail.damageTable.filter { row ->
+            row.distance.contains("米") &&
+                (row.upper.isNotBlank() || row.lower.isNotBlank() || row.head.isNotBlank())
+        }
+        val simpleRows = detail.damageTable.filter { row ->
+            !row.distance.contains("米") && row.upper.isBlank() && row.lower.isBlank()
+        }
         
         if (detail.baseDamage.isNotBlank() || distanceRows.isNotEmpty()) {
             item("damage_table") {
@@ -534,6 +539,7 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
             }
 
             val rows = groupedTables[selectedPlatform].orEmpty()
+            val pelletOnly = rows.isNotEmpty() && rows.all { it.upper.isBlank() && it.lower.isBlank() }
             if (rows.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
 
@@ -546,18 +552,25 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                         Text("距离", Modifier.weight(1f),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold)
-                        Text("头部", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center)
-                        Text("上肢", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center)
-                        Text("下肢", Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center)
+                        if (pelletOnly) {
+                            Text("伤害", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                        } else {
+                            Text("头部", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                            Text("上肢", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                            Text("下肢", Modifier.weight(1f),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center)
+                        }
                     }
                 }
 
@@ -577,17 +590,23 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                         Text(normalizeDistanceLabel(row.distance), Modifier.weight(1f),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium)
-                        Text(row.head, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.error)
-                        Text(row.upper, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center)
-                        Text(row.lower, Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (pelletOnly) {
+                            Text(row.head, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center)
+                        } else {
+                            Text(row.head, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.error)
+                            Text(row.upper, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center)
+                            Text(row.lower, Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
