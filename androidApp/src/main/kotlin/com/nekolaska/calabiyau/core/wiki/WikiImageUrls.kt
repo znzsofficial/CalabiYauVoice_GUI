@@ -20,11 +20,14 @@ object WikiImageUrls {
         if (widthPx <= 0 || "/thumb/" in original) return original
         val fileName = original.substringAfterLast('/')
         if (fileName.isBlank()) return original
-        val insertAt = original.indexOf("/images/")
-        if (insertAt < 0) return original
-        val prefix = original.substring(0, insertAt + "/images/".length)
-        val hashPath = original.removePrefix(prefix)
-        return "${prefix}thumb/$hashPath/${widthPx}px-$fileName"
+        val imagesAt = original.indexOf("/images/")
+        if (imagesAt < 0) return original
+        val afterImages = original.substring(imagesAt + "/images/".length)
+        val wikiEnd = afterImages.indexOf('/')
+        if (wikiEnd < 0) return original
+        val prefix = original.substring(0, imagesAt + "/images/".length + wikiEnd)
+        val hashPath = afterImages.substring(wikiEnd + 1)
+        return "$prefix/thumb/$hashPath/${widthPx}px-$fileName"
     }
 
     fun normalize(url: String?): String? {

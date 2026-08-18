@@ -14,6 +14,7 @@ object VotingParsers {
         val infoText = pollInfoMatch.groupValues[1]
             .replace("&amp;", "&")
             .replace("&#039;", "'")
+            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
             .replace(Regex("<[^>]+>"), "")
 
         val configMap = mutableMapOf<String, String>()

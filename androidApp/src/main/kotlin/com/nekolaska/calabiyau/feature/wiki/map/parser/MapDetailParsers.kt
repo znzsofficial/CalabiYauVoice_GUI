@@ -59,7 +59,7 @@ object MapDetailParsers {
 
     private fun parseTemplateParams(content: String): Map<String, String> {
         val params = mutableMapOf<String, String>()
-        content.split("|").forEach { part ->
+        splitTopLevel(content, '|').forEach { part ->
             val eqIdx = part.indexOf('=')
             if (eqIdx > 0) {
                 val key = part.substring(0, eqIdx).trim()
@@ -68,6 +68,49 @@ object MapDetailParsers {
             }
         }
         return params
+    }
+
+    private fun splitTopLevel(content: String, delimiter: Char): List<String> {
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        var braceDepth = 0
+        var bracketDepth = 0
+        var index = 0
+        while (index < content.length) {
+            when {
+                content.startsWith("{{", index) -> {
+                    braceDepth++
+                    current.append("{{")
+                    index += 2
+                }
+                content.startsWith("}}", index) -> {
+                    braceDepth = (braceDepth - 1).coerceAtLeast(0)
+                    current.append("}}")
+                    index += 2
+                }
+                content.startsWith("[[", index) -> {
+                    bracketDepth++
+                    current.append("[[")
+                    index += 2
+                }
+                content.startsWith("]]", index) -> {
+                    bracketDepth = (bracketDepth - 1).coerceAtLeast(0)
+                    current.append("]]")
+                    index += 2
+                }
+                content[index] == delimiter && braceDepth == 0 && bracketDepth == 0 -> {
+                    parts += current.toString()
+                    current.clear()
+                    index++
+                }
+                else -> {
+                    current.append(content[index])
+                    index++
+                }
+            }
+        }
+        if (current.isNotEmpty()) parts += current.toString()
+        return parts
     }
 
     private fun parseTerrainMapUrl(document: org.jsoup.nodes.Document): String? {
