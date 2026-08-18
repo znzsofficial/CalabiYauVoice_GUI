@@ -141,41 +141,7 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
 
 @Composable
 private fun ItemCatalogSkeleton(modifier: Modifier = Modifier) {
-    Column(modifier = modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ShimmerBox(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp)
-                .height(52.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp).horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            repeat(7) {
-                ShimmerBox(
-                    modifier = Modifier.width(if (it == 0) 88.dp else 64.dp).height(32.dp),
-                    shape = smoothCapsuleShape()
-                )
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 108.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            userScrollEnabled = false
-        ) {
-            items(12) {
-                ShimmerBox(
-                    modifier = Modifier.fillMaxWidth().height(150.dp),
-                    shape = smoothCornerShape(18.dp)
-                )
-            }
-        }
-    }
+    CatalogGridSkeleton(modifier = modifier, showSelector = false, chipCount = 7)
 }
 
 @Composable
@@ -369,67 +335,16 @@ private fun ItemCategoryRow(
 
 @Composable
 private fun ItemCard(item: ItemInfo, onClick: () -> Unit) {
-    Card(
+    CatalogGridCard(
+        name = item.name,
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        border = BorderStroke(
-            1.dp,
-            item.quality?.let { catalogQualityColor(it.level).copy(alpha = 0.4f) }
-                ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(smoothCornerShape(16.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!item.iconUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = item.iconUrl,
-                        contentDescription = item.name,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().padding(14.dp)
-                    )
-                } else {
-                    Icon(
-                        Icons.Outlined.Inventory2,
-                        null,
-                        modifier = Modifier.size(38.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                    )
-                }
-                item.quality?.let { quality ->
-                    Surface(
-                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
-                        shape = smoothCapsuleShape(),
-                        color = catalogQualityColor(quality.level).copy(alpha = 0.85f)
-                    ) {
-                        Text(
-                            quality.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-            Text(
-                item.name,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().height(46.dp).padding(horizontal = 6.dp, vertical = 6.dp)
-            )
-        }
-    }
+        imageUrl = item.iconUrl,
+        qualityLabel = item.quality?.displayName,
+        qualityLevel = item.quality?.level,
+        fallbackIcon = Icons.Outlined.Inventory2,
+        contentScale = ContentScale.Fit,
+        imagePadding = 14.dp
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

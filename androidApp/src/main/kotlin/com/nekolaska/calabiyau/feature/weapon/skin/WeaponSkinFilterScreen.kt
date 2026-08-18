@@ -35,10 +35,12 @@ import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.WeaponSki
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.CatalogDetailRow
+import com.nekolaska.calabiyau.core.ui.CatalogGridCard
+import com.nekolaska.calabiyau.core.ui.CatalogGridSkeleton
+import com.nekolaska.calabiyau.core.ui.CatalogQualityBadge
 import com.nekolaska.calabiyau.core.ui.ExpandableCatalogDescription
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.SearchBar
-import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.catalogQualityColor
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -198,92 +200,7 @@ fun WeaponSkinFilterScreen(
 
 @Composable
 private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        ShimmerBox(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp)
-                .height(52.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ShimmerBox(
-                modifier = Modifier
-                    .width(72.dp)
-                    .height(14.dp),
-                shape = smoothCornerShape(6.dp)
-            )
-            ShimmerBox(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = smoothCornerShape(20.dp)
-            )
-            ShimmerBox(
-                modifier = Modifier
-                    .width(72.dp)
-                    .height(14.dp),
-                shape = smoothCornerShape(6.dp)
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                repeat(6) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .width(if (it == 0) 72.dp else 60.dp)
-                            .height(32.dp),
-                        shape = smoothCapsuleShape()
-                    )
-                }
-            }
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 110.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            userScrollEnabled = false
-        ) {
-            items(12) {
-                Card(
-                    shape = smoothCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        ShimmerBox(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f),
-                            shape = smoothCornerShape(14.dp)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        ShimmerBox(
-                            Modifier.fillMaxWidth(0.75f).height(12.dp)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        ShimmerBox(
-                            Modifier.fillMaxWidth(0.5f).height(10.dp)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-            }
-        }
-    }
+    CatalogGridSkeleton(modifier = modifier)
 }
 
 // ────────────────────────────────────────────
@@ -340,90 +257,14 @@ private fun WeaponSkinFilterBar(
 
 @Composable
 private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
-    Card(
+    CatalogGridCard(
+        name = skin.name,
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        border = BorderStroke(
-            width = 1.dp,
-            color = skin.quality?.let { catalogQualityColor(it.level).copy(alpha = 0.4f) }
-                ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // 外观图片
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(smoothCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (skin.thumbnailUrl != null) {
-                    AsyncImage(
-                        model = skin.thumbnailUrl,
-                        contentDescription = skin.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.3f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Outlined.Palette, null,
-                                Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-
-                // 品质角标
-                if (skin.quality != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = smoothCapsuleShape(),
-                        color = catalogQualityColor(skin.quality.level).copy(alpha = 0.85f)
-                    ) {
-                        Text(
-                            skin.quality.displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            // 外观名
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(horizontal = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    skin.name,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-    }
+        imageUrl = skin.thumbnailUrl,
+        qualityLabel = skin.quality?.displayName,
+        qualityLevel = skin.quality?.level,
+        fallbackIcon = Icons.Outlined.Palette
+    )
 }
 
 // ────────────────────────────────────────────
@@ -496,23 +337,11 @@ private fun WeaponSkinDetailSheet(
                             )
                         )
                 )
-                if (skin.quality != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp),
-                        shape = smoothCapsuleShape(),
-                        color = qColor.copy(alpha = 0.9f)
-                    ) {
-                        Text(
-                            skin.quality.displayName,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                }
+                CatalogQualityBadge(
+                    label = skin.quality?.displayName,
+                    level = skin.quality?.level,
+                    compact = false
+                )
             }
 
             // ── 名称 & 武器 ──

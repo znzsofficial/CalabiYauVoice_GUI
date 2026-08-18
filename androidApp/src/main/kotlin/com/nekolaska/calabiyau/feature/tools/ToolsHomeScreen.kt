@@ -1,10 +1,8 @@
 package com.nekolaska.calabiyau.feature.tools
 
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -29,10 +27,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.predictiveBackFraction
+import com.nekolaska.calabiyau.core.ui.SeekablePredictiveBackHandler
+import com.nekolaska.calabiyau.core.ui.rememberPredictiveBackTransition
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
@@ -103,25 +101,15 @@ fun ToolsHomeScreen(
         }
     }
 
-    val transitionState = remember { SeekableTransitionState(currentSection) }
+    val transitionState = rememberPredictiveBackTransition(currentSection)
 
-    LaunchedEffect(currentSection) {
-        if (transitionState.currentState != currentSection || transitionState.targetState != currentSection) {
-            transitionState.animateTo(currentSection)
-        }
-    }
-
-    PredictiveBackHandler(enabled = backEnabled && currentSection != null) { progress ->
-        try {
-            progress.collect { event ->
-                transitionState.seekTo(predictiveBackFraction(event.progress), null)
-            }
-            currentSection = null
-        } catch (error: CancellationException) {
-            transitionState.animateTo(currentSection)
-            throw error
-        }
-    }
+    SeekablePredictiveBackHandler(
+        enabled = backEnabled && currentSection != null,
+        currentState = currentSection,
+        targetState = null,
+        transitionState = transitionState,
+        onCommit = { currentSection = null }
+    )
 
     val openInFileManagerIfAvailable: (String?, String) -> Unit = remember(onOpenFileManager, showSnack) {
         { path, errorMessage ->

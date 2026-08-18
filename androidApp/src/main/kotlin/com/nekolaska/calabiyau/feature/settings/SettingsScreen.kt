@@ -4,11 +4,9 @@ import android.content.Intent
 import android.os.Build
 import android.webkit.CookieManager
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -82,10 +80,10 @@ import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
-import com.nekolaska.calabiyau.core.ui.predictiveBackFraction
+import com.nekolaska.calabiyau.core.ui.SeekablePredictiveBackHandler
+import com.nekolaska.calabiyau.core.ui.rememberPredictiveBackTransition
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import kotlinx.coroutines.CancellationException
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import com.nekolaska.calabiyau.feature.tools.getWritablePathFromTreeUri
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
@@ -152,25 +150,15 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
     }
 
     val canPredictivePopToMain = currentPage != SettingsPage.MAIN && currentPage != SettingsPage.UPDATE_WEB
-    val transitionState = remember { SeekableTransitionState(currentPage) }
+    val transitionState = rememberPredictiveBackTransition(currentPage)
 
-    LaunchedEffect(currentPage) {
-        if (transitionState.currentState != currentPage || transitionState.targetState != currentPage) {
-            transitionState.animateTo(currentPage)
-        }
-    }
-
-    PredictiveBackHandler(enabled = canPredictivePopToMain) { progress ->
-        try {
-            progress.collect { event ->
-                transitionState.seekTo(predictiveBackFraction(event.progress), SettingsPage.MAIN)
-            }
-            currentPage = SettingsPage.MAIN
-        } catch (error: CancellationException) {
-            transitionState.animateTo(currentPage)
-            throw error
-        }
-    }
+    SeekablePredictiveBackHandler(
+        enabled = canPredictivePopToMain,
+        currentState = currentPage,
+        targetState = SettingsPage.MAIN,
+        transitionState = transitionState,
+        onCommit = { currentPage = SettingsPage.MAIN }
+    )
     BackHandler(enabled = currentPage == SettingsPage.MAIN) {
         onBack()
     }
