@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.voting
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -85,10 +84,6 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
             }
         }
         isLoadingConfig = false
-    }
-
-    if (!embedded) {
-        BackHandler { onBack() }
     }
 
     Scaffold(

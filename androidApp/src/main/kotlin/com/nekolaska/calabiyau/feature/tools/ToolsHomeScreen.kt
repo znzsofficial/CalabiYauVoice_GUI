@@ -1,9 +1,11 @@
 package com.nekolaska.calabiyau.feature.tools
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,8 +29,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.predictiveBackFraction
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
@@ -99,8 +103,24 @@ fun ToolsHomeScreen(
         }
     }
 
-    BackHandler(enabled = backEnabled && currentSection != null) {
-        currentSection = null
+    val transitionState = remember { SeekableTransitionState(currentSection) }
+
+    LaunchedEffect(currentSection) {
+        if (transitionState.currentState != currentSection || transitionState.targetState != currentSection) {
+            transitionState.animateTo(currentSection)
+        }
+    }
+
+    PredictiveBackHandler(enabled = backEnabled && currentSection != null) { progress ->
+        try {
+            progress.collect { event ->
+                transitionState.seekTo(predictiveBackFraction(event.progress), null)
+            }
+            currentSection = null
+        } catch (error: CancellationException) {
+            transitionState.animateTo(currentSection)
+            throw error
+        }
     }
 
     val openInFileManagerIfAvailable: (String?, String) -> Unit = remember(onOpenFileManager, showSnack) {
@@ -133,8 +153,8 @@ fun ToolsHomeScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        AnimatedContent(
-            targetState = currentSection,
+        val transition = rememberTransition(transitionState, label = "ToolsSectionTransition")
+        transition.AnimatedContent(
             transitionSpec = {
                 if (targetState != null) {
                     (fadeIn(tween(220)) + slideInHorizontally(tween(260)) { it / 8 } + scaleIn(tween(220), initialScale = 0.98f))
@@ -143,8 +163,7 @@ fun ToolsHomeScreen(
                     (fadeIn(tween(220)) + slideInHorizontally(tween(260)) { -it / 8 } + scaleIn(tween(220), initialScale = 0.98f))
                         .togetherWith(fadeOut(tween(180)) + slideOutHorizontally(tween(220)) { it / 10 } + scaleOut(tween(180), targetScale = 0.98f))
                 }
-            },
-            label = "ToolsSectionTransition"
+            }
         ) { sectionState ->
             if (sectionState == null) {
                 ToolsHomeContent(

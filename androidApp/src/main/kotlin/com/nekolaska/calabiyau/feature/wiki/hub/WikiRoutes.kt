@@ -53,3 +53,8 @@ sealed interface WikiRoute {
     data object CatalogHub : WikiRoute
     data object ExtensionHub : WikiRoute
 }
+
+internal val WikiRoute.isDetailRoute: Boolean
+    get() = this is WikiRoute.CharDetail ||
+        this is WikiRoute.WeaponDetail ||
+        this is WikiRoute.MapDetail

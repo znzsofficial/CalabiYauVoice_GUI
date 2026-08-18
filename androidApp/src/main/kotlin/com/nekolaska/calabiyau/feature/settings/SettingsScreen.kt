@@ -4,9 +4,12 @@ import android.content.Intent
 import android.os.Build
 import android.webkit.CookieManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -79,8 +82,10 @@ import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.predictiveBackFraction
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import kotlinx.coroutines.CancellationException
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import com.nekolaska.calabiyau.feature.tools.getWritablePathFromTreeUri
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
@@ -146,8 +151,25 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
         }
     }
 
-    BackHandler(enabled = currentPage != SettingsPage.MAIN) {
-        currentPage = SettingsPage.MAIN
+    val canPredictivePopToMain = currentPage != SettingsPage.MAIN && currentPage != SettingsPage.UPDATE_WEB
+    val transitionState = remember { SeekableTransitionState(currentPage) }
+
+    LaunchedEffect(currentPage) {
+        if (transitionState.currentState != currentPage || transitionState.targetState != currentPage) {
+            transitionState.animateTo(currentPage)
+        }
+    }
+
+    PredictiveBackHandler(enabled = canPredictivePopToMain) { progress ->
+        try {
+            progress.collect { event ->
+                transitionState.seekTo(predictiveBackFraction(event.progress), SettingsPage.MAIN)
+            }
+            currentPage = SettingsPage.MAIN
+        } catch (error: CancellationException) {
+            transitionState.animateTo(currentPage)
+            throw error
+        }
     }
     BackHandler(enabled = currentPage == SettingsPage.MAIN) {
         onBack()
@@ -156,8 +178,8 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
     val settingsScrollState = rememberScrollState()
 
     val animDuration = 300
-    AnimatedContent(
-        targetState = currentPage,
+    val transition = rememberTransition(transitionState, label = "SettingsAboutTransition")
+    transition.AnimatedContent(
         modifier = Modifier.background(MaterialTheme.colorScheme.background),
         transitionSpec = {
             if (targetState != SettingsPage.MAIN) {
@@ -167,8 +189,7 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                 (slideInHorizontally(tween(animDuration)) { -it / 4 } + fadeIn(tween(animDuration)))
                     .togetherWith(slideOutHorizontally(tween(animDuration)) { it / 4 } + fadeOut(tween(animDuration / 2)))
             }
-        },
-        label = "SettingsAboutTransition"
+        }
     ) { page ->
         if (page == SettingsPage.ABOUT) {
             AboutScreen(onBack = { currentPage = SettingsPage.MAIN })

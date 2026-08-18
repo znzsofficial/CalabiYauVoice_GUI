@@ -1,10 +1,13 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -40,6 +43,7 @@ import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.ui.predictiveBackFraction
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterScreen
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailScreen
@@ -78,6 +82,7 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
 import com.nekolaska.calabiyau.feature.wiki.tips.GameTipsScreen
 import com.nekolaska.calabiyau.feature.wiki.voting.VotingScreen
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -317,6 +322,7 @@ fun WikiHubScreen(
     val hasWallpaper = !wallpaperUrl.isNullOrBlank()
 
     var isNavigatingBack by remember { mutableStateOf(false) }
+    val transitionState = remember(resetKey) { SeekableTransitionState(currentRoute) }
 
     fun popBackStack() {
         if (backStack.size > 1) {
@@ -331,6 +337,37 @@ fun WikiHubScreen(
         backStack = backStack + route
     }
 
+    val previousRoute = backStack.getOrNull(backStack.lastIndex - 1)
+    val canPredictivePop = !isOverlaid &&
+        previousRoute != null &&
+        !currentRoute.isDetailRoute &&
+        !previousRoute.isDetailRoute
+
+    LaunchedEffect(currentRoute) {
+        if (transitionState.currentState != currentRoute || transitionState.targetState != currentRoute) {
+            transitionState.animateTo(currentRoute)
+        }
+    }
+
+    PredictiveBackHandler(enabled = canPredictivePop) { progress ->
+        val target = backStack.getOrNull(backStack.lastIndex - 1) ?: return@PredictiveBackHandler
+        isNavigatingBack = true
+        try {
+            progress.collect { event ->
+                transitionState.seekTo(predictiveBackFraction(event.progress), target)
+            }
+            popBackStack()
+        } catch (error: CancellationException) {
+            isNavigatingBack = false
+            transitionState.animateTo(currentRoute)
+            throw error
+        }
+    }
+
+    BackHandler(enabled = backStack.size > 1 && !isOverlaid && !canPredictivePop) {
+        popBackStack()
+    }
+
     fun navigateToMapDetail(name: String, imageUrl: String?, source: String = "list") {
         val resolvedImageUrl = imageUrl ?: gameModes
             .asSequence()
@@ -338,10 +375,6 @@ fun WikiHubScreen(
             .firstOrNull { it.name == name }
             ?.imageUrl
         navigateTo(WikiRoute.MapDetail(name, resolvedImageUrl, source))
-    }
-
-    BackHandler(enabled = backStack.size > 1 && !isOverlaid) {
-        popBackStack()
     }
 
     // 采用 MD3 约定的 Shared Axis (X轴) 过渡：轻量位移配合快速淡入淡出，比大范围拉扯更具现代感
@@ -354,19 +387,13 @@ fun WikiHubScreen(
 
         androidx.compose.runtime.CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
             SharedTransitionLayout {
-            AnimatedContent(
-                targetState = currentRoute,
+            val transition = rememberTransition(transitionState, label = "WikiHubPageTransition")
+            transition.AnimatedContent(
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
                     val duration = 400
-                    val isDetailTransition = targetState is WikiRoute.CharDetail ||
-                            targetState is WikiRoute.WeaponDetail ||
-                            targetState is WikiRoute.MapDetail ||
-                            initialState is WikiRoute.CharDetail ||
-                            initialState is WikiRoute.WeaponDetail ||
-                            initialState is WikiRoute.MapDetail
+                    val isDetailTransition = targetState.isDetailRoute || initialState.isDetailRoute
                     if (isDetailTransition) {
-                        // 详情页：crossfade，配合 sharedElement
                         fadeIn(tween(duration)) togetherWith fadeOut(tween(duration / 2))
                     } else if (isNavigatingBack) {
                         (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { -it / 8 } +
@@ -383,8 +410,7 @@ fun WikiHubScreen(
                                         fadeOut(tween(duration / 2, easing = FastOutLinearInEasing))
                             )
                     }
-                },
-                label = "WikiHubPageTransition"
+                }
             ) { route ->
             when (route) {
             is WikiRoute.Home -> {
