@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.EmojiEvents
@@ -48,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -443,82 +441,4 @@ private fun AggregatePageScaffold(
     }
 }
 
-@Composable
-internal fun AggregatePreviewCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    backdrop: Backdrop
-) {
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
-    val cardShape = AppShapes.card
-    val capsuleShape = AppShapes.capsule
-    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    val contentColor = MaterialTheme.colorScheme.onSurface
 
-    Surface(
-        onClick = onClick,
-        shape = cardShape,
-        color = when {
-            liquidGlass -> Color.Transparent
-            hasWallpaper -> containerColor.copy(alpha = 0.78f)
-            else -> containerColor
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { cardShape },
-                surfaceAlpha = 0.3f
-            )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .height(88.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = capsuleShape,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                modifier = Modifier
-                    .padding(start = 18.dp)
-                    .height(48.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .height(48.dp)
-                        .padding(horizontal = 12.dp)
-                ) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-            Column(Modifier
-                .weight(1f)
-                .padding(start = 14.dp, end = 8.dp)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = contentColor
-                )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(end = 16.dp)
-            )
-        }
-    }
-}

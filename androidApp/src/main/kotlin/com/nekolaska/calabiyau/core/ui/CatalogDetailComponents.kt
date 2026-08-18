@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.core.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,10 +27,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -232,6 +239,136 @@ fun CatalogGridSkeleton(
                         ShimmerBox(Modifier.fillMaxWidth(0.5f).height(10.dp))
                         Spacer(Modifier.height(8.dp))
                     }
+                }
+            }
+        }
+    }
+}
+
+data class CatalogPreviewImage(
+    val label: String,
+    val url: String,
+    val contentScale: ContentScale = ContentScale.Crop,
+    val background: Color = Color.Transparent
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CatalogDetailSheet(
+    title: String,
+    subtitle: String,
+    onDismiss: () -> Unit,
+    images: List<CatalogPreviewImage> = emptyList(),
+    qualityLabel: String? = null,
+    qualityLevel: Int? = null,
+    description: String = "",
+    descriptionCollapsedLines: Int = 4,
+    descriptionExpandedMaxHeight: Dp = 240.dp,
+    heroHeight: Dp = 260.dp,
+    imageContent: (@Composable () -> Unit)? = null,
+    extraHeader: @Composable () -> Unit = {},
+    details: @Composable () -> Unit
+) {
+    val selectedImage = remember(images) { mutableStateOf(images.firstOrNull()) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+        ),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = AppShapes.sheet,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(heroHeight)
+                    .background(
+                        selectedImage.value?.background
+                            ?: MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                val preview = selectedImage.value
+                if (imageContent != null) {
+                    imageContent()
+                } else if (preview != null) {
+                    AsyncImage(
+                        model = preview.url,
+                        contentDescription = title,
+                        contentScale = preview.contentScale,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(100.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceContainerLow)
+                            )
+                        )
+                )
+                CatalogQualityBadge(
+                    label = qualityLabel,
+                    level = qualityLevel,
+                    compact = false
+                )
+            }
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                extraHeader()
+                if (images.size > 1) {
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        images.forEach { image ->
+                            FilterChip(
+                                selected = selectedImage.value?.label == image.label,
+                                onClick = { selectedImage.value = image },
+                                label = { Text(image.label) },
+                                shape = smoothCornerShape(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            if (description.isNotBlank()) {
+                ExpandableCatalogDescription(
+                    text = description,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    collapsedLines = descriptionCollapsedLines,
+                    expandedMaxHeight = descriptionExpandedMaxHeight
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = AppShapes.card,
+                color = MaterialTheme.colorScheme.surfaceContainer
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    details()
                 }
             }
         }

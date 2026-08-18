@@ -35,10 +35,10 @@ import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.WeaponSki
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.CatalogDetailRow
+import com.nekolaska.calabiyau.core.ui.CatalogDetailSheet
 import com.nekolaska.calabiyau.core.ui.CatalogGridCard
 import com.nekolaska.calabiyau.core.ui.CatalogGridSkeleton
-import com.nekolaska.calabiyau.core.ui.CatalogQualityBadge
-import com.nekolaska.calabiyau.core.ui.ExpandableCatalogDescription
+import com.nekolaska.calabiyau.core.ui.CatalogPreviewImage
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.catalogQualityColor
@@ -275,176 +275,73 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
 //  外观详情底部弹窗
 // ────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeaponSkinDetailSheet(
     skin: WeaponSkinInfo,
     onDismiss: () -> Unit
 ) {
     val qColor = skin.quality?.let { catalogQualityColor(it.level) } ?: MaterialTheme.colorScheme.outline
-    val displayModes = buildList {
-        if (!skin.fullImageUrl.isNullOrBlank() || !skin.thumbnailUrl.isNullOrBlank()) add("立绘")
-        if (!skin.screenshotUrl.isNullOrBlank()) add("游戏截图")
+    val images = buildList {
+        val portrait = skin.fullImageUrl ?: skin.thumbnailUrl
+        if (!portrait.isNullOrBlank()) {
+            add(CatalogPreviewImage("立绘", portrait))
+        }
+        if (!skin.screenshotUrl.isNullOrBlank()) {
+            add(CatalogPreviewImage("游戏截图", skin.screenshotUrl))
+        }
     }
-    var selectedMode by remember(skin.name, skin.weapon) {
-        mutableStateOf(if (displayModes.contains("立绘")) "立绘" else displayModes.firstOrNull().orEmpty())
-    }
-    val displayedImage = when (selectedMode) {
-        "游戏截图" -> skin.screenshotUrl ?: skin.fullImageUrl ?: skin.thumbnailUrl
-        else -> skin.fullImageUrl ?: skin.thumbnailUrl ?: skin.screenshotUrl
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = smoothCornerShape(28.dp),
-        tonalElevation = 0.dp
+    CatalogDetailSheet(
+        title = skin.name,
+        subtitle = skin.weapon,
+        onDismiss = onDismiss,
+        images = images,
+        qualityLabel = skin.quality?.displayName,
+        qualityLevel = skin.quality?.level,
+        description = skin.description,
+        descriptionCollapsedLines = 5
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp)
-        ) {
-            // ── 头部：图片 + 渐变 + 名称 ──
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-            ) {
-                if (displayedImage != null) {
-                    AsyncImage(
-                        model = displayedImage,
-                        contentDescription = skin.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surfaceContainerLow
-                                )
-                            )
-                        )
-                )
-                CatalogQualityBadge(
-                    label = skin.quality?.displayName,
-                    level = skin.quality?.level,
-                    compact = false
-                )
-            }
-
-            // ── 名称 & 武器 ──
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text(
-                    skin.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    skin.weapon,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (displayModes.size > 1) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        displayModes.forEach { mode ->
-                            FilterChip(
-                                selected = selectedMode == mode,
-                                onClick = { selectedMode = mode },
-                                label = { Text(mode) },
-                                shape = smoothCornerShape(12.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (skin.description.isNotBlank()) {
-                ExpandableCatalogDescription(
-                    text = skin.description,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    collapsedLines = 5
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            // ── 信息卡片 ──
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    // 获取方式
-                    if (skin.sources.isNotEmpty()) {
-                        CatalogDetailRow(
-                            icon = Icons.Outlined.ShoppingBag,
-                            label = "获取方式",
-                            value = skin.sources.joinToString("、")
-                        )
-                    }
-
-                    // 巴布洛晶核价格
-                    if (skin.crystalCost.isNotBlank()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        CatalogDetailRow(
-                            imageUrl = CRYSTAL_ICON_URL,
-                            fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
-                            label = "巴布洛晶核",
-                            value = skin.crystalCost
-                        )
-                    }
-
-                    // 基弦价格
-                    if (skin.baseCost.isNotBlank()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        CatalogDetailRow(
-                            imageUrl = BASE_ICON_URL,
-                            fallbackImageUrl = BASE_ICON_FALLBACK_URL,
-                            label = "基弦",
-                            value = skin.baseCost
-                        )
-                    }
-
-                    // 品质
-                    if (skin.quality != null) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        CatalogDetailRow(
-                            icon = Icons.Outlined.Star,
-                            label = "品质",
-                            value = skin.quality.displayName,
-                            valueColor = qColor
-                        )
-                    }
-                }
-            }
+        if (skin.sources.isNotEmpty()) {
+            CatalogDetailRow(
+                icon = Icons.Outlined.ShoppingBag,
+                label = "获取方式",
+                value = skin.sources.joinToString("、")
+            )
+        }
+        if (skin.crystalCost.isNotBlank()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            CatalogDetailRow(
+                imageUrl = CRYSTAL_ICON_URL,
+                fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
+                label = "巴布洛晶核",
+                value = skin.crystalCost
+            )
+        }
+        if (skin.baseCost.isNotBlank()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            CatalogDetailRow(
+                imageUrl = BASE_ICON_URL,
+                fallbackImageUrl = BASE_ICON_FALLBACK_URL,
+                label = "基弦",
+                value = skin.baseCost
+            )
+        }
+        if (skin.quality != null) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            CatalogDetailRow(
+                icon = Icons.Outlined.Star,
+                label = "品质",
+                value = skin.quality.displayName,
+                valueColor = qColor
+            )
         }
     }
 }

@@ -32,10 +32,10 @@ import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterApi.Qualit
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.CatalogDetailRow
+import com.nekolaska.calabiyau.core.ui.CatalogDetailSheet
 import com.nekolaska.calabiyau.core.ui.CatalogGridCard
 import com.nekolaska.calabiyau.core.ui.CatalogGridSkeleton
-import com.nekolaska.calabiyau.core.ui.CatalogQualityBadge
-import com.nekolaska.calabiyau.core.ui.ExpandableCatalogDescription
+import com.nekolaska.calabiyau.core.ui.CatalogPreviewImage
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.catalogQualityColor
@@ -270,184 +270,81 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
 //  时装详情底部弹窗
 // ────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CostumeDetailSheet(
     costume: CostumeInfo,
     onDismiss: () -> Unit
 ) {
     val qColor = costume.quality?.let { catalogQualityColor(it.level) } ?: MaterialTheme.colorScheme.outline
-    val displayModes = buildList {
-        if (!costume.fullImageUrl.isNullOrBlank() || !costume.thumbnailUrl.isNullOrBlank()) add("立绘")
-        if (!costume.screenshotUrl.isNullOrBlank()) add("游戏截图")
+    val quality = costume.quality?.takeIf { it != Quality.INITIAL }
+    val screenshotBackground = MaterialTheme.colorScheme.surfaceContainerHighest
+    val images = buildList {
+        val portrait = costume.fullImageUrl ?: costume.thumbnailUrl
+        if (!portrait.isNullOrBlank()) {
+            add(CatalogPreviewImage("立绘", portrait))
+        }
+        if (!costume.screenshotUrl.isNullOrBlank()) {
+            add(
+                CatalogPreviewImage(
+                    label = "游戏截图",
+                    url = costume.screenshotUrl,
+                    contentScale = ContentScale.Fit,
+                    background = screenshotBackground
+                )
+            )
+        }
     }
-    var selectedMode by remember(costume.name, costume.character) {
-        mutableStateOf(if (displayModes.contains("立绘")) "立绘" else displayModes.firstOrNull().orEmpty())
-    }
-    val displayedImage = when (selectedMode) {
-        "游戏截图" -> costume.screenshotUrl ?: costume.fullImageUrl ?: costume.thumbnailUrl
-        else -> costume.fullImageUrl ?: costume.thumbnailUrl ?: costume.screenshotUrl
-    }
-    val imageContentScale = if (selectedMode == "游戏截图") ContentScale.Fit else ContentScale.Crop
-    val imageBackgroundColor = if (selectedMode == "游戏截图") {
-        MaterialTheme.colorScheme.surfaceContainerHighest
-    } else {
-        Color.Transparent
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = smoothCornerShape(28.dp),
-        tonalElevation = 0.dp
+    CatalogDetailSheet(
+        title = costume.name,
+        subtitle = costume.character,
+        onDismiss = onDismiss,
+        images = images,
+        qualityLabel = quality?.displayName,
+        qualityLevel = quality?.level,
+        description = costume.description
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp)
-        ) {
-            // ── 头部：图片 + 渐变 + 名称 ──
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .background(imageBackgroundColor),
-                contentAlignment = Alignment.Center
-            ) {
-                if (displayedImage != null) {
-                    AsyncImage(
-                        model = displayedImage,
-                        contentDescription = costume.name,
-                        contentScale = imageContentScale,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                // 底部渐变
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.surfaceContainerLow
-                                )
-                            )
-                        )
-                )
-                CatalogQualityBadge(
-                    label = costume.quality?.takeIf { it != Quality.INITIAL }?.displayName,
-                    level = costume.quality?.takeIf { it != Quality.INITIAL }?.level,
-                    compact = false
-                )
-            }
-
-            // ── 名称 & 角色 ──
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text(
-                    costume.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    costume.character,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (displayModes.size > 1) {
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        displayModes.forEach { mode ->
-                            FilterChip(
-                                selected = selectedMode == mode,
-                                onClick = { selectedMode = mode },
-                                label = { Text(mode) },
-                                shape = smoothCornerShape(12.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (costume.description.isNotBlank()) {
-                ExpandableCatalogDescription(
-                    text = costume.description,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-
-            // ── 信息卡片 ──
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    // 获取方式
-                    if (costume.sources.isNotEmpty()) {
-                        CatalogDetailRow(
-                            icon = Icons.Outlined.ShoppingBag,
-                            label = "获取方式",
-                            value = costume.sources.joinToString("、")
-                        )
-                    }
-
-                    // 巴布洛晶核价格
-                    if (costume.crystalCost.isNotBlank()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        CatalogDetailRow(
-                            imageUrl = CRYSTAL_ICON_URL,
-                            fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
-                            label = "巴布洛晶核",
-                            value = costume.crystalCost
-                        )
-                    }
-
-                    // 基弦价格
-                    if (costume.baseCost.isNotBlank()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        CatalogDetailRow(
-                            imageUrl = BASE_ICON_URL,
-                            fallbackImageUrl = BASE_ICON_FALLBACK_URL,
-                            label = "基弦",
-                            value = costume.baseCost
-                        )
-                    }
-
-                    // 品质
-                    if (costume.quality != null && costume.quality != Quality.INITIAL) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 10.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                        CatalogDetailRow(
-                            icon = Icons.Outlined.Star,
-                            label = "品质",
-                            value = costume.quality.displayName,
-                            valueColor = qColor
-                        )
-                    }
-                }
-            }
+        if (costume.sources.isNotEmpty()) {
+            CatalogDetailRow(
+                icon = Icons.Outlined.ShoppingBag,
+                label = "获取方式",
+                value = costume.sources.joinToString("、")
+            )
+        }
+        if (costume.crystalCost.isNotBlank()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            CatalogDetailRow(
+                imageUrl = CRYSTAL_ICON_URL,
+                fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
+                label = "巴布洛晶核",
+                value = costume.crystalCost
+            )
+        }
+        if (costume.baseCost.isNotBlank()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            CatalogDetailRow(
+                imageUrl = BASE_ICON_URL,
+                fallbackImageUrl = BASE_ICON_FALLBACK_URL,
+                label = "基弦",
+                value = costume.baseCost
+            )
+        }
+        if (quality != null) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 10.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+            CatalogDetailRow(
+                icon = Icons.Outlined.Star,
+                label = "品质",
+                value = quality.displayName,
+                valueColor = qColor
+            )
         }
     }
 }

@@ -347,80 +347,41 @@ private fun ItemCard(item: ItemInfo, onClick: () -> Unit) {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ItemDetailSheet(item: ItemInfo, onDismiss: () -> Unit) {
     val qColor = item.quality?.let { catalogQualityColor(it.level) } ?: MaterialTheme.colorScheme.outline
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = smoothCornerShape(28.dp),
-        tonalElevation = 0.dp
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!item.iconUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = item.iconUrl,
-                        contentDescription = item.name,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().padding(44.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(96.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceContainerLow)
-                            )
-                        )
+    CatalogDetailSheet(
+        title = item.name,
+        subtitle = item.category,
+        onDismiss = onDismiss,
+        qualityLabel = item.quality?.displayName,
+        qualityLevel = item.quality?.level,
+        description = item.description,
+        descriptionCollapsedLines = 5,
+        descriptionExpandedMaxHeight = 260.dp,
+        heroHeight = 220.dp,
+        imageContent = {
+            if (!item.iconUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.iconUrl,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(44.dp)
                 )
-            }
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text(item.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text(item.category, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.height(16.dp))
-            if (item.description.isNotBlank()) {
-                ExpandableCatalogDescription(
-                    text = item.description,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    collapsedLines = 5,
-                    expandedMaxHeight = 260.dp
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer
-            ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    CatalogDetailRow(icon = Icons.Outlined.Category, label = "分类", value = item.category)
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    CatalogDetailRow(
-                        icon = Icons.Outlined.Star,
-                        label = "稀有度",
-                        value = item.quality?.displayName ?: item.qualityName,
-                        valueColor = qColor
-                    )
-                }
             }
         }
+    ) {
+        CatalogDetailRow(icon = Icons.Outlined.Category, label = "分类", value = item.category)
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 10.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+        CatalogDetailRow(
+            icon = Icons.Outlined.Star,
+            label = "稀有度",
+            value = item.quality?.displayName ?: item.qualityName,
+            valueColor = qColor
+        )
     }
 }
 

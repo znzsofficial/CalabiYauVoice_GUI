@@ -312,7 +312,7 @@ internal fun WikiHomePage(
 
                     // ── 玩法与养成 ──
                     item(key = "gameplay_hub", contentType = "action_card") {
-                        AggregatePreviewCard(
+                        ActionCard(
                             title = "玩法与养成",
                             subtitle = "角色培养、玩法系统与移动端内容",
                             icon = Icons.Outlined.Extension,
@@ -323,7 +323,7 @@ internal fun WikiHomePage(
 
                     // ── 外观与图鉴 ──
                     item(key = "catalog_hub", contentType = "action_card") {
-                        AggregatePreviewCard(
+                        ActionCard(
                             title = "外观与图鉴",
                             subtitle = "道具图鉴、时装筛选与武器外观",
                             icon = Icons.Outlined.Inventory2,
@@ -334,7 +334,7 @@ internal fun WikiHomePage(
 
                     // ── 玩家装饰 ──
                     item(key = "decorations_hub", contentType = "action_card") {
-                        AggregatePreviewCard(
+                        ActionCard(
                             title = "玩家装饰",
                             subtitle = "基板、封装、勋章、喷漆等外观装饰",
                             icon = Icons.Outlined.Palette,
@@ -345,7 +345,7 @@ internal fun WikiHomePage(
 
                     // ── 游戏延伸 ──
                     item(key = "extension_hub", contentType = "action_card") {
-                        AggregatePreviewCard(
+                        ActionCard(
                             title = "游戏延伸",
                             subtitle = "剧情、历史、BGM、投票与百科内容",
                             icon = Icons.Outlined.MoreHoriz,
@@ -1254,7 +1254,6 @@ internal fun ActionCard(
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
     val actionCardShape = AppShapes.card
-    val capsuleShape = AppShapes.capsule
     val contentColor = MaterialTheme.colorScheme.onSurface
     val accent = MaterialTheme.colorScheme.primary
     Card(
@@ -1281,7 +1280,7 @@ internal fun ActionCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = capsuleShape,
+                shape = AppShapes.capsule,
                 color = accent.copy(alpha = 0.12f),
                 modifier = Modifier.size(48.dp)
             ) {
@@ -1306,7 +1305,9 @@ internal fun ActionCard(
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Icon(
