@@ -108,14 +108,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.palette.graphics.Palette
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
-import coil3.request.allowHardware
-import coil3.size.Size
-import coil3.toBitmap
+import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
+import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
@@ -123,14 +119,13 @@ import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
+import com.nekolaska.calabiyau.core.ui.WallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.liquidGlassLight
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import util.wikiPathEncode
 
 // ────────────────────────────────────────────
@@ -171,40 +166,20 @@ internal fun WikiHomePage(
     val hasWallpaper = LocalHasWallpaper.current
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
-    // ── 壁纸刷新后重新提取主题色 ──
-    //
-    // 复用 Coil 的 ImageLoader：走内存/磁盘缓存，命中时几乎瞬时返回，
-    // 且共享 WikiEngine.client（UA 轮换 + 403/429/503 重试）。
-    // 相比原先手动 OkHttp 下载 + 两次 BitmapFactory 解码，省一次网络请求和一次 decode。
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
     val context = LocalContext.current
     LaunchedEffect(wallpaperUrl) {
-        val url = wallpaperUrl ?: return@LaunchedEffect
-        // URL 未变且已缓存过取色结果：直接使用缓存色
-        val cachedUrl = AppPrefs.wallpaperSeedColorUrl
-        val cachedColor = AppPrefs.wallpaperSeedColorCache
-        if (url == cachedUrl && cachedColor != 0) {
-            wallpaperSeedColor.intValue = cachedColor
-            return@LaunchedEffect
-        }
-        withContext(Dispatchers.IO) {
-            val request = ImageRequest.Builder(context)
-                .data(url)
-                .allowHardware(false)  // Palette 需读像素，必须软件位图
-                .size(Size(128, 128))  // 降采样：128px 提取主色已足够，省显存
-                .build()
-            val result = SingletonImageLoader.get(context).execute(request)
-            if (result !is SuccessResult) return@withContext
-            val bitmap = runCatching { result.image.toBitmap() }.getOrNull()
-                ?: return@withContext
-            val palette = Palette.from(bitmap).generate()
-            val dominant = palette.getVibrantColor(palette.getMutedColor(0))
-            if (dominant != 0) {
-                wallpaperSeedColor.intValue = dominant
-                AppPrefs.wallpaperSeedColorCache = dominant
-                AppPrefs.wallpaperSeedColorUrl = url
+        val color = WallpaperSeedColor.resolve(context, wallpaperUrl)
+        if (color != 0) wallpaperSeedColor.intValue = color
+    }
+    LaunchedEffect(factions, selectedHomeFaction) {
+        val urls = buildList {
+            factions.getOrNull(selectedHomeFaction)?.characters?.let(::addAll)
+            factions.forEachIndexed { index, faction ->
+                if (index != selectedHomeFaction) addAll(faction.characters)
             }
-        }
+        }.map { it.portraitUrl ?: it.imageUrl }
+        SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
     }
 
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -303,8 +278,6 @@ internal fun WikiHomePage(
                             title = "武器一览",
                             subtitle = "查看全部武器数据",
                             icon = Icons.Outlined.GpsFixed,
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             onClick = { onNavigateTo(WikiRoute.Weapons) },
                             backdrop = backdrop
                         )
@@ -332,8 +305,6 @@ internal fun WikiHomePage(
                             title = "平衡数据",
                             subtitle = "官网角色胜率/选取率/KD等数据",
                             icon = Icons.Outlined.BarChart,
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                             onClick = { onNavigateTo(WikiRoute.BalanceData) },
                             backdrop = backdrop
                         )
@@ -389,8 +360,6 @@ internal fun WikiHomePage(
                             title = "卡牌",
                             subtitle = "生化卡牌与卡组分享",
                             icon = Icons.Outlined.Style,
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                             onClick = { onNavigateTo(WikiRoute.BioCards) },
                             backdrop = backdrop
                         )
@@ -402,8 +371,6 @@ internal fun WikiHomePage(
                             title = "活动",
                             subtitle = "浏览当前与历史活动时间和内容简介",
                             icon = Icons.Outlined.Event,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             onClick = { onNavigateTo(WikiRoute.Activities) },
                             backdrop = backdrop
                         )
@@ -414,8 +381,6 @@ internal fun WikiHomePage(
                             title = "公告资讯",
                             subtitle = "查看最新游戏公告和更新信息",
                             icon = Icons.Outlined.Campaign,
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                             onClick = { onNavigateTo(WikiRoute.Announcements) },
                             backdrop = backdrop
                         )
@@ -427,8 +392,6 @@ internal fun WikiHomePage(
                             title = "完整导航",
                             subtitle = "浏览 Wiki 全部分类目录",
                             icon = Icons.Outlined.AccountTree,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             onClick = { onNavigateTo(WikiRoute.Navigation) },
                             backdrop = backdrop
                         )
@@ -531,7 +494,7 @@ private fun QuickAccessGridCard(
     val cellShape = smoothCornerShape(18.dp)
     val surfaceColor = when {
         liquidGlass -> Color.Transparent
-        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = MaterialTheme.colorScheme.onSurface
@@ -608,7 +571,7 @@ private fun QuickAccessButtonGrid(
     val entryShape = smoothCornerShape(20.dp)
     val surfaceColor = when {
         liquidGlass -> Color.Transparent
-        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.85f)
+        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
         else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
     val contentColor = MaterialTheme.colorScheme.onSurface
@@ -741,7 +704,7 @@ private fun CharacterPreviewSection(
             )
 
             hasWallpaper -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f),
                 contentColor = onSurface
             )
 
@@ -867,11 +830,14 @@ private fun CharacterPortraitCard(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    val context = LocalContext.current
+    val portraitRequest = remember(context, character.portraitUrl, character.imageUrl) {
+        wikiPortraitRequest(context, character.portraitUrl ?: character.imageUrl, crossfade = false)
+    }
     val cardShape = AppShapes.compactCard
     // 阵营色淡色背景，无阵营色时使用默认表面色
-    val cardBgColor = factionBaseColor?.copy(alpha = 0.15f) ?: MaterialTheme.colorScheme.surfaceContainerLow
-    // 底部渐变色（使用阵营色的深色版本）
-    val gradientColor = factionBaseColor?.copy(alpha = 0.85f) ?: Color.Black.copy(alpha = 0.7f)
+    val cardBgColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+    val gradientColor = factionBaseColor?.copy(alpha = 0.72f) ?: Color.Black.copy(alpha = 0.7f)
 
     Card(
         onClick = onClick,
@@ -900,7 +866,7 @@ private fun CharacterPortraitCard(
                     )
             ) {
                 AsyncImage(
-                    model = character.portraitUrl ?: character.imageUrl,
+                    model = portraitRequest,
                     contentDescription = character.name,
                     contentScale = ContentScale.Crop,
                     alignment = BiasAlignment(0f, -0.85f),
@@ -978,7 +944,7 @@ private fun MapPreviewSection(
             )
 
             hasWallpaper -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f),
                 contentColor = onSurface
             )
 
@@ -1193,7 +1159,7 @@ internal fun ContentBlockCard(
             )
 
             hasWallpaper -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f),
                 contentColor = onSurface
             )
 
@@ -1282,8 +1248,6 @@ internal fun ActionCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
     onClick: () -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
@@ -1291,15 +1255,18 @@ internal fun ActionCard(
     val hasWallpaper = LocalHasWallpaper.current
     val actionCardShape = AppShapes.card
     val capsuleShape = AppShapes.capsule
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val accent = MaterialTheme.colorScheme.primary
     Card(
         onClick = onClick,
         shape = actionCardShape,
         colors = CardDefaults.cardColors(
             containerColor = when {
                 liquidGlass -> Color.Transparent
-                hasWallpaper -> containerColor.copy(alpha = 0.85f)
-                else -> containerColor
-            }
+                hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+                else -> MaterialTheme.colorScheme.surfaceContainerLow
+            },
+            contentColor = contentColor
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -1315,14 +1282,14 @@ internal fun ActionCard(
         ) {
             Surface(
                 shape = capsuleShape,
-                color = contentColor.copy(alpha = 0.15f),
+                color = accent.copy(alpha = 0.12f),
                 modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         icon,
                         contentDescription = null,
-                        tint = contentColor,
+                        tint = accent,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -1339,13 +1306,13 @@ internal fun ActionCard(
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = contentColor.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = contentColor.copy(alpha = 0.5f)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

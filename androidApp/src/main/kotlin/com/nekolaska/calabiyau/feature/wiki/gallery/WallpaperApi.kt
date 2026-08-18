@@ -65,6 +65,10 @@ object WallpaperApi {
             val url = fetchImageUrl(randomFile, forceRefresh)
             // 持久化到 AppPrefs
             if (url != null) {
+                if (url != AppPrefs.wallpaperUrl) {
+                    AppPrefs.wallpaperSeedColorCache = 0
+                    AppPrefs.wallpaperSeedColorUrl = url
+                }
                 AppPrefs.wallpaperUrl = url
                 hasRefreshedThisSession = true
             }

@@ -253,22 +253,22 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         var showQuickLayoutDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.GridView,
-                            title = "快捷入口样式",
+                            title = "快捷入口",
                             subtitle = when (homeQuickEntryLayout) {
-                                AppPrefs.HOME_QUICK_LAYOUT_BUTTONS -> "六按钮"
-                                else -> "网格大卡（默认）"
+                                AppPrefs.HOME_QUICK_LAYOUT_BUTTONS -> "按钮"
+                                else -> "网格"
                             },
                             onClick = { showQuickLayoutDialog = true }
                         )
                         if (showQuickLayoutDialog) {
                             AlertDialog(
                                 onDismissRequest = { showQuickLayoutDialog = false },
-                                title = { Text("快捷入口样式") },
+                                title = { Text("快捷入口") },
                                 text = {
                                     Column {
                                         listOf(
-                                            AppPrefs.HOME_QUICK_LAYOUT_GRID to "网格大卡（默认）",
-                                            AppPrefs.HOME_QUICK_LAYOUT_BUTTONS to "六按钮"
+                                            AppPrefs.HOME_QUICK_LAYOUT_GRID to "网格",
+                                            AppPrefs.HOME_QUICK_LAYOUT_BUTTONS to "按钮"
                                         ).forEach { (layout, label) ->
                                             Row(
                                                 modifier = Modifier
@@ -304,10 +304,10 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
                         SettingsItem(
                             icon = Icons.Outlined.SpaceDashboard,
-                            title = "顶部六入口",
+                            title = "自定义入口",
                             subtitle = homeQuickEntryIds
                                 .mapNotNull(quickEntryById::get)
-                                .joinToString(" · ") { it.label }
+                                .joinToString("、") { it.label }
                                 .ifBlank { "默认" },
                             onClick = { showQuickEntrySheet = true }
                         )
@@ -340,8 +340,8 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         var showPathDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.Edit,
-                            title = "手动填写",
-                            subtitle = "直接输入自定义保存路径",
+                            title = "自定路径",
+                            subtitle = "输入保存位置",
                             onClick = { showPathDialog = true }
                         )
                         if (showPathDialog) {
@@ -378,19 +378,19 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         var showConcurrencyDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.Speed,
-                            title = "最大并发下载数",
-                            subtitle = "当前 $maxConcurrency 个连接并发",
+                            title = "同时下载",
+                            subtitle = maxConcurrency,
                             onClick = { showConcurrencyDialog = true }
                         )
                         if (showConcurrencyDialog) {
                             var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
                             AlertDialog(
                                 onDismissRequest = { showConcurrencyDialog = false },
-                                title = { Text("最大并发下载数") },
+                                title = { Text("同时下载") },
                                 text = {
                                     Column {
                                         Text(
-                                            "设置同时下载文件的最大数量（1-32）",
+                                            "可同时进行的下载数量，范围为 1 到 32。",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -493,12 +493,12 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                     Column {
                         var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
                         val cacheName = when (wikiCacheMode) {
-                            AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存（弱网可用）"
-                            else -> "默认（联网加载）"
+                            AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存"
+                            else -> "自动"
                         }
                         SettingsItem(
                             icon = Icons.Outlined.OfflinePin,
-                            title = "Wiki 缓存策略",
+                            title = "缓存",
                             subtitle = cacheName,
                             onClick = {
                                 val newMode = if (wikiCacheMode == AppPrefs.WIKI_CACHE_DEFAULT)
@@ -513,8 +513,8 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
                         SettingsToggleItem(
                             icon = Icons.Outlined.DesktopWindows,
-                            title = "桌面模式",
-                            subtitle = if (wikiDesktopMode) "使用桌面版 User-Agent" else "使用移动版（默认）",
+                            title = "桌面版网页",
+                            subtitle = if (wikiDesktopMode) "开启" else "关闭",
                             checked = wikiDesktopMode,
                             onCheckedChange = {
                                 wikiDesktopMode = it
@@ -527,15 +527,15 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         var showClearCookieDialog by remember { mutableStateOf(false) }
                         SettingsItem(
                             icon = Icons.Outlined.DeleteSweep,
-                            title = "清除登录状态",
-                            subtitle = "清除 Wiki Cookie 并登出",
+                            title = "退出登录",
+                            subtitle = "清除 Wiki 登录信息",
                             onClick = { showClearCookieDialog = true }
                         )
                         if (showClearCookieDialog) {
                             AlertDialog(
                                 onDismissRequest = { showClearCookieDialog = false },
-                                title = { Text("清除登录状态") },
-                                text = { Text("确定要清除 Wiki 登录状态吗？\n清除后需要重新登录才能使用投票等功能。") },
+                                title = { Text("退出登录") },
+                                text = { Text("将清除 Wiki 登录信息。之后需要重新登录才能使用投票等功能。") },
                                 shape = AppShapes.dialog,
                                 confirmButton = {
                                     FilledTonalButton(onClick = {
@@ -588,9 +588,9 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.4"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.5"
                     } catch (_: Exception) {
-                        "2.1.4"
+                        "2.1.5"
                     }
                 }
                 val currentVersionCode = remember {
@@ -618,13 +618,13 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         SettingsItem(
                             icon = Icons.Outlined.Info,
                             title = "关于",
-                            subtitle = "版本信息与版权声明",
+                            subtitle = "版本与版权",
                             onClick = { currentPage = SettingsPage.ABOUT }
                         )
 
                         SettingsItem(
                             icon = if (isCheckingUpdate) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
-                            title = "检查更新",
+                            title = "软件更新",
                             subtitle = if (isCheckingUpdate) "正在检查…" else updateSubtitle,
                             onClick = {
                                 if (isCheckingUpdate) return@SettingsItem

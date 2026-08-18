@@ -1,8 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.item
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -13,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,9 +40,10 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
         fetch = { force -> ItemCatalogApi.fetch(forceRefresh = force) }
     )
     val allItems = state.data
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var selectedQuality by remember { mutableStateOf<Quality?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedQualityLevel by rememberSaveable { mutableStateOf<Int?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val selectedQuality = selectedQualityLevel?.let(Quality::fromLevel)
 
     val categories = remember(allItems) { allItems.map { it.category }.distinct().sorted() }
     val filteredItems = remember(allItems, selectedCategory, selectedQuality, searchQuery) {
@@ -107,7 +107,7 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
                             selectedCategory = selectedCategory,
                             onCategorySelected = { selectedCategory = it },
                             selectedQuality = selectedQuality,
-                            onQualitySelected = { selectedQuality = it }
+                            onQualitySelected = { selectedQualityLevel = it?.level }
                         )
                     }
                 }
@@ -124,7 +124,7 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
                 } else {
                     itemsIndexed(
                         filteredItems,
-                        key = { index, item -> "${item.category}|${item.name}|${item.iconUrl.orEmpty()}|$index" }
+                        key = { _, item -> "${item.category}|${item.name}|${item.iconUrl.orEmpty()}" }
                     ) { _, item ->
                         ItemCard(item = item, onClick = { selectedItem = item })
                     }
@@ -198,28 +198,13 @@ private fun ItemFilterBar(
         )
 
         Text("按稀有度筛选", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = selectedQuality == null,
-                onClick = { onQualitySelected(null) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("全部稀有度", maxLines = 1) }
-            )
-            Quality.entries.sortedByDescending { it.level }.forEach { quality ->
-                FilterChip(
-                    selected = selectedQuality == quality,
-                    onClick = { onQualitySelected(if (selectedQuality == quality) null else quality) },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text(quality.displayName, maxLines = 1) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = qualityColor(quality).copy(alpha = 0.2f)
-                    )
-                )
-            }
-        }
+        QualityFilterChips(
+            selectedLevel = selectedQuality?.level,
+            levels = Quality.entries.sortedByDescending { it.level }.map { it.level to it.displayName },
+            onSelectedLevelChange = { level -> onQualitySelected(level?.let(Quality::fromLevel)) },
+            allLabel = "全部稀有度",
+            colorForLevel = { catalogQualityColor(it) }
+        )
     }
 }
 
@@ -391,7 +376,7 @@ private fun ItemCard(item: ItemInfo, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         border = BorderStroke(
             1.dp,
-            item.quality?.let { qualityColor(it).copy(alpha = 0.4f) }
+            item.quality?.let { catalogQualityColor(it.level).copy(alpha = 0.4f) }
                 ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
     ) {
@@ -422,7 +407,7 @@ private fun ItemCard(item: ItemInfo, onClick: () -> Unit) {
                     Surface(
                         modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                         shape = smoothCapsuleShape(),
-                        color = qualityColor(quality).copy(alpha = 0.85f)
+                        color = catalogQualityColor(quality.level).copy(alpha = 0.85f)
                     ) {
                         Text(
                             quality.displayName,
@@ -450,7 +435,7 @@ private fun ItemCard(item: ItemInfo, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ItemDetailSheet(item: ItemInfo, onDismiss: () -> Unit) {
-    val qColor = item.quality?.let { qualityColor(it) } ?: MaterialTheme.colorScheme.outline
+    val qColor = item.quality?.let { catalogQualityColor(it.level) } ?: MaterialTheme.colorScheme.outline
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(
@@ -496,29 +481,12 @@ private fun ItemDetailSheet(item: ItemInfo, onDismiss: () -> Unit) {
             }
             Spacer(Modifier.height(16.dp))
             if (item.description.isNotBlank()) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer
-                ) {
-                    var expanded by remember { mutableStateOf(false) }
-                    Text(
-                        text = item.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (expanded) Int.MAX_VALUE else 5,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = if (expanded) 260.dp else Dp.Unspecified)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { expanded = !expanded }
-                            .animateContentSize()
-                            .padding(20.dp)
-                    )
-                }
+                ExpandableCatalogDescription(
+                    text = item.description,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    collapsedLines = 5,
+                    expandedMaxHeight = 260.dp
+                )
                 Spacer(Modifier.height(12.dp))
             }
             Surface(
@@ -527,42 +495,18 @@ private fun ItemDetailSheet(item: ItemInfo, onDismiss: () -> Unit) {
                 color = MaterialTheme.colorScheme.surfaceContainer
             ) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    InfoRow(icon = Icons.Outlined.Category, label = "分类", value = item.category)
+                    CatalogDetailRow(icon = Icons.Outlined.Category, label = "分类", value = item.category)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    InfoRow(icon = Icons.Outlined.Star, label = "稀有度", value = item.quality?.displayName ?: item.qualityName, valueColor = qColor)
+                    CatalogDetailRow(
+                        icon = Icons.Outlined.Star,
+                        label = "稀有度",
+                        value = item.quality?.displayName ?: item.qualityName,
+                        valueColor = qColor
+                    )
                 }
             }
         }
     }
 }
 
-@Composable
-private fun InfoRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface
-) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Surface(
-            modifier = Modifier.size(36.dp),
-            shape = smoothCapsuleShape(),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(72.dp))
-        Text(value.ifBlank { "未知" }, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = valueColor)
-    }
-}
 
-@Composable
-private fun qualityColor(quality: Quality): Color = when (quality) {
-    Quality.EXQUISITE -> Color(0xFF3B82F6)
-    Quality.SUPERIOR -> Color(0xFFA855F7)
-    Quality.PERFECT -> Color(0xFFF59E0B)
-    Quality.LEGENDARY -> Color(0xFFEF4444)
-}

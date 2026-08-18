@@ -12,15 +12,42 @@ import android.net.Uri
 import android.os.Message
 import android.util.Base64
 import android.view.ViewGroup
-import android.webkit.*
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.URLUtil
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,9 +57,43 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.OpenInBrowser
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.WifiOff
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.ZoomOut
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,9 +108,9 @@ import androidx.core.net.toUri
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
-import com.nekolaska.calabiyau.core.util.enqueueDownload
 import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.util.enqueueDownload
 import com.nekolaska.calabiyau.core.wiki.WikiUserAgent
 import com.nekolaska.calabiyau.feature.tools.openFile
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +148,18 @@ private data class PendingApkDownload(
     val file: File,
     val fileName: String
 )
+
+private fun destroyWikiWebView(webView: WebView?, rendererGone: Boolean = false) {
+    webView ?: return
+    if (!rendererGone) {
+        runCatching { webView.stopLoading() }
+        runCatching { webView.webViewClient = WebViewClient() }
+        runCatching { webView.webChromeClient = null }
+    }
+    runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }
+    runCatching { webView.removeAllViews() }
+    runCatching { webView.destroy() }
+}
 
 private fun PendingApkDownload.withCompletedDownload(cursor: android.database.Cursor): PendingApkDownload {
     val localUri = runCatching {
@@ -405,19 +478,13 @@ fun WikiWebViewScreen(
 
     // 状态
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var webViewGeneration by remember { mutableIntStateOf(0) }
+    var recoveryUrl by remember { mutableStateOf<String?>(null) }
 
     // WebView 生命周期管理：组件销毁时释放 WebView 资源
     DisposableEffect(Unit) {
         onDispose {
-            webView?.let { wv ->
-                wv.stopLoading()
-                wv.loadUrl("about:blank")
-                wv.webViewClient = WebViewClient()  // 清除回调
-                wv.webChromeClient = null
-                (wv.parent as? ViewGroup)?.removeView(wv)
-                wv.removeAllViews()
-                wv.destroy()
-            }
+            destroyWikiWebView(webView)
             webView = null
         }
     }
@@ -425,6 +492,7 @@ fun WikiWebViewScreen(
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
     var currentUrl by remember { mutableStateOf(initialUrl) }
+    val latestCurrentUrl = rememberUpdatedState(currentUrl)
     var pageTitle by remember { mutableStateOf("Wiki") }
     var loadingProgress by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
@@ -773,88 +841,114 @@ fun WikiWebViewScreen(
             Box(
                 modifier = Modifier.fillMaxSize()
             ) {
-                AndroidView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background),
-                    factory = { ctx ->
-                        createWikiWebView(
-                            context = ctx,
-                            backgroundColor = webViewBackgroundColor,
-                            onPageStarted = { url ->
-                                currentUrl = url
-                                isLoading = true
-                                isToolbarVisible = true
-                                // about:blank 是网络错误时主动加载的空白页，不应重置错误状态
-                                if (url != "about:blank") {
-                                    hasNetworkError = false
-                                }
-                            },
-                            onPageFinished = { url ->
-                                currentUrl = url
-                                isLoading = false
-                            },
-                            onNetworkError = { url ->
-                                hasNetworkError = true
-                                networkErrorUrl = url
-                                isLoading = false
-                            },
-                            onTitleChanged = { title ->
-                                if (title.isNotBlank() && !title.startsWith("http")) {
-                                    pageTitle = title
-                                }
-                            },
-                            onProgressChanged = { progress ->
-                                loadingProgress = progress
-                            },
-                            onNavigationChanged = { back, forward ->
-                                canGoBack = back
-                                canGoForward = forward
-                            },
-                            onScrollDirectionChanged = { isUp ->
-                                if (isToolbarVisible != isUp) {
-                                    isToolbarVisible = isUp
-                                }
-                            },
-                            onFileChooser = { callback, params ->
-                                fileChooserCallback?.onReceiveValue(null) // 取消之前的回调
-                                fileChooserCallback = callback
-                                try {
-                                    val chooserIntent = buildWikiFileChooserIntent(params)
-                                    fileChooserLauncher.launch(chooserIntent)
-                                } catch (_: Exception) {
-                                    callback.onReceiveValue(null)
-                                    fileChooserCallback = null
-                                }
-                                true
-                            },
-                            onPassportDetected = showLoginReturnSnack,
-                            pendingApkDownloads = pendingApkDownloads,
-                            downloadScope = snackbarScope,
-                            showSnack = showSnack
-                        ).also { wv ->
-                            webView = wv
-                            // 长按图片检测
-                            wv.setOnLongClickListener {
-                                val result = wv.hitTestResult
-                                when (result.type) {
-                                    WebView.HitTestResult.IMAGE_TYPE,
-                                    WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
-                                        result.extra?.let { url ->
-                                            longPressImageUrl = url
-                                        }
-                                        true
+                key(webViewGeneration) {
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        factory = { ctx ->
+                            createWikiWebView(
+                                context = ctx,
+                                backgroundColor = webViewBackgroundColor,
+                                onPageStarted = { url ->
+                                    currentUrl = url
+                                    isLoading = true
+                                    isToolbarVisible = true
+                                    // about:blank 是网络错误时主动加载的空白页，不应重置错误状态
+                                    if (url != "about:blank") {
+                                        hasNetworkError = false
                                     }
+                                },
+                                onPageFinished = { url ->
+                                    currentUrl = url
+                                    isLoading = false
+                                },
+                                onNetworkError = { url ->
+                                    hasNetworkError = true
+                                    networkErrorUrl = url
+                                    isLoading = false
+                                },
+                                onRendererProcessGone = { crashedWebView, detail ->
+                                    val failedUrl = latestCurrentUrl.value.takeIf { it.isHttpOrHttpsUrl() }
+                                        ?: allowedInitialUrl
+                                    destroyWikiWebView(crashedWebView, rendererGone = true)
+                                    webView = null
+                                    fileChooserCallback?.onReceiveValue(null)
+                                    fileChooserCallback = null
+                                    recoveryUrl = failedUrl
+                                    webViewGeneration++
+                                    hasNetworkError = false
+                                    isLoading = true
+                                    loadingProgress = 0
+                                    canGoBack = false
+                                    canGoForward = false
+                                    showSnack(
+                                        if (detail.didCrash()) {
+                                            "网页渲染进程已崩溃，正在重新加载。前进后退记录会丢失"
+                                        } else {
+                                            "网页渲染进程已退出，正在重新加载。前进后退记录会丢失"
+                                        }
+                                    )
+                                },
+                                onTitleChanged = { title ->
+                                    if (title.isNotBlank() && !title.startsWith("http")) {
+                                        pageTitle = title
+                                    }
+                                },
+                                onProgressChanged = { progress ->
+                                    loadingProgress = progress
+                                },
+                                onNavigationChanged = { back, forward ->
+                                    canGoBack = back
+                                    canGoForward = forward
+                                },
+                                onScrollDirectionChanged = { isUp ->
+                                    if (isToolbarVisible != isUp) {
+                                        isToolbarVisible = isUp
+                                    }
+                                },
+                                onFileChooser = { callback, params ->
+                                    fileChooserCallback?.onReceiveValue(null) // 取消之前的回调
+                                    fileChooserCallback = callback
+                                    try {
+                                        val chooserIntent = buildWikiFileChooserIntent(params)
+                                        fileChooserLauncher.launch(chooserIntent)
+                                    } catch (_: Exception) {
+                                        callback.onReceiveValue(null)
+                                        fileChooserCallback = null
+                                    }
+                                    true
+                                },
+                                onPassportDetected = showLoginReturnSnack,
+                                pendingApkDownloads = pendingApkDownloads,
+                                downloadScope = snackbarScope,
+                                showSnack = showSnack
+                            ).also { wv ->
+                                webView = wv
+                                // 长按图片检测
+                                wv.setOnLongClickListener {
+                                    val result = wv.hitTestResult
+                                    when (result.type) {
+                                        WebView.HitTestResult.IMAGE_TYPE,
+                                        WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                                            result.extra?.let { url ->
+                                                longPressImageUrl = url
+                                            }
+                                            true
+                                        }
 
-                                    else -> false
+                                        else -> false
+                                    }
+                                }
+                                wv.loadWikiUrl(recoveryUrl ?: allowedInitialUrl, null)
+                                if (webViewGeneration == 0) {
+                                    onInitialUrlConsumed?.invoke()
                                 }
                             }
-                            wv.loadWikiUrl(allowedInitialUrl, null)
-                            onInitialUrlConsumed?.invoke()
-                        }
-                    },
-                    update = { wv -> wv.setBackgroundColor(webViewBackgroundColor) }
-                )
+                        },
+                        update = { wv -> wv.setBackgroundColor(webViewBackgroundColor) }
+                    )
+                }
 
                 AnimatedVisibility(
                     visible = isLoading && loadingProgress < 20,
@@ -1339,6 +1433,7 @@ private fun createWikiWebView(
     onNavigationChanged: (canGoBack: Boolean, canGoForward: Boolean) -> Unit,
     onScrollDirectionChanged: (isUp: Boolean) -> Unit,
     onNetworkError: (String) -> Unit = {},
+    onRendererProcessGone: (WebView, RenderProcessGoneDetail) -> Unit = { _, _ -> },
     onPassportDetected: () -> Unit = {},
     onFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams?) -> Boolean,
     pendingApkDownloads: MutableMap<Long, PendingApkDownload>,
@@ -1564,6 +1659,14 @@ private fun createWikiWebView(
         webViewClient = object : WebViewClient() {
             private var passportHintShown = false
 
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                view?.let { onRendererProcessGone(it, detail ?: return true) }
+                return true
+            }
+
             private fun maybeRedirectLoginCompletion(view: WebView?, url: String?): Boolean {
                 val host = url?.toUri()?.host ?: return false
                 if (!passportHintShown || !isWikiLoginCompletionHost(host)) {
@@ -1731,6 +1834,14 @@ private fun createWikiWebView(
                 // 创建临时 WebView 来拦截 URL，避免父 WebView 承载自身弹窗
                 val tempWebView = WebView(parentWebView.context)
                 tempWebView.webViewClient = object : WebViewClient() {
+                    override fun onRenderProcessGone(
+                        view: WebView?,
+                        detail: RenderProcessGoneDetail?
+                    ): Boolean {
+                        destroyWikiWebView(view, rendererGone = true)
+                        return true
+                    }
+
                     override fun shouldOverrideUrlLoading(
                         v: WebView?,
                         request: WebResourceRequest?
@@ -1740,7 +1851,7 @@ private fun createWikiWebView(
                             handleWikiNavigation(parentWebView.context, url) { navigatedUrl ->
                                 parentWebView.loadWikiUrl(navigatedUrl)
                             }
-                        tempWebView.destroy()
+                        destroyWikiWebView(tempWebView)
                         return handled
                     }
                 }

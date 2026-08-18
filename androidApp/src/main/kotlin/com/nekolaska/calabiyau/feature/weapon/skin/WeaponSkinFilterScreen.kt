@@ -1,11 +1,8 @@
 package com.nekolaska.calabiyau.feature.weapon.skin
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -17,19 +14,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.verticalScroll
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.feature.weapon.components.WeaponSelector
 import com.nekolaska.calabiyau.feature.weapon.components.WeaponSelectorOption
@@ -38,9 +34,12 @@ import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.Quality
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi.WeaponSkinInfo
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.CatalogDetailRow
+import com.nekolaska.calabiyau.core.ui.ExpandableCatalogDescription
 import com.nekolaska.calabiyau.core.ui.QualityFilterChips
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
+import com.nekolaska.calabiyau.core.ui.catalogQualityColor
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -69,10 +68,11 @@ fun WeaponSkinFilterScreen(
     val allSkins = state.data
 
     // 筛选状态
-    var selectedWeapon by remember { mutableStateOf(initialWeapon) }
-    var selectedWeaponCategory by remember { mutableStateOf<String?>(null) }
-    var selectedQuality by remember { mutableStateOf<Quality?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
+    var selectedWeapon by rememberSaveable(initialWeapon) { mutableStateOf(initialWeapon) }
+    var selectedWeaponCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedQualityLevel by rememberSaveable { mutableStateOf<Int?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val selectedQuality = selectedQualityLevel?.let(Quality::fromLevel)
 
     // 筛选后的列表
     val filteredSkins = remember(allSkins, selectedWeapon, selectedWeaponCategory, selectedQuality, searchQuery) {
@@ -157,7 +157,7 @@ fun WeaponSkinFilterScreen(
                                 selectedWeapon = weapon
                             },
                             selectedQuality = selectedQuality,
-                            onQualitySelected = { selectedQuality = it }
+                            onQualitySelected = { selectedQualityLevel = it?.level }
                         )
                     }
                 }
@@ -173,7 +173,7 @@ fun WeaponSkinFilterScreen(
                         }
                     }
                 } else {
-                    items(filteredSkins, key = { it.name + it.weapon }) { skin ->
+                    items(filteredSkins, key = { "${it.weapon}|${it.name}|${it.thumbnailUrl.orEmpty()}" }) { skin ->
                         WeaponSkinCard(
                             skin = skin,
                             onClick = { selectedSkin = skin }
@@ -328,7 +328,7 @@ private fun WeaponSkinFilterBar(
             selectedLevel = selectedQuality?.level,
             levels = Quality.entries.sortedByDescending { it.level }.map { it.level to it.displayName },
             onSelectedLevelChange = { level -> onQualitySelected(level?.let(Quality::fromLevel)) },
-            colorForLevel = { level -> Quality.fromLevel(level)?.let { skinQualityColor(it) } ?: MaterialTheme.colorScheme.primary }
+            colorForLevel = { catalogQualityColor(it) }
         )
     }
 }
@@ -349,7 +349,7 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = skin.quality?.let { skinQualityColor(it).copy(alpha = 0.4f) }
+            color = skin.quality?.let { catalogQualityColor(it.level).copy(alpha = 0.4f) }
                 ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         )
     ) {
@@ -364,7 +364,7 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
             ) {
                 if (skin.thumbnailUrl != null) {
                     AsyncImage(
-                        model = skin.fullImageUrl ?: skin.thumbnailUrl,
+                        model = skin.thumbnailUrl,
                         contentDescription = skin.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -391,7 +391,7 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
                             .align(Alignment.TopEnd)
                             .padding(4.dp),
                         shape = smoothCapsuleShape(),
-                        color = skinQualityColor(skin.quality).copy(alpha = 0.85f)
+                        color = catalogQualityColor(skin.quality.level).copy(alpha = 0.85f)
                     ) {
                         Text(
                             skin.quality.displayName,
@@ -430,17 +430,6 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
 //  品质颜色
 // ────────────────────────────────────────────
 
-@Composable
-private fun skinQualityColor(quality: Quality): Color {
-    return when (quality) {
-        Quality.EXQUISITE -> Color(0xFF3B82F6)   // 蓝
-        Quality.SUPERIOR -> Color(0xFFA855F7)    // 紫
-        Quality.PERFECT -> Color(0xFFF59E0B)     // 金
-        Quality.LEGENDARY -> Color(0xFFEF4444)   // 红
-        Quality.COLLECTION -> Color(0xFFFF6B2C)  // 橙
-    }
-}
-
 // ────────────────────────────────────────────
 //  外观详情底部弹窗
 // ────────────────────────────────────────────
@@ -451,7 +440,7 @@ private fun WeaponSkinDetailSheet(
     skin: WeaponSkinInfo,
     onDismiss: () -> Unit
 ) {
-    val qColor = skin.quality?.let { skinQualityColor(it) } ?: MaterialTheme.colorScheme.outline
+    val qColor = skin.quality?.let { catalogQualityColor(it.level) } ?: MaterialTheme.colorScheme.outline
     val displayModes = buildList {
         if (!skin.fullImageUrl.isNullOrBlank() || !skin.thumbnailUrl.isNullOrBlank()) add("立绘")
         if (!skin.screenshotUrl.isNullOrBlank()) add("游戏截图")
@@ -558,34 +547,11 @@ private fun WeaponSkinDetailSheet(
             Spacer(Modifier.height(16.dp))
 
             if (skin.description.isNotBlank()) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer
-                ) {
-                    var isDescriptionExpanded by remember { mutableStateOf(false) }
-                    val scrollState = rememberScrollState()
-                    Text(
-                        text = skin.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 5,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = if (isDescriptionExpanded) 240.dp else Dp.Unspecified)
-                            .then(if (isDescriptionExpanded) Modifier.verticalScroll(scrollState) else Modifier)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { isDescriptionExpanded = !isDescriptionExpanded }
-                            .animateContentSize()
-                            .padding(20.dp)
-                    )
-                }
-
+                ExpandableCatalogDescription(
+                    text = skin.description,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    collapsedLines = 5
+                )
                 Spacer(Modifier.height(12.dp))
             }
 
@@ -600,7 +566,7 @@ private fun WeaponSkinDetailSheet(
                 Column(Modifier.padding(20.dp)) {
                     // 获取方式
                     if (skin.sources.isNotEmpty()) {
-                        SkinDetailRow(
+                        CatalogDetailRow(
                             icon = Icons.Outlined.ShoppingBag,
                             label = "获取方式",
                             value = skin.sources.joinToString("、")
@@ -613,7 +579,7 @@ private fun WeaponSkinDetailSheet(
                             modifier = Modifier.padding(vertical = 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
-                        SkinDetailRow(
+                        CatalogDetailRow(
                             imageUrl = CRYSTAL_ICON_URL,
                             fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
                             label = "巴布洛晶核",
@@ -627,7 +593,7 @@ private fun WeaponSkinDetailSheet(
                             modifier = Modifier.padding(vertical = 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
-                        SkinDetailRow(
+                        CatalogDetailRow(
                             imageUrl = BASE_ICON_URL,
                             fallbackImageUrl = BASE_ICON_FALLBACK_URL,
                             label = "基弦",
@@ -641,7 +607,7 @@ private fun WeaponSkinDetailSheet(
                             modifier = Modifier.padding(vertical = 10.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
-                        SkinDetailRow(
+                        CatalogDetailRow(
                             icon = Icons.Outlined.Star,
                             label = "品质",
                             value = skin.quality.displayName,
@@ -654,59 +620,4 @@ private fun WeaponSkinDetailSheet(
     }
 }
 
-@Composable
-private fun SkinDetailRow(
-    icon: ImageVector? = null,
-    imageUrl: String? = null,
-    fallbackImageUrl: String? = null,
-    label: String,
-    value: String,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(36.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (imageUrl != null) {
-                    var useFallback by remember(imageUrl, fallbackImageUrl) { mutableStateOf(false) }
-                    AsyncImage(
-                        model = if (useFallback) fallbackImageUrl ?: imageUrl else imageUrl,
-                        contentDescription = label,
-                        contentScale = ContentScale.Fit,
-                        onError = {
-                            if (!useFallback && !fallbackImageUrl.isNullOrBlank()) {
-                                useFallback = true
-                            }
-                        },
-                        modifier = Modifier.size(22.dp)
-                    )
-                } else if (icon != null) {
-                    Icon(
-                        icon, null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(80.dp)
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = valueColor
-        )
-    }
-}
+

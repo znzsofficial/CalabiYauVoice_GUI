@@ -49,7 +49,7 @@ class CalabiYauApplication : Application(), SingletonImageLoader.Factory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(128L * 1024 * 1024)
+                    .maxSizeBytes(256L * 1024 * 1024)
                     .build()
             }
             .crossfade(true)

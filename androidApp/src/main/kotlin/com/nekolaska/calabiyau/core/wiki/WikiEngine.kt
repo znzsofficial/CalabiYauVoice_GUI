@@ -19,6 +19,7 @@ import util.buildWikiUrl
 import util.awaitGet
 import util.awaitGetToFile
 import util.executeGet
+import kotlin.time.Duration.Companion.milliseconds
 
 object WikiEngine {
 
@@ -244,7 +245,7 @@ object WikiEngine {
             } catch (e: Exception) {
                 onError?.invoke("网络异常: ${e.javaClass.simpleName}: ${e.message}")
             }
-            if (attempt == 0) delay(500)
+            if (attempt == 0) delay(500.milliseconds)
         }
         null
     }

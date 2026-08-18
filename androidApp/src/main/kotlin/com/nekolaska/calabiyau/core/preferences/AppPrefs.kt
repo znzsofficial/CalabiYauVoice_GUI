@@ -217,4 +217,17 @@ object AppPrefs {
      *  8 = Content
      */
     var paletteStyle by constrainedIntPref(0, 0, 8)
+
+    /**
+     * 对比度索引，对应 materialkolor Contrast：
+     * 0 = Default, 1 = Medium, 2 = High, 3 = Reduced
+     */
+    const val CONTRAST_DEFAULT = 0
+    const val CONTRAST_MEDIUM = 1
+    const val CONTRAST_HIGH = 2
+    const val CONTRAST_REDUCED = 3
+    var contrastLevel by constrainedIntPref(CONTRAST_DEFAULT, CONTRAST_DEFAULT, CONTRAST_REDUCED)
+
+    var amoledDark by booleanPref(false)
+    var colorSpec2025 by booleanPref(true)
 }

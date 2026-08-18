@@ -82,8 +82,6 @@ internal fun WikiGameplayHubScreen(
                     title = "战斗模式",
                     subtitle = "查看所有战斗模式详情",
                     icon = Icons.Outlined.SportsEsports,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     onClick = { onNavigateTo(WikiRoute.GameModes) },
                     backdrop = backdrop
                 )
@@ -93,8 +91,6 @@ internal fun WikiGameplayHubScreen(
                     title = "成就",
                     subtitle = "查看战斗勋章、荣耀成就与光辉事迹",
                     icon = Icons.Outlined.EmojiEvents,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Achievements) },
                     backdrop = backdrop
                 )
@@ -185,8 +181,6 @@ internal fun WikiCatalogHubScreen(
                     title = "道具图鉴",
                     subtitle = "浏览功能道具、货币与礼盒礼包",
                     icon = Icons.Outlined.Inventory2,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Items) },
                     backdrop = backdrop
                 )
@@ -196,8 +190,6 @@ internal fun WikiCatalogHubScreen(
                     title = "时装筛选",
                     subtitle = "浏览全部角色时装与外观",
                     icon = Icons.Outlined.Checkroom,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Costumes()) },
                     backdrop = backdrop
                 )
@@ -207,8 +199,6 @@ internal fun WikiCatalogHubScreen(
                     title = "武器外观",
                     subtitle = "浏览全部武器外观与皮肤",
                     icon = Icons.Outlined.Palette,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiRoute.WeaponSkins()) },
                     backdrop = backdrop
                 )
@@ -242,8 +232,6 @@ internal fun WikiExtensionHubScreen(
                     title = "投票",
                     subtitle = "查看并参与当前 Wiki 投票",
                     icon = Icons.Outlined.HowToVote,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Voting) },
                     backdrop = backdrop
                 )
@@ -277,8 +265,6 @@ internal fun WikiExtensionHubScreen(
                     title = "投稿作品",
                     subtitle = "查看引航者投稿的视频、文章与游戏作品",
                     icon = Icons.Outlined.UploadFile,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Submissions) },
                     backdrop = backdrop
                 )
@@ -288,8 +274,6 @@ internal fun WikiExtensionHubScreen(
                     title = "壁纸",
                     subtitle = "浏览官方壁纸与视觉图",
                     icon = Icons.Outlined.Wallpaper,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Wallpapers) },
                     backdrop = backdrop
                 )
@@ -299,8 +283,6 @@ internal fun WikiExtensionHubScreen(
                     title = "表情包",
                     subtitle = "查看官方表情包资源",
                     icon = Icons.Outlined.EmojiEmotions,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Stickers) },
                     backdrop = backdrop
                 )
@@ -310,8 +292,6 @@ internal fun WikiExtensionHubScreen(
                     title = "喵言喵语",
                     subtitle = "查看喵言喵语词条内容",
                     icon = Icons.Outlined.Pets,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     onClick = { onNavigateTo(WikiRoute.MeowLanguage) },
                     backdrop = backdrop
                 )
@@ -321,8 +301,6 @@ internal fun WikiExtensionHubScreen(
                     title = "BGM",
                     subtitle = "浏览原声音乐、专辑与场景曲目",
                     icon = Icons.Outlined.MusicNote,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                     onClick = { onNavigateTo(WikiRoute.Bgm) },
                     backdrop = backdrop
                 )
@@ -485,7 +463,7 @@ internal fun AggregatePreviewCard(
         shape = cardShape,
         color = when {
             liquidGlass -> Color.Transparent
-            hasWallpaper -> containerColor.copy(alpha = 0.85f)
+            hasWallpaper -> containerColor.copy(alpha = 0.78f)
             else -> containerColor
         },
         modifier = Modifier

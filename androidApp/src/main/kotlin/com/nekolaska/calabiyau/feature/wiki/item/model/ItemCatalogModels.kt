@@ -7,9 +7,8 @@ enum class Quality(val level: Int, val displayName: String) {
     LEGENDARY(5, "传说");
 
     companion object {
-        fun fromLevel(level: String): Quality? = level.toIntOrNull()?.let { value ->
-            entries.find { it.level == value }
-        }
+        fun fromLevel(level: Int): Quality? = entries.find { it.level == level }
+        fun fromLevel(level: String): Quality? = level.toIntOrNull()?.let(::fromLevel)
     }
 }
 

@@ -28,12 +28,14 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailApi.CharacterDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
@@ -351,6 +353,10 @@ private fun HeaderSection(
 ) {
     val headerImage = detail.portraitUrl ?: portraitUrl ?: detail.avatarUrl
     val hasPortrait = detail.portraitUrl != null || portraitUrl != null
+    val context = LocalContext.current
+    val headerRequest = remember(context, headerImage, hasPortrait) {
+        wikiPortraitRequest(context, headerImage)
+    }
     
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -374,7 +380,7 @@ private fun HeaderSection(
                     )
             ) {
                 AsyncImage(
-                    model = headerImage,
+                    model = headerRequest,
                     contentDescription = detail.name,
                     contentScale = ContentScale.Crop,
                     alignment = if (hasPortrait) BiasAlignment(0f, -0.85f) else Alignment.Center,
@@ -1543,8 +1549,12 @@ private fun CharacterDetailSkeleton(
                     )
             ) {
                 if (portraitUrl != null) {
+                    val context = LocalContext.current
+                    val skeletonRequest = remember(context, portraitUrl) {
+                        wikiPortraitRequest(context, portraitUrl, crossfade = false)
+                    }
                     AsyncImage(
-                        model = portraitUrl,
+                        model = skeletonRequest,
                         contentDescription = characterName,
                         contentScale = ContentScale.Crop,
                         alignment = BiasAlignment(0f, -0.85f),

@@ -1,10 +1,8 @@
 package com.nekolaska.calabiyau.core.ui
 
-import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -25,15 +23,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.palette.graphics.Palette
+import com.materialkolor.Contrast
 import com.materialkolor.DynamicMaterialExpressiveTheme
 import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamiccolor.ColorSpec
 import com.kyant.capsule.ContinuousRoundedRectangle
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
-import com.nekolaska.calabiyau.core.wiki.WikiEngine
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import util.executeGet
 
 /** Global theme mode state, readable and writable from composables. */
 val LocalThemeMode = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.themeMode) }
@@ -47,26 +42,41 @@ val LocalWallpaperSeedColor = staticCompositionLocalOf { mutableIntStateOf(0) }
 /** Palette style index (0–8), maps to materialkolor PaletteStyle enum ordinal. */
 val LocalPaletteStyle = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.paletteStyle) }
 
+/** Contrast index: 0=Default, 1=Medium, 2=High, 3=Reduced. */
+val LocalContrastLevel = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.contrastLevel) }
+
+val LocalAmoledDark = staticCompositionLocalOf { mutableStateOf(AppPrefs.amoledDark) }
+
+val LocalColorSpec2025 = staticCompositionLocalOf { mutableStateOf(AppPrefs.colorSpec2025) }
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
-    val wallpaperSeedColor = remember { mutableIntStateOf(AppPrefs.wallpaperSeedColorCache) }
+    val wallpaperSeedColor = remember {
+        mutableIntStateOf(WallpaperSeedColor.applyCachedColor(AppPrefs.wallpaperUrl))
+    }
     val liquidGlassEnabled = remember { mutableStateOf(AppPrefs.liquidGlassEnabled) }
     val highReadabilityDrawer = remember { mutableStateOf(AppPrefs.highReadabilityDrawer) }
     val paletteStyle = remember { mutableIntStateOf(AppPrefs.paletteStyle) }
+    val contrastLevel = remember { mutableIntStateOf(AppPrefs.contrastLevel) }
+    val amoledDark = remember { mutableStateOf(AppPrefs.amoledDark) }
+    val colorSpec2025 = remember { mutableStateOf(AppPrefs.colorSpec2025) }
     val currentContent = rememberUpdatedState(content)
     val movableContent = remember { movableContentOf { currentContent.value() } }
+    val context = LocalContext.current
 
-    LaunchedEffect(seedColor.intValue) {
+    LaunchedEffect(seedColor.intValue, AppPrefs.wallpaperUrl) {
         if (seedColor.intValue != AppPrefs.SEED_WALLPAPER) return@LaunchedEffect
-        if (wallpaperSeedColor.intValue != 0) return@LaunchedEffect
-        val color = extractWallpaperSeedColor(AppPrefs.wallpaperUrl ?: return@LaunchedEffect)
-        if (color != 0) {
-            wallpaperSeedColor.intValue = color
-            AppPrefs.wallpaperSeedColorCache = color
+        val url = AppPrefs.wallpaperUrl
+        val cached = WallpaperSeedColor.applyCachedColor(url)
+        if (cached != 0) {
+            wallpaperSeedColor.intValue = cached
+            return@LaunchedEffect
         }
+        val color = WallpaperSeedColor.resolve(context, url)
+        if (color != 0) wallpaperSeedColor.intValue = color
     }
 
     val darkTheme = when (themeMode.intValue) {
@@ -74,18 +84,19 @@ fun AppTheme(content: @Composable () -> Unit) {
         AppPrefs.THEME_DARK -> true
         else -> isSystemInDarkTheme()
     }
-    val context = LocalContext.current
     val effectiveSeed = when (seedColor.intValue) {
         AppPrefs.SEED_WALLPAPER -> wallpaperSeedColor.intValue
         else -> seedColor.intValue
     }
-    val fallbackColorScheme = when {
+    val systemColorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> darkColorScheme()
         else -> lightColorScheme()
     }
+    val themeSeed = if (effectiveSeed != 0) Color(effectiveSeed) else systemColorScheme.primary
+    val useSystemPrimary = effectiveSeed == 0
 
     CompositionLocalProvider(
         LocalThemeMode provides themeMode,
@@ -93,7 +104,10 @@ fun AppTheme(content: @Composable () -> Unit) {
         LocalWallpaperSeedColor provides wallpaperSeedColor,
         LocalLiquidGlassEnabled provides liquidGlassEnabled,
         LocalHighReadabilityDrawer provides highReadabilityDrawer,
-        LocalPaletteStyle provides paletteStyle
+        LocalPaletteStyle provides paletteStyle,
+        LocalContrastLevel provides contrastLevel,
+        LocalAmoledDark provides amoledDark,
+        LocalColorSpec2025 provides colorSpec2025
     ) {
         val appShapes = remember {
             Shapes(
@@ -113,41 +127,30 @@ fun AppTheme(content: @Composable () -> Unit) {
                 labelMedium = base.labelMedium.copy(fontWeight = FontWeight.Medium)
             )
         }
-        if (effectiveSeed != 0) {
-            DynamicMaterialExpressiveTheme(
-                seedColor = Color(effectiveSeed),
-                motionScheme = MotionScheme.expressive(),
-                isDark = darkTheme,
-                style = PaletteStyle.entries[paletteStyle.intValue],
-                shapes = appShapes,
-                typography = appTypography,
-                animate = true,
-                content = movableContent
-            )
-        } else {
-            MaterialExpressiveTheme(
-                colorScheme = fallbackColorScheme,
-                motionScheme = MotionScheme.expressive(),
-                shapes = appShapes,
-                typography = appTypography,
-                content = movableContent
-            )
-        }
+        DynamicMaterialExpressiveTheme(
+            seedColor = themeSeed,
+            motionScheme = MotionScheme.expressive(),
+            isDark = darkTheme,
+            isAmoled = darkTheme && amoledDark.value,
+            primary = themeSeed.takeIf { useSystemPrimary },
+            style = PaletteStyle.entries[paletteStyle.intValue],
+            contrastLevel = contrastLevel.intValue.toContrastValue(),
+            specVersion = if (colorSpec2025.value) {
+                ColorSpec.SpecVersion.SPEC_2025
+            } else {
+                ColorSpec.SpecVersion.SPEC_2021
+            },
+            shapes = appShapes,
+            typography = appTypography,
+            animate = true,
+            content = movableContent
+        )
     }
 }
 
-private suspend fun extractWallpaperSeedColor(url: String): Int = withContext(Dispatchers.IO) {
-    var bitmap: android.graphics.Bitmap? = null
-    try {
-        val bytes = WikiEngine.client.executeGet(url).use { response ->
-            response.body.bytes()
-        }
-        bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@withContext 0
-        val palette = Palette.from(bitmap).generate()
-        palette.getVibrantColor(palette.getMutedColor(0))
-    } catch (_: Exception) {
-        0
-    } finally {
-        bitmap?.recycle()
-    }
+private fun Int.toContrastValue(): Double = when (this) {
+    AppPrefs.CONTRAST_MEDIUM -> Contrast.Medium.value
+    AppPrefs.CONTRAST_HIGH -> Contrast.High.value
+    AppPrefs.CONTRAST_REDUCED -> Contrast.Reduced.value
+    else -> Contrast.Default.value
 }

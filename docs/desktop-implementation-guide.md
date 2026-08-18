@@ -675,7 +675,7 @@ jvmArgs += "--enable-native-access=ALL-UNNAMED"
 `desktopApp/build.gradle.kts:50-67` 当前配置：
 
 - 包名：`CalabiYauVoice_GUI`
-- 版本：`2.1.4`
+- 版本：`2.1.5`
 - 目标格式：MSI、EXE
 - 安装目录选择
 - 桌面快捷方式

@@ -39,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,11 +51,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
+import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
@@ -114,6 +119,16 @@ fun CharacterListScreen(
             modifier = Modifier.padding(innerPadding),
             loading = { mod -> CharacterListSkeleton(mod) }
         ) { factions ->
+            val context = LocalContext.current
+            LaunchedEffect(factions, selectedTab) {
+                val urls = buildList {
+                    factions.getOrNull(selectedTab)?.characters?.let(::addAll)
+                    factions.forEachIndexed { index, faction ->
+                        if (index != selectedTab) addAll(faction.characters)
+                    }
+                }.map { it.portraitUrl ?: it.imageUrl }
+                SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
+            }
             // 阵营 Tab
             if (factions.size > 1) {
                 Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
@@ -320,6 +335,10 @@ private fun CharacterCard(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     val hasWallpaper = LocalHasWallpaper.current
+    val context = LocalContext.current
+    val portraitRequest = remember(context, character.portraitUrl, character.imageUrl) {
+        wikiPortraitRequest(context, character.portraitUrl ?: character.imageUrl)
+    }
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -352,7 +371,7 @@ private fun CharacterCard(
                     )
             ) {
                 AsyncImage(
-                    model = character.portraitUrl ?: character.imageUrl,
+                    model = portraitRequest,
                     contentDescription = character.name,
                     contentScale = ContentScale.Crop,
                     alignment = BiasAlignment(0f, -0.85f),
