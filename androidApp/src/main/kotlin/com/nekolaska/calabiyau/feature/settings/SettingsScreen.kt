@@ -597,9 +597,9 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.5"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.6"
                     } catch (_: Exception) {
-                        "2.1.5"
+                        "2.1.6"
                     }
                 }
                 val currentVersionCode = remember {
