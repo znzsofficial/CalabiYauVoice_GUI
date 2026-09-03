@@ -25,6 +25,9 @@ This project currently stores the app release version in a few separate places. 
   - `versionCode`
   - `changelog`
   - `publishedAt`
+  - `apkUrl` / `apkSize`
+  - `releases`: archive list served by the homepage. `webDist` uploads the APK to R2 (`calabiyau-releases/android/CalabiYauVoice-<version>.apk` plus `CalabiYauVoice-latest.apk`) and prepends the new version here. Keep older entries; do not delete 2.1.6.
+  - `apkUrl` stays a same-origin path such as `/downloads/CalabiYauVoice-2.1.7.apk`. The Pages Worker streams the file from R2. Android `UpdateApi` does not need a code change.
 
 - `downloadPage/dist/downloads/latest.json`
   - Keep this copy in sync with `downloadPage/downloads/latest.json` if the built download page is committed.

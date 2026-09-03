@@ -149,11 +149,15 @@ private data class PendingApkDownload(
     val fileName: String
 )
 
+private val noopWebViewClient = object : WebViewClient() {
+    override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean = true
+}
+
 private fun destroyWikiWebView(webView: WebView?, rendererGone: Boolean = false) {
     webView ?: return
     if (!rendererGone) {
         runCatching { webView.stopLoading() }
-        runCatching { webView.webViewClient = WebViewClient() }
+        runCatching { webView.webViewClient = noopWebViewClient }
         runCatching { webView.webChromeClient = null }
     }
     runCatching { (webView.parent as? ViewGroup)?.removeView(webView) }

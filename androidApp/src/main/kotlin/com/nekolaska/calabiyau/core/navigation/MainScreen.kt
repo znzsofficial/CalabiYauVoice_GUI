@@ -175,8 +175,7 @@ fun MainScreen(
     downloadVM: DownloadViewModel,
     portraitVM: PortraitViewModel,
     shortcutTarget: String? = null,
-    shortcutRequestKey: Int = 0,
-    pendingUrl: String? = null
+    shortcutRequestKey: Int = 0
 ) {
     val coroutineScope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -277,14 +276,6 @@ fun MainScreen(
     val pageContent = remember { movableContentOf {
         // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
         var hubWebViewUrl by rememberSaveable { mutableStateOf<String?>(null) }
-
-        // 外部传入的 URL（如更新页）直接在内置 WebView 中打开
-        LaunchedEffect(pendingUrl) {
-            val url = pendingUrl ?: return@LaunchedEffect
-            hubWebViewUrl = url
-            wikiEnteredFromHub = true
-            currentDestination = DrawerDestination.WIKI_HUB_WEBVIEW
-        }
 
         // 将 WIKI_HUB 和 WIKI_HUB_WEBVIEW 视为同一动画状态（WebView 叠加在 Hub 上，不需要转场）
         val animKey = if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW)
@@ -433,8 +424,7 @@ fun MainScreen(
 
             DrawerDestination.SETTINGS -> {
                 SettingsScreen(
-                    onBack = { openWikiHub() },
-                    onWebViewVisible = { childWebViewVisible = it }
+                    onBack = { openWikiHub() }
                 )
             }
 

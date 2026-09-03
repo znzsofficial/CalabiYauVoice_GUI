@@ -1,0 +1,12 @@
+{
+  "$schema": "https://www.unpkg.com/wrangler@4.128.0/config-schema.json",
+  "name": "calabiyauwiki",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-05-25",
+  "r2_buckets": [
+    {
+      "binding": "RELEASES",
+      "bucket_name": "calabiyau-releases"
+    }
+  ]
+}

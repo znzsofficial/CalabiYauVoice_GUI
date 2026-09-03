@@ -166,7 +166,7 @@
 │   ├── package.json
 │   ├── vite.config.ts                  #   多页 Vite 构建 + 本地 API 代理
 │   ├── download.css / base.css
-│   ├── downloads/                      #   latest.json 与 APK 资源
+│   ├── downloads/                      #   latest.json；APK 实际在 R2 calabiyau-releases
 │   └── src/
 │       ├── main.ts                     #   首页入口
 │       ├── App.svelte                  #   首页 UI

@@ -14,12 +14,14 @@
   type BalanceSettings = { modes: BalanceOption[]; maps: BalanceOption[]; ranks: BalanceOption[]; seasons: BalanceOption[]; positions: BalanceOption[]; characters: BalanceOption[] };
   type BalanceResult = Record<BalanceSide, BalanceHero[]>;
   type CompareData = Record<BalanceSide, Record<string, Partial<Record<SortField, number>>>>;
-  type LatestInfo = { apkUrl?: string; versionName?: string; version?: string; publishedAt?: string; changelog?: string[]; body?: string; apkSize?: number | string };
+  type ReleaseInfo = { versionName?: string; version?: string; versionCode?: number; apkUrl?: string; apkSize?: number | string; publishedAt?: string; changelog?: string[] };
+  type LatestInfo = ReleaseInfo & { changelog?: string[]; body?: string; releases?: ReleaseInfo[] };
+  type HistoryRelease = { versionName: string; apkUrl: string; apkSize: string; publishedAt: string };
   type BalanceSettingsPayload = { setting: Record<'mode' | 'map' | 'rank' | 'season', RawContentItem[]>; role_list: { position: RawContentItem[]; role_list: RawContentItem[] } };
   type BalanceSettingsResponse = { code: number; msg?: string; data: { value: BalanceSettingsPayload } };
   type RawHero = Partial<Record<SortField, number>> & { id?: number | string; heroName?: string };
   type BalanceDataResponse = { jData?: { iRet?: number | string; sMsg?: string; data1?: { side1?: RawHero[]; side2?: RawHero[] }; data2?: { side1?: CompareData['attackers']; side2?: CompareData['defenders'] } } };
-  const fallbackApk = '/downloads/CalabiYauVoice-latest.apk';
+  const fallbackApk = '/downloads/CalabiYauVoice-2.1.6.apk';
   const chartId = '338985';
   const ideToken = 'b7FM3m';
   const qqGroupId = '1037289201';
@@ -32,10 +34,12 @@
   let apkUrl = $state(fallbackApk);
   let statusText = $state('如果版本信息加载失败，下载按钮仍会使用默认 APK 地址。');
   let changelog: string[] | null = $state(null);
+  let historyReleases = $state([] as HistoryRelease[]);
   let copied = $state(false);
   let githubStars = $state(0);
   let qqGroupCopied = $state(false);
 
+  let historyDialogRef: HTMLDialogElement | null = $state(null);
   let balanceDialogRef: HTMLDialogElement | null = $state(null);
   let balanceStatus: BalanceStatus = $state('idle');
   let balanceError = $state('');
@@ -96,16 +100,33 @@
     }
   }
 
+  function parseHistoryReleases(info: LatestInfo, currentVersion: string): HistoryRelease[] {
+    const items = Array.isArray(info.releases) ? info.releases : [];
+    return items.flatMap(item => {
+      const name = item.versionName || item.version || '';
+      if (!name || name === currentVersion || !item.apkUrl) return [];
+      const size = Number(item.apkSize);
+      return [{
+        versionName: name,
+        apkUrl: resolveUrl(item.apkUrl),
+        apkSize: formatFileSize(size) || '未知',
+        publishedAt: item.publishedAt || '未标注',
+      }];
+    });
+  }
+
   async function loadLatestInfo(): Promise<void> {
     try {
       const response = await fetchWithTimeout('/downloads/latest.json', { cache: 'no-store' }, 8000);
       const info = await response.json() as LatestInfo;
       const nextApkUrl = resolveUrl(info.apkUrl);
+      const nextVersion = info.versionName || info.version || '未知版本';
       apkUrl = nextApkUrl;
-      versionName = info.versionName || info.version || '未知版本';
+      versionName = nextVersion;
       publishedAt = info.publishedAt || '未标注';
       statusText = '版本信息已更新，点击按钮下载最新 APK。';
       changelog = Array.isArray(info.changelog) ? info.changelog : String(info.body || '暂无更新日志').split('\n');
+      historyReleases = parseHistoryReleases(info, nextVersion);
       await measureApkSize(nextApkUrl, Number(info.apkSize));
     } catch (error) {
       const err = toError(error);
@@ -113,6 +134,7 @@
       publishedAt = err.name === 'AbortError' ? '加载超时' : '读取失败';
       apkSize = '未知';
       apkUrl = fallbackApk;
+      historyReleases = [];
       statusText = err.name === 'AbortError' ? '读取 latest.json 超时，已切换到默认 APK 下载地址。' : '暂时无法读取 latest.json，已切换到默认 APK 下载地址。';
       changelog = ['无法读取在线更新日志，请稍后刷新页面重试。'];
       await measureApkSize(fallbackApk);
@@ -424,6 +446,11 @@
           <div class="card-header"><div class="card-title"><iconify-icon icon="lucide:link"></iconify-icon>相关资源</div></div>
           <div class="card-body">
             <div class="link-grid">
+              <button class="resource-link" type="button" onclick={() => historyDialogRef?.showModal()} disabled={historyReleases.length === 0}>
+                <span class="resource-icon"><iconify-icon icon="lucide:archive"></iconify-icon></span>
+                <span style="flex: 1;"><strong>历史版本</strong><small>{historyReleases.length > 0 ? `${historyReleases.length} 个归档安装包` : '暂无历史版本'}</small></span>
+                <iconify-icon icon="lucide:chevron-right" class="text-muted" style="font-size: 14px; opacity: 0.5;"></iconify-icon>
+              </button>
               <a class="resource-link" href="https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5" target="_blank" rel="noopener noreferrer">
                 <span class="resource-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></span>
                 <span style="flex: 1;"><strong>Wiki 首页</strong><small>角色、武器、活动资料</small></span>
@@ -456,6 +483,30 @@
     <p>本项目为玩家社区工具，非《卡拉彼丘》官方应用；游戏名称、商标与素材版权归其各自权利方所有。</p>
   </footer>
 </div>
+
+<dialog class="history-dialog" bind:this={historyDialogRef} onclick={(event) => { if (event.target === historyDialogRef) historyDialogRef?.close(); }}>
+  <div class="history-dialog-inner">
+    <div class="history-dialog-header">
+      <h2 class="history-dialog-title"><iconify-icon icon="lucide:archive"></iconify-icon>历史版本</h2>
+      <button class="btn outline balance-close-btn" type="button" aria-label="关闭" onclick={() => historyDialogRef?.close()}><iconify-icon icon="lucide:x"></iconify-icon></button>
+    </div>
+    <div class="history-dialog-body">
+      <div class="release-list">
+        {#each historyReleases as release (release.versionName)}
+          <div class="release-item">
+            <div class="release-meta">
+              <strong>{release.versionName}</strong>
+              <small>{release.publishedAt} · {release.apkSize}</small>
+            </div>
+            <a class="btn outline release-download" href={release.apkUrl} download>
+              <iconify-icon icon="lucide:download"></iconify-icon>下载
+            </a>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
+</dialog>
 
 <BalanceDialog
   bind:dialogRef={balanceDialogRef}

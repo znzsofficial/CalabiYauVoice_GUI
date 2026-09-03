@@ -10,6 +10,7 @@ downloadPage/dist/
 .impeccable
 .github
 .wrangler/
+downloadPage/wrangler.toml
 
 ### IntelliJ IDEA ###
 .idea

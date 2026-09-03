@@ -55,10 +55,53 @@ export default {
       return proxyWikiApi(url);
     }
 
+    const apkResponse = await serveReleaseApk(request, env, url.pathname);
+    if (apkResponse) return apkResponse;
+
     // 其余请求走静态资源
     return env.ASSETS.fetch(request);
   },
 };
+
+function apkObjectKey(pathname) {
+  const match = pathname.match(/^\/downloads\/(CalabiYauVoice-(?:latest|\d+\.\d+\.\d+)\.apk)$/);
+  return match ? `android/${match[1]}` : null;
+}
+
+async function serveReleaseApk(request, env, pathname) {
+  const key = apkObjectKey(pathname);
+  if (!key || !env.RELEASES) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+  }
+
+  const object = request.method === "HEAD"
+    ? await env.RELEASES.head(key)
+    : await env.RELEASES.get(key, { range: request.headers });
+
+  if (!object) return new Response("Not Found", { status: 404 });
+
+  const filename = key.slice(key.lastIndexOf("/") + 1);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("Content-Type", "application/vnd.android.package-archive");
+  headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+  if (filename.endsWith("-latest.apk")) {
+    headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+  } else {
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  }
+  headers.set("Access-Control-Allow-Origin", "*");
+
+  if (request.method === "HEAD") {
+    return new Response(null, { status: 200, headers });
+  }
+  if (!("body" in object) || !object.body) {
+    return new Response("Not Found", { status: 404 });
+  }
+  return new Response(object.body, { status: 200, headers });
+}
 
 function wikiProxyErrorMessage(status) {
   if (status === 429) return "请求过于频繁，请稍后再试";

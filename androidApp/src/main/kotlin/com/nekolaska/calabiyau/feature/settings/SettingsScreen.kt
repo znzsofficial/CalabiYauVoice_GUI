@@ -61,7 +61,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -86,7 +85,6 @@ import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import com.nekolaska.calabiyau.feature.tools.getWritablePathFromTreeUri
-import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.defaultQuickEntryIds
 import com.nekolaska.calabiyau.feature.wiki.hub.quickEntryById
 import kotlinx.coroutines.Dispatchers
@@ -96,15 +94,14 @@ import kotlinx.coroutines.withContext
 private enum class SettingsPage {
     MAIN,
     ABOUT,
-    STORAGE,
-    UPDATE_WEB
+    STORAGE
 }
 
 private const val SHOW_SETTINGS_DEBUG_ITEM = false
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {}) {
+fun SettingsScreen(onBack: () -> Unit) {
     var savePath by remember { mutableStateOf(AppPrefs.savePath) }
     var maxConcurrency by remember { mutableStateOf(AppPrefs.maxConcurrency.toString()) }
     var currentPage by remember { mutableStateOf(SettingsPage.MAIN) }
@@ -122,7 +119,6 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
     var storageSnapshot by remember { mutableStateOf<StorageSnapshot?>(null) }
     var isStorageCalculating by remember { mutableStateOf(true) }
     var storageRefreshKey by remember { mutableIntStateOf(0) }
-    var updateWebUrl by remember { mutableStateOf<String?>(null) }
 
     fun refreshStorageSnapshot() {
         storageRefreshKey++
@@ -149,7 +145,7 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
         }
     }
 
-    val canPredictivePopToMain = currentPage != SettingsPage.MAIN && currentPage != SettingsPage.UPDATE_WEB
+    val canPredictivePopToMain = currentPage != SettingsPage.MAIN
     val transitionState = rememberPredictiveBackTransition(currentPage)
 
     SeekablePredictiveBackHandler(
@@ -192,17 +188,6 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
             )
             return@AnimatedContent
         }
-        if (page == SettingsPage.UPDATE_WEB) {
-            LaunchedEffect(Unit) { onWebViewVisible(true) }
-            DisposableEffect(Unit) { onDispose { onWebViewVisible(false) } }
-            WikiWebViewScreen(
-                onExitWiki = { currentPage = SettingsPage.MAIN },
-                initialUrl = updateWebUrl ?: "https://wiki.nekolaska.vip",
-                useTopBarMode = true
-            )
-            return@AnimatedContent
-        }
-
         Scaffold(
             topBar = {
                 Row(
@@ -597,9 +582,9 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.6"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.7"
                     } catch (_: Exception) {
-                        "2.1.6"
+                        "2.1.7"
                     }
                 }
                 val currentVersionCode = remember {
@@ -677,12 +662,7 @@ fun SettingsScreen(onBack: () -> Unit, onWebViewVisible: (Boolean) -> Unit = {})
                         currentVersion = currentVersion,
                         onDismiss = { updateResult = null },
                         onOpenBrowser = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri()))
-                        },
-                        onOpenInApp = {
-                            updateWebUrl = info.htmlUrl
-                            updateResult = null
-                            currentPage = SettingsPage.UPDATE_WEB
+                            context.startActivity(Intent(Intent.ACTION_VIEW, UpdateApi.resolveApkUrl(info).toUri()))
                         }
                     )
                 }

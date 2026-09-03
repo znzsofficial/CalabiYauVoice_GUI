@@ -679,19 +679,28 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
     padding: 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--foreground);
+    text-align: left;
+    font: inherit;
     text-decoration: none;
     background-color: var(--card);
+    cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.resource-link:hover {
+.resource-link:hover:not(:disabled) {
     background-color: var(--accent);
     transform: translateX(4px);
     border-color: color-mix(in srgb, var(--border) 40%, var(--foreground));
+}
+
+.resource-link:disabled {
+    cursor: default;
+    opacity: 0.65;
 }
 
 .resource-link:hover .resource-icon {
@@ -786,6 +795,104 @@
         width: 100%;
         justify-self: stretch;
     }
+}
+
+.history-dialog {
+    border: none;
+    border-radius: var(--radius);
+    background-color: var(--card);
+    color: var(--card-foreground);
+    padding: 0;
+    max-width: 480px;
+    width: calc(100% - 32px);
+    max-height: calc(100vh - 48px);
+    box-shadow: 0 24px 48px -12px color-mix(in srgb, var(--foreground) 25%, transparent);
+    overflow: hidden;
+}
+
+.history-dialog::backdrop {
+    background-color: color-mix(in srgb, var(--background) 60%, transparent);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.history-dialog[open] {
+    animation: dialogIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-dialog[open]::backdrop {
+    animation: backdropIn 0.25s ease;
+}
+
+.history-dialog-inner {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 48px);
+}
+
+.history-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.history-dialog-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.history-dialog-body {
+    padding: 12px 16px 16px;
+    overflow-y: auto;
+}
+
+.release-list {
+    display: grid;
+    gap: 8px;
+}
+
+.release-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--muted) 55%, var(--card));
+}
+
+.release-meta {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 2px;
+}
+
+.release-meta strong {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+}
+
+.release-meta small {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.release-download {
+    height: 2.25rem;
+    min-width: 4.75rem;
+    padding-inline: 0.75rem;
+    gap: 6px;
+    flex: 0 0 auto;
 }
 
 /* ══════════════════════════════════════

@@ -108,7 +108,6 @@ class MainActivity : ComponentActivity() {
                 // 启动时静默检查更新，每天最多一次。
                 val context = LocalContext.current
                 var startupUpdateInfo by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
-                var startupUpdateWebUrl by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(Unit) {
                     val now = System.currentTimeMillis()
                     val lastCheck = AppPrefs.lastUpdateCheck
@@ -142,8 +141,7 @@ class MainActivity : ComponentActivity() {
                         downloadVM,
                         portraitVM,
                         shortcutTarget = shortcutTargetState.value,
-                        shortcutRequestKey = shortcutRequestKeyState.intValue,
-                        pendingUrl = startupUpdateWebUrl
+                        shortcutRequestKey = shortcutRequestKeyState.intValue
                     )
 
                     AnimatedVisibility(
@@ -166,12 +164,7 @@ class MainActivity : ComponentActivity() {
                         currentVersion = curVer,
                         onDismiss = { startupUpdateInfo = null },
                         onOpenBrowser = {
-                            startupUpdateInfo = null
-                            context.startActivity(Intent(Intent.ACTION_VIEW, info.htmlUrl.toUri()))
-                        },
-                        onOpenInApp = {
-                            startupUpdateWebUrl = info.htmlUrl
-                            startupUpdateInfo = null
+                            context.startActivity(Intent(Intent.ACTION_VIEW, UpdateApi.resolveApkUrl(info).toUri()))
                         }
                     )
                 }

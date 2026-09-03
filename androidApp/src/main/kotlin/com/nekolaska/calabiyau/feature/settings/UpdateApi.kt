@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.settings
 
+import android.content.Context
+import com.nekolaska.calabiyau.core.util.enqueueDownload
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.coroutines.CancellationException
@@ -105,6 +107,39 @@ object UpdateApi {
             is JsonPrimitive -> element.contentOrNull.orEmpty()
             else -> ""
         }
+    }
+
+    fun resolveApkUrl(info: UpdateInfo): String {
+        return info.apkUrl?.takeIf { it.isNotBlank() } ?: info.htmlUrl
+    }
+
+    fun apkFileName(info: UpdateInfo): String {
+        val fromUrl = resolveApkUrl(info).substringAfterLast('/').substringBefore('?')
+        return fromUrl.takeIf { it.endsWith(".apk", ignoreCase = true) }
+            ?: "CalabiYauVoice-${info.versionName}.apk"
+    }
+
+    data class ApkDownload(
+        val id: Long,
+        val file: java.io.File,
+        val fileName: String,
+    )
+
+    fun enqueueApkDownload(context: Context, info: UpdateInfo): ApkDownload {
+        val apkUrl = resolveApkUrl(info).takeIf { it.startsWith("http") }
+            ?: error("没有可用的安装包地址")
+        val fileName = apkFileName(info)
+        val dir = context.getExternalFilesDir(null) ?: context.filesDir
+        val file = java.io.File(dir, fileName)
+        if (file.exists()) file.delete()
+        val id = context.enqueueDownload(
+            url = apkUrl,
+            dir = dir,
+            fileName = fileName,
+            description = "正在下载 ${info.versionName}",
+            mimeType = "application/vnd.android.package-archive",
+        )
+        return ApkDownload(id, file, fileName)
     }
 
     private fun resolveUrl(url: String): String = when {

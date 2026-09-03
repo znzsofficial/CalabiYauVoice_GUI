@@ -10,8 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -32,9 +32,9 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val versionName = remember(context) {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.6"
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.7"
         } catch (_: Exception) {
-            "2.1.6"
+            "2.1.7"
         }
     }
 
@@ -162,12 +162,12 @@ fun AboutScreen(onBack: () -> Unit) {
             ) {
                 Column {
                     LinkItem(
-                        title = "核心脚本",
-                        subtitle = "CalabiyauWikiVoice",
-                        icon = Icons.Outlined.Terminal,
+                        title = "发布页",
+                        subtitle = "wiki.nekolaska.vip",
+                        icon = Icons.Outlined.Language,
                         onClick = {
                             context.startActivity(
-                                Intent(Intent.ACTION_VIEW, "https://github.com/znzsofficial/CalabiyauWikiVoice".toUri())
+                                Intent(Intent.ACTION_VIEW, "https://wiki.nekolaska.vip/".toUri())
                             )
                         }
                     )

@@ -12,13 +12,15 @@ class DownloadPagePlugin : Plugin<Project> {
             tasks.register<WebDistTask>("webDist") {
                 group = "distribution"
                 description =
-                    "Assembles Android release APK and copies it to downloadPage/downloads."
+                    "Assembles Android release APK, uploads it to R2, and updates latest.json."
 
                 dependsOn(":androidApp:assembleRelease")
                 androidBuildFile.set(layout.projectDirectory.file("androidApp/build.gradle.kts"))
                 latestJsonFile.set(layout.projectDirectory.file("downloadPage/downloads/latest.json"))
                 apkOutputDirectory.set(layout.projectDirectory.dir("androidApp/build/outputs/apk/release"))
                 downloadsDirectory.set(layout.projectDirectory.dir("downloadPage/downloads"))
+                stagedApkFile.set(layout.projectDirectory.file("downloadPage/downloads/CalabiYauVoice-latest.apk"))
+                r2Bucket.set("calabiyau-releases")
             }
 
             tasks.register<Exec>("webPush") {
@@ -29,16 +31,17 @@ class DownloadPagePlugin : Plugin<Project> {
                         .contains("windows")
                 ) "npx.cmd" else "npx"
 
-                workingDir = rootDir
+                workingDir = layout.projectDirectory.dir("downloadPage").asFile
                 commandLine(
                     npxCommand,
                     "wrangler",
                     "pages",
                     "deploy",
-                    "downloadPage/dist",
+                    "dist",
                     "--project-name",
                     "calabiyauwiki",
-                    "--branch=main"
+                    "--branch=main",
+                    "--commit-dirty=true"
                 )
             }
 
@@ -64,7 +67,7 @@ class DownloadPagePlugin : Plugin<Project> {
                     include("_headers")
                     include("_redirects")
                     include("download.html")
-                    include("downloads/**")
+                    include("downloads/latest.json")
                     include("icon.svg")
                 }
                 from(layout.projectDirectory.dir("downloadPage/src/api")) {

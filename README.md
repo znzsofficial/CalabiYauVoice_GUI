@@ -166,7 +166,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 │   ├── package.json
 │   ├── vite.config.ts                  #   Multi-page Vite build + local API proxy
 │   ├── download.css / base.css
-│   ├── downloads/                      #   latest.json + APK assets for Pages
+│   ├── downloads/                      #   latest.json; APKs are served from R2 calabiyau-releases
 │   └── src/
 │       ├── main.ts                     #   Home entry
 │       ├── App.svelte                  #   Home UI
