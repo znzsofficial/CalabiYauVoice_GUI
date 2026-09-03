@@ -178,7 +178,7 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
      * | <img ... src="缩略图URL" ... srcset="原图URL 1.5x" .../><br />武器名：外观名
      * ```
      */
-    private fun parseWeaponSkinHtml(html: String, weaponMeta: Map<String, WeaponMeta>): List<WeaponSkinInfo> {
+    internal fun parseWeaponSkinHtml(html: String, weaponMeta: Map<String, WeaponMeta> = emptyMap()): List<WeaponSkinInfo> {
         val blockRegex = Regex(
             """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
         )

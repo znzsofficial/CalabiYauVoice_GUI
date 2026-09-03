@@ -117,25 +117,86 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
     /**
      * 从 HTML 解析时装数据。
      *
-     * HTML 格式：
-     * ```
-     * data-param1="角色名" data-param2="品质" data-param3="获取方式" data-param4="晶核" data-param5="基弦"
-     * | <img ... src="缩略图URL" ... srcset="原图URL 1.5x" .../><br />时装名
-     * ```
+     * 现网为 `gallerygrid-item klbq-skin-card` 卡片；旧版为 `tr.divsort` 表格。
      */
-    private fun parseCostumeHtml(html: String): List<CostumeInfo> {
+    internal fun parseCostumeHtml(html: String): List<CostumeInfo> {
+        val document = Jsoup.parse(html)
+        val cards = document.select(".gallerygrid-item.klbq-skin-card, .klbq-skin-card")
+        if (cards.isNotEmpty()) {
+            val usedKeys = mutableSetOf<String>()
+            return cards.mapNotNull { card -> parseCostumeCard(card, usedKeys) }
+        }
+        return parseLegacyCostumeTable(html)
+    }
+
+    private fun parseCostumeCard(card: Element, usedKeys: MutableSet<String>): CostumeInfo? {
+        val character = card.attr("data-param1").trim()
+        if (character.isBlank()) return null
+
+        val name = card.firstBySkinClass("name")?.text()?.trim()
+            .orEmpty()
+            .ifBlank { "$character：未知" }
+        val description = card.firstBySkinClass("desc")
+            ?.firstBySkinClass("value")
+            ?.text()?.trim().orEmpty()
+        val previewImage = card.firstBySkinClass("imagebox")?.selectFirst("img")
+            ?: card.selectFirst("img[alt*=图鉴]")
+        val screenshotImage = card.select("img").firstOrNull { image ->
+            val alt = image.attr("alt")
+            alt.isNotBlank() && "图鉴" !in alt && "图标" !in alt
+        }
+        val identity = previewImage?.attr("alt").orEmpty()
+        val protectedName = uniqueDisplayName(name, character, identity, usedKeys)
+
+        return CostumeInfo(
+            name = protectedName,
+            character = character,
+            quality = Quality.fromLevel(card.attr("data-param2")),
+            sources = card.attr("data-param3").split(",").map { it.trim() }.filter { it.isNotBlank() },
+            crystalCost = card.attr("data-param4").replace("无", "").trim(),
+            baseCost = card.attr("data-param5").replace("无", "").trim(),
+            description = description,
+            thumbnailUrl = previewImage?.attr("src")?.takeIf { it.isNotBlank() },
+            fullImageUrl = originalImageUrl(previewImage),
+            screenshotUrl = originalImageUrl(screenshotImage)
+        )
+    }
+
+    private fun Element.firstBySkinClass(suffix: String): Element? {
+        val target = "klbq-skin-card__$suffix"
+        return sequenceOf(this).plus(select("*")).firstOrNull { element ->
+            element.classNames().any { className ->
+                className.replace("&#95;", "_") == target
+            }
+        }
+    }
+
+    private fun originalImageUrl(image: Element?): String? {
+        if (image == null) return null
+        return WikiImageUrls.originalFromThumbnail(
+            image.attr("srcset")
+                .split(',')
+                .lastOrNull()
+                ?.substringBeforeLast(' ')
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: image.attr("src").takeIf { it.isNotBlank() }
+        )
+    }
+
+    private fun parseLegacyCostumeTable(html: String): List<CostumeInfo> {
         val blockRegex = Regex(
             """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
         )
         val usedKeys = mutableSetOf<String>()
 
-        val items = blockRegex.findAll(html).map { match ->
+        return blockRegex.findAll(html).map { match ->
             val character = match.groupValues[1].trim()
             val info = parseCostumeDetail(match.groupValues[6], character)
             val protectedName = uniqueDisplayName(
                 baseName = info.name,
                 ownerName = character,
-                blockHtml = match.groupValues[6],
+                identity = extractIdentitySuffix(match.groupValues[6]),
                 usedKeys = usedKeys
             )
 
@@ -152,8 +213,6 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
                 screenshotUrl = info.screenshotUrl
             )
         }.toList()
-
-        return items
     }
 
     private fun parseCostumeDetail(blockHtml: String, character: String): ParsedVisualInfo {
@@ -162,25 +221,8 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
         val hiddenLargeImage = document.select("span[style*=display:none] img").firstOrNull()
 
         val thumbnailUrl = previewImage?.attr("src")
-        val fullImageUrl = WikiImageUrls.originalFromThumbnail(
-            previewImage?.attr("srcset")
-                ?.split(',')
-                ?.lastOrNull()
-                ?.substringBeforeLast(' ')
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
-        )
-
-        val screenshotUrl = WikiImageUrls.originalFromThumbnail(
-            hiddenLargeImage?.attr("srcset")
-                ?.split(',')
-                ?.lastOrNull()
-                ?.substringBeforeLast(' ')
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
-        )
+        val fullImageUrl = originalImageUrl(previewImage)
+        val screenshotUrl = originalImageUrl(hiddenLargeImage)
 
         val name = Regex("""<br\s*/?>\s*([^\n<|]+)""")
             .find(blockHtml)
@@ -282,11 +324,10 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
     private fun uniqueDisplayName(
         baseName: String,
         ownerName: String,
-        blockHtml: String,
+        identity: String,
         usedKeys: MutableSet<String>
     ): String {
         val normalizedBase = baseName.ifBlank { "$ownerName：未知" }
-        val identity = extractIdentitySuffix(blockHtml)
         var candidate = normalizedBase
         var key = candidate + ownerName
 

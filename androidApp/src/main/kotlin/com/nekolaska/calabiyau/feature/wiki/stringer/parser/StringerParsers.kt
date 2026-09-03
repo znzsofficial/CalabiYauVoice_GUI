@@ -98,6 +98,9 @@ object StringerTalentParsers {
                     if (title in setOf("机能", "生存", "续航", "输出")) {
                         flushSection()
                         currentTitle = title
+                    } else if (element.tagName() == "h2") {
+                        flushSection()
+                        currentTitle = null
                     }
                 }
 
