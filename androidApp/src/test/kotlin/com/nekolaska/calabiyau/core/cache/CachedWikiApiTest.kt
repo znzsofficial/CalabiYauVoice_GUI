@@ -73,6 +73,20 @@ class CachedWikiApiTest {
     }
 
     @Test
+    fun memoryCachePreservesOfflineMetadata() = runBlocking {
+        val api = TestCachedWikiApi()
+        api.nextResult = ApiResult.Success("disk-fallback", isOffline = true, cacheAgeMs = 1234L)
+
+        val first = api.fetch()
+        val second = api.fetch()
+
+        assertTrue(first is ApiResult.Success)
+        assertTrue(second is ApiResult.Success)
+        assertTrue(second.isOffline)
+        assertEquals(1234L, second.cacheAgeMs)
+    }
+
+    @Test
     fun cancellationIsNotWrapped() = runBlocking {
         val api = object : CachedWikiApi<String>("CancelledApi") {
             override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<String> {
@@ -87,6 +101,7 @@ class CachedWikiApiTest {
     private class TestCachedWikiApi : CachedWikiApi<String>("TestCachedWikiApi") {
         var cacheFetchCount = 0
         var networkFetchCount = 0
+        var nextResult: ApiResult<String> = ApiResult.Success("network")
 
         fun primeMemory(value: String) {
             updateCache(value)
@@ -101,7 +116,7 @@ class CachedWikiApiTest {
 
         override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<String> {
             networkFetchCount++
-            return ApiResult.Success("network")
+            return nextResult
         }
     }
 }

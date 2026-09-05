@@ -1,15 +1,21 @@
 package com.nekolaska.calabiyau.core.cache
 
 import android.content.Context
+import android.system.ErrnoException
+import android.system.Os
 import com.nekolaska.calabiyau.CrashContextStore
 import com.nekolaska.calabiyau.core.network.NetworkMonitor
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 离线缓存管理器。
@@ -95,6 +101,21 @@ object OfflineCache {
 
     // ── 请求去重 ──
     private val inflight = ConcurrentHashMap<String, CompletableDeferred<CacheResult?>>()
+    private val cacheLocks = ConcurrentHashMap<String, Mutex>()
+    private val cacheMutationLock = Mutex()
+    private val typeGenerations = ConcurrentHashMap<Type, AtomicLong>()
+    private val keyGenerations = ConcurrentHashMap<String, AtomicLong>()
+
+    private fun typeGeneration(type: Type): AtomicLong =
+        typeGenerations.computeIfAbsent(type) { AtomicLong() }
+
+    private fun keyGeneration(type: Type, key: String): AtomicLong =
+        keyGenerations.computeIfAbsent("${type.dir}:$key") { AtomicLong() }
+
+    private data class CacheGeneration(val type: Long, val key: Long)
+
+    private fun generation(type: Type, key: String): CacheGeneration =
+        CacheGeneration(typeGeneration(type).get(), keyGeneration(type, key).get())
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -135,9 +156,7 @@ object OfflineCache {
      */
     suspend fun put(type: Type, key: String, json: String) = withContext(Dispatchers.IO) {
         if (!::cacheDir.isInitialized) return@withContext
-        try {
-            cacheFile(type, key).writeText(json)
-        } catch (_: Exception) { }
+        putIfCurrent(type, key, json, generation(type, key))
     }
 
     /**
@@ -145,8 +164,11 @@ object OfflineCache {
      */
     suspend fun invalidate(type: Type, key: String) = withContext(Dispatchers.IO) {
         if (!::cacheDir.isInitialized) return@withContext
-        val f = cacheFile(type, key, createDir = false)
-        if (f.exists()) f.delete()
+        cacheMutationLock.withLock {
+            keyGeneration(type, key).incrementAndGet()
+            val f = cacheFile(type, key, createDir = false)
+            if (f.exists()) f.delete()
+        }
     }
 
     /**
@@ -154,7 +176,10 @@ object OfflineCache {
      */
     suspend fun clear(type: Type) = withContext(Dispatchers.IO) {
         if (!::cacheDir.isInitialized) return@withContext
-        File(cacheDir, type.dir).deleteRecursively()
+        cacheMutationLock.withLock {
+            typeGeneration(type).incrementAndGet()
+            File(cacheDir, type.dir).deleteRecursively()
+        }
     }
 
     /**
@@ -162,8 +187,11 @@ object OfflineCache {
      */
     suspend fun clearAll() = withContext(Dispatchers.IO) {
         if (!::cacheDir.isInitialized) return@withContext
-        cacheDir.deleteRecursively()
-        cacheDir.mkdirs()
+        cacheMutationLock.withLock {
+            Type.entries.forEach { typeGeneration(it).incrementAndGet() }
+            cacheDir.deleteRecursively()
+            cacheDir.mkdirs()
+        }
         clearMemoryCaches()
     }
 
@@ -216,10 +244,6 @@ object OfflineCache {
         forceRefresh: Boolean = false,
         networkFetch: suspend () -> String?
     ): CacheResult? {
-        if (forceRefresh) {
-            invalidate(type, key)
-        }
-
         // 强制刷新走独立命名空间，避免搭便车拿到旧数据；
         // 也避免强制刷新的 Deferred 覆盖非强制请求者正在等待的结果
         val dedupKey = if (forceRefresh) "force:${type.dir}:$key" else "${type.dir}:$key"
@@ -227,27 +251,49 @@ object OfflineCache {
         val deferred = CompletableDeferred<CacheResult?>()
         val prev = inflight.putIfAbsent(dedupKey, deferred)
         if (prev != null) {
-            return runCatching { prev.await() }.getOrNull()
+            return prev.await()
         }
 
+        val lockKey = "${type.dir}:$key"
+        val cacheLock = cacheLocks.computeIfAbsent(lockKey) { Mutex() }
+        val requestedGeneration = generation(type, key)
         return try {
-            val result = doFetch(type, key, networkFetch)
-            if (result == null && ::appContext.isInitialized) {
-                CrashContextStore.record(
-                    appContext,
-                    "OfflineCache.fetchWithCache",
-                    "null result | type=${type.dir} | key=$key | forceRefresh=$forceRefresh"
-                )
-            } else if (result?.isFromCache == true && ::appContext.isInitialized) {
-                CrashContextStore.record(
-                    appContext,
-                    "OfflineCache.fetchWithCache",
-                    "cache fallback | type=${type.dir} | key=$key | ageMs=${result.ageMs}"
-                )
+            cacheLock.withLock {
+                val cacheGeneration = if (forceRefresh) {
+                    invalidate(type, key)
+                    generation(type, key)
+                } else {
+                    val currentGeneration = generation(type, key)
+                    if (currentGeneration != requestedGeneration) {
+                        getEntry(type, key)?.let {
+                            val cachedResult = it.toCacheResult()
+                            deferred.complete(cachedResult)
+                            return@withLock cachedResult
+                        }
+                    }
+                    currentGeneration
+                }
+                val result = doFetch(type, key, cacheGeneration, networkFetch)
+                if (result == null && ::appContext.isInitialized) {
+                    CrashContextStore.record(
+                        appContext,
+                        "OfflineCache.fetchWithCache",
+                        "null result | type=${type.dir} | key=$key | forceRefresh=$forceRefresh"
+                    )
+                } else if (result?.isFromCache == true && ::appContext.isInitialized) {
+                    CrashContextStore.record(
+                        appContext,
+                        "OfflineCache.fetchWithCache",
+                        "cache fallback | type=${type.dir} | key=$key | ageMs=${result.ageMs}"
+                    )
+                }
+                deferred.complete(result)
+                result
             }
-            deferred.complete(result)
-            result
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) {
+            deferred.cancel(e)
+            throw e
+        } catch (e: Exception) {
             if (::appContext.isInitialized) {
                 CrashContextStore.record(
                     appContext,
@@ -265,6 +311,7 @@ object OfflineCache {
     private suspend fun doFetch(
         type: Type,
         key: String,
+        cacheGeneration: CacheGeneration,
         networkFetch: suspend () -> String?
     ): CacheResult? {
         val isOnline = try {
@@ -277,7 +324,9 @@ object OfflineCache {
             // 有网络：先尝试网络请求
             val fresh = try {
                 networkFetch()
-            } catch (e: Throwable) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 if (::appContext.isInitialized) {
                     CrashContextStore.record(
                         appContext,
@@ -288,7 +337,7 @@ object OfflineCache {
                 null
             }
             if (fresh != null) {
-                put(type, key, fresh)
+                putIfCurrent(type, key, fresh, cacheGeneration)
                 return CacheResult(payload = fresh, isFromCache = false, ageMs = 0L)
             }
             if (::appContext.isInitialized) {
@@ -309,9 +358,45 @@ object OfflineCache {
     private fun CacheEntry.toCacheResult(): CacheResult =
         CacheResult(payload = content, isFromCache = true, ageMs = ageMs)
 
+    private suspend fun putIfCurrent(
+        type: Type,
+        key: String,
+        json: String,
+        expectedGeneration: CacheGeneration
+    ) = withContext(Dispatchers.IO) {
+        if (!::cacheDir.isInitialized) return@withContext
+        try {
+            cacheMutationLock.withLock {
+                if (generation(type, key) != expectedGeneration) return@withLock
+                val target = cacheFile(type, key)
+                val temp = File.createTempFile(".cache-", ".tmp", target.parentFile)
+                try {
+                    temp.writeText(json, Charsets.UTF_8)
+                    try {
+                        Os.rename(temp.absolutePath, target.absolutePath)
+                    } catch (error: ErrnoException) {
+                        throw java.io.IOException("Could not publish cache entry", error)
+                    }
+                } finally {
+                    temp.delete()
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (::appContext.isInitialized) {
+                CrashContextStore.record(
+                    appContext,
+                    "OfflineCache.put",
+                    "cache write failed | type=${type.dir} | key=$key | ${e::class.java.simpleName}: ${e.message.orEmpty().take(120)}"
+                )
+            }
+        }
+    }
+
     private fun cacheFile(type: Type, key: String, createDir: Boolean = true): File {
         val hash = MessageDigest.getInstance("MD5")
-            .digest(key.toByteArray())
+            .digest(key.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         val dir = File(cacheDir, type.dir)
         if (createDir) dir.mkdirs()

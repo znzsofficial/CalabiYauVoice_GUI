@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.core.wiki
 import data.ApiResult
 import data.SharedJson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -221,7 +222,7 @@ object WikiUserApi {
         parseErrorMessage: String,
         crossinline transform: (String) -> T
     ): ApiResult<T> {
-        return runCatching {
+        return try {
             WikiEngine.client.executeRequest(url) {
                 header("Cookie", cookies)
                 header("User-Agent", "CalabiYauVoice/2.0 (Android)")
@@ -235,12 +236,19 @@ object WikiUserApi {
                     body.trimStart().startsWith("<") ->
                         ApiResult.Error("返回了非 JSON 页面，可能未登录或被网关拦截")
                     else -> {
-                        runCatching { ApiResult.Success(transform(body)) }
-                            .getOrElse { ApiResult.Error(parseErrorMessage) }
+                        try {
+                            ApiResult.Success(transform(body))
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            ApiResult.Error(parseErrorMessage)
+                        }
                     }
                 }
             }
-        }.getOrElse { e ->
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             ApiResult.Error(e.message ?: "网络请求失败")
         }
     }

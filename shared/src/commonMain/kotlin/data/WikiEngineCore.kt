@@ -2,6 +2,7 @@ package data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -17,7 +18,6 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 import util.buildWikiUrl
@@ -46,16 +46,45 @@ object WikiEngineCore {
      */
     class CharacterNameCache {
         val cache: MutableSet<String> = ConcurrentHashMap.newKeySet()
-        val loading = AtomicBoolean(false)
+        private val loadLock = Any()
+        private var loadInFlight: CompletableDeferred<Unit>? = null
 
         suspend fun ensure(getAllNames: suspend () -> List<String>) = withContext(Dispatchers.IO) {
             if (cache.isNotEmpty()) return@withContext
-            if (!loading.compareAndSet(false, true)) return@withContext
+            val deferred: CompletableDeferred<Unit>
+            val isLoader: Boolean
+            synchronized(loadLock) {
+                if (cache.isNotEmpty()) return@withContext
+                val current = loadInFlight
+                if (current != null) {
+                    deferred = current
+                    isLoader = false
+                } else {
+                    deferred = CompletableDeferred()
+                    loadInFlight = deferred
+                    isLoader = true
+                }
+            }
+
+            if (!isLoader) {
+                deferred.await()
+                return@withContext
+            }
+
             try {
                 val names = getAllNames()
                 cache.addAll(names)
+                deferred.complete(Unit)
+            } catch (e: CancellationException) {
+                deferred.cancel(e)
+                throw e
+            } catch (e: Throwable) {
+                deferred.completeExceptionally(e)
+                throw e
             } finally {
-                if (cache.isEmpty()) loading.set(false)
+                synchronized(loadLock) {
+                    if (loadInFlight === deferred) loadInFlight = null
+                }
             }
         }
     }
@@ -146,8 +175,7 @@ object WikiEngineCore {
         fun matchesFilter(url: String, mime: String?): Boolean {
             if (!audioOnly) return true
             val clean = url.substringBefore('?')
-            return mime?.startsWith("audio/") == true ||
-                clean.endsWith(".wav") || clean.endsWith(".mp3") || clean.endsWith(".ogg")
+            return mime?.startsWith("audio/") == true || util.isAudioFile("", clean)
         }
         // --- 路径 1：allimages 前缀搜索 ---
         val path1 = LinkedHashMap<String, String>()
@@ -435,8 +463,7 @@ object WikiEngineCore {
                     val i = p.imageinfo?.firstOrNull()
                     if (i?.url != null) {
                         val cleanUrl = i.url.substringBefore('?')
-                        val isAudio = i.mime?.startsWith("audio/") == true ||
-                            cleanUrl.endsWith(".wav") || cleanUrl.endsWith(".mp3") || cleanUrl.endsWith(".ogg")
+                        val isAudio = i.mime?.startsWith("audio/") == true || util.isAudioFile("", cleanUrl)
                         if (!audioOnly || isAudio) list.add(p.title.replace(filePrefixRegex, "") to i.url)
                     }
                 }

@@ -21,7 +21,7 @@ import util.wikiPathEncode
  * 武器列表 API（Android）。
  *
  * 通过 Semantic MediaWiki ask API 获取各分类武器列表，
- * 武器图片通过 `文件:使用者名-weapon.png` 命名规则获取。
+ * 主武器图片通常使用 `文件:武器名-weapon.png`，旧页面也可能使用使用者名。
  */
 object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<WeaponListApi.WeaponCategoryData>>("WeaponListApi") {
 
@@ -159,6 +159,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
             val body = cacheResult.payload
 
             val weapons = parseWeapons(body)
+            if (weapons.isEmpty()) return null
 
             val weaponsWithImages = if (includeImages) {
                 val imageUrls = fetchWeaponImages(weapons, category, forceRefresh)
@@ -192,6 +193,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
                 key = "category_${category.name}"
             ) ?: return null
             val weapons = parseWeapons(entry.content)
+            if (weapons.isEmpty()) return null
             val weaponsWithImages = if (includeImages) {
                 val imageUrls = loadCachedWeaponImages(category)
                 weapons.map { weapon -> weapon.copy(imageUrl = imageUrls[weapon.name]) }
@@ -254,7 +256,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
     private suspend fun loadCachedWeaponImages(category: WeaponCategory): Map<String, String> {
         val entry = OfflineCache.getEntry(
             type = OfflineCache.Type.WEAPON_LIST,
-            key = "category_images_${category.name}"
+            key = imageCacheKey(category)
         ) ?: return emptyMap()
         val parsed = SharedJson.parseToJsonElement(entry.content).jsonObject
         return parsed.mapValues { (_, value) -> value.jsonPrimitive.content }
@@ -262,7 +264,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
 
     /**
      * 批量获取武器图片 URL。
-     * - 主武器命名规则：`文件:使用者名-weapon.png`
+     * - 主武器命名规则：`文件:武器名-weapon.png`，兼容旧的使用者名命名
      * - 非主武器命名规则：`文件:武器-武器名.png`
      */
     private suspend fun fetchWeaponImages(
@@ -273,26 +275,25 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         // 构建需要查询的文件标题列表
         val titleMap = mutableMapOf<String, String>() // fileName -> weaponName
         weapons.forEach { weapon ->
-            val fileName = if (category == WeaponCategory.PRIMARY && weapon.user.isNotBlank()) {
-                "${weapon.user}-weapon.png"
-            } else {
-                "武器-${weapon.name}.png"
-            }
-            titleMap[fileName] = weapon.name
+            val fileNames = weaponImageFileNames(weapon, category)
+            fileNames.forEach { fileName -> titleMap[fileName] = weapon.name }
         }
 
         if (titleMap.isEmpty()) return@withContext emptyMap()
 
         val cacheResult = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.WEAPON_LIST,
-            key = "category_images_${category.name}",
+            key = imageCacheKey(category),
             forceRefresh = forceRefresh
         ) {
             val urlMap = WikiEngine.fetchImageUrls(titleMap.keys.toList())
             buildJsonObject {
-                titleMap.forEach { (fileName, weaponName) ->
-                    urlMap[fileName]?.let { put(weaponName, it) }
-                }
+                titleMap.entries
+                    .groupBy { it.value }
+                    .forEach { (weaponName, candidates) ->
+                        candidates.firstNotNullOfOrNull { urlMap[it.key] }
+                            ?.let { put(weaponName, it) }
+                    }
             }.toString()
         }
 
@@ -301,4 +302,21 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         parsed.mapValues { (_, value) -> value.jsonPrimitive.content }
     }
 
+    private fun imageCacheKey(category: WeaponCategory): String =
+        "category_images_v2_${category.name}"
+
+}
+
+internal fun weaponImageFileNames(
+    weapon: WeaponListApi.WeaponInfo,
+    category: WeaponListApi.WeaponCategory
+): List<String> = if (category == WeaponListApi.WeaponCategory.PRIMARY) {
+    buildList {
+        add("${weapon.name}-weapon.png")
+        if (weapon.user.isNotBlank() && weapon.user != weapon.name) {
+            add("${weapon.user}-weapon.png")
+        }
+    }
+} else {
+    listOf("武器-${weapon.name}.png")
 }

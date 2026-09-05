@@ -5,6 +5,7 @@ import data.WikiEngineCore
 import data.WikiResponse
 import data.filePrefixRegex
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
@@ -44,6 +45,8 @@ suspend fun fetchBatchImageUrls(
                     val name = page.title.replace(filePrefixRegex, "")
                     result[name] = imageUrl
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {}
         }
     }.awaitAll()

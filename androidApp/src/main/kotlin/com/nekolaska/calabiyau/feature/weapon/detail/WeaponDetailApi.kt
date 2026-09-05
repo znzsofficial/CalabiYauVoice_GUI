@@ -291,11 +291,9 @@ object WeaponDetailApi {
             val content = extractTemplate(wikitext, tpl) ?: continue
             val params = parseTemplateParams(content)
             val explicitImage = params["武器图片"].orEmpty()
-            val user = params["使用者"].orEmpty()
             return when {
                 explicitImage.isNotBlank() -> explicitImage
-                user.isNotBlank() -> "${user}-weapon.png"
-                else -> "武器-${weaponName}.png"
+                else -> "${weaponName}-weapon.png"
             }
         }
         return null

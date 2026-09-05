@@ -1,6 +1,7 @@
 package data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -78,6 +79,8 @@ object VotingApi {
             val config = parsePollConfigFromHtml(html)
                 ?: return@withContext ApiResult.Error("未找到投票组件")
             ApiResult.Success(config)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("获取投票页失败: ${e.message}")
         }
@@ -138,6 +141,8 @@ object VotingApi {
                     pollDataMap = pollDataMap
                 )
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("获取投票数据失败: ${e.message}")
         }
@@ -151,6 +156,11 @@ object VotingApi {
         selectedNames: Set<String>
     ): ApiResult<Unit> = withContext(Dispatchers.IO) {
         try {
+            val candidateNames = voteState.config.candidates.map { it.name }.toSet()
+            if (!selectedNames.all { it in candidateNames }) {
+                return@withContext ApiResult.Error("包含无效的投票候选项")
+            }
+
             val token = fetchCsrfToken()
                 ?: return@withContext ApiResult.Error("获取 CSRF Token 失败，可能未登录")
 
@@ -196,6 +206,8 @@ object VotingApi {
             }
 
             ApiResult.Success(Unit)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             ApiResult.Error("提交投票失败: ${e.message}")
         }

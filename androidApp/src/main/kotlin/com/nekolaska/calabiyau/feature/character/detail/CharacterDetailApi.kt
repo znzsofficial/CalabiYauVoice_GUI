@@ -246,24 +246,28 @@ object CharacterDetailApi {
                 .distinct()
                 .map { characterName ->
                     async {
-                        runCatching {
+                        try {
                             val url = buildParseUrl(API, characterName, "wikitext")
                             val result = OfflineCache.fetchWithCache(
                                 type = OfflineCache.Type.CHARACTER_DETAIL,
-                                key = characterName,
+                                key = "position_$characterName",
                                 forceRefresh = forceRefresh
-                            ) { WikiEngine.safeGet(url) } ?: return@runCatching null
+                            ) { WikiEngine.safeGet(url) } ?: return@async null
 
                             val json = SharedJson.parseToJsonElement(result.payload).jsonObject
                             val wikitext = json["parse"]?.jsonObject
                                 ?.get("wikitext")?.jsonObject
                                 ?.get("*")?.jsonPrimitive?.content
-                                ?: return@runCatching null
+                                ?: return@async null
 
                             parseCharacterPositionFromWikitext(wikitext)?.let { position ->
                                 characterName to position
                             }
-                        }.getOrNull()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
                     }
                 }
                 .awaitAll()

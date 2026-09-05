@@ -116,6 +116,9 @@ object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
                 sourceResult.wikitext,
                 modeMapMapping[mode.displayName] ?: emptyList()
             )
+            if (detail.summary.isBlank() && detail.winCondition.isBlank() &&
+                detail.settings.isBlank() && detail.maps.isEmpty()
+            ) return null
             ModeResult(detail = detail, isFromCache = sourceResult.isFromCache, ageMs = sourceResult.ageMs)
         } catch (e: CancellationException) {
             throw e

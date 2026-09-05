@@ -104,6 +104,9 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
                 ?: return ApiResult.Error("请求 $displayName 失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val maps = MapListParsers.parseMapsFromHtml(sourceResult.html)
+            if (maps.isEmpty()) {
+                return ApiResult.Error("未找到 $displayName 地图数据", kind = ErrorKind.NOT_FOUND)
+            }
             ApiResult.Success(
                 GameModeData(displayName, templateName, maps),
                 isOffline = sourceResult.isFromCache,

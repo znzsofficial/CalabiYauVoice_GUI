@@ -61,6 +61,11 @@ object VotingApi {
 
     suspend fun submitVotes(voteState: VoteState, selectedNames: Set<String>): ApiResult<Unit> =
         ioApiCall("提交投票失败") {
+            val candidateNames = voteState.config.candidates.map { it.name }.toSet()
+            if (!selectedNames.all { it in candidateNames }) {
+                return@ioApiCall ApiResult.Error("包含无效的投票候选项")
+            }
+
             val cookies = VotingRemoteSource.getWikiCookies()
             if (cookies.isNullOrBlank()) return@ioApiCall ApiResult.Error("未登录")
 

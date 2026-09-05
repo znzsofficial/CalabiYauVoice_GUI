@@ -3,6 +3,7 @@ package data
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.decodeToImageBitmap
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -110,6 +111,8 @@ object ImageLoader {
                 deferred.complete(result)
                 return@withContext result
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             deferred.complete(null)
             return@withContext null
@@ -136,6 +139,8 @@ object ImageLoader {
 
         val jsonStr = try {
             client.executeGetString(url)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         } ?: return@withContext null
@@ -146,6 +151,8 @@ object ImageLoader {
                 ?.imageinfo?.firstOrNull()?.url
             if (realUrl != null) avatarCache[characterName] = realUrl
             realUrl
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             null
         }

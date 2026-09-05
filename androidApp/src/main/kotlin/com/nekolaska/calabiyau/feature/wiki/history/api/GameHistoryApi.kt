@@ -18,7 +18,7 @@ object GameHistoryApi : CachedWikiApi<List<GameHistorySection>>("GameHistoryApi"
                 ?: return@ioApiCall ApiResult.Error("没有游戏历史缓存", kind = ErrorKind.NETWORK)
 
             val parsedSections = GameHistoryParsers.parseSections(sourceResult.html)
-            val sections = enrichWithImageUrls(parsedSections)
+            val sections = enrichWithImageUrls(parsedSections, cacheOnly = true)
 
             if (sections.isEmpty()) {
                 ApiResult.Error("未找到游戏历史缓存数据", kind = ErrorKind.NOT_FOUND)
@@ -33,7 +33,7 @@ object GameHistoryApi : CachedWikiApi<List<GameHistorySection>>("GameHistoryApi"
                 ?: return@ioApiCall ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val parsedSections = GameHistoryParsers.parseSections(sourceResult.html)
-            val sections = enrichWithImageUrls(parsedSections)
+            val sections = enrichWithImageUrls(parsedSections, cacheOnly = sourceResult.isFromCache)
 
             if (sections.isEmpty()) {
                 ApiResult.Error("未找到游戏历史数据", kind = ErrorKind.NOT_FOUND)
@@ -43,7 +43,8 @@ object GameHistoryApi : CachedWikiApi<List<GameHistorySection>>("GameHistoryApi"
         }
 
     private suspend fun enrichWithImageUrls(
-        sections: List<GameHistorySection>
+        sections: List<GameHistorySection>,
+        cacheOnly: Boolean
     ): List<GameHistorySection> {
         if (sections.isEmpty()) return emptyList()
 
@@ -51,7 +52,7 @@ object GameHistoryApi : CachedWikiApi<List<GameHistorySection>>("GameHistoryApi"
             section.entries.mapNotNull(GameHistoryEntry::imageFileName)
         }.distinct()
 
-        val imageUrlMap = if (imageFileNames.isNotEmpty()) {
+        val imageUrlMap = if (!cacheOnly && imageFileNames.isNotEmpty()) {
             WikiEngine.fetchImageUrls(imageFileNames)
         } else {
             emptyMap()

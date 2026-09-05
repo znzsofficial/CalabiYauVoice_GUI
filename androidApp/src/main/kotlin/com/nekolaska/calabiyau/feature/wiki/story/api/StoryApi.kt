@@ -18,7 +18,7 @@ object StoryApi : CachedWikiApi<List<StorySection>>("StoryApi") {
                 ?: return@ioApiCall ApiResult.Error("没有剧情故事缓存", kind = ErrorKind.NETWORK)
 
             val parsedSections = StoryParsers.parseSections(sourceResult.html)
-            val sections = enrichWithImageUrls(parsedSections)
+            val sections = enrichWithImageUrls(parsedSections, cacheOnly = true)
 
             if (sections.isEmpty()) {
                 ApiResult.Error("未找到剧情故事缓存数据", kind = ErrorKind.NOT_FOUND)
@@ -33,7 +33,7 @@ object StoryApi : CachedWikiApi<List<StorySection>>("StoryApi") {
                 ?: return@ioApiCall ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val parsedSections = StoryParsers.parseSections(sourceResult.html)
-            val sections = enrichWithImageUrls(parsedSections)
+            val sections = enrichWithImageUrls(parsedSections, cacheOnly = sourceResult.isFromCache)
 
             if (sections.isEmpty()) {
                 ApiResult.Error("未找到剧情故事数据", kind = ErrorKind.NOT_FOUND)
@@ -43,7 +43,8 @@ object StoryApi : CachedWikiApi<List<StorySection>>("StoryApi") {
         }
 
     private suspend fun enrichWithImageUrls(
-        sections: List<StorySection>
+        sections: List<StorySection>,
+        cacheOnly: Boolean
     ): List<StorySection> {
         if (sections.isEmpty()) return emptyList()
 
@@ -51,7 +52,7 @@ object StoryApi : CachedWikiApi<List<StorySection>>("StoryApi") {
             section.entries.mapNotNull(StoryEntry::imageFileName)
         }.distinct()
 
-        val imageUrlMap = if (imageFileNames.isNotEmpty()) {
+        val imageUrlMap = if (!cacheOnly && imageFileNames.isNotEmpty()) {
             WikiEngine.fetchImageUrls(imageFileNames)
         } else {
             emptyMap()

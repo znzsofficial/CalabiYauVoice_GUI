@@ -2,6 +2,7 @@ package util
 
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CancellationException
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.FormBody
@@ -65,6 +66,9 @@ suspend fun OkHttpClient.awaitGetToFile(url: String, file: File): Boolean =
                     }
                     if (continuation.isActive) continuation.resume(true)
                     else file.delete()
+                } catch (error: CancellationException) {
+                    file.delete()
+                    throw error
                 } catch (error: IOException) {
                     file.delete()
                     if (continuation.isActive) continuation.resumeWithException(error)
@@ -204,4 +208,10 @@ fun Response.bodyToFile(file: File) {
  * ```
  */
 inline fun <T> runApiCatching(block: () -> T): data.ApiResult<T> =
-    try { data.ApiResult.Success(block()) } catch (e: Exception) { data.ApiResult.Error(e.message ?: "未知错误") }
+    try {
+        data.ApiResult.Success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        data.ApiResult.Error(e.message ?: "未知错误")
+    }

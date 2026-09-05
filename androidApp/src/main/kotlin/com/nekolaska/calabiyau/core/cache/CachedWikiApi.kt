@@ -12,16 +12,22 @@ import data.ApiResult
 abstract class CachedWikiApi<T>(private val name: String) {
 
     @Volatile
-    private var cachedValue: T? = null
+    private var cachedValue: CachedValue<T>? = null
+
+    private data class CachedValue<T>(
+        val value: T,
+        val isOffline: Boolean,
+        val cacheAgeMs: Long
+    )
 
     init {
         MemoryCacheRegistry.register(name) { cachedValue = null }
     }
 
-    protected fun getCachedValue(): T? = cachedValue
+    protected fun getCachedValue(): T? = cachedValue?.value
 
     protected fun updateCache(value: T?) {
-        cachedValue = value
+        cachedValue = value?.let { CachedValue(it, isOffline = false, cacheAgeMs = 0L) }
     }
 
     /**
@@ -37,10 +43,14 @@ abstract class CachedWikiApi<T>(private val name: String) {
         allowMemoryCache: Boolean = true
     ): ApiResult<T> {
         if (!forceRefresh && !cacheOnly && allowMemoryCache) {
-            cachedValue?.let { return ApiResult.Success(it) }
+            cachedValue?.let {
+                return ApiResult.Success(it.value, isOffline = it.isOffline, cacheAgeMs = it.cacheAgeMs)
+            }
         }
         val result = if (cacheOnly) fetchFromCache() else fetchFromNetwork(forceRefresh)
-        if (!cacheOnly && result is ApiResult.Success) cachedValue = result.value
+        if (!cacheOnly && result is ApiResult.Success) {
+            cachedValue = CachedValue(result.value, result.isOffline, result.cacheAgeMs)
+        }
         return result
     }
 

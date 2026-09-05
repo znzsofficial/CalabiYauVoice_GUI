@@ -10,17 +10,23 @@ import data.ApiResult
  */
 abstract class KeyedCachedWikiApi<K, T>(private val name: String) {
 
-    private val cacheMap = linkedMapOf<K, T>()
+    private val cacheMap = linkedMapOf<K, CachedValue<T>>()
+
+    private data class CachedValue<T>(
+        val value: T,
+        val isOffline: Boolean,
+        val cacheAgeMs: Long
+    )
 
     init {
         MemoryCacheRegistry.register(name) { clearMemoryCache() }
     }
 
-    protected fun getCachedValue(key: K): T? = synchronized(cacheMap) { cacheMap[key] }
+    protected fun getCachedValue(key: K): T? = synchronized(cacheMap) { cacheMap[key]?.value }
 
     protected fun updateCache(key: K, value: T) {
         synchronized(cacheMap) {
-            cacheMap[key] = value
+            cacheMap[key] = CachedValue(value, isOffline = false, cacheAgeMs = 0L)
         }
     }
 
@@ -37,10 +43,17 @@ abstract class KeyedCachedWikiApi<K, T>(private val name: String) {
         allowMemoryCache: Boolean = true
     ): ApiResult<T> {
         if (!forceRefresh && !cacheOnly && allowMemoryCache) {
-            getCachedValue(key)?.let { return ApiResult.Success(it) }
+            val cached = synchronized(cacheMap) { cacheMap[key] }
+            cached?.let {
+                return ApiResult.Success(it.value, isOffline = it.isOffline, cacheAgeMs = it.cacheAgeMs)
+            }
         }
         val result = if (cacheOnly) fetchFromCache(key) else fetchFromNetwork(key, forceRefresh)
-        if (!cacheOnly && result is ApiResult.Success) updateCache(key, result.value)
+        if (!cacheOnly && result is ApiResult.Success) {
+            synchronized(cacheMap) {
+                cacheMap[key] = CachedValue(result.value, result.isOffline, result.cacheAgeMs)
+            }
+        }
         return result
     }
 

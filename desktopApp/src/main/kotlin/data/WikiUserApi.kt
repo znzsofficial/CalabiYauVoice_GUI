@@ -1,6 +1,7 @@
 package data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -424,7 +425,7 @@ object WikiUserApi {
 
     private fun fetchStringResult(url: String): ApiResult<String> {
         if (url.isBlank()) return ApiResult.Error("API 地址无效")
-        return runCatching {
+        return try {
             WikiEngine.client.executeGet(url).use { resp ->
                 val body = resp.body.string()
                 when {
@@ -434,7 +435,9 @@ object WikiUserApi {
                     else -> ApiResult.Success(body)
                 }
             }
-        }.getOrElse { e ->
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             ApiResult.Error(e.message ?: "网络请求失败")
         }
     }
@@ -444,8 +447,13 @@ object WikiUserApi {
         parseErrorMessage: String,
         transform: (String) -> T
     ): ApiResult<T> = when (source) {
-        is ApiResult.Success -> runCatching { ApiResult.Success(transform(source.value)) }
-            .getOrElse { ApiResult.Error(parseErrorMessage) }
+        is ApiResult.Success -> try {
+            ApiResult.Success(transform(source.value))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ApiResult.Error(parseErrorMessage)
+        }
         is ApiResult.Error -> source
     }
 

@@ -150,7 +150,10 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
                 ?: return ApiResult.Error("解析 $faction HTML 失败", kind = ErrorKind.PARSE)
 
             val characters = parseCharactersFromHtml(html)
-            val withPortraits = fetchPortraits(characters)
+            if (characters.isEmpty()) {
+                return ApiResult.Error("未找到 $faction 角色数据", kind = ErrorKind.NOT_FOUND)
+            }
+            val withPortraits = if (result.isFromCache) characters else fetchPortraits(characters)
             ApiResult.Success(
                 FactionData(faction, withPortraits),
                 isOffline = result.isFromCache,
@@ -177,8 +180,13 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
                 ?.jsonPrimitive?.content
                 ?: return ApiResult.Error("解析 $faction 缓存 HTML 失败", kind = ErrorKind.PARSE)
 
+            val characters = parseCharactersFromHtml(html)
+            if (characters.isEmpty()) {
+                return ApiResult.Error("未找到 $faction 角色缓存数据", kind = ErrorKind.NOT_FOUND)
+            }
+
             ApiResult.Success(
-                FactionData(faction, parseCharactersFromHtml(html)),
+                FactionData(faction, characters),
                 isOffline = true,
                 cacheAgeMs = entry.ageMs
             )
@@ -212,7 +220,7 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             val imageUrl = WikiImageUrls.originalFromThumbnail(
                 imageLink.selectFirst("img")?.attr("src")
             ).orEmpty()
-            if (name !in seen) {
+            if (name.isNotBlank() && name !in seen) {
                 seen += name
                 results += CharacterInfo(
                     name = name,

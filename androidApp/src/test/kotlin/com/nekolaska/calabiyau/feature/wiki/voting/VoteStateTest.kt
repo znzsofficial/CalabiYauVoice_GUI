@@ -4,10 +4,13 @@ import com.nekolaska.calabiyau.feature.wiki.voting.model.PollCandidate
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollData
 import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteState
+import com.nekolaska.calabiyau.feature.wiki.voting.api.VotingApi
+import data.ApiResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 
 class VoteStateTest {
 
@@ -58,6 +61,14 @@ class VoteStateTest {
         assertFalse(updated.userVotedTotal)
         assertEquals(4, updated.pollDataMap.getValue("A").votes)
         assertTrue(updated.pollDataMap.getValue("A").userVoted)
+    }
+
+    @Test
+    fun submitVotesRejectsUnknownCandidatesBeforeNetworkAccess() = runBlocking {
+        val result = VotingApi.submitVotes(voteState(), setOf("unknown"))
+
+        assertTrue(result is ApiResult.Error)
+        assertEquals("包含无效的投票候选项", result.message)
     }
 
     private fun voteState(
