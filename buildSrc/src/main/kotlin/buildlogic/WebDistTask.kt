@@ -13,6 +13,7 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.UntrackedTask
 import org.gradle.process.ExecOperations
 import java.io.File
+import java.security.MessageDigest
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -71,7 +72,8 @@ abstract class WebDistTask : DefaultTask() {
         val latestJson = latestJsonFile.get().asFile
         val previous = if (latestJson.exists()) parseLatestJson(latestJson.readText()) else emptyMap()
         val publishedAt = LocalDate.now().toString()
-        val apkUrl = "/downloads/$versionedName"
+        val fingerprint = sha256(stagedApk).take(16)
+        val apkUrl = "/downloads/$versionedName?build=$fingerprint"
         val next = linkedMapOf<String, Any?>(
             "versionName" to versionName,
             "versionCode" to versionCode,
@@ -158,5 +160,18 @@ abstract class WebDistTask : DefaultTask() {
 
     private fun toPrettyJson(value: Any?): String {
         return groovy.json.JsonBuilder(value).toPrettyString() + "\n"
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

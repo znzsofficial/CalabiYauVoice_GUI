@@ -1,7 +1,7 @@
 {
     "versionName": "2.1.8",
     "versionCode": 38,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.8.apk",
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.8.apk?build=38b47ce23c854cc5",
     "apkSize": 3497668,
     "releaseUrl": "/",
     "changelog": [
@@ -16,7 +16,7 @@
         {
             "versionName": "2.1.8",
             "versionCode": 38,
-            "apkUrl": "/downloads/CalabiYauVoice-2.1.8.apk",
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.8.apk?build=38b47ce23c854cc5",
             "apkSize": 3497668,
             "publishedAt": "2026-09-05"
         },
