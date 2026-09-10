@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.rememberSliderState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -46,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -656,6 +658,16 @@ private fun ColorChannelSlider(
     onValueChange: (Float) -> Unit,
     trackBrush: Brush
 ) {
+    // material3 alpha28 起自定义 track 需改用 SliderState 重载（value, steps, valueRange）
+    val sliderState = rememberSliderState(value, 0, valueRange)
+    // 外部 value 变化同步进 state
+    LaunchedEffect(value) {
+        if (sliderState.value != value) sliderState.value = value
+    }
+    // 拖动产生的 state 变化向上转发
+    LaunchedEffect(sliderState.value) {
+        if (sliderState.value != value) onValueChange(sliderState.value)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             label,
@@ -663,9 +675,7 @@ private fun ColorChannelSlider(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
+            state = sliderState,
             modifier = Modifier.fillMaxWidth(),
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.onSurface,

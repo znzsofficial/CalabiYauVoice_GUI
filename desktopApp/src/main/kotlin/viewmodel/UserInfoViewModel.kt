@@ -59,6 +59,23 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     // 使用 WikiUserApi.currentUser 作为数据源
     val userInfo: StateFlow<WikiUserApi.UserInfo?> = WikiUserApi.currentUser
 
+    // 自定义档案 (当前登录用户)
+    private val _customProfile = MutableStateFlow<data.CustomUserProfile?>(null)
+    val customProfile: StateFlow<data.CustomUserProfile?> = _customProfile.asStateFlow()
+
+    // 自定义档案编辑弹窗状态
+    private val _isEditingProfile = MutableStateFlow(false)
+    val isEditingProfile: StateFlow<Boolean> = _isEditingProfile.asStateFlow()
+
+    private val _isSavingProfile = MutableStateFlow(false)
+    val isSavingProfile: StateFlow<Boolean> = _isSavingProfile.asStateFlow()
+
+    private val _isUploadingAvatar = MutableStateFlow(false)
+    val isUploadingAvatar: StateFlow<Boolean> = _isUploadingAvatar.asStateFlow()
+
+    private val _editError = MutableStateFlow<String?>(null)
+    val editError: StateFlow<String?> = _editError.asStateFlow()
+
     private val _isLoadingInfo = MutableStateFlow(false)
     val isLoadingInfo: StateFlow<Boolean> = _isLoadingInfo.asStateFlow()
 
@@ -131,6 +148,10 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
 
     private val _lookupResult = MutableStateFlow<WikiUserApi.PublicUserInfo?>(null)
     val lookupResult: StateFlow<WikiUserApi.PublicUserInfo?> = _lookupResult.asStateFlow()
+
+    // 查询用户的自定义档案
+    private val _lookupCustomProfile = MutableStateFlow<data.CustomUserProfile?>(null)
+    val lookupCustomProfile: StateFlow<data.CustomUserProfile?> = _lookupCustomProfile.asStateFlow()
 
     private val _lookupBlockStatus = MutableStateFlow<WikiUserApi.BlockInfo?>(null)
     val lookupBlockStatus: StateFlow<WikiUserApi.BlockInfo?> = _lookupBlockStatus.asStateFlow()
@@ -275,6 +296,11 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         _cookieInput.value = ""
         resetAuthenticatedState()
         resetLookupState()
+        _customProfile.value = null
+        _isEditingProfile.value = false
+        _isUploadingAvatar.value = false
+        _isSavingProfile.value = false
+        _editError.value = null
         _currentTab.value = UserInfoTab.INFO
         _logTypeFilter.value = null
         _logSortOrder.value = LogSortOrder.NEWEST_FIRST
@@ -304,8 +330,10 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                             _userSummaryState.value = RequestState.Loading
                             val blockDeferred = async { WikiUserApi.fetchBlockStatusResult(info.name) }
                             val lastEditDeferred = async { WikiUserApi.fetchLastEditTimestampResult(info.name) }
+                            val customProfileDeferred = async { data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id.toLong()) }
                             val blockResult = blockDeferred.await()
                             val lastEditResult = lastEditDeferred.await()
+                            val customProfileResult = customProfileDeferred.await()
                             if (requestToken != currentUserRequestToken) return@launch
                             val errors = mutableListOf<String>()
                             when (blockResult) {
@@ -316,12 +344,17 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                                 is ApiResult.Success -> _lastEditTimestamp.value = lastEditResult.value.orEmpty()
                                 is ApiResult.Error -> errors += lastEditResult.message
                             }
+                            when (customProfileResult) {
+                                is data.ApiResult.Success -> _customProfile.value = customProfileResult.value
+                                is data.ApiResult.Error -> _customProfile.value = null
+                            }
                             _userSummaryState.value = if (errors.isEmpty()) {
                                 RequestState.Success
                             } else {
                                 RequestState.Error(errors.joinToString("；"))
                             }
                         } else {
+                            _customProfile.value = null
                             resetAuthenticatedCollections()
                         }
                     }
@@ -459,8 +492,10 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                             _lookupSummaryState.value = RequestState.Loading
                             val blockDeferred = async { WikiUserApi.fetchBlockStatusResult(publicUser.name) }
                             val lastEditDeferred = async { WikiUserApi.fetchLastEditTimestampResult(publicUser.name) }
+                            val customProfileDeferred = async { data.CustomUserApi.fetchProfile(bid = publicUser.name, wikiId = publicUser.userid.toLong()) }
                             val blockResult = blockDeferred.await()
                             val lastEditResult = lastEditDeferred.await()
+                            val customProfileResult = customProfileDeferred.await()
                             if (requestToken != lookupRequestToken) return@launch
                             val errors = mutableListOf<String>()
                             when (blockResult) {
@@ -470,6 +505,10 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                             when (lastEditResult) {
                                 is ApiResult.Success -> _lookupLastEdit.value = lastEditResult.value.orEmpty()
                                 is ApiResult.Error -> errors += lastEditResult.message
+                            }
+                            when (customProfileResult) {
+                                is data.ApiResult.Success -> _lookupCustomProfile.value = customProfileResult.value
+                                is data.ApiResult.Error -> _lookupCustomProfile.value = null
                             }
                             _lookupSummaryState.value = if (errors.isEmpty()) {
                                 RequestState.Success
@@ -546,6 +585,78 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         }
     }
 
+    fun openEditProfile() {
+        _editError.value = null
+        _isEditingProfile.value = true
+    }
+
+    fun closeEditProfile() {
+        _isEditingProfile.value = false
+        _editError.value = null
+    }
+
+    fun uploadAvatarAndSave(
+        imageBytes: ByteArray,
+        mimeType: String,
+        customName: String? = _customProfile.value?.customName,
+        bio: String? = _customProfile.value?.bio,
+        badge: String? = _customProfile.value?.badge
+    ) {
+        val cookies = WikiCookieManager.currentCookieString
+        if (cookies.isBlank()) {
+            _editError.value = "未登录 Wiki"
+            return
+        }
+        scope.launch {
+            _isUploadingAvatar.value = true
+            _editError.value = null
+            when (val uploadRes = data.CustomUserApi.uploadAvatar(imageBytes, mimeType, cookies)) {
+                is data.ApiResult.Success -> {
+                    _isUploadingAvatar.value = false
+                    saveProfile(customName = customName, avatarUrl = uploadRes.value, bio = bio, badge = badge)
+                }
+                is data.ApiResult.Error -> {
+                    _editError.value = uploadRes.message
+                    _isUploadingAvatar.value = false
+                }
+            }
+        }
+    }
+
+    fun saveProfile(
+        customName: String? = _customProfile.value?.customName,
+        avatarUrl: String? = _customProfile.value?.avatarUrl,
+        bio: String? = _customProfile.value?.bio,
+        badge: String? = _customProfile.value?.badge
+    ) {
+        val cookies = WikiCookieManager.currentCookieString
+        if (cookies.isBlank()) {
+            _editError.value = "未登录 Wiki"
+            return
+        }
+        scope.launch {
+            _isSavingProfile.value = true
+            _editError.value = null
+            when (val updateRes = data.CustomUserApi.updateProfile(
+                customName = customName,
+                avatarUrl = avatarUrl,
+                bio = bio,
+                badge = badge,
+                wikiCookie = cookies
+            )) {
+                is data.ApiResult.Success -> {
+                    _customProfile.value = updateRes.value
+                    _isEditingProfile.value = false
+                    _statusMessage.value = "✅ 自定义资料已保存"
+                }
+                is data.ApiResult.Error -> {
+                    _editError.value = updateRes.message
+                }
+            }
+            _isSavingProfile.value = false
+        }
+    }
+
     private fun currentAuthenticatedUserName(): String? =
         userInfo.value?.takeIf { it.isLoggedIn }?.name ?: WikiCookieManager.extractUserNameFromCookies()
 
@@ -602,6 +713,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     private fun resetLookupState(clearQuery: Boolean = false) {
         if (clearQuery) _lookupQuery.value = ""
         _lookupResult.value = null
+        _lookupCustomProfile.value = null
         _lookupBlockStatus.value = null
         _lookupLastEdit.value = null
         _lookupSummaryState.value = RequestState.Idle

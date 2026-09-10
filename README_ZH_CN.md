@@ -58,6 +58,7 @@
 - **🏠 Wiki Hub** — 原生 Wiki 客户端，可浏览角色图鉴、武器百科、地图一览、时装筛选、玩法模式、公告资讯、时装投票等，无需 WebView。
 - **🖼️ 画廊** — 原生浏览壁纸、表情包、四格漫画，支持分区筛选与全屏预览。
 - **🌐 内置 Wiki 浏览器** — 嵌入式 WebView，支持 Cookie 持久化、自动检测登录状态、用户信息展示、文件下载/上传与页面导航。
+- **👤 自定义用户档案** — 登录 Wiki 账号后可设置自定义昵称、头像（自动压缩为 WebP）、称号与签名，展示在侧栏与用户信息弹窗中，未设置时回退官方信息。
 - **🖼️ 立绘查看器** — 多时装切换，每套时装支持横向滑动浏览全部图片，显示图片类型标签与页码指示器。
 - **📁 文件管理器** — 浏览已下载文件，支持多选模式（长按进入）、批量删除/分享、图片画廊预览与音频播放。
 - **📊 下载历史** — 记录历史下载，显示状态与文件数。
@@ -107,8 +108,9 @@
 | 构建工具  | Vite 8                                  |
 | 部署    | Cloudflare Pages                        |
 | 边缘接口  | Cloudflare Worker（`src/api/_worker.js`） |
+| 存储    | Cloudflare D1（用户档案）+ R2（头像、APK）         |
 | 媒体处理  | `gifenc`、`gifuct-js`、`jszip`            |
-| 页面    | 首页 / Wiki 搜索 / 视频素材工具台                  |
+| 页面    | 首页 / Wiki 搜索 / 视频素材工具台 / 管理后台           |
 
 ---
 
@@ -163,16 +165,18 @@
 │   ├── index.html                      #   首页：APK 下载、QQ 群、平衡数据
 │   ├── search/index.html               #   Wiki 搜索 / 分类打包 / 语音字幕
 │   ├── video/index.html                #   本地视频/GIF 素材工具
+│   ├── admin.html                      #   密码保护的用户档案管理后台
 │   ├── package.json
 │   ├── vite.config.ts                  #   多页 Vite 构建 + 本地 API 代理
 │   ├── download.css / base.css
+│   ├── migrations/                     #   D1 迁移脚本（user_profiles 表）
 │   ├── downloads/                      #   latest.json；APK 实际在 R2 calabiyau-releases
 │   └── src/
 │       ├── main.ts                     #   首页入口
 │       ├── App.svelte                  #   首页 UI
 │       ├── BalanceDialog.svelte        #   平衡数据弹窗
 │       ├── CustomSelect.svelte
-│       ├── api/_worker.js              #   CF Worker：GitHub stars、Wiki/图片代理、平衡数据代理
+│       ├── api/_worker.js              #   CF Worker：GitHub stars、Wiki/图片代理、平衡数据代理、用户档案（D1 + R2）
 │       ├── search/                     #   Wiki 搜索、语音索引、批量下载
 │       │   ├── SearchApp.svelte
 │       │   ├── searchApi.ts

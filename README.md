@@ -58,6 +58,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **🏠 Wiki Hub** — Native client for browsing characters, weapons, maps, costumes, game modes, announcements, voting, and more — no WebView needed.
 - **🖼️ Gallery** — Browse wallpapers, stickers, and comics in a native image gallery with section filtering and fullscreen preview.
 - **🌐 Built-in Wiki Browser** — Embedded WebView with cookie persistence, auto-login detection, user info display, and file download/upload support.
+- **👤 Custom User Profile** — Sign in with your Wiki account to set a custom nickname, avatar (auto-compressed to WebP), badge, and bio; displayed on the sidebar and user sheet, with official info as fallback.
 - **🖼️ Portrait Viewer** — Swipeable multi-image preview per costume with image type labels and page indicators.
 - **📁 File Manager** — Browse downloaded files with multi-select mode (long-press), batch delete/share, image gallery preview, and audio playback.
 - **📊 Download History** — Track past downloads with status and file count.
@@ -107,8 +108,9 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 | Bundler     | Vite 8                                          |
 | Hosting     | Cloudflare Pages                                |
 | Edge API    | Cloudflare Worker (`src/api/_worker.js`)        |
+| Storage     | Cloudflare D1 (user profiles) + R2 (avatars, APKs) |
 | Media tools | `gifenc`, `gifuct-js`, `jszip`                  |
-| Pages       | Home / Wiki Search / Video tools                |
+| Pages       | Home / Wiki Search / Video tools / Admin console |
 
 ---
 
@@ -163,16 +165,18 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 │   ├── index.html                      #   Home: APK download, QQ group, balance data
 │   ├── search/index.html               #   Wiki search / category download / voice tools
 │   ├── video/index.html                #   Local video/GIF material tools
+│   ├── admin.html                      #   Password-protected user profile admin console
 │   ├── package.json
 │   ├── vite.config.ts                  #   Multi-page Vite build + local API proxy
 │   ├── download.css / base.css
+│   ├── migrations/                     #   D1 migrations (user_profiles table)
 │   ├── downloads/                      #   latest.json; APKs are served from R2 calabiyau-releases
 │   └── src/
 │       ├── main.ts                     #   Home entry
 │       ├── App.svelte                  #   Home UI
 │       ├── BalanceDialog.svelte        #   Balance data dialog
 │       ├── CustomSelect.svelte
-│       ├── api/_worker.js              #   Cloudflare Worker: GitHub stars, Wiki/image proxy, balance proxy
+│       ├── api/_worker.js              #   Cloudflare Worker: GitHub stars, Wiki/image proxy, balance proxy, user profiles (D1 + R2)
 │       ├── search/                     #   Wiki search app, voice index, bulk download
 │       │   ├── SearchApp.svelte
 │       │   ├── searchApi.ts

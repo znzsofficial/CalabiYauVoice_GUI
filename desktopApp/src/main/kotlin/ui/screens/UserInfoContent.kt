@@ -21,13 +21,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogWindow
+import androidx.compose.ui.window.rememberDialogState
 import data.UserLookupMode
 import data.WikiUserApi
 import io.github.composefluent.ExperimentalFluentApi
@@ -81,6 +85,12 @@ fun UserInfoContent(
     val lookupFilesRequestState by viewModel.lookupFilesRequestState.collectAsState()
     val lookupLogEvents by viewModel.lookupLogEvents.collectAsState()
     val lookupLogRequestState by viewModel.lookupLogRequestState.collectAsState()
+    val customProfile by viewModel.customProfile.collectAsState()
+    val lookupCustomProfile by viewModel.lookupCustomProfile.collectAsState()
+    val isEditingProfile by viewModel.isEditingProfile.collectAsState()
+    val isSavingProfile by viewModel.isSavingProfile.collectAsState()
+    val isUploadingAvatar by viewModel.isUploadingAvatar.collectAsState()
+    val editError by viewModel.editError.collectAsState()
 
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp),
@@ -126,6 +136,7 @@ fun UserInfoContent(
                     currentLookup != null && currentLookup.exists -> {
                         PublicUserInfoCard(
                             user = currentLookup,
+                            customProfile = lookupCustomProfile,
                             blockStatus = lookupBlockStatus,
                             lastEdit = lookupLastEdit,
                             summaryState = lookupSummaryState,
@@ -144,6 +155,7 @@ fun UserInfoContent(
                     currentUser != null && currentUser.isLoggedIn -> {
                         AuthenticatedUserSection(
                             info = currentUser,
+                            customProfile = customProfile,
                             blockStatus = blockStatus,
                             lastEditTimestamp = lastEditTimestamp,
                             userSummaryState = userSummaryState,
@@ -162,7 +174,8 @@ fun UserInfoContent(
                             onRefreshWatchlist = viewModel::fetchWatchlist,
                             onRefreshLog = viewModel::fetchLogEvents,
                             onLogTypeFilterChange = viewModel::onLogTypeFilterChange,
-                            onLogSortOrderChange = viewModel::onLogSortOrderChange
+                            onLogSortOrderChange = viewModel::onLogSortOrderChange,
+                            onEditProfile = viewModel::openEditProfile
                         )
                     }
 
@@ -180,6 +193,26 @@ fun UserInfoContent(
                     }
                 }
             }
+        }
+
+        // 编辑资料对话框
+        val dialogUser = userInfo
+        if (isEditingProfile && dialogUser != null) {
+            EditProfileDialog(
+                currentProfile = customProfile,
+                bid = dialogUser.name,
+                wikiUserId = dialogUser.id.toLong(),
+                isSaving = isSavingProfile,
+                isUploadingAvatar = isUploadingAvatar,
+                errorMessage = editError,
+                onDismiss = viewModel::closeEditProfile,
+                onSave = { name, avatar, bio, badge ->
+                    viewModel.saveProfile(customName = name, avatarUrl = avatar, bio = bio, badge = badge)
+                },
+                onUploadAvatar = { bytes, mime, name, bio, badge ->
+                    viewModel.uploadAvatarAndSave(bytes, mime, customName = name, bio = bio, badge = badge)
+                }
+            )
         }
     }
 }
@@ -467,6 +500,7 @@ private fun MessageCard(
 @Composable
 private fun AuthenticatedUserSection(
     info: WikiUserApi.UserInfo,
+    customProfile: data.CustomUserProfile?,
     blockStatus: WikiUserApi.BlockInfo?,
     lastEditTimestamp: String?,
     userSummaryState: RequestState,
@@ -485,10 +519,11 @@ private fun AuthenticatedUserSection(
     onRefreshWatchlist: () -> Unit,
     onRefreshLog: () -> Unit,
     onLogTypeFilterChange: (String?) -> Unit,
-    onLogSortOrderChange: (LogSortOrder) -> Unit
+    onLogSortOrderChange: (LogSortOrder) -> Unit,
+    onEditProfile: () -> Unit
 ) {
     Column(Modifier.fillMaxSize()) {
-        UserHeaderCard(info)
+        UserHeaderCard(info = info, customProfile = customProfile, onEditProfile = onEditProfile)
         Spacer(Modifier.height(12.dp))
         SelectorBar {
             SelectorBarItem(
@@ -556,35 +591,90 @@ private fun AuthenticatedUserSection(
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-private fun UserHeaderCard(info: WikiUserApi.UserInfo) {
+private fun UserHeaderCard(
+    info: WikiUserApi.UserInfo,
+    customProfile: data.CustomUserProfile? = null,
+    onEditProfile: (() -> Unit)? = null
+) {
     Card(Modifier.fillMaxWidth()) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(44.dp)
-                    .clip(CircleShape)
-                    .background(FluentTheme.colors.fillAccent.default),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    info.name.take(1).uppercase(),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
+            val profileBadge = customProfile?.badge?.takeIf { it.isNotBlank() }
+            val profileBio = customProfile?.bio?.takeIf { it.isNotBlank() }
+            val avatarUrl = customProfile?.avatarUrl
+            if (!avatarUrl.isNullOrBlank()) {
+                Box(
+                    Modifier.size(48.dp)
+                        .clip(CircleShape)
+                        .background(FluentTheme.colors.control.secondary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ui.components.NetworkImage(
+                        url = avatarUrl,
+                        contentDescription = "头像",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            } else {
+                Box(
+                    Modifier.size(48.dp)
+                        .clip(CircleShape)
+                        .background(FluentTheme.colors.fillAccent.default),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        (customProfile?.customName?.take(1) ?: info.name.take(1)).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(info.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                val badge = buildString {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val displayName = customProfile?.customName?.takeIf { it.isNotBlank() } ?: info.name
+                    Text(displayName, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    if (customProfile?.customName?.isNotBlank() == true) {
+                        Spacer(Modifier.width(6.dp))
+                        Text("(${info.name})", fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+                    }
+                    if (profileBadge != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Box(
+                            Modifier.clip(RoundedCornerShape(4.dp))
+                                .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(profileBadge, fontSize = 10.sp, color = FluentTheme.colors.fillAccent.default, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                val groupsBadge = buildString {
                     val userGroups = info.groups.filter { it != "*" && it != "user" }
                     if (userGroups.isNotEmpty()) append(userGroups.joinToString(" · ")) else append("普通用户")
                 }
-                Text(badge, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+                Text(groupsBadge, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary)
+                if (profileBio != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(profileBio, fontSize = 12.sp, color = FluentTheme.colors.text.text.secondary, maxLines = 2)
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
+                if (onEditProfile != null) {
+                    Button(
+                        onClick = onEditProfile,
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Regular.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("编辑资料", fontSize = 11.sp)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
                 Text("编辑次数", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
                 Text(
                     info.editCount.toString(),
@@ -1139,6 +1229,7 @@ private fun LogTabContent(
 @Composable
 private fun PublicUserInfoCard(
     user: WikiUserApi.PublicUserInfo,
+    customProfile: data.CustomUserProfile? = null,
     blockStatus: WikiUserApi.BlockInfo?,
     lastEdit: String?,
     summaryState: RequestState,
@@ -1174,19 +1265,63 @@ private fun PublicUserInfoCard(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(36.dp).clip(CircleShape)
-                    .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+            val lookupAvatarUrl = customProfile?.avatarUrl
+            if (!lookupAvatarUrl.isNullOrBlank()) {
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape)
+                        .background(FluentTheme.colors.control.secondary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ui.components.NetworkImage(
+                        url = lookupAvatarUrl,
+                        contentDescription = "头像",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            } else {
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape)
+                        .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        (customProfile?.customName?.take(1) ?: user.name.take(1)).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(user.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                val lookupBadge = customProfile?.badge?.takeIf { it.isNotBlank() }
+                val lookupBio = customProfile?.bio?.takeIf { it.isNotBlank() }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val lookupDisplayName = customProfile?.customName?.takeIf { it.isNotBlank() } ?: user.name
+                    Text(lookupDisplayName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (customProfile?.customName?.isNotBlank() == true) {
+                        Spacer(Modifier.width(6.dp))
+                        Text("(${user.name})", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                    }
+                    if (lookupBadge != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            Modifier.clip(RoundedCornerShape(3.dp))
+                                .background(FluentTheme.colors.fillAccent.default.copy(alpha = 0.15f))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(lookupBadge, fontSize = 9.sp, color = FluentTheme.colors.fillAccent.default, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
                 val badge = user.groups.filter { it != "*" && it != "user" }
                     .joinToString(" · ").ifBlank { "普通用户" }
                 Text(badge, fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                if (lookupBio != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(lookupBio, fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary, maxLines = 1)
+                }
             }
             Column(horizontalAlignment = Alignment.End) {
                 // 关闭按钮
@@ -1617,3 +1752,222 @@ private fun readClipboardText(): String? = runCatching {
 private fun openExternalUrl(url: String): Boolean = runCatching {
     java.awt.Desktop.getDesktop().browse(java.net.URI(url))
 }.isSuccess
+
+// ── 编辑自定义资料对话框 ─────────────────────────────────────────
+
+private const val MAX_AVATAR_BYTES = 2 * 1024 * 1024
+private val AVATAR_IMAGE_EXTS = setOf("png", "jpg", "jpeg", "webp")
+
+@OptIn(ExperimentalFluentApi::class)
+@Composable
+private fun EditProfileDialog(
+    currentProfile: data.CustomUserProfile?,
+    bid: String,
+    wikiUserId: Long,
+    isSaving: Boolean,
+    isUploadingAvatar: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onSave: (customName: String?, avatarUrl: String?, bio: String?, badge: String?) -> Unit,
+    onUploadAvatar: (imageBytes: ByteArray, mimeType: String, customName: String?, bio: String?, badge: String?) -> Unit
+) {
+    var customName by remember(currentProfile) { mutableStateOf(currentProfile?.customName.orEmpty()) }
+    var bio by remember(currentProfile) { mutableStateOf(currentProfile?.bio.orEmpty()) }
+    var badge by remember(currentProfile) { mutableStateOf(currentProfile?.badge.orEmpty()) }
+    // 本地选择的头像字节（未上传时预览），上传完成后由 ViewModel 持久化
+    var pendingAvatarBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingAvatarMime by remember { mutableStateOf("image/png") }
+    var pendingAvatarName by remember { mutableStateOf<String?>(null) }
+    var localError by remember { mutableStateOf<String?>(null) }
+
+    fun pickAvatarFile() {
+        val files = chooseFiles(AVATAR_IMAGE_EXTS, multi = false) ?: return
+        val file = files.firstOrNull() ?: return
+        if (file.length() > MAX_AVATAR_BYTES) {
+            localError = "图片大小不能超过 2MB"
+            return
+        }
+        val bytes = runCatching { file.readBytes() }.getOrNull()
+        if (bytes == null) {
+            localError = "无法读取图片文件"
+            return
+        }
+        pendingAvatarMime = when (file.extension.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            else -> "image/png"
+        }
+        pendingAvatarBytes = bytes
+        pendingAvatarName = file.name
+        localError = null
+    }
+
+    DialogWindow(
+        onCloseRequest = { if (!isSaving && !isUploadingAvatar) onDismiss() },
+        title = "编辑自定义资料",
+        state = rememberDialogState(width = 460.dp, height = 540.dp),
+        onKeyEvent = { keyEvent ->
+            if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.Escape) {
+                if (!isSaving && !isUploadingAvatar) onDismiss()
+                true
+            } else false
+        }
+    ) {
+        Column(
+            Modifier.fillMaxSize().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // 身份提示
+            Text(
+                "绑定账号：$bid（WikiID $wikiUserId）",
+                fontSize = 11.sp,
+                color = FluentTheme.colors.text.text.secondary
+            )
+
+            // 头像选择区
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(72.dp).clip(CircleShape)
+                        .background(FluentTheme.colors.control.secondary)
+                        .border(1.dp, FluentTheme.colors.stroke.card.default, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val currentAvatarUrl = currentProfile?.avatarUrl
+                    when {
+                        pendingAvatarBytes != null -> {
+                            val previewBitmap: androidx.compose.ui.graphics.ImageBitmap? = remember(pendingAvatarBytes) {
+                                runCatching {
+                                    val img = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(pendingAvatarBytes))
+                                    img?.let {
+                                        val out = java.io.ByteArrayOutputStream()
+                                        javax.imageio.ImageIO.write(it, "png", out)
+                                        org.jetbrains.skia.Image.makeFromEncoded(out.toByteArray())
+                                            .toComposeImageBitmap()
+                                    }
+                                }.getOrNull()
+                            }
+                            if (previewBitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = previewBitmap,
+                                    contentDescription = "头像预览",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Text("?", color = Color.Gray, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            }
+                        }
+                        !currentAvatarUrl.isNullOrBlank() -> {
+                            ui.components.NetworkImage(
+                                url = currentAvatarUrl,
+                                contentDescription = "当前头像",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        else -> Text(
+                            bid.take(1).uppercase(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 24.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Button(
+                        onClick = { pickAvatarFile() },
+                        disabled = isSaving || isUploadingAvatar
+                    ) {
+                        Text(if (pendingAvatarBytes != null) "重新选择图片" else "选择头像图片", fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        pendingAvatarName ?: "支持 PNG / JPG / WebP，2MB 以内",
+                        fontSize = 10.sp,
+                        color = FluentTheme.colors.text.text.secondary,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // 表单字段
+            Column {
+                Text("自定义昵称（留空则显示 BID）", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                Spacer(Modifier.height(4.dp))
+                TextField(
+                    value = customName,
+                    onValueChange = { if (it.length <= 30) customName = it },
+                    placeholder = { Text("最多 30 字符") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Column {
+                Text("徽章 / 头衔", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                Spacer(Modifier.height(4.dp))
+                TextField(
+                    value = badge,
+                    onValueChange = { if (it.length <= 20) badge = it },
+                    placeholder = { Text("如：开发组（最多 20 字符）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Column {
+                Text("个人签名", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                Spacer(Modifier.height(4.dp))
+                TextField(
+                    value = bio,
+                    onValueChange = { if (it.length <= 200) bio = it },
+                    placeholder = { Text("最多 200 字符") },
+                    singleLine = false,
+                    modifier = Modifier.fillMaxWidth().height(84.dp)
+                )
+            }
+
+            // 错误提示
+            val displayError = localError ?: errorMessage
+            if (!displayError.isNullOrBlank()) {
+                Text(displayError, fontSize = 11.sp, color = Color(0xFFE57373))
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            // 底部按钮
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                if (isUploadingAvatar) {
+                    Text("正在上传头像…", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                    Spacer(Modifier.width(8.dp))
+                } else if (isSaving) {
+                    Text("正在保存…", fontSize = 11.sp, color = FluentTheme.colors.text.text.secondary)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Button(
+                    onClick = onDismiss,
+                    disabled = isSaving || isUploadingAvatar
+                ) { Text("取消") }
+                Spacer(Modifier.width(10.dp))
+                Button(
+                    onClick = {
+                        val finalName = customName.trim().ifBlank { null }
+                        val finalBio = bio.trim().ifBlank { null }
+                        val finalBadge = badge.trim().ifBlank { null }
+                        val bytes = pendingAvatarBytes
+                        if (bytes != null) {
+                            // 先上传头像，成功后由 ViewModel 连同表单字段一起保存（失败保留已选图片）
+                            onUploadAvatar(bytes, pendingAvatarMime, finalName, finalBio, finalBadge)
+                        } else {
+                            onSave(finalName, currentProfile?.avatarUrl, finalBio, finalBadge)
+                        }
+                    },
+                    disabled = isSaving || isUploadingAvatar
+                ) {
+                    Text("保存", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}

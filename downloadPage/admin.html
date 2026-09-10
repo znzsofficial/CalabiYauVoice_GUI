@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>用户档案管理 · 卡拉彼丘Wiki助手</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <style>
+      :root {
+        --bg: #f4f6fb;
+        --card: #ffffff;
+        --border: #e2e8f0;
+        --text: #1e293b;
+        --muted: #64748b;
+        --accent: #00acc1;
+        --danger: #e57373;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f172a;
+          --card: #1e293b;
+          --border: #334155;
+          --text: #f1f5f9;
+          --muted: #94a3b8;
+          --accent: #38bdf8;
+          --danger: #f87171;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 1.3rem; margin: 0 0 4px; }
+      .subtitle { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      input, button {
+        font: inherit;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        padding: 8px 12px;
+      }
+      input { flex: 1; min-width: 200px; }
+      input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+      button { cursor: pointer; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+      button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+      th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+      th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+      td .bio { color: var(--muted); display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        object-fit: cover; background: var(--border); display: block;
+      }
+      .avatar-placeholder {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: var(--border); color: var(--muted);
+        display: flex; align-items: center; justify-content: center; font-weight: 700;
+      }
+      .badge-tag {
+        display: inline-block; padding: 1px 6px; border-radius: 6px;
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
+        color: var(--accent); font-size: 0.72rem; font-weight: 600;
+      }
+      .actions { display: flex; gap: 6px; }
+      .actions button { padding: 4px 10px; font-size: 0.78rem; }
+      .pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 12px; font-size: 0.85rem; color: var(--muted); }
+      .empty { text-align: center; color: var(--muted); padding: 32px 0; }
+      .error { color: var(--danger); font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; }
+      dialog {
+        border: 1px solid var(--border); border-radius: 12px;
+        background: var(--card); color: var(--text);
+        padding: 20px; width: min(420px, 92vw);
+      }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+      dialog h2 { margin: 0 0 12px; font-size: 1.05rem; }
+      dialog label { display: block; font-size: 0.78rem; color: var(--muted); margin: 10px 0 4px; }
+      dialog input { width: 100%; }
+      dialog textarea {
+        width: 100%; font: inherit; color: var(--text);
+        background: var(--card); border: 1px solid var(--border);
+        border-radius: 8px; padding: 8px 12px; min-height: 72px; resize: vertical;
+      }
+      dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+      .current-avatar { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+      .current-avatar img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+      .hint { font-size: 0.75rem; color: var(--muted); }
+      #loginCard { max-width: 380px; margin: 80px auto 0; }
+      #loginCard input { width: 100%; margin-bottom: 10px; }
+      #loginCard button { width: 100%; }
+      .logout { margin-left: auto; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- 登录 -->
+      <div id="loginCard" class="card">
+        <h1>用户档案管理</h1>
+        <p class="subtitle">输入管理密码登录</p>
+        <input id="passwordInput" type="password" placeholder="管理密码" autocomplete="current-password" />
+        <button id="loginBtn" class="primary">登录</button>
+        <div class="error" id="loginError"></div>
+      </div>
+
+      <!-- 管理界面 -->
+      <div id="adminPanel" style="display: none">
+        <h1>用户档案管理</h1>
+        <p class="subtitle">D1 user_profiles · <button id="logoutBtn" class="logout">退出</button></p>
+        <div class="card">
+          <div class="toolbar">
+            <input id="searchInput" type="search" placeholder="搜索 BID / 昵称 / WikiID…" />
+            <button id="searchBtn" class="primary">搜索</button>
+            <button id="resetBtn">重置</button>
+          </div>
+          <div style="overflow-x: auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>头像</th>
+                  <th>BID</th>
+                  <th>WikiID</th>
+                  <th>昵称</th>
+                  <th>徽章</th>
+                  <th>签名</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody">
+                <tr><td colspan="8" class="empty">加载中…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <span id="pageInfo"></span>
+            <button id="prevBtn" disabled>上一页</button>
+            <button id="nextBtn" disabled>下一页</button>
+          </div>
+          <div class="error" id="listError"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑对话框 -->
+    <dialog id="editDialog">
+      <h2>编辑档案</h2>
+      <p class="hint" id="editBidLabel"></p>
+      <label for="editName">自定义昵称（留空显示 BID）</label>
+      <input id="editName" maxlength="30" />
+      <label for="editBadge">徽章 / 头衔</label>
+      <input id="editBadge" maxlength="20" />
+      <label for="editBio">个人签名</label>
+      <textarea id="editBio" maxlength="200"></textarea>
+      <div class="current-avatar" id="avatarRow">
+        <img id="editAvatar" alt="头像" />
+        <span class="hint">勾选保存将删除该头像文件</span>
+        <label style="display:flex;align-items:center;gap:4px;margin:0;color:var(--text)">
+          <input type="checkbox" id="clearAvatar" style="width:auto" /> 删除头像
+        </label>
+      </div>
+      <div class="error" id="editError"></div>
+      <div class="row">
+        <button id="editCancel">取消</button>
+        <button id="editSave" class="primary">保存</button>
+      </div>
+    </dialog>
+
+    <script>
+      const PASSWORD_KEY = "admin_password";
+      let currentPage = 1;
+      let currentQuery = "";
+      let totalPages = 1;
+      let editingBid = null;
+
+      const $ = (id) => document.getElementById(id);
+
+      function headers() {
+        return { "Content-Type": "application/json", "X-Admin-Password": sessionStorage.getItem(PASSWORD_KEY) || "" };
+      }
+
+      function formatTime(unix) {
+        if (!unix) return "-";
+        return new Date(unix * 1000).toLocaleString("zh-CN", { hour12: false });
+      }
+
+      function showError(el, message) {
+        el.textContent = message || "";
+      }
+
+      // ── 登录 ──
+      async function tryLogin(password) {
+        const resp = await fetch("/api/admin/profiles?page=1&size=1", { headers: { ...headers(), "X-Admin-Password": password } });
+        return resp.ok;
+      }
+
+      $("loginBtn").addEventListener("click", doLogin);
+      $("passwordInput").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+
+      async function doLogin() {
+        const password = $("passwordInput").value;
+        if (!password) return;
+        $("loginBtn").disabled = true;
+        showError($("loginError"), "");
+        try {
+          if (await tryLogin(password)) {
+            sessionStorage.setItem(PASSWORD_KEY, password);
+            enterAdmin();
+          } else {
+            showError($("loginError"), "密码错误");
+          }
+        } catch {
+          showError($("loginError"), "网络请求失败");
+        } finally {
+          $("loginBtn").disabled = false;
+        }
+      }
+
+      function enterAdmin() {
+        $("loginCard").style.display = "none";
+        $("adminPanel").style.display = "";
+        loadList();
+      }
+
+      $("logoutBtn").addEventListener("click", () => {
+        sessionStorage.removeItem(PASSWORD_KEY);
+        location.reload();
+      });
+
+      // ── 列表 ──
+      async function loadList() {
+        showError($("listError"), "");
+        $("tableBody").innerHTML = '<tr><td colspan="8" class="empty">加载中…</td></tr>';
+        try {
+          const params = new URLSearchParams({ page: String(currentPage), size: "20" });
+          if (currentQuery) params.set("q", currentQuery);
+          const resp = await fetch(`/api/admin/profiles?${params}`, { headers: headers() });
+          if (resp.status === 401) {
+            sessionStorage.removeItem(PASSWORD_KEY);
+            location.reload();
+            return;
+          }
+          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          const data = await resp.json();
+          totalPages = Math.max(1, Math.ceil(data.total / data.size));
+          $("pageInfo").textContent = `共 ${data.total} 条 · 第 ${data.page}/${totalPages} 页`;
+          $("prevBtn").disabled = data.page <= 1;
+          $("nextBtn").disabled = data.page >= totalPages;
+
+          if (!data.profiles.length) {
+            $("tableBody").innerHTML = '<tr><td colspan="8" class="empty">暂无档案</td></tr>';
+            return;
+          }
+          $("tableBody").innerHTML = data.profiles.map((p) => {
+            const initial = (p.customName || p.bid || "?").charAt(0).toUpperCase();
+            const avatarCell = p.avatarUrl
+              ? `<img class="avatar" src="${p.avatarUrl}" loading="lazy" onerror="this.outerHTML='<div class=&quot;avatar-placeholder&quot;>${initial}</div>'" />`
+              : `<div class="avatar-placeholder">${initial}</div>`;
+            return `<tr>
+              <td>${avatarCell}</td>
+              <td>${escapeHtml(p.bid)}</td>
+              <td>${p.wikiUserId ?? "-"}</td>
+              <td>${escapeHtml(p.customName || "-")}</td>
+              <td>${p.badge ? `<span class="badge-tag">${escapeHtml(p.badge)}</span>` : "-"}</td>
+              <td><span class="bio" title="${escapeHtml(p.bio || "")}">${escapeHtml(p.bio || "-")}</span></td>
+              <td>${formatTime(p.updatedAt)}</td>
+              <td><div class="actions">
+                <button data-edit="${escapeHtml(p.bid)}">编辑</button>
+                <button class="danger" data-delete="${escapeHtml(p.bid)}">删除</button>
+              </div></td>
+            </tr>`;
+          }).join("");
+        } catch (err) {
+          $("tableBody").innerHTML = '<tr><td colspan="8" class="empty">加载失败</td></tr>';
+          showError($("listError"), err.message || "加载失败");
+        }
+      }
+
+      function escapeHtml(text) {
+        return String(text ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      $("searchBtn").addEventListener("click", () => { currentQuery = $("searchInput").value.trim(); currentPage = 1; loadList(); });
+      $("searchInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("searchBtn").click(); });
+      $("resetBtn").addEventListener("click", () => { $("searchInput").value = ""; currentQuery = ""; currentPage = 1; loadList(); });
+      $("prevBtn").addEventListener("click", () => { if (currentPage > 1) { currentPage--; loadList(); } });
+      $("nextBtn").addEventListener("click", () => { if (currentPage < totalPages) { currentPage++; loadList(); } });
+
+      $("tableBody").addEventListener("click", (e) => {
+        const editBid = e.target.closest("button[data-edit]")?.dataset.edit;
+        const deleteBid = e.target.closest("button[data-delete]")?.dataset.delete;
+        if (editBid) openEdit(editBid);
+        if (deleteBid) removeProfile(deleteBid);
+      });
+
+      // ── 编辑 ──
+      const dialog = $("editDialog");
+      let editRow = null;
+
+      async function openEdit(bid) {
+        // 从当前列表数据取行内容
+        const params = new URLSearchParams({ q: bid, page: "1", size: "1" });
+        try {
+          const resp = await fetch(`/api/admin/profiles?${params}`, { headers: headers() });
+          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          const data = await resp.json();
+          editRow = data.profiles.find((p) => p.bid === bid);
+          if (!editRow) { showError($("listError"), "未找到该档案"); return; }
+        } catch (err) {
+          showError($("listError"), err.message || "加载档案失败");
+          return;
+        }
+
+        editingBid = bid;
+        $("editBidLabel").textContent = `BID：${bid} · WikiID：${editRow.wikiUserId ?? "-"}`;
+        $("editName").value = editRow.customName || "";
+        $("editBadge").value = editRow.badge || "";
+        $("editBio").value = editRow.bio || "";
+        $("clearAvatar").checked = false;
+        const avatarImg = $("editAvatar");
+        if (editRow.avatarUrl) {
+          avatarImg.src = editRow.avatarUrl;
+          avatarImg.style.display = "";
+          $("avatarRow").style.display = "flex";
+        } else {
+          avatarImg.style.display = "none";
+          $("avatarRow").style.display = "none";
+        }
+        showError($("editError"), "");
+        dialog.showModal();
+      }
+
+      $("editCancel").addEventListener("click", () => dialog.close());
+      $("editSave").addEventListener("click", async () => {
+        if (!editingBid) return;
+        $("editSave").disabled = true;
+        showError($("editError"), "");
+        try {
+          const payload = {
+            bid: editingBid,
+            customName: $("editName").value.trim() || null,
+            badge: $("editBadge").value.trim() || null,
+            bio: $("editBio").value.trim() || null,
+            avatarUrl: $("clearAvatar").checked ? null : editRow.avatarUrl,
+          };
+          const resp = await fetch("/api/admin/profile", {
+            method: "PUT",
+            headers: headers(),
+            body: JSON.stringify(payload),
+          });
+          if (resp.status === 401) { sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return; }
+          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          dialog.close();
+          loadList();
+        } catch (err) {
+          showError($("editError"), err.message || "保存失败");
+        } finally {
+          $("editSave").disabled = false;
+        }
+      });
+
+      // ── 删除 ──
+      async function removeProfile(bid) {
+        if (!confirm(`确定删除 ${bid} 的档案？\n其头像文件也会一并删除。`)) return;
+        try {
+          const resp = await fetch(`/api/admin/profile?bid=${encodeURIComponent(bid)}`, { method: "DELETE", headers: headers() });
+          if (resp.status === 401) { sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return; }
+          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          loadList();
+        } catch (err) {
+          showError($("listError"), err.message || "删除失败");
+        }
+      }
+
+      // 启动：已保存密码则直接进入
+      if (sessionStorage.getItem(PASSWORD_KEY)) {
+        enterAdmin();
+      } else {
+        $("passwordInput").focus();
+      }
+    </script>
+  </body>
+</html>

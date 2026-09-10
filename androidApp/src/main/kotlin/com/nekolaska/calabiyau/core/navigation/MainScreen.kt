@@ -59,6 +59,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -118,6 +119,8 @@ import com.nekolaska.calabiyau.core.ui.LocalSnackbarHostState
 import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.wiki.CustomProfileAvatar
+import com.nekolaska.calabiyau.core.wiki.CustomProfileEditDialog
 import com.nekolaska.calabiyau.core.wiki.WikiUserApi
 import com.nekolaska.calabiyau.feature.download.DownloadHistoryScreen
 import com.nekolaska.calabiyau.feature.download.DownloadViewModel
@@ -538,8 +541,10 @@ private fun AppDrawerContent(
     // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
     val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
     var wikiUserInfo by remember { mutableStateOf<WikiUserApi.UserInfo?>(null) }
+    var customProfile by remember { mutableStateOf<data.CustomUserProfile?>(null) }
     var isLoadingUserInfo by remember { mutableStateOf(false) }
     var showUserInfoSheet by remember { mutableStateOf(false) }
+    var showEditProfileDialog by remember { mutableStateOf(false) }
     var showLoginConfirmDialog by remember { mutableStateOf(false) }
     val drawerContentShape = smoothCornerShape(28.dp)
     val useHighReadability = liquidGlassEnabled && highReadabilityDrawer
@@ -624,6 +629,11 @@ private fun AppDrawerContent(
                             val info = result.value
                             if (info != null && info.isLoggedIn) {
                                 wikiUserInfo = info
+                                // 同步获取自定义档案（失败静默，走官方回退展示）
+                                when (val profile = data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id)) {
+                                    is ApiResult.Success -> customProfile = profile.value
+                                    is ApiResult.Error -> customProfile = null
+                                }
                             }
                         }
                         is ApiResult.Error -> { /* 忽略错误 */ }
@@ -636,13 +646,25 @@ private fun AppDrawerContent(
             }
             if (!hasLoginCookie.value) {
                 wikiUserInfo = null
+                customProfile = null
                 showUserInfoSheet = false
+            }
+        }
+
+        // 打开用户信息弹窗时刷新自定义档案（同步其他端的修改）
+        LaunchedEffect(showUserInfoSheet) {
+            if (!showUserInfoSheet) return@LaunchedEffect
+            val info = wikiUserInfo ?: return@LaunchedEffect
+            when (val profile = data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id)) {
+                is ApiResult.Success -> if (profile.value != null) customProfile = profile.value
+                is ApiResult.Error -> { /* 静默保留当前数据 */ }
             }
         }
 
         if (wikiUserInfo != null) {
             WikiUserInfoCard(
                 userInfo = wikiUserInfo!!,
+                customProfile = customProfile,
                 onClick = { showUserInfoSheet = true },
                 modifier = Modifier
                     .padding(horizontal = 16.dp)
@@ -759,8 +781,26 @@ private fun AppDrawerContent(
     if (showUserInfoSheet && wikiUserInfo != null) {
         WikiUserInfoBottomSheet(
             userInfo = wikiUserInfo!!,
-            onDismiss = { showUserInfoSheet = false }
+            customProfile = customProfile,
+            onDismiss = { showUserInfoSheet = false },
+            onEditProfile = { showEditProfileDialog = true }
         )
+    }
+
+    if (showEditProfileDialog) {
+        val dialogUserInfo = wikiUserInfo
+        if (dialogUserInfo != null) {
+            CustomProfileEditDialog(
+                currentProfile = customProfile,
+                bid = dialogUserInfo.name,
+                wikiUserId = dialogUserInfo.id,
+                onDismiss = { showEditProfileDialog = false },
+                onSaved = { saved ->
+                    customProfile = saved
+                    showEditProfileDialog = false
+                }
+            )
+        }
     }
 
     if (showLoginConfirmDialog) {
@@ -899,6 +939,7 @@ private fun WikiLoginPromptCard(
 @Composable
 private fun WikiUserInfoCard(
     userInfo: WikiUserApi.UserInfo,
+    customProfile: data.CustomUserProfile? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -915,36 +956,63 @@ private fun WikiUserInfoCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 头像圆圈（首字母）
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
+            // 头像圆圈（自定义头像优先，否则首字母）
+            CustomProfileAvatar(
+                profile = customProfile,
+                fallbackText = userInfo.name,
                 modifier = Modifier.size(36.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = userInfo.name.firstOrNull()?.uppercase() ?: "?",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
+            )
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = userInfo.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "编辑 ${userInfo.editCount} 次",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val displayName = customProfile?.customName?.takeIf { it.isNotBlank() } ?: userInfo.name
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (customProfile?.customName?.isNotBlank() == true) {
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "(${userInfo.name})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val cardBadge = customProfile?.badge
+                    if (!cardBadge.isNullOrBlank()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = smoothCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = cardBadge,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Text(
+                        text = "编辑 ${userInfo.editCount} 次",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
             }
 
             Icon(
@@ -962,7 +1030,9 @@ private fun WikiUserInfoCard(
 @Composable
 private fun WikiUserInfoBottomSheet(
     userInfo: WikiUserApi.UserInfo,
-    onDismiss: () -> Unit
+    customProfile: data.CustomUserProfile? = null,
+    onDismiss: () -> Unit,
+    onEditProfile: () -> Unit = {}
 ) {
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -1027,32 +1097,59 @@ private fun WikiUserInfoBottomSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
+                CustomProfileAvatar(
+                    profile = customProfile,
+                    fallbackText = userInfo.name,
+                    modifier = Modifier.size(48.dp),
+                    textStyle = MaterialTheme.typography.titleMedium
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val displayName = customProfile?.customName?.takeIf { it.isNotBlank() } ?: userInfo.name
                         Text(
-                            text = userInfo.name.firstOrNull()?.uppercase() ?: "?",
+                            text = displayName,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        val sheetBadge = customProfile?.badge
+                        if (!sheetBadge.isNullOrBlank()) {
+                            Spacer(Modifier.width(6.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = smoothCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = sheetBadge,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
                     }
-                }
-                Column {
-                    Text(
-                        text = userInfo.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
                     Text(
                         text = "Wiki ID: ${userInfo.id}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val sheetBio = customProfile?.bio
+                    if (!sheetBio.isNullOrBlank()) {
+                        Text(
+                            text = sheetBio,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                FilledTonalButton(onClick = onEditProfile) {
+                    Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("编辑资料")
                 }
             }
 

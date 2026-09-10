@@ -3,10 +3,22 @@
   "name": "calabiyauwiki",
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-05-25",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "calabiyau-db",
+      "database_id": "cb8d4bdf-540c-420e-931e-6e6c1da88cd1",
+      "migrations_dir": "./migrations"
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "RELEASES",
       "bucket_name": "calabiyau-releases"
+    },
+    {
+      "binding": "USER_ASSETS",
+      "bucket_name": "calabiyau-user-assets"
     }
   ]
 }

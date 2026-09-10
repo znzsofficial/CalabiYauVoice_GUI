@@ -237,7 +237,8 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         search: resolve(import.meta.dirname, 'search/index.html'),
-        video: resolve(import.meta.dirname, 'video/index.html')
+        video: resolve(import.meta.dirname, 'video/index.html'),
+        admin: resolve(import.meta.dirname, 'admin.html')
       }
     }
   }
