@@ -55,7 +55,7 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
 private enum class ApkDownloadUi {
-    Idle, Downloading, Ready, Failed
+    Idle, Downloading, Paused, Ready, Failed
 }
 
 @Composable
@@ -70,6 +70,7 @@ internal fun UpdateAvailableDialog(
     var progress by remember { mutableFloatStateOf(0f) }
     var progressText by remember { mutableStateOf("") }
     var errorText by remember { mutableStateOf<String?>(null) }
+    var pausedReason by remember { mutableStateOf<String?>(null) }
     var download by remember { mutableStateOf<UpdateApi.ApkDownload?>(null) }
     var apkFile by remember { mutableStateOf<File?>(null) }
 
@@ -115,6 +116,12 @@ internal fun UpdateAvailableDialog(
                     ui = ApkDownloadUi.Failed
                     errorText = downloadFailureMessage(snapshot.reason)
                     break
+                }
+                DownloadManager.STATUS_PAUSED -> {
+                    // 系统暂停（等网络/重试等）：显示原因并解锁弹窗，但继续轮询——
+                    // PAUSED_WAITING_TO_RETRY 等状态会自动恢复，恢复后回到 Downloading
+                    pausedReason = downloadPausedMessage(snapshot.reason)
+                    ui = ApkDownloadUi.Paused
                 }
                 else -> {
                     ui = ApkDownloadUi.Downloading
@@ -214,11 +221,11 @@ internal fun UpdateAvailableDialog(
                     }
                 }
 
-                if (ui == ApkDownloadUi.Failed && errorText != null) {
+                if ((ui == ApkDownloadUi.Failed || ui == ApkDownloadUi.Paused) && (errorText ?: pausedReason) != null) {
                     Text(
-                        errorText!!,
+                        errorText ?: pausedReason.orEmpty(),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = if (ui == ApkDownloadUi.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -257,7 +264,12 @@ internal fun UpdateAvailableDialog(
                             FilledTonalButton(
                                 onClick = {
                                     try {
+                                        // 移除旧任务，避免重复通知/双倍流量/写同一文件的竞争
+                                        download?.id?.let { oldId ->
+                                            context.getSystemService(DownloadManager::class.java)?.remove(oldId)
+                                        }
                                         errorText = null
+                                        pausedReason = null
                                         progress = 0f
                                         progressText = "正在开始…"
                                         ui = ApkDownloadUi.Downloading
@@ -272,7 +284,13 @@ internal fun UpdateAvailableDialog(
                             ) {
                                 Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text(if (ui == ApkDownloadUi.Failed) "重试下载" else "下载安装包")
+                                Text(
+                                    when (ui) {
+                                        ApkDownloadUi.Failed -> "重试下载"
+                                        ApkDownloadUi.Paused -> "重新下载"
+                                        else -> "下载安装包"
+                                    }
+                                )
                             }
                         }
                     }
@@ -340,6 +358,14 @@ private fun downloadFailureMessage(reason: Int): String = when (reason) {
     DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "下载地址无效"
     DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "服务器拒绝下载"
     else -> "下载失败"
+}
+
+private fun downloadPausedMessage(reason: Int): String = when (reason) {
+    DownloadManager.PAUSED_WAITING_FOR_NETWORK -> "等待可用网络（可在系统设置中允许移动数据下载）"
+    DownloadManager.PAUSED_QUEUED_FOR_WIFI -> "等待 Wi-Fi 网络下载"
+    DownloadManager.PAUSED_WAITING_TO_RETRY -> "下载暂停，即将自动重试"
+    DownloadManager.PAUSED_UNKNOWN -> "下载已暂停"
+    else -> "下载已暂停（错误码 $reason）"
 }
 
 @Composable
