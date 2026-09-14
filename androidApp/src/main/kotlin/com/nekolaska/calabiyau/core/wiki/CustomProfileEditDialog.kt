@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -72,7 +74,10 @@ fun CustomProfileEditDialog(
     var customName by remember(currentProfile) { mutableStateOf(currentProfile?.customName.orEmpty()) }
     var badge by remember(currentProfile) { mutableStateOf(currentProfile?.badge.orEmpty()) }
     var bio by remember(currentProfile) { mutableStateOf(currentProfile?.bio.orEmpty()) }
-    var pendingAvatarUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    // 选图后进入裁切：cropSource 为待裁切原图，croppedAvatar 为确认后的方形结果
+    var cropSource by remember { mutableStateOf<Bitmap?>(null) }
+    var croppedAvatar by remember { mutableStateOf<Bitmap?>(null) }
     var isBusy by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -80,8 +85,17 @@ fun CustomProfileEditDialog(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            pendingAvatarUri = uri
-            errorMessage = null
+            scope.launch {
+                val decoded = runCatching {
+                    decodeSampledAvatar(context, uri, AVATAR_CROP_SOURCE_SIZE_PX)
+                }.getOrNull()
+                if (decoded == null) {
+                    errorMessage = "无法读取所选图片"
+                } else {
+                    errorMessage = null
+                    cropSource = decoded
+                }
+            }
         }
     }
 
@@ -94,33 +108,25 @@ fun CustomProfileEditDialog(
         val finalName = customName.trim().ifBlank { null }
         val finalBio = bio.trim().ifBlank { null }
         val finalBadge = badge.trim().ifBlank { null }
-        val avatarUri = pendingAvatarUri
+        val cropped = croppedAvatar
         isBusy = true
         errorMessage = null
         scope.launch {
             var avatarUrl: String? = currentProfile?.avatarUrl
-            if (avatarUri != null) {
-                // 采样解码 → 中心裁方 → 限制 512px → WEBP 压缩，源图大小不限
-                val processedBytes = runCatching {
-                    val source = decodeSampledAvatar(context, avatarUri, AVATAR_TARGET_SIZE_PX)
-                    if (source == null) {
-                        errorMessage = "无法读取所选图片"
-                        null
-                    } else {
-                        encodeSquareAvatar(source, AVATAR_TARGET_SIZE_PX).also { source.recycle() }
-                    }
-                }.getOrNull()
-                if (processedBytes == null) {
-                    errorMessage = errorMessage ?: "图片处理失败"
+            if (cropped != null) {
+                // 裁切结果已是方形：限制 512px → WEBP 压缩
+                val encoded = runCatching { encodeSquareAvatar(cropped, AVATAR_TARGET_SIZE_PX) }.getOrNull()
+                if (encoded == null) {
+                    errorMessage = "图片处理失败"
                     isBusy = false
                     return@launch
                 }
-                if (processedBytes.size > 2 * 1024 * 1024) {
+                if (encoded.size > 2 * 1024 * 1024) {
                     errorMessage = "图片处理结果过大，请更换图片"
                     isBusy = false
                     return@launch
                 }
-                when (val upload = CustomUserApi.uploadAvatar(processedBytes, "image/webp", cookies)) {
+                when (val upload = CustomUserApi.uploadAvatar(encoded, "image/webp", cookies)) {
                     is ApiResult.Success -> avatarUrl = upload.value
                     is ApiResult.Error -> {
                         errorMessage = upload.message
@@ -168,11 +174,11 @@ fun CustomProfileEditDialog(
                             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
                         contentAlignment = Alignment.Center
                     ) {
-                        val previewUri = pendingAvatarUri
+                        val croppedPreview = croppedAvatar
                         val currentAvatar = currentProfile?.avatarUrl
                         when {
-                            previewUri != null -> AsyncImage(
-                                model = previewUri,
+                            croppedPreview != null -> Image(
+                                bitmap = croppedPreview.asImageBitmap(),
                                 contentDescription = "头像预览",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -199,11 +205,11 @@ fun CustomProfileEditDialog(
                         ) {
                             Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text(if (pendingAvatarUri != null) "重新选择" else "选择头像")
+                            Text(if (croppedAvatar != null) "重新选择" else "选择头像")
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "PNG / JPG / WebP，2MB 以内",
+                            text = "选图后可拖动裁切为方形",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -263,6 +269,20 @@ fun CustomProfileEditDialog(
             TextButton(onClick = onDismiss, enabled = !isBusy) { Text("取消") }
         }
     )
+
+    // 裁切弹窗（选图后触发）
+    val pendingCrop = cropSource
+    if (pendingCrop != null) {
+        AvatarCropDialog(
+            source = pendingCrop,
+            onConfirm = { cropped ->
+                croppedAvatar = cropped
+                cropSource = null
+                errorMessage = null
+            },
+            onDismiss = { cropSource = null }
+        )
+    }
 }
 
 /** 简化的自定义档案头像组件：有头像用头像，否则显示首字母。 */
@@ -304,6 +324,9 @@ fun CustomProfileAvatar(
 
 /** 头像目标边长：展示最大 64dp，按 3x 密度留足余量 */
 private const val AVATAR_TARGET_SIZE_PX = 512
+
+/** 裁切源图的最大边长（保证裁切精度，同时避免超大位图） */
+private const val AVATAR_CROP_SOURCE_SIZE_PX = 2048
 
 /** 采样解码：按目标尺寸计算 inSampleSize，避免整图加载进内存 */
 private fun decodeSampledAvatar(context: android.content.Context, uri: Uri, targetSizePx: Int): Bitmap? {
