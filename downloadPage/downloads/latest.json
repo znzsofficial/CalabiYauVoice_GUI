@@ -1,17 +1,24 @@
 {
-    "versionName": "2.1.9",
-    "versionCode": 39,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.9.apk?build=536fdab4c5033d28",
-    "apkSize": 3530720,
+    "versionName": "2.1.10",
+    "versionCode": 40,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.10.apk?build=ce703512a61f70b1",
+    "apkSize": 3547108,
     "releaseUrl": "/",
     "changelog": [
-        "\u65b0\u589e\u81ea\u5b9a\u4e49\u7528\u6237\u6863\u6848\uff1a\u767b\u5f55 Wiki \u540e\u53ef\u8bbe\u7f6e\u6635\u79f0\u3001\u5934\u50cf\u3001\u79f0\u53f7\u4e0e\u7b7e\u540d",
-        "\u4fa7\u680f\u4e0e\u7528\u6237\u4fe1\u606f\u9875\u5c55\u793a\u81ea\u5b9a\u4e49\u6863\u6848\uff0c\u672a\u8bbe\u7f6e\u65f6\u56de\u9000\u5b98\u65b9\u4fe1\u606f",
-        "\u5934\u50cf\u81ea\u52a8\u538b\u7f29\u4e3a WebP \u4e0a\u4f20\uff0c\u624b\u673a\u539f\u56fe\u5927\u5c0f\u4e0d\u9650",
-        "\u7ba1\u7406\u540e\u53f0\u652f\u6301\u6863\u6848\u67e5\u8be2\u3001\u7f16\u8f91\u4e0e\u5220\u9664"
+        "\u65b0\u589e\u7ad9\u70b9\u7559\u8a00\u677f\uff1a\u6240\u6709\u4eba\u53ef\u53d1\u8a00\uff0c\u767b\u5f55\u5e26\u8eab\u4efd\u3001\u8bbf\u5ba2\u5e26\u7f16\u53f7\uff0c\u652f\u6301\u5220\u9664\u4e0e\u7ba1\u7406",
+        "\u6863\u6848\u70b9\u8d5e\uff0c\u70b9\u51fb\u7559\u8a00\u5934\u50cf\u53ef\u67e5\u770b\u4f5c\u8005\u8d44\u6599\u8be6\u60c5",
+        "\u5934\u50cf\u4e0a\u4f20\u652f\u6301\u62d6\u52a8\u7f29\u653e\u88c1\u5207",
+        "\u4fee\u590d\u66f4\u65b0\u4e0b\u8f7d\u5728\u7cfb\u7edf\u6682\u505c\u65f6\u5361\u4f4f\u7684\u95ee\u9898"
     ],
-    "publishedAt": "2026-09-10",
+    "publishedAt": "2026-09-14",
     "releases": [
+        {
+            "versionName": "2.1.10",
+            "versionCode": 40,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.10.apk?build=ce703512a61f70b1",
+            "apkSize": 3547108,
+            "publishedAt": "2026-09-14"
+        },
         {
             "versionName": "2.1.9",
             "versionCode": 39,

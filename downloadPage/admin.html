@@ -462,7 +462,7 @@
             return;
           }
           $("commentTableBody").innerHTML = data.comments.map((c) => `<tr>
-            <td>${escapeHtml(c.targetBid)}</td>
+            <td>${escapeHtml(c.targetBid === "__public__" ? "站点公共板" : c.targetBid)}</td>
             <td>${escapeHtml(c.authorName || c.authorBid)}${c.authorBid === "anon" && c.authorTag ? `<span class="hint">#${escapeHtml(c.authorTag)}</span>` : ""}<div class="hint">${escapeHtml(c.authorBid)}</div></td>
             <td style="max-width:280px">${escapeHtml(c.content)}</td>
             <td>${formatTime(c.createdAt)}</td>
