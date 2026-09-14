@@ -20,9 +20,8 @@ import java.util.concurrent.TimeUnit
 object CustomUserApi {
 
     private const val DEFAULT_BASE_URL = "https://wiki.nekolaska.vip"
-    var customBaseUrl: String? = null
 
-    private fun baseUrl(): String = (customBaseUrl ?: DEFAULT_BASE_URL).trimEnd('/')
+    private fun baseUrl(): String = DEFAULT_BASE_URL.trimEnd('/')
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -48,7 +47,7 @@ object CustomUserApi {
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
+                val body = resp.body.string()
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<CustomUserProfileResponse>(body).error }.getOrNull()
                     return@withContext ApiResult.Error(errMsg ?: "请求失败 (${resp.code})", kind = ErrorKind.NETWORK)
@@ -63,50 +62,6 @@ object CustomUserApi {
             throw e
         } catch (e: Exception) {
             ApiResult.Error(e.message ?: "获取用户档案失败", kind = e.toErrorKind())
-        }
-    }
-
-    /**
-     * 批量查询用户自定义资料映射表 (Key 为 BID)
-     */
-    suspend fun fetchProfiles(
-        bids: List<String> = emptyList(),
-        wikiIds: List<Long> = emptyList()
-    ): ApiResult<Map<String, CustomUserProfile>> = withContext(Dispatchers.IO) {
-        if (bids.isEmpty() && wikiIds.isEmpty()) {
-            return@withContext ApiResult.Success(emptyMap())
-        }
-        val url = "${baseUrl()}/api/user/profiles"
-        val requestJson = buildJsonObject {
-            if (bids.isNotEmpty()) {
-                put("bids", kotlinx.serialization.json.JsonArray(bids.map { kotlinx.serialization.json.JsonPrimitive(it) }))
-            }
-            if (wikiIds.isNotEmpty()) {
-                put("wiki_ids", kotlinx.serialization.json.JsonArray(wikiIds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
-            }
-        }.toString()
-
-        try {
-            val req = Request.Builder()
-                .url(url)
-                .post(requestJson.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                .build()
-            client.newCall(req).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) {
-                    val errMsg = runCatching { json.decodeFromString<CustomUserProfilesResponse>(body).error }.getOrNull()
-                    return@withContext ApiResult.Error(errMsg ?: "批量查询失败 (${resp.code})", kind = ErrorKind.NETWORK)
-                }
-                val parsed = json.decodeFromString<CustomUserProfilesResponse>(body)
-                if (parsed.error != null) {
-                    return@withContext ApiResult.Error(parsed.error, kind = ErrorKind.UNKNOWN)
-                }
-                ApiResult.Success(parsed.profiles)
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            ApiResult.Error(e.message ?: "批量获取用户档案失败", kind = e.toErrorKind())
         }
     }
 
@@ -147,7 +102,7 @@ object CustomUserApi {
                 .build()
 
             client.newCall(req).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
+                val body = resp.body.string()
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<CustomUserAvatarUploadResponse>(body).error }.getOrNull()
                     return@withContext ApiResult.Error(errMsg ?: "头像上传失败 (${resp.code})", kind = ErrorKind.NETWORK)
@@ -202,7 +157,7 @@ object CustomUserApi {
                 .build()
 
             client.newCall(req).execute().use { resp ->
-                val body = resp.body?.string().orEmpty()
+                val body = resp.body.string()
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<CustomUserUpdateResponse>(body).error }.getOrNull()
                     return@withContext ApiResult.Error(errMsg ?: "保存失败 (${resp.code})", kind = ErrorKind.NETWORK)
@@ -218,6 +173,187 @@ object CustomUserApi {
             throw e
         } catch (e: Exception) {
             ApiResult.Error(e.message ?: "保存资料网络异常", kind = e.toErrorKind())
+        }
+    }
+
+    // ───── 留言板与点赞 ──────────────────────────────────────────────
+
+    /**
+     * 拉取指定用户的留言列表（按时间倒序）。
+     */
+    suspend fun fetchComments(
+        bid: String,
+        page: Int = 1,
+        size: Int = 20
+    ): ApiResult<ProfileCommentsResponse> = withContext(Dispatchers.IO) {
+        val url = "${baseUrl()}/api/user/comments?bid=${bid.trim().wikiPathEncode()}&page=$page&size=$size"
+        try {
+            val req = Request.Builder().url(url).get().build()
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    val errMsg = runCatching { json.decodeFromString<ProfileCommentsResponse>(body).error }.getOrNull()
+                    return@withContext ApiResult.Error(errMsg ?: "获取留言失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                }
+                val parsed = json.decodeFromString<ProfileCommentsResponse>(body)
+                if (parsed.error != null) {
+                    return@withContext ApiResult.Error(parsed.error, kind = ErrorKind.UNKNOWN)
+                }
+                ApiResult.Success(parsed)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "获取留言网络异常", kind = e.toErrorKind())
+        }
+    }
+
+    /**
+     * 发表留言。登录用户自动带身份署名（10 秒限流）；
+     * 未登录（Cookie 为空）以访客身份匿名发言，可提供昵称（30 秒 IP 限流）。
+     * 内容上限 200 字。
+     */
+    suspend fun postComment(
+        targetBid: String,
+        content: String,
+        wikiCookie: String? = null,
+        authorName: String? = null
+    ): ApiResult<ProfileComment> = withContext(Dispatchers.IO) {
+        val payload = buildJsonObject {
+            put("targetBid", targetBid)
+            put("content", content)
+            if (authorName != null && authorName.isNotBlank()) put("authorName", authorName.trim())
+        }.toString()
+        val url = "${baseUrl()}/api/user/comments"
+
+        try {
+            val req = Request.Builder()
+                .url(url)
+                .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .apply { if (!wikiCookie.isNullOrBlank()) header("X-Wiki-Cookie", wikiCookie) }
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    val errMsg = runCatching { json.decodeFromString<ProfileCommentPostResponse>(body).error }.getOrNull()
+                    return@withContext ApiResult.Error(errMsg ?: "发表留言失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                }
+                val parsed = json.decodeFromString<ProfileCommentPostResponse>(body)
+                if (parsed.success && parsed.comment != null) {
+                    ApiResult.Success(parsed.comment)
+                } else {
+                    ApiResult.Error(parsed.error ?: "发表留言失败", kind = ErrorKind.UNKNOWN)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "发表留言网络异常", kind = e.toErrorKind())
+        }
+    }
+
+    /**
+     * 删除自己的留言（需 Wiki 登录 Cookie，仅作者本人可删）。
+     */
+    suspend fun deleteComment(
+        commentId: Long,
+        wikiCookie: String
+    ): ApiResult<Unit> = withContext(Dispatchers.IO) {
+        if (wikiCookie.isBlank()) {
+            return@withContext ApiResult.Error("未登录 Wiki，无法删除留言", kind = ErrorKind.UNKNOWN)
+        }
+        val url = "${baseUrl()}/api/user/comments?id=$commentId"
+        try {
+            val req = Request.Builder()
+                .url(url)
+                .delete()
+                .header("X-Wiki-Cookie", wikiCookie)
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    val errMsg = runCatching { json.decodeFromString<ProfileDeleteResponse>(body).error }.getOrNull()
+                    return@withContext ApiResult.Error(errMsg ?: "删除留言失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                }
+                ApiResult.Success(Unit)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "删除留言网络异常", kind = e.toErrorKind())
+        }
+    }
+
+    /**
+     * 查询点赞数；传入 Cookie 时附带当前用户是否已赞。
+     */
+    suspend fun fetchLikes(
+        bid: String,
+        wikiCookie: String? = null
+    ): ApiResult<ProfileLikesResponse> = withContext(Dispatchers.IO) {
+        val url = "${baseUrl()}/api/user/likes?bid=${bid.trim().wikiPathEncode()}"
+        try {
+            val req = Request.Builder().url(url).get().apply {
+                if (!wikiCookie.isNullOrBlank()) header("X-Wiki-Cookie", wikiCookie)
+            }.build()
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    val errMsg = runCatching { json.decodeFromString<ProfileLikesResponse>(body).error }.getOrNull()
+                    return@withContext ApiResult.Error(errMsg ?: "获取点赞失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                }
+                val parsed = json.decodeFromString<ProfileLikesResponse>(body)
+                if (parsed.error != null) {
+                    return@withContext ApiResult.Error(parsed.error, kind = ErrorKind.UNKNOWN)
+                }
+                ApiResult.Success(parsed)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "获取点赞网络异常", kind = e.toErrorKind())
+        }
+    }
+
+    /**
+     * 切换点赞状态（已赞则取消，未赞则点赞），返回最新状态。
+     */
+    suspend fun toggleLike(
+        targetBid: String,
+        wikiCookie: String
+    ): ApiResult<ProfileLikeToggleResponse> = withContext(Dispatchers.IO) {
+        if (wikiCookie.isBlank()) {
+            return@withContext ApiResult.Error("未登录 Wiki，无法点赞", kind = ErrorKind.UNKNOWN)
+        }
+        val payload = buildJsonObject { put("targetBid", targetBid) }.toString()
+        val url = "${baseUrl()}/api/user/likes"
+
+        try {
+            val req = Request.Builder()
+                .url(url)
+                .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("X-Wiki-Cookie", wikiCookie)
+                .build()
+
+            client.newCall(req).execute().use { resp ->
+                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    val errMsg = runCatching { json.decodeFromString<ProfileLikeToggleResponse>(body).error }.getOrNull()
+                    return@withContext ApiResult.Error(errMsg ?: "点赞操作失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                }
+                val parsed = json.decodeFromString<ProfileLikeToggleResponse>(body)
+                if (parsed.success) {
+                    ApiResult.Success(parsed)
+                } else {
+                    ApiResult.Error(parsed.error ?: "点赞操作失败", kind = ErrorKind.UNKNOWN)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "点赞网络异常", kind = e.toErrorKind())
         }
     }
 }

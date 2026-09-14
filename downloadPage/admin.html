@@ -110,7 +110,7 @@
     <div class="container">
       <!-- 登录 -->
       <div id="loginCard" class="card">
-        <h1>用户档案管理</h1>
+        <h1>用户系统管理</h1>
         <p class="subtitle">输入管理密码登录</p>
         <input id="passwordInput" type="password" placeholder="管理密码" autocomplete="current-password" />
         <button id="loginBtn" class="primary">登录</button>
@@ -119,8 +119,15 @@
 
       <!-- 管理界面 -->
       <div id="adminPanel" style="display: none">
-        <h1>用户档案管理</h1>
-        <p class="subtitle">D1 user_profiles · <button id="logoutBtn" class="logout">退出</button></p>
+        <h1>用户系统管理</h1>
+        <p class="subtitle">
+          D1 user_profiles / profile_comments ·
+          <button id="sectionProfiles" class="primary">用户档案</button>
+          <button id="sectionComments">留言板管理</button>
+          <button id="logoutBtn" class="logout">退出</button>
+        </p>
+        <!-- 用户档案区块 -->
+        <div id="profilesSection">
         <div class="card">
           <div class="toolbar">
             <input id="searchInput" type="search" placeholder="搜索 BID / 昵称 / WikiID…" />
@@ -152,6 +159,40 @@
             <button id="nextBtn" disabled>下一页</button>
           </div>
           <div class="error" id="listError"></div>
+        </div>
+        </div>
+
+        <!-- 留言板管理区块 -->
+        <div id="commentsSection" style="display: none">
+        <div class="card">
+          <div class="toolbar">
+            <input id="commentSearchInput" type="search" placeholder="搜索内容 / 作者 / 目标…" />
+            <button id="commentSearchBtn" class="primary">搜索</button>
+            <button id="commentResetBtn">重置</button>
+          </div>
+          <div style="overflow-x: auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>目标</th>
+                  <th>作者</th>
+                  <th>内容</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="commentTableBody">
+                <tr><td colspan="5" class="empty">加载中…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <span id="commentPageInfo"></span>
+            <button id="commentPrevBtn" disabled>上一页</button>
+            <button id="commentNextBtn" disabled>下一页</button>
+          </div>
+          <div class="error" id="commentError"></div>
+        </div>
         </div>
       </div>
     </div>
@@ -385,6 +426,69 @@
           showError($("listError"), err.message || "删除失败");
         }
       }
+
+      // ── 留言板管理 ──
+      let commentPage = 1;
+      let commentQuery = "";
+      let commentTotalPages = 1;
+
+      function showSection(name) {
+        $("profilesSection").style.display = name === "profiles" ? "" : "none";
+        $("commentsSection").style.display = name === "comments" ? "" : "none";
+        $("sectionProfiles").className = name === "profiles" ? "primary" : "";
+        $("sectionComments").className = name === "comments" ? "primary" : "";
+        if (name === "comments") loadAdminComments();
+      }
+      $("sectionProfiles").addEventListener("click", () => showSection("profiles"));
+      $("sectionComments").addEventListener("click", () => showSection("comments"));
+
+      async function loadAdminComments() {
+        showError($("commentError"), "");
+        $("commentTableBody").innerHTML = '<tr><td colspan="5" class="empty">加载中…</td></tr>';
+        try {
+          const params = new URLSearchParams({ page: String(commentPage), size: "20" });
+          if (commentQuery) params.set("q", commentQuery);
+          const resp = await fetch(`/api/admin/comments?${params}`, { headers: headers() });
+          if (resp.status === 401) { sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return; }
+          if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
+          const data = await resp.json();
+          commentTotalPages = Math.max(1, Math.ceil(data.total / data.size));
+          $("commentPageInfo").textContent = `共 ${data.total} 条 · 第 ${data.page}/${commentTotalPages} 页`;
+          $("commentPrevBtn").disabled = data.page <= 1;
+          $("commentNextBtn").disabled = data.page >= commentTotalPages;
+
+          if (!data.comments.length) {
+            $("commentTableBody").innerHTML = '<tr><td colspan="5" class="empty">暂无留言</td></tr>';
+            return;
+          }
+          $("commentTableBody").innerHTML = data.comments.map((c) => `<tr>
+            <td>${escapeHtml(c.targetBid)}</td>
+            <td>${escapeHtml(c.authorName || c.authorBid)}${c.authorBid === "anon" && c.authorTag ? `<span class="hint">#${escapeHtml(c.authorTag)}</span>` : ""}<div class="hint">${escapeHtml(c.authorBid)}</div></td>
+            <td style="max-width:280px">${escapeHtml(c.content)}</td>
+            <td>${formatTime(c.createdAt)}</td>
+            <td><div class="actions">
+              <button class="danger" data-cdel="${c.id}">删除</button>
+            </div></td>
+          </tr>`).join("");
+        } catch (err) {
+          $("commentTableBody").innerHTML = '<tr><td colspan="5" class="empty">加载失败</td></tr>';
+          showError($("commentError"), err.message || "加载失败");
+        }
+      }
+
+      $("commentTableBody").addEventListener("click", (e) => {
+        const id = e.target.closest("button[data-cdel]")?.dataset.cdel;
+        if (id && confirm(`确定删除留言 #${id}？`)) {
+          fetch(`/api/admin/comment?id=${id}`, { method: "DELETE", headers: headers() })
+            .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); loadAdminComments(); })
+            .catch((err) => showError($("commentError"), err.message || "删除失败"));
+        }
+      });
+      $("commentSearchBtn").addEventListener("click", () => { commentQuery = $("commentSearchInput").value.trim(); commentPage = 1; loadAdminComments(); });
+      $("commentSearchInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("commentSearchBtn").click(); });
+      $("commentResetBtn").addEventListener("click", () => { $("commentSearchInput").value = ""; commentQuery = ""; commentPage = 1; loadAdminComments(); });
+      $("commentPrevBtn").addEventListener("click", () => { if (commentPage > 1) { commentPage--; loadAdminComments(); } });
+      $("commentNextBtn").addEventListener("click", () => { if (commentPage < commentTotalPages) { commentPage++; loadAdminComments(); } });
 
       // 启动：已保存密码则直接进入
       if (sessionStorage.getItem(PASSWORD_KEY)) {

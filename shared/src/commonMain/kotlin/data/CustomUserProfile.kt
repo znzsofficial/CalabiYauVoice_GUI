@@ -28,12 +28,6 @@ data class CustomUserProfileResponse(
 )
 
 @Serializable
-data class CustomUserProfilesResponse(
-    val profiles: Map<String, CustomUserProfile> = emptyMap(),
-    val error: String? = null
-)
-
-@Serializable
 data class CustomUserAvatarUploadResponse(
     val avatarUrl: String? = null,
     val objectKey: String? = null,
@@ -44,5 +38,54 @@ data class CustomUserAvatarUploadResponse(
 data class CustomUserUpdateResponse(
     val success: Boolean = false,
     val profile: CustomUserProfile? = null,
+    val error: String? = null
+)
+
+/** 档案留言（作者名/头像来自其自定义档案，未设置时客户端回退 BID；匿名留言带访客编号 authorTag） */
+@Serializable
+data class ProfileComment(
+    val id: Long,
+    val authorBid: String,
+    val authorName: String? = null,
+    val authorTag: String? = null,
+    val authorAvatarUrl: String? = null,
+    val content: String,
+    val createdAt: Long = 0L
+)
+
+@Serializable
+data class ProfileCommentsResponse(
+    val total: Int = 0,
+    val page: Int = 1,
+    val size: Int = 20,
+    val comments: List<ProfileComment> = emptyList(),
+    val error: String? = null
+)
+
+@Serializable
+data class ProfileCommentPostResponse(
+    val success: Boolean = false,
+    val comment: ProfileComment? = null,
+    val error: String? = null
+)
+
+@Serializable
+data class ProfileLikesResponse(
+    val count: Int = 0,
+    val likedByMe: Boolean = false,
+    val error: String? = null
+)
+
+@Serializable
+data class ProfileLikeToggleResponse(
+    val success: Boolean = false,
+    val liked: Boolean = false,
+    val count: Int = 0,
+    val error: String? = null
+)
+
+@Serializable
+data class ProfileDeleteResponse(
+    val success: Boolean = false,
     val error: String? = null
 )

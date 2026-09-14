@@ -16,6 +16,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +47,11 @@ import androidx.compose.material.icons.outlined.BuildCircle
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PersonOff
@@ -62,6 +67,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
@@ -121,6 +127,7 @@ import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.CustomProfileAvatar
 import com.nekolaska.calabiyau.core.wiki.CustomProfileEditDialog
+import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 import com.nekolaska.calabiyau.core.wiki.WikiUserApi
 import com.nekolaska.calabiyau.feature.download.DownloadHistoryScreen
 import com.nekolaska.calabiyau.feature.download.DownloadViewModel
@@ -149,6 +156,7 @@ private data class ToolFileManagerOverlayState(
 private sealed interface MainBackTarget {
     data object CloseDrawer : MainBackTarget
     data object CloseToolOverlay : MainBackTarget
+    data object CloseHubWebView : MainBackTarget
     data object ExitWikiToPrevious : MainBackTarget
     data object BackToDownloader : MainBackTarget
     data object GoHome : MainBackTarget
@@ -157,12 +165,12 @@ private sealed interface MainBackTarget {
 /** 侧栏导航目的地 */
 enum class DrawerDestination {
     WIKI_HUB,          // 首页（Wiki 主页）
-    WIKI_HUB_WEBVIEW,  // 从 Hub 内打开的 WebView（叠加在 Hub 之上，保留 Hub 状态）
     WIKI,              // Wiki 浏览器（从侧栏进入）
     DOWNLOADER,        // 资源下载
     FILE_MANAGER,      // 文件管理
     TOOLS,             // 素材工具
     DOWNLOAD_HISTORY,  // 下载历史（仅从资源下载页打开）
+    MESSAGE_BOARD,     // 留言板（登录用户）
     SETTINGS           // 设置
 }
 
@@ -213,14 +221,14 @@ fun MainScreen(
     var previousDestination by rememberSaveable { mutableStateOf(DrawerDestination.WIKI_HUB) }
     // 子页面内嵌 WebView 可见时禁用 Drawer 手势
     var childWebViewVisible by remember { mutableStateOf(false) }
-
-    fun normalizePreviousDestination(destination: DrawerDestination): DrawerDestination =
-        if (destination == DrawerDestination.WIKI_HUB_WEBVIEW) DrawerDestination.WIKI_HUB else destination
+    // Hub 内打开的子 WebView（叠加在 Hub 之上，不参与导航枚举）
+    var hubWebViewUrl by rememberSaveable { mutableStateOf<String?>(null) }
 
     fun openWikiHub(page: WikiRoute = WikiRoute.Home, resetStack: Boolean = true) {
         wikiEnteredFromHub = false
         hubStartPage = page
         if (resetStack) hubResetToken++
+        hubWebViewUrl = null
         currentDestination = DrawerDestination.WIKI_HUB
     }
 
@@ -235,7 +243,7 @@ fun MainScreen(
             "wiki" -> {
                 wikiEnteredFromHub = false
                 showWikiLoginHintOnOpen = false
-                previousDestination = normalizePreviousDestination(currentDestination)
+                previousDestination = currentDestination
                 currentDestination = DrawerDestination.WIKI
             }
             else -> openWikiHub()
@@ -246,11 +254,11 @@ fun MainScreen(
     val backTarget = when {
         drawerState.isOpen -> MainBackTarget.CloseDrawer
         toolFileManagerOverlay != null -> MainBackTarget.CloseToolOverlay
+        hubWebViewUrl != null -> MainBackTarget.CloseHubWebView
         currentDestination == DrawerDestination.WIKI && !drawerState.isOpen -> MainBackTarget.ExitWikiToPrevious
         currentDestination == DrawerDestination.DOWNLOAD_HISTORY && !drawerState.isOpen -> MainBackTarget.BackToDownloader
         currentDestination != DrawerDestination.WIKI_HUB
                 && currentDestination != DrawerDestination.WIKI
-                && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW
                 && !drawerState.isOpen -> MainBackTarget.GoHome
         else -> null
     }
@@ -258,6 +266,7 @@ fun MainScreen(
         when (backTarget) {
             MainBackTarget.CloseDrawer -> coroutineScope.launch { drawerState.close() }
             MainBackTarget.CloseToolOverlay -> toolFileManagerOverlay = null
+            MainBackTarget.CloseHubWebView -> hubWebViewUrl = null
             MainBackTarget.ExitWikiToPrevious -> currentDestination = previousDestination
             MainBackTarget.BackToDownloader -> currentDestination = DrawerDestination.DOWNLOADER
             MainBackTarget.GoHome -> openWikiHub()
@@ -265,9 +274,10 @@ fun MainScreen(
         }
     }
 
-    // 切换页面时停止音频播放
+    // 切换页面时停止音频播放；离开 Hub 时清掉残留的子 WebView 叠层
     LaunchedEffect(currentDestination) {
         AudioPlayerManager.stop()
+        if (currentDestination != DrawerDestination.WIKI_HUB) hubWebViewUrl = null
     }
 
     val openDrawer: () -> Unit = {
@@ -277,15 +287,8 @@ fun MainScreen(
     // ── 页面内容（Drawer 和 PermanentDrawer 共用） ──
     // 使用 movableContentOf 保持组合树身份，避免 Drawer 类型切换时子树重建
     val pageContent = remember { movableContentOf {
-        // Hub 和从 Hub 打开的 WebView 共享同一个组合树，保留 Hub 状态
-        var hubWebViewUrl by rememberSaveable { mutableStateOf<String?>(null) }
-
-        // 将 WIKI_HUB 和 WIKI_HUB_WEBVIEW 视为同一动画状态（WebView 叠加在 Hub 上，不需要转场）
-        val animKey = if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW)
-            DrawerDestination.WIKI_HUB else currentDestination
-
         AnimatedContent(
-            targetState = animKey,
+            targetState = currentDestination,
             transitionSpec = {
                 val enterTween = tween<Float>(300, easing = FastOutSlowInEasing)
                 val exitTween = tween<Float>(250, easing = FastOutLinearInEasing)
@@ -314,30 +317,31 @@ fun MainScreen(
                 )
             }
             DrawerDestination.WIKI_HUB -> {
-                // WIKI_HUB_WEBVIEW 也映射到此分支（animKey 合并）
-                // Shortcut "characters" → 直接进入角色列表
+                // Hub 内子 WebView 直接叠加在 Hub 上（不切换导航目的地，保留 Hub 状态）
                 Box {
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
-                        isOverlaid = currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW,
+                        isOverlaid = hubWebViewUrl != null,
                         initialPage = hubStartPage,
                         resetKey = hubResetToken,
                         onOpenWikiUrl = { url ->
                             hubWebViewUrl = url
                             wikiEnteredFromHub = true
-                            currentDestination = DrawerDestination.WIKI_HUB_WEBVIEW
                         }
                     )
-                    if (currentDestination == DrawerDestination.WIKI_HUB_WEBVIEW && hubWebViewUrl != null) {
+                    if (hubWebViewUrl != null) {
                         WikiWebViewScreen(
-                            onExitWiki = {
-                                currentDestination = DrawerDestination.WIKI_HUB
-                            },
+                            onExitWiki = { hubWebViewUrl = null },
                             initialUrl = hubWebViewUrl!!,
                             useTopBarMode = true
                         )
                     }
                 }
+            }
+            DrawerDestination.MESSAGE_BOARD -> {
+                MessageBoardScreen(
+                    onBack = { openWikiHub() }
+                )
             }
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
@@ -430,8 +434,6 @@ fun MainScreen(
                     onBack = { openWikiHub() }
                 )
             }
-
-            else -> {} // WIKI_HUB_WEBVIEW 已合并到 WIKI_HUB 处理
         }
         }
     } }
@@ -459,7 +461,9 @@ fun MainScreen(
                 if (dest == DrawerDestination.WIKI) {
                     wikiEnteredFromHub = false
                     showWikiLoginHintOnOpen = false
-                    previousDestination = normalizePreviousDestination(currentDestination)
+                    if (currentDestination != DrawerDestination.WIKI) {
+                        previousDestination = currentDestination
+                    }
                 }
                 if (dest == DrawerDestination.WIKI_HUB) {
                     openWikiHub()
@@ -470,7 +474,9 @@ fun MainScreen(
             },
             onLoginRequested = {
                 wikiEnteredFromHub = false
-                previousDestination = normalizePreviousDestination(currentDestination)
+                if (currentDestination != DrawerDestination.WIKI) {
+                    previousDestination = currentDestination
+                }
                 currentDestination = DrawerDestination.WIKI
                 showWikiLoginHintOnOpen = true
                 if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
@@ -499,7 +505,7 @@ fun MainScreen(
                         drawerState = drawerState,
                         gesturesEnabled = !childWebViewVisible
                                 && currentDestination != DrawerDestination.WIKI
-                                && currentDestination != DrawerDestination.WIKI_HUB_WEBVIEW,
+                                && hubWebViewUrl == null,
                         drawerContent = drawerContent,
                         content = {
                             Box(modifier = Modifier.fillMaxSize().then(if (liquidGlassEnabled) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
@@ -736,6 +742,13 @@ private fun AppDrawerContent(
                         )
                     }
                 }
+            )
+            DrawerNavItem(
+                icon = Icons.Outlined.Forum,
+                label = "留言板",
+                selected = currentDestination == DrawerDestination.MESSAGE_BOARD,
+                onClick = { onDestinationSelected(DrawerDestination.MESSAGE_BOARD) },
+                colors = drawerItemColors
             )
         }
 
@@ -1051,7 +1064,39 @@ private fun WikiUserInfoBottomSheet(
     var isLoadingWatchlist by remember { mutableStateOf(false) }
     var watchlistError by remember { mutableStateOf<String?>(null) }
 
+    // 点赞状态
+    var likeCount by remember { mutableIntStateOf(0) }
+    var likedByMe by remember { mutableStateOf(false) }
+    var isTogglingLike by remember { mutableStateOf(false) }
+
     val activityScope = rememberCoroutineScope()
+
+    // 打开弹窗即拉取点赞状态（带 Cookie 以标记自己是否已赞）
+    LaunchedEffect(userInfo.id, userInfo.name) {
+        when (val result = data.CustomUserApi.fetchLikes(bid = userInfo.name, wikiCookie = WikiAuthHelper.getWikiCookies())) {
+            is ApiResult.Success -> {
+                likeCount = result.value.count
+                likedByMe = result.value.likedByMe
+            }
+            is ApiResult.Error -> { /* 静默 */ }
+        }
+    }
+
+    fun toggleLike() {
+        val cookies = WikiAuthHelper.getWikiCookies()
+        if (cookies.isNullOrBlank()) return
+        activityScope.launch {
+            isTogglingLike = true
+            when (val result = data.CustomUserApi.toggleLike(targetBid = userInfo.name, wikiCookie = cookies)) {
+                is ApiResult.Success -> {
+                    likedByMe = result.value.liked
+                    likeCount = result.value.count
+                }
+                is ApiResult.Error -> { /* 静默 */ }
+            }
+            isTogglingLike = false
+        }
+    }
 
     // 切到编辑贡献 Tab 时自动加载
     LaunchedEffect(selectedTab) {
@@ -1150,6 +1195,28 @@ private fun WikiUserInfoBottomSheet(
                     Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("编辑资料")
+                }
+            }
+
+            // 点赞行
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                FilledTonalButton(
+                    onClick = { toggleLike() },
+                    enabled = !isTogglingLike
+                ) {
+                    Icon(
+                        imageVector = if (likedByMe) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (likedByMe) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("$likeCount")
                 }
             }
 

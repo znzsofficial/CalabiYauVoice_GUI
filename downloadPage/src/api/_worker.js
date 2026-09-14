@@ -313,57 +313,7 @@ async function handleUserApi(request, env, url) {
     }
   }
 
-  // 3. POST /api/user/profiles → 批量查询 { bids?: string[], wiki_ids?: number[] }
-  if (request.method === "POST" && url.pathname === "/api/user/profiles") {
-    if (!env.DB) {
-      return Response.json({ error: "D1 database not configured" }, { status: 500, headers: CORS_USER_HEADERS });
-    }
-    try {
-      const body = await request.json();
-      const bids = Array.isArray(body.bids) ? body.bids.map(b => String(b).trim()).filter(Boolean) : [];
-      const wikiIds = Array.isArray(body.wiki_ids) ? body.wiki_ids.map(id => Number(id)).filter(id => !isNaN(id)) : [];
-
-      if (bids.length === 0 && wikiIds.length === 0) {
-        return Response.json({ profiles: {} }, { headers: CORS_USER_HEADERS });
-      }
-
-      // D1 单条语句最多绑定 100 个参数，各限制 50
-      const safeBids = bids.slice(0, 50);
-      const safeWikiIds = wikiIds.slice(0, 50);
-
-      if (safeBids.length === 0 && safeWikiIds.length === 0) {
-        return Response.json({ profiles: {} }, { headers: CORS_USER_HEADERS });
-      }
-
-      const conditions = [];
-      const bindings = [];
-
-      if (safeBids.length > 0) {
-        const placeholders = safeBids.map(() => "?").join(",");
-        conditions.push(`bid IN (${placeholders})`);
-        bindings.push(...safeBids);
-      }
-      if (safeWikiIds.length > 0) {
-        const placeholders = safeWikiIds.map(() => "?").join(",");
-        conditions.push(`wiki_user_id IN (${placeholders})`);
-        bindings.push(...safeWikiIds);
-      }
-
-      const sql = `SELECT bid, wiki_user_id as wikiUserId, custom_name as customName, avatar_url as avatarUrl, bio, badge, updated_at as updatedAt FROM user_profiles WHERE ${conditions.join(" OR ")}`;
-      const { results } = await env.DB.prepare(sql).bind(...bindings).all();
-
-      const profilesMap = {};
-      for (const item of (results || [])) {
-        profilesMap[item.bid] = withAbsoluteAvatarUrl(item, url.origin);
-      }
-      return Response.json({ profiles: profilesMap }, { headers: { ...CORS_USER_HEADERS, "Cache-Control": "public, max-age=60" } });
-    } catch (err) {
-      console.error("user profiles batch query failed:", err);
-      return Response.json({ error: "批量查询用户档案失败" }, { status: 500, headers: CORS_USER_HEADERS });
-    }
-  }
-
-  // 4. POST /api/user/avatar → 上传头像到 R2
+  // 3. POST /api/user/avatar → 上传头像到 R2
   if (request.method === "POST" && url.pathname === "/api/user/avatar") {
     if (!env.USER_ASSETS) {
       return Response.json({ error: "R2 user bucket not configured" }, { status: 500, headers: CORS_USER_HEADERS });
@@ -371,6 +321,11 @@ async function handleUserApi(request, env, url) {
     const authUser = await authenticateWikiUser(request);
     if (!authUser) {
       return Response.json({ error: "登录已失效或未授权，请检查 Wiki 登录 Cookie" }, { status: 401, headers: CORS_USER_HEADERS });
+    }
+    // 限流：同一用户 30 秒内只允许上传一次
+    const avatarThrottleKey = `uav:${authUser.bid}`;
+    if (throttleBlocked(await getThrottleLastAt(env, avatarThrottleKey), 30)) {
+      return Response.json({ error: "操作过于频繁，请稍后再试" }, { status: 429, headers: CORS_USER_HEADERS });
     }
 
     try {
@@ -429,6 +384,7 @@ async function handleUserApi(request, env, url) {
           cacheControl: "public, max-age=31536000, immutable",
         },
       });
+      await recordThrottle(env, avatarThrottleKey);
 
       const avatarUrl = `/api/user/avatar/${objectKey}`;
       return Response.json({ avatarUrl, objectKey }, { headers: CORS_USER_HEADERS });
@@ -446,6 +402,11 @@ async function handleUserApi(request, env, url) {
     const authUser = await authenticateWikiUser(request);
     if (!authUser) {
       return Response.json({ error: "登录已失效或未授权，请检查 Wiki 登录 Cookie" }, { status: 401, headers: CORS_USER_HEADERS });
+    }
+    // 限流：同一用户 10 秒内只允许保存一次
+    const profileThrottleKey = `uprof:${authUser.bid}`;
+    if (throttleBlocked(await getThrottleLastAt(env, profileThrottleKey), 10)) {
+      return Response.json({ error: "操作过于频繁，请稍后再试" }, { status: 429, headers: CORS_USER_HEADERS });
     }
 
     try {
@@ -511,6 +472,7 @@ async function handleUserApi(request, env, url) {
         const oldKey = oldAvatarPath.replace(/^\/api\/user\/avatar\//, "");
         if (oldKey) await env.USER_ASSETS.delete(oldKey).catch(() => {});
       }
+      await recordThrottle(env, profileThrottleKey);
 
       return Response.json({
         success: true,
@@ -527,6 +489,234 @@ async function handleUserApi(request, env, url) {
     } catch (err) {
       console.error("user profile update failed:", err);
       return Response.json({ error: "更新资料失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // ───── 留言板与点赞 ──────────────────────────────────────────────
+
+  // 6. GET /api/user/comments?bid=&page=&size= → 留言列表（公开）
+  if (request.method === "GET" && url.pathname === "/api/user/comments") {
+    if (!env.DB) {
+      return Response.json({ error: "D1 database not configured" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+    const bid = url.searchParams.get("bid")?.trim();
+    if (!bid) {
+      return Response.json({ error: "缺少 bid" }, { status: 400, headers: CORS_USER_HEADERS });
+    }
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+    const size = Math.min(50, Math.max(1, parseInt(url.searchParams.get("size") || "20", 10) || 20));
+    const offset = (page - 1) * size;
+
+    try {
+      const totalRow = await env.DB.prepare("SELECT COUNT(*) as count FROM profile_comments WHERE target_bid = ?")
+        .bind(bid).first();
+      const { results } = await env.DB.prepare(
+        `SELECT c.id, c.author_bid as authorBid, c.content, c.created_at as createdAt,
+                c.author_tag as authorTag,
+                COALESCE(p.custom_name, c.author_name) as authorName, p.avatar_url as authorAvatarUrl
+         FROM profile_comments c
+         LEFT JOIN user_profiles p ON p.bid = c.author_bid
+         WHERE c.target_bid = ?
+         ORDER BY c.created_at DESC, c.id DESC
+         LIMIT ? OFFSET ?`
+      ).bind(bid, size, offset).all();
+
+      const comments = (results || []).map((row) => ({
+        ...row,
+        authorName: row.authorName || row.authorBid,
+        authorAvatarUrl: row.authorAvatarUrl
+          ? (row.authorAvatarUrl.startsWith("/") ? url.origin + row.authorAvatarUrl : row.authorAvatarUrl)
+          : null,
+      }));
+      return Response.json(
+        { total: totalRow?.count || 0, page, size, comments },
+        { headers: { ...CORS_USER_HEADERS, "Cache-Control": "no-store" } },
+      );
+    } catch (err) {
+      console.error("comments query failed:", err);
+      return Response.json({ error: "查询留言失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // 7. POST /api/user/comments {targetBid, content, authorName?} → 发表留言
+  //    登录用户带身份署名（10s 限流）；未登录以访客身份匿名发言（30s IP 限流）
+  if (request.method === "POST" && url.pathname === "/api/user/comments") {
+    const authUser = await authenticateWikiUser(request);
+    try {
+      const body = await request.json();
+      const targetBid = String(body.targetBid || "").trim();
+      const content = String(body.content || "").trim();
+      if (!targetBid || targetBid.length > 64) {
+        return Response.json({ error: "缺少 targetBid" }, { status: 400, headers: CORS_USER_HEADERS });
+      }
+      if (!content) {
+        return Response.json({ error: "留言内容不能为空" }, { status: 400, headers: CORS_USER_HEADERS });
+      }
+      if (content.length > 200) {
+        return Response.json({ error: "留言不能超过 200 字" }, { status: 400, headers: CORS_USER_HEADERS });
+      }
+
+      let authorBid;
+      let authorName = null;
+      let authorTag = null;
+      let throttleKey;
+      let throttleSeconds;
+      if (authUser) {
+        authorBid = authUser.bid;
+        throttleKey = `bid:${authUser.bid}`;
+        throttleSeconds = 10;
+      } else {
+        // 匿名：昵称可选，默认「访客」；仅留言板展示，不可删除
+        authorBid = "anon";
+        authorName = String(body.authorName || "").trim().slice(0, 20) || "访客";
+        const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+        throttleKey = `ip:${await sha256Hex(ip)}`;
+        throttleSeconds = 30;
+        // 访客编号：密钥+IP 派生，同 IP 恒定、不可反推，展示为「访客#042」
+        authorTag = await guestTag(env, ip);
+      }
+
+      // 简易限流（write_throttle 表，覆盖登录与匿名；成功后才计数）
+      const now = Math.floor(Date.now() / 1000);
+      if (throttleBlocked(await getThrottleLastAt(env, throttleKey), throttleSeconds)) {
+        return Response.json({ error: "操作过于频繁，请稍后再试" }, { status: 429, headers: CORS_USER_HEADERS });
+      }
+
+      // 公共板之外的目标必须已有档案，防止任意字符串刷垃圾板
+      if (targetBid !== "__public__") {
+        const targetExists = await env.DB.prepare("SELECT 1 FROM user_profiles WHERE bid = ?").bind(targetBid).first();
+        if (!targetExists) {
+          return Response.json({ error: "目标用户不存在" }, { status: 404, headers: CORS_USER_HEADERS });
+        }
+      }
+
+      const result = await env.DB.prepare(
+        "INSERT INTO profile_comments (target_bid, author_bid, author_name, author_tag, author_ip_hash, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).bind(
+        targetBid,
+        authorBid,
+        authorName,
+        authorTag,
+        authUser ? null : throttleKey,
+        content,
+        now
+      ).run();
+      await recordThrottle(env, throttleKey);
+
+      return Response.json({
+        success: true,
+        comment: {
+          id: result.meta?.last_row_id ?? 0,
+          authorBid,
+          authorName,
+          authorTag,
+          authorAvatarUrl: null,
+          content,
+          createdAt: now,
+        },
+      }, { headers: CORS_USER_HEADERS });
+    } catch (err) {
+      console.error("comment insert failed:", err);
+      return Response.json({ error: "发表留言失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // 8. DELETE /api/user/comments?id= → 删除自己的留言（鉴权）
+  if (request.method === "DELETE" && url.pathname === "/api/user/comments") {
+    const authUser = await authenticateWikiUser(request);
+    if (!authUser) {
+      return Response.json({ error: "登录已失效或未授权，请检查 Wiki 登录 Cookie" }, { status: 401, headers: CORS_USER_HEADERS });
+    }
+    const id = parseInt(url.searchParams.get("id") || "", 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return Response.json({ error: "缺少有效的留言 id" }, { status: 400, headers: CORS_USER_HEADERS });
+    }
+    try {
+      const comment = await env.DB.prepare("SELECT id, author_bid FROM profile_comments WHERE id = ?").bind(id).first();
+      if (!comment) {
+        return Response.json({ error: "留言不存在" }, { status: 404, headers: CORS_USER_HEADERS });
+      }
+      if (comment.author_bid !== authUser.bid) {
+        return Response.json({ error: "只能删除自己的留言" }, { status: 403, headers: CORS_USER_HEADERS });
+      }
+      await env.DB.prepare("DELETE FROM profile_comments WHERE id = ?").bind(id).run();
+      return Response.json({ success: true }, { headers: CORS_USER_HEADERS });
+    } catch (err) {
+      console.error("comment delete failed:", err);
+      return Response.json({ error: "删除留言失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // 9. GET /api/user/likes?bid= → 点赞数（携带有效 Cookie 时附带 likedByMe）
+  if (request.method === "GET" && url.pathname === "/api/user/likes") {
+    if (!env.DB) {
+      return Response.json({ error: "D1 database not configured" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+    const bid = url.searchParams.get("bid")?.trim();
+    if (!bid) {
+      return Response.json({ error: "缺少 bid" }, { status: 400, headers: CORS_USER_HEADERS });
+    }
+    try {
+      const countRow = await env.DB.prepare("SELECT COUNT(*) as count FROM profile_likes WHERE target_bid = ?")
+        .bind(bid).first();
+      let likedByMe = false;
+      const authUser = await authenticateWikiUser(request);
+      if (authUser) {
+        const mine = await env.DB.prepare(
+          "SELECT 1 FROM profile_likes WHERE target_bid = ? AND author_bid = ?"
+        ).bind(bid, authUser.bid).first();
+        likedByMe = !!mine;
+      }
+      return Response.json(
+        { count: countRow?.count || 0, likedByMe },
+        { headers: { ...CORS_USER_HEADERS, "Cache-Control": "no-store" } },
+      );
+    } catch (err) {
+      console.error("likes query failed:", err);
+      return Response.json({ error: "查询点赞失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // 10. POST /api/user/likes {targetBid} → 切换点赞（鉴权）
+  if (request.method === "POST" && url.pathname === "/api/user/likes") {
+    const authUser = await authenticateWikiUser(request);
+    if (!authUser) {
+      return Response.json({ error: "登录已失效或未授权，请检查 Wiki 登录 Cookie" }, { status: 401, headers: CORS_USER_HEADERS });
+    }
+    try {
+      const body = await request.json();
+      const targetBid = String(body.targetBid || "").trim();
+      if (!targetBid) {
+        return Response.json({ error: "缺少 targetBid" }, { status: 400, headers: CORS_USER_HEADERS });
+      }
+      // 与留言一致：公共板之外的目标必须已有档案
+      if (targetBid !== "__public__") {
+        const targetExists = await env.DB.prepare("SELECT 1 FROM user_profiles WHERE bid = ?").bind(targetBid).first();
+        if (!targetExists) {
+          return Response.json({ error: "目标用户不存在" }, { status: 404, headers: CORS_USER_HEADERS });
+        }
+      }
+      const existing = await env.DB.prepare(
+        "SELECT 1 FROM profile_likes WHERE target_bid = ? AND author_bid = ?"
+      ).bind(targetBid, authUser.bid).first();
+      let liked;
+      if (existing) {
+        await env.DB.prepare("DELETE FROM profile_likes WHERE target_bid = ? AND author_bid = ?")
+          .bind(targetBid, authUser.bid).run();
+        liked = false;
+      } else {
+        // 并发双击时第二个 INSERT 撞主键：DO NOTHING 兜底，语义仍为「已赞」
+        await env.DB.prepare(
+          "INSERT INTO profile_likes (target_bid, author_bid, created_at) VALUES (?, ?, ?) ON CONFLICT(target_bid, author_bid) DO NOTHING"
+        ).bind(targetBid, authUser.bid, Math.floor(Date.now() / 1000)).run();
+        liked = true;
+      }
+      const countRow = await env.DB.prepare("SELECT COUNT(*) as count FROM profile_likes WHERE target_bid = ?")
+        .bind(targetBid).first();
+      return Response.json({ success: true, liked, count: countRow?.count || 0 }, { headers: CORS_USER_HEADERS });
+    } catch (err) {
+      console.error("like toggle failed:", err);
+      return Response.json({ error: "点赞操作失败" }, { status: 500, headers: CORS_USER_HEADERS });
     }
   }
 
@@ -601,6 +791,13 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** 访客编号：sha256(密钥:IP) 前 8 位 hex → 0-999 三位数；无密钥时退化为纯 IP 哈希 */
+async function guestTag(env, ip) {
+  const secret = env.ADMIN_PASSWORD || "calabiyau-guest";
+  const hash = await sha256Hex(`${secret}:${ip}`);
+  return String(parseInt(hash.slice(0, 8), 16) % 1000).padStart(3, "0");
+}
+
 /** 管理员鉴权：X-Admin-Password 头与 env.ADMIN_PASSWORD 比对（两侧哈希后比较） */
 async function isAdminAuthorized(request, env) {
   const expected = (env.ADMIN_PASSWORD || "").trim();
@@ -609,6 +806,28 @@ async function isAdminAuthorized(request, env) {
   if (!provided) return false;
   const [providedHash, expectedHash] = await Promise.all([sha256Hex(provided), sha256Hex(expected)]);
   return providedHash === expectedHash;
+}
+
+/** 读取限流计数器上次触发时间（无记录返回 0） */
+async function getThrottleLastAt(env, key) {
+  const row = await env.DB.prepare("SELECT last_at FROM write_throttle WHERE key = ?").bind(key).first();
+  return row?.last_at ?? 0;
+}
+
+/** 写入限流计数器（成功完成操作后调用），顺带清理超过 24h 的过期键防表膨胀 */
+async function recordThrottle(env, key) {
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO write_throttle (key, last_at) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET last_at = excluded.last_at"
+    ).bind(key, now),
+    env.DB.prepare("DELETE FROM write_throttle WHERE last_at < ?").bind(now - 86400),
+  ]);
+}
+
+/** 限流判定：距离上次写入不足 interval 秒返回 true（拦截） */
+function throttleBlocked(lastAt, intervalSeconds) {
+  return lastAt > 0 && Math.floor(Date.now() / 1000) - lastAt < intervalSeconds;
 }
 
 /**
@@ -738,10 +957,74 @@ async function handleAdminApi(request, env, url) {
         const oldKey = oldRow.avatar_url.replace(/^\/api\/user\/avatar\//, "");
         if (oldKey) await env.USER_ASSETS.delete(oldKey).catch(() => {});
       }
-      return Response.json({ success: true, deleted: (result.changes || 0) > 0 }, { headers: CORS_USER_HEADERS });
+      // 清空该用户的留言板与点赞（其在他处的留言保留，作者名回退显示 BID）
+      if ((result.meta?.changes ?? result.changes ?? 0) > 0) {
+        await env.DB.prepare("DELETE FROM profile_comments WHERE target_bid = ?").bind(bid).run();
+        await env.DB.prepare("DELETE FROM profile_likes WHERE target_bid = ?").bind(bid).run();
+      }
+      return Response.json({ success: true, deleted: (result.meta?.changes ?? result.changes ?? 0) > 0 }, { headers: CORS_USER_HEADERS });
     } catch (err) {
       console.error("admin profile delete failed:", err);
       return Response.json({ error: "删除失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // 4. DELETE /api/admin/comment?id= → 删除任意留言
+  if (request.method === "DELETE" && url.pathname === "/api/admin/comment") {
+    const id = parseInt(url.searchParams.get("id") || "", 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return Response.json({ error: "缺少有效的留言 id" }, { status: 400, headers: CORS_USER_HEADERS });
+    }
+    try {
+      const result = await env.DB.prepare("DELETE FROM profile_comments WHERE id = ?").bind(id).run();
+      return Response.json({ success: true, deleted: (result.meta?.changes ?? result.changes ?? 0) > 0 }, { headers: CORS_USER_HEADERS });
+    } catch (err) {
+      console.error("admin comment delete failed:", err);
+      return Response.json({ error: "删除留言失败" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+  }
+
+  // 5. GET /api/admin/comments?page=&size=&q= → 全站留言列表（跨目标，含匿名）
+  if (request.method === "GET" && url.pathname === "/api/admin/comments") {
+    if (!env.DB) {
+      return Response.json({ error: "D1 database not configured" }, { status: 500, headers: CORS_USER_HEADERS });
+    }
+    const q = url.searchParams.get("q")?.trim() || "";
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+    const size = Math.min(50, Math.max(1, parseInt(url.searchParams.get("size") || "20", 10) || 20));
+    const offset = (page - 1) * size;
+
+    let where = "";
+    let bindings = [];
+    if (q) {
+      where = "WHERE c.content LIKE ? ESCAPE '\\' OR c.author_bid LIKE ? ESCAPE '\\' OR c.target_bid LIKE ? ESCAPE '\\' OR c.author_name LIKE ? ESCAPE '\\'";
+      const likePattern = `%${q.replace(/[\\%_]/g, "\\$&")}%`;
+      bindings = [likePattern, likePattern, likePattern, likePattern];
+    }
+
+    try {
+      const totalRow = await env.DB.prepare(
+        `SELECT COUNT(*) as count FROM profile_comments c ${where}`
+      ).bind(...bindings).first();
+      const { results } = await env.DB.prepare(
+        `SELECT c.id, c.target_bid as targetBid, c.author_bid as authorBid,
+                COALESCE(p.custom_name, c.author_name) as authorName,
+                c.author_tag as authorTag,
+                c.content, c.created_at as createdAt
+         FROM profile_comments c
+         LEFT JOIN user_profiles p ON p.bid = c.author_bid
+         ${where}
+         ORDER BY c.created_at DESC, c.id DESC
+         LIMIT ? OFFSET ?`
+      ).bind(...bindings, size, offset).all();
+
+      return Response.json(
+        { total: totalRow?.count || 0, page, size, comments: results || [] },
+        { headers: { ...CORS_USER_HEADERS, "Cache-Control": "no-store" } },
+      );
+    } catch (err) {
+      console.error("admin comments query failed:", err);
+      return Response.json({ error: "查询留言失败" }, { status: 500, headers: CORS_USER_HEADERS });
     }
   }
 

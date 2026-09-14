@@ -2,6 +2,7 @@ package data
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -62,22 +63,54 @@ class CustomUserProfileTest {
         assertEquals("测试", parsedSingle.profile?.customName)
         assertNull(parsedSingle.error)
 
-        val batchSuccess = """
-            {
-                "profiles": {
-                    "111": {"bid": "111", "customName": "A"},
-                    "222": {"bid": "222", "customName": "B"}
-                }
-            }
-        """.trimIndent()
-        val parsedBatch = SharedJson.decodeFromString<CustomUserProfilesResponse>(batchSuccess)
-        assertEquals(2, parsedBatch.profiles.size)
-        assertEquals("A", parsedBatch.profiles["111"]?.customName)
-        assertEquals("B", parsedBatch.profiles["222"]?.customName)
-
         val errorResponse = """{"error": "D1 error"}"""
         val parsedError = SharedJson.decodeFromString<CustomUserProfileResponse>(errorResponse)
         assertNull(parsedError.profile)
         assertEquals("D1 error", parsedError.error)
+    }
+
+    @Test
+    fun testCommentsAndLikesParsing() {
+        val comments = """
+            {
+                "total": 2,
+                "page": 1,
+                "size": 20,
+                "comments": [
+                    {
+                        "id": 11,
+                        "authorBid": "10086",
+                        "authorName": "星绘Official",
+                        "authorAvatarUrl": "https://wiki.nekolaska.vip/api/user/avatar/avatars/10086_a.webp",
+                        "content": "路过留个爪",
+                        "createdAt": 1720000000
+                    },
+                    {
+                        "id": 12,
+                        "authorBid": "20099",
+                        "content": "没有档案的作者",
+                        "createdAt": 1720000001
+                    }
+                ]
+            }
+        """.trimIndent()
+        val parsed = SharedJson.decodeFromString<ProfileCommentsResponse>(comments)
+        assertEquals(2, parsed.total)
+        assertEquals(2, parsed.comments.size)
+        assertEquals("星绘Official", parsed.comments[0].authorName)
+        assertEquals("10086", parsed.comments[0].authorBid)
+        assertNull(parsed.comments[1].authorName)
+        assertNull(parsed.comments[1].authorAvatarUrl)
+
+        val likes = """{"count": 42, "likedByMe": true}"""
+        val parsedLikes = SharedJson.decodeFromString<ProfileLikesResponse>(likes)
+        assertEquals(42, parsedLikes.count)
+        assertTrue(parsedLikes.likedByMe)
+
+        val toggle = """{"success": true, "liked": false, "count": 41}"""
+        val parsedToggle = SharedJson.decodeFromString<ProfileLikeToggleResponse>(toggle)
+        assertTrue(parsedToggle.success)
+        assertFalse(parsedToggle.liked)
+        assertEquals(41, parsedToggle.count)
     }
 }

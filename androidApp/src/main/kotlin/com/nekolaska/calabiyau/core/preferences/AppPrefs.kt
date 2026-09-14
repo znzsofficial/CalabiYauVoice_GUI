@@ -165,6 +165,7 @@ object AppPrefs {
     var wallpaperAutoRefresh by booleanPref(false)
     var wallpaperSeedColorCache by intPref(0)
     var wallpaperSeedColorUrl by stringPref()
+    var anonymousNickname by stringPref()
     var lastUpdateCheck by longPref(0L)
 
     var homeQuickEntryIds: List<String>
