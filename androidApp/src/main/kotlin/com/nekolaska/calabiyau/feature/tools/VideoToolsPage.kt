@@ -217,13 +217,16 @@ internal fun VideoToolsPage(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    val framePositionState = rememberSyncedSliderState(
+                        framePositionMs.toFloat(),
+                        0f..frameDurationMs.coerceAtLeast(1L).toFloat()
+                    )
                     Slider(
-                        value = framePositionMs.toFloat(),
+                        state = framePositionState,
                         onValueChange = {
                             framePositionMs = it.toLong().coerceIn(0L, frameDurationMs.coerceAtLeast(0L))
                             updateFramePreview(selected, framePositionMs, debounceMs = 120L)
                         },
-                        valueRange = 0f..frameDurationMs.coerceAtLeast(1L).toFloat(),
                         enabled = !isBusy && frameDurationMs > 0L
                     )
                     Surface(shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {

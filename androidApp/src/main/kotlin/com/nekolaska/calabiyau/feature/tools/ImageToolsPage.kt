@@ -426,10 +426,10 @@ private fun ExportOptions(
         "导出质量：${(quality * 100).toInt()}%",
         style = MaterialTheme.typography.bodyMedium
     )
+    val qualityState = rememberSyncedSliderState(quality, 0.05f..1f)
     Slider(
-        value = quality,
-        onValueChange = onQualityChange,
-        valueRange = 0.05f..1f
+        state = qualityState,
+        onValueChange = onQualityChange
     )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1125,10 +1125,10 @@ internal fun ImageToolsPage(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            val batchQualityState = rememberSyncedSliderState(batchConvertQuality, 0.4f..1f)
             Slider(
-                value = batchConvertQuality,
-                onValueChange = { batchConvertQuality = it.coerceIn(0.4f, 1f) },
-                valueRange = 0.4f..1f
+                state = batchQualityState,
+                onValueChange = { batchConvertQuality = it.coerceIn(0.4f, 1f) }
             )
             FilledTonalButton(
                 onClick = {
@@ -1761,11 +1761,10 @@ private fun UpscaleBottomSheet(
                         }
                     }
 
+                    val factorState = rememberSyncedSliderState(factor, MinUpscaleFactor..MaxUpscaleFactor, steps = 10)
                     Slider(
-                        value = factor,
-                        onValueChange = { onFactorChange(it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)) },
-                        valueRange = MinUpscaleFactor..MaxUpscaleFactor,
-                        steps = 10
+                        state = factorState,
+                        onValueChange = { onFactorChange(it.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)) }
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1965,11 +1964,10 @@ private fun GifComposeBottomSheet(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
             Text("帧率：${fps} fps", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val fpsState = rememberSyncedSliderState(fps.toFloat(), 1f..60f, steps = 58)
             Slider(
-                value = fps.toFloat(),
-                onValueChange = { onFpsChange(it.roundToInt().coerceIn(1, 60)) },
-                valueRange = 1f..60f,
-                steps = 58
+                state = fpsState,
+                onValueChange = { onFpsChange(it.roundToInt().coerceIn(1, 60)) }
             )
 
             Row(
@@ -1979,19 +1977,17 @@ private fun GifComposeBottomSheet(
             ) {
                 Text("循环次数（0 = 无限）：$loopCount")
             }
+            val loopState = rememberSyncedSliderState(loopCount.toFloat(), 0f..20f, steps = 19)
             Slider(
-                value = loopCount.toFloat(),
-                onValueChange = { onLoopCountChange(it.roundToInt().coerceIn(0, 20)) },
-                valueRange = 0f..20f,
-                steps = 19
+                state = loopState,
+                onValueChange = { onLoopCountChange(it.roundToInt().coerceIn(0, 20)) }
             )
 
             Text("色彩采样：$quantizeSample", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val quantizeState = rememberSyncedSliderState(quantizeSample.toFloat(), 1f..30f, steps = 28)
             Slider(
-                value = quantizeSample.toFloat(),
-                onValueChange = { onQuantizeSampleChange(it.roundToInt().coerceIn(1, 30)) },
-                valueRange = 1f..30f,
-                steps = 28
+                state = quantizeState,
+                onValueChange = { onQuantizeSampleChange(it.roundToInt().coerceIn(1, 30)) }
             )
 
             Row(
@@ -2193,7 +2189,8 @@ private fun UpscaleSliderRow(
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(valueText, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         }
-        Slider(value = value, onValueChange = onValueChange, valueRange = 0f..1f)
+        val valueState = rememberSyncedSliderState(value, 0f..1f)
+        Slider(state = valueState, onValueChange = onValueChange)
     }
 }
 
