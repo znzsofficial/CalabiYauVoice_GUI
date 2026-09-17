@@ -3,7 +3,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && npm run build:worker",
+    "build:worker": "esbuild src/api/_worker.js --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/_worker.js",
+    "test:worker": "node --test tests/backend.test.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview"
   },
@@ -11,6 +13,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/node": "^25.9.5",
     "esbuild": "^0.28.1",
+    "miniflare": "^4.20260730.0",
     "svelte": "^5.56.6",
     "svelte-check": "^4.7.3",
     "typescript": "^6.0.3",

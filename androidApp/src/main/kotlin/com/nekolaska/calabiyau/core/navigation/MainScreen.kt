@@ -1087,7 +1087,7 @@ private fun WikiUserInfoBottomSheet(
         if (cookies.isNullOrBlank()) return
         activityScope.launch {
             isTogglingLike = true
-            when (val result = data.CustomUserApi.toggleLike(targetBid = userInfo.name, wikiCookie = cookies)) {
+            when (val result = data.CustomUserApi.setLike(targetBid = userInfo.name, liked = !likedByMe, wikiCookie = cookies)) {
                 is ApiResult.Success -> {
                     likedByMe = result.value.liked
                     likeCount = result.value.count

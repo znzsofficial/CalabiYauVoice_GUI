@@ -51,7 +51,12 @@ data class ProfileComment(
     val authorAvatarUrl: String? = null,
     val content: String,
     val createdAt: Long = 0L
-)
+) {
+    fun displayAuthor(): String {
+        val name = authorName?.takeIf { it.isNotBlank() } ?: if (authorBid == "anon") "访客" else authorBid
+        return if (authorBid == "anon" && !authorTag.isNullOrBlank()) "$name#$authorTag" else name
+    }
+}
 
 @Serializable
 data class ProfileCommentsResponse(
@@ -59,6 +64,8 @@ data class ProfileCommentsResponse(
     val page: Int = 1,
     val size: Int = 20,
     val comments: List<ProfileComment> = emptyList(),
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
     val error: String? = null
 )
 

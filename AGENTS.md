@@ -12,7 +12,7 @@ Windows: `.\gradlew.bat`. macOS/Linux: `./gradlew`.
 - Web local: `cd downloadPage; npm run dev` (Vite proxies `/api/wiki`, `/api/balance/*`, image/file download; it does **not** serve R2 APKs)
 - Release site: `.\gradlew.bat webDeploy` → `webDist` (assembleRelease, rewrite `latest.json`, upload APK to R2) then `webPush` (build + `wrangler pages deploy`)
 
-`downloadPage/dist/` is generated. After `npm run build`, `webStatic` copies `_headers`, `_redirects`, `downloads/latest.json`, `icon.svg`, and `src/api/_worker.js` into `dist`.
+`downloadPage/dist/` is generated. `npm run build` builds the site and bundles `src/api/_worker.js` with esbuild into `dist/_worker.js`. `webStatic` copies `_headers`, `_redirects`, `downloads/latest.json`, and `icon.svg`; never overwrite the bundled Worker with its source entrypoint. Worker integration tests: `npm run test:worker` in `downloadPage/`.
 
 ## Version / release
 
@@ -26,7 +26,9 @@ Do not delete `2.1.6` from `releases`. Full checklist: `docs/release-version-che
 
 ## downloadPage Worker
 
-`downloadPage/src/api/_worker.js` and `downloadPage/vite.config.ts` share the same upstream constants; change both.
+`downloadPage/src/api/proxy.js`, `src/api/auth.js`, and `downloadPage/vite.config.ts` share upstream constants; change both production and development paths.
+
+Before deploying the backend consistency update, apply migration `0005_backend_consistency.sql` and configure a dedicated random `GUEST_SECRET` (at least 32 characters) in Pages. Do not reuse `ADMIN_PASSWORD`. `POST /api/admin/maintenance` performs bounded orphan-avatar and expired-metadata cleanup; it needs an external schedule or manual invocation.
 
 R2 binding is `RELEASES` in `downloadPage/wrangler.jsonc` (Pages project `calabiyauwiki`). Do not commit `downloadPage/wrangler.toml` (gitignored; dashboard download can contain secrets). `GITHUB_TOKEN` is a Pages dashboard secret, not in `wrangler.jsonc`.
 

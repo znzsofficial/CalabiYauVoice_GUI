@@ -3,7 +3,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { resolve } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-// These constants must stay in sync with downloadPage/src/api/_worker.js
+// These constants must stay in sync with src/api/proxy.js and src/api/auth.js.
 const upstream = 'https://klbq-prod-www.idreamsky.com';
 const wikiApiUpstream = 'https://wiki.biligame.com/klbq/api.php';
 const allowedImageHosts = new Set(['wiki.biligame.com', 'patchwiki.biligame.com']);
@@ -150,7 +150,7 @@ async function handleFileDownloadProxy(url: URL, res: ServerResponse): Promise<v
     target = null;
   }
 
-  if (!target || !allowedImageHosts.has(target.hostname)) {
+  if (!target || target.protocol !== 'https:' || target.username || target.password || (target.port && target.port !== '443') || !allowedImageHosts.has(target.hostname)) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({ error: '不支持的文件地址' }));
@@ -177,7 +177,7 @@ async function handleFileDownloadProxy(url: URL, res: ServerResponse): Promise<v
       const location = response.headers.get('location');
       if (!location) break;
       const next = new URL(location, current);
-      if (!allowedImageHosts.has(next.hostname) && next.hostname !== current.hostname) {
+      if (next.protocol !== 'https:' || next.username || next.password || (next.port && next.port !== '443') || !allowedImageHosts.has(next.hostname)) {
         throw new Error('文件重定向目标不受支持');
       }
       current = next;
@@ -203,6 +203,7 @@ async function handleFileDownloadProxy(url: URL, res: ServerResponse): Promise<v
 function sanitizeProxyHeaders(headers: IncomingMessage['headers'], target: string): Headers {
   const nextHeaders = new Headers();
   for (const [key, value] of Object.entries(headers)) {
+    if (!['content-type', 'accept', 'user-agent', 'referer', 'origin'].includes(key.toLowerCase())) continue;
     if (!value || key.startsWith('sec-')) continue;
     if (['host', 'connection', 'content-length'].includes(key.toLowerCase())) continue;
     nextHeaders.set(key, Array.isArray(value) ? value.join(', ') : value);

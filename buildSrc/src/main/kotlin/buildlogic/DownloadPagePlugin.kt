@@ -70,9 +70,6 @@ class DownloadPagePlugin : Plugin<Project> {
                     include("downloads/latest.json")
                     include("icon.svg")
                 }
-                from(layout.projectDirectory.dir("downloadPage/src/api")) {
-                    include("_worker.js")
-                }
                 into(layout.projectDirectory.dir("downloadPage/dist"))
             }
 

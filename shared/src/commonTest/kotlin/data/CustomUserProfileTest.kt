@@ -113,4 +113,18 @@ class CustomUserProfileTest {
         assertFalse(parsedToggle.liked)
         assertEquals(41, parsedToggle.count)
     }
+
+    @Test
+    fun guestTagAndCursorContract() {
+        val response = SharedJson.decodeFromString<ProfileCommentsResponse>("""
+            {"hasMore":true,"nextCursor":"1720000000:11","comments":[
+              {"id":11,"authorBid":"anon","authorName":"小猫","authorTag":"12AB34CD56","content":"hello"}
+            ]}
+        """.trimIndent())
+        assertTrue(response.hasMore)
+        assertEquals("1720000000:11", response.nextCursor)
+        assertEquals("小猫#12AB34CD56", response.comments.single().displayAuthor())
+        assertEquals("访客#12AB34CD56", response.comments.single().copy(authorName = null).displayAuthor())
+        assertEquals("小猫", response.comments.single().copy(authorBid = "member").displayAuthor())
+    }
 }

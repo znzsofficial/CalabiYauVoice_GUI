@@ -184,9 +184,11 @@ object CustomUserApi {
     suspend fun fetchComments(
         bid: String,
         page: Int = 1,
-        size: Int = 20
+        size: Int = 20,
+        before: String? = null
     ): ApiResult<ProfileCommentsResponse> = withContext(Dispatchers.IO) {
-        val url = "${baseUrl()}/api/user/comments?bid=${bid.trim().wikiPathEncode()}&page=$page&size=$size"
+        val url = "${baseUrl()}/api/user/comments?bid=${bid.trim().wikiPathEncode()}&page=$page&size=$size" +
+            (before?.let { "&before=${it.wikiPathEncode()}" } ?: "")
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
@@ -217,7 +219,9 @@ object CustomUserApi {
         targetBid: String,
         content: String,
         wikiCookie: String? = null,
-        authorName: String? = null
+        authorName: String? = null,
+        requestId: String,
+        guestId: String? = null
     ): ApiResult<ProfileComment> = withContext(Dispatchers.IO) {
         val payload = buildJsonObject {
             put("targetBid", targetBid)
@@ -230,6 +234,8 @@ object CustomUserApi {
             val req = Request.Builder()
                 .url(url)
                 .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .header("Idempotency-Key", requestId)
+                .apply { if (!guestId.isNullOrBlank()) header("X-Guest-Id", guestId) }
                 .apply { if (!wikiCookie.isNullOrBlank()) header("X-Wiki-Cookie", wikiCookie) }
                 .build()
 
@@ -318,10 +324,11 @@ object CustomUserApi {
     }
 
     /**
-     * 切换点赞状态（已赞则取消，未赞则点赞），返回最新状态。
+     * 设置点赞状态；重试相同请求不会反转状态。
      */
-    suspend fun toggleLike(
+    suspend fun setLike(
         targetBid: String,
+        liked: Boolean,
         wikiCookie: String
     ): ApiResult<ProfileLikeToggleResponse> = withContext(Dispatchers.IO) {
         if (wikiCookie.isBlank()) {
@@ -333,7 +340,7 @@ object CustomUserApi {
         try {
             val req = Request.Builder()
                 .url(url)
-                .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .method(if (liked) "PUT" else "DELETE", payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
                 .header("X-Wiki-Cookie", wikiCookie)
                 .build()
 

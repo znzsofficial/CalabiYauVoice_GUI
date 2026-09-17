@@ -65,6 +65,7 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 /** 公共留言板的目标标识（站点级，非个人档案） */
 private const val PUBLIC_BOARD_TARGET = "__public__"
@@ -89,7 +90,7 @@ internal fun MessageBoardScreen(
 
     var comments by remember { mutableStateOf<List<ProfileComment>>(emptyList()) }
     var commentsTotal by remember { mutableIntStateOf(0) }
-    var currentPage by remember { mutableIntStateOf(1) }
+    var nextCursor by remember { mutableStateOf<String?>(null) }
     var isLoadingComments by remember { mutableStateOf(false) }
     var commentsError by remember { mutableStateOf<String?>(null) }
 
@@ -97,15 +98,19 @@ internal fun MessageBoardScreen(
     var commentInput by remember { mutableStateOf("") }
     var isPosting by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
+    val guestId = remember {
+        AppPrefs.anonymousGuestId?.takeIf { it.isNotBlank() }
+            ?: UUID.randomUUID().toString().also { AppPrefs.anonymousGuestId = it }
+    }
+    // Keep the key for retries of exactly the same payload, but not a new comment.
+    var pendingPayload by remember { mutableStateOf<List<String?>?>(null) }
+    var pendingRequestId by remember { mutableStateOf<String?>(null) }
 
     // 作者资料详情弹窗
     var profileSheetBid by remember { mutableStateOf<String?>(null) }
 
-    // 每次重组时按最新总数计算
-    val totalPages = if (commentsTotal == 0) 1 else (commentsTotal + BOARD_PAGE_SIZE - 1) / BOARD_PAGE_SIZE
-    val isAnonymous = userInfo == null
-
     fun loadInitial() {
+        if (isLoadingComments || isPosting) return
         isLoadingComments = true
         commentsError = null
         // 身份识别与留言拉取互不依赖，并行请求，先到先渲染
@@ -114,9 +119,11 @@ internal fun MessageBoardScreen(
                 is ApiResult.Success -> userInfo = user.value?.takeIf { it.isLoggedIn }
                 is ApiResult.Error -> userInfo = null
             }
-            if (userInfo != null) {
-                when (val profile = CustomUserApi.fetchProfile(bid = userInfo!!.name, wikiId = userInfo!!.id)) {
-                    is ApiResult.Success -> if (profile.value != null) customProfile = profile.value
+            val currentUser = userInfo
+            customProfile = null
+            if (currentUser != null) {
+                when (val profile = CustomUserApi.fetchProfile(bid = currentUser.name, wikiId = currentUser.id)) {
+                    is ApiResult.Success -> customProfile = profile.value
                     is ApiResult.Error -> Unit
                 }
             }
@@ -127,7 +134,7 @@ internal fun MessageBoardScreen(
                 is ApiResult.Success -> {
                     comments = result.value.comments
                     commentsTotal = result.value.total
-                    currentPage = 1
+                    nextCursor = result.value.nextCursor
                 }
                 is ApiResult.Error -> commentsError = result.message
             }
@@ -136,16 +143,17 @@ internal fun MessageBoardScreen(
     }
 
     fun loadMore() {
-        if (isLoadingComments || currentPage >= totalPages) return
-        val nextPage = currentPage + 1
+        if (isLoadingComments || isPosting) return
+        val cursor = nextCursor ?: return
         isLoadingComments = true
         commentsError = null
         scope.launch {
-            when (val result = CustomUserApi.fetchComments(bid = PUBLIC_BOARD_TARGET, page = nextPage, size = BOARD_PAGE_SIZE)) {
+            when (val result = CustomUserApi.fetchComments(bid = PUBLIC_BOARD_TARGET, before = cursor, size = BOARD_PAGE_SIZE)) {
                 is ApiResult.Success -> {
-                    // 发帖本地插入与他人中途发帖会造成 offset 漂移，去重防 LazyColumn key 冲突
+                    // 去重也覆盖请求重试。
                     comments = (comments + result.value.comments).distinctBy { it.id }
-                    currentPage = nextPage
+                    nextCursor = result.value.nextCursor
+                    commentsTotal = result.value.total
                 }
                 is ApiResult.Error -> commentsError = result.message
             }
@@ -155,22 +163,33 @@ internal fun MessageBoardScreen(
 
     fun sendComment() {
         val content = commentInput.trim()
-        if (content.isEmpty()) return
+        if (content.isEmpty() || isPosting || isLoadingComments) return
         val cookies = WikiAuthHelper.getWikiCookies()
+        val authorName = nickname.trim().ifBlank { null }
+        val payload = listOf(content, authorName, cookies)
+        if (pendingPayload != payload || pendingRequestId == null) {
+            pendingPayload = payload
+            pendingRequestId = UUID.randomUUID().toString()
+        }
+        val requestId = pendingRequestId!!
+        isPosting = true
         scope.launch {
-            isPosting = true
             actionError = null
             when (val result = CustomUserApi.postComment(
                 targetBid = PUBLIC_BOARD_TARGET,
                 content = content,
                 wikiCookie = cookies,
-                authorName = nickname.trim().ifBlank { null }
+                authorName = authorName,
+                requestId = requestId,
+                guestId = guestId
             )) {
                 is ApiResult.Success -> {
                     commentInput = ""
+                    pendingPayload = null
+                    pendingRequestId = null
                     // 本地插到列表头部，免整页刷新、滚动位置不跳
-                    comments = listOf(result.value) + comments
-                    commentsTotal += 1
+                    if (comments.none { it.id == result.value.id }) commentsTotal += 1
+                    comments = (listOf(result.value) + comments).distinctBy { it.id }
                 }
                 is ApiResult.Error -> actionError = result.message
             }
@@ -322,7 +341,7 @@ internal fun MessageBoardScreen(
                         }
                     )
                 }
-                if (currentPage < totalPages) {
+                if (nextCursor != null) {
                     item {
                         TextButton(
                             onClick = { loadMore() },
@@ -369,7 +388,7 @@ internal fun MessageBoardScreen(
                 )
                 FilledTonalButton(
                     onClick = { sendComment() },
-                    enabled = !isPosting && commentInput.isNotBlank(),
+                    enabled = !isPosting && !isLoadingComments && identityLoaded && commentInput.isNotBlank(),
                     modifier = Modifier.height(52.dp)
                 ) {
                     if (isPosting) {
@@ -534,14 +553,7 @@ private fun MessageBoardCommentItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = comment.authorName?.takeIf { it.isNotBlank() } ?: comment.authorBid
-                        .let { name ->
-                            // 匿名留言追加稳定访客编号，如「访客#042」
-                            val tag = comment.authorTag
-                                ?.takeIf { comment.authorBid == "anon" && it.isNotBlank() }
-                                ?.let { "#$it" } ?: ""
-                            "$name$tag"
-                        },
+                        text = comment.displayAuthor(),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
