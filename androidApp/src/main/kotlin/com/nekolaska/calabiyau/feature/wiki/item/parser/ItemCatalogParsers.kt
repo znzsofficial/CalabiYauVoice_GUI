@@ -9,8 +9,9 @@ object ItemCatalogParsers {
 
     fun parseItems(html: String): List<ItemInfo> {
         val document = Jsoup.parse(html)
-        // 现网结构：div.klbq-item-card[data-param1=分类, data-param2=品质] 卡片网格
-        val cards = document.select("div.gallerygrid-item.klbq-item-card, div.klbq-item-card[data-param1]")
+        // 现网结构：div.klbq-item-card[data-param1=分类, data-param2=品质] 卡片网格。
+        // 单选择器避免逗号组合在 Jsoup 中重复收集；页面偶发的完全重复卡按整行去重。
+        val cards = document.select("div.klbq-item-card[data-param1]")
         if (cards.isNotEmpty()) {
             return cards.mapNotNull { card ->
                 val name = card.selectFirst("[class*=name]")?.text()?.trim().orEmpty()
@@ -26,7 +27,7 @@ object ItemCatalogParsers {
                         card.selectFirst("[class*=imagebox] img[src]")?.attr("src")?.takeIf { it.isNotBlank() }
                     )
                 )
-            }
+            }.distinctBy { it }
         }
         // 旧结构：table#CardSelectTr 的 divsort 表格行
         return document.select("table#CardSelectTr tr.divsort").mapNotNull { row ->

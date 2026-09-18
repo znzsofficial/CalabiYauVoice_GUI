@@ -285,12 +285,27 @@ private fun WeaponCard(
 @Composable
 private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
     val hasWallpaper = LocalHasWallpaper.current
+    Column(modifier = modifier.fillMaxSize()) {
+        // 顶部分类 Tab 占位，避免加载完成后布局跳动
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            repeat(4) {
+                ShimmerBox(
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    shape = smoothCapsuleShape()
+                )
+            }
+        }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 140.dp),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.weight(1f).fillMaxWidth(),
         userScrollEnabled = false
     ) {
         items(6) {
@@ -332,6 +347,7 @@ private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
         }
     }
 }

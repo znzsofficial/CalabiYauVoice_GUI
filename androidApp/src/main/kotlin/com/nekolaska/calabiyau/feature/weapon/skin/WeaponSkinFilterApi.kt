@@ -187,7 +187,11 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
     internal fun parseWeaponSkinHtml(html: String, weaponMeta: Map<String, WeaponMeta> = emptyMap()): List<WeaponSkinInfo> {
         // Current markup: the Lua module renders div.klbq-skin-card[data-param*] cards.
         val cards = Jsoup.parse(html).select("div.gallerygrid-item[data-param1], div.klbq-skin-card[data-param1]")
-        if (cards.isNotEmpty()) return cards.map { parseSkinCard(it, weaponMeta) }
+        if (cards.isNotEmpty()) {
+            val parsed = cards.map { parseSkinCard(it, weaponMeta) }
+            // 页面偶发完全重复卡按整行去重，避免列表 key 冲突
+            return parsed.distinctBy { it }
+        }
 
         // Legacy fallback: wikitext table rows |- class="divsort" data-param1=...
         val blockRegex = Regex(

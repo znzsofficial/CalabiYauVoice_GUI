@@ -401,14 +401,29 @@ private fun CharacterCard(
 @Composable
 private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
     val hasWallpaper = LocalHasWallpaper.current
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 100.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = modifier.fillMaxSize(),
-        userScrollEnabled = false
-    ) {
+    Column(modifier = modifier.fillMaxSize()) {
+        // 顶部阵营 Tab 占位，避免加载完成后布局跳动
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            repeat(4) {
+                ShimmerBox(
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    shape = smoothCornerShape(16.dp)
+                )
+            }
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 100.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            userScrollEnabled = false
+        ) {
         items(9) {
             Card(
                 shape = smoothCornerShape(12.dp),
@@ -433,6 +448,7 @@ private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
                     Spacer(Modifier.height(8.dp))
                 }
             }
+        }
         }
     }
 }

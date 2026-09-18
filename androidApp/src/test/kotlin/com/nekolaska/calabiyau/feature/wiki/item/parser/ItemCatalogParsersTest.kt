@@ -45,6 +45,21 @@ class ItemCatalogParsersTest {
     }
 
     @Test
+    fun duplicateCardsAreDeduplicated() {
+        val card = """
+            <div class="gallerygrid-item klbq-item-card" data-param1="礼盒礼包" data-param2="4">
+              <div class="klbq-item-card__imagebox"><img src="https://patchwiki.biligame.com/images/klbq/e/ed/card.png"/></div>
+              <div class="klbq-item-card__name">武器外观自选体验卡</div>
+              <div class="klbq-item-card__desc">自选一款武器外观。</div>
+            </div>
+        """.trimIndent()
+        val items = ItemCatalogParsers.parseItems("<div class=\"gallerygrid\">$card$card</div>")
+
+        // 页面重复卡不得产生重复行（曾导致 LazyColumn key 冲突崩溃）
+        assertEquals(1, items.size)
+    }
+
+    @Test
     fun newCardStructureTakesPrecedenceOverLegacyTable() {
         val items = ItemCatalogParsers.parseItems(
             """

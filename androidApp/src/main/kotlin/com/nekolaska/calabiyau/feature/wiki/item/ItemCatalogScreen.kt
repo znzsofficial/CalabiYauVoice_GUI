@@ -164,7 +164,8 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
                 } else {
                     itemsIndexed(
                         filteredItems,
-                        key = { _, item -> "${item.category}|${item.name}|${item.iconUrl.orEmpty()}" }
+                        // data class hashCode 覆盖全字段：同名同图但描述/品质不同的行也不会撞 key
+                        key = { _, item -> item.hashCode().toString() }
                     ) { _, item ->
                         ItemCard(item = item, onClick = { selectedItem = item })
                     }

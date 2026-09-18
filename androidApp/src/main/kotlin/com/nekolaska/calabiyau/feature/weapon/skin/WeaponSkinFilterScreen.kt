@@ -179,7 +179,7 @@ fun WeaponSkinFilterScreen(
                         }
                     }
                 } else {
-                    items(filteredSkins, key = { "${it.weapon}|${it.name}|${it.thumbnailUrl.orEmpty()}" }) { skin ->
+                    items(filteredSkins, key = { it.hashCode().toString() }) { skin ->
                         WeaponSkinCard(
                             skin = skin,
                             onClick = { selectedSkin = skin }
