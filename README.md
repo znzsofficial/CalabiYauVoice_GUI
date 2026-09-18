@@ -65,6 +65,9 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **⭐ Favorites** — Bookmark characters for quick access.
 - **💾 Offline Cache** — Disk cache for Wiki resources with offline-first mode, cache pruning, and manual cache clearing.
 - **🎨 Material You** — Dynamic color with wallpaper-based seed color, light/dark/system theme, and liquid glass effects.
+- **💬 Message Board** — Two-level discussions with reply notifications, pinned threads, admin moderation, per-account draft isolation, and rename-stable identity.
+- **🔎 Character Detail** — Skills, augmentation network, signature weapon renders, and relations parsed live from the Wiki.
+- **⬇️ In-App Updates** — Release-site update checker with changelog and one-tap APK download.
 
 ---
 
@@ -106,11 +109,12 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 |-------------|-------------------------------------------------|
 | Framework   | Svelte 5 + TypeScript                           |
 | Bundler     | Vite 8                                          |
+ | Package mgr | pnpm workspace                                  |
 | Hosting     | Cloudflare Pages                                |
 | Edge API    | Cloudflare Worker (`src/api/_worker.js`)        |
 | Storage     | Cloudflare D1 (user profiles) + R2 (avatars, APKs) |
-| Media tools | `gifenc`, `gifuct-js`, `jszip`                  |
-| Pages       | Home / Wiki Search / Video tools / Admin console |
+ | Libraries   | `jszip` (batch export)                          |
+ | Pages       | Home / Download / Wiki Search / Wiki Navigation / Admin console |
 
 ---
 
