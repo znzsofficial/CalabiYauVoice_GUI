@@ -46,13 +46,23 @@ data class CustomUserUpdateResponse(
 data class ProfileComment(
     val id: Long,
     val authorBid: String,
+    val authorWikiUserId: Long? = null,
     val authorName: String? = null,
     val authorTag: String? = null,
     val authorAvatarUrl: String? = null,
     val content: String,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val rootId: Long? = null,
+    val replyToId: Long? = null,
+    val replyToName: String? = null,
+    val replyToTag: String? = null,
+    val replyCount: Int = 0,
+    val deleted: Boolean = false,
+    val pinnedAt: Long? = null,
+    val targetBid: String? = null
 ) {
     fun displayAuthor(): String {
+        if (deleted) return "已删除留言"
         val name = authorName?.takeIf { it.isNotBlank() } ?: if (authorBid == "anon") "访客" else authorBid
         return if (authorBid == "anon" && !authorTag.isNullOrBlank()) "$name#$authorTag" else name
     }
@@ -66,14 +76,28 @@ data class ProfileCommentsResponse(
     val comments: List<ProfileComment> = emptyList(),
     val hasMore: Boolean = false,
     val nextCursor: String? = null,
-    val error: String? = null
+    val root: ProfileComment? = null,
+    val pinnedComments: List<ProfileComment> = emptyList(),
+    val error: String? = null,
+    val errorCode: String? = null
 )
 
 @Serializable
 data class ProfileCommentPostResponse(
     val success: Boolean = false,
     val comment: ProfileComment? = null,
-    val error: String? = null
+    val error: String? = null,
+    val errorCode: String? = null
+)
+
+@Serializable
+data class UserSession(val bid: String, val wikiUserId: Long)
+
+@Serializable
+data class UserSessionResponse(
+    val user: UserSession? = null,
+    val error: String? = null,
+    val errorCode: String? = null
 )
 
 @Serializable

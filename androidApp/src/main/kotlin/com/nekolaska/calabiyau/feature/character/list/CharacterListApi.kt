@@ -5,6 +5,7 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
+import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi.FACTIONS
 import data.ApiResult
 import data.ErrorKind
@@ -15,11 +16,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import util.buildParseUrl
 import util.buildWikiUrl
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 角色列表 API（Android）。
@@ -153,7 +157,9 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             if (characters.isEmpty()) {
                 return ApiResult.Error("未找到 $faction 角色数据", kind = ErrorKind.NOT_FOUND)
             }
-            val withPortraits = if (result.isFromCache) characters else fetchPortraits(characters)
+            // 立绘始终补抓：批量 imageinfo 请求成本低，缓存路径也执行，
+            // 避免首次抓取被限流后缓存里的立绘永远缺失。
+            val withPortraits = fetchPortraits(characters)
             ApiResult.Success(
                 FactionData(faction, withPortraits),
                 isOffline = result.isFromCache,
@@ -234,39 +240,73 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
 
     /**
      * 批量获取角色立绘 URL。
-     * 并发请求每个角色的 Wiki 页面，从渲染 HTML 中解析第一个立绘图片。
+     *
+     * 首选：立绘文件名遵循 "角色名-初始立绘.png" 规律，用批量 imageinfo 一次查 50 个，
+     * 把请求数从「每角色一次页面渲染」降到「每 50 角色一次」，避免触发 EdgeOne 频率拦截
+     * （此前并发逐角色抓页面经常收到 567 拦截页，解析失败被静默吞掉导致 fallback）。
+     *
+     * 兜底：规律查不到的角色（命名不同/无初始立绘）退回逐角色页面解析，限并发 3。
      */
     private suspend fun fetchPortraits(
         characters: List<CharacterInfo>
     ): List<CharacterInfo> = withContext(Dispatchers.IO) {
         if (characters.isEmpty()) return@withContext characters
+        val byBatchUrl = fetchPortraitsViaImageInfo(characters)
+        val missing = characters.filter { it.portraitUrl == null && it.name !in byBatchUrl }
+        // 批量查询已覆盖标准命名；剩余数量过多说明批量失败或整批命名特殊，
+        // 此时逐页兜底既慢又容易再次触发限流，直接保留卡片缩略图展示。
+        val byPage = if (missing.isEmpty() || missing.size > 8) emptyMap() else fetchPortraitsViaPages(missing)
+        characters.map { char ->
+            char.copy(portraitUrl = byBatchUrl[char.name] ?: byPage[char.name] ?: char.portraitUrl)
+        }
+    }
+
+    /** 「角色名-初始立绘.png」规律 + 批量 imageinfo，一次请求查一批。 */
+    private suspend fun fetchPortraitsViaImageInfo(
+        characters: List<CharacterInfo>
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        val fileNames = characters.map { "${it.name}-初始立绘.png" }
+        fetchBatchImageUrls(fileNames, API) { url -> WikiEngine.safeGet(url) }
+            .mapKeys { (fileName, _) -> fileName.removeSuffix("-初始立绘.png") }
+    }
+
+    /** 逐角色页面解析兜底；限并发 3，失败时保留原数据而不是静默丢立绘。 */
+    private suspend fun fetchPortraitsViaPages(
+        characters: List<CharacterInfo>
+    ): Map<String, String> = withContext(Dispatchers.IO) {
         val portraitPattern = Regex(
             """^.+-[^|\]\n{}]+立绘\.(?:png|jpg|jpeg|webp)$""",
             RegexOption.IGNORE_CASE
         )
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+        val result = ConcurrentHashMap<String, String>()
         characters.map { char ->
             async {
-                try {
-                    val url = buildParseUrl(API, char.name, "text")
-                    val body = WikiEngine.safeGet(url) ?: return@async char
-                    val json = SharedJson.parseToJsonElement(body).jsonObject
-                    val html = json["parse"]
-                        ?.jsonObject?.get("text")
-                        ?.jsonObject?.get("*")
-                        ?.jsonPrimitive?.content
-                        ?: return@async char
-                    val portraitSrc = Jsoup.parse(html).select("img[src][alt]")
-                        .firstOrNull { img -> portraitPattern.matches(img.attr("alt").trim()) }
-                        ?.attr("src")
-                    val portraitUrl = WikiImageUrls.originalFromThumbnail(portraitSrc)
-                    if (portraitUrl.isNullOrBlank()) char else char.copy(portraitUrl = portraitUrl)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    char
+                semaphore.withPermit {
+                    try {
+                        val url = buildParseUrl(API, char.name, "text")
+                        val body = WikiEngine.safeGet(url) ?: return@withPermit
+                        val json = SharedJson.parseToJsonElement(body).jsonObject
+                        val html = json["parse"]
+                            ?.jsonObject?.get("text")
+                            ?.jsonObject?.get("*")
+                            ?.jsonPrimitive?.content
+                            ?: return@withPermit
+                        val portraitSrc = Jsoup.parse(html).select("img[src][alt]")
+                            .firstOrNull { img -> portraitPattern.matches(img.attr("alt").trim()) }
+                            ?.attr("src")
+                        WikiImageUrls.originalFromThumbnail(portraitSrc)
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { result[char.name] = it }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // 立绘抓取失败只影响 portraitUrl，列表数据保留
+                    }
                 }
             }
         }.awaitAll()
+        result.toMap()
     }
 
 }

@@ -3,9 +3,12 @@ import { requireAdmin } from "./auth.js";
 import { PROFILE_COLUMNS, saveProfile } from "./profiles.js";
 import { deleteComment } from "./comments.js";
 import { avatarPath, retireAvatar, cleanupAvatars } from "./avatars.js";
+import { moderate, auditList, auditStatement } from "./moderation.js";
 
 export async function admin(request, env, url, ctx) {
   await requireAdmin(request, env);
+  if (request.method === "PUT" && url.pathname === "/api/admin/comment") return moderate(request, env);
+  if (request.method === "GET" && url.pathname === "/api/admin/audit") return auditList(env, url);
   if (request.method === "PUT" && url.pathname === "/api/admin/profile") return saveProfile(request, env, url, true, ctx);
   if (request.method === "DELETE" && url.pathname === "/api/admin/comment") return deleteComment(request, env, url, true);
   if (request.method === "POST" && url.pathname === "/api/admin/maintenance") {
@@ -13,6 +16,7 @@ export async function admin(request, env, url, ctx) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM write_throttle WHERE key IN (SELECT key FROM write_throttle WHERE last_at < unixepoch()-86400 LIMIT 1000)"),
       env.DB.prepare("DELETE FROM write_requests WHERE rowid IN (SELECT rowid FROM write_requests WHERE created_at < unixepoch()-604800 LIMIT 1000)"),
+      env.DB.prepare("DELETE FROM reply_notifications WHERE rowid IN (SELECT rowid FROM reply_notifications WHERE read_at < unixepoch()-7776000 LIMIT 1000)"),
     ]);
     return json({ success: true });
   }
@@ -21,6 +25,7 @@ export async function admin(request, env, url, ctx) {
     const results = await env.DB.batch([
       env.DB.prepare("SELECT avatar_url FROM user_profiles WHERE bid=?").bind(bid),
       env.DB.prepare("DELETE FROM user_profiles WHERE bid=?").bind(bid),
+      auditStatement(env.DB, "delete_profile", bid),
       env.DB.prepare("DELETE FROM profile_comments WHERE target_bid=?").bind(bid),
       env.DB.prepare("DELETE FROM profile_likes WHERE target_bid=?").bind(bid),
     ]);
@@ -46,7 +51,9 @@ export async function admin(request, env, url, ctx) {
     }
     const from = profiles ? "FROM user_profiles" : "FROM profile_comments c LEFT JOIN user_profiles p ON p.bid=c.author_bid AND c.author_bid<>'anon'";
     const columns = profiles ? PROFILE_COLUMNS : `c.id,c.target_bid AS targetBid,c.author_bid AS authorBid,
-      COALESCE(NULLIF(p.custom_name,''),c.author_name,c.author_bid) AS authorName,c.author_tag AS authorTag,c.content,c.created_at AS createdAt`;
+      COALESCE(NULLIF(p.custom_name,''),c.author_name,c.author_bid) AS authorName,c.author_tag AS authorTag,
+      CASE WHEN c.deleted_at IS NULL THEN c.content ELSE '该留言已删除' END AS content,
+      c.root_id AS rootId,c.reply_to_id AS replyToId,c.deleted_at AS deletedAt,c.hidden_at AS hiddenAt,c.pinned_at AS pinnedAt,c.created_at AS createdAt`;
     const [count, rows] = await env.DB.batch([
       env.DB.prepare(`SELECT COUNT(*) AS count ${from} ${where}`).bind(...bindings),
       env.DB.prepare(`SELECT ${columns} ${from} ${where} ORDER BY ${profiles ? "updated_at DESC,bid" : "c.created_at DESC,c.id DESC"} LIMIT ? OFFSET ?`).bind(...bindings, size, (page - 1) * size),

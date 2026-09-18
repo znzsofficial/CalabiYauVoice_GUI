@@ -167,6 +167,9 @@ object AppPrefs {
     var wallpaperSeedColorUrl by stringPref()
     var anonymousNickname by stringPref()
     var anonymousGuestId by stringPref()
+    var messageBoardDraftsJson by stringPref()
+    /** Write-ahead barrier for a pending network mutation. Call on an IO dispatcher. */
+    fun flushMessageBoardDrafts(): Boolean = prefs.edit().putString("messageBoardDraftsJson", messageBoardDraftsJson).commit()
     var lastUpdateCheck by longPref(0L)
 
     var homeQuickEntryIds: List<String>

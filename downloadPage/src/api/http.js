@@ -5,7 +5,9 @@ export const CORS = {
   "Access-Control-Expose-Headers": "Retry-After, Content-Range, Accept-Ranges, ETag",
 };
 export class HttpError extends Error {
-  constructor(status, message, headers = {}) { super(message); this.status = status; this.headers = headers; }
+  constructor(status, message, headers = {}, code = null) {
+    super(message); this.status = status; this.headers = headers; this.code = code;
+  }
 }
 export function json(value, status = 200, headers = {}) {
   return Response.json(value, { status, headers: { ...CORS, "Cache-Control": "no-store", ...headers } });

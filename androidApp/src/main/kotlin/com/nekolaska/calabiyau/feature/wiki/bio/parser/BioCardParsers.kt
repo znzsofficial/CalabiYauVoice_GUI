@@ -1,12 +1,12 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.parser
 
-import android.text.Html
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardRefreshProbability
 import com.nekolaska.calabiyau.feature.wiki.bio.model.MobileCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SharedDeck
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -24,7 +24,7 @@ object BioCardParsers {
                 .orEmpty()
                 .ifBlank { "未知卡牌" }
 
-            val roles = cleanHtml(item.selectFirst(".zombie-card__roles")?.html().orEmpty())
+            val roles = HtmlText.clean(item.selectFirst(".zombie-card__roles")?.html().orEmpty())
                 .split(Regex("[、,/\\n]+"))
                 .map { it.trim() }
                 .filter { it.isNotBlank() && it != "无" }
@@ -37,8 +37,8 @@ object BioCardParsers {
                 defaultTag = item.attr("data-param4"),
                 acquireType = item.attr("data-param5"),
                 releaseDate = item.attr("data-param6"),
-                maxLevel = cleanHtml(item.selectFirst(".zombie-card__stat .zombie-card__value")?.html().orEmpty()),
-                effect = cleanHtml(item.selectFirst(".zombie-card__desc .zombie-card__value")?.html().orEmpty()),
+                maxLevel = HtmlText.clean(item.selectFirst(".zombie-card__stat .zombie-card__value")?.html().orEmpty()),
+                effect = HtmlText.clean(item.selectFirst(".zombie-card__desc .zombie-card__value")?.html().orEmpty()),
                 roles = roles,
                 imageUrl = item.selectFirst(".zombie-card__imagebox img")?.let { img ->
                     img.attr("data-src").ifBlank { img.attr("src") }
@@ -63,7 +63,7 @@ object BioCardParsers {
         }
 
         val items = table.select("tr").drop(1).mapNotNull { row ->
-            val cells = row.select("> th, > td").map { cleanHtml(it.html()) }
+            val cells = row.select("> th, > td").map { HtmlText.clean(it.html()) }
             if (cells.size < 5) return@mapNotNull null
             val name = cells[0]
             if (name.isBlank()) return@mapNotNull null
@@ -86,8 +86,8 @@ object BioCardParsers {
                 faction = item.attr("data-param1"),
                 category = item.attr("data-param2"),
                 rarity = item.attr("data-param3").toIntOrNull() ?: 0,
-                maxLevel = cleanHtml(item.selectFirst(".zombie-card-mobile__stat .zombie-card-mobile__value")?.html().orEmpty()),
-                effect = cleanHtml(item.selectFirst(".zombie-card-mobile__desc .zombie-card-mobile__value")?.html().orEmpty()),
+                maxLevel = HtmlText.clean(item.selectFirst(".zombie-card-mobile__stat .zombie-card-mobile__value")?.html().orEmpty()),
+                effect = HtmlText.clean(item.selectFirst(".zombie-card-mobile__desc .zombie-card-mobile__value")?.html().orEmpty()),
                 imageUrl = item.selectFirst(".zombie-card-mobile__imagebox img")?.let { img ->
                     img.attr("data-src").ifBlank { img.attr("src") }
                 }.let { WikiImageUrls.originalFromThumbnail(it) }
@@ -163,22 +163,6 @@ object BioCardParsers {
         )
     }
 
-    private fun cleanHtml(raw: String): String {
-        val normalized = raw
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace("&nbsp;", " ")
-        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .replace("￼", "")
-            .replace("\uFFFC", "")
-            .replace('\u00A0', ' ')
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
-            .trim()
-    }
-
     private fun extractShareId(raw: String): String {
         val cleaned = raw
             .substringAfterLast('｜', raw)
@@ -204,15 +188,18 @@ object BioCardParsers {
     ): String {
         if (html.isBlank() || cardIndexMap.isEmpty()) return ""
 
-        val cardIdsParam = Regex("""var\s+cardIdsParam\s*=\s*\"([^\"]*)\"""")
-            .find(html)
+        // The share component is inline <script> content; use Jsoup's data() instead of
+        // regexing the full HTML so nested quotes/markup can't break the match.
+        val scriptData = Jsoup.parse(html).select("script").joinToString("\n") { it.data() }
+        val cardIdsParam = Regex("""var\s+cardIdsParam\s*=\s*"([^"]*)"""")
+            .find(scriptData)
             ?.groupValues
             ?.getOrNull(1)
             .orEmpty()
         if (cardIdsParam.isBlank()) return ""
 
-        val factionFromScript = Regex("""var\s+factionParam\s*=\s*\"([^\"]*)\"""")
-            .find(html)
+        val factionFromScript = Regex("""var\s+factionParam\s*=\s*"([^"]*)"""")
+            .find(scriptData)
             ?.groupValues
             ?.getOrNull(1)
             .orEmpty()

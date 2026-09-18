@@ -3,128 +3,103 @@ package com.nekolaska.calabiyau.feature.wiki.voting.parser
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollCandidate
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollData
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
 
 object VotingParsers {
 
     fun parsePollConfigFromHtml(html: String): PollConfig? {
-        if (!html.contains("kqp-poll-container")) return null
+        val document = Jsoup.parse(html)
+        if (document.selectFirst(".kqp-poll-container") == null) return null
 
-        val pollInfoRegex = Regex("""<div\s+class="poll-info"[^>]*>(.*?)</div>""", RegexOption.DOT_MATCHES_ALL)
-        val pollInfoMatch = pollInfoRegex.find(html) ?: return null
-        val infoText = pollInfoMatch.groupValues[1]
-            .replace("&amp;", "&")
-            .replace("&#039;", "'")
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<[^>]+>"), "")
-
+        // Lines like 名称：… / 限制票数：… / 结束时间：… separated by <br>.
         val configMap = mutableMapOf<String, String>()
-        infoText.split("\n").forEach { line ->
-            val separator = if ("：" in line) "：" else if (":" in line) ":" else null
-            if (separator != null) {
-                val parts = line.split(separator, limit = 2)
-                if (parts.size == 2) {
-                    configMap[parts[0].trim()] = parts[1].trim()
+        document.selectFirst(".poll-info")?.let { info ->
+            textLines(info).forEach { line ->
+                val separator = when {
+                    "：" in line -> "："
+                    ":" in line -> ":"
+                    else -> null
+                }
+                if (separator != null) {
+                    val parts = line.split(separator, limit = 2)
+                    if (parts.size == 2) configMap[parts[0].trim()] = parts[1].trim()
                 }
             }
         }
 
-        val pollName = configMap["名称"] ?: "未命名投票"
-        val limit = configMap["限制票数"]?.toIntOrNull() ?: 1
-        val endTime = configMap["结束时间"] ?: ""
-
-        val candidates = mutableListOf<PollCandidate>()
-        val cardRegex = Regex(
-            """<input\s+type="checkbox"\s+value="([^"]+)"[^/]*/>\s*<div\s+class="card-content">.*?<img\s+[^>]*src="([^"]+)"[^>]*>""",
-            RegexOption.DOT_MATCHES_ALL
-        )
-        cardRegex.findAll(html).forEach { match ->
-            val name = decodeHtmlEntities(match.groupValues[1])
-            val imageUrl = match.groupValues[2]
-            candidates.add(PollCandidate(name, imageUrl))
+        val candidates = document.select("input[type=checkbox][value]").mapNotNull { checkbox ->
+            val name = checkbox.attr("value").trim().ifBlank { return@mapNotNull null }
+            val card = checkbox.closest(".card-content")
+                ?: checkbox.nextElementSibling()?.takeIf { it.hasClass("card-content") }
+            val imageUrl = card?.selectFirst("img[src]")?.absUrl("src").takeUnless { it.isNullOrBlank() }
+                ?: card?.selectFirst("img[src]")?.attr("src").orEmpty()
+            PollCandidate(name, imageUrl)
         }
-
         if (candidates.isEmpty()) return null
 
         return PollConfig(
-            name = pollName,
-            voteLimit = limit,
-            endTime = endTime,
+            name = configMap["名称"] ?: "未命名投票",
+            voteLimit = configMap["限制票数"]?.toIntOrNull() ?: 1,
+            endTime = configMap["结束时间"] ?: "",
             candidates = candidates
         )
     }
 
     fun parseAjaxPollElements(html: String): List<PollData> {
-        val results = mutableListOf<PollData>()
+        val containers = Jsoup.parse(html).select("[class*=ajaxpoll-container]")
+        if (containers.isEmpty()) return emptyList()
 
-        val containerStarts = mutableListOf<Int>()
-        val containerPrefix = "ajaxpoll-container-"
-        var searchFrom = 0
-        while (true) {
-            val idx = html.indexOf(containerPrefix, searchFrom)
-            if (idx == -1) break
-            val divStart = html.lastIndexOf("<div", idx)
-            if (divStart != -1) containerStarts.add(divStart)
-            searchFrom = idx + containerPrefix.length
-        }
+        return containers.mapNotNull { container ->
+            val pollId = Regex("""poll-id\s+([A-Fa-f0-9]+)""")
+                .find(container.html())
+                ?.groupValues?.get(1)
+                ?: return@mapNotNull null
 
-        if (containerStarts.isEmpty()) return results
-
-        for (i in containerStarts.indices) {
-            val start = containerStarts[i]
-            val end = if (i < containerStarts.size - 1) containerStarts[i + 1] else html.length
-            val block = html.substring(start, end)
-
-            val pollIdMatch = Regex("""poll-id\s+([A-Fa-f0-9]+)""").find(block)
-                ?: continue
-            val pollId = pollIdMatch.groupValues[1]
-
-            var votes = 0
+            val answerBlock = container.selectFirst("div[answer=1]")
             var userVoted = false
+            var votes = 0
 
-            val answerBlockMatch = Regex(
-                """<div[^>]*answer="1"[^>]*>(.*?)(?=<div[^>]*class="ajaxpoll-info")""",
-                RegexOption.DOT_MATCHES_ALL
-            ).find(block)
-
-            if (answerBlockMatch != null) {
-                val answerContent = answerBlockMatch.groupValues[1]
-
-                userVoted = answerContent.contains("ajaxpoll-our-vote")
-                if (!userVoted) {
-                    userVoted = Regex("""checked=""")
-                        .containsMatchIn(answerContent)
-                }
-
-                val voteSpanMatch = Regex(
-                    """ajaxpoll-answer-vote[^>]*>\s*<span[^>]*>(\d+)</span>""",
-                    RegexOption.DOT_MATCHES_ALL
-                ).find(answerContent)
-                if (voteSpanMatch != null) {
-                    votes = voteSpanMatch.groupValues[1].toIntOrNull() ?: 0
-                }
+            if (answerBlock != null) {
+                userVoted = answerBlock.selectFirst(".ajaxpoll-our-vote") != null ||
+                    answerBlock.select("input[checked]").isNotEmpty()
+                votes = Regex("""ajaxpoll-answer-vote[^>]*>\s*<span[^>]*>(\d+)</span>""")
+                    .find(answerBlock.html())
+                    ?.groupValues?.get(1)?.toIntOrNull() ?: 0
             }
 
             if (votes == 0) {
-                val infoMatch = Regex("""共有(\d+)\s*人投票""").find(block)
-                if (infoMatch != null) {
-                    votes = infoMatch.groupValues[1].toIntOrNull() ?: 0
-                }
+                votes = Regex("""共有(\d+)\s*人投票""")
+                    .find(container.text())
+                    ?.groupValues?.get(1)?.toIntOrNull() ?: 0
             }
 
-            results.add(PollData(pollId = pollId, votes = votes, userVoted = userVoted))
+            PollData(pollId = pollId, votes = votes, userVoted = userVoted)
         }
-
-        return results
     }
 
-    private fun decodeHtmlEntities(text: String): String {
-        return text
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#039;", "'")
-            .replace("&middot;", "·")
-            .replace("\\u00b7", "·")
+    private fun textLines(element: Element): List<String> =
+        element.textWithLineBreaks()
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+    private fun Element.textWithLineBreaks(): String {
+        val builder = StringBuilder()
+        fun appendNode(node: org.jsoup.nodes.Node) {
+            when (node) {
+                is org.jsoup.nodes.TextNode -> builder.append(node.wholeText)
+                is Element -> {
+                    if (node.tagName().equals("br", ignoreCase = true)) {
+                        builder.append('\n')
+                    } else {
+                        node.childNodes().forEach(::appendNode)
+                        if (node.tagName().equals("p", ignoreCase = true)) builder.append('\n')
+                    }
+                }
+            }
+        }
+        appendNode(this)
+        return builder.toString()
     }
 }

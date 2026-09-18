@@ -1,9 +1,9 @@
 package com.nekolaska.calabiyau.feature.wiki.activity.parser
 
-import android.text.Html
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.feature.wiki.activity.model.ACTIVITY_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.activity.model.ActivityEntry
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import java.net.URLDecoder
 
@@ -26,14 +26,14 @@ object ActivityParsers {
             if (cells.size < 4) return@mapNotNull null
 
             val titleCell = cells[0]
-            val titleCellText = cleanHtml(titleCell.html())
+            val titleCellText = HtmlText.clean(titleCell.html())
             val title = titleCellText.lineSequence()
                 .map { it.trim() }
                 .firstOrNull { it.isNotBlank() }
                 .orEmpty()
-            val startTime = cleanHtml(cells[1].html())
-            val endTime = cleanHtml(cells[2].html())
-            val description = cleanHtml(cells[3].html())
+            val startTime = HtmlText.clean(cells[1].html())
+            val endTime = HtmlText.clean(cells[2].html())
+            val description = HtmlText.clean(cells[3].html())
 
             val detailLink = titleCell.selectFirst("a[title], a[href]")
             val detailPageTitle = detailLink?.attr("title")?.takeIf { it.isNotBlank() }
@@ -94,19 +94,4 @@ object ActivityParsers {
         else -> "$PAGE_BASE${href.trimStart('/')}"
     }
 
-    fun cleanHtml(raw: String): String {
-        val normalized = raw
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace("&nbsp;", " ")
-        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .replace("￼", "")
-            .replace("\uFFFC", "")
-            .replace('\u00A0', ' ')
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
-            .trim()
-    }
 }

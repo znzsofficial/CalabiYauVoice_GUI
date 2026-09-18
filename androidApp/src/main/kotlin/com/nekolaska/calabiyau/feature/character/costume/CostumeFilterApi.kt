@@ -224,9 +224,12 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
         val fullImageUrl = originalImageUrl(previewImage)
         val screenshotUrl = originalImageUrl(hiddenLargeImage)
 
-        val name = Regex("""<br\s*/?>\s*([^\n<|]+)""")
-            .find(blockHtml)
-            ?.groupValues?.get(1)
+        // Legacy cell markup: "<br/>外观名|…". Name is the text right after <br>,
+        // cut at the wikitext cell separator; Jsoup decodes entities.
+        val name = document.body().selectFirst("br")?.nextSibling()
+            ?.let { sibling -> (sibling as? org.jsoup.nodes.TextNode)?.text() }
+            ?.trim()
+            ?.substringBefore("|")
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: "$character：未知"

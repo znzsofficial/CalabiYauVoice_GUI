@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.collaboration.parser
 
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationEvent
 import com.nekolaska.calabiyau.feature.wiki.collaboration.model.CollaborationPage
@@ -118,7 +119,11 @@ object CollaborationParsers {
 
     private fun extractUsefulLines(element: Element): List<String> {
         return when (element.tagName()) {
-            "p" -> element.html().split(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)).map { Jsoup.parse(it).text() }
+            // Node traversal keeps <br> line breaks without re-parsing HTML fragments.
+            "p" -> listOf(element.textWithLineBreaks())
+                .flatMap { it.lines() }
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
             "ul", "ol" -> element.select("li").map { it.cleanText() }
             "dl" -> element.select("dt,dd").map { it.cleanText() }
             "div" -> {
@@ -146,6 +151,9 @@ object CollaborationParsers {
         copy.select("style,script,.mw-editsection").remove()
         return copy.text().replace(Regex("\\s+"), " ").trim()
     }
+
+    private fun Element.textWithLineBreaks(): String =
+        HtmlText.textWithLineBreaks(this)
 
     private fun String.cleanLine(): String = replace(Regex("\\s+"), " ").trim()
 

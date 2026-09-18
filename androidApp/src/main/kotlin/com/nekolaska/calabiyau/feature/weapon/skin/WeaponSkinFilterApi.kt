@@ -9,6 +9,8 @@ import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
 import data.ioApiCall
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -84,21 +86,25 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
         }
 
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<WeaponSkinInfo>> =
-        ioApiCall("获取武器外观数据失败") {
-            val weaponMeta = fetchWeaponMetaMap(forceRefresh, cacheOnly = false)
+    ioApiCall("获取武器外观数据失败") {
+        // 武器元数据（大类/类型）和外观渲染互不依赖：meta 走 ask+imageinfo（慢），
+        // 皮肤数据只要 1 次模块渲染（快）。并行执行，关键路径取两者较大值。
+        coroutineScope {
+            val metaDeferred = async { fetchWeaponMetaMap(forceRefresh, cacheOnly = false) }
             val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:武器|武器外观筛选}}", "prop" to "text", "format" to "json")
             val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_SKINS,
                 key = "all_weapon_skins",
                 forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) }
-                ?: return@ioApiCall ApiResult.Error(
+                ?: return@coroutineScope ApiResult.Error(
                     "请求失败，且无离线缓存",
                     kind = ErrorKind.NETWORK
                 )
 
-            parseSkinResult(result.payload, weaponMeta, isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
+            parseSkinResult(result.payload, metaDeferred.await(), isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
         }
+    }
 
     data class WeaponMeta(
         val category: String,
@@ -179,6 +185,11 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
      * ```
      */
     internal fun parseWeaponSkinHtml(html: String, weaponMeta: Map<String, WeaponMeta> = emptyMap()): List<WeaponSkinInfo> {
+        // Current markup: the Lua module renders div.klbq-skin-card[data-param*] cards.
+        val cards = Jsoup.parse(html).select("div.gallerygrid-item[data-param1], div.klbq-skin-card[data-param1]")
+        if (cards.isNotEmpty()) return cards.map { parseSkinCard(it, weaponMeta) }
+
+        // Legacy fallback: wikitext table rows |- class="divsort" data-param1=...
         val blockRegex = Regex(
             """\|-\s*class="divsort"\s+data-param1="([^"]*?)"\s+data-param2="([^"]*?)"\s+data-param3="([^"]*?)"\s+data-param4="([^"]*?)"\s+data-param5="([^"]*?)"([\s\S]*?)(?=\|-\s*class="divsort"|$)"""
         )
@@ -213,6 +224,52 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
         return items
     }
 
+    /** Parses one div.klbq-skin-card element from the current Lua module markup. */
+    private fun parseSkinCard(card: Element, weaponMeta: Map<String, WeaponMeta>): WeaponSkinInfo {
+        val weapon = card.attr("data-param1").trim()
+        val fullTextName = card.selectFirst("[class*=name]")?.text()?.trim().orEmpty()
+        // The card name is already "武器：外观名"; fall back to weapon-prefixed forms.
+        val name = when {
+            fullTextName.contains('：') || fullTextName.contains(':') -> fullTextName
+            fullTextName.isNotBlank() -> "$weapon：$fullTextName"
+            else -> "$weapon：未知"
+        }
+        val previewImage = card.selectFirst("[class*=imagebox] img[alt]")
+            ?: card.selectFirst("img[alt]")
+        val hiddenLargeImage = card.select("span[style*=display:none] img").firstOrNull()
+
+        return WeaponSkinInfo(
+            name = name,
+            weapon = weapon,
+            weaponCategory = weaponMeta[weapon]?.category ?: "其他",
+            weaponType = weaponMeta[weapon]?.type.orEmpty(),
+            quality = Quality.fromLevel(card.attr("data-param2")),
+            sources = card.attr("data-param3").split(",").map { it.trim() }.filter { it.isNotBlank() },
+            crystalCost = card.attr("data-param4").replace("无", "").trim(),
+            baseCost = card.attr("data-param5").replace("无", "").trim(),
+            description = card.selectFirst("[class*=desc] [class*=value]")?.text()?.trim().orEmpty(),
+            thumbnailUrl = previewImage?.attr("src")?.takeIf { it.isNotBlank() },
+            fullImageUrl = WikiImageUrls.originalFromThumbnail(
+                previewImage?.attr("srcset")
+                    ?.split(',')
+                    ?.lastOrNull()
+                    ?.substringBeforeLast(' ')
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: previewImage?.attr("src")?.takeIf { it.isNotBlank() }
+            ),
+            screenshotUrl = WikiImageUrls.originalFromThumbnail(
+                hiddenLargeImage?.attr("srcset")
+                    ?.split(',')
+                    ?.lastOrNull()
+                    ?.substringBeforeLast(' ')
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
+            )
+        )
+    }
+
     private fun parseWeaponSkinDetail(blockHtml: String, weapon: String): ParsedSkinVisualInfo {
         val document = Jsoup.parse(blockHtml)
         val previewImage = document.selectFirst("img[alt]")
@@ -239,19 +296,34 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
                 ?: hiddenLargeImage?.attr("src")?.takeIf { it.isNotBlank() }
         )
 
-        val name = Regex("""<br\s*/?>\s*(?:<a[^>]*>(.*?)</a>)?\s*[:：]?\s*([^<\n|]+)""", RegexOption.DOT_MATCHES_ALL)
-            .find(blockHtml)
-            ?.let { match ->
-                val weaponLabel = Jsoup.parse(match.groupValues[1]).text().replace(" ", "").trim()
-                val skinLabel = Jsoup.parse(match.groupValues[2]).text().trim()
+        // Legacy cell markup: "<br/><a>武器</a>外观名<br/>简介…". The <a> holds the weapon
+        // label and the following text node the skin name; later segments are description.
+        // Jsoup decodes entities, so no manual &amp;/&middot; handling is needed.
+        val anchorAfterBr = document.body().selectFirst("a")
+        val linkedWeapon = anchorAfterBr?.text()?.replace(" ", "")?.trim().orEmpty()
+        val nameLine = anchorAfterBr?.nextSibling()
+            ?.let { sibling -> (sibling as? org.jsoup.nodes.TextNode)?.text() }
+            ?.substringBefore('\n')
+            ?.substringBefore('|')
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: document.body().childNodes()
+                .filterIsInstance<org.jsoup.nodes.TextNode>()
+                .map { it.text().trim() }
+                .firstOrNull { it.isNotBlank() && !it.contains('|') }
+        val name = nameLine
+            ?.removePrefix("|")
+            ?.trim()
+            ?.let { line ->
+                val colon = line.indexOfFirst { it == '：' || it == ':' }
+                val weaponLabel = if (colon > 0) line.substring(0, colon).replace(" ", "").trim() else linkedWeapon
+                val skinLabel = if (colon >= 0) line.substring(colon + 1).trim() else line
                 when {
                     weaponLabel.isNotBlank() && skinLabel.isNotBlank() -> "$weaponLabel：$skinLabel"
                     skinLabel.isNotBlank() -> if (skinLabel.contains('：') || skinLabel.contains(':')) skinLabel else "$weapon：$skinLabel"
                     else -> ""
                 }
             }
-            ?.removePrefix("|")
-            ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?: "$weapon：未知"
         val description = parseDescription(blockHtml)

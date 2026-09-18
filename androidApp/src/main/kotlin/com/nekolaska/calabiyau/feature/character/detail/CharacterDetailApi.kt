@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.feature.character.detail
 
-import android.text.Html
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
@@ -19,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import java.net.URLDecoder
 import java.util.concurrent.ConcurrentHashMap
@@ -450,7 +450,7 @@ object CharacterDetailApi {
 
         val relations = block.select(".data p span")
             .flatMap { span ->
-                cleanHtml(span.html())
+                HtmlText.clean(span.html())
                     .lineSequence()
                     .map { it.trim() }
                     .filter { it.isNotBlank() }
@@ -468,7 +468,7 @@ object CharacterDetailApi {
         val infoMap = linkedMapOf<String, String>()
         block.select("dl > div").forEach { item ->
             val label = item.selectFirst("dt")?.text()?.removeSuffix("：")?.trim().orEmpty()
-            val value = item.selectFirst("dd")?.let { cleanHtml(it.html()) }.orEmpty()
+            val value = item.selectFirst("dd")?.let { HtmlText.clean(it.html()) }.orEmpty()
             if (label.isNotBlank() && value.isNotBlank()) {
                 infoMap[label] = value
             }
@@ -497,23 +497,6 @@ object CharacterDetailApi {
             lifeInfo = other.lifeInfo.ifEmpty { base.lifeInfo },
             relations = other.relations.ifEmpty { base.relations }
         )
-    }
-
-    private fun cleanHtml(raw: String): String {
-        if (raw.isBlank()) return ""
-        val normalized = raw
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace("&nbsp;", " ")
-        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .replace("￼", "")
-            .replace("\uFFFC", "")
-            .replace('\u00A0', ' ')
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
-            .trim()
     }
 
     private fun normalizeCharacterName(name: String): String {
@@ -808,7 +791,7 @@ object CharacterDetailApi {
             } ?: groupPattern.matchEntire(suffix)?.let { match ->
                 "${match.groupValues[1]}组${match.groupValues[2]}属性变化"
             } ?: return@forEach
-            val label = row.selectFirst(".upgrade-text")?.let { cleanHtml(it.html()) }.orEmpty()
+            val label = row.selectFirst(".upgrade-text")?.let { HtmlText.clean(it.html()) }.orEmpty()
             if (label.isNotBlank()) {
                 result["$mode|$key"] = label
             }
@@ -1137,11 +1120,11 @@ object CharacterDetailApi {
                 when {
                     element.tagName() == "div" && element.hasClass("alert") && element.hasClass("alert-warning") -> {
                         flushEntry()
-                        currentDate = cleanHtml(element.html())
+                        currentDate = HtmlText.clean(element.html())
                     }
 
                     element.tagName() == "li" && currentDate.isNotBlank() -> {
-                        cleanHtml(element.html())
+                        HtmlText.clean(element.html())
                             .takeIf { it.isNotBlank() }
                             ?.let { currentChanges += it }
                     }

@@ -30,6 +30,14 @@ Do not delete `2.1.6` from `releases`. Full checklist: `docs/release-version-che
 
 Before deploying the backend consistency update, apply migration `0005_backend_consistency.sql` and configure a dedicated random `GUEST_SECRET` (at least 32 characters) in Pages. Do not reuse `ADMIN_PASSWORD`. `POST /api/admin/maintenance` performs bounded orphan-avatar and expired-metadata cleanup; it needs an external schedule or manual invocation.
 
+Two-level replies additionally require `0006_comment_replies.sql`. `/api/user/comments` lists roots only for old-client compatibility; `/api/user/replies` lists/posts replies. Comment deletion clears content and retains a tombstone; a deleted root closes its discussion to new replies.
+
+Content moderation requires `0007_comment_moderation.sql`. Hidden roots hide their discussion; hiding is reversible, deletion is not. Pins are returned separately as `pinnedComments` (maximum 3 per board); the chronological feed still includes pinned rows for stable pagination and old clients. New clients deduplicate pins for display. Admin mutations and `admin_audit` writes share a transaction.
+
+Reply notifications additionally require `0008_reply_notifications.sql`. Notifications target logged-in users only, are created in the reply D1 batch, and expose no content after the referenced reply/root is hidden or deleted. `GET/PUT /api/user/notifications` supports unread counts, cursor pages, single-read and through-read.
+
+Stable identity additionally requires `0009_stable_user_identity.sql`. Comments store `author_wiki_user_id` and notifications `recipient_wiki_user_id`; ownership, self-reply detection and notification routing match the immutable MediaWiki user ID first with BID only as legacy fallback. `GET /api/user/session` returns the authoritative identity. Business errors may carry a structured `errorCode`; clients invalidate caches only on those.
+
 R2 binding is `RELEASES` in `downloadPage/wrangler.jsonc` (Pages project `calabiyauwiki`). Do not commit `downloadPage/wrangler.toml` (gitignored; dashboard download can contain secrets). `GITHUB_TOKEN` is a Pages dashboard secret, not in `wrangler.jsonc`.
 
 ## Android Wiki pages

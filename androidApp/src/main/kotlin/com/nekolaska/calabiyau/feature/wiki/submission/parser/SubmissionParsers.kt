@@ -1,8 +1,8 @@
 package com.nekolaska.calabiyau.feature.wiki.submission.parser
 
-import android.text.Html
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.feature.wiki.submission.model.SubmissionEntry
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 
 object SubmissionParsers {
@@ -17,11 +17,11 @@ object SubmissionParsers {
             if (cells.size < 5) return@mapNotNull null
 
             val titleLink = cells[0].selectFirst("a[href]") ?: return@mapNotNull null
-            val title = cleanHtml(cells[0].html()).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
-            val date = cleanHtml(cells[1].html())
-            val author = cleanHtml(cells[2].html())
-            val type = cleanHtml(cells[3].html())
-            val topic = cleanHtml(cells[4].html())
+            val title = HtmlText.clean(cells[0].html()).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+            val date = HtmlText.clean(cells[1].html())
+            val author = HtmlText.clean(cells[2].html())
+            val type = HtmlText.clean(cells[3].html())
+            val topic = HtmlText.clean(cells[4].html())
 
             if (title.isBlank() || title == "标题" || date == "时间") return@mapNotNull null
 
@@ -45,18 +45,4 @@ object SubmissionParsers {
         else -> "$PAGE_BASE${href.trimStart('/')}"
     }
 
-    private fun cleanHtml(raw: String): String {
-        val normalized = raw
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace("&nbsp;", " ")
-        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .replace("\uFFFC", "")
-            .replace('\u00A0', ' ')
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
-            .trim()
-    }
 }

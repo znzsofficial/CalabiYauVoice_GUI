@@ -2,10 +2,11 @@ import { CORS, HttpError, json, requireDb } from "./http.js";
 import { serveRelease } from "./releases.js";
 import { proxyApi } from "./proxy.js";
 import { serveAvatar, uploadAvatar } from "./avatars.js";
-import { getProfile, saveProfile } from "./profiles.js";
-import { listComments, postComment, deleteComment } from "./comments.js";
+import { getProfile, saveProfile, getSession } from "./profiles.js";
+import { listComments, listReplies, postComment, deleteComment } from "./comments.js";
 import { likes } from "./likes.js";
 import { admin } from "./admin.js";
+import { notifications } from "./notifications.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -18,11 +19,16 @@ export default {
         if (url.pathname.startsWith("/api/admin/")) return await admin(request, env, url, ctx);
         switch (`${request.method} ${url.pathname}`) {
           case "GET /api/user/profile": return await getProfile(request, env, url);
+          case "GET /api/user/session": return await getSession(request);
           case "PUT /api/user/profile": return await saveProfile(request, env, url, false, ctx);
           case "POST /api/user/avatar": return await uploadAvatar(request, env);
           case "GET /api/user/comments": return await listComments(request, env, url);
           case "POST /api/user/comments": return await postComment(request, env, url);
+          case "GET /api/user/replies": return await listReplies(request, env, url);
+          case "POST /api/user/replies": return await postComment(request, env, url, true);
           case "DELETE /api/user/comments": return await deleteComment(request, env, url);
+          case "GET /api/user/notifications":
+          case "PUT /api/user/notifications": return await notifications(request, env, url);
           case "GET /api/user/likes":
           case "POST /api/user/likes":
           case "PUT /api/user/likes":
@@ -37,7 +43,7 @@ export default {
       if (url.pathname.startsWith("/api/")) throw new HttpError(404, "接口不存在");
       return await env.ASSETS.fetch(request);
     } catch (error) {
-      if (error instanceof HttpError) return json({ error: error.message }, error.status, error.headers);
+      if (error instanceof HttpError) return json({ error: error.message, ...(error.code ? { errorCode: error.code } : {}) }, error.status, error.headers);
       const requestId = crypto.randomUUID();
       console.error(JSON.stringify({ event: "request_failed", requestId, method: request.method, path: url.pathname, error: String(error) }));
       return json({ error: "服务暂不可用，请稍后重试", requestId }, 500);

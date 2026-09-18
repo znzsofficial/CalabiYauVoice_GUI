@@ -1,10 +1,10 @@
 package com.nekolaska.calabiyau.feature.wiki.interactionitem.parser
 
-import android.text.Html
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.feature.wiki.interactionitem.model.InteractionItemInfo
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -23,16 +23,16 @@ object InteractionItemParsers {
             val cells = row.select("> th, > td")
             if (cells.size < 4) return@mapNotNull null
 
-            val name = cleanHtml(cells[0].html()).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
+            val name = HtmlText.clean(cells[0].html()).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
             if (name.isBlank() || name == "名称") return@mapNotNull null
 
             val quality = qualityFromCell(cells[1])
             InteractionItemInfo(
                 name = name,
                 quality = quality,
-                qualityName = quality?.displayName ?: cleanHtml(cells[1].html()),
-                description = cleanHtml(cells[2].html()),
-                obtainMethod = cleanHtml(cells[3].html()),
+                qualityName = quality?.displayName ?: HtmlText.clean(cells[1].html()),
+                description = HtmlText.clean(cells[2].html()),
+                obtainMethod = HtmlText.clean(cells[3].html()),
                 iconUrl = WikiImageUrls.originalFromThumbnail(
                     cells[0].selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
                 )
@@ -58,7 +58,7 @@ object InteractionItemParsers {
     private fun qualityFromCell(cell: Element): Quality? {
         val badge = cell.selectFirst(".quality-badge")
         val qualityValue = badge?.attr("data-quality").orEmpty()
-        val qualityText = badge?.ownText().orEmpty().ifBlank { cleanHtml(cell.html()) }
+        val qualityText = badge?.ownText().orEmpty().ifBlank { HtmlText.clean(cell.html()) }
         return Quality.entries.firstOrNull { quality ->
             qualityValue == quality.level.toString() ||
                 qualityValue == quality.displayName ||
@@ -66,18 +66,4 @@ object InteractionItemParsers {
         }
     }
 
-    private fun cleanHtml(raw: String): String {
-        val normalized = raw
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace("&nbsp;", " ")
-        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .replace("\uFFFC", "")
-            .replace('\u00A0', ' ')
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
-            .trim()
-    }
 }

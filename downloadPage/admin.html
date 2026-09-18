@@ -124,6 +124,7 @@
           D1 user_profiles / profile_comments ·
           <button id="sectionProfiles" class="primary">用户档案</button>
           <button id="sectionComments">留言板管理</button>
+          <button id="sectionAudit">操作记录</button>
           <button id="logoutBtn" class="logout">退出</button>
         </p>
         <!-- 用户档案区块 -->
@@ -192,7 +193,18 @@
             <button id="commentNextBtn" disabled>下一页</button>
           </div>
           <div class="error" id="commentError"></div>
+          <p class="hint">隐藏可恢复；删除会清空原文。隐藏主留言会隐藏整条讨论，恢复主留言不会恢复被单独隐藏的回复。</p>
         </div>
+        </div>
+        <div id="auditSection" class="card" style="display:none">
+          <h2>管理操作记录</h2>
+          <p class="hint">当前使用共享管理密码，操作者统一标记为 admin。记录不包含原文或凭据。</p>
+          <div style="overflow-x:auto"><table>
+            <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>对象</th><th>原因</th></tr></thead>
+            <tbody id="auditBody"></tbody>
+          </table></div>
+          <div class="pager"><span id="auditInfo"></span><button id="auditPrev">上一页</button><button id="auditNext">下一页</button></div>
+          <div class="error" id="auditError"></div>
         </div>
       </div>
     </div>
@@ -435,12 +447,38 @@
       function showSection(name) {
         $("profilesSection").style.display = name === "profiles" ? "" : "none";
         $("commentsSection").style.display = name === "comments" ? "" : "none";
+        $("auditSection").style.display = name === "audit" ? "" : "none";
         $("sectionProfiles").className = name === "profiles" ? "primary" : "";
         $("sectionComments").className = name === "comments" ? "primary" : "";
+        $("sectionAudit").className = name === "audit" ? "primary" : "";
         if (name === "comments") loadAdminComments();
+        if (name === "audit") loadAudit();
       }
       $("sectionProfiles").addEventListener("click", () => showSection("profiles"));
       $("sectionComments").addEventListener("click", () => showSection("comments"));
+      $("sectionAudit").addEventListener("click", () => showSection("audit"));
+      let auditPage = 1;
+      let auditPages = 1;
+      let auditCursors = [null];
+      const actionNames = { hide: "隐藏留言", restore: "恢复留言", pin: "置顶", unpin: "取消置顶", delete_comment: "删除留言", edit_profile: "编辑档案", delete_profile: "删除档案" };
+      async function loadAudit() {
+        showError($("auditError"), "");
+        try {
+          const cursor = auditCursors[auditPage - 1];
+          const response = await fetch(`/api/admin/audit${cursor ? `?before=${encodeURIComponent(cursor)}` : ""}`, { headers: headers() });
+          if (response.status === 401) { sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return; }
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+          auditPages = Math.max(1, Math.ceil(data.total / data.size));
+          if (data.nextCursor) auditCursors[auditPage] = data.nextCursor; else auditCursors.length = auditPage;
+          $("auditBody").innerHTML = data.records.map(r => `<tr><td>${formatTime(r.created_at)}</td><td>${escapeHtml(r.actor)}</td><td>${escapeHtml(actionNames[r.action] || r.action)}</td><td>${escapeHtml(r.target)}</td><td>${escapeHtml(r.reason)}</td></tr>`).join("") || '<tr><td colspan="5">暂无操作记录</td></tr>';
+          $("auditInfo").textContent = `第 ${auditPage}/${auditPages} 页 · 共 ${data.total} 条`;
+          $("auditPrev").disabled = auditPage <= 1;
+          $("auditNext").disabled = !data.nextCursor;
+        } catch (error) { showError($("auditError"), error.message || "加载失败"); }
+      }
+      $("auditPrev").addEventListener("click", () => { if (auditPage > 1) { auditPage--; loadAudit(); } });
+      $("auditNext").addEventListener("click", () => { if (auditCursors[auditPage]) { auditPage++; loadAudit(); } });
 
       async function loadAdminComments() {
         showError($("commentError"), "");
@@ -462,12 +500,14 @@
             return;
           }
           $("commentTableBody").innerHTML = data.comments.map((c) => `<tr>
-            <td>${escapeHtml(c.targetBid === "__public__" ? "站点公共板" : c.targetBid)}</td>
+            <td>${escapeHtml(c.targetBid === "__public__" ? "站点公共板" : c.targetBid)}<div class="hint">${c.rootId ? `讨论 #${escapeHtml(c.rootId)} · 回复 #${escapeHtml(c.replyToId)}` : `主留言 #${escapeHtml(c.id)}`}</div></td>
             <td>${escapeHtml(c.authorName || c.authorBid)}${c.authorBid === "anon" && c.authorTag ? `<span class="hint">#${escapeHtml(c.authorTag)}</span>` : ""}<div class="hint">${escapeHtml(c.authorBid)}</div></td>
-            <td style="max-width:280px">${escapeHtml(c.content)}</td>
+            <td style="max-width:280px">${c.hiddenAt != null ? '<strong>已隐藏 · </strong>' : ''}${c.pinnedAt != null ? '<strong>置顶 · </strong>' : ''}${escapeHtml(c.content)}</td>
             <td>${formatTime(c.createdAt)}</td>
             <td><div class="actions">
-              <button class="danger" data-cdel="${c.id}">删除</button>
+              ${c.deletedAt != null ? '<span class="hint">已删除</span>' : `<button class="danger" data-cdel="${c.id}">删除</button>`}
+              ${c.deletedAt == null || c.rootId == null ? `<button data-moderate="${c.hiddenAt != null ? 'restore' : 'hide'}" data-id="${c.id}" data-deleted-root="${c.deletedAt != null && c.rootId == null}">${c.deletedAt != null ? (c.hiddenAt != null ? '取消隐藏讨论' : '隐藏讨论') : (c.hiddenAt != null ? '恢复' : '隐藏')}</button>` : ''}
+              ${c.deletedAt == null && c.hiddenAt == null && c.rootId == null ? `<button data-moderate="${c.pinnedAt != null ? 'unpin' : 'pin'}" data-id="${c.id}">${c.pinnedAt != null ? '取消置顶' : '置顶'}</button>` : ''}
             </div></td>
           </tr>`).join("");
         } catch (err) {
@@ -476,7 +516,23 @@
         }
       }
 
-      $("commentTableBody").addEventListener("click", (e) => {
+      $("commentTableBody").addEventListener("click", async (e) => {
+        const button = e.target.closest("button[data-moderate]");
+        if (button) {
+          const action = button.dataset.moderate;
+          const scopeHint = button.dataset.deletedRoot === 'true' ? '\n仅改变讨论可见性，主留言原文仍保持已删除。' : '';
+          const reason = prompt(`${actionNames[action]} #${button.dataset.id}${scopeHint}\n填写原因（可选，最多 200 字）`, "");
+          if (reason === null) return;
+          button.disabled = true;
+          try {
+            const response = await fetch('/api/admin/comment', { method: 'PUT', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(button.dataset.id), action, reason }) });
+            if (response.status === 401) { sessionStorage.removeItem(PASSWORD_KEY); location.reload(); return; }
+            if (!response.ok) throw new Error((await response.json()).error || `HTTP ${response.status}`);
+            await loadAdminComments();
+          } catch (error) { showError($("commentError"), error.message || "操作失败"); }
+          finally { button.disabled = false; }
+          return;
+        }
         const id = e.target.closest("button[data-cdel]")?.dataset.cdel;
         if (id && confirm(`确定删除留言 #${id}？`)) {
           fetch(`/api/admin/comment?id=${id}`, { method: "DELETE", headers: headers() })

@@ -30,6 +30,53 @@ object CustomUserApi {
 
     private val json = SharedJson
 
+    suspend fun fetchSession(wikiCookie: String): ApiResult<UserSession> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder().url("${baseUrl()}/api/user/session")
+                .header("X-Wiki-Cookie", wikiCookie).get().build()
+            client.newCall(request).execute().use { response ->
+                val body = response.body.string()
+                nonJsonApiMessage(body)?.let { return@withContext ApiResult.Error(it, ErrorKind.NETWORK) }
+                val parsed = json.decodeFromString<UserSessionResponse>(body)
+                if (!response.isSuccessful || parsed.user == null) {
+                    ApiResult.Error(parsed.error ?: "身份验证失败 (${response.code})", ErrorKind.NETWORK,
+                        response.code, parsed.errorCode)
+                } else ApiResult.Success(parsed.user)
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { ApiResult.Error("身份验证失败，请稍后重试", e.toErrorKind()) }
+    }
+
+    suspend fun fetchNotifications(wikiCookie: String, before: String? = null): ApiResult<ReplyNotificationsResponse> =
+        notificationRequest(wikiCookie, before, null, null)
+
+    suspend fun readNotifications(wikiCookie: String, id: Long? = null, throughId: Long? = null): ApiResult<ReplyNotificationsResponse> =
+        notificationRequest(wikiCookie, null, id, throughId)
+
+    private suspend fun notificationRequest(
+        cookie: String, before: String?, id: Long?, throughId: Long?
+    ): ApiResult<ReplyNotificationsResponse> = withContext(Dispatchers.IO) {
+        if (cookie.isBlank()) return@withContext ApiResult.Error("请先登录 Wiki", kind = ErrorKind.UNKNOWN)
+        try {
+            val builder = Request.Builder().url("${baseUrl()}/api/user/notifications" +
+                (before?.let { "?before=${it.wikiPathEncode()}" } ?: "")).header("X-Wiki-Cookie", cookie)
+            if (id != null || throughId != null) {
+                val payload = buildJsonObject {
+                    if (id != null) put("id", id) else put("throughId", throughId!!)
+                }.toString()
+                builder.put(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+            }
+            client.newCall(builder.build()).execute().use { response ->
+                val body = response.body.string()
+                nonJsonApiMessage(body)?.let { return@withContext ApiResult.Error(it, kind = ErrorKind.NETWORK) }
+                val result = json.decodeFromString<ReplyNotificationsResponse>(body)
+                if (!response.isSuccessful || result.error != null) ApiResult.Error(result.error ?: "通知请求失败 (${response.code})", kind = ErrorKind.NETWORK, httpStatus = response.code, apiCode = result.errorCode)
+                else ApiResult.Success(result)
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { ApiResult.Error("通知请求失败，请稍后重试", kind = e.toErrorKind()) }
+    }
+
     /**
      * 查询单个用户的自定义资料 (支持按 BID 或 WikiID)
      */
@@ -48,6 +95,9 @@ object CustomUserApi {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
                 val body = resp.body.string()
+                nonJsonApiMessage(body)?.let { message ->
+                    return@withContext ApiResult.Error(message, kind = ErrorKind.NETWORK)
+                }
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<CustomUserProfileResponse>(body).error }.getOrNull()
                     return@withContext ApiResult.Error(errMsg ?: "请求失败 (${resp.code})", kind = ErrorKind.NETWORK)
@@ -185,17 +235,25 @@ object CustomUserApi {
         bid: String,
         page: Int = 1,
         size: Int = 20,
-        before: String? = null
+        before: String? = null,
+        rootId: Long? = null,
+        focusId: Long? = null
     ): ApiResult<ProfileCommentsResponse> = withContext(Dispatchers.IO) {
-        val url = "${baseUrl()}/api/user/comments?bid=${bid.trim().wikiPathEncode()}&page=$page&size=$size" +
-            (before?.let { "&before=${it.wikiPathEncode()}" } ?: "")
+        val path = if (rootId == null) "comments?bid=${bid.trim().wikiPathEncode()}&page=$page" else "replies?rootId=$rootId"
+        val url = "${baseUrl()}/api/user/$path&size=$size" +
+            (before?.let { "&before=${it.wikiPathEncode()}" } ?: "") +
+            (focusId?.let { "&focusId=$it" } ?: "")
         try {
             val req = Request.Builder().url(url).get().build()
             client.newCall(req).execute().use { resp ->
                 val body = resp.body.string()
+                nonJsonApiMessage(body, replies = rootId != null)?.let { message ->
+                    return@withContext ApiResult.Error(message, kind = ErrorKind.NETWORK)
+                }
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<ProfileCommentsResponse>(body).error }.getOrNull()
-                    return@withContext ApiResult.Error(errMsg ?: "获取留言失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                    val parsed = runCatching { json.decodeFromString<ProfileCommentsResponse>(body) }.getOrNull()
+                    return@withContext ApiResult.Error(parsed?.error ?: errMsg ?: "获取留言失败 (${resp.code})", kind = ErrorKind.NETWORK, httpStatus = resp.code, apiCode = parsed?.errorCode)
                 }
                 val parsed = json.decodeFromString<ProfileCommentsResponse>(body)
                 if (parsed.error != null) {
@@ -221,14 +279,16 @@ object CustomUserApi {
         wikiCookie: String? = null,
         authorName: String? = null,
         requestId: String,
-        guestId: String? = null
+        guestId: String? = null,
+        replyToId: Long? = null
     ): ApiResult<ProfileComment> = withContext(Dispatchers.IO) {
         val payload = buildJsonObject {
             put("targetBid", targetBid)
             put("content", content)
+            if (replyToId != null) put("replyToId", replyToId)
             if (authorName != null && authorName.isNotBlank()) put("authorName", authorName.trim())
         }.toString()
-        val url = "${baseUrl()}/api/user/comments"
+        val url = "${baseUrl()}/api/user/${if (replyToId == null) "comments" else "replies"}"
 
         try {
             val req = Request.Builder()
@@ -241,9 +301,13 @@ object CustomUserApi {
 
             client.newCall(req).execute().use { resp ->
                 val body = resp.body.string()
+                nonJsonApiMessage(body, replies = replyToId != null)?.let { message ->
+                    return@withContext ApiResult.Error(message, kind = ErrorKind.NETWORK)
+                }
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<ProfileCommentPostResponse>(body).error }.getOrNull()
-                    return@withContext ApiResult.Error(errMsg ?: "发表留言失败 (${resp.code})", kind = ErrorKind.NETWORK)
+                    val parsed = runCatching { json.decodeFromString<ProfileCommentPostResponse>(body) }.getOrNull()
+                    return@withContext ApiResult.Error(parsed?.error ?: errMsg ?: "发表留言失败 (${resp.code})", kind = ErrorKind.NETWORK, httpStatus = resp.code, apiCode = parsed?.errorCode)
                 }
                 val parsed = json.decodeFromString<ProfileCommentPostResponse>(body)
                 if (parsed.success && parsed.comment != null) {

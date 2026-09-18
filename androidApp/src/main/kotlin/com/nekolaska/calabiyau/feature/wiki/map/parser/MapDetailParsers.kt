@@ -1,9 +1,9 @@
 package com.nekolaska.calabiyau.feature.wiki.map.parser
 
-import android.text.Html
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
 import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -165,11 +165,11 @@ object MapDetailParsers {
                         element.hasClass("alert") &&
                         element.hasClass("alert-warning") -> {
                         flushEntry()
-                        currentDate = cleanHtml(element.html())
+                        currentDate = HtmlText.clean(element.html())
                     }
 
                     element.tagName().equals("li", ignoreCase = true) && currentDate.isNotBlank() -> {
-                        cleanHtml(element.html())
+                        HtmlText.clean(element.html())
                             .takeIf { it.isNotBlank() }
                             ?.let { currentChanges += it }
                     }
@@ -181,30 +181,13 @@ object MapDetailParsers {
 
         val fallbackParagraphs = sectionNodes
             .filter { it.tagName().equals("p", ignoreCase = true) }
-            .mapNotNull { paragraph -> cleanHtml(paragraph.html()).takeIf { it.isNotBlank() } }
+            .mapNotNull { paragraph -> HtmlText.clean(paragraph.html()).takeIf { it.isNotBlank() } }
 
         return if (fallbackParagraphs.isNotEmpty()) {
             listOf(UpdateEntry(date = "历史记录", changes = fallbackParagraphs))
         } else {
             emptyList()
         }
-    }
-
-    private fun cleanHtml(raw: String): String {
-        if (raw.isBlank()) return ""
-        val normalized = raw
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-            .replace("&nbsp;", " ")
-        return Html.fromHtml(normalized, Html.FROM_HTML_MODE_LEGACY)
-            .toString()
-            .replace("￼", "")
-            .replace("\uFFFC", "")
-            .replace('\u00A0', ' ')
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
-            .trim()
     }
 
     private fun collectSectionNodes(

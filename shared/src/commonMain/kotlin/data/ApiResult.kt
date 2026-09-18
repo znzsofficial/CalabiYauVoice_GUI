@@ -58,6 +58,10 @@ sealed interface ApiResult<out T> {
      */
     data class Error(
         val message: String,
-        val kind: ErrorKind = ErrorKind.UNKNOWN
+        val kind: ErrorKind = ErrorKind.UNKNOWN,
+        /** Original HTTP status when a server response exists; null for transport errors. */
+        val httpStatus: Int? = null,
+        /** Stable machine-readable API error code; absent for gateways and legacy endpoints. */
+        val apiCode: String? = null
     ) : ApiResult<Nothing>
 }

@@ -370,6 +370,7 @@ private fun encodeSquareAvatar(source: Bitmap, targetSizePx: Int, quality: Int =
     val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Bitmap.CompressFormat.WEBP_LOSSY
     } else {
+        @Suppress("DEPRECATION")
         Bitmap.CompressFormat.WEBP
     }
     return ByteArrayOutputStream().use { out ->

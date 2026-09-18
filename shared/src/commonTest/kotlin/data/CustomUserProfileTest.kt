@@ -127,4 +127,47 @@ class CustomUserProfileTest {
         assertEquals("访客#12AB34CD56", response.comments.single().copy(authorName = null).displayAuthor())
         assertEquals("小猫", response.comments.single().copy(authorBid = "member").displayAuthor())
     }
+
+    @Test
+    fun replyAndDeletedRootContract() {
+        val response = SharedJson.decodeFromString<ProfileCommentsResponse>("""
+            {"root":{"id":11,"authorBid":"","authorName":"已删除留言","content":"该留言已删除","deleted":true,"replyCount":1},
+             "comments":[{"id":12,"rootId":11,"replyToId":11,"replyToName":"已删除留言","authorBid":"anon",
+               "authorName":"访客","authorTag":"12AB34CD56","content":"hello","deleted":false}],"hasMore":false}
+        """.trimIndent())
+        assertTrue(response.root!!.deleted)
+        assertEquals("已删除留言", response.root.displayAuthor())
+        assertEquals(1, response.root.replyCount)
+        assertEquals(11L, response.comments.single().rootId)
+        assertEquals(11L, response.comments.single().replyToId)
+        assertEquals("已删除留言", response.comments.single().replyToName)
+        assertFalse(response.comments.single().deleted)
+    }
+
+    @Test
+    fun separatePinnedFeedParsesWithoutChangingChronologicalCursor() {
+        val response = SharedJson.decodeFromString<ProfileCommentsResponse>("""
+            {"pinnedComments":[{"id":11,"authorBid":"Alice","content":"公告","pinnedAt":100}],
+             "comments":[{"id":12,"authorBid":"Bob","content":"新留言"}],"nextCursor":"101:12"}
+        """.trimIndent())
+        assertEquals(100L, response.pinnedComments.single().pinnedAt)
+        assertEquals(11L, response.pinnedComments.single().id)
+        assertEquals(12L, response.comments.single().id)
+        assertEquals("101:12", response.nextCursor)
+    }
+
+    @Test
+    fun notificationContractParsesUnreadAndUnavailableStates() {
+        val response = SharedJson.decodeFromString<ReplyNotificationsResponse>("""
+            {"unreadCount":2,"notifications":[
+              {"id":9,"rootId":2,"commentId":5,"status":"available","content":"hello","authorBid":"Alice"},
+              {"id":8,"rootId":2,"commentId":4,"status":"hidden","content":null,"authorBid":null,"read":true}
+            ],"nextCursor":"8"}
+        """.trimIndent())
+        assertEquals(2, response.unreadCount)
+        assertEquals("Alice", response.notifications[0].displayAuthor())
+        assertEquals("hidden", response.notifications[1].status)
+        assertEquals(null, response.notifications[1].content)
+        assertEquals("8", response.nextCursor)
+    }
 }

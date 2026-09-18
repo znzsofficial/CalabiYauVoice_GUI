@@ -2,8 +2,14 @@ import { HttpError, json, text, readJson, integer, absoluteProfile } from "./htt
 import { wikiUser } from "./auth.js";
 import { avatarPath, avatarKey, validateAvatar, retireAvatar } from "./avatars.js";
 import { writeGate, gateCondition, requireClaim } from "./writes.js";
+import { auditStatement } from "./moderation.js";
 
 export const PROFILE_COLUMNS = "bid,wiki_user_id AS wikiUserId,custom_name AS customName,avatar_url AS avatarUrl,bio,badge,updated_at AS updatedAt";
+
+export async function getSession(request) {
+  const user = await wikiUser(request, true);
+  return json({ user: { bid: user.bid, wikiUserId: user.wikiUserId } });
+}
 
 export async function getProfile(request, env, url) {
   const bid = text(url.searchParams.get("bid"), "bid", 128);
@@ -43,6 +49,7 @@ export async function saveProfile(request, env, url, admin = false, ctx) {
       avatar_url=excluded.avatar_url,bio=excluded.bio,badge=excluded.badge,updated_at=excluded.updated_at`)
     .bind(...values, ...conditionBindings);
   const statements = gate ? [gate.claim, statement] : [statement];
+  if (admin) statements.push(auditStatement(env.DB, "edit_profile", bid));
   // Release a claimed window if the asset was concurrently retired and no write happened.
   if (gate) statements.push(env.DB.prepare("DELETE FROM write_throttle WHERE key=? AND token=? AND changes()=0").bind(gate.key, gate.token));
   const results = await env.DB.batch(statements);

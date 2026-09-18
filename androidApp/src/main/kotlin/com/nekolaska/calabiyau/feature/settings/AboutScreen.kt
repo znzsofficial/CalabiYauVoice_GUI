@@ -32,9 +32,9 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val versionName = remember(context) {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.10"
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.12"
         } catch (_: Exception) {
-            "2.1.10"
+            "2.1.12"
         }
     }
 
