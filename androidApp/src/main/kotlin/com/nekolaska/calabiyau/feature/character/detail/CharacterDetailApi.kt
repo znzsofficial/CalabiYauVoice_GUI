@@ -754,7 +754,10 @@ object CharacterDetailApi {
             .trim()
     }
 
-    private fun parseAugmentationModes(wikitext: String, html: String? = null): List<AugmentationMode> {
+    /** 弦能增幅网络3 模板中的数值元数据参数，不是属性变化条目，不应出现在界面上。 */
+    private val augmentationMetadataKeys = setOf("角色", "模式", "护甲值", "护甲值移动端", "移动速度")
+
+    internal fun parseAugmentationModes(wikitext: String, html: String? = null): List<AugmentationMode> {
         val tabsTemplate = extractTemplate(wikitext, "弦能增幅网络Tabs") ?: return emptyList()
         val tabParams = parseTemplateParams(tabsTemplate)
         val modeNames = tabParams.keys.map { clean(it) }
@@ -763,7 +766,7 @@ object CharacterDetailApi {
             val cleanModeName = clean(modeName)
             val networkTemplate = extractTemplate(modeContent, "弦能增幅网络3") ?: return@mapNotNull null
             val entries = parseTemplateParams(networkTemplate)
-                .filterKeys { it != "角色" && it != "模式" }
+                .filterKeys { it !in augmentationMetadataKeys }
                 .mapNotNull { (key, value) ->
                     parseAugmentationEntry(key, value, renderedLabels["$cleanModeName|$key"])
                 }
