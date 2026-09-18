@@ -861,7 +861,16 @@
   <div class="header-content">
     <a href="/" class="header-back" aria-label="返回下载页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></a>
     <h1 class="header-title"><img src="/icon.svg" alt="" class="header-logo">卡拉彼丘 Wiki 搜索</h1>
-    <a class="header-link" href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer">访问原站</a>
+    <div class="header-actions">
+      <a class="header-link" href="/nav/" title="前往全站 Wiki 导航目录">
+        <iconify-icon icon="lucide:compass"></iconify-icon>
+        <span>Wiki 导航</span>
+      </a>
+      <a class="header-link" href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer">
+        <span>访问原站</span>
+        <iconify-icon icon="lucide:external-link"></iconify-icon>
+      </a>
+    </div>
   </div>
 </header>
 

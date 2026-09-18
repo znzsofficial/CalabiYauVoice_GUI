@@ -3,25 +3,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build && npm run build:worker",
+    "build": "vite build && pnpm run build:worker",
     "build:worker": "esbuild src/api/_worker.js --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/_worker.js",
     "test:worker": "node --test tests/backend.test.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.2.0",
-    "@types/node": "^25.9.5",
-    "esbuild": "^0.28.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@types/node": "^26.6.1",
+    "esbuild": "^0.28.2",
     "miniflare": "^4.20260730.0",
-    "svelte": "^5.56.6",
-    "svelte-check": "^4.7.3",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
-    "vite": "^8.1.5"
+    "vite": "^8.3.0"
   },
   "dependencies": {
-    "gifenc": "^1.0.3",
-    "gifuct-js": "^2.1.2",
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.2"
   }
 }

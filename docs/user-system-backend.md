@@ -35,7 +35,7 @@ Worker 按职责拆分：`_worker.js` 只负责路由和统一错误处理；`ht
 `auth.js` 负责 Wiki/管理员鉴权及访客 HMAC，`writes.js` 负责原子写入门禁，
 `profiles.js`、`avatars.js`、`comments.js`、`likes.js`、`admin.js` 是业务模块，
 `releases.js` 负责 APK Range/HEAD/ETag，`proxy.js` 负责上游代理。
-`npm run build` 使用 esbuild 将模块打包为 `dist/_worker.js`；`webStatic` 不再覆盖此产物。
+`pnpm build` 使用 esbuild 将模块打包为 `dist/_worker.js`；`webStatic` 不再覆盖此产物。
 
 ## 2. 云资源与配置
 
@@ -341,7 +341,7 @@ npx wrangler@4.130.0 d1 export calabiyau-db --remote --output backup.sql
 - `npx wrangler` 可能拉到新版导致 OAuth 授权异常（7403），
   固定 `npx wrangler@4.130.0` 可复现已验证行为。
 - 迁移和密钥准备好后，在项目根目录执行 `.\gradlew.bat webPush`。
-- 测试：downloadPage 目录 `npm run test:worker`（Miniflare/workerd + 本地 D1/R2），`npm run check`、`npm run build`。
+- 测试：downloadPage 目录 `pnpm test:worker`（Miniflare/workerd + 本地 D1/R2），`pnpm check`、`pnpm build`。
 - `node -c` 只能验证语法，不能替代并发、鉴权、事务和 Range 回归测试。
 - 维护调用不会自动调度；部署后定期使用管理凭据调用 `/api/admin/maintenance`。
   每次扫描 100 个 R2 对象、最多回收 100 个过期对象；旧对象扫描游标持久化，可重复执行。

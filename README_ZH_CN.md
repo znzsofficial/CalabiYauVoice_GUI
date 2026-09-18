@@ -164,12 +164,13 @@
 ├── downloadPage/                       # 网页下载站与浏览器端工具
 │   ├── index.html                      #   首页：APK 下载、QQ 群、平衡数据
 │   ├── search/index.html               #   Wiki 搜索 / 分类打包 / 语音字幕
-│   ├── video/index.html                #   本地视频/GIF 素材工具
+│   ├── nav/index.html                  #   Wiki 导航站（基于侧边栏的全站目录）
 │   ├── admin.html                      #   密码保护的用户档案管理后台
 │   ├── package.json
+│   ├── pnpm-workspace.yaml / pnpm-lock.yaml
 │   ├── vite.config.ts                  #   多页 Vite 构建 + 本地 API 代理
 │   ├── download.css / base.css
-│   ├── migrations/                     #   D1 迁移脚本（user_profiles 表）
+│   ├── migrations/                     #   D1 迁移脚本（档案、评论、审核、通知）
 │   ├── downloads/                      #   latest.json；APK 实际在 R2 calabiyau-releases
 │   └── src/
 │       ├── main.ts                     #   首页入口
@@ -183,9 +184,10 @@
 │       │   ├── download/               #   ZIP / 队列 / Blob 工具
 │       │   ├── panels/                 #   Wiki / 分类 / 语音面板
 │       │   └── voice/                  #   语音索引构建与播放 UI
-│       └── video/                      #   本地视频/GIF 工作台
-│           ├── NativeVideoApp.svelte
-│           └── native-video.css
+│       └── nav/                        #   Wiki 导航应用
+│           ├── NavApp.svelte
+│           ├── sidebar.ts              #   侧边栏抓取与解析（与 Android 端解析器保持一致）
+│           └── nav.css
 ├── webApp/                             # 可选 Compose/Web 相关模块
 ├── gradle/libs.versions.toml           # 集中管理依赖版本
 ├── build.gradle.kts
@@ -198,7 +200,7 @@
 
 - JDK 21（Gradle toolchain 可自动配置项目指定的 Amazon Corretto JDK）
 - 构建 Android 应用时需要 Android SDK
-- 构建 `downloadPage/` 时需要 Node.js 与 npm
+- 构建 `downloadPage/` 时需要 Node.js 与 pnpm
 - 桌面端 FLAC 播放/转换目前需要 Windows x64；项目已内置官方 `libFLAC.dll` 1.5.0，并在加载前校验 SHA-256
 
 ```powershell
@@ -213,9 +215,9 @@
 
 # 下载页 / 网页工具站
 cd downloadPage
-npm install
-npm run dev
-npm run build
+pnpm install
+pnpm dev
+pnpm build
 ```
 
 > macOS / Linux 请使用 `./gradlew` 代替 `./gradlew.bat`。

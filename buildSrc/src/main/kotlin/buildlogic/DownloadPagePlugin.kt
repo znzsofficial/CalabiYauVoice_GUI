@@ -49,12 +49,12 @@ class DownloadPagePlugin : Plugin<Project> {
                 group = "distribution"
                 description = "Builds the Svelte download page."
 
-                val npmCommand = if (System.getProperty("os.name").lowercase()
+                val pnpmCommand = if (System.getProperty("os.name").lowercase()
                         .contains("windows")
-                ) "npm.cmd" else "npm"
+                ) "pnpm.cmd" else "pnpm"
 
                 workingDir = layout.projectDirectory.dir("downloadPage").asFile
-                commandLine(npmCommand, "run", "build")
+                commandLine(pnpmCommand, "run", "build")
             }
 
             tasks.register<Copy>("webStatic") {
@@ -79,13 +79,13 @@ class DownloadPagePlugin : Plugin<Project> {
 
                 dependsOn("webStatic")
 
-                val npmCommand = if (System.getProperty("os.name").lowercase()
+                val pnpmCommand = if (System.getProperty("os.name").lowercase()
                         .contains("windows")
-                ) "npm.cmd" else "npm"
+                ) "pnpm.cmd" else "pnpm"
 
                 workingDir = layout.projectDirectory.dir("downloadPage").asFile
                 commandLine(
-                    npmCommand,
+                    pnpmCommand,
                     "run",
                     "preview",
                     "--",

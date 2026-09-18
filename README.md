@@ -164,12 +164,13 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 ├── downloadPage/                       # Web download hub + browser tools
 │   ├── index.html                      #   Home: APK download, QQ group, balance data
 │   ├── search/index.html               #   Wiki search / category download / voice tools
-│   ├── video/index.html                #   Local video/GIF material tools
+│   ├── nav/index.html                  #   Wiki navigation hub (sidebar-driven directory)
 │   ├── admin.html                      #   Password-protected user profile admin console
 │   ├── package.json
+│   ├── pnpm-workspace.yaml / pnpm-lock.yaml
 │   ├── vite.config.ts                  #   Multi-page Vite build + local API proxy
 │   ├── download.css / base.css
-│   ├── migrations/                     #   D1 migrations (user_profiles table)
+│   ├── migrations/                     #   D1 migrations (profiles, comments, moderation, notifications)
 │   ├── downloads/                      #   latest.json; APKs are served from R2 calabiyau-releases
 │   └── src/
 │       ├── main.ts                     #   Home entry
@@ -183,9 +184,10 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 │       │   ├── download/               #   ZIP / queue / blob helpers
 │       │   ├── panels/                 #   Wiki / category / voice panels
 │       │   └── voice/                  #   Voice index builder & player UI
-│       └── video/                      #   Native video/GIF workbench
-│           ├── NativeVideoApp.svelte
-│           └── native-video.css
+│       └── nav/                        #   Wiki navigation hub app
+│           ├── NavApp.svelte
+│           ├── sidebar.ts              #   Sidebar fetch & parser (mirrors Android parser)
+│           └── nav.css
 ├── webApp/                             # Optional Compose/Web related module
 ├── gradle/libs.versions.toml           # Centralized dependency versions
 ├── build.gradle.kts
@@ -198,7 +200,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 - JDK 21 (the Gradle toolchain can provision the configured Amazon Corretto JDK)
 - Android SDK for Android builds
-- Node.js and npm for `downloadPage/`
+- Node.js and pnpm for `downloadPage/`
 - Windows x64 for desktop FLAC playback/conversion; the official `libFLAC.dll` 1.5.0 is bundled and verified by SHA-256 before loading
 
 ```powershell
@@ -213,9 +215,9 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 # Download page (web tools)
 cd downloadPage
-npm install
-npm run dev
-npm run build
+pnpm install
+pnpm dev
+pnpm build
 ```
 
 > For macOS/Linux, use `./gradlew` instead of `./gradlew.bat`.

@@ -152,7 +152,22 @@
   {:else if status === 'loading'}
     {#each Array(5) as _}<div class="result-card skeleton-card"><div class="result-body"><div class="skeleton-line" style="width: 40%; height: 18px;"></div><div class="skeleton-line" style="width: 100%; height: 14px; margin-top: 8px;"></div><div class="skeleton-line" style="width: 80%; height: 14px; margin-top: 4px;"></div><div class="skeleton-line" style="width: 30%; height: 12px; margin-top: 8px;"></div></div></div>{/each}
   {:else if status === 'empty'}
-    <div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 6 0"/></svg></div><p>未找到「{query}」相关结果</p>{#if resultSuggestion}<p class="empty-hint">你是不是要搜：<button class="suggestion-link" onclick={() => onSuggestion(resultSuggestion)}>{resultSuggestion}</button></p>{:else}<p class="empty-hint">试试换个关键词，或检查拼写</p>{/if}</div>
+    <div class="empty-state">
+      <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 6 0"/></svg></div>
+      <p>未找到「{query}」相关结果</p>
+      {#if resultSuggestion}
+        <p class="empty-hint">你是不是要搜：<button class="suggestion-link" onclick={() => onSuggestion(resultSuggestion)}>{resultSuggestion}</button></p>
+      {:else}
+        <p class="empty-hint">试试换个关键词，或检查拼写</p>
+      {/if}
+      <div class="empty-nav-jump">
+        <a class="empty-nav-link" href="/nav/">
+          <iconify-icon icon="lucide:compass"></iconify-icon>
+          <span>在 Wiki 导航中按分类浏览目录</span>
+          <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+        </a>
+      </div>
+    </div>
   {:else if status === 'error'}
     <div class="notice-card notice-card-center" role="alert">
       <div class="notice-card-glow"></div>

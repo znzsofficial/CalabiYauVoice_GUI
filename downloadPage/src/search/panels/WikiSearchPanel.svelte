@@ -80,6 +80,30 @@
           · 你是不是要搜：<button class="suggestion-link" onclick={() => onSuggestion(resultSuggestion)}>{resultSuggestion}</button>
         {/if}
       </div>
+    {:else if status === 'idle'}
+      <div class="search-idle-portal">
+        <div class="idle-portal-main">
+          <div class="idle-portal-icon-box">
+            <iconify-icon icon="lucide:compass"></iconify-icon>
+          </div>
+          <div class="idle-portal-texts">
+            <h2 class="idle-portal-title">探索 Wiki 全站导航目录</h2>
+            <p class="idle-portal-desc">不知道确切词条？按分区快速浏览角色、武器、地图与系统玩法，200+ 词条一目了然。</p>
+          </div>
+          <a class="idle-portal-btn" href="/nav/">
+            <span>前往 Wiki 导航</span>
+            <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+          </a>
+        </div>
+        <div class="idle-portal-chips">
+          <span class="portal-chips-label">常用快捷入口：</span>
+          <a class="portal-chip-item" href="/nav/">🌟 角色时装投票</a>
+          <a class="portal-chip-item" href="/nav/">🎯 武器筛选</a>
+          <a class="portal-chip-item" href="/nav/">📊 主武器理论数据</a>
+          <a class="portal-chip-item" href="/nav/">🗺️ 地图一览</a>
+          <a class="portal-chip-item" href="/nav/">🎁 兑换码</a>
+        </div>
+      </div>
     {/if}
 
     {#if status === 'ready' || status === 'loading' || status === 'empty' || status === 'error'}

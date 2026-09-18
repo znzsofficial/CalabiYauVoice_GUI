@@ -908,6 +908,159 @@
     margin: 0 1px;
 }
 
+/* ── 空搜索态：Wiki 导航指引卡 ── */
+
+.search-idle-portal {
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background-color: var(--card);
+    box-shadow: 0 4px 20px -6px color-mix(in srgb, var(--foreground) 5%, transparent);
+    padding: 24px;
+    margin-bottom: 24px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-idle-portal:hover {
+    border-color: color-mix(in srgb, #3b82f6 40%, var(--border));
+    box-shadow: 0 8px 30px -8px color-mix(in srgb, #3b82f6 15%, transparent);
+}
+
+.idle-portal-main {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.idle-portal-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    font-size: 1.5rem;
+    background-color: color-mix(in srgb, #3b82f6 12%, transparent);
+    color: #2563eb;
+    flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .idle-portal-icon-box {
+        color: #60a5fa;
+        background-color: color-mix(in srgb, #60a5fa 16%, transparent);
+    }
+}
+
+.idle-portal-texts {
+    flex: 1;
+    min-width: 240px;
+}
+
+.idle-portal-title {
+    margin: 0 0 4px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--foreground);
+}
+
+.idle-portal-desc {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    line-height: 1.5;
+}
+
+.idle-portal-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background-color: var(--background);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.idle-portal-btn:hover {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+    transform: translateX(2px);
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.idle-portal-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.portal-chips-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    flex-shrink: 0;
+}
+
+.portal-chip-item {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 2%, var(--background));
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.portal-chip-item:hover {
+    background-color: var(--accent);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    transform: translateY(-1px);
+}
+
+.empty-nav-jump {
+    margin-top: 16px;
+}
+
+.empty-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background-color: var(--card);
+    color: var(--foreground);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.empty-nav-link:hover {
+    background-color: var(--accent);
+    border-color: color-mix(in srgb, var(--foreground) 35%, var(--border));
+    transform: translateY(-1px);
+}
+
 /* ── Pagination ── */
 
 .pagination {

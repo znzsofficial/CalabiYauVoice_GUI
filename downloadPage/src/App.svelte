@@ -344,9 +344,9 @@
         <span class="feature-title">Wiki 搜索</span>
         <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
       </a>
-      <a href="/video/" class="card shadow-sm feature-card index-card">
-        <div class="feature-icon video-icon"><iconify-icon icon="lucide:scissors"></iconify-icon></div>
-        <span class="feature-title">视频素材</span>
+      <a href="/nav/" class="card shadow-sm feature-card index-card">
+        <div class="feature-icon nav-icon"><iconify-icon icon="lucide:compass"></iconify-icon></div>
+        <span class="feature-title">Wiki 导航</span>
         <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
       </a>
       <button class="card shadow-sm feature-card index-card" type="button" onclick={openBalance}>

@@ -8,11 +8,11 @@ Windows: `.\gradlew.bat`. macOS/Linux: `./gradlew`.
 
 - Android compile: `.\gradlew.bat :androidApp:compileDebugKotlin`
 - Desktop run: `.\gradlew.bat run`
-- Web typecheck: `cd downloadPage; npm run check`
-- Web local: `cd downloadPage; npm run dev` (Vite proxies `/api/wiki`, `/api/balance/*`, image/file download; it does **not** serve R2 APKs)
+- Web typecheck: `cd downloadPage; pnpm check`
+- Web local: `cd downloadPage; pnpm dev` (Vite proxies `/api/wiki`, `/api/balance/*`, image/file download; it does **not** serve R2 APKs)
 - Release site: `.\gradlew.bat webDeploy` → `webDist` (assembleRelease, rewrite `latest.json`, upload APK to R2) then `webPush` (build + `wrangler pages deploy`)
 
-`downloadPage/dist/` is generated. `npm run build` builds the site and bundles `src/api/_worker.js` with esbuild into `dist/_worker.js`. `webStatic` copies `_headers`, `_redirects`, `downloads/latest.json`, and `icon.svg`; never overwrite the bundled Worker with its source entrypoint. Worker integration tests: `npm run test:worker` in `downloadPage/`.
+`downloadPage/dist/` is generated. `pnpm build` builds the site and bundles `src/api/_worker.js` with esbuild into `dist/_worker.js`. `webStatic` copies `_headers`, `_redirects`, `downloads/latest.json`, and `icon.svg`; never overwrite the bundled Worker with its source entrypoint. Worker integration tests: `pnpm test:worker` in `downloadPage/`.
 
 ## Version / release
 

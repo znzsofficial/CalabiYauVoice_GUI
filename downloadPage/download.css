@@ -405,7 +405,7 @@
 }
 
 .wiki-icon { background-color: color-mix(in srgb, #3b82f6 12%, transparent); color: #2563eb; }
-.video-icon { background-color: color-mix(in srgb, #f59e0b 12%, transparent); color: #d97706; }
+.nav-icon { background-color: color-mix(in srgb, #f59e0b 12%, transparent); color: #d97706; }
 .balance-icon { background-color: color-mix(in srgb, #10b981 12%, transparent); color: #059669; }
 
 .feature-title {
@@ -439,7 +439,7 @@
 
 @media (prefers-color-scheme: dark) {
     .wiki-icon { color: #60a5fa; }
-    .video-icon { color: #fbbf24; }
+    .nav-icon { color: #fbbf24; }
     .balance-icon { color: #34d399; }
 
     .feature-card:hover {
