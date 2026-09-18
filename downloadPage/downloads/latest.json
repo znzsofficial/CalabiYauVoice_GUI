@@ -1,8 +1,8 @@
 {
     "versionName": "2.1.13",
     "versionCode": 43,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.13.apk",
-    "apkSize": 3579900,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.13.apk?build=f7121d27b23e95b4",
+    "apkSize": 3596288,
     "releaseUrl": "/",
     "changelog": [
         "\u4fee\u590d\u89d2\u8272\u5217\u8868\u9aa8\u67b6\u5c4f\u6bd4\u5b9e\u9645\u5361\u7247\u504f\u9ad8\u7684\u95ee\u9898",
@@ -13,6 +13,13 @@
     ],
     "publishedAt": "2026-09-18",
     "releases": [
+        {
+            "versionName": "2.1.13",
+            "versionCode": 43,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.13.apk?build=f7121d27b23e95b4",
+            "apkSize": 3596288,
+            "publishedAt": "2026-09-18"
+        },
         {
             "versionName": "2.1.12",
             "versionCode": 42,
