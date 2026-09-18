@@ -1,12 +1,13 @@
 /**
  * 随机壁纸服务（移植自移动端 WallpaperApi）
- * 从 BWiki 壁纸页面解析 170+ 官方壁纸，随机抽取并提供全屏背景与预览
+ * 从 BWiki 壁纸页面动态解析官方壁纸列表，随机抽取并提供全屏背景与预览
  */
 
 export interface WallpaperInfo {
   fileName: string;
   title: string;
   url: string;
+  totalCount?: number;
 }
 
 const WIKI_API = '/api/wiki';
@@ -174,7 +175,8 @@ export async function getRandomWallpaper(forceRefresh = false): Promise<Wallpape
   const result: WallpaperInfo = {
     fileName: pickedFileName,
     title: cleanWallpaperTitle(pickedFileName),
-    url: url || FALLBACK_WALLPAPERS[0].url
+    url: url || FALLBACK_WALLPAPERS[0].url,
+    totalCount: list.length
   };
 
   if (typeof sessionStorage !== 'undefined') {

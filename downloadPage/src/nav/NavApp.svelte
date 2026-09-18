@@ -8,6 +8,14 @@
     type WallpaperInfo
   } from './wallpaper';
   import { fetchCharacterAvatars } from './avatars';
+  import {
+    CATGIRL_TOOLBOX_MODAL,
+    OFFICIAL_CHANNELS_MODAL,
+    FILTER_TOOLS_MODAL,
+    GAME_EXTENSIONS_MODAL,
+    type CollectionModalData
+  } from './toolboxes';
+  import { matchNavTitle } from './searchAliases';
 
   let sections = $state<NavSection[]>([]);
   let loading = $state(true);
@@ -16,11 +24,28 @@
   let activeTab = $state<'all' | string>('all');
   let searchInputEl = $state<HTMLInputElement | null>(null);
 
-  // 壁纸状态
+  // 弹窗状态
+  let activeCollectionModal = $state<CollectionModalData | null>(null);
+
+  // 滚动位置
+  let scrollY = $state(0);
+  const showScrollTop = $derived(scrollY > 350);
+
+  // 壁纸与提示
   let currentWallpaper = $state<WallpaperInfo | null>(null);
   let wallpaperActive = $state(true);
   let changingWallpaper = $state(false);
   let wallpaperModalOpen = $state(false);
+  let wallpaperToast = $state<string | null>(null);
+  let toastTimer: number | null = null;
+
+  function showWallpaperToast(msg: string): void {
+    wallpaperToast = msg;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      wallpaperToast = null;
+    }, 2200);
+  }
 
   // 角色头像映射
   let avatarMap = $state<Record<string, string>>({});
@@ -28,11 +53,34 @@
 
   // 阵营分类主题配置
   const factionThemes: Record<string, { color: string; badge: string; icon: string }> = {
-    '欧泊': { color: '#3b82f6', badge: '欧泊阵营', icon: 'lucide:shield' },
-    '剪刀手': { color: '#ef4444', badge: '剪刀手阵营', icon: 'lucide:scissors' },
-    '乌尔比诺': { color: '#f59e0b', badge: '乌尔比诺商会', icon: 'lucide:crown' },
-    '晶源体': { color: '#a855f7', badge: '晶源感染生物', icon: 'lucide:biohazard' }
+    '欧泊': { color: '#2563eb', badge: '欧泊阵营', icon: 'lucide:shield' },
+    '剪刀手': { color: '#dc2626', badge: '剪刀手阵营', icon: 'lucide:scissors' },
+    '乌尔比诺': { color: '#d97706', badge: '乌尔比诺商会', icon: 'lucide:crown' },
+    '晶源体': { color: '#9333ea', badge: '晶源感染生物', icon: 'lucide:biohazard' }
   };
+
+  function getSubgroupIcon(title: string): string {
+    if (title.includes('步枪') || title.includes('狙击') || title.includes('枪')) return 'lucide:crosshair';
+    if (title.includes('近战') || title.includes('刀')) return 'lucide:sword';
+    if (title.includes('战术') || title.includes('道具') || title.includes('雷')) return 'lucide:bomb';
+    if (title.includes('爆破')) return 'lucide:flame';
+    if (title.includes('乱斗') || title.includes('冲突')) return 'lucide:swords';
+    if (title.includes('团竞') || title.includes('推进')) return 'lucide:flag';
+    if (title.includes('感染')) return 'lucide:biohazard';
+    if (title.includes('争夺')) return 'lucide:target';
+    if (title.includes('筛选') || title.includes('表')) return 'lucide:filter';
+    if (title.includes('链接') || title.includes('官网')) return 'lucide:link-2';
+    if (title.includes('宝箱') || title.includes('工具') || title.includes('模拟器')) return 'lucide:box';
+    if (title.includes('移动端')) return 'lucide:smartphone';
+    if (title.includes('培养') || title.includes('誓约') || title.includes('印迹')) return 'lucide:heart';
+    if (title.includes('账号') || title.includes('好友') || title.includes('成就')) return 'lucide:user';
+    if (title.includes('分享') || title.includes('卡组')) return 'lucide:share-2';
+    if (title.includes('延伸') || title.includes('BGM') || title.includes('壁纸') || title.includes('表情')) return 'lucide:sparkles';
+    if (title.includes('随笔') || title.includes('梗') || title.includes('Tips')) return 'lucide:book-open';
+    if (title.includes('装饰') || title.includes('基板') || title.includes('勋章') || title.includes('外观')) return 'lucide:gem';
+    if (title.includes('赛事') || title.includes('杯')) return 'lucide:trophy';
+    return 'lucide:folder-git-2';
+  }
 
   // 分区主题配置
   const sectionThemes: Record<string, { icon: string; color: string; tag: string }> = {
@@ -44,8 +92,54 @@
     '其他': { icon: 'lucide:sparkles', color: '#0891b2', tag: '社区与资料' }
   };
 
+  function getModalDataForGroup(groupTitle: string): CollectionModalData | null {
+    if (groupTitle === '猫娘的百宝箱') return CATGIRL_TOOLBOX_MODAL;
+    if (groupTitle === '常用链接') return OFFICIAL_CHANNELS_MODAL;
+    if (groupTitle === '常用筛选表') return FILTER_TOOLS_MODAL;
+    if (groupTitle === '游戏延伸') return GAME_EXTENSIONS_MODAL;
+    return null;
+  }
+
+  interface FeaturedTool {
+    title: string;
+    desc: string;
+    url?: string;
+    action?: () => void;
+    icon: string;
+    color: string;
+    tag: string;
+    isModal?: boolean;
+  }
+
   // 高频精选工具卡片 (Featured Spotlight)
-  const featuredTools = [
+  const featuredTools: FeaturedTool[] = [
+    {
+      title: '猫娘百宝箱',
+      desc: '卡牌制作、贴纸生成、抽卡模拟等 8 款社区工具',
+      action: () => { activeCollectionModal = CATGIRL_TOOLBOX_MODAL; },
+      icon: 'lucide:box',
+      color: '#06b6d4',
+      tag: '8大工具',
+      isModal: true
+    },
+    {
+      title: '官方渠道矩阵',
+      desc: 'PC国服、国际服官网、手游预约与官方B站',
+      action: () => { activeCollectionModal = OFFICIAL_CHANNELS_MODAL; },
+      icon: 'lucide:globe',
+      color: '#2563eb',
+      tag: '官方门户',
+      isModal: true
+    },
+    {
+      title: '全站筛选图鉴',
+      desc: '时装外观、武器皮肤、功能道具与生化卡牌',
+      action: () => { activeCollectionModal = FILTER_TOOLS_MODAL; },
+      icon: 'lucide:filter',
+      color: '#f59e0b',
+      tag: '5大筛选',
+      isModal: true
+    },
     {
       title: '角色时装投票',
       desc: '超弦体时装人气投票与排行榜',
@@ -61,14 +155,6 @@
       icon: 'lucide:file-bar-chart',
       color: '#dc2626',
       tag: '硬核数据'
-    },
-    {
-      title: '武器外观筛选',
-      desc: '各枪械金色/紫色皮肤展示图鉴',
-      url: 'https://wiki.biligame.com/klbq/%E6%AD%A6%E5%99%A8%E5%A4%96%E8%A7%82%E7%AD%9B%E9%80%89',
-      icon: 'lucide:palette',
-      color: '#f59e0b',
-      tag: '皮肤图鉴'
     },
     {
       title: '对战地图一览',
@@ -87,12 +173,12 @@
       tag: '实时福利'
     },
     {
-      title: '猫娘百宝箱',
-      desc: '生化卡牌、贴纸生成器与重构模拟器',
-      url: 'https://wiki.biligame.com/klbq/WIKI_APP',
-      icon: 'lucide:box',
-      color: '#06b6d4',
-      tag: '实用工具'
+      title: '武器外观筛选',
+      desc: '各枪械金色/紫色皮肤展示图鉴',
+      url: 'https://wiki.biligame.com/klbq/%E6%AD%A6%E5%99%A8%E5%A4%96%E8%A7%82%E7%AD%9B%E9%80%89',
+      icon: 'lucide:palette',
+      color: '#f97316',
+      tag: '皮肤图鉴'
     }
   ];
 
@@ -112,8 +198,8 @@
   const normalizedFilter = $derived(filter.trim().toLowerCase());
 
   function matchesQuery(title: string): boolean {
-    if (!normalizedFilter) return true;
-    return title.toLowerCase().includes(normalizedFilter);
+    if (!filterActive) return true;
+    return matchNavTitle(title, filter);
   }
 
   // 统计分区总条目
@@ -168,6 +254,9 @@
     changingWallpaper = true;
     try {
       currentWallpaper = await getRandomWallpaper(true);
+      if (currentWallpaper?.title) {
+        showWallpaperToast(`已换壁纸：${currentWallpaper.title}`);
+      }
     } catch {
       // 保持当前壁纸
     } finally {
@@ -188,7 +277,9 @@
       e.preventDefault();
       searchInputEl?.focus();
     } else if (e.key === 'Escape') {
-      if (wallpaperModalOpen) {
+      if (activeCollectionModal) {
+        activeCollectionModal = null;
+      } else if (wallpaperModalOpen) {
         wallpaperModalOpen = false;
       } else if (filterActive) {
         filter = '';
@@ -245,7 +336,7 @@
   });
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onscroll={() => scrollY = window.scrollY} />
 
 <!-- ── 随机全屏壁纸背景层 (移自 Android 端的 WikiHubWallpaperBackground) ── -->
 {#if wallpaperActive && currentWallpaper}
@@ -377,25 +468,49 @@
       </div>
       <div class="featured-grid">
         {#each featuredTools as tool (tool.title)}
-          <a
-            class="featured-tool-card"
-            href={tool.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style="--tool-accent: {tool.color};"
-          >
-            <div class="tool-card-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
-              <iconify-icon icon={tool.icon}></iconify-icon>
-            </div>
-            <div class="tool-card-info">
-              <div class="tool-card-title-row">
-                <strong class="tool-card-title">{tool.title}</strong>
-                <span class="tool-card-tag" style="background: color-mix(in srgb, {tool.color} 10%, transparent); color: {tool.color};">{tool.tag}</span>
+          {#if tool.action}
+            <button
+              class="featured-tool-card as-btn"
+              type="button"
+              onclick={tool.action}
+              style="--tool-accent: {tool.color};"
+            >
+              <div class="tool-card-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
+                <iconify-icon icon={tool.icon}></iconify-icon>
               </div>
-              <p class="tool-card-desc">{tool.desc}</p>
-            </div>
-            <iconify-icon icon="lucide:arrow-up-right" class="tool-card-arrow"></iconify-icon>
-          </a>
+              <div class="tool-card-info">
+                <div class="tool-card-title-row">
+                  <strong class="tool-card-title">{tool.title}</strong>
+                  <span class="tool-card-tag" style="background: color-mix(in srgb, {tool.color} 10%, transparent); color: {tool.color};">{tool.tag}</span>
+                </div>
+                <p class="tool-card-desc">{tool.desc}</p>
+              </div>
+              <div class="tool-card-modal-badge" style="background: color-mix(in srgb, {tool.color} 12%, transparent); color: {tool.color};">
+                <span>选工具</span>
+                <iconify-icon icon="lucide:layout-grid"></iconify-icon>
+              </div>
+            </button>
+          {:else}
+            <a
+              class="featured-tool-card"
+              href={tool.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style="--tool-accent: {tool.color};"
+            >
+              <div class="tool-card-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
+                <iconify-icon icon={tool.icon}></iconify-icon>
+              </div>
+              <div class="tool-card-info">
+                <div class="tool-card-title-row">
+                  <strong class="tool-card-title">{tool.title}</strong>
+                  <span class="tool-card-tag" style="background: color-mix(in srgb, {tool.color} 10%, transparent); color: {tool.color};">{tool.tag}</span>
+                </div>
+                <p class="tool-card-desc">{tool.desc}</p>
+              </div>
+              <iconify-icon icon="lucide:arrow-up-right" class="tool-card-arrow"></iconify-icon>
+            </a>
+          {/if}
         {/each}
       </div>
     </section>
@@ -499,14 +614,14 @@
   {:else}
     <!-- 各大主题分区卡片 -->
     <div class="sections-container">
-      {#each displaySections as section (section.title)}
+      {#each displaySections as section, sectionIdx (section.title)}
         {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#4b5563', tag: '资料' }}
         {@const isCharacterSection = section.title === '角色'}
         {@const directItems = section.items.filter(item => item.children.length === 0)}
         {@const groupItems = section.items.filter(item => item.children.length > 0)}
         {@const sectionCount = countSectionTotal(section)}
 
-        <section class="section-card" style="--section-theme: {theme.color};">
+        <section class="section-card" style="--section-theme: {theme.color}; --card-index: {sectionIdx};">
           <!-- 分区卡片头部 -->
           <div class="section-card-header">
             <div class="section-badge-icon" style="background-color: color-mix(in srgb, {theme.color} 14%, transparent); color: {theme.color};">
@@ -556,7 +671,7 @@
                               referrerpolicy="no-referrer"
                             >
                           {:else}
-                            <div class="char-avatar-placeholder">
+                            <div class="char-avatar-placeholder" aria-hidden="true">
                               <span>{charItem.title.slice(0, 1)}</span>
                             </div>
                           {/if}
@@ -645,21 +760,40 @@
                         <!-- 子卡片标题 -->
                         <div class="subgroup-card-header">
                           <div class="subgroup-card-title-wrap">
-                            <span class="subgroup-bullet"></span>
+                            <div class="subgroup-icon-badge">
+                              <iconify-icon icon={getSubgroupIcon(group.title)}></iconify-icon>
+                            </div>
                             <strong class="subgroup-card-title">{group.title}</strong>
                             <span class="subgroup-count-badge">{group.children.length}</span>
                           </div>
-                          {#if group.url}
-                            <a
-                              class="subgroup-external-link"
-                              href={group.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="前往分类原页面"
-                            >
-                              <iconify-icon icon="lucide:arrow-up-right"></iconify-icon>
-                            </a>
-                          {/if}
+
+                          <div class="subgroup-header-actions">
+                            {#if getModalDataForGroup(group.title)}
+                              {@const modalData = getModalDataForGroup(group.title)!}
+                              <button
+                                class="subgroup-popup-pill-btn"
+                                type="button"
+                                onclick={() => activeCollectionModal = modalData}
+                                title={`以弹窗全览 ${group.title}`}
+                                aria-label={`以弹窗全览 ${group.title}`}
+                              >
+                                <iconify-icon icon="lucide:layout-grid"></iconify-icon>
+                                <span>弹窗选择</span>
+                              </button>
+                            {/if}
+
+                            {#if group.url}
+                              <a
+                                class="subgroup-external-link"
+                                href={group.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="前往分类原页面"
+                              >
+                                <iconify-icon icon="lucide:arrow-up-right"></iconify-icon>
+                              </a>
+                            {/if}
+                          </div>
                         </div>
 
                         <!-- 子条目标签集 -->
@@ -735,7 +869,13 @@
       </div>
 
       <div class="wp-modal-footer">
-        <span class="wp-modal-tip">170+ 官方壁纸库随机抽取</span>
+        <span class="wp-modal-tip">
+          {#if currentWallpaper.totalCount && currentWallpaper.totalCount > 0}
+            官方壁纸库随机抽取 · 库藏 {currentWallpaper.totalCount} 张
+          {:else}
+            官方壁纸库随机抽取
+          {/if}
+        </span>
         <div class="wp-modal-actions">
           <button
             class="wp-action-btn"
@@ -758,5 +898,109 @@
         </div>
       </div>
     </div>
+  </div>
+{/if}
+
+<!-- ── 聚合合集弹窗 (猫娘百宝箱 / 官方渠道 / 全站筛选表 / 游戏延伸) ── -->
+{#if activeCollectionModal}
+  <div
+    class="collection-modal-backdrop"
+    onclick={(e) => { if (e.target === e.currentTarget) activeCollectionModal = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') activeCollectionModal = null; }}
+    role="dialog"
+    aria-modal="true"
+    aria-label={activeCollectionModal.title}
+    tabindex="-1"
+  >
+    <div class="collection-modal-content">
+      <div class="coll-modal-header" style="--modal-accent: {activeCollectionModal.color};">
+        <div class="coll-modal-title-wrap">
+          <div class="coll-modal-icon-badge" style="background: color-mix(in srgb, {activeCollectionModal.color} 14%, transparent); color: {activeCollectionModal.color};">
+            <iconify-icon icon={activeCollectionModal.icon}></iconify-icon>
+          </div>
+          <div class="coll-modal-text-group">
+            <div class="coll-modal-title-row">
+              <h3 class="coll-modal-title">{activeCollectionModal.title}</h3>
+              <span class="coll-modal-count-badge">{activeCollectionModal.items.length} 个入口</span>
+            </div>
+            <p class="coll-modal-subtitle">{activeCollectionModal.subtitle}</p>
+          </div>
+        </div>
+        <button
+          class="coll-modal-close-btn"
+          type="button"
+          onclick={() => activeCollectionModal = null}
+          aria-label="关闭弹窗"
+        >
+          <iconify-icon icon="lucide:x"></iconify-icon>
+        </button>
+      </div>
+
+      <div class="coll-modal-body">
+        <div class="coll-tools-grid">
+          {#each activeCollectionModal.items as tool, toolIdx (tool.title)}
+            <a
+              class="coll-tool-card"
+              href={tool.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style="--item-color: {tool.color}; --tool-index: {toolIdx};"
+            >
+              <div class="coll-tool-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
+                <iconify-icon icon={tool.icon}></iconify-icon>
+              </div>
+              <div class="coll-tool-info">
+                <div class="coll-tool-title-row">
+                  <strong class="coll-tool-title">{tool.title}</strong>
+                  <span class="coll-tool-tag" style="background: color-mix(in srgb, {tool.color} 10%, transparent); color: {tool.color};">{tool.tag}</span>
+                </div>
+                <p class="coll-tool-desc">{tool.desc}</p>
+              </div>
+              <div class="coll-tool-arrow-wrap">
+                <iconify-icon icon="lucide:arrow-up-right"></iconify-icon>
+              </div>
+            </a>
+          {/each}
+        </div>
+      </div>
+
+      {#if activeCollectionModal.footerTip || activeCollectionModal.wikiUrl}
+        <div class="coll-modal-footer">
+          <span class="coll-footer-tip">{activeCollectionModal.footerTip || ''}</span>
+          {#if activeCollectionModal.wikiUrl}
+            <a
+              class="coll-wiki-link"
+              href={activeCollectionModal.wikiUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span>查看 Wiki 说明页面</span>
+              <iconify-icon icon="lucide:external-link"></iconify-icon>
+            </a>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- ── 浮动返回顶部按钮 ── -->
+{#if showScrollTop}
+  <button
+    class="floating-top-btn"
+    type="button"
+    onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+    title="返回顶部"
+    aria-label="返回顶部"
+  >
+    <iconify-icon icon="lucide:arrow-up"></iconify-icon>
+  </button>
+{/if}
+
+<!-- ── 壁纸切换浮动微提示 ── -->
+{#if wallpaperToast}
+  <div class="wallpaper-toast-pill" role="status" aria-live="polite">
+    <iconify-icon icon="lucide:sparkles" class="toast-sparkle"></iconify-icon>
+    <span>{wallpaperToast}</span>
   </div>
 {/if}
