@@ -1471,11 +1471,8 @@ private fun createWikiWebView(
             javaScriptEnabled = true
             domStorageEnabled = true
 
-            // 缓存策略：根据用户设置
-            cacheMode = if (AppPrefs.wikiCacheMode == AppPrefs.WIKI_CACHE_OFFLINE_FIRST)
-                WebSettings.LOAD_CACHE_ELSE_NETWORK
-            else
-                WebSettings.LOAD_DEFAULT
+            // 缓存策略：标准浏览器缓存（资源复用 + 内容及时更新）
+            cacheMode = WebSettings.LOAD_DEFAULT
 
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
 

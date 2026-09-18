@@ -20,6 +20,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.encodeToString
 import org.jsoup.Jsoup
 import util.buildParseUrl
 import util.buildWikiUrl
@@ -35,6 +36,12 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
+    private val portraitSemaphore = Semaphore(3)
+
+    private suspend fun cachedPortraits(faction: String): Map<String, String> =
+        OfflineCache.getEntry(OfflineCache.Type.CHARACTER_LIST, "portraits_$faction")?.let {
+            runCatching { SharedJson.decodeFromString<Map<String, String>>(it.content) }.getOrNull()
+        }.orEmpty()
 
     /** 四个阵营（与 Wiki 首页"超弦体 & 晶源体"内容块一致） */
     val FACTIONS = listOf("欧泊", "剪刀手", "乌尔比诺", "晶源体")
@@ -159,7 +166,13 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             }
             // 立绘始终补抓：批量 imageinfo 请求成本低，缓存路径也执行，
             // 避免首次抓取被限流后缓存里的立绘永远缺失。
-            val withPortraits = fetchPortraits(characters)
+            val savedPortraits = cachedPortraits(faction)
+            val withPortraits = fetchPortraits(characters.map {
+                it.copy(portraitUrl = savedPortraits[it.name])
+            })
+            val resolved = withPortraits.mapNotNull { char -> char.portraitUrl?.let { char.name to it } }.toMap()
+            if (resolved.isNotEmpty()) OfflineCache.put(OfflineCache.Type.CHARACTER_LIST,
+                "portraits_$faction", SharedJson.encodeToString(savedPortraits + resolved))
             ApiResult.Success(
                 FactionData(faction, withPortraits),
                 isOffline = result.isFromCache,
@@ -191,8 +204,9 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
                 return ApiResult.Error("未找到 $faction 角色缓存数据", kind = ErrorKind.NOT_FOUND)
             }
 
+            val portraits = cachedPortraits(faction)
             ApiResult.Success(
-                FactionData(faction, characters),
+                FactionData(faction, characters.map { it.copy(portraitUrl = portraits[it.name]) }),
                 isOffline = true,
                 cacheAgeMs = entry.ageMs
             )
@@ -278,11 +292,10 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             """^.+-[^|\]\n{}]+立绘\.(?:png|jpg|jpeg|webp)$""",
             RegexOption.IGNORE_CASE
         )
-        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
         val result = ConcurrentHashMap<String, String>()
         characters.map { char ->
             async {
-                semaphore.withPermit {
+                portraitSemaphore.withPermit {
                     try {
                         val url = buildParseUrl(API, char.name, "text")
                         val body = WikiEngine.safeGet(url) ?: return@withPermit

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailApi.CharacterDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
@@ -685,6 +686,24 @@ private fun AttributesCard(detail: CharacterDetail) {
 
 @Composable
 private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = null) {
+    // 主武器立绘：文件名规律 "<武器名>-weapon.png"，旧页面可能用 "<角色名>-weapon.png"。
+    // 一次批量 imageinfo 查两个候选，加载失败时回退到占位图标，不阻塞卡片其余内容。
+    val primaryWeaponFile = "${detail.weaponName}-weapon.png"
+    val legacyWeaponFile = "${detail.name}-weapon.png"
+    var weaponImageUrl by remember(detail.weaponName, detail.name) { mutableStateOf<String?>(null) }
+    var imageFailed by remember(weaponImageUrl) { mutableStateOf(false) }
+    LaunchedEffect(detail.weaponName, detail.name) {
+        if (detail.weaponName.isBlank()) return@LaunchedEffect
+        val result = com.nekolaska.calabiyau.core.cache.OfflineCache.fetchWithCache(
+            com.nekolaska.calabiyau.core.cache.OfflineCache.Type.WEAPON_LIST,
+            "detail_image_${detail.weaponName}_${detail.name}"
+        ) {
+            val urls = WikiEngine.fetchImageUrls(listOf(primaryWeaponFile, legacyWeaponFile))
+            urls[primaryWeaponFile] ?: urls[legacyWeaponFile]
+        }
+        weaponImageUrl = result?.payload
+    }
+
     Card(
         onClick = { onClick?.invoke() },
         shape = smoothCornerShape(24.dp),
@@ -698,21 +717,33 @@ private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = nul
             )
             Spacer(Modifier.height(12.dp))
 
-            // 武器名 + 类型
+            // 武器立绘 + 名称 + 类型
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Outlined.GpsFixed,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(22.dp)
-                        )
+                Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                if (weaponImageUrl != null && !imageFailed) {
+                    AsyncImage(
+                        model = weaponImageUrl,
+                        contentDescription = detail.weaponName,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(64.dp),
+                        onError = { imageFailed = true }
+                    )
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Outlined.GpsFixed,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
+                }
                 }
                 Spacer(Modifier.width(14.dp))
                 Column {

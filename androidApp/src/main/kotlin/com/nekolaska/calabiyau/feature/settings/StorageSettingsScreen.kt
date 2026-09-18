@@ -248,10 +248,10 @@ internal fun StorageSettingsScreen(
                             onClear = {
                                 scope.launch {
                                     clearingCategory = category
-                                    withContext(Dispatchers.IO) { clearCache(context, category) }
+                                    clearCache(context, category)
                                     clearingCategory = null
                                     onRefreshSnapshot()
-                                    showSnack("${category.title}已清除")
+                                    showSnack(if (category == CacheCategory.WEBVIEW) "已清理网页缓存，使用时会重新生成" else "${category.title}已清除")
                                 }
                             }
                         )
@@ -306,7 +306,7 @@ internal fun StorageSettingsScreen(
                             isClearingAll = false
                             showClearAllConfirm = false
                             onRefreshSnapshot()
-                            showSnack("所有缓存已清除")
+                            showSnack("已清理缓存，使用过程中会重新生成")
                         }
                     },
                     colors = ButtonDefaults.filledTonalButtonColors(
@@ -616,7 +616,6 @@ private suspend fun clearCache(
     when (category) {
         CacheCategory.OFFLINE -> {
             OfflineCache.clearAll()
-            OfflineCache.clearMemoryCaches()
         }
 
         CacheCategory.IMAGE -> {
@@ -639,8 +638,18 @@ private suspend fun clearCache(
 
 private fun calculateWebViewCacheSize(context: Context): Long {
     var total = 0L
+    for (dir in webViewCacheDirs(context)) {
+        if (dir.exists() && dir.isDirectory) {
+            total += dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        }
+    }
+    return total
+}
+
+/** Known WebView cache locations, used only for estimating disk usage. */
+private fun webViewCacheDirs(context: Context): List<File> {
     val dataDir = context.dataDir
-    val cacheDirs = listOf(
+    return listOf(
         File(context.cacheDir, "WebView"),
         File(context.codeCacheDir, "WebView"),
         File(dataDir, "app_webview/Cache"),
@@ -652,10 +661,4 @@ private fun calculateWebViewCacheSize(context: Context): Long {
         File(dataDir, "app_webview/Default/GPUCache")
     ).mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
         .distinctBy { it.path }
-    for (dir in cacheDirs) {
-        if (dir.exists() && dir.isDirectory) {
-            total += dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-        }
-    }
-    return total
 }

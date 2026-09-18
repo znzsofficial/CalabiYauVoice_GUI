@@ -14,6 +14,7 @@ import data.DownloadRecord
 import data.sanitizeFileName
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import portrait.PortraitCostume
 import java.io.File
 
@@ -151,6 +152,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                     is DownloadTask.FileSearch -> downloadFileSearch(task, baseDir)
                     is DownloadTask.Category -> downloadCategory(task, baseDir)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 val msg = if (!isNetworkAvailable.value) "网络连接失败，下载中断" else "下载失败: ${e.message}"
                 _errorEvent.tryEmit(msg)
@@ -187,7 +190,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             sanitizeFileName(costume.name)
         )
         addLog("开始下载 [${characterName}/${costume.name}] ${files.size} 个立绘...")
-        WikiEngine.downloadSpecificFiles(
+        val downloadedFiles = WikiEngine.downloadSpecificFiles(
             files = files,
             saveDir = saveDir,
             maxConcurrency = AppPrefs.maxConcurrency,
@@ -201,7 +204,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         addLog("下载完成！保存至: ${saveDir.absolutePath}")
         addDownloadRecord(DownloadRecord(
             name = "$characterName / ${costume.name}",
-            fileCount = assets.size,
+            fileCount = downloadedFiles.size,
             timestamp = System.currentTimeMillis(),
             status = "success",
             savePath = saveDir.absolutePath
@@ -215,7 +218,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         }
         val saveDir = File(baseDir, "文件搜索")
         addLog("开始下载 ${files.size} 个文件...")
-        WikiEngine.downloadSpecificFiles(
+        val downloadedFiles = WikiEngine.downloadSpecificFiles(
             files = files,
             saveDir = saveDir,
             maxConcurrency = AppPrefs.maxConcurrency,
@@ -228,8 +231,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         scanMediaFiles(saveDir)
         addLog("下载完成！保存至: ${saveDir.absolutePath}")
         addDownloadRecord(DownloadRecord(
-            name = "文件搜索 (${files.size}个)",
-            fileCount = files.size,
+            name = "文件搜索 (${downloadedFiles.size}个)",
+            fileCount = downloadedFiles.size,
             timestamp = System.currentTimeMillis(),
             status = "success",
             savePath = saveDir.absolutePath
@@ -244,7 +247,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         }
         val charDir = File(baseDir, sanitizeFileName(group.characterName))
         var totalDownloaded = 0
-        for (cat in cats) {
+        val categoryFiles = cats.distinct().mapNotNull { cat ->
             val manual = task.manualSelectionMap[cat]
             val files = if (manual != null) {
                 addLog("[${cat.removePrefix("Category:").removePrefix("分类:")}] 使用手动选择 (${manual.size}项)")
@@ -252,21 +255,31 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             } else {
                 WikiEngine.fetchFilesInCategory(cat, audioOnly = task.voiceOnly)
             }
-            if (files.isEmpty()) continue
+            files.distinctBy { it.second }.takeIf { it.isNotEmpty() }?.let { cat to it }
+        }
+        val totalFiles = categoryFiles.sumOf { it.second.size }
+        if (totalFiles == 0) {
+            addLog("所选分类没有可下载的文件")
+            return
+        }
+        var progressOffset = 0
+        for ((cat, files) in categoryFiles) {
             val catName = sanitizeFileName(cat.removePrefix("Category:").removePrefix("分类:"))
             val saveDir = File(charDir, catName)
             addLog("下载分类 [$catName]: ${files.size} 个文件")
-            WikiEngine.downloadSpecificFiles(
+            val downloadedFiles = WikiEngine.downloadSpecificFiles(
                 files = files,
                 saveDir = saveDir,
                 maxConcurrency = AppPrefs.maxConcurrency,
                 onLog = { addLog(it) },
-                onProgress = { current, total, name ->
-                    _downloadProgress.value = current.toFloat() / total
-                    _downloadStatusText.value = "[$catName] $current/$total: $name"
+                onProgress = { current, _, name ->
+                    val overallCurrent = progressOffset + current
+                    _downloadProgress.value = overallCurrent.toFloat() / totalFiles.coerceAtLeast(1)
+                    _downloadStatusText.value = "[$catName] $overallCurrent/$totalFiles: $name"
                 }
             )
-            totalDownloaded += files.size
+            progressOffset += files.size
+            totalDownloaded += downloadedFiles.size
         }
         scanMediaFiles(charDir)
         addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")

@@ -151,7 +151,7 @@ internal fun AppearanceSettingsSection() {
             }
             SettingsItem(
                 icon = Icons.Outlined.Palette,
-                title = "外观",
+                title = "主题模式",
                 subtitle = themeName,
                 onClick = { showThemeDialog = true }
             )
@@ -159,7 +159,7 @@ internal fun AppearanceSettingsSection() {
             if (showThemeDialog) {
                 AlertDialog(
                     onDismissRequest = { showThemeDialog = false },
-                    title = { Text("外观") },
+                    title = { Text("主题模式") },
                     text = {
                         Column {
                             listOf(

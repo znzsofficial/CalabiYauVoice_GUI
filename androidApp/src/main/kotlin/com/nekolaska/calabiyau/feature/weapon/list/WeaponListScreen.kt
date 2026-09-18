@@ -240,11 +240,11 @@ private fun WeaponCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                // 使用者（主武器）
-                if (weapon.user.isNotBlank()) {
+                // 使用者（主武器）；通用武器显示"甲 等 N 名角色"
+                if (weapon.users.isNotEmpty()) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        text = weapon.user,
+                        text = weapon.displayUsers,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -267,7 +267,7 @@ private fun WeaponCard(
                     }
                 }
                 // 武器介绍（近战/副武器/战术道具，没有使用者时显示）
-                if (weapon.user.isBlank() && weapon.description.isNotBlank()) {
+                if (weapon.users.isEmpty() && weapon.description.isNotBlank()) {
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = weapon.description,

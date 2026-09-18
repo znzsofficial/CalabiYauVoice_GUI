@@ -7,6 +7,17 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class VotingParsersTest {
+    @Test
+    fun idContainerPreservesExplicitZeroVotes() {
+        val polls = VotingParsers.parseAjaxPollElements("""
+            <div id="ajaxpoll-container-ABC123">
+              <div answer="1"><div class="ajaxpoll-answer-vote"><span><b>0</b></span></div></div>
+              <div class="ajaxpoll-info">共有99 人投票</div>
+            </div>
+        """)
+        assertEquals("ABC123", polls.single().pollId)
+        assertEquals(0, polls.single().votes)
+    }
 
     @Test
     fun parsePollConfigReadsInfoAndDecodesCandidate() {

@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.voting.parser
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollCandidate
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollData
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -47,28 +48,28 @@ object VotingParsers {
     }
 
     fun parseAjaxPollElements(html: String): List<PollData> {
-        val containers = Jsoup.parse(html).select("[class*=ajaxpoll-container]")
+        val containers = Jsoup.parse(html).select("[id^=ajaxpoll-container-], [class*=ajaxpoll-container]")
         if (containers.isEmpty()) return emptyList()
 
         return containers.mapNotNull { container ->
-            val pollId = Regex("""poll-id\s+([A-Fa-f0-9]+)""")
-                .find(container.html())
-                ?.groupValues?.get(1)
+            val pollId = container.selectFirst(".poll-id")?.classNames()
+                ?.firstOrNull { it.matches(Regex("[A-Fa-f0-9]+")) }
+                ?: container.id().removePrefix("ajaxpoll-container-").takeIf {
+                    container.id().startsWith("ajaxpoll-container-") && it.matches(Regex("[A-Fa-f0-9]+"))
+                }
                 ?: return@mapNotNull null
 
             val answerBlock = container.selectFirst("div[answer=1]")
             var userVoted = false
-            var votes = 0
+            var votes: Int? = null
 
             if (answerBlock != null) {
                 userVoted = answerBlock.selectFirst(".ajaxpoll-our-vote") != null ||
                     answerBlock.select("input[checked]").isNotEmpty()
-                votes = Regex("""ajaxpoll-answer-vote[^>]*>\s*<span[^>]*>(\d+)</span>""")
-                    .find(answerBlock.html())
-                    ?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                votes = answerBlock.selectFirst(".ajaxpoll-answer-vote span")?.text()?.trim()?.toIntOrNull()
             }
 
-            if (votes == 0) {
+            if (votes == null) {
                 votes = Regex("""共有(\d+)\s*人投票""")
                     .find(container.text())
                     ?.groupValues?.get(1)?.toIntOrNull() ?: 0
@@ -84,22 +85,6 @@ object VotingParsers {
             .map { it.trim() }
             .filter { it.isNotBlank() }
 
-    private fun Element.textWithLineBreaks(): String {
-        val builder = StringBuilder()
-        fun appendNode(node: org.jsoup.nodes.Node) {
-            when (node) {
-                is org.jsoup.nodes.TextNode -> builder.append(node.wholeText)
-                is Element -> {
-                    if (node.tagName().equals("br", ignoreCase = true)) {
-                        builder.append('\n')
-                    } else {
-                        node.childNodes().forEach(::appendNode)
-                        if (node.tagName().equals("p", ignoreCase = true)) builder.append('\n')
-                    }
-                }
-            }
-        }
-        appendNode(this)
-        return builder.toString()
-    }
+    private fun Element.textWithLineBreaks(): String =
+        HtmlText.textWithLineBreaks(this)
 }

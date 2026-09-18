@@ -24,10 +24,6 @@ object AppPrefs {
     const val THEME_LIGHT = 1
     const val THEME_DARK = 2
 
-    /** Wiki 缓存模式：0=默认, 1=优先缓存 */
-    const val WIKI_CACHE_DEFAULT = 0
-    const val WIKI_CACHE_OFFLINE_FIRST = 1
-
     /** 首页快捷入口布局：0=网格大卡, 1=六按钮 */
     const val HOME_QUICK_LAYOUT_GRID = 0
     const val HOME_QUICK_LAYOUT_BUTTONS = 1
@@ -144,7 +140,6 @@ object AppPrefs {
     }
 
     var bottomBarStyle by intPref(BAR_STYLE_BOTTOM_APP_BAR)
-    var wikiCacheMode by intPref(WIKI_CACHE_DEFAULT)
     var offlineCacheNeverExpire by booleanPref(false)
     var customSeedColor by intPref(SEED_WALLPAPER)
     var wikiDesktopMode by booleanPref(false)

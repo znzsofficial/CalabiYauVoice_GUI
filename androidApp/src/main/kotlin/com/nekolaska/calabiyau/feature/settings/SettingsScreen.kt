@@ -37,7 +37,6 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.OfflinePin
 import androidx.compose.material.icons.outlined.SpaceDashboard
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Sync
@@ -485,25 +484,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
                     Column {
-                        var wikiCacheMode by remember { mutableIntStateOf(AppPrefs.wikiCacheMode) }
-                        val cacheName = when (wikiCacheMode) {
-                            AppPrefs.WIKI_CACHE_OFFLINE_FIRST -> "优先使用缓存"
-                            else -> "自动"
-                        }
-                        SettingsItem(
-                            icon = Icons.Outlined.OfflinePin,
-                            title = "缓存",
-                            subtitle = cacheName,
-                            onClick = {
-                                val newMode = if (wikiCacheMode == AppPrefs.WIKI_CACHE_DEFAULT)
-                                    AppPrefs.WIKI_CACHE_OFFLINE_FIRST else AppPrefs.WIKI_CACHE_DEFAULT
-                                wikiCacheMode = newMode
-                                AppPrefs.wikiCacheMode = newMode
-                            }
-                        )
-
-                        HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-
                         var wikiDesktopMode by remember { mutableStateOf(AppPrefs.wikiDesktopMode) }
                         SettingsToggleItem(
                             icon = Icons.Outlined.DesktopWindows,
@@ -563,7 +543,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             icon = Icons.Outlined.Info,
                             title = "存储空间",
                             subtitle = storageSnapshot?.let {
-                                "已用 ${formatFileSize(it.totalSize)} · 缓存 ${formatFileSize(it.cacheTotalSize)}"
+                                "已用 ${formatFileSize(it.totalSize)}"
                             } ?: "正在计算…",
                             onClick = { currentPage = SettingsPage.STORAGE }
                         )
@@ -582,9 +562,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.12"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.13"
                     } catch (_: Exception) {
-                        "2.1.12"
+                        "2.1.13"
                     }
                 }
                 val currentVersionCode = remember {

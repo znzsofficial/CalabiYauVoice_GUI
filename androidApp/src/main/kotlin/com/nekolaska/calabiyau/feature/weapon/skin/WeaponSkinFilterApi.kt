@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.weapon.skin
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import data.ApiResult
@@ -79,7 +80,7 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
                 ?: return@ioApiCall ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
             parseSkinResult(
                 entry.content,
-                weaponMeta = fetchWeaponMetaMap(forceRefresh = false, cacheOnly = true),
+                weaponMeta = fetchCachedWeaponMetaMap(),
                 isOffline = true,
                 cacheAgeMs = entry.ageMs
             )
@@ -87,20 +88,20 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
 
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<WeaponSkinInfo>> =
     ioApiCall("获取武器外观数据失败") {
-        // 武器元数据（大类/类型）和外观渲染互不依赖：meta 走 ask+imageinfo（慢），
+        // 武器元数据只查询 ask，不获取无关武器图片；与外观渲染互不依赖。
         // 皮肤数据只要 1 次模块渲染（快）。并行执行，关键路径取两者较大值。
         coroutineScope {
-            val metaDeferred = async { fetchWeaponMetaMap(forceRefresh, cacheOnly = false) }
+            val metaDeferred = async { fetchWeaponMetaMap(forceRefresh) }
             val url = buildWikiUrl(API, "action" to "parse", "text" to "{{#invoke:武器|武器外观筛选}}", "prop" to "text", "format" to "json")
             val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_SKINS,
                 key = "all_weapon_skins",
                 forceRefresh = forceRefresh
             ) { WikiEngine.safeGet(url) }
-                ?: return@coroutineScope ApiResult.Error(
-                    "请求失败，且无离线缓存",
-                    kind = ErrorKind.NETWORK
-                )
+                ?: run {
+                    metaDeferred.cancel()
+                    return@coroutineScope ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
+                }
 
             parseSkinResult(result.payload, metaDeferred.await(), isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
         }
@@ -111,9 +112,8 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
         val type: String
     )
 
-    private suspend fun fetchWeaponMetaMap(forceRefresh: Boolean, cacheOnly: Boolean): Map<String, WeaponMeta> {
-        if (cacheOnly) return fetchCachedWeaponMetaMap()
-        return when (val result = WeaponListApi.fetchAllCategories(forceRefresh)) {
+    private suspend fun fetchWeaponMetaMap(forceRefresh: Boolean): Map<String, WeaponMeta> {
+        return when (val result = WeaponListApi.fetchAllCategories(forceRefresh = forceRefresh, includeImages = false)) {
             is ApiResult.Success -> result.value
                 .flatMap { categoryData ->
                     categoryData.weapons.map { weapon ->
@@ -388,26 +388,8 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
     }
 
 
-    private fun Element.textWithLineBreaks(): String {
-        val builder = StringBuilder()
-        fun appendNode(element: Element) {
-            element.childNodes().forEach { node ->
-                when (node) {
-                    is org.jsoup.nodes.TextNode -> builder.append(node.wholeText)
-                    is Element -> {
-                        if (node.tagName().equals("br", ignoreCase = true)) {
-                            builder.append('\n')
-                        } else {
-                            appendNode(node)
-                            if (node.tagName().equals("p", ignoreCase = true)) builder.append('\n')
-                        }
-                    }
-                }
-            }
-        }
-        appendNode(this)
-        return builder.toString()
-    }
+    private fun Element.textWithLineBreaks(): String =
+        HtmlText.textWithLineBreaks(this)
 
     private data class ParsedSkinVisualInfo(
         val name: String,

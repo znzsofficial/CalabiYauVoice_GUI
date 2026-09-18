@@ -420,7 +420,7 @@ private fun CharacterListSkeleton(modifier: Modifier = Modifier) {
                     ShimmerBox(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(5f / 12f),
+                            .aspectRatio(5f / 8f),
                         shape = smoothCornerShape(12.dp)
                     )
                     Spacer(Modifier.height(8.dp))

@@ -80,13 +80,6 @@ class LiveWikiSnapshotTest {
         val html = json["parse"]?.jsonObject?.get("text")?.jsonObject?.get("*")
             ?.jsonPrimitive?.content
             ?: error("parse response missing text")
-        // Known regression: the module switched from |- class="divsort" table rows to
-        // div.klbq-skin-card[data-param*] markup, which parseWeaponSkinHtml does not yet parse.
-        // Track the parser fix; until then this stays skipped instead of failing every run.
-        org.junit.Assume.assumeTrue(
-            "weapon skin module markup regression (klbq-skin-card): parser fix pending",
-            !html.contains("klbq-skin-card") || WeaponSkinFilterApi.parseWeaponSkinHtml(html).isNotEmpty()
-        )
         assertTrue(WeaponSkinFilterApi.parseWeaponSkinHtml(html).isNotEmpty(), "weapon skin parser returned no rows")
     }
 

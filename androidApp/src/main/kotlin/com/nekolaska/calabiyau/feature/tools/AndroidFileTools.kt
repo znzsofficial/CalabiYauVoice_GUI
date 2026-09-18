@@ -12,6 +12,7 @@ import androidx.core.content.FileProvider
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import java.io.File
 import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,7 +24,9 @@ fun formatFileSize(bytes: Long): String {
     val units = arrayOf("B", "KB", "MB", "GB")
     val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
     val idx = digitGroups.coerceIn(0, units.size - 1)
-    return DecimalFormat("#,##0.#").format(bytes / 1024.0.pow(idx.toDouble())) + " " + units[idx]
+    // Locale.US keeps "1.5 MB" consistent regardless of device decimal separator.
+    return DecimalFormat("#,##0.#", DecimalFormatSymbols(Locale.US))
+        .format(bytes / 1024.0.pow(idx.toDouble())) + " " + units[idx]
 }
 
 fun formatDateTime(timestamp: Long): String {

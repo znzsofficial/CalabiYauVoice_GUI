@@ -39,12 +39,21 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
     /** 武器信息 */
     data class WeaponInfo(
         val name: String,
-        val user: String,           // 使用者
+        val users: List<String>,    // 使用者（通用武器有多名角色）
         val type: String,           // 武器类型（自动步枪、狙击步枪等）
         val description: String,    // 武器介绍
         val wikiUrl: String,
-        val imageUrl: String?        // 武器图片 URL
-    )
+        val imageUrl: String?       // 武器图片 URL
+    ) {
+        /** 列表卡片上的使用者文案：1 人显名字，多人截断为"甲 等 N 名角色"。 */
+        val displayUsers: String
+            get() = when (users.size) {
+                0 -> ""
+                1 -> users[0]
+                2 -> users.joinToString("、")
+                else -> "${users.first()} 等 ${users.size} 名角色"
+            }
+    }
 
     /** 分类武器数据 */
     data class WeaponCategoryData(
@@ -216,7 +225,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         }
     }
 
-    private fun parseWeapons(body: String): List<WeaponInfo> {
+    internal fun parseWeapons(body: String): List<WeaponInfo> {
         val json = SharedJson.parseToJsonElement(body).jsonObject
         val results = json["query"]?.jsonObject?.get("results")?.jsonObject ?: return emptyList()
 
@@ -224,8 +233,18 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
             val obj = value.jsonObject
             val printouts = obj["printouts"]?.jsonObject
 
-            val user = printouts?.get("使用者")?.jsonArray
-                ?.firstOrNull()?.jsonPrimitive?.content ?: ""
+            // 使用者是多值属性：专属武器 1 人，通用武器（如静风）多名角色
+            val users = printouts?.get("使用者")?.jsonArray
+                ?.mapNotNull { element ->
+                    when (element) {
+                        is JsonPrimitive -> element.contentOrNull
+                        is JsonObject -> element["fulltext"]?.jsonPrimitive?.contentOrNull
+                        else -> null
+                    }?.trim()
+                }
+                ?.filter { it.isNotBlank() }
+                ?.distinct()
+                .orEmpty()
             val type = printouts?.get("类型")?.jsonArray
                 ?.firstOrNull()?.jsonPrimitive?.content ?: ""
             val desc = printouts?.get("武器介绍")?.jsonArray
@@ -235,7 +254,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
 
             WeaponInfo(
                 name = weaponName,
-                user = user,
+                users = users,
                 type = type,
                 description = desc,
                 wikiUrl = fullUrl,
@@ -313,8 +332,10 @@ internal fun weaponImageFileNames(
 ): List<String> = if (category == WeaponListApi.WeaponCategory.PRIMARY) {
     buildList {
         add("${weapon.name}-weapon.png")
-        if (weapon.user.isNotBlank() && weapon.user != weapon.name) {
-            add("${weapon.user}-weapon.png")
+        // 仅单使用者武器兼容旧命名，避免通用武器误用某位角色的专属武器图。
+        val firstUser = weapon.users.singleOrNull()
+        if (!firstUser.isNullOrBlank() && firstUser != weapon.name) {
+            add("$firstUser-weapon.png")
         }
     }
 } else {

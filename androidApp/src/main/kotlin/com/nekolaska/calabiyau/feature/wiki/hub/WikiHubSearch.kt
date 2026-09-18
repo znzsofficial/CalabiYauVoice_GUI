@@ -422,14 +422,14 @@ private fun buildDynamicSearchEntries(
             HubSearchEntry(
                 id = "weapon_${weapon.name}",
                 title = weapon.name,
-                subtitle = listOf("武器", category.category.displayName, weapon.user, weapon.type)
+                subtitle = listOf("武器", category.category.displayName, weapon.displayUsers, weapon.type)
                     .filter { it.isNotBlank() }
                     .joinToString(" · "),
-                keywords = listOf(weapon.name, weapon.user, weapon.type, category.category.displayName, "武器", "枪械", "枪"),
+                keywords = listOf(weapon.name, weapon.type, category.category.displayName, "武器", "枪械", "枪") + weapon.users,
                 icon = Icons.Outlined.GpsFixed,
                 targetRoute = WikiRoute.WeaponDetail(weapon.name),
                 kind = SearchEntryKind.Weapon,
-                aliases = listOf(weapon.user, weapon.type, category.category.displayName).filter { it.isNotBlank() },
+                aliases = (weapon.users + weapon.type + category.category.displayName).filter { it.isNotBlank() },
             )
         }
     }

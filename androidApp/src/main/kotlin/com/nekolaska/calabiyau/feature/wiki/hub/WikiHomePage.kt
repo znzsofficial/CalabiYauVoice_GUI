@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -310,48 +312,50 @@ internal fun WikiHomePage(
                         )
                     }
 
-                    // ── 玩法与养成 ──
-                    item(key = "gameplay_hub", contentType = "action_card") {
-                        ActionCard(
-                            title = "玩法与养成",
-                            subtitle = "角色培养、玩法系统与移动端内容",
-                            icon = Icons.Outlined.Extension,
-                            onClick = { onNavigateTo(WikiRoute.GameplayHub) },
-                            backdrop = backdrop
-                        )
-                    }
-
-                    // ── 外观与图鉴 ──
-                    item(key = "catalog_hub", contentType = "action_card") {
-                        ActionCard(
-                            title = "外观与图鉴",
-                            subtitle = "道具图鉴、时装筛选与武器外观",
-                            icon = Icons.Outlined.Inventory2,
-                            onClick = { onNavigateTo(WikiRoute.CatalogHub) },
-                            backdrop = backdrop
-                        )
-                    }
-
-                    // ── 玩家装饰 ──
-                    item(key = "decorations_hub", contentType = "action_card") {
-                        ActionCard(
-                            title = "玩家装饰",
-                            subtitle = "基板、封装、勋章、喷漆等外观装饰",
-                            icon = Icons.Outlined.Palette,
-                            onClick = { onNavigateTo(WikiRoute.DecorationHub) },
-                            backdrop = backdrop
-                        )
-                    }
-
-                    // ── 游戏延伸 ──
-                    item(key = "extension_hub", contentType = "action_card") {
-                        ActionCard(
-                            title = "游戏延伸",
-                            subtitle = "剧情、历史、BGM、投票与百科内容",
-                            icon = Icons.Outlined.MoreHoriz,
-                            onClick = { onNavigateTo(WikiRoute.ExtensionHub) },
-                            backdrop = backdrop
-                        )
+                    // ── 聚合入口（二级菜单页，2×2 网格与直连内容卡区分） ──
+                    item(key = "hub_grid", contentType = "hub_grid") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.weight(1f)) {
+                                    HubCard(
+                                        title = "玩法与养成",
+                                        subtitle = "角色培养、玩法系统与移动端内容",
+                                        icon = Icons.Outlined.Extension,
+                                        onClick = { onNavigateTo(WikiRoute.GameplayHub) },
+                                        backdrop = backdrop
+                                    )
+                                }
+                                Box(Modifier.weight(1f)) {
+                                    HubCard(
+                                        title = "外观与图鉴",
+                                        subtitle = "道具图鉴、时装筛选与武器外观",
+                                        icon = Icons.Outlined.Inventory2,
+                                        onClick = { onNavigateTo(WikiRoute.CatalogHub) },
+                                        backdrop = backdrop
+                                    )
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.weight(1f)) {
+                                    HubCard(
+                                        title = "玩家装饰",
+                                        subtitle = "基板、封装、勋章、喷漆等外观装饰",
+                                        icon = Icons.Outlined.Palette,
+                                        onClick = { onNavigateTo(WikiRoute.DecorationHub) },
+                                        backdrop = backdrop
+                                    )
+                                }
+                                Box(Modifier.weight(1f)) {
+                                    HubCard(
+                                        title = "游戏延伸",
+                                        subtitle = "剧情、历史、BGM、投票与百科内容",
+                                        icon = Icons.Outlined.MoreHoriz,
+                                        onClick = { onNavigateTo(WikiRoute.ExtensionHub) },
+                                        backdrop = backdrop
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // ── 卡牌 ──
@@ -401,6 +405,72 @@ internal fun WikiHomePage(
                     item { Spacer(Modifier.height(24.dp)) }
                 }
             }
+        }
+    }
+}
+
+// ────────────────────────────────────────────
+//  聚合入口卡（通向 WikiAggregateScreens 的二级菜单页）
+//  用浅色图标底 + 主色描边 + 竖排瓦片，与直连内容的行卡区分
+// ────────────────────────────────────────────
+
+@Composable
+private fun HubCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    backdrop: Backdrop = emptyBackdrop()
+) {
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
+    val hubCardShape = AppShapes.card
+    val accent = MaterialTheme.colorScheme.primary
+    Card(
+        onClick = onClick,
+        shape = hubCardShape,
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                liquidGlass -> Color.Transparent
+                hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+                else -> MaterialTheme.colorScheme.surfaceContainerLow
+            }
+        ),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { hubCardShape },
+                surfaceAlpha = 0.25f
+            )
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Surface(shape = CircleShape, color = accent.copy(alpha = 0.12f), modifier = Modifier.size(40.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
