@@ -204,15 +204,45 @@ import { onMount, tick } from 'svelte';
     return 'lucide:folder-git-2';
   }
 
-  // 分区主题配置
-  const sectionThemes: Record<string, { icon: string; tag: string }> = {
-    '首页': { icon: 'lucide:compass', tag: '门户与常用' },
-    '角色': { icon: 'lucide:users', tag: '超弦体与阵营' },
-    '武器': { icon: 'lucide:crosshair', tag: '枪械与战术' },
-    '地图': { icon: 'lucide:map', tag: '对战场景' },
-    '玩法': { icon: 'lucide:gamepad-2', tag: '模式与系统' },
-    '其他': { icon: 'lucide:sparkles', tag: '社区与资料' }
+  // 分区主题配置 (充满秩序感与活力的战略色彩)
+  const sectionThemes: Record<string, { icon: string; color: string; tag: string }> = {
+    '首页': { icon: 'lucide:compass', color: '#0284c7', tag: '门户与常用' },
+    '角色': { icon: 'lucide:users', color: '#2563eb', tag: '超弦体与阵营' },
+    '武器': { icon: 'lucide:crosshair', color: '#dc2626', tag: '枪械与战术' },
+    '地图': { icon: 'lucide:map', color: '#059669', tag: '对战场景' },
+    '玩法': { icon: 'lucide:gamepad-2', color: '#7c3aed', tag: '模式与系统' },
+    '其他': { icon: 'lucide:sparkles', color: '#d97706', tag: '社区与资料' }
   };
+
+  function getPortalSub(title: string): string {
+    if (title === '首页') return '官方百科主站';
+    if (title === '往期公告') return '版本维护更新';
+    if (title === '往期活动') return '限时主题归档';
+    if (title === '投稿作品') return '同人创作者馆';
+    if (title === 'WIKI反馈版') return '勘误纠错反馈';
+    return '官方直达';
+  }
+
+  function getCollectionIcon(title: string): string {
+    if (title === '猫娘的百宝箱') return 'lucide:box';
+    if (title === '常用链接') return 'lucide:globe';
+    if (title === '常用筛选表') return 'lucide:filter';
+    return 'lucide:layers';
+  }
+
+  function getCollectionDesc(title: string): string {
+    if (title === '猫娘的百宝箱') return 'GuGuTalk、卡牌生成器、重构模拟等 8 款同人工具';
+    if (title === '常用链接') return 'PC国服/国际服官网、移动端预约与官方B站';
+    if (title === '常用筛选表') return '角色时装外观、武器皮肤与生化卡牌速查';
+    return '分类快捷合集';
+  }
+
+  function getCollectionColor(title: string): string {
+    if (title === '猫娘的百宝箱') return '#06b6d4';
+    if (title === '常用链接') return '#2563eb';
+    if (title === '常用筛选表') return '#f59e0b';
+    return '#6b7280';
+  }
 
   function getModalDataForGroup(groupTitle: string): CollectionModalData | null {
     if (groupTitle === '猫娘的百宝箱') return CATGIRL_TOOLBOX_MODAL;
@@ -228,17 +258,19 @@ import { onMount, tick } from 'svelte';
     url?: string;
     action?: (trigger?: HTMLElement) => void;
     icon: string;
+    color: string;
     tag: string;
     isModal?: boolean;
   }
 
-  // 高频精选工具卡片 (Featured Spotlight)
+  // 高频精选工具卡片 (Featured Spotlight - 精致微色调，告别单调平庸)
   const featuredTools: FeaturedTool[] = [
     {
       title: '猫娘百宝箱',
       desc: '卡牌制作、贴纸生成、抽卡模拟等 8 款社区工具',
       action: (el) => openCollectionModal(CATGIRL_TOOLBOX_MODAL, el),
       icon: 'lucide:box',
+      color: '#06b6d4',
       tag: '工具',
       isModal: true
     },
@@ -247,6 +279,7 @@ import { onMount, tick } from 'svelte';
       desc: 'PC国服、国际服官网、手游预约与官方B站',
       action: (el) => openCollectionModal(OFFICIAL_CHANNELS_MODAL, el),
       icon: 'lucide:globe',
+      color: '#2563eb',
       tag: '官方',
       isModal: true
     },
@@ -255,6 +288,7 @@ import { onMount, tick } from 'svelte';
       desc: '时装外观、武器皮肤、功能道具与生化卡牌',
       action: (el) => openCollectionModal(FILTER_TOOLS_MODAL, el),
       icon: 'lucide:filter',
+      color: '#f59e0b',
       tag: '筛选',
       isModal: true
     },
@@ -263,6 +297,7 @@ import { onMount, tick } from 'svelte';
       desc: '超弦体时装人气投票与排行榜',
       url: 'https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8',
       icon: 'lucide:heart-handshake',
+      color: '#ec4899',
       tag: '热门'
     },
     {
@@ -270,6 +305,7 @@ import { onMount, tick } from 'svelte';
       desc: '全武器伤害、射速与衰减倍率比对',
       url: 'https://wiki.biligame.com/klbq/%E4%B8%BB%E6%AD%A6%E5%99%A8%E7%90%86%E8%AE%BA%E6%95%B0%E6%8D%AE%E8%A1%A8',
       icon: 'lucide:file-bar-chart',
+      color: '#dc2626',
       tag: '数据'
     },
     {
@@ -277,6 +313,7 @@ import { onMount, tick } from 'svelte';
       desc: '爆破、乱斗、团竞等全模式作战场景',
       url: 'https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE',
       icon: 'lucide:map-pin',
+      color: '#10b981',
       tag: '地图'
     },
     {
@@ -284,6 +321,7 @@ import { onMount, tick } from 'svelte';
       desc: '官方最新晶核、基板与礼包兑换码',
       url: 'https://wiki.biligame.com/klbq/%E5%85%91%E6%8D%A2%E7%A0%81',
       icon: 'lucide:gift',
+      color: '#8b5cf6',
       tag: '福利'
     },
     {
@@ -291,6 +329,7 @@ import { onMount, tick } from 'svelte';
       desc: '各枪械金色/紫色皮肤展示图鉴',
       url: 'https://wiki.biligame.com/klbq/%E6%AD%A6%E5%99%A8%E5%A4%96%E8%A7%82%E7%AD%9B%E9%80%89',
       icon: 'lucide:palette',
+      color: '#f97316',
       tag: '外观'
     }
   ];
@@ -646,6 +685,7 @@ import { onMount, tick } from 'svelte';
               class="featured-tool-card as-btn"
               type="button"
               onclick={(e) => tool.action?.(e.currentTarget as HTMLElement)}
+              style="--tool-color: {tool.color};"
             >
               <div class="tool-card-icon-box">
                 <iconify-icon icon={tool.icon}></iconify-icon>
@@ -665,6 +705,7 @@ import { onMount, tick } from 'svelte';
               href={tool.url}
               target="_blank"
               rel="noopener noreferrer"
+              style="--tool-color: {tool.color};"
             >
               <div class="tool-card-icon-box">
                 <iconify-icon icon={tool.icon}></iconify-icon>
@@ -783,13 +824,14 @@ import { onMount, tick } from 'svelte';
     <!-- 各大主题分区卡片 -->
     <div class="sections-container">
       {#each displaySections as section, sectionIdx (section.title)}
-        {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', tag: '资料' }}
+        {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#0284c7', tag: '资料' }}
+        {@const isHomeSection = section.title === '首页'}
         {@const isCharacterSection = section.title === '角色'}
         {@const directItems = section.items.filter(item => item.children.length === 0)}
         {@const groupItems = section.items.filter(item => item.children.length > 0)}
         {@const sectionCount = countSectionTotal(section)}
 
-        <section class="section-card" style="--card-index: {sectionIdx};">
+        <section class="section-card" style="--section-color: {theme.color}; --card-index: {sectionIdx};">
           <!-- 分区卡片头部 -->
           <div class="section-card-header">
             <div class="section-badge-icon">
@@ -805,8 +847,104 @@ import { onMount, tick } from 'svelte';
           </div>
 
           <div class="section-card-body">
+            <!-- ── 首页分区专属：轻量化门户枢纽与精选合集 ── -->
+            {#if isHomeSection}
+              <!-- 1. 官方门户核心入口 -->
+              <div class="tier-block home-portal-block">
+                <div class="tier-label">
+                  <iconify-icon icon="lucide:compass" class="tier-icon"></iconify-icon>
+                  <span>官方门户枢纽</span>
+                </div>
+                <div class="home-portal-grid">
+                  {#each directItems as item (item.title)}
+                    <a
+                      class="home-portal-card"
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={item.title}
+                    >
+                      <div class="home-portal-icon-box">
+                        <iconify-icon icon={getItemIcon(item.title)}></iconify-icon>
+                      </div>
+                      <div class="home-portal-texts">
+                        <strong class="home-portal-title">{item.title}</strong>
+                        <span class="home-portal-sub">{getPortalSub(item.title)}</span>
+                      </div>
+                      <iconify-icon icon="lucide:arrow-up-right" class="home-portal-arrow"></iconify-icon>
+                    </a>
+                  {/each}
+                </div>
+              </div>
+
+              <!-- 2. 精选分类合集矩阵 (告别繁重标签云) -->
+              <div class="tier-block home-collections-block">
+                <div class="tier-label">
+                  <iconify-icon icon="lucide:layout-grid" class="tier-icon"></iconify-icon>
+                  <span>精选分类集合</span>
+                </div>
+                <div class="home-collections-grid">
+                  {#each groupItems as group (group.title)}
+                    {@const modalData = getModalDataForGroup(group.title)}
+                    {@const collColor = getCollectionColor(group.title)}
+                    <div class="home-collection-card" style="--coll-color: {collColor};">
+                      <div class="home-coll-header">
+                        <div class="home-coll-title-row">
+                          <div class="home-coll-icon-box">
+                            <iconify-icon icon={getCollectionIcon(group.title)}></iconify-icon>
+                          </div>
+                          <div class="home-coll-title-wrap">
+                            <div class="home-coll-title-line">
+                              <strong class="home-coll-title">{group.title}</strong>
+                              <span class="home-coll-count">{group.children.length} 项</span>
+                            </div>
+                            <span class="home-coll-desc">{getCollectionDesc(group.title)}</span>
+                          </div>
+                        </div>
+                        {#if modalData}
+                          <button
+                            class="home-coll-expand-btn"
+                            type="button"
+                            onclick={(e) => openCollectionModal(modalData, e.currentTarget as HTMLElement)}
+                            title={`以弹窗全览 ${group.title}`}
+                          >
+                            <iconify-icon icon="lucide:layout-grid"></iconify-icon>
+                            <span>全览</span>
+                          </button>
+                        {/if}
+                      </div>
+
+                      <div class="home-coll-pills">
+                        {#each group.children.slice(0, 4) as child (child.title)}
+                          <a
+                            class="home-coll-pill"
+                            href={child.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={child.title}
+                          >
+                            <span>{child.title}</span>
+                            <iconify-icon icon="lucide:arrow-up-right" class="pill-mini-arrow"></iconify-icon>
+                          </a>
+                        {/each}
+                        {#if group.children.length > 4 && modalData}
+                          <button
+                            class="home-coll-more-btn"
+                            type="button"
+                            onclick={(e) => openCollectionModal(modalData, e.currentTarget as HTMLElement)}
+                          >
+                            <span>更多 ({group.children.length - 4})</span>
+                            <iconify-icon icon="lucide:chevron-right"></iconify-icon>
+                          </button>
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+
             <!-- ── 角色分区专属的阵营图鉴卡片展示 (含官方头像) ── -->
-            {#if isCharacterSection}
+            {:else if isCharacterSection}
               <!-- 角色生日速递横幅 -->
               {#if nearestBirthday}
                 <div class="birthday-spotlight-banner">
