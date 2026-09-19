@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -427,7 +429,10 @@ private fun AggregatePageScaffold(
         },
         containerColor = Color.Transparent
     ) { innerPadding ->
-        content(innerPadding, backdrop)
+        // 与首页一致：关闭二级导航页的 overscroll 拉伸效果
+        CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            content(innerPadding, backdrop)
+        }
     }
 }
 
