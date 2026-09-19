@@ -35,14 +35,48 @@ object AnnouncementParsers {
             val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
                 ?: "$WIKI_BASE${title.wikiPathEncode()}"
 
+            val (date, sortTimestamp) = printouts.firstDate(DATE_KEYS)
+
             Announcement(
                 title = title,
-                date = printouts.firstText(DATE_KEYS),
+                date = date,
                 biliUrl = printouts.firstText(BILI_KEYS),
                 officialUrl = printouts.firstText(OFFICIAL_KEYS),
-                wikiUrl = fullUrl
+                wikiUrl = fullUrl,
+                sortTimestamp = sortTimestamp
             )
-        }.sortedByDescending { it.date }
+        }.sortedWith(
+            compareByDescending<Announcement> { it.sortTimestamp }.thenByDescending { it.date }
+        )
+    }
+
+    /**
+     * 日期属性（公告发布时间）是 Date 类型：SMW 返回 {timestamp, raw} 对象，
+     * raw 形如 "1/2026/9/16"（前缀为日历模型编号），直接显示会多出 "1/"。
+     * 优先用 timestamp 按东八区格式化；无 timestamp 时剥离 raw 的日历前缀兜底。
+     */
+    private fun JsonObject?.firstDate(keys: List<String>): Pair<String, Long> {
+        if (this == null) return "" to 0L
+        for (key in keys) {
+            val arr = this[key] as? JsonArray ?: continue
+            val elem = arr.firstOrNull() ?: continue
+            val timestamp = (elem as? JsonObject)?.get("timestamp")?.jsonPrimitive?.content?.toLongOrNull()
+            val raw = when (elem) {
+                is JsonObject -> elem["raw"]?.jsonPrimitive?.content ?: ""
+                is JsonPrimitive -> elem.content
+                else -> ""
+            }
+            val date = timestamp?.let(::formatTimestamp)
+                ?: raw.replace(Regex("""^\d+/(?=\d{4}/)"""), "").trim()
+            if (date.isNotBlank()) return date to (timestamp ?: 0L)
+        }
+        return "" to 0L
+    }
+
+    private fun formatTimestamp(epochSeconds: Long): String {
+        val format = java.text.SimpleDateFormat("yyyy/M/d", java.util.Locale.US)
+        format.timeZone = java.util.TimeZone.getTimeZone("GMT+8")
+        return format.format(java.util.Date(epochSeconds * 1000))
     }
 
     private fun JsonObject?.firstText(keys: List<String>): String {

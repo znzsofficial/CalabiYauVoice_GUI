@@ -5,5 +5,6 @@ data class Announcement(
     val date: String,
     val biliUrl: String,
     val officialUrl: String,
-    val wikiUrl: String
+    val wikiUrl: String,
+    val sortTimestamp: Long = 0L
 )

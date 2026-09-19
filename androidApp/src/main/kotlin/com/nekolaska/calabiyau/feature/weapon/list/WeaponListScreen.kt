@@ -286,18 +286,23 @@ private fun WeaponCard(
 private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
     val hasWallpaper = LocalHasWallpaper.current
     Column(modifier = modifier.fillMaxSize()) {
-        // 顶部分类 Tab 占位，避免加载完成后布局跳动
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // 顶部分类 Tab 占位：通栏 Surface + 等宽文本占位，与真实 PrimaryTabRow 形态一致
+        Surface(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = if (hasWallpaper) 0.86f else 1f)
         ) {
-            repeat(4) {
-                ShimmerBox(
-                    modifier = Modifier.weight(1f).height(36.dp),
-                    shape = smoothCapsuleShape()
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(4) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 18.dp)
+                            .height(14.dp),
+                        shape = smoothCornerShape(7.dp)
+                    )
+                }
             }
         }
     LazyVerticalGrid(
