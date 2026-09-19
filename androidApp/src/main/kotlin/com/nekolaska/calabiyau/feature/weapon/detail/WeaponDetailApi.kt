@@ -213,6 +213,19 @@ object WeaponDetailApi {
                 val pellet = allDamageParams("移动端${d}米")
                 if (!pellet.isNullOrBlank()) {
                     damageTable.add(DamageRow("移动端·${d}米", pellet, "", ""))
+                    return@forEach
+                }
+                // 新一代页面移动端参数形态：10米头部移动端 / 10米上肢移动端 / 10米下肢移动端
+                val mobileHead = allDamageParams("${d}米头部移动端")
+                if (!mobileHead.isNullOrBlank()) {
+                    damageTable.add(
+                        DamageRow(
+                            "移动端·${d}米",
+                            mobileHead,
+                            allDamageParams("${d}米上肢移动端") ?: "-",
+                            allDamageParams("${d}米下肢移动端") ?: "-"
+                        )
+                    )
                 }
             }
         }

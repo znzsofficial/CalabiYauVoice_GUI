@@ -126,6 +126,26 @@ class LiveWikiSnapshotTest {
         assertTrue(detail.damageTable.isNotEmpty(), "live weapon damage table empty")
         assertTrue(detail.baseDamage.isNotBlank(), "live weapon baseDamage blank")
         assertTrue(detail.user.contains("、") || detail.user.isNotBlank(), "live weapon user blank")
+
+        // 其余三类模板的代表武器：新代主武器 / 近战 / 副武器（战术道具冷却依赖登录态外接口，不在此覆盖）
+        for (weapon in listOf("北极星", "大剑", "小蜜蜂")) {
+            val body = fetchBody(
+                "https://wiki.biligame.com/klbq/api.php?action=parse" +
+                    "&page=${encoded(weapon)}&prop=wikitext%7Ctext&format=json",
+                json = true
+            )
+            val p = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject["parse"]?.jsonObject
+                ?: error("$weapon parse missing")
+            val wt = p["wikitext"]?.jsonObject?.get("*")?.jsonPrimitive?.content ?: error("$weapon wikitext missing")
+            val html2 = p["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content ?: ""
+            val d = WeaponDetailApi.parseWeaponWikitext(weapon, wt, renderedHtml = html2)
+            assertNotNull(d, "$weapon detail parse failed")
+            // 近战模板没有 类型 参数，不做统一断言；只要求产出可用数据
+            assertTrue(
+                d.damageTable.isNotEmpty() || d.stringDamage.isNotBlank() || d.description.isNotBlank() || d.obtainMethod.isNotBlank(),
+                "$weapon produced no usable data"
+            )
+        }
     }
 
     @Test
