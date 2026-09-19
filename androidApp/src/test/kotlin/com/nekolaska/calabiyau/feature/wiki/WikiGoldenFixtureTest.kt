@@ -110,4 +110,21 @@ class WikiGoldenFixtureTest {
         assertTrue(distanceRows.isNotEmpty(), "secondary distance table drifted")
         assertTrue(distanceRows.any { it.upper.isNotBlank() }, "distance table lost upper column")
     }
+
+    @Test
+    fun lingGoldenFixtureParsesNewXianquModeTab() {
+        // 令（2026-09-19 抓取）：Tabs 含新增的 弦区争夺模式（游戏新增通用武器后的角色页形态）
+        val parse = parseResponse(fixture("weapon_ling_parse.json"))
+        val wikitext = parse["wikitext"]!!.jsonObject["*"]!!.jsonPrimitive.content
+        val modes = com.nekolaska.calabiyau.feature.character.detail.CharacterDetailApi
+            .parseAugmentationModes(wikitext)
+        val names = modes.map { it.mode }
+        assertTrue(
+            names.containsAll(listOf("爆破模式", "极限推进模式", "弦区争夺模式")),
+            "modes=$names — new mode tab drifted"
+        )
+        val xianqu = modes.first { it.mode == "弦区争夺模式" }
+        assertTrue(xianqu.entries.isNotEmpty(), "弦区争夺模式 parsed with no entries")
+        assertTrue(xianqu.entries.all { it.value.isNotBlank() && it.group.isNotBlank() })
+    }
 }
