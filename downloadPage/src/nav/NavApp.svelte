@@ -741,7 +741,7 @@ import { onMount, tick } from 'svelte';
         </button>
 
         {#each sections as section (section.title)}
-          {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', tag: '' }}
+          {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#6b7280', tag: '' }}
           {@const count = countSectionTotal(section)}
           <button
             class="category-tab"
@@ -749,7 +749,7 @@ import { onMount, tick } from 'svelte';
             type="button"
             onclick={() => { activeTab = section.title; filter = ''; }}
           >
-            <iconify-icon icon={theme.icon} class="tab-icon"></iconify-icon>
+            <iconify-icon icon={theme.icon} class="tab-icon" style="color: {theme.color};"></iconify-icon>
             <span class="tab-title">{section.title}</span>
             <span class="tab-count">{count}</span>
           </button>

@@ -471,16 +471,17 @@ button, a, input, select {
 .quick-tags-label {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.75rem;
+    gap: 5px;
+    font-size: 0.8125rem;
     font-weight: 700;
-    color: var(--muted-foreground);
+    color: var(--foreground);
     flex-shrink: 0;
+    letter-spacing: -0.01em;
 }
 
 .quick-tags-label iconify-icon {
-    font-size: 0.8125rem;
-    color: var(--muted-foreground);
+    font-size: 0.9375rem;
+    color: #f59e0b;
 }
 
 .quick-tags-list {
@@ -497,8 +498,8 @@ button, a, input, select {
     padding: 0 10px;
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-    background-color: color-mix(in srgb, var(--foreground) 4%, transparent);
-    color: var(--muted-foreground);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    color: var(--foreground);
     font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
@@ -507,8 +508,8 @@ button, a, input, select {
 
 .quick-tag-chip:hover {
     color: var(--foreground);
-    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
-    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-color: color-mix(in srgb, #f59e0b 45%, var(--border));
+    background-color: color-mix(in srgb, #f59e0b 10%, var(--card));
     transform: translateY(-1px);
 }
 
@@ -527,18 +528,17 @@ button, a, input, select {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--muted-foreground);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 10px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.015em;
+    margin-bottom: 12px;
     padding-left: 2px;
 }
 
 .spotlight-title-icon {
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
+    font-size: 1rem;
+    color: #ef4444;
 }
 
 .featured-grid {
@@ -561,11 +561,28 @@ button, a, input, select {
     -webkit-backdrop-filter: blur(16px);
     text-decoration: none;
     color: var(--foreground);
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
     width: 100%;
     text-align: left;
+}
+
+.featured-tool-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--tool-color, transparent), transparent 70%);
+    opacity: 0.55;
+    transition: opacity 0.2s ease, height 0.2s ease;
+}
+
+.featured-tool-card:hover::before {
+    opacity: 1;
+    height: 2.5px;
 }
 
 .featured-tool-card.as-btn {
@@ -577,23 +594,28 @@ button, a, input, select {
 }
 
 .featured-tool-card:hover {
-    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    border-color: color-mix(in srgb, var(--tool-color, var(--foreground)) 40%, var(--border));
     background-color: color-mix(in srgb, var(--card) 92%, transparent);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--foreground) 6%, transparent);
+    box-shadow: 0 6px 20px -4px color-mix(in srgb, var(--tool-color, var(--foreground)) 16%, transparent);
 }
 
 .tool-card-icon-box {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
+    width: 35px;
+    height: 35px;
+    border-radius: 9px;
     display: grid;
     place-items: center;
-    font-size: 1.1rem;
-    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-    color: var(--foreground);
+    font-size: 1.15rem;
+    background-color: color-mix(in srgb, var(--tool-color, var(--foreground)) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tool-color, var(--foreground)) 22%, transparent);
+    color: var(--tool-color, var(--foreground));
     flex-shrink: 0;
+    transition: transform 0.18s ease;
+}
+
+.featured-tool-card:hover .tool-card-icon-box {
+    transform: scale(1.06);
 }
 
 .tool-card-info {
@@ -633,8 +655,9 @@ button, a, input, select {
     white-space: nowrap;
     flex-shrink: 0;
     line-height: 1.2;
-    background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
-    color: var(--muted-foreground);
+    background-color: color-mix(in srgb, var(--tool-color, var(--foreground)) 10%, transparent);
+    color: var(--tool-color, var(--muted-foreground));
+    border: 1px solid color-mix(in srgb, var(--tool-color, var(--foreground)) 18%, transparent);
 }
 
 .tool-card-desc {
@@ -864,8 +887,8 @@ button, a, input, select {
 }
 
 .section-card:hover {
-    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
-    box-shadow: 0 8px 28px -8px color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-color: color-mix(in srgb, var(--section-color, var(--foreground)) 35%, var(--border));
+    box-shadow: 0 8px 28px -8px color-mix(in srgb, var(--section-color, var(--foreground)) 12%, transparent);
 }
 
 /* 分区卡片头部 */
@@ -875,7 +898,7 @@ button, a, input, select {
     gap: 12px;
     padding: 16px 20px 14px;
     border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
-    background: transparent;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--section-color, transparent) 4.5%, transparent) 0%, transparent 100%);
 }
 
 .section-badge-icon {
@@ -886,9 +909,9 @@ button, a, input, select {
     place-items: center;
     font-size: 1.2rem;
     flex-shrink: 0;
-    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
-    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-    color: var(--foreground);
+    background-color: color-mix(in srgb, var(--section-color, var(--foreground)) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--section-color, var(--foreground)) 22%, transparent);
+    color: var(--section-color, var(--foreground));
 }
 
 .section-title-wrap {
@@ -934,6 +957,260 @@ button, a, input, select {
     flex-direction: column;
     gap: 20px;
     padding: 20px 24px 24px;
+}
+
+/* ── 首页分区专属：轻量化门户矩阵与精选合集 ── */
+.home-portal-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.home-portal-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    text-decoration: none;
+    color: var(--foreground);
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.home-portal-card:hover {
+    border-color: color-mix(in srgb, #0284c7 45%, var(--border));
+    background-color: color-mix(in srgb, var(--card) 90%, transparent);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px -4px color-mix(in srgb, #0284c7 16%, transparent);
+}
+
+.home-portal-icon-box {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 1.15rem;
+    background-color: color-mix(in srgb, #0284c7 12%, transparent);
+    border: 1px solid color-mix(in srgb, #0284c7 24%, transparent);
+    color: #0284c7;
+    flex-shrink: 0;
+}
+
+.home-portal-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.home-portal-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--foreground);
+    line-height: 1.25;
+}
+
+.home-portal-sub {
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-portal-arrow {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    opacity: 0.4;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.home-portal-card:hover .home-portal-arrow {
+    opacity: 1;
+    color: #0284c7;
+    transform: translate(1px, -1px);
+}
+
+/* 首页精选合集矩阵 */
+.home-collections-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.home-collection-card {
+    border: 1px solid color-mix(in srgb, var(--coll-color, var(--border)) 25%, transparent);
+    border-radius: 14px;
+    background-color: color-mix(in srgb, var(--card) 55%, transparent);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.home-collection-card:hover {
+    border-color: color-mix(in srgb, var(--coll-color, var(--foreground)) 45%, var(--border));
+    background-color: color-mix(in srgb, var(--card) 85%, transparent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -6px color-mix(in srgb, var(--coll-color, var(--foreground)) 16%, transparent);
+}
+
+.home-coll-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.home-coll-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.home-coll-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 1.15rem;
+    background-color: color-mix(in srgb, var(--coll-color, var(--foreground)) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--coll-color, var(--foreground)) 22%, transparent);
+    color: var(--coll-color, var(--foreground));
+    flex-shrink: 0;
+}
+
+.home-coll-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.home-coll-title-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.home-coll-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+.home-coll-count {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+    padding: 1px 6px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.home-coll-desc {
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.home-coll-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid color-mix(in srgb, var(--coll-color, var(--border)) 25%, transparent);
+    background-color: color-mix(in srgb, var(--coll-color, var(--foreground)) 8%, transparent);
+    color: var(--coll-color, var(--foreground));
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.home-coll-expand-btn:hover {
+    background-color: color-mix(in srgb, var(--coll-color, var(--foreground)) 18%, transparent);
+    border-color: var(--coll-color, var(--foreground));
+}
+
+.home-coll-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.home-coll-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 9px;
+    border-radius: 7px;
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.home-coll-pill:hover {
+    border-color: color-mix(in srgb, var(--coll-color, var(--foreground)) 40%, var(--border));
+    background-color: color-mix(in srgb, var(--coll-color, var(--card)) 12%, var(--card));
+    transform: translateY(-1px);
+}
+
+.pill-mini-arrow {
+    font-size: 0.75rem;
+    opacity: 0.4;
+    transition: transform 0.15s ease;
+}
+
+.home-coll-pill:hover .pill-mini-arrow {
+    opacity: 1;
+    transform: translate(1px, -1px);
+}
+
+.home-coll-more-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 7px;
+    border: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.home-coll-more-btn:hover {
+    border-color: var(--foreground);
+    color: var(--foreground);
 }
 
 /* ── 角色分区专属的超弦体阵营图鉴展板 ── */
@@ -2625,6 +2902,16 @@ button, a, input, select {
         padding: 12px 16px;
     }
 
+    .home-portal-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .home-collections-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
     .floating-top-btn {
         right: 16px;
         bottom: 18px;
@@ -2635,6 +2922,21 @@ button, a, input, select {
 }
 
 @media (max-width: 480px) {
+    .home-portal-grid {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .home-coll-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .home-coll-expand-btn {
+        align-self: flex-start;
+    }
+
     .faction-slogan-text {
         display: none;
     }
