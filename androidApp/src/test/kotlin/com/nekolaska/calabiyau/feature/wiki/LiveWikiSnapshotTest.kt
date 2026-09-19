@@ -1,6 +1,8 @@
 package com.nekolaska.calabiyau.feature.wiki
 
 import com.nekolaska.calabiyau.feature.wiki.achievement.parser.AchievementParsers
+import com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityParsers
+import com.nekolaska.calabiyau.feature.wiki.announcement.parser.AnnouncementParsers
 import com.nekolaska.calabiyau.feature.wiki.bgm.parser.BgmParsers
 import com.nekolaska.calabiyau.feature.wiki.collaboration.parser.CollaborationParsers
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
@@ -18,9 +20,11 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.parser.StringerPushCardPars
 import com.nekolaska.calabiyau.feature.wiki.stringer.parser.StringerTalentParsers
 import com.nekolaska.calabiyau.feature.wiki.tips.parser.GameTipsParsers
 import com.nekolaska.calabiyau.feature.weapon.skin.WeaponSkinFilterApi
+import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import java.nio.file.Files
 import java.nio.file.Path
@@ -81,6 +85,47 @@ class LiveWikiSnapshotTest {
             ?.jsonPrimitive?.content
             ?: error("parse response missing text")
         assertTrue(WeaponSkinFilterApi.parseWeaponSkinHtml(html).isNotEmpty(), "weapon skin parser returned no rows")
+    }
+
+    /** Live end-to-end: announcements ask API, activity page, and weapon detail (静风) with renamed templates. */
+    @Test
+    fun fetchesAndParsesAnnouncementActivityWeaponWhenEnabled() {
+        org.junit.Assume.assumeTrue("Enable LIVE_WIKI_TEST=1 to fetch production HTML", System.getenv("LIVE_WIKI_TEST") == "1")
+        Files.createDirectories(Paths.get("build/live-wiki"))
+
+        val askBody = fetchBody(
+            "https://wiki.biligame.com/klbq/api.php?action=ask" +
+                "&query=${encoded("[[分类:公告资讯]]|?公告发布时间|?公告B站发布链接|?公告官网发布链接|sort=公告发布时间|order=desc|limit=20")}" +
+                "&format=json",
+            json = true
+        )
+        val results = kotlinx.serialization.json.Json.parseToJsonElement(askBody)
+            .jsonObject["query"]?.jsonObject?.get("results")
+            ?: kotlinx.serialization.json.buildJsonObject { }
+        val announcements = AnnouncementParsers.parseAnnouncements(results)
+        assertTrue(announcements.isNotEmpty(), "live announcements returned no rows")
+        assertTrue(announcements.first().date.isNotBlank(), "live announcement date blank")
+
+        val activityHtml = fetchHtml("https://wiki.biligame.com/klbq/${encoded("活动")}")
+        val activities = ActivityParsers.parseActivities(activityHtml)
+        assertTrue(activities.isNotEmpty(), "live activities returned no rows")
+        assertTrue(activities.any { it.entry.title.isNotBlank() && it.entry.startTime.isNotBlank() },
+            "live activity rows missing title/time")
+
+        val weaponBody = fetchBody(
+            "https://wiki.biligame.com/klbq/api.php?action=parse" +
+                "&page=${encoded("静风")}&prop=wikitext%7Ctext&format=json",
+            json = true
+        )
+        val wjson = kotlinx.serialization.json.Json.parseToJsonElement(weaponBody).jsonObject["parse"]?.jsonObject
+            ?: error("weapon parse missing")
+        val wikitext = wjson["wikitext"]?.jsonObject?.get("*")?.jsonPrimitive?.content ?: error("missing wikitext")
+        val renderedHtml = wjson["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content ?: error("missing html")
+        val detail = WeaponDetailApi.parseWeaponWikitext("静风", wikitext, renderedHtml = renderedHtml)
+        assertNotNull(detail, "weapon detail parse failed")
+        assertTrue(detail.damageTable.isNotEmpty(), "live weapon damage table empty")
+        assertTrue(detail.baseDamage.isNotBlank(), "live weapon baseDamage blank")
+        assertTrue(detail.user.contains("、") || detail.user.isNotBlank(), "live weapon user blank")
     }
 
     @Test

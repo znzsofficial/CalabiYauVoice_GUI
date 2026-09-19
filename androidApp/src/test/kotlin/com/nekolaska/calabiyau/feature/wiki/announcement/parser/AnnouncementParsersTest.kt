@@ -43,4 +43,34 @@ class AnnouncementParsersTest {
         )
         assertEquals("https://wiki.biligame.com/klbq/旧公告", items[1].wikiUrl)
     }
+
+    @Test
+    fun parsesRenamedPrintoutKeys() {
+        // 2026-09 Wiki 将 SMW 属性改名为 公告发布时间/公告B站发布链接/公告官网发布链接
+        val results = SharedJson.parseToJsonElement(
+            """
+            {
+              "新公告": {
+                "printouts": {
+                  "公告发布时间": ["2026-09-10"],
+                  "公告B站发布链接": ["https://b23.tv/new2"],
+                  "公告官网发布链接": []
+                }
+              }
+            }
+            """.trimIndent()
+        ).jsonObject
+
+        val items = AnnouncementParsers.parseAnnouncements(results)
+        assertEquals("2026-09-10", items.single().date)
+        assertEquals("https://b23.tv/new2", items.single().biliUrl)
+        assertEquals("", items.single().officialUrl)
+    }
+
+    @Test
+    fun emptyArrayResultsYieldNoCrash() {
+        // SMW 无结果时 results 是 JSON 数组（如 []），不得抛 JsonObject 类型异常
+        val empty = SharedJson.parseToJsonElement("[]")
+        assertTrue(AnnouncementParsers.parseAnnouncements(empty).isEmpty())
+    }
 }

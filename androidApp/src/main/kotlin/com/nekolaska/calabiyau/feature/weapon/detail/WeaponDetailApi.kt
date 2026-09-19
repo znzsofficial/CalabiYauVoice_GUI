@@ -157,7 +157,7 @@ object WeaponDetailApi {
             }
         }
 
-    private fun parseWeaponWikitext(
+    internal fun parseWeaponWikitext(
         name: String,
         wikitext: String,
         isTactical: Boolean = false,
@@ -181,31 +181,36 @@ object WeaponDetailApi {
         // 判断是否为战术道具
         val isTacticalEquipment = isTactical || matchedTemplate == "武器-战术道具"
 
-        // 解析 {{武器伤害|...}} 模板（主武器专用）
+        // 解析伤害数值模板。Wiki 已将 {{武器伤害}} 改名为 {{武器详细数据}}，
+        // 距离伤害/基础伤害参数同时存在于主 {{武器}} 模板，读取时按 新模板 → 旧模板 → 主模板 回退。
         val damageContent = extractTemplate(wikitext, "武器伤害")
+            ?: extractTemplate(wikitext, "武器详细数据")
         val damageParams = if (damageContent != null) parseTemplateParams(damageContent) else emptyMap()
+        val allDamageParams: (String) -> String? = { key ->
+            damageParams[key] ?: weaponParams[key]
+        }
 
         // 构建伤害表
         val damageTable = mutableListOf<DamageRow>()
-        
-        // 1. 尝试从模板解析 (PC / 霰弹枪单值)
-        if (damageParams.isNotEmpty()) {
+
+        // 1. 尝试从模板解析 (PC / 霰弹枪单值)。新页面距离参数可能带"伤害"后缀（如 10米头部伤害）。
+        if (damageParams.isNotEmpty() || weaponParams.containsKey("基础伤害")) {
             val distances = listOf("10", "15", "20", "25", "30", "40", "50")
             distances.forEach { d ->
-                val head = damageParams["${d}米头部"]
-                val upper = damageParams["${d}米上肢"]
-                val lower = damageParams["${d}米下肢"]
+                val head = allDamageParams("${d}米头部") ?: allDamageParams("${d}米头部伤害")
+                val upper = allDamageParams("${d}米上肢") ?: allDamageParams("${d}米上肢伤害")
+                val lower = allDamageParams("${d}米下肢") ?: allDamageParams("${d}米下肢伤害")
                 if (head != null || upper != null || lower != null) {
                     damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
                     return@forEach
                 }
-                val pellet = damageParams["${d}米"]
+                val pellet = allDamageParams("${d}米")
                 if (!pellet.isNullOrBlank()) {
                     damageTable.add(DamageRow("${d}米", pellet, "", ""))
                 }
             }
             distances.forEach { d ->
-                val pellet = damageParams["移动端${d}米"]
+                val pellet = allDamageParams("移动端${d}米")
                 if (!pellet.isNullOrBlank()) {
                     damageTable.add(DamageRow("移动端·${d}米", pellet, "", ""))
                 }
@@ -261,10 +266,10 @@ object WeaponDetailApi {
             fireMode = weaponParams["开火模式"] ?: "",
             magnification = weaponParams["放大倍率"] ?: "",
             damageTable = damageTable,
-            baseDamage = damageParams["基础伤害"] ?: "",
-            headMultiplier = damageParams["头部倍率"] ?: "",
-            upperMultiplier = damageParams["上肢倍率"] ?: "",
-            lowerMultiplier = damageParams["下肢倍率"] ?: "",
+            baseDamage = allDamageParams("基础伤害") ?: "",
+            headMultiplier = allDamageParams("头部倍率") ?: "",
+            upperMultiplier = allDamageParams("上肢倍率") ?: "",
+            lowerMultiplier = allDamageParams("下肢倍率") ?: "",
             imageUrl = imageUrl,
             subPages = subPages,
             cooldowns = cooldowns
@@ -299,10 +304,15 @@ object WeaponDetailApi {
         return null
     }
 
+    /** Wiki 将"武器伤害"章节改名为"武器详细数据"，两个标题都要能定位。 */
+    private val damageSectionHeadings = setOf("武器伤害", "武器详细数据")
+
     private fun parseWeaponDamageFromHtml(html: String): List<DamageRow> {
         if (html.isBlank()) return emptyList()
         val document = Jsoup.parse(html)
-        val headline = document.getElementById("武器伤害") ?: return emptyList()
+        val headline = damageSectionHeadings.firstNotNullOfOrNull { document.getElementById(it) }
+            ?: document.select("span.mw-headline").firstOrNull { it.text().trim() in damageSectionHeadings }?.parent()
+            ?: return emptyList()
         val sectionStart = headline.parent()?.takeIf { it.tagName().matches(Regex("h[1-6]")) } ?: headline
         val sectionElements = generateSequence(sectionStart.nextElementSibling()) { it.nextElementSibling() }
             .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }

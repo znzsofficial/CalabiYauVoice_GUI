@@ -19,6 +19,54 @@ object ActivityParsers {
 
     fun parseActivities(html: String): List<ParsedActivity> {
         val document = Jsoup.parse(html)
+        // 现网结构：div.klbq-event-card 卡片网格（klbq-event-card__title/time-item/desc/imagebox）
+        val cards = document.select("div.klbq-event-card")
+        if (cards.isNotEmpty()) {
+            val cardParsed = cards.mapNotNull { card -> parseEventCard(card) }
+            if (cardParsed.isNotEmpty()) {
+                return WikiParseLogger.finishList("ActivityApi.parseActivities", cardParsed, html, "cards=${cards.size}")
+            }
+        }
+        return parseLegacyActivityTable(document, html)
+    }
+
+    private fun parseEventCard(card: org.jsoup.nodes.Element): ParsedActivity? {
+        val titleLink = card.selectFirst("[class*=title] a[title], [class*=title] a[href]")
+        val title = card.selectFirst("[class*=title]")?.text()?.trim().orEmpty()
+        if (title.isBlank()) return null
+
+        var startTime = ""
+        var endTime = ""
+        card.select("[class*=time-item]").forEach { item ->
+            val label = item.selectFirst("[class*=label]")?.text()?.trim().orEmpty()
+            val value = item.selectFirst("[class*=value]")?.text()?.trim().orEmpty()
+            when {
+                label.contains("开始") -> startTime = value
+                label.contains("结束") -> endTime = value
+            }
+        }
+
+        val detailLink = titleLink ?: card.selectFirst("a[title], a[href]")
+        val detailPageTitle = detailLink?.attr("title")?.takeIf { it.isNotBlank() }
+            ?: detailLink?.attr("href")?.let(::extractPageTitleFromHref)
+        val wikiUrl = detailLink?.attr("href")
+            ?.let(::toAbsoluteWikiUrl)
+            ?: ACTIVITY_PAGE_URL
+
+        return ParsedActivity(
+            entry = ActivityEntry(
+                title = title,
+                startTime = startTime,
+                endTime = endTime,
+                description = card.selectFirst("[class*=desc]")?.text()?.trim().orEmpty(),
+                imageUrl = card.selectFirst("[class*=imagebox] img")?.attr("src"),
+                wikiUrl = wikiUrl
+            ),
+            detailPageTitle = detailPageTitle
+        )
+    }
+
+    private fun parseLegacyActivityTable(document: org.jsoup.nodes.Document, html: String): List<ParsedActivity> {
         val rows = document.select("table.klbqtable tr")
 
         val parsed = rows.mapNotNull { row ->
