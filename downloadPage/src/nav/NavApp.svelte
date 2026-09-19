@@ -23,6 +23,11 @@ import { onMount, tick } from 'svelte';
     getUpcomingBirthdays,
     type CharacterBirthday
   } from './birthdays';
+  import {
+    fetchGameAssets,
+    getItemIcon,
+    type GameAssets
+  } from './gameAssets';
 
   let sections = $state<NavSection[]>([]);
   let loading = $state(true);
@@ -33,6 +38,9 @@ import { onMount, tick } from 'svelte';
   let modalCloseEl = $state<HTMLButtonElement | null>(null);
   let modalTriggerEl = $state<HTMLElement | null>(null);
   let navReloading = $state(false);
+
+  // 游戏资产映射（武器立绘图、地图缩略图）
+  let gameAssets = $state<GameAssets>({ weapons: {}, maps: {} });
 
   // 弹窗状态
   let activeCollectionModal = $state<CollectionModalData | null>(null);
@@ -449,6 +457,11 @@ import { onMount, tick } from 'svelte';
             avatarsLoading = false;
           });
       }
+
+      // 异步预载全部武器立绘与地图实景缩略图
+      fetchGameAssets().then(assets => {
+        gameAssets = assets;
+      });
     } catch (error) {
       sections = [];
       errorMessage = error instanceof Error ? error.message : String(error);
@@ -905,11 +918,13 @@ import { onMount, tick } from 'svelte';
                           rel="noopener noreferrer"
                           title={item.title}
                         >
+                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                           <span class="pill-label">{item.title}</span>
                           <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
                         </a>
                       {:else}
                         <span class="nav-link-pill pill-plain">
+                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                           <span class="pill-label">{item.title}</span>
                         </span>
                       {/if}
@@ -938,11 +953,13 @@ import { onMount, tick } from 'svelte';
                           rel="noopener noreferrer"
                           title={item.title}
                         >
+                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                           <span class="pill-label">{item.title}</span>
                           <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
                         </a>
                       {:else}
                         <span class="nav-link-pill pill-plain">
+                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                           <span class="pill-label">{item.title}</span>
                         </span>
                       {/if}
@@ -983,7 +1000,6 @@ import { onMount, tick } from 'svelte';
                                 aria-label={`以弹窗全览 ${group.title}`}
                               >
                                 <iconify-icon icon="lucide:layout-grid"></iconify-icon>
-                                <span>弹窗选择</span>
                               </button>
                             {/if}
 
@@ -1007,6 +1023,8 @@ import { onMount, tick } from 'svelte';
                             {@const isWeaponSection = section.title === '武器'}
                             {@const isMapSection = section.title === '地图'}
                             {@const weaponOwner = isWeaponSection ? getWeaponOwnerDisplay(child.title) : null}
+                            {@const weaponImg = isWeaponSection ? gameAssets.weapons[child.title] : null}
+                            {@const mapImg = isMapSection ? gameAssets.maps[child.title] : null}
                             {#if child.url}
                               <a
                                 class="subgroup-tag-chip"
@@ -1016,8 +1034,12 @@ import { onMount, tick } from 'svelte';
                                 rel="noopener noreferrer"
                                 title={weaponOwner ? `${child.title}（使用者：${weaponOwner.name}）` : child.title}
                               >
-                                {#if isMapSection}
-                                  <iconify-icon icon="lucide:map-pin" class="chip-prefix-icon"></iconify-icon>
+                                {#if weaponImg}
+                                  <img class="weapon-icon-render" src={weaponImg} alt="" loading="lazy" referrerpolicy="no-referrer">
+                                {:else if mapImg}
+                                  <img class="map-thumb-render" src={mapImg} alt="" loading="lazy" referrerpolicy="no-referrer">
+                                {:else}
+                                  <iconify-icon icon={getItemIcon(child.title)} class="chip-prefix-icon"></iconify-icon>
                                 {/if}
                                 <span class="tag-chip-title">{child.title}</span>
                                 {#if weaponOwner}
@@ -1037,8 +1059,12 @@ import { onMount, tick } from 'svelte';
                               </a>
                             {:else}
                               <span class="subgroup-tag-chip tag-plain">
-                                {#if isMapSection}
-                                  <iconify-icon icon="lucide:map-pin" class="chip-prefix-icon"></iconify-icon>
+                                {#if weaponImg}
+                                  <img class="weapon-icon-render" src={weaponImg} alt="" loading="lazy" referrerpolicy="no-referrer">
+                                {:else if mapImg}
+                                  <img class="map-thumb-render" src={mapImg} alt="" loading="lazy" referrerpolicy="no-referrer">
+                                {:else}
+                                  <iconify-icon icon={getItemIcon(child.title)} class="chip-prefix-icon"></iconify-icon>
                                 {/if}
                                 <span class="tag-chip-title">{child.title}</span>
                               </span>

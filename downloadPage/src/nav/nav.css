@@ -1020,6 +1020,13 @@ body {
     white-space: nowrap;
 }
 
+.chip-item-icon {
+    font-size: 1.1rem;
+    color: color-mix(in srgb, var(--section-theme, var(--foreground)) 80%, var(--foreground));
+    flex-shrink: 0;
+    opacity: 0.9;
+}
+
 .pill-arrow {
     font-size: 1rem;
     color: var(--muted-foreground);
@@ -1126,17 +1133,18 @@ body {
 .subgroup-popup-pill-btn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    height: 24px;
-    padding: 0 8px;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
     border-radius: 6px;
     border: 1px solid color-mix(in srgb, var(--section-theme, var(--foreground)) 25%, transparent);
     background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 8%, transparent);
     color: var(--section-theme, var(--foreground));
-    font-size: 0.6875rem;
-    font-weight: 700;
+    font-size: 0.8125rem;
     cursor: pointer;
     transition: all 0.15s ease;
+    flex-shrink: 0;
 }
 
 .subgroup-popup-pill-btn:hover {
@@ -1206,12 +1214,31 @@ body {
 
 .is-weapon-chip {
     gap: 6px;
-    padding-right: 4px;
+    padding-right: 6px;
+}
+
+.weapon-icon-render {
+    width: 28px;
+    height: 18px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
+    margin-right: 2px;
+}
+
+.map-thumb-render {
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    margin-right: 2px;
 }
 
 .chip-prefix-icon {
-    font-size: 0.8125rem;
-    color: #10b981;
+    font-size: 0.9375rem;
+    color: color-mix(in srgb, var(--section-theme, var(--foreground)) 80%, var(--foreground));
     opacity: 0.85;
     margin-right: 2px;
     flex-shrink: 0;
