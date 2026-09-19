@@ -10,7 +10,8 @@
 基于 Kotlin Multiplatform 构建的[卡拉彼丘](https://wiki.biligame.com/klbq/) Wiki 资源浏览与下载工具，支持桌面端和 Android 端。
 
 [![下载 Android APK](https://img.shields.io/badge/下载-Android%20APK-3DDC84?logo=android&logoColor=white)](https://wiki.nekolaska.vip/)
-[![网页工具](https://img.shields.io/badge/Wiki资源站-0A0A0A?logo=cloudflare&logoColor=white)](https://wiki.nekolaska.vip/search)
+[![Wiki 导航站](https://img.shields.io/badge/Wiki-全站导航站-3b82f6?logo=compass&logoColor=white)](https://wiki.nekolaska.vip/nav/)
+[![Wiki 搜索与工具](https://img.shields.io/badge/Wiki-搜索与工具-0A0A0A?logo=cloudflare&logoColor=white)](https://wiki.nekolaska.vip/search)
 
 **官网入口：** [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)  
 **备用链接：** [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/)
@@ -191,6 +192,11 @@
 │       └── nav/                        #   Wiki 导航应用
 │           ├── NavApp.svelte
 │           ├── sidebar.ts              #   侧边栏抓取与解析（与 Android 端解析器保持一致）
+│           ├── gameAssets.ts           #   武器立绘、地图实景缩略图与道具图标
+│           ├── searchAliases.ts        #   搜索别名与模糊词字典
+│           ├── toolboxes.ts            #   二级合集弹窗数据源
+│           ├── wallpaper.ts            #   官方随机壁纸系统与缓存
+│           ├── birthdays.ts            #   超弦体生日档案、倒计时与生日日历
 │           └── nav.css
 ├── webApp/                             # 可选 Compose/Web 相关模块
 ├── gradle/libs.versions.toml           # 集中管理依赖版本

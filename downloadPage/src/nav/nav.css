@@ -1396,21 +1396,21 @@ button, a, input, select {
     border-radius: 7px;
     display: grid;
     place-items: center;
-    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
-    color: var(--foreground);
+    background-color: color-mix(in srgb, var(--section-color, var(--foreground)) 10%, transparent);
+    color: var(--section-color, var(--foreground));
     flex-shrink: 0;
     transition: transform 0.15s ease;
 }
 
 .core-pill:hover {
-    border-color: color-mix(in srgb, var(--foreground) 35%, var(--border));
-    background-color: color-mix(in srgb, var(--card) 85%, transparent);
+    border-color: color-mix(in srgb, var(--section-color, var(--foreground)) 45%, var(--border));
+    background-color: color-mix(in srgb, var(--section-color, var(--card)) 12%, var(--card));
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--foreground) 6%, transparent);
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--section-color, var(--foreground)) 16%, transparent);
 }
 
 .core-pill:hover .core-pill-icon-box {
-    transform: scale(1.05);
+    transform: scale(1.08);
 }
 
 .pill-label {
@@ -1421,8 +1421,8 @@ button, a, input, select {
 }
 
 .chip-item-icon {
-    font-size: 1.1rem;
-    color: color-mix(in srgb, var(--section-theme, var(--foreground)) 85%, var(--foreground));
+    font-size: 1.05rem;
+    color: var(--section-color, var(--foreground));
     flex-shrink: 0;
     opacity: 0.95;
 }
@@ -1456,17 +1456,37 @@ button, a, input, select {
 }
 
 .subgroup-card {
-    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    border: 1px solid color-mix(in srgb, var(--subgroup-color, var(--border)) 24%, transparent);
     border-radius: 12px;
-    background-color: color-mix(in srgb, var(--card) 50%, transparent);
+    background-color: color-mix(in srgb, var(--card) 55%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     overflow: hidden;
-    transition: border-color 0.15s ease;
+    position: relative;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.subgroup-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    background: linear-gradient(90deg, var(--subgroup-color, transparent), transparent 75%);
+    opacity: 0.6;
+    transition: opacity 0.2s ease, height 0.2s ease;
+}
+
+.subgroup-card:hover::before {
+    opacity: 1;
+    height: 2px;
 }
 
 .subgroup-card:hover {
-    border-color: color-mix(in srgb, var(--foreground) 25%, var(--border));
+    border-color: color-mix(in srgb, var(--subgroup-color, var(--foreground)) 42%, var(--border));
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px -4px color-mix(in srgb, var(--subgroup-color, var(--foreground)) 12%, transparent);
 }
 
 .subgroup-card-header {
@@ -1476,6 +1496,7 @@ button, a, input, select {
     gap: 8px;
     padding: 9px 12px;
     border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--subgroup-color, transparent) 4%, transparent) 0%, transparent 100%);
 }
 
 .subgroup-card-title-wrap {
@@ -1483,6 +1504,21 @@ button, a, input, select {
     align-items: center;
     gap: 6px;
     min-width: 0;
+}
+
+.subgroup-title-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    background-color: color-mix(in srgb, var(--subgroup-color, var(--foreground)) 12%, transparent);
+    color: var(--subgroup-color, var(--foreground));
+    flex-shrink: 0;
+}
+
+.subgroup-dot-icon {
+    font-size: 0.8125rem;
 }
 
 .subgroup-card-title {
@@ -1500,8 +1536,8 @@ button, a, input, select {
     border-radius: 999px;
     font-size: 0.6875rem;
     font-weight: 600;
-    color: var(--muted-foreground);
-    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--subgroup-color, var(--muted-foreground));
+    background-color: color-mix(in srgb, var(--subgroup-color, var(--foreground)) 10%, transparent);
     flex-shrink: 0;
 }
 
@@ -1520,9 +1556,9 @@ button, a, input, select {
     height: 22px;
     padding: 0;
     border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-    background-color: color-mix(in srgb, var(--foreground) 4%, transparent);
-    color: var(--muted-foreground);
+    border: 1px solid color-mix(in srgb, var(--subgroup-color, var(--border)) 25%, transparent);
+    background-color: color-mix(in srgb, var(--subgroup-color, var(--foreground)) 8%, transparent);
+    color: var(--subgroup-color, var(--foreground));
     font-size: 0.8125rem;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -1530,9 +1566,8 @@ button, a, input, select {
 }
 
 .subgroup-popup-pill-btn:hover {
-    background-color: color-mix(in srgb, var(--foreground) 10%, transparent);
-    color: var(--foreground);
-    border-color: color-mix(in srgb, var(--foreground) 25%, var(--border));
+    background-color: color-mix(in srgb, var(--subgroup-color, var(--foreground)) 18%, transparent);
+    border-color: var(--subgroup-color, var(--foreground));
 }
 
 .subgroup-external-link {
@@ -1578,10 +1613,10 @@ button, a, input, select {
 }
 
 .subgroup-tag-chip:hover {
-    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
-    background-color: color-mix(in srgb, var(--card) 90%, transparent);
+    border-color: color-mix(in srgb, var(--subgroup-color, var(--foreground)) 45%, var(--border));
+    background-color: color-mix(in srgb, var(--subgroup-color, var(--card)) 12%, var(--card));
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--foreground) 8%, transparent);
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--subgroup-color, var(--foreground)) 16%, transparent);
 }
 
 .subgroup-tag-chip:active {
@@ -1635,8 +1670,8 @@ button, a, input, select {
 
 .chip-prefix-icon {
     font-size: 0.9375rem;
-    color: var(--muted-foreground);
-    opacity: 0.85;
+    color: var(--subgroup-color, var(--muted-foreground));
+    opacity: 0.9;
     margin-right: 2px;
     flex-shrink: 0;
 }

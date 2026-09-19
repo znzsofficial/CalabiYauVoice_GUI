@@ -10,7 +10,8 @@
 A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource browser & downloader, built with Compose for Desktop and Android.
 
 [![Download Android APK](https://img.shields.io/badge/Download-Android%20APK-3DDC84?logo=android&logoColor=white)](https://wiki.nekolaska.vip/)
-[![Web Tools](https://img.shields.io/badge/Wiki%20Hub-0A0A0A?logo=cloudflare&logoColor=white)](https://wiki.nekolaska.vip/search)
+[![Wiki Navigation](https://img.shields.io/badge/Wiki-Navigation%20Hub-3b82f6?logo=compass&logoColor=white)](https://wiki.nekolaska.vip/nav/)
+[![Wiki Search](https://img.shields.io/badge/Wiki-Search%20%26%20Tools-0A0A0A?logo=cloudflare&logoColor=white)](https://wiki.nekolaska.vip/search)
 
 **Website:** [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)  
 **Backup:** [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/)
@@ -191,6 +192,11 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 │       └── nav/                        #   Wiki navigation hub app
 │           ├── NavApp.svelte
 │           ├── sidebar.ts              #   Sidebar fetch & parser (mirrors Android parser)
+│           ├── gameAssets.ts           #   Weapon renders, map thumbnails and item icons
+│           ├── searchAliases.ts        #   Search aliases & fuzzy keyword dictionary
+│           ├── toolboxes.ts            #   Collection modals data sources
+│           ├── wallpaper.ts            #   Random official wallpaper system
+│           ├── birthdays.ts            #   Character birthdays, countdowns and calendar
 │           └── nav.css
 ├── webApp/                             # Optional Compose/Web related module
 ├── gradle/libs.versions.toml           # Centralized dependency versions

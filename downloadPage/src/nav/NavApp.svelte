@@ -204,7 +204,44 @@ import { onMount, tick } from 'svelte';
     return 'lucide:folder-git-2';
   }
 
-  // 分区主题配置 (充满秩序感与活力的战略色彩)
+  // 子分类主题色彩配置 (赋予玩法与其它丰富的业务语义色彩)
+  const subgroupColors: Record<string, string> = {
+    // 玩法分区
+    '移动端内容': '#06b6d4', // 科技青
+    '角色培养': '#ec4899',   // 羁绊粉
+    '账号系统': '#3b82f6',   // 档案蓝
+    '分享工具': '#8b5cf6',   // 社区紫
+    // 其他分区
+    '游戏延伸': '#f59e0b',   // 灵感橙
+    '随笔条目': '#10b981',   // 探索绿
+    '玩家装饰': '#e11d48',   // 潮流红
+    '官方赛事': '#8b5cf6',   // 竞技紫
+    '民间赛事': '#6366f1',   // 社区蓝紫
+    // 地图与武器
+    '爆破模式': '#ef4444',
+    '团队乱斗模式': '#f97316',
+    '无限团竞模式': '#06b6d4',
+    '极限推进模式': '#8b5cf6',
+    '大头乱斗模式': '#ec4899',
+    '晶源感染模式': '#a855f7',
+    '极限刀战模式': '#14b8a6',
+    '弦区争夺模式': '#f59e0b',
+    '枪王乱斗模式': '#3b82f6',
+    '晶能冲突模式': '#10b981',
+    '自动步枪': '#ef4444',
+    '微型冲锋枪': '#f97316',
+    '狙击步枪': '#8b5cf6',
+    '精确射手步枪': '#3b82f6',
+    '轻机枪': '#d97706',
+    '霰弹枪': '#06b6d4',
+    '近战武器': '#10b981',
+    '副武器': '#64748b',
+    '战术道具': '#e11d48'
+  };
+
+  function getSubgroupColor(title: string): string {
+    return subgroupColors[title] || 'var(--foreground)';
+  }
   const sectionThemes: Record<string, { icon: string; color: string; tag: string }> = {
     '首页': { icon: 'lucide:compass', color: '#0284c7', tag: '门户与常用' },
     '角色': { icon: 'lucide:users', color: '#2563eb', tag: '超弦体与阵营' },
@@ -1124,10 +1161,14 @@ import { onMount, tick } from 'svelte';
 
                   <div class="subgroups-grid">
                     {#each groupItems as group (group.title)}
-                      <div class="subgroup-card">
+                      {@const groupColor = getSubgroupColor(group.title)}
+                      <div class="subgroup-card" style="--subgroup-color: {groupColor};">
                         <!-- 子卡片标题 -->
                         <div class="subgroup-card-header">
                           <div class="subgroup-card-title-wrap">
+                            <span class="subgroup-title-indicator">
+                              <iconify-icon icon={getSubgroupIcon(group.title)} class="subgroup-dot-icon"></iconify-icon>
+                            </span>
                             <strong class="subgroup-card-title">{group.title}</strong>
                             <span class="subgroup-count-badge">{group.children.length}</span>
                           </div>

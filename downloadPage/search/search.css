@@ -1101,20 +1101,23 @@ button, a, input, select {
     height: 36px;
     padding: 0 14px;
     border-radius: 10px;
-    border: 1px solid var(--border);
-    background-color: var(--card);
+    border: 1px solid color-mix(in srgb, var(--border) 50%, rgba(255, 255, 255, 0.25));
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     color: var(--foreground);
     font-size: 0.8125rem;
     font-weight: 600;
     text-decoration: none;
     transition: all 0.15s ease;
-    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent);
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .empty-nav-link:hover {
-    background-color: var(--accent);
+    background-color: color-mix(in srgb, var(--card) 90%, transparent);
     border-color: color-mix(in srgb, var(--foreground) 35%, var(--border));
     transform: translateY(-1px);
+    box-shadow: 0 6px 16px -4px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 /* ── Pagination ── */
