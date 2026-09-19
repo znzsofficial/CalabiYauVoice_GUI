@@ -479,8 +479,8 @@ button, a, input, select {
 }
 
 .quick-tags-label iconify-icon {
-    font-size: 0.875rem;
-    color: #f59e0b;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
 }
 
 .quick-tags-list {
@@ -496,23 +496,19 @@ button, a, input, select {
     height: 26px;
     padding: 0 10px;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.25));
-    background-color: color-mix(in srgb, var(--card) 60%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 4%, transparent);
     color: var(--muted-foreground);
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .quick-tag-chip:hover {
     color: var(--foreground);
-    border-color: color-mix(in srgb, var(--foreground) 35%, var(--border));
-    background-color: color-mix(in srgb, var(--card) 85%, transparent);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 2px 8px -2px color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
     transform: translateY(-1px);
 }
 
@@ -524,25 +520,25 @@ button, a, input, select {
 
 /* ── 高频热门功能卡片矩阵 (Featured Spotlight) ── */
 .featured-spotlight-section {
-    margin-bottom: 28px;
+    margin-bottom: 24px;
 }
 
 .spotlight-section-title {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.8125rem;
-    font-weight: 700;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: var(--muted-foreground);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 12px;
-    padding-left: 4px;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+    padding-left: 2px;
 }
 
 .spotlight-title-icon {
-    font-size: 1rem;
-    color: #ef4444;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
 }
 
 .featured-grid {
@@ -555,18 +551,17 @@ button, a, input, select {
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 64px;
-    padding: 0 14px;
+    height: 58px;
+    padding: 0 12px;
     box-sizing: border-box;
-    border-radius: 14px;
-    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.25));
-    background-color: color-mix(in srgb, var(--card) 62%, transparent);
-    backdrop-filter: blur(22px) saturate(160%);
-    -webkit-backdrop-filter: blur(22px) saturate(160%);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 4px 16px -4px color-mix(in srgb, var(--foreground) 5%, transparent);
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--card) 68%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     text-decoration: none;
     color: var(--foreground);
-    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
     width: 100%;
@@ -578,23 +573,26 @@ button, a, input, select {
     font-family: inherit;
     margin: 0;
     line-height: inherit;
-    background-color: color-mix(in srgb, var(--card) 62%, transparent);
+    background-color: color-mix(in srgb, var(--card) 68%, transparent);
 }
 
 .featured-tool-card:hover {
-    border-color: color-mix(in srgb, var(--tool-accent, #3b82f6) 45%, var(--border));
-    background-color: color-mix(in srgb, var(--card) 85%, transparent);
-    transform: translateY(-2px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.45), 0 8px 24px -4px color-mix(in srgb, var(--tool-accent, var(--foreground)) 18%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    background-color: color-mix(in srgb, var(--card) 92%, transparent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .tool-card-icon-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
     display: grid;
     place-items: center;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    color: var(--foreground);
     flex-shrink: 0;
 }
 
@@ -616,48 +614,51 @@ button, a, input, select {
 }
 
 .tool-card-title {
-    font-size: 0.875rem;
-    font-weight: 700;
+    font-size: 0.8125rem;
+    font-weight: 600;
     letter-spacing: -0.01em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
     flex-shrink: 1;
+    color: var(--foreground);
 }
 
 .tool-card-tag {
     padding: 1px 5px;
     border-radius: 4px;
     font-size: 0.625rem;
-    font-weight: 700;
+    font-weight: 600;
     white-space: nowrap;
     flex-shrink: 0;
-    line-height: 1.3;
+    line-height: 1.2;
+    background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+    color: var(--muted-foreground);
 }
 
 .tool-card-desc {
     margin: 0;
     font-size: 0.6875rem;
     color: var(--muted-foreground);
-    line-height: 1.35;
+    line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .tool-card-arrow {
-    font-size: 1.05rem;
+    font-size: 0.9375rem;
     color: var(--muted-foreground);
-    opacity: 0.4;
-    transition: all 0.18s ease;
+    opacity: 0.45;
+    transition: all 0.15s ease;
     flex-shrink: 0;
     margin-left: auto;
 }
 
 .featured-tool-card:hover .tool-card-arrow {
     opacity: 1;
-    color: var(--tool-accent, var(--foreground));
+    color: var(--foreground);
     transform: translate(1px, -1px);
 }
 
@@ -678,13 +679,13 @@ button, a, input, select {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 4px;
+    padding: 3px;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--border) 40%, rgba(255, 255, 255, 0.35));
-    background-color: color-mix(in srgb, var(--card) 60%, transparent);
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 10px 30px -6px color-mix(in srgb, var(--foreground) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--card) 75%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 4px 16px -4px color-mix(in srgb, var(--foreground) 8%, transparent);
     overflow-x: auto;
     scrollbar-width: none;
     max-width: 100%;
@@ -699,34 +700,34 @@ button, a, input, select {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 34px;
-    padding: 0 16px;
+    height: 32px;
+    padding: 0 14px;
     border-radius: 999px;
     border: none;
     background-color: transparent;
     color: var(--muted-foreground);
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
-    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
     user-select: none;
 }
 
 .category-tab:hover {
     color: var(--foreground);
-    background-color: color-mix(in srgb, var(--foreground) 7%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .category-tab.active {
     background-color: var(--primary);
     color: var(--primary-foreground);
-    box-shadow: 0 2px 10px -1px color-mix(in srgb, var(--primary) 35%, transparent);
+    box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 .category-tab .tab-icon {
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     opacity: 0.85;
 }
 
@@ -739,10 +740,10 @@ button, a, input, select {
     padding: 1px 6px;
     border-radius: 999px;
     font-size: 0.6875rem;
-    font-weight: 700;
+    font-weight: 600;
     background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
     color: var(--muted-foreground);
-    transition: all 0.18s ease;
+    transition: all 0.15s ease;
 }
 
 .category-tab.active .tab-count {
@@ -834,17 +835,17 @@ button, a, input, select {
 .sections-container {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
 }
 
 .section-card {
     position: relative;
-    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.3));
-    border-radius: 20px;
-    background-color: color-mix(in srgb, var(--card) 68%, transparent);
-    backdrop-filter: blur(28px) saturate(175%);
-    -webkit-backdrop-filter: blur(28px) saturate(175%);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 10px 32px -8px color-mix(in srgb, var(--foreground) 7%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    border-radius: 16px;
+    background-color: color-mix(in srgb, var(--card) 72%, transparent);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 4px 20px -6px color-mix(in srgb, var(--foreground) 5%, transparent);
     overflow: hidden;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     animation: navCardFadeIn 0.36s cubic-bezier(0.16, 1, 0.3, 1) backwards;
@@ -863,29 +864,31 @@ button, a, input, select {
 }
 
 .section-card:hover {
-    border-color: color-mix(in srgb, var(--section-theme, var(--border)) 40%, var(--border));
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.45), 0 14px 38px -8px color-mix(in srgb, var(--section-theme, var(--foreground)) 16%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    box-shadow: 0 8px 28px -8px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 /* 分区卡片头部 */
 .section-card-header {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 18px 24px 16px;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, rgba(255, 255, 255, 0.15));
-    background: linear-gradient(180deg, color-mix(in srgb, var(--section-theme, transparent) 7%, transparent) 0%, transparent 100%);
+    gap: 12px;
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+    background: transparent;
 }
 
 .section-badge-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
-    font-size: 1.35rem;
+    font-size: 1.2rem;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--section-theme, transparent) 25%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    color: var(--foreground);
 }
 
 .section-title-wrap {
@@ -938,13 +941,10 @@ button, a, input, select {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 16px;
-    border-radius: 16px;
-    border: 1px solid color-mix(in srgb, var(--faction-color, var(--border)) 24%, rgba(255, 255, 255, 0.2));
-    background-color: color-mix(in srgb, var(--faction-color, var(--card)) 4%, color-mix(in srgb, var(--card) 42%, transparent));
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--faction-color, var(--border)) 22%, transparent);
+    background-color: color-mix(in srgb, var(--card) 50%, transparent);
 }
 
 .faction-header-row {
@@ -960,38 +960,35 @@ button, a, input, select {
     font-weight: 500;
     color: var(--muted-foreground);
     letter-spacing: -0.01em;
-    opacity: 0.85;
 }
 
 .faction-title-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 12px;
+    gap: 6px;
+    padding: 3px 10px;
     border-radius: 999px;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 .faction-count-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 1px 7px;
+    padding: 0 5px;
     border-radius: 999px;
-    font-size: 0.6875rem;
-    font-weight: 800;
-    background-color: var(--faction-color, #2563eb);
+    font-size: 0.625rem;
+    font-weight: 700;
+    background-color: var(--faction-color, var(--foreground));
     color: #ffffff;
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--faction-color, #2563eb) 35%, transparent);
 }
 
 /* 头像网格 */
 .character-avatars-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
 }
 
 .char-avatar-card {
@@ -999,43 +996,37 @@ button, a, input, select {
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    padding: 12px 8px 10px;
-    border-radius: 16px;
-    border: 1px solid color-mix(in srgb, var(--border) 40%, rgba(255, 255, 255, 0.2));
-    background-color: color-mix(in srgb, var(--card) 58%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+    padding: 10px 6px 8px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
     text-decoration: none;
     color: var(--foreground);
-    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .char-avatar-card:hover {
     border-color: var(--faction-color, var(--foreground));
     transform: translateY(-2px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 8px 20px -4px color-mix(in srgb, var(--faction-color, var(--foreground)) 28%, transparent);
-    background-color: color-mix(in srgb, var(--card) 82%, transparent);
+    background-color: color-mix(in srgb, var(--card) 85%, transparent);
 }
 
 .char-avatar-frame {
-    width: 52px;
-    height: 52px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     overflow: hidden;
-    background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    border: 2.5px solid color-mix(in srgb, var(--faction-color, var(--border)) 35%, transparent);
-    box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--faction-color, var(--foreground)) 20%, transparent);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid color-mix(in srgb, var(--faction-color, var(--border)) 30%, transparent);
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .char-avatar-card:hover .char-avatar-frame {
     border-color: var(--faction-color, var(--foreground));
-    transform: scale(1.08);
-    box-shadow: 0 4px 14px -1px color-mix(in srgb, var(--faction-color, var(--foreground)) 35%, transparent);
+    transform: scale(1.05);
 }
 
 .char-avatar-img {
@@ -1058,49 +1049,49 @@ button, a, input, select {
 }
 
 .char-name-label {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
-    transition: color 0.18s ease, text-shadow 0.18s ease;
+    color: var(--foreground);
+    transition: color 0.15s ease;
 }
 
 .char-avatar-card:hover .char-name-label {
     color: var(--faction-color, var(--foreground));
-    text-shadow: 0 0 12px color-mix(in srgb, var(--faction-color, var(--foreground)) 65%, transparent);
 }
 
 /* ── 通用层级块 ── */
 .tier-block {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 
 .tier-label {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.8125rem;
-    font-weight: 700;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: var(--muted-foreground);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
 
 .tier-label .tier-icon {
-    font-size: 0.9375rem;
-    color: var(--section-theme, var(--muted-foreground));
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
 }
 
 /* 快捷核心入口 Pills */
 .direct-chips-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 10px;
+    gap: 8px;
 }
 
 .nav-link-pill {
@@ -1108,44 +1099,41 @@ button, a, input, select {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    min-height: 44px;
-    padding: 0 14px 0 8px;
-    border-radius: 14px;
-    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.25));
-    background-color: color-mix(in srgb, var(--card) 58%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 2px 8px -2px color-mix(in srgb, var(--foreground) 4%, transparent);
+    min-height: 40px;
+    padding: 0 12px 0 8px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
     color: var(--foreground);
     text-decoration: none;
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: 0.8125rem;
+    font-weight: 500;
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
 }
 
 .core-pill-icon-box {
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
     display: grid;
     place-items: center;
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 10%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--foreground);
     flex-shrink: 0;
-    transition: background-color 0.15s ease, transform 0.15s ease;
+    transition: transform 0.15s ease;
 }
 
 .core-pill:hover {
-    border-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 45%, var(--border));
-    background-color: color-mix(in srgb, var(--section-theme, var(--card)) 14%, var(--card));
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 6px 18px -4px color-mix(in srgb, var(--section-theme, var(--foreground)) 20%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 35%, var(--border));
+    background-color: color-mix(in srgb, var(--card) 85%, transparent);
     transform: translateY(-1px);
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .core-pill:hover .core-pill-icon-box {
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 20%, transparent);
-    transform: scale(1.08);
+    transform: scale(1.05);
 }
 
 .pill-label {
@@ -1191,19 +1179,17 @@ button, a, input, select {
 }
 
 .subgroup-card {
-    border: 1px solid color-mix(in srgb, var(--border) 40%, rgba(255, 255, 255, 0.2));
-    border-radius: 14px;
-    background-color: color-mix(in srgb, var(--card) 45%, transparent);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+    border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    border-radius: 12px;
+    background-color: color-mix(in srgb, var(--card) 50%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     overflow: hidden;
-    transition: all 0.15s ease;
+    transition: border-color 0.15s ease;
 }
 
 .subgroup-card:hover {
-    border-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 30%, var(--border));
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 6px 18px -4px color-mix(in srgb, var(--section-theme, var(--foreground)) 10%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 25%, var(--border));
 }
 
 .subgroup-card-header {
@@ -1211,41 +1197,22 @@ button, a, input, select {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 10px 14px;
-    border-bottom: 1px dashed color-mix(in srgb, var(--border) 40%, rgba(255, 255, 255, 0.15));
+    padding: 9px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
 }
 
 .subgroup-card-title-wrap {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
-.subgroup-icon-badge {
-    width: 24px;
-    height: 24px;
-    border-radius: 7px;
-    display: grid;
-    place-items: center;
-    font-size: 0.8125rem;
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 12%, transparent);
-    color: var(--section-theme, var(--foreground));
-    flex-shrink: 0;
-}
-
-.subgroup-bullet {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background-color: var(--section-theme, var(--foreground));
-    opacity: 0.75;
-    flex-shrink: 0;
-}
-
 .subgroup-card-title {
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
     letter-spacing: -0.01em;
+    color: var(--foreground);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1255,16 +1222,16 @@ button, a, input, select {
     padding: 1px 6px;
     border-radius: 999px;
     font-size: 0.6875rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--muted-foreground);
-    background-color: color-mix(in srgb, var(--foreground) 7%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 5%, transparent);
     flex-shrink: 0;
 }
 
 .subgroup-header-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
 }
 
@@ -1276,9 +1243,9 @@ button, a, input, select {
     height: 22px;
     padding: 0;
     border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--section-theme, var(--foreground)) 25%, transparent);
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 8%, transparent);
-    color: var(--section-theme, var(--foreground));
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 4%, transparent);
+    color: var(--muted-foreground);
     font-size: 0.8125rem;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -1286,9 +1253,9 @@ button, a, input, select {
 }
 
 .subgroup-popup-pill-btn:hover {
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 18%, transparent);
-    border-color: var(--section-theme, var(--foreground));
-    transform: translateY(-1px);
+    background-color: color-mix(in srgb, var(--foreground) 10%, transparent);
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--foreground) 25%, var(--border));
 }
 
 .subgroup-external-link {
@@ -1306,7 +1273,7 @@ button, a, input, select {
 
 .subgroup-external-link:hover {
     color: var(--foreground);
-    background-color: var(--accent);
+    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 /* 子条目标签云 */
@@ -1321,13 +1288,10 @@ button, a, input, select {
     display: inline-flex;
     align-items: center;
     height: 30px;
-    padding: 0 10px;
+    padding: 0 9px;
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--border) 40%, rgba(255, 255, 255, 0.2));
-    background-color: color-mix(in srgb, var(--card) 55%, transparent);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
     color: var(--foreground);
     font-size: 0.8125rem;
     font-weight: 500;
@@ -1337,10 +1301,10 @@ button, a, input, select {
 }
 
 .subgroup-tag-chip:hover {
-    border-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 45%, var(--border));
-    background-color: color-mix(in srgb, var(--section-theme, var(--card)) 20%, var(--card));
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    background-color: color-mix(in srgb, var(--card) 90%, transparent);
     transform: translateY(-1px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 4px 12px -2px color-mix(in srgb, var(--section-theme, var(--foreground)) 18%, transparent);
+    box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .subgroup-tag-chip:active {
@@ -1355,47 +1319,46 @@ button, a, input, select {
 
 .is-weapon-chip {
     gap: 6px;
-    padding-right: 6px;
+    padding-right: 8px;
 }
 
 .weapon-icon-render {
-    width: 32px;
-    height: 20px;
+    width: 30px;
+    height: 18px;
     object-fit: contain;
     flex-shrink: 0;
-    padding: 1px 3px;
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--foreground) 4.5%, transparent);
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
-    margin-right: 3px;
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 1px 2px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--foreground) 4%, transparent);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+    margin-right: 2px;
+    transition: transform 0.15s ease;
 }
 
 .subgroup-tag-chip:hover .weapon-icon-render {
-    transform: scale(1.08);
+    transform: scale(1.05);
 }
 
 .map-thumb-render {
-    width: 34px;
-    height: 20px;
+    width: 32px;
+    height: 19px;
     aspect-ratio: 16 / 9.5;
-    border-radius: 5px;
+    border-radius: 4px;
     object-fit: cover;
     object-position: center 30%;
     flex-shrink: 0;
-    border: 1px solid color-mix(in srgb, var(--foreground) 12%, rgba(255, 255, 255, 0.25));
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, rgba(255, 255, 255, 0.2));
     margin-right: 3px;
-    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.15s ease;
 }
 
 .subgroup-tag-chip:hover .map-thumb-render {
-    transform: scale(1.08);
+    transform: scale(1.05);
 }
 
 .chip-prefix-icon {
     font-size: 0.9375rem;
-    color: color-mix(in srgb, var(--section-theme, var(--foreground)) 80%, var(--foreground));
+    color: var(--muted-foreground);
     opacity: 0.85;
     margin-right: 2px;
     flex-shrink: 0;
@@ -1410,31 +1373,21 @@ button, a, input, select {
 .weapon-owner-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 1px 6px 1px 3px;
-    border-radius: 999px;
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--section-theme, var(--foreground)) 20%, transparent);
+    gap: 4px;
     font-size: 0.6875rem;
-    font-weight: 700;
-    color: color-mix(in srgb, var(--section-theme, var(--foreground)) 85%, var(--foreground));
-    line-height: 1;
-    transition: all 0.15s ease;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    margin-left: 2px;
     flex-shrink: 0;
 }
 
-.subgroup-tag-chip:hover .weapon-owner-badge {
-    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 22%, transparent);
-    border-color: var(--section-theme, var(--foreground));
-}
-
 .owner-avatar-tiny {
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     object-fit: cover;
     display: block;
-    border: 1px solid color-mix(in srgb, var(--section-theme, var(--foreground)) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 /* ── 骨架屏 ── */
@@ -2013,13 +1966,12 @@ button, a, input, select {
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 12px 16px;
-    border-radius: 14px;
-    border: 1px solid color-mix(in srgb, #f59e0b 32%, rgba(255, 255, 255, 0.25));
-    background: linear-gradient(135deg, color-mix(in srgb, #f59e0b 12%, color-mix(in srgb, var(--card) 60%, transparent)) 0%, color-mix(in srgb, #ec4899 9%, color-mix(in srgb, var(--card) 60%, transparent)) 100%);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 6px 20px -4px color-mix(in srgb, #f59e0b 16%, transparent);
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     margin-bottom: 8px;
     flex-wrap: wrap;
 }
@@ -2027,28 +1979,34 @@ button, a, input, select {
 .bday-banner-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
     flex: 1;
 }
 
 .bday-cake-icon-box {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
     display: grid;
     place-items: center;
-    font-size: 1.25rem;
-    background: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
-    color: #ffffff;
+    font-size: 1.1rem;
+    background-color: color-mix(in srgb, #f59e0b 12%, transparent);
+    border: 1px solid color-mix(in srgb, #f59e0b 25%, transparent);
+    color: #d97706;
     flex-shrink: 0;
-    box-shadow: 0 3px 8px -2px rgba(245, 158, 11, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+    .bday-cake-icon-box {
+        color: #fbbf24;
+    }
 }
 
 .bday-banner-text {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
     min-width: 0;
 }
 
@@ -2060,21 +2018,26 @@ button, a, input, select {
 }
 
 .bday-banner-title {
-    font-size: 0.9375rem;
-    font-weight: 700;
+    font-size: 0.875rem;
+    font-weight: 600;
     color: var(--foreground);
     letter-spacing: -0.01em;
 }
 
 .bday-countdown-badge {
-    padding: 1px 7px;
+    padding: 1px 6px;
     border-radius: 999px;
     font-size: 0.6875rem;
-    font-weight: 800;
-    background-color: #f59e0b;
-    color: #ffffff;
+    font-weight: 600;
+    background-color: color-mix(in srgb, #f59e0b 14%, transparent);
+    color: #d97706;
     margin-left: 4px;
-    box-shadow: 0 1px 4px rgba(245, 158, 11, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+    .bday-countdown-badge {
+        color: #fbbf24;
+    }
 }
 
 .bday-banner-sub {
@@ -2086,32 +2049,22 @@ button, a, input, select {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    height: 32px;
-    padding: 0 12px;
+    height: 30px;
+    padding: 0 10px;
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
-    background-color: color-mix(in srgb, #f59e0b 12%, transparent);
-    color: #d97706;
-    font-size: 0.8125rem;
-    font-weight: 700;
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 4%, transparent);
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.15s ease;
     flex-shrink: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-    .bday-view-all-btn {
-        color: #fbbf24;
-        background-color: color-mix(in srgb, #f59e0b 18%, transparent);
-    }
-}
-
 .bday-view-all-btn:hover {
-    background-color: #f59e0b;
-    color: #ffffff;
-    border-color: #f59e0b;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px -2px rgba(245, 158, 11, 0.4);
+    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 25%, var(--border));
 }
 
 /* ── 角色卡片生日状态角标与日期 ── */

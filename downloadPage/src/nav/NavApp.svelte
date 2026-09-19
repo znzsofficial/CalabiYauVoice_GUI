@@ -205,13 +205,13 @@ import { onMount, tick } from 'svelte';
   }
 
   // 分区主题配置
-  const sectionThemes: Record<string, { icon: string; color: string; tag: string }> = {
-    '首页': { icon: 'lucide:compass', color: '#d97706', tag: '门户与常用' },
-    '角色': { icon: 'lucide:users', color: '#2563eb', tag: '超弦体与阵营' },
-    '武器': { icon: 'lucide:crosshair', color: '#dc2626', tag: '枪械与战术' },
-    '地图': { icon: 'lucide:map', color: '#059669', tag: '对战场景' },
-    '玩法': { icon: 'lucide:gamepad-2', color: '#7c3aed', tag: '模式与系统' },
-    '其他': { icon: 'lucide:sparkles', color: '#0891b2', tag: '社区与资料' }
+  const sectionThemes: Record<string, { icon: string; tag: string }> = {
+    '首页': { icon: 'lucide:compass', tag: '门户与常用' },
+    '角色': { icon: 'lucide:users', tag: '超弦体与阵营' },
+    '武器': { icon: 'lucide:crosshair', tag: '枪械与战术' },
+    '地图': { icon: 'lucide:map', tag: '对战场景' },
+    '玩法': { icon: 'lucide:gamepad-2', tag: '模式与系统' },
+    '其他': { icon: 'lucide:sparkles', tag: '社区与资料' }
   };
 
   function getModalDataForGroup(groupTitle: string): CollectionModalData | null {
@@ -228,7 +228,6 @@ import { onMount, tick } from 'svelte';
     url?: string;
     action?: (trigger?: HTMLElement) => void;
     icon: string;
-    color: string;
     tag: string;
     isModal?: boolean;
   }
@@ -240,7 +239,6 @@ import { onMount, tick } from 'svelte';
       desc: '卡牌制作、贴纸生成、抽卡模拟等 8 款社区工具',
       action: (el) => openCollectionModal(CATGIRL_TOOLBOX_MODAL, el),
       icon: 'lucide:box',
-      color: '#06b6d4',
       tag: '工具',
       isModal: true
     },
@@ -249,7 +247,6 @@ import { onMount, tick } from 'svelte';
       desc: 'PC国服、国际服官网、手游预约与官方B站',
       action: (el) => openCollectionModal(OFFICIAL_CHANNELS_MODAL, el),
       icon: 'lucide:globe',
-      color: '#2563eb',
       tag: '官方',
       isModal: true
     },
@@ -258,7 +255,6 @@ import { onMount, tick } from 'svelte';
       desc: '时装外观、武器皮肤、功能道具与生化卡牌',
       action: (el) => openCollectionModal(FILTER_TOOLS_MODAL, el),
       icon: 'lucide:filter',
-      color: '#f59e0b',
       tag: '筛选',
       isModal: true
     },
@@ -267,7 +263,6 @@ import { onMount, tick } from 'svelte';
       desc: '超弦体时装人气投票与排行榜',
       url: 'https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8',
       icon: 'lucide:heart-handshake',
-      color: '#ec4899',
       tag: '热门'
     },
     {
@@ -275,7 +270,6 @@ import { onMount, tick } from 'svelte';
       desc: '全武器伤害、射速与衰减倍率比对',
       url: 'https://wiki.biligame.com/klbq/%E4%B8%BB%E6%AD%A6%E5%99%A8%E7%90%86%E8%AE%BA%E6%95%B0%E6%8D%AE%E8%A1%A8',
       icon: 'lucide:file-bar-chart',
-      color: '#dc2626',
       tag: '数据'
     },
     {
@@ -283,7 +277,6 @@ import { onMount, tick } from 'svelte';
       desc: '爆破、乱斗、团竞等全模式作战场景',
       url: 'https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE',
       icon: 'lucide:map-pin',
-      color: '#10b981',
       tag: '地图'
     },
     {
@@ -291,7 +284,6 @@ import { onMount, tick } from 'svelte';
       desc: '官方最新晶核、基板与礼包兑换码',
       url: 'https://wiki.biligame.com/klbq/%E5%85%91%E6%8D%A2%E7%A0%81',
       icon: 'lucide:gift',
-      color: '#8b5cf6',
       tag: '福利'
     },
     {
@@ -299,7 +291,6 @@ import { onMount, tick } from 'svelte';
       desc: '各枪械金色/紫色皮肤展示图鉴',
       url: 'https://wiki.biligame.com/klbq/%E6%AD%A6%E5%99%A8%E5%A4%96%E8%A7%82%E7%AD%9B%E9%80%89',
       icon: 'lucide:palette',
-      color: '#f97316',
       tag: '外观'
     }
   ];
@@ -655,15 +646,14 @@ import { onMount, tick } from 'svelte';
               class="featured-tool-card as-btn"
               type="button"
               onclick={(e) => tool.action?.(e.currentTarget as HTMLElement)}
-              style="--tool-accent: {tool.color};"
             >
-              <div class="tool-card-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
+              <div class="tool-card-icon-box">
                 <iconify-icon icon={tool.icon}></iconify-icon>
               </div>
               <div class="tool-card-info">
                 <div class="tool-card-title-row">
                   <strong class="tool-card-title">{tool.title}</strong>
-                  <span class="tool-card-tag" style="background: color-mix(in srgb, {tool.color} 10%, transparent); color: {tool.color};">{tool.tag}</span>
+                  <span class="tool-card-tag">{tool.tag}</span>
                 </div>
                 <p class="tool-card-desc">{tool.desc}</p>
               </div>
@@ -675,15 +665,14 @@ import { onMount, tick } from 'svelte';
               href={tool.url}
               target="_blank"
               rel="noopener noreferrer"
-              style="--tool-accent: {tool.color};"
             >
-              <div class="tool-card-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
+              <div class="tool-card-icon-box">
                 <iconify-icon icon={tool.icon}></iconify-icon>
               </div>
               <div class="tool-card-info">
                 <div class="tool-card-title-row">
                   <strong class="tool-card-title">{tool.title}</strong>
-                  <span class="tool-card-tag" style="background: color-mix(in srgb, {tool.color} 10%, transparent); color: {tool.color};">{tool.tag}</span>
+                  <span class="tool-card-tag">{tool.tag}</span>
                 </div>
                 <p class="tool-card-desc">{tool.desc}</p>
               </div>
@@ -711,7 +700,7 @@ import { onMount, tick } from 'svelte';
         </button>
 
         {#each sections as section (section.title)}
-          {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#6b7280', tag: '' }}
+          {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', tag: '' }}
           {@const count = countSectionTotal(section)}
           <button
             class="category-tab"
@@ -719,7 +708,7 @@ import { onMount, tick } from 'svelte';
             type="button"
             onclick={() => { activeTab = section.title; filter = ''; }}
           >
-            <iconify-icon icon={theme.icon} class="tab-icon" style="color: {theme.color};"></iconify-icon>
+            <iconify-icon icon={theme.icon} class="tab-icon"></iconify-icon>
             <span class="tab-title">{section.title}</span>
             <span class="tab-count">{count}</span>
           </button>
@@ -794,16 +783,16 @@ import { onMount, tick } from 'svelte';
     <!-- 各大主题分区卡片 -->
     <div class="sections-container">
       {#each displaySections as section, sectionIdx (section.title)}
-        {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#4b5563', tag: '资料' }}
+        {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', tag: '资料' }}
         {@const isCharacterSection = section.title === '角色'}
         {@const directItems = section.items.filter(item => item.children.length === 0)}
         {@const groupItems = section.items.filter(item => item.children.length > 0)}
         {@const sectionCount = countSectionTotal(section)}
 
-        <section class="section-card" style="--section-theme: {theme.color}; --card-index: {sectionIdx};">
+        <section class="section-card" style="--card-index: {sectionIdx};">
           <!-- 分区卡片头部 -->
           <div class="section-card-header">
-            <div class="section-badge-icon" style="background-color: color-mix(in srgb, {theme.color} 14%, transparent); color: {theme.color};">
+            <div class="section-badge-icon">
               <iconify-icon icon={theme.icon}></iconify-icon>
             </div>
             <div class="section-title-wrap">
@@ -1001,9 +990,6 @@ import { onMount, tick } from 'svelte';
                         <!-- 子卡片标题 -->
                         <div class="subgroup-card-header">
                           <div class="subgroup-card-title-wrap">
-                            <div class="subgroup-icon-badge">
-                              <iconify-icon icon={getSubgroupIcon(group.title)}></iconify-icon>
-                            </div>
                             <strong class="subgroup-card-title">{group.title}</strong>
                             <span class="subgroup-count-badge">{group.children.length}</span>
                           </div>
