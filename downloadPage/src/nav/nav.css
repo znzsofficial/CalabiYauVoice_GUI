@@ -429,7 +429,7 @@ body {
 
 .featured-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
 }
 
@@ -829,6 +829,16 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.faction-slogan-text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    letter-spacing: -0.01em;
+    opacity: 0.85;
 }
 
 .faction-title-pill {
@@ -1177,6 +1187,55 @@ body {
     border-style: dashed;
     color: var(--muted-foreground);
     background: transparent;
+}
+
+.is-weapon-chip {
+    gap: 6px;
+    padding-right: 4px;
+}
+
+.chip-prefix-icon {
+    font-size: 0.8125rem;
+    color: #10b981;
+    opacity: 0.85;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+.tag-chip-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.weapon-owner-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px 1px 3px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--section-theme, var(--foreground)) 20%, transparent);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--section-theme, var(--foreground)) 85%, var(--foreground));
+    line-height: 1;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.subgroup-tag-chip:hover .weapon-owner-badge {
+    background-color: color-mix(in srgb, var(--section-theme, var(--foreground)) 22%, transparent);
+    border-color: var(--section-theme, var(--foreground));
+}
+
+.owner-avatar-tiny {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    border: 1px solid color-mix(in srgb, var(--section-theme, var(--foreground)) 30%, transparent);
 }
 
 /* ── 骨架屏 ── */
@@ -1889,7 +1948,9 @@ body {
     .category-tabs-scroller {
         border-radius: 999px;
         background-color: color-mix(in srgb, var(--card) 92%, transparent);
-        padding: 3px;
+        padding: 3px 12px;
+        mask-image: linear-gradient(to right, transparent, black 14px, black calc(100% - 14px), transparent);
+        -webkit-mask-image: linear-gradient(to right, transparent, black 14px, black calc(100% - 14px), transparent);
     }
 
     .category-tab {
@@ -1987,6 +2048,10 @@ body {
 }
 
 @media (max-width: 480px) {
+    .faction-slogan-text {
+        display: none;
+    }
+
     .character-avatars-grid {
         grid-template-columns: repeat(4, 1fr);
     }
@@ -2014,6 +2079,16 @@ body {
 
     .char-name-label {
         font-size: 0.6875rem;
+    }
+
+    .weapon-owner-badge {
+        font-size: 0.625rem;
+        padding: 0 4px 0 2px;
+    }
+
+    .owner-avatar-tiny {
+        width: 13px;
+        height: 13px;
     }
 
     .subgroup-tag-chip {

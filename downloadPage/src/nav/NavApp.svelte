@@ -52,12 +52,48 @@
   let avatarsLoading = $state(false);
 
   // 阵营分类主题配置
-  const factionThemes: Record<string, { color: string; badge: string; icon: string }> = {
-    '欧泊': { color: '#2563eb', badge: '欧泊阵营', icon: 'lucide:shield' },
-    '剪刀手': { color: '#dc2626', badge: '剪刀手阵营', icon: 'lucide:scissors' },
-    '乌尔比诺': { color: '#d97706', badge: '乌尔比诺商会', icon: 'lucide:crown' },
-    '晶源体': { color: '#9333ea', badge: '晶源感染生物', icon: 'lucide:biohazard' }
+  const factionThemes: Record<string, { color: string; badge: string; icon: string; slogan: string }> = {
+    '欧泊': { color: '#2563eb', badge: '欧泊阵营', icon: 'lucide:shield', slogan: '维和治安 · 官方秩序防卫军' },
+    '剪刀手': { color: '#dc2626', badge: '剪刀手阵营', icon: 'lucide:scissors', slogan: '自由潜行 · 追求平权的超弦同盟' },
+    '乌尔比诺': { color: '#d97706', badge: '乌尔比诺商会', icon: 'lucide:crown', slogan: '商业财阀 · 掌控巴布洛核心科技' },
+    '晶源体': { color: '#9333ea', badge: '晶源感染生物', icon: 'lucide:biohazard', slogan: '超弦感染 · 生化感染模式母体与变异体' }
   };
+
+  // 专属主武器与使用者对应表（根据 Wiki 权威 SMW 数据）
+  const PRIMARY_WEAPON_OWNERS: Record<string, string> = {
+    '北极星': '星绘',
+    '警探': '米雪儿·李',
+    '卫冕': '奥黛丽·格罗夫',
+    '夜镰': '玛拉',
+    '审判官': '信',
+    '幻霜': '伊薇特',
+    '彩绘': '玛德蕾娜·利里',
+    '影袭': '拉薇',
+    '枫鸣': '千代',
+    '校准仪': '蕾欧娜',
+    '欺诈师': '加拉蒂亚·利里',
+    '潮音': '汐',
+    '独舞': '芙拉薇娅',
+    '破晓': '令',
+    '空境': '心夏',
+    '绝对执行': '忧雾',
+    '绽放': '珐格兰丝',
+    '自由意志': '白墨',
+    '谢幕曲': '香奈美',
+    '逆焰': '明',
+    '隼': '梅瑞狄斯',
+    '雨晦': '诺诺',
+    '鸣火': '艾卡',
+    '齿锋': '绯莎',
+    '静风': '全员通用'
+  };
+
+  function getWeaponOwnerDisplay(weaponName: string): { name: string; avatarKey: string } | null {
+    const full = PRIMARY_WEAPON_OWNERS[weaponName];
+    if (!full) return null;
+    if (full === '全员通用') return { name: '通用', avatarKey: '' };
+    return { name: full.split('·')[0], avatarKey: full };
+  }
 
   function getSubgroupIcon(title: string): string {
     if (title.includes('步枪') || title.includes('狙击') || title.includes('枪')) return 'lucide:crosshair';
@@ -649,6 +685,9 @@
                       <span>{factionGroup.title}</span>
                       <span class="faction-count-badge">{factionGroup.children.length}</span>
                     </div>
+                    {#if factionInfo.slogan}
+                      <span class="faction-slogan-text">{factionInfo.slogan}</span>
+                    {/if}
                   </div>
 
                   <div class="character-avatars-grid">
@@ -799,19 +838,43 @@
                         <!-- 子条目标签集 -->
                         <div class="subgroup-tag-cloud">
                           {#each group.children as child (child.title)}
+                            {@const isWeaponSection = section.title === '武器'}
+                            {@const isMapSection = section.title === '地图'}
+                            {@const weaponOwner = isWeaponSection ? getWeaponOwnerDisplay(child.title) : null}
                             {#if child.url}
                               <a
                                 class="subgroup-tag-chip"
+                                class:is-weapon-chip={!!weaponOwner}
                                 href={child.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title={child.title}
+                                title={weaponOwner ? `${child.title}（使用者：${weaponOwner.name}）` : child.title}
                               >
-                                {child.title}
+                                {#if isMapSection}
+                                  <iconify-icon icon="lucide:map-pin" class="chip-prefix-icon"></iconify-icon>
+                                {/if}
+                                <span class="tag-chip-title">{child.title}</span>
+                                {#if weaponOwner}
+                                  <span class="weapon-owner-badge">
+                                    {#if weaponOwner.avatarKey && (avatarMap[weaponOwner.avatarKey] || avatarMap[weaponOwner.name])}
+                                      <img
+                                        class="owner-avatar-tiny"
+                                        src={avatarMap[weaponOwner.avatarKey] || avatarMap[weaponOwner.name]}
+                                        alt=""
+                                        loading="lazy"
+                                        referrerpolicy="no-referrer"
+                                      >
+                                    {/if}
+                                    <span class="owner-name">{weaponOwner.name}</span>
+                                  </span>
+                                {/if}
                               </a>
                             {:else}
                               <span class="subgroup-tag-chip tag-plain">
-                                {child.title}
+                                {#if isMapSection}
+                                  <iconify-icon icon="lucide:map-pin" class="chip-prefix-icon"></iconify-icon>
+                                {/if}
+                                <span class="tag-chip-title">{child.title}</span>
                               </span>
                             {/if}
                           {/each}
