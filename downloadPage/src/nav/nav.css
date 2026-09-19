@@ -1048,6 +1048,12 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
+    transition: color 0.18s ease, text-shadow 0.18s ease;
+}
+
+.char-avatar-card:hover .char-name-label {
+    color: var(--faction-color, var(--foreground));
+    text-shadow: 0 0 12px color-mix(in srgb, var(--faction-color, var(--foreground)) 65%, transparent);
 }
 
 /* ── 通用层级块 ── */
