@@ -1815,6 +1815,400 @@ body {
     text-decoration: underline;
 }
 
+/* ── 角色生日速递横幅 ── */
+.birthday-spotlight-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, #f59e0b 28%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, #f59e0b 8%, var(--card)) 0%, color-mix(in srgb, #ec4899 5%, var(--card)) 100%);
+    box-shadow: 0 4px 14px -3px color-mix(in srgb, #f59e0b 14%, transparent);
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.bday-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+}
+
+.bday-cake-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    font-size: 1.25rem;
+    background: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
+    color: #ffffff;
+    flex-shrink: 0;
+    box-shadow: 0 3px 8px -2px rgba(245, 158, 11, 0.4);
+}
+
+.bday-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.bday-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bday-banner-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.01em;
+}
+
+.bday-countdown-badge {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    background-color: #f59e0b;
+    color: #ffffff;
+    margin-left: 4px;
+    box-shadow: 0 1px 4px rgba(245, 158, 11, 0.3);
+}
+
+.bday-banner-sub {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+
+.bday-view-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+    background-color: color-mix(in srgb, #f59e0b 12%, transparent);
+    color: #d97706;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .bday-view-all-btn {
+        color: #fbbf24;
+        background-color: color-mix(in srgb, #f59e0b 18%, transparent);
+    }
+}
+
+.bday-view-all-btn:hover {
+    background-color: #f59e0b;
+    color: #ffffff;
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px rgba(245, 158, 11, 0.4);
+}
+
+/* ── 角色卡片生日状态角标与日期 ── */
+.char-avatar-card.birthday-today {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 1px #f59e0b, 0 6px 20px -4px rgba(245, 158, 11, 0.35);
+    background: linear-gradient(180deg, color-mix(in srgb, #f59e0b 8%, var(--card)) 0%, var(--card) 100%);
+}
+
+.char-avatar-card.birthday-near {
+    border-color: color-mix(in srgb, #f59e0b 45%, var(--border));
+}
+
+.char-bday-flag {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    font-size: 0.625rem;
+    font-weight: 800;
+    line-height: 1.2;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.char-bday-flag.today {
+    background: linear-gradient(135deg, #ec4899 0%, #f59e0b 100%);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(236, 72, 153, 0.4);
+    animation: bdayPulse 1.8s ease infinite;
+}
+
+.char-bday-flag.near {
+    background-color: color-mix(in srgb, #f59e0b 16%, var(--card));
+    border: 1px solid color-mix(in srgb, #f59e0b 35%, transparent);
+    color: #d97706;
+}
+
+@media (prefers-color-scheme: dark) {
+    .char-bday-flag.near {
+        color: #fbbf24;
+    }
+}
+
+@keyframes bdayPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+}
+
+.char-bday-sublabel {
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    font-weight: 500;
+    margin-top: -2px;
+}
+
+/* ── 生日日历弹窗 ── */
+.bday-highlight-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, #f59e0b 30%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, #f59e0b 10%, var(--card)) 0%, color-mix(in srgb, #ec4899 6%, var(--card)) 100%);
+    margin-bottom: 20px;
+}
+
+.bday-hl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    color: #d97706;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+@media (prefers-color-scheme: dark) {
+    .bday-hl-badge {
+        color: #fbbf24;
+    }
+}
+
+.bday-hl-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.bday-hl-avatar-wrap {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    border: 2px solid #f59e0b;
+    box-shadow: 0 3px 12px rgba(245, 158, 11, 0.3);
+}
+
+.bday-hl-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.bday-hl-avatar.placeholder {
+    display: grid;
+    place-items: center;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.bday-hl-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.bday-hl-name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.bday-hl-name {
+    font-size: 1.125rem;
+    font-weight: 800;
+    color: var(--foreground);
+}
+
+.bday-hl-date {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--muted-foreground);
+}
+
+.bday-hl-status {
+    font-size: 0.8125rem;
+    color: var(--foreground);
+}
+
+/* 12个月份网格 */
+.bday-months-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.bday-month-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+    background-color: color-mix(in srgb, var(--foreground) 1.5%, var(--card));
+}
+
+.bday-month-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.month-num {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.month-count {
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+}
+
+.bday-month-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.month-empty-hint {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    opacity: 0.5;
+    padding: 4px 0;
+}
+
+.bday-item-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    background-color: var(--card);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    font-size: 0.75rem;
+    transition: all 0.15s ease;
+}
+
+.bday-item-pill.is-today {
+    border-color: #ec4899;
+    background-color: color-mix(in srgb, #ec4899 8%, var(--card));
+    box-shadow: 0 2px 8px -2px rgba(236, 72, 153, 0.25);
+}
+
+.bday-item-pill.is-near {
+    border-color: #f59e0b;
+    background-color: color-mix(in srgb, #f59e0b 8%, var(--card));
+}
+
+.bday-item-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.bday-item-avatar.placeholder {
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    font-size: 0.625rem;
+    font-weight: 700;
+}
+
+.bday-item-name {
+    font-weight: 600;
+    color: var(--foreground);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bday-item-date {
+    margin-left: auto;
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+
+.bday-status-pill {
+    padding: 1px 5px;
+    border-radius: 999px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.bday-status-pill.today {
+    background-color: #ec4899;
+    color: #fff;
+}
+
+.bday-status-pill.near {
+    background-color: #f59e0b;
+    color: #fff;
+}
+
+@media (max-width: 900px) {
+    .bday-months-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .bday-months-grid {
+        grid-template-columns: 1fr;
+    }
+    .birthday-spotlight-banner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .bday-view-all-btn {
+        justify-content: center;
+        width: 100%;
+    }
+}
+
 /* ── 浮动返回顶部按钮 ── */
 .floating-top-btn {
     position: fixed;

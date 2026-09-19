@@ -16,6 +16,13 @@ import { onMount, tick } from 'svelte';
     type CollectionModalData
   } from './toolboxes';
   import { matchNavTitle } from './searchAliases';
+  import {
+    CHARACTER_BIRTHDAYS,
+    BIRTHDAY_MAP,
+    getDaysUntilBirthday,
+    getUpcomingBirthdays,
+    type CharacterBirthday
+  } from './birthdays';
 
   let sections = $state<NavSection[]>([]);
   let loading = $state(true);
@@ -29,6 +36,18 @@ import { onMount, tick } from 'svelte';
 
   // 弹窗状态
   let activeCollectionModal = $state<CollectionModalData | null>(null);
+  let birthdayModalOpen = $state(false);
+
+  // 角色生日计算
+  const upcomingBirthdays = $derived(getUpcomingBirthdays(3));
+  const nearestBirthday = $derived(upcomingBirthdays[0] || null);
+
+  function getCharacterBirthdayInfo(charName: string): { birthday: CharacterBirthday; days: number; isToday: boolean } | null {
+    const b = BIRTHDAY_MAP[charName] || BIRTHDAY_MAP[charName.split('·')[0]];
+    if (!b) return null;
+    const days = getDaysUntilBirthday(b);
+    return { birthday: b, days, isToday: days === 0 };
+  }
 
   // 滚动位置
   let scrollY = $state(0);
@@ -42,7 +61,7 @@ import { onMount, tick } from 'svelte';
   let wallpaperToast = $state<string | null>(null);
   let toastTimer: number | null = null;
 
-  const modalOpen = $derived(activeCollectionModal !== null || wallpaperModalOpen);
+  const modalOpen = $derived(activeCollectionModal !== null || wallpaperModalOpen || birthdayModalOpen);
 
   function openCollectionModal(data: CollectionModalData, trigger?: HTMLElement): void {
     modalTriggerEl = trigger || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -51,6 +70,16 @@ import { onMount, tick } from 'svelte';
 
   function closeCollectionModal(): void {
     activeCollectionModal = null;
+    requestAnimationFrame(() => modalTriggerEl?.focus());
+  }
+
+  function openBirthdayModal(trigger?: HTMLElement): void {
+    modalTriggerEl = trigger || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    birthdayModalOpen = true;
+  }
+
+  function closeBirthdayModal(): void {
+    birthdayModalOpen = false;
     requestAnimationFrame(() => modalTriggerEl?.focus());
   }
 
@@ -269,6 +298,7 @@ import { onMount, tick } from 'svelte';
 
   const quickSearchTags = [
     '角色时装投票',
+    '🎂 角色生日',
     '星绘',
     '奥黛丽',
     '北极星',
@@ -376,9 +406,11 @@ import { onMount, tick } from 'svelte';
       searchInputEl?.focus();
     } else if (e.key === 'Escape') {
       if (activeCollectionModal) {
-        activeCollectionModal = null;
+        closeCollectionModal();
       } else if (wallpaperModalOpen) {
-        wallpaperModalOpen = false;
+        closeWallpaperModal();
+      } else if (birthdayModalOpen) {
+        closeBirthdayModal();
       } else if (filterActive) {
         filter = '';
       }
@@ -762,9 +794,47 @@ import { onMount, tick } from 'svelte';
           <div class="section-card-body">
             <!-- ── 角色分区专属的阵营图鉴卡片展示 (含官方头像) ── -->
             {#if isCharacterSection}
+              <!-- 角色生日速递横幅 -->
+              {#if nearestBirthday}
+                <div class="birthday-spotlight-banner">
+                  <div class="bday-banner-left">
+                    <div class="bday-cake-icon-box">
+                      <iconify-icon icon="lucide:cake"></iconify-icon>
+                    </div>
+                    <div class="bday-banner-text">
+                      <div class="bday-title-row">
+                        <strong class="bday-banner-title">
+                          {#if nearestBirthday.isToday}
+                            🎉 今天是 {nearestBirthday.birthday.name} 的生日！
+                          {:else}
+                            🎂 近期寿星：{nearestBirthday.birthday.name} · {nearestBirthday.birthday.dateText}
+                            <span class="bday-countdown-badge">{nearestBirthday.statusText}</span>
+                          {/if}
+                        </strong>
+                      </div>
+                      <span class="bday-banner-sub">
+                        {#if nearestBirthday.isToday}
+                          祝 {nearestBirthday.birthday.name} 生日快乐！去游戏内或 Wiki 查看看生日特别剧情吧~
+                        {:else}
+                          全角色生日档案与倒计时一览
+                        {/if}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    class="bday-view-all-btn"
+                    type="button"
+                    onclick={(e) => openBirthdayModal(e.currentTarget as HTMLElement)}
+                  >
+                    <iconify-icon icon="lucide:calendar-days"></iconify-icon>
+                    <span>生日日历</span>
+                  </button>
+                </div>
+              {/if}
+
               <!-- 阵营角色展示 -->
               {#each groupItems as factionGroup (factionGroup.title)}
-                {@const factionInfo = factionThemes[factionGroup.title] || { color: '#6b7280', badge: factionGroup.title, icon: 'lucide:users' }}
+                {@const factionInfo = factionThemes[factionGroup.title] || { color: '#6b7280', badge: factionGroup.title, icon: 'lucide:users', slogan: '' }}
                 <div class="faction-gallery-block" style="--faction-color: {factionInfo.color};">
                   <div class="faction-header-row">
                     <div class="faction-title-pill" style="background: color-mix(in srgb, {factionInfo.color} 12%, transparent); color: {factionInfo.color}; border: 1px solid color-mix(in srgb, {factionInfo.color} 25%, transparent);">
@@ -780,13 +850,22 @@ import { onMount, tick } from 'svelte';
                   <div class="character-avatars-grid">
                     {#each factionGroup.children as charItem (charItem.title)}
                       {@const avatarUrl = avatarMap[charItem.title]}
+                      {@const bInfo = getCharacterBirthdayInfo(charItem.title)}
                       <a
                         class="char-avatar-card"
+                        class:birthday-today={bInfo?.isToday}
+                        class:birthday-near={bInfo && !bInfo.isToday && bInfo.days <= 7}
                         href={charItem.url || `https://wiki.biligame.com/klbq/${encodeURIComponent(charItem.title)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title={`查看 ${charItem.title} 角色资料`}
+                        title={bInfo ? `${charItem.title}（生日：${bInfo.birthday.dateText}${bInfo.isToday ? ' · 今天生日！' : ` · 还有${bInfo.days}天`}）` : `查看 ${charItem.title} 角色资料`}
                       >
+                        {#if bInfo?.isToday}
+                          <span class="char-bday-flag today" title="今天生日！">🎂 生日!</span>
+                        {:else if bInfo && bInfo.days <= 7}
+                          <span class="char-bday-flag near" title={`${bInfo.days}天后生日`}>🎂 {bInfo.days}天</span>
+                        {/if}
+
                         <div class="char-avatar-frame">
                           {#if avatarUrl}
                             <img
@@ -803,6 +882,9 @@ import { onMount, tick } from 'svelte';
                           {/if}
                         </div>
                         <span class="char-name-label">{charItem.title}</span>
+                        {#if bInfo}
+                          <span class="char-bday-sublabel">{bInfo.birthday.dateText}</span>
+                        {/if}
                       </a>
                     {/each}
                   </div>
@@ -1132,6 +1214,122 @@ import { onMount, tick } from 'svelte';
           {/if}
         </div>
       {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- ── 全角色生日日历弹窗 ── -->
+{#if birthdayModalOpen}
+  <div
+    class="collection-modal-backdrop"
+    onclick={(e) => { if (e.target === e.currentTarget) closeBirthdayModal(); }}
+    onkeydown={(e) => { if (e.key === 'Escape') closeBirthdayModal(); handleModalTrap(e); }}
+    role="dialog"
+    aria-modal="true"
+    aria-label="超弦体生日日历"
+    tabindex="-1"
+  >
+    <div class="collection-modal-content bday-modal-content">
+      <div class="coll-modal-header" style="--modal-accent: #f59e0b;">
+        <div class="coll-modal-title-wrap">
+          <div class="coll-modal-icon-badge" style="background: color-mix(in srgb, #f59e0b 14%, transparent); color: #f59e0b;">
+            <iconify-icon icon="lucide:cake"></iconify-icon>
+          </div>
+          <div class="coll-modal-text-group">
+            <div class="coll-modal-title-row">
+              <h3 class="coll-modal-title">超弦体生日日历</h3>
+              <span class="coll-modal-count-badge">27 位角色</span>
+            </div>
+            <p class="coll-modal-subtitle">记录引航者与每位超弦体的诞辰纪念日</p>
+          </div>
+        </div>
+        <button
+          bind:this={modalCloseEl}
+          class="coll-modal-close-btn"
+          type="button"
+          onclick={closeBirthdayModal}
+          aria-label="关闭弹窗"
+        >
+          <iconify-icon icon="lucide:x"></iconify-icon>
+        </button>
+      </div>
+
+      <div class="coll-modal-body bday-modal-body">
+        {#if nearestBirthday}
+          <div class="bday-highlight-card">
+            <div class="bday-hl-badge">
+              <iconify-icon icon="lucide:sparkles"></iconify-icon>
+              <span>下一位寿星</span>
+            </div>
+            <div class="bday-hl-content">
+              <div class="bday-hl-avatar-wrap">
+                {#if avatarMap[nearestBirthday.birthday.name] || avatarMap[`${nearestBirthday.birthday.name}·李`] || avatarMap[`${nearestBirthday.birthday.name}·格罗夫`] || avatarMap[`${nearestBirthday.birthday.name}·利里`]}
+                  <img
+                    class="bday-hl-avatar"
+                    src={avatarMap[nearestBirthday.birthday.name] || avatarMap[`${nearestBirthday.birthday.name}·李`] || avatarMap[`${nearestBirthday.birthday.name}·格罗夫`] || avatarMap[`${nearestBirthday.birthday.name}·利里`]}
+                    alt={nearestBirthday.birthday.name}
+                  >
+                {:else}
+                  <div class="bday-hl-avatar placeholder">
+                    {nearestBirthday.birthday.name.slice(0, 1)}
+                  </div>
+                {/if}
+              </div>
+              <div class="bday-hl-info">
+                <div class="bday-hl-name-row">
+                  <span class="bday-hl-name">{nearestBirthday.birthday.name}</span>
+                  <span class="bday-hl-date">{nearestBirthday.birthday.dateText}</span>
+                </div>
+                <div class="bday-hl-status">
+                  {#if nearestBirthday.isToday}
+                    🎉 <strong>今天就是生日！</strong> 快去游戏内收听专属特别语音吧！
+                  {:else}
+                    距离生日还有 <strong>{nearestBirthday.daysRemaining}</strong> 天 ({nearestBirthday.statusText})
+                  {/if}
+                </div>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <div class="bday-months-grid">
+          {#each Array.from({ length: 12 }, (_, i) => i + 1) as month (month)}
+            {@const monthBirthdays = CHARACTER_BIRTHDAYS.filter(b => b.month === month)}
+            <div class="bday-month-card" class:has-birthdays={monthBirthdays.length > 0}>
+              <div class="bday-month-header">
+                <span class="month-num">{month} 月</span>
+                <span class="month-count">{monthBirthdays.length} 位</span>
+              </div>
+              <div class="bday-month-list">
+                {#if monthBirthdays.length === 0}
+                  <span class="month-empty-hint">本月暂无超弦体生日</span>
+                {:else}
+                  {#each monthBirthdays as b (b.name)}
+                    {@const days = getDaysUntilBirthday(b)}
+                    {@const isToday = days === 0}
+                    {@const isNear = days > 0 && days <= 14}
+                    {@const avatar = avatarMap[b.name] || avatarMap[`${b.name}·李`] || avatarMap[`${b.name}·格罗夫`] || avatarMap[`${b.name}·利里`]}
+                    <div class="bday-item-pill" class:is-today={isToday} class:is-near={isNear}>
+                      {#if avatar}
+                        <img class="bday-item-avatar" src={avatar} alt="" loading="lazy">
+                      {:else}
+                        <span class="bday-item-avatar placeholder">{b.name.slice(0, 1)}</span>
+                      {/if}
+                      <span class="bday-item-name">{b.name}</span>
+                      <span class="bday-item-date">{b.month}月{b.day}日</span>
+                      {#if isToday}
+                        <span class="bday-status-pill today">今天!</span>
+                      {:else if isNear}
+                        <span class="bday-status-pill near">{days}天后</span>
+                      {/if}
+                    </div>
+                  {/each}
+                {/if}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
     </div>
   </div>
 {/if}
