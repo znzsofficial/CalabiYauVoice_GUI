@@ -77,8 +77,8 @@ function toImmutable(node: MutableNode): NavItem {
 
 interface CachedSidebar { time: number; sections: NavSection[] }
 
-export async function fetchNavSections(signal?: AbortSignal): Promise<NavSection[]> {
-  if (typeof sessionStorage !== 'undefined') {
+export async function fetchNavSections(signal?: AbortSignal, forceRefresh = false): Promise<NavSection[]> {
+  if (!forceRefresh && typeof sessionStorage !== 'undefined') {
     try {
       const raw = sessionStorage.getItem(CACHE_KEY);
       if (raw) {

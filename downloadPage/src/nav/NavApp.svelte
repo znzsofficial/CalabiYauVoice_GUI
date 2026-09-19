@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+import { onMount, tick } from 'svelte';
   import { fetchNavSections, type NavItem, type NavSection } from './sidebar';
   import {
     getRandomWallpaper,
@@ -23,6 +23,9 @@
   let filter = $state('');
   let activeTab = $state<'all' | string>('all');
   let searchInputEl = $state<HTMLInputElement | null>(null);
+  let modalCloseEl = $state<HTMLButtonElement | null>(null);
+  let modalTriggerEl = $state<HTMLElement | null>(null);
+  let navReloading = $state(false);
 
   // 弹窗状态
   let activeCollectionModal = $state<CollectionModalData | null>(null);
@@ -38,6 +41,52 @@
   let wallpaperModalOpen = $state(false);
   let wallpaperToast = $state<string | null>(null);
   let toastTimer: number | null = null;
+
+  const modalOpen = $derived(activeCollectionModal !== null || wallpaperModalOpen);
+
+  function openCollectionModal(data: CollectionModalData, trigger?: HTMLElement): void {
+    modalTriggerEl = trigger || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    activeCollectionModal = data;
+  }
+
+  function closeCollectionModal(): void {
+    activeCollectionModal = null;
+    requestAnimationFrame(() => modalTriggerEl?.focus());
+  }
+
+  function openWallpaperModal(trigger?: HTMLElement): void {
+    modalTriggerEl = trigger || (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    wallpaperModalOpen = true;
+  }
+
+  function closeWallpaperModal(): void {
+    wallpaperModalOpen = false;
+    requestAnimationFrame(() => modalTriggerEl?.focus());
+  }
+
+  function handleModalTrap(e: KeyboardEvent): void {
+    if (e.key === 'Tab') {
+      const modalEl = e.currentTarget as HTMLElement | null;
+      if (!modalEl) return;
+      const focusables = modalEl.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
 
   function showWallpaperToast(msg: string): void {
     wallpaperToast = msg;
@@ -140,7 +189,7 @@
     title: string;
     desc: string;
     url?: string;
-    action?: () => void;
+    action?: (trigger?: HTMLElement) => void;
     icon: string;
     color: string;
     tag: string;
@@ -152,7 +201,7 @@
     {
       title: '猫娘百宝箱',
       desc: '卡牌制作、贴纸生成、抽卡模拟等 8 款社区工具',
-      action: () => { activeCollectionModal = CATGIRL_TOOLBOX_MODAL; },
+      action: (el) => openCollectionModal(CATGIRL_TOOLBOX_MODAL, el),
       icon: 'lucide:box',
       color: '#06b6d4',
       tag: '8大工具',
@@ -161,7 +210,7 @@
     {
       title: '官方渠道矩阵',
       desc: 'PC国服、国际服官网、手游预约与官方B站',
-      action: () => { activeCollectionModal = OFFICIAL_CHANNELS_MODAL; },
+      action: (el) => openCollectionModal(OFFICIAL_CHANNELS_MODAL, el),
       icon: 'lucide:globe',
       color: '#2563eb',
       tag: '官方门户',
@@ -170,7 +219,7 @@
     {
       title: '全站筛选图鉴',
       desc: '时装外观、武器皮肤、功能道具与生化卡牌',
-      action: () => { activeCollectionModal = FILTER_TOOLS_MODAL; },
+      action: (el) => openCollectionModal(FILTER_TOOLS_MODAL, el),
       icon: 'lucide:filter',
       color: '#f59e0b',
       tag: '5大筛选',
@@ -308,6 +357,19 @@
     setWallpaperEnabled(wallpaperActive);
   }
 
+  async function refreshNavigation(): Promise<void> {
+    if (navReloading) return;
+    navReloading = true;
+    try {
+      sections = await fetchNavSections(undefined, true);
+      showWallpaperToast('导航目录已刷新');
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+    } finally {
+      navReloading = false;
+    }
+  }
+
   function handleKeydown(e: KeyboardEvent): void {
     if (e.key === '/' && document.activeElement !== searchInputEl) {
       e.preventDefault();
@@ -369,6 +431,17 @@
       currentWallpaper = wp;
     });
     void loadData();
+    return () => {
+      if (toastTimer) clearTimeout(toastTimer);
+      document.body.style.overflow = '';
+    };
+  });
+
+  $effect(() => {
+    document.body.style.overflow = modalOpen ? 'hidden' : '';
+    if (modalOpen) {
+      void tick().then(() => modalCloseEl?.focus());
+    }
   });
 </script>
 
@@ -421,7 +494,7 @@
           <button
             class="wp-ctrl-btn info-btn"
             type="button"
-            onclick={() => wallpaperModalOpen = true}
+            onclick={(e) => openWallpaperModal(e.currentTarget as HTMLElement)}
             title={`当前壁纸：${currentWallpaper.title} (点击全屏预览)`}
             aria-label="预览当前壁纸"
           >
@@ -440,6 +513,20 @@
             <iconify-icon icon={wallpaperActive ? 'lucide:eye' : 'lucide:eye-off'}></iconify-icon>
           </button>
         </div>
+      {/if}
+
+      {#if !loading && !errorMessage}
+        <button
+          class="header-link refresh-nav-btn"
+          class:refreshing={navReloading}
+          type="button"
+          onclick={refreshNavigation}
+          title="强制刷新 Wiki 侧边栏导航数据"
+          aria-label="刷新 Wiki 侧边栏导航数据"
+        >
+          <iconify-icon icon="lucide:refresh-cw" class="ext-icon" class:spinning={navReloading}></iconify-icon>
+          <span class="btn-text-desktop">刷新</span>
+        </button>
       {/if}
 
       <a class="header-link search-jump" href="/search/" title="前往 Wiki 全文搜索与素材下载">
@@ -508,7 +595,7 @@
             <button
               class="featured-tool-card as-btn"
               type="button"
-              onclick={tool.action}
+              onclick={(e) => tool.action?.(e.currentTarget as HTMLElement)}
               style="--tool-accent: {tool.color};"
             >
               <div class="tool-card-icon-box" style="background: color-mix(in srgb, {tool.color} 14%, transparent); color: {tool.color};">
@@ -812,7 +899,7 @@
                               <button
                                 class="subgroup-popup-pill-btn"
                                 type="button"
-                                onclick={() => activeCollectionModal = modalData}
+                                onclick={(e) => openCollectionModal(modalData, e.currentTarget as HTMLElement)}
                                 title={`以弹窗全览 ${group.title}`}
                                 aria-label={`以弹窗全览 ${group.title}`}
                               >
@@ -900,8 +987,8 @@
 {#if wallpaperModalOpen && currentWallpaper}
   <div
     class="wallpaper-modal-backdrop"
-    onclick={(e) => { if (e.target === e.currentTarget) wallpaperModalOpen = false; }}
-    onkeydown={(e) => { if (e.key === 'Escape') wallpaperModalOpen = false; }}
+    onclick={(e) => { if (e.target === e.currentTarget) closeWallpaperModal(); }}
+    onkeydown={(e) => { if (e.key === 'Escape') closeWallpaperModal(); handleModalTrap(e); }}
     role="dialog"
     aria-modal="true"
     aria-label="壁纸大图预览"
@@ -914,9 +1001,10 @@
           <h3>{currentWallpaper.title}</h3>
         </div>
         <button
+          bind:this={modalCloseEl}
           class="wp-modal-close-btn"
           type="button"
-          onclick={() => wallpaperModalOpen = false}
+          onclick={closeWallpaperModal}
           aria-label="关闭预览"
         >
           <iconify-icon icon="lucide:x"></iconify-icon>
@@ -968,8 +1056,8 @@
 {#if activeCollectionModal}
   <div
     class="collection-modal-backdrop"
-    onclick={(e) => { if (e.target === e.currentTarget) activeCollectionModal = null; }}
-    onkeydown={(e) => { if (e.key === 'Escape') activeCollectionModal = null; }}
+    onclick={(e) => { if (e.target === e.currentTarget) closeCollectionModal(); }}
+    onkeydown={(e) => { if (e.key === 'Escape') closeCollectionModal(); handleModalTrap(e); }}
     role="dialog"
     aria-modal="true"
     aria-label={activeCollectionModal.title}
@@ -990,9 +1078,10 @@
           </div>
         </div>
         <button
+          bind:this={modalCloseEl}
           class="coll-modal-close-btn"
           type="button"
-          onclick={() => activeCollectionModal = null}
+          onclick={closeCollectionModal}
           aria-label="关闭弹窗"
         >
           <iconify-icon icon="lucide:x"></iconify-icon>

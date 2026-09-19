@@ -373,6 +373,9 @@ export function matchNavTitle(title: string, rawQuery: string): boolean {
 
   const lowerTitle = title.toLowerCase();
 
+  // Avoid broad one-character matches such as "m" matching every M-prefixed weapon.
+  if (q.length === 1) return lowerTitle === q;
+
   // 1. 直观包含匹配
   if (lowerTitle.includes(q)) return true;
 

@@ -79,8 +79,8 @@ export function cleanWallpaperTitle(fileName: string): string {
 }
 
 /** 从 Wiki "壁纸" 页面提取全部壁纸文件名 */
-export async function fetchWallpaperFileList(): Promise<string[]> {
-  if (typeof localStorage !== 'undefined') {
+export async function fetchWallpaperFileList(forceRefresh = false): Promise<string[]> {
+  if (!forceRefresh && typeof localStorage !== 'undefined') {
     try {
       const cached = localStorage.getItem(CACHE_LIST_KEY);
       if (cached) {
@@ -161,7 +161,7 @@ export async function getRandomWallpaper(forceRefresh = false): Promise<Wallpape
     } catch {}
   }
 
-  const list = await fetchWallpaperFileList();
+  const list = await fetchWallpaperFileList(forceRefresh);
   if (list.length === 0) {
     const fallback = FALLBACK_WALLPAPERS[Math.floor(Math.random() * FALLBACK_WALLPAPERS.length)];
     return fallback;
