@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.core.navigation
 
 import android.content.res.Configuration
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
@@ -95,6 +96,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,6 +107,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -145,6 +148,7 @@ import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 private data class ToolFileManagerOverlayState(
     val initialPath: String? = null,
@@ -262,7 +266,11 @@ fun MainScreen(
                 && !drawerState.isOpen -> MainBackTarget.GoHome
         else -> null
     }
-    BackHandler(enabled = backTarget != null) {
+    // ── 预测性返回：手势驱动当前页缩小/平移/淡出，可取消 ──
+    var predictiveActive by remember { mutableStateOf(false) }
+    var predictiveProgress by remember { mutableFloatStateOf(0f) }
+
+    fun performBack() {
         when (backTarget) {
             MainBackTarget.CloseDrawer -> coroutineScope.launch { drawerState.close() }
             MainBackTarget.CloseToolOverlay -> toolFileManagerOverlay = null
@@ -274,6 +282,21 @@ fun MainScreen(
         }
     }
 
+    PredictiveBackHandler(enabled = backTarget != null) { progress ->
+        try {
+            progress.collect { event ->
+                predictiveActive = true
+                predictiveProgress = event.progress
+            }
+            performBack()
+        } catch (e: CancellationException) {
+            // 手势取消：恢复页面（状态复位由下方 LaunchedEffect/下一手势处理）
+        } finally {
+            predictiveActive = false
+            predictiveProgress = 0f
+        }
+    }
+
     // 切换页面时停止音频播放；离开 Hub 时清掉残留的子 WebView 叠层
     LaunchedEffect(currentDestination) {
         AudioPlayerManager.stop()
@@ -282,6 +305,18 @@ fun MainScreen(
 
     val openDrawer: () -> Unit = {
         if (!useExpandedLayout) coroutineScope.launch { drawerState.open() }
+    }
+
+    // 预测性返回手势期间，主内容区跟随手指缩小/平移/淡出
+    val predictiveBackModifier = Modifier.graphicsLayer {
+        if (predictiveActive) {
+            val p = predictiveProgress.coerceIn(0f, 1f)
+            scaleX = 1f - 0.07f * p
+            scaleY = 1f - 0.07f * p
+            alpha = 1f - 0.25f * p
+            shape = androidx.compose.foundation.shape.RoundedCornerShape((24 * p).dp)
+            clip = p > 0.02f
+        }
     }
 
     // ── 页面内容（Drawer 和 PermanentDrawer 共用） ──

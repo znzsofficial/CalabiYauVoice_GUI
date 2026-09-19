@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -929,7 +930,7 @@ private fun CharacterPortraitCard(
                                 Modifier.sharedElement(
                                     sharedContentState = rememberSharedContentState(key = "home-char-image-${character.name}"),
                                     animatedVisibilityScope = animatedVisibilityScope,
-                                    boundsTransform = { _, _ -> tween(500) }
+                                    boundsTransform = { _, _ -> tween(350) }
                                 )
                             }
                         } else Modifier
@@ -1151,7 +1152,7 @@ private fun MapCard(
                         Modifier.sharedElement(
                             sharedContentState = rememberSharedContentState(key = "home-map-image-${map.name}"),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> tween(500) }
+                            boundsTransform = { _, _ -> tween(350) }
                         )
                     }
                 } else Modifier
@@ -1277,8 +1278,8 @@ internal fun ContentBlockCard(
 
             AnimatedVisibility(
                 visible = expanded,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = fadeIn(tween(220)) + expandVertically(tween(250, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(180)) + shrinkVertically(tween(220, easing = FastOutSlowInEasing))
             ) {
                 val btnShape = smoothCornerShape(14.dp)
                 FlowRow(
@@ -1532,7 +1533,7 @@ private fun MapGridCard(
                         Modifier.sharedElement(
                             sharedContentState = rememberSharedContentState(key = "list-map-image-${map.name}"),
                             animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> tween(500) }
+                            boundsTransform = { _, _ -> tween(350) }
                         )
                     }
                 } else Modifier
