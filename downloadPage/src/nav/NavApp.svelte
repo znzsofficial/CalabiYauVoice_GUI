@@ -233,7 +233,7 @@ import { onMount, tick } from 'svelte';
       action: (el) => openCollectionModal(CATGIRL_TOOLBOX_MODAL, el),
       icon: 'lucide:box',
       color: '#06b6d4',
-      tag: '8大工具',
+      tag: '工具',
       isModal: true
     },
     {
@@ -242,7 +242,7 @@ import { onMount, tick } from 'svelte';
       action: (el) => openCollectionModal(OFFICIAL_CHANNELS_MODAL, el),
       icon: 'lucide:globe',
       color: '#2563eb',
-      tag: '官方门户',
+      tag: '官方',
       isModal: true
     },
     {
@@ -251,7 +251,7 @@ import { onMount, tick } from 'svelte';
       action: (el) => openCollectionModal(FILTER_TOOLS_MODAL, el),
       icon: 'lucide:filter',
       color: '#f59e0b',
-      tag: '5大筛选',
+      tag: '筛选',
       isModal: true
     },
     {
@@ -260,7 +260,7 @@ import { onMount, tick } from 'svelte';
       url: 'https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8',
       icon: 'lucide:heart-handshake',
       color: '#ec4899',
-      tag: '热门投票'
+      tag: '热门'
     },
     {
       title: '主武器理论数据表',
@@ -268,7 +268,7 @@ import { onMount, tick } from 'svelte';
       url: 'https://wiki.biligame.com/klbq/%E4%B8%BB%E6%AD%A6%E5%99%A8%E7%90%86%E8%AE%BA%E6%95%B0%E6%8D%AE%E8%A1%A8',
       icon: 'lucide:file-bar-chart',
       color: '#dc2626',
-      tag: '硬核数据'
+      tag: '数据'
     },
     {
       title: '对战地图一览',
@@ -276,7 +276,7 @@ import { onMount, tick } from 'svelte';
       url: 'https://wiki.biligame.com/klbq/%E5%9C%B0%E5%9B%BE',
       icon: 'lucide:map-pin',
       color: '#10b981',
-      tag: '全图透视'
+      tag: '地图'
     },
     {
       title: '福利兑换码',
@@ -284,7 +284,7 @@ import { onMount, tick } from 'svelte';
       url: 'https://wiki.biligame.com/klbq/%E5%85%91%E6%8D%A2%E7%A0%81',
       icon: 'lucide:gift',
       color: '#8b5cf6',
-      tag: '实时福利'
+      tag: '福利'
     },
     {
       title: '武器外观筛选',
@@ -292,7 +292,7 @@ import { onMount, tick } from 'svelte';
       url: 'https://wiki.biligame.com/klbq/%E6%AD%A6%E5%99%A8%E5%A4%96%E8%A7%82%E7%AD%9B%E9%80%89',
       icon: 'lucide:palette',
       color: '#f97316',
-      tag: '皮肤图鉴'
+      tag: '外观'
     }
   ];
 
@@ -640,10 +640,7 @@ import { onMount, tick } from 'svelte';
                 </div>
                 <p class="tool-card-desc">{tool.desc}</p>
               </div>
-              <div class="tool-card-modal-badge" style="background: color-mix(in srgb, {tool.color} 12%, transparent); color: {tool.color};">
-                <span>选工具</span>
-                <iconify-icon icon="lucide:layout-grid"></iconify-icon>
-              </div>
+              <iconify-icon icon="lucide:layout-grid" class="tool-card-arrow"></iconify-icon>
             </button>
           {:else}
             <a
