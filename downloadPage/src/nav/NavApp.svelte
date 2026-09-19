@@ -536,16 +536,30 @@ import { onMount, tick } from 'svelte';
             <span class="btn-text-desktop">换壁纸</span>
           </button>
 
-          <button
-            class="wp-ctrl-btn info-btn"
-            type="button"
-            onclick={(e) => openWallpaperModal(e.currentTarget as HTMLElement)}
-            title={`当前壁纸：${currentWallpaper.title} (点击全屏预览)`}
-            aria-label="预览当前壁纸"
-          >
-            <iconify-icon icon="lucide:image"></iconify-icon>
-            <span class="wp-title-truncate">{currentWallpaper.title}</span>
-          </button>
+          <div class="wallpaper-info-container">
+            <button
+              class="wp-ctrl-btn info-btn"
+              type="button"
+              onclick={(e) => openWallpaperModal(e.currentTarget as HTMLElement)}
+              title={`当前壁纸：${currentWallpaper.title} (点击全屏预览)`}
+              aria-label="预览当前壁纸"
+            >
+              <iconify-icon icon="lucide:image"></iconify-icon>
+              <span class="wp-title-truncate">{currentWallpaper.title}</span>
+            </button>
+            <div class="wp-hover-preview-card" role="tooltip">
+              <div class="wp-hover-preview-thumb">
+                <img src={currentWallpaper.url} alt="" loading="lazy" referrerpolicy="no-referrer" />
+              </div>
+              <div class="wp-hover-preview-meta">
+                <span class="wp-hover-title">{currentWallpaper.title}</span>
+                <span class="wp-hover-hint">
+                  <iconify-icon icon="lucide:maximize-2"></iconify-icon>
+                  <span>点击进入全屏画廊</span>
+                </span>
+              </div>
+            </div>
+          </div>
 
           <button
             class="wp-ctrl-btn toggle-btn"
@@ -911,22 +925,26 @@ import { onMount, tick } from 'svelte';
                   <div class="direct-chips-grid">
                     {#each directItems as item (item.title)}
                       {#if item.url}
-                        <a
-                          class="nav-link-pill core-pill"
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={item.title}
-                        >
-                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
-                          <span class="pill-label">{item.title}</span>
-                          <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
-                        </a>
-                      {:else}
-                        <span class="nav-link-pill pill-plain">
-                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
-                          <span class="pill-label">{item.title}</span>
-                        </span>
+                          <a
+                            class="nav-link-pill core-pill"
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={item.title}
+                          >
+                            <span class="core-pill-icon-box">
+                              <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
+                            </span>
+                            <span class="pill-label">{item.title}</span>
+                            <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
+                          </a>
+                        {:else}
+                          <span class="nav-link-pill pill-plain">
+                            <span class="core-pill-icon-box">
+                              <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
+                            </span>
+                            <span class="pill-label">{item.title}</span>
+                          </span>
                       {/if}
                     {/each}
                   </div>
@@ -946,22 +964,26 @@ import { onMount, tick } from 'svelte';
                   <div class="direct-chips-grid">
                     {#each directItems as item (item.title)}
                       {#if item.url}
-                        <a
-                          class="nav-link-pill core-pill"
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={item.title}
-                        >
-                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
-                          <span class="pill-label">{item.title}</span>
-                          <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
-                        </a>
-                      {:else}
-                        <span class="nav-link-pill pill-plain">
-                          <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
-                          <span class="pill-label">{item.title}</span>
-                        </span>
+                          <a
+                            class="nav-link-pill core-pill"
+                            href={item.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={item.title}
+                          >
+                            <span class="core-pill-icon-box">
+                              <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
+                            </span>
+                            <span class="pill-label">{item.title}</span>
+                            <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
+                          </a>
+                        {:else}
+                          <span class="nav-link-pill pill-plain">
+                            <span class="core-pill-icon-box">
+                              <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
+                            </span>
+                            <span class="pill-label">{item.title}</span>
+                          </span>
                       {/if}
                     {/each}
                   </div>
