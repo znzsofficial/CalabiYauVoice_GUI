@@ -863,12 +863,12 @@
     <h1 class="header-title"><img src="/icon.svg" alt="" class="header-logo">卡拉彼丘 Wiki 搜索</h1>
     <div class="header-actions">
       <a class="header-link" href="/nav/" title="前往全站 Wiki 导航目录">
-        <iconify-icon icon="lucide:compass"></iconify-icon>
+        <iconify-icon icon="lucide:compass" class="ext-icon"></iconify-icon>
         <span>Wiki 导航</span>
       </a>
-      <a class="header-link" href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer">
+      <a class="header-link" href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer" title="前往哔哩哔哩卡拉彼丘官方BWiki">
         <span>访问原站</span>
-        <iconify-icon icon="lucide:external-link"></iconify-icon>
+        <iconify-icon icon="lucide:external-link" class="ext-icon"></iconify-icon>
       </a>
     </div>
   </div>

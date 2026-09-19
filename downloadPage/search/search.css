@@ -1,27 +1,34 @@
+html, body, #search-app {
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation;
+}
+
+button, a, input, select {
+    -webkit-tap-highlight-color: transparent !important;
+}
+
 /* ── Header ── */
 
 .header {
     position: sticky;
     top: 0;
-    z-index: 10;
-    border-bottom: 1px solid var(--border);
-    background-color: rgb(255 255 255 / 0.62);
-    backdrop-filter: blur(18px) saturate(180%);
-    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    z-index: 50;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, rgba(255, 255, 255, 0.25));
+    background-color: color-mix(in srgb, var(--background) 60%, transparent);
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
     padding: 10px 16px;
-}
-
-@media (prefers-color-scheme: dark) {
-    .header {
-        background-color: rgb(18 18 18 / 0.62);
-    }
+    box-shadow: 0 4px 20px -8px color-mix(in srgb, var(--foreground) 6%, transparent);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .header-content {
     display: flex;
     align-items: center;
-    gap: 12px;
-    max-width: 800px;
+    justify-content: space-between;
+    gap: 14px;
+    width: 100%;
+    max-width: 1180px;
     margin: 0 auto;
 }
 
@@ -29,38 +36,45 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: calc(var(--radius) - 2px);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.25));
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
     color: var(--foreground);
-    transition: background-color 0.15s;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
 }
 
 .header-back:hover {
-    background-color: var(--accent);
+    background-color: color-mix(in srgb, var(--card) 85%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 2px 8px -2px color-mix(in srgb, var(--foreground) 10%, transparent);
+    transform: translateX(-1px);
 }
 
 .header-back svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
 }
 
 .header-title {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 1rem;
-    font-weight: 600;
+    gap: 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
     letter-spacing: -0.015em;
     margin: 0;
     flex: 1;
     min-width: 0;
+    color: var(--foreground);
 }
 
 .header-logo {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     flex-shrink: 0;
 }
 
@@ -70,19 +84,54 @@
     }
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .header-link {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.75rem;
-    color: var(--muted-foreground);
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.25));
+    background-color: color-mix(in srgb, var(--card) 60%, transparent);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--foreground);
     text-decoration: none;
-    transition: color 0.15s;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.header-link .ext-icon {
+    font-size: 0.9375rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.85;
     flex-shrink: 0;
 }
 
 .header-link:hover {
+    background-color: color-mix(in srgb, var(--card) 85%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 25%, var(--border));
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 2px 8px -2px color-mix(in srgb, var(--foreground) 10%, transparent);
+    transform: translateY(-1px);
     color: var(--foreground);
+}
+
+.header-link:active {
+    transform: scale(0.97);
 }
 
 /* ── Main ── */
@@ -135,17 +184,19 @@
     position: relative;
     display: flex;
     align-items: center;
-    height: 48px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background-color: var(--card);
-    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
+    height: 50px;
+    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.3));
+    border-radius: 14px;
+    background-color: color-mix(in srgb, var(--card) 75%, transparent);
+    backdrop-filter: blur(20px) saturate(170%);
+    -webkit-backdrop-filter: blur(20px) saturate(170%);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 4px 18px -4px color-mix(in srgb, var(--foreground) 6%, transparent);
     transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
 .search-input-wrap:focus-within {
-    border-color: var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent), 0 10px 24px -14px color-mix(in srgb, var(--foreground) 16%, transparent);
+    border-color: color-mix(in srgb, var(--foreground) 45%, var(--border));
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.5), 0 0 0 3px color-mix(in srgb, #3b82f6 15%, transparent), 0 8px 24px -6px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
 .mode-select {
@@ -911,18 +962,20 @@
 /* ── 空搜索态：Wiki 导航指引卡 ── */
 
 .search-idle-portal {
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.25));
     border-radius: 18px;
-    background-color: var(--card);
-    box-shadow: 0 4px 20px -6px color-mix(in srgb, var(--foreground) 5%, transparent);
+    background-color: color-mix(in srgb, var(--card) 68%, transparent);
+    backdrop-filter: blur(24px) saturate(175%);
+    -webkit-backdrop-filter: blur(24px) saturate(175%);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 6px 24px -8px color-mix(in srgb, var(--foreground) 6%, transparent);
     padding: 24px;
     margin-bottom: 24px;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .search-idle-portal:hover {
-    border-color: color-mix(in srgb, #3b82f6 40%, var(--border));
-    box-shadow: 0 8px 30px -8px color-mix(in srgb, #3b82f6 15%, transparent);
+    border-color: color-mix(in srgb, #3b82f6 45%, var(--border));
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.4), 0 10px 32px -8px color-mix(in srgb, #3b82f6 18%, transparent);
 }
 
 .idle-portal-main {
@@ -1019,8 +1072,10 @@
     height: 28px;
     padding: 0 10px;
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-    background-color: color-mix(in srgb, var(--foreground) 2%, var(--background));
+    border: 1px solid color-mix(in srgb, var(--border) 45%, rgba(255, 255, 255, 0.2));
+    background-color: color-mix(in srgb, var(--card) 55%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     color: var(--foreground);
     font-size: 0.75rem;
     font-weight: 500;
@@ -1029,9 +1084,10 @@
 }
 
 .portal-chip-item:hover {
-    background-color: var(--accent);
-    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    background-color: color-mix(in srgb, #3b82f6 14%, var(--card));
+    border-color: color-mix(in srgb, #3b82f6 45%, var(--border));
     transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, #3b82f6 20%, transparent);
 }
 
 .empty-nav-jump {
@@ -1170,7 +1226,10 @@
     }
 
     .header-link {
-        font-size: 0.6875rem;
+        height: 30px;
+        padding: 0 8px;
+        font-size: 0.75rem;
+        gap: 4px;
     }
 
     .search-input {
