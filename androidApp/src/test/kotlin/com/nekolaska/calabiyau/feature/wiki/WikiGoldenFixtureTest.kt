@@ -83,6 +83,8 @@ class WikiGoldenFixtureTest {
         val mobile = detail.damageTable.filter { it.distance.startsWith("移动端·") }
         assertTrue(mobile.isNotEmpty(), "mobile distance rows missing — new-gen mobile params drifted")
         assertTrue(mobile.all { it.head.isNotBlank() })
+        // 新代页面主模板仍带 射速 参数（如 666），属性区正常显示
+        assertEquals("666", detail.fireRate)
     }
 
     @Test
