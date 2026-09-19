@@ -63,3 +63,6 @@ local.properties
 
 ### Tools & Samples ###
 /tools/wiki_samples/
+
+# Real-page golden fixtures: kept locally, not tracked
+androidApp/src/test/resources/fixtures/pages/

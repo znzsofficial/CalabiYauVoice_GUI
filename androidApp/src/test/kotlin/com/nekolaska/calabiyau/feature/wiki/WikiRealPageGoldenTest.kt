@@ -22,18 +22,25 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Real-page golden tests: production HTML captured 2026-09-18 from wiki.biligame.com,
- * committed under /fixtures/pages/. Every parser runs against the REAL page structure,
- * so any Wiki markup change fails these tests locally without the live flag.
+ * Real-page golden tests: production HTML captured 2026-09-18 from wiki.biligame.com.
+ * 快照文件（fixtures/pages 目录下的 HTML）保留在本地但不入 git（避免仓库语言统计被 HTML 淹没）：
+ * 文件存在时逐页跑 parser 断言；缺失时（如新 clone / CI）整组跳过。
  *
  * Refresh: re-fetch each page via action=parse&page=<名>&prop=text and replace the file.
  */
 class WikiRealPageGoldenTest {
 
-    private fun page(name: String): String =
-        javaClass.getResourceAsStream("/fixtures/pages/$name")!!
-            .bufferedReader(Charsets.UTF_8).use { it.readText() }
-            .removePrefix("\uFEFF")
+    private fun pageOrNull(name: String): String? {
+        val path = java.nio.file.Paths.get("src/test/resources/fixtures/pages", name)
+        if (!java.nio.file.Files.exists(path)) return null
+        return java.nio.file.Files.readString(path).removePrefix("\uFEFF")
+    }
+
+    private fun page(name: String): String {
+        val path = java.nio.file.Paths.get("src/test/resources/fixtures/pages", name)
+        org.junit.Assume.assumeTrue("page fixture $name not present locally", java.nio.file.Files.exists(path))
+        return java.nio.file.Files.readString(path).removePrefix("\uFEFF")
+    }
 
     @Test
     fun items() {
@@ -99,8 +106,27 @@ class WikiRealPageGoldenTest {
 
     @Test
     fun meme() {
-        val meme = MemeParsers.parsePage(page("meme.html"))
-        assertTrue(meme.officialIssues.isNotEmpty() || meme.editorEntries.isNotEmpty(), "meme empty")
+        // 梗百科条目是社区 UGC 创作内容，页面快照不入仓库；
+        // 用符合线上 DOM 假设（官方编写 tabs / 编辑编写 dl-li）的最小夹具锁定 parser 结构。
+        val mini = """
+            <div class="mw-parser-output">
+              <h2><span class="mw-headline" id="官方编写">官方编写</span></h2>
+              <div class="tab">
+                <ul class="tab-nav"><li class="active"><a href="#/tab/1">第一期【奖励你卡拉彼丘该有的热度】</a></li></ul>
+                <div class="tab-content">
+                  <img src="https://patchwiki.biligame.com/images/klbq/a/ab/meme1.png"/>
+                  <dl><dt>梗A：</dt></dl>
+                  <li>定义甲</li>
+                </div>
+              </div>
+              <h2><span class="mw-headline" id="编辑编写">编辑编写</span></h2>
+              <dl><dt>梗B：</dt></dl>
+              <ul><li>来源说明</li><li>含义补充</li></dl>
+            </div>
+        """.trimIndent()
+        val meme = MemeParsers.parsePage(mini)
+        assertTrue(meme.officialIssues.isNotEmpty(), "official issues empty")
+        assertTrue(meme.editorEntries.isNotEmpty(), "editor entries empty")
     }
 
     @Test
