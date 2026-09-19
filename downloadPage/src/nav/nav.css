@@ -2,11 +2,21 @@
    Wiki 导航页 (Wiki Hub) —— 现代化游戏百科视觉导航
    ══════════════════════════════════════════════════════════════ */
 
+html, body, #nav-app {
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation;
+}
+
 body {
     display: flex;
     flex-direction: column;
     min-height: 100%;
     position: relative;
+    overscroll-behavior-y: none;
+}
+
+button, a, input, select {
+    -webkit-tap-highlight-color: transparent !important;
 }
 
 /* ── 随机壁纸背景层 (移自移动端 WikiHubWallpaperBackground) ── */
@@ -80,6 +90,7 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 14px;
+    width: 100%;
     max-width: 1120px;
     margin: 0 auto;
 }
@@ -440,6 +451,12 @@ body {
     background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
     border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
     user-select: none;
+}
+
+@media (max-width: 640px) {
+    .search-shortcut {
+        display: none;
+    }
 }
 
 /* 热搜推荐标签 */
@@ -2145,13 +2162,6 @@ body {
     50% { transform: scale(1.08); }
 }
 
-.char-bday-sublabel {
-    font-size: 0.6875rem;
-    color: var(--muted-foreground);
-    font-weight: 500;
-    margin-top: -2px;
-}
-
 /* ── 生日日历弹窗 ── */
 .bday-highlight-card {
     display: flex;
@@ -2482,6 +2492,34 @@ body {
     }
 }
 
+/* ── 移动端触摸优化：消除点击高光遮罩与悬停粘连 ── */
+@media (hover: none) {
+    .featured-tool-card:hover,
+    .char-avatar-card:hover,
+    .subgroup-tag-chip:hover,
+    .core-pill:hover,
+    .subgroup-card:hover,
+    .section-card:hover,
+    .category-tab:hover,
+    .header-link:hover,
+    .wp-ctrl-btn:hover {
+        transform: none !important;
+        box-shadow: none !important;
+    }
+}
+
+.featured-tool-card:active,
+.char-avatar-card:active,
+.subgroup-tag-chip:active,
+.core-pill:active,
+.category-tab:active,
+.header-link:active,
+.wp-ctrl-btn:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+    transition: transform 0.08s ease, opacity 0.08s ease;
+}
+
 /* ── 响应式适配 ── */
 @media (min-width: 641px) and (max-width: 1040px) {
     .featured-grid {
@@ -2545,10 +2583,8 @@ body {
 
     .category-tabs-scroller {
         border-radius: 999px;
-        background-color: color-mix(in srgb, var(--card) 92%, transparent);
-        padding: 3px 12px;
-        mask-image: linear-gradient(to right, transparent, black 14px, black calc(100% - 14px), transparent);
-        -webkit-mask-image: linear-gradient(to right, transparent, black 14px, black calc(100% - 14px), transparent);
+        background-color: color-mix(in srgb, var(--card) 60%, transparent);
+        padding: 3px 8px;
     }
 
     .category-tab {
@@ -2661,9 +2697,20 @@ body {
 
     .nav-link-pill {
         min-height: 36px;
-        padding: 0 10px;
+        padding: 0 8px;
         font-size: 0.75rem;
         border-radius: 10px;
+        gap: 6px;
+    }
+
+    .core-pill-icon-box {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+    }
+
+    .core-pill-icon-box .chip-item-icon {
+        font-size: 0.875rem;
     }
 
     .pill-arrow {

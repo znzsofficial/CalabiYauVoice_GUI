@@ -906,9 +906,6 @@ import { onMount, tick } from 'svelte';
                           {/if}
                         </div>
                         <span class="char-name-label">{charItem.title}</span>
-                        {#if bInfo}
-                          <span class="char-bday-sublabel">{bInfo.birthday.dateText}</span>
-                        {/if}
                       </a>
                     {/each}
                   </div>
