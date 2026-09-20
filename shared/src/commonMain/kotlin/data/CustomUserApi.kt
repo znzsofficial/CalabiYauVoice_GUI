@@ -243,6 +243,8 @@ object CustomUserApi {
                 }
                 val parsed = json.decodeFromString<CustomUserUpdateResponse>(body)
                 if (parsed.success && parsed.profile != null) {
+                    // 资料已变更：失效读取缓存，避免弹窗重开显示旧资料
+                    profileCache = null
                     ApiResult.Success(parsed.profile)
                 } else {
                     ApiResult.Error(parsed.error ?: "更新失败", kind = ErrorKind.UNKNOWN)

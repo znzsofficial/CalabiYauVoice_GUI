@@ -109,6 +109,7 @@ internal object WikiAuthHelper {
                 cm.setCookie(WIKI_SUB_PATH, setCookie)
             }
             cm.flush()
+        cookieMemo = null
         }
     }
 
