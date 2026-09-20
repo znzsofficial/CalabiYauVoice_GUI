@@ -28,4 +28,5 @@ Remove-Item Env:LIVE_WIKI_TEST
 
 - 普通页面：功能道具筛选表、游戏Tips、游戏历史、成就、活动、BGM、联动、印迹、喵言喵语、梗百科、誓约、玩家等级、剧情故事、投稿作品、好友、战斗模式（16 个）。
 - Lua 模板：`{{#invoke:武器|武器外观筛选}}` 经 `action=parse` 渲染后交给 `parseWeaponSkinHtml`。
+- 端到端（`fetchesAndParsesAnnouncementActivityWeaponWhenEnabled`）：公告 ask 新属性查询、活动卡片解析、静风/北极星/大剑/小蜜蜂四类武器详情 wikitext+HTML 解析，全部跑真实 parser 并断言非空/字段完整。
 - 地图列表与时装投票等其余功能分别依赖模式模板与登录 Cookie，暂不在通用联网冒烟范围内。

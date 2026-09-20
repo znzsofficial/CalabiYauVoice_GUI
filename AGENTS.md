@@ -40,6 +40,14 @@ Stable identity additionally requires `0009_stable_user_identity.sql`. Comments 
 
 R2 binding is `RELEASES` in `downloadPage/wrangler.jsonc` (Pages project `calabiyauwiki`). Do not commit `downloadPage/wrangler.toml` (gitignored; dashboard download can contain secrets). `GITHUB_TOKEN` is a Pages dashboard secret, not in `wrangler.jsonc`.
 
+## Wiki structure golden fixtures & EdgeOne rate limits
+
+BWiki HTML is not a stable API: 2026-09 drift broke items/announcements/activities/weapon-detail parsers. Real-page snapshots live under `androidApp/src/test/resources/fixtures/pages/` (gitignored, local-only) — `WikiRealPageGoldenTest` runs real-structure assertions when files exist and skips on fresh clones. Refresh via `action=parse&page=<名>&prop=text`; update anchor assertions after refresh. `WikiGoldenFixtureTest` holds captured API JSON (announcement ask, weapon parses) — tracked, keep small.
+
+Batch-fetching BWiki triggers Tencent EdgeOne blocks (HTTP 567) — keep >= 6s between requests; on block, wait minutes and retry. Live e2e tests (`LIVE_WIKI_TEST=1`) now cover announcements ask, activity cards, weapon detail for 静风/北极星/大剑/小蜜蜂.
+
+Account-chain caches invalidate on mutation: `updateProfile` clears `profileCache` (60s profile memo), `syncResponseCookies` clears `cookieMemo` (500ms cookie memo). New caches must follow the same invalidate-on-write pattern.
+
 ## Android Wiki pages
 
 When adding/refactoring `androidApp/.../feature/wiki`, follow `docs/android-wiki-feature-guide.md`: split `model` / `source` / `parser` / `api` / `Screen`. BWiki HTML is not a stable API; keep parse failures diagnosable.
