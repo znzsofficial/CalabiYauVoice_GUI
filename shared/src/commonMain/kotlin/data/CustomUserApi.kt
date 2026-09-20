@@ -93,8 +93,11 @@ object CustomUserApi {
     }
 
     /**
-     * 查询单个用户的自定义资料 (支持按 BID 或 WikiID)
+     * 查询单个用户的自定义资料。同一用户 60 秒内复用内存结果
+     * （资料弹窗/留言板头像高频重复打开）。
      */
+    private var profileCache: MutableMap<String, Pair<TimeSource.Monotonic.ValueTimeMark, CustomUserProfile?>>? = null
+
     suspend fun fetchProfile(
         bid: String? = null,
         wikiId: Long? = null
@@ -103,6 +106,12 @@ object CustomUserApi {
             !bid.isNullOrBlank() -> "bid=${bid.trim().wikiPathEncode()}"
             wikiId != null && wikiId > 0 -> "wiki_id=$wikiId"
             else -> return@withContext ApiResult.Error("缺少查询参数 bid 或 wiki_id", kind = ErrorKind.UNKNOWN)
+        }
+        val cacheKey = bid?.trim() ?: "wiki_id=$wikiId"
+        profileCache?.let { cache ->
+            cache[cacheKey]?.let { (mark, profile) ->
+                if (mark.elapsedNow() < 60.seconds) return@withContext ApiResult.Success(profile)
+            }
         }
         val url = "${baseUrl()}/api/user/profile?$queryParam"
 
@@ -121,7 +130,12 @@ object CustomUserApi {
                 if (parsed.error != null) {
                     return@withContext ApiResult.Error(parsed.error, kind = ErrorKind.UNKNOWN)
                 }
-                ApiResult.Success(parsed.profile)
+                ApiResult.Success(parsed.profile).also { result ->
+                    (result as? ApiResult.Success)?.value?.let { profile ->
+                        val cache = profileCache ?: mutableMapOf<String, Pair<TimeSource.Monotonic.ValueTimeMark, CustomUserProfile?>>().also { profileCache = it }
+                        cache[cacheKey] = TimeSource.Monotonic.markNow() to profile
+                    }
+                }
             }
         } catch (e: CancellationException) {
             throw e
