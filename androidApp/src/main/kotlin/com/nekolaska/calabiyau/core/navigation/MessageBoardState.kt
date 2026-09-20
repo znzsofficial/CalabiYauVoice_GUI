@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.core.navigation
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 import com.nekolaska.calabiyau.core.wiki.WikiUserApi
@@ -10,6 +11,9 @@ import data.ApiResult
 import data.CustomUserApi
 import data.CustomUserProfile
 import data.ProfileComment
+import data.ProfileCommentsResponse
+import data.SharedJson
+import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
@@ -60,7 +64,16 @@ internal data class BoardPage(
 }
 
 /** Screen-owned state: leaving the screen cancels its scope; switching threads cancels stale reads. */
-internal class MessageBoardState(private val scope: CoroutineScope) {
+internal class MessageBoardState(
+    private val scope: CoroutineScope,
+    // 列表缓存读写可注入（测试传内存实现）；默认走 OfflineCache
+    private val readListCache: suspend () -> String? = {
+        OfflineCache.getEntry(OfflineCache.Type.MESSAGE_BOARD, "public_list")?.content
+    },
+    private val writeListCache: suspend (String) -> Unit = {
+        OfflineCache.put(OfflineCache.Type.MESSAGE_BOARD, "public_list", it)
+    }
+) {
     var userInfo by mutableStateOf<WikiUserApi.UserInfo?>(null)
         private set
     var profile by mutableStateOf<CustomUserProfile?>(null)
@@ -270,6 +283,29 @@ internal class MessageBoardState(private val scope: CoroutineScope) {
         listJob?.cancel()
         val token = ++generation
         val selected = threadId
+
+        // 首屏主列表：先渲染磁盘缓存（公开数据，身份类 UI 由独立状态驱动），
+        // 网络刷新在后台继续，完成后无感覆盖。缓存读取独立于 listJob（不受取消影响），
+        // 仅在期间没有新数据到达时渲染。
+        if (cursor == null && focusId == null && selected == null && comments.isEmpty()) {
+            scope.launch {
+                readListCache()?.let { cached ->
+                    runCatching {
+                        val data = SharedJson.decodeFromString<ProfileCommentsResponse>(cached)
+                        if (token == generation && comments.isEmpty() && data.comments.isNotEmpty()) {
+                            comments = data.comments
+                            root = data.root
+                            pinned = data.pinnedComments
+                            total = data.total
+                            nextCursor = data.nextCursor
+                            pageLoaded = true
+                            loading = false
+                        }
+                    }
+                }
+            }
+        }
+
         loading = true; error = null
         listJob = scope.launch {
             try {
@@ -289,7 +325,9 @@ internal class MessageBoardState(private val scope: CoroutineScope) {
                         }
                         updateCachedRoot()
                         savePage()
-                    }
+                        if (cursor == null && focusId == null && selected == null) {
+                            writeListCache(SharedJson.encodeToString(data))
+                        }                    }
                     is ApiResult.Error -> if (token == generation) {
                         error = result.message
                         if (focusId != null && result.apiCode == "FOCUS_UNAVAILABLE") {

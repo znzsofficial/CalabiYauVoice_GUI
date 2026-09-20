@@ -4,8 +4,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -30,7 +33,17 @@ object CustomUserApi {
 
     private val json = SharedJson
 
+    // 同一 Cookie 的 session 结果短期复用：留言板等页面每次进入都会确认身份，
+    // 60 秒内免一次 Worker→SMW 两跳请求。账号切换由 Cookie 变化自然失效。
+    private var sessionCache: Pair<String, Pair<TimeSource.Monotonic.ValueTimeMark, UserSession>>? = null
+
     suspend fun fetchSession(wikiCookie: String): ApiResult<UserSession> = withContext(Dispatchers.IO) {
+        sessionCache?.let { (ck, cached) ->
+            val (mark, session) = cached
+            if (ck == wikiCookie && mark.elapsedNow() < 60.seconds) {
+                return@withContext ApiResult.Success(session)
+            }
+        }
         try {
             val request = Request.Builder().url("${baseUrl()}/api/user/session")
                 .header("X-Wiki-Cookie", wikiCookie).get().build()
@@ -41,7 +54,9 @@ object CustomUserApi {
                 if (!response.isSuccessful || parsed.user == null) {
                     ApiResult.Error(parsed.error ?: "身份验证失败 (${response.code})", ErrorKind.NETWORK,
                         response.code, parsed.errorCode)
-                } else ApiResult.Success(parsed.user)
+                } else ApiResult.Success(parsed.user).also { result ->
+                    (result as? ApiResult.Success)?.value?.let { session -> sessionCache = wikiCookie to (TimeSource.Monotonic.markNow() to session) }
+                }
             }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { ApiResult.Error("身份验证失败，请稍后重试", e.toErrorKind()) }
