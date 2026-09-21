@@ -54,8 +54,8 @@ object CustomUserApi {
                 if (!response.isSuccessful || parsed.user == null) {
                     ApiResult.Error(parsed.error ?: "身份验证失败 (${response.code})", ErrorKind.NETWORK,
                         response.code, parsed.errorCode)
-                } else ApiResult.Success(parsed.user).also { result ->
-                    (result as? ApiResult.Success)?.value?.let { session -> sessionCache = wikiCookie to (TimeSource.Monotonic.markNow() to session) }
+                } else ApiResult.Success(parsed.user).also {
+                    sessionCache = wikiCookie to (TimeSource.Monotonic.markNow() to parsed.user)
                 }
             }
         } catch (e: CancellationException) { throw e }
@@ -96,7 +96,7 @@ object CustomUserApi {
      * 查询单个用户的自定义资料。同一用户 60 秒内复用内存结果
      * （资料弹窗/留言板头像高频重复打开）。
      */
-    private var profileCache: MutableMap<String, Pair<TimeSource.Monotonic.ValueTimeMark, CustomUserProfile?>>? = null
+    private val profileCache = java.util.concurrent.ConcurrentHashMap<String, Pair<TimeSource.Monotonic.ValueTimeMark, CustomUserProfile?>>()
 
     suspend fun fetchProfile(
         bid: String? = null,
@@ -108,10 +108,8 @@ object CustomUserApi {
             else -> return@withContext ApiResult.Error("缺少查询参数 bid 或 wiki_id", kind = ErrorKind.UNKNOWN)
         }
         val cacheKey = bid?.trim() ?: "wiki_id=$wikiId"
-        profileCache?.let { cache ->
-            cache[cacheKey]?.let { (mark, profile) ->
-                if (mark.elapsedNow() < 60.seconds) return@withContext ApiResult.Success(profile)
-            }
+        profileCache[cacheKey]?.let { (mark, profile) ->
+            if (mark.elapsedNow() < 60.seconds) return@withContext ApiResult.Success(profile)
         }
         val url = "${baseUrl()}/api/user/profile?$queryParam"
 
@@ -130,10 +128,9 @@ object CustomUserApi {
                 if (parsed.error != null) {
                     return@withContext ApiResult.Error(parsed.error, kind = ErrorKind.UNKNOWN)
                 }
-                ApiResult.Success(parsed.profile).also { result ->
-                    (result as? ApiResult.Success)?.value?.let { profile ->
-                        val cache = profileCache ?: mutableMapOf<String, Pair<TimeSource.Monotonic.ValueTimeMark, CustomUserProfile?>>().also { profileCache = it }
-                        cache[cacheKey] = TimeSource.Monotonic.markNow() to profile
+                ApiResult.Success(parsed.profile).also {
+                    parsed.profile?.let { profile ->
+                        profileCache[cacheKey] = TimeSource.Monotonic.markNow() to profile
                     }
                 }
             }
@@ -244,7 +241,7 @@ object CustomUserApi {
                 val parsed = json.decodeFromString<CustomUserUpdateResponse>(body)
                 if (parsed.success && parsed.profile != null) {
                     // 资料已变更：失效读取缓存，避免弹窗重开显示旧资料
-                    profileCache = null
+                    profileCache.clear()
                     ApiResult.Success(parsed.profile)
                 } else {
                     ApiResult.Error(parsed.error ?: "更新失败", kind = ErrorKind.UNKNOWN)

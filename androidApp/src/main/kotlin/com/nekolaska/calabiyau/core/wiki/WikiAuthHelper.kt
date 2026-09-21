@@ -41,12 +41,14 @@ internal object WikiAuthHelper {
         return value
     }
 
-    // CSRF token 会话级有效，按 API 地址缓存 30 分钟，避免每次投票/分享都现取
-    private val csrfCache = mutableMapOf<String, Pair<Long, String>>()
+    // CSRF token 会话级有效，按「API 地址 + Cookie 摘要」缓存 30 分钟，避免每次投票/分享都现取。
+    // key 必须包含 Cookie：token 与登录会话绑定，账号切换后旧 token 会被服务端拒绝且重试无效。
+    private val csrfCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
 
     fun fetchCsrfToken(apiUrl: String, cookies: String): String? {
         val now = android.os.SystemClock.elapsedRealtime()
-        csrfCache[apiUrl]?.let { (ts, token) -> if (now - ts < 30 * 60 * 1000L) return token }
+        val cacheKey = "$apiUrl#${cookies.hashCode()}"
+        csrfCache[cacheKey]?.let { (ts, token) -> if (now - ts < 30 * 60 * 1000L) return token }
         val url = buildWikiUrl(
             apiUrl,
             "action" to "query",
@@ -64,7 +66,7 @@ internal object WikiAuthHelper {
         } catch (_: Exception) {
             null
         }
-        return token?.also { csrfCache[apiUrl] = now to it }
+        return token?.also { csrfCache[cacheKey] = now to it }
     }
 
     fun httpGet(url: String, expectJson: Boolean = false): String? {
@@ -109,8 +111,8 @@ internal object WikiAuthHelper {
                 cm.setCookie(WIKI_SUB_PATH, setCookie)
             }
             cm.flush()
-        cookieMemo = null
         }
+        cookieMemo = null
     }
 
 }

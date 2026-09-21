@@ -327,7 +327,8 @@ internal class MessageBoardState(
                         savePage()
                         if (cursor == null && focusId == null && selected == null) {
                             writeListCache(SharedJson.encodeToString(data))
-                        }                    }
+                        }
+                    }
                     is ApiResult.Error -> if (token == generation) {
                         error = result.message
                         if (focusId != null && result.apiCode == "FOCUS_UNAVAILABLE") {
