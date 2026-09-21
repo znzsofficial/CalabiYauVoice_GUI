@@ -168,6 +168,15 @@ class WikiRealPageGoldenTest {
     }
 
     @Test
+    fun mapListMode() {
+        val html = pageOrNull("map_list_mode.html") ?: return
+        val maps = MapListParsers.parseMapsFromHtml(html)
+        assertTrue(maps.isNotEmpty(), "map cards empty")
+        assertTrue(maps.all { it.name.isNotBlank() && it.wikiUrl.startsWith("https://wiki.biligame.com/klbq/") })
+        assertTrue(maps.all { it.imageUrl.startsWith("http") }, "image urls missing")
+    }
+
+    @Test
     fun weaponSkinsFromCommittedLiveCapture() {
         // 武器外观为 Lua 模块渲染，夹具为真实 action=parse 响应（2026-09-18 抓取）
         val json = page("weapon_skins_parse.json")

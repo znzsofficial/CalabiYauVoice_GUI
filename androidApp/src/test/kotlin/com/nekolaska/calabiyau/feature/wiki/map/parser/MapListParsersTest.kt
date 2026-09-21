@@ -72,6 +72,37 @@ class MapListParsersTest {
     }
 
     @Test
+    fun parsesNewKlbqMapCardStructure() {
+        val maps = MapListParsers.parseMapsFromHtml(
+            """
+            <div class="klbq-map">
+              <div class="klbq-map-card">
+                <a href="/klbq/莱布伦城" title="莱布伦城"><span class="klbq-map-card__link"></span></a>
+                <div class="klbq-map-card__image">
+                  <a href="/klbq/%E6%96%87%E4%BB%B6:%E5%9C%B0%E5%9B%BE-%E8%8E%B1%E5%B8%83%E4%BC%A6%E5%9F%8E.png" class="image">
+                    <img alt="地图-莱布伦城.png"
+                         src="https://patchwiki.biligame.com/images/klbq/e/e3/hash.png"
+                         width="1920" height="1080" />
+                  </a>
+                </div>
+                <div class="klbq-map-card__floating-name">
+                  <a href="/klbq/莱布伦城" title="莱布伦城">莱布伦城</a>
+                </div>
+              </div>
+              <div class="klbq-map-card">
+                <a href="/klbq/404基地" title="404基地"><span class="klbq-map-card__link"></span></a>
+              </div>
+            </div>
+            """.trimIndent()
+        )
+
+        assertEquals(1, maps.size)
+        assertEquals("莱布伦城", maps.single().name)
+        assertEquals("https://wiki.biligame.com/klbq/莱布伦城", maps.single().wikiUrl)
+        assertEquals("https://patchwiki.biligame.com/images/klbq/e/e3/hash.png", maps.single().imageUrl)
+    }
+
+    @Test
     fun emptyHtmlReturnsEmptyList() {
         assertTrue(MapListParsers.parseMapsFromHtml("<div class='mw-parser-output'></div>").isEmpty())
     }
