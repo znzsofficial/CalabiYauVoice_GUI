@@ -377,7 +377,9 @@ private fun CharacterOptionCard(
             .padding(4.dp)
     ) {
         Surface(
-            shape = smoothCornerShape(18.dp),
+            // 半径取容器一半 (58/2=29dp)：连续圆角呈圆形，与内部圆形头像贴合，
+            // 消除方框四角露出的空隙
+            shape = smoothCornerShape(29.dp),
             color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
             border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
             modifier = Modifier.size(58.dp)
