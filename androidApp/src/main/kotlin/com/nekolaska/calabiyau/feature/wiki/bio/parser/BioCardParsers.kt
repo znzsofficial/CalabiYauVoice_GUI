@@ -169,7 +169,9 @@ object BioCardParsers {
             .substringBefore("**")
             .substringAfterLast(' ') // 无空格时返回整段（缺省 "" 会空转靠正则兜底）
             .trim()
-        if (cleaned.isNotBlank()) return cleaned
+        // 合法分享码只含 base64 字符集；编辑者随手填写的内容（如“看不懂”）
+        // 置空处理，避免列表出现复制后必然解码失败的假码
+        if (cleaned.matches(Regex("[A-Za-z0-9+/=_-]{12,}"))) return cleaned
 
         return Regex("""[A-Za-z0-9+/=_-]{12,}""")
             .find(raw)
