@@ -123,31 +123,76 @@
     gap: 20px;
 }
 
-.hero-section {
+.card.hero-section {
     position: relative;
     padding: 32px 36px;
     margin-bottom: 0;
     overflow: hidden;
+    transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 顶部精密发光线 (Precision Edge Highlight) */
+.hero-section::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        transparent 5%, 
+        color-mix(in srgb, var(--primary) 35%, rgba(255, 255, 255, 0.4)) 35%, 
+        color-mix(in srgb, var(--accent) 55%, rgba(255, 255, 255, 0.65)) 50%, 
+        color-mix(in srgb, var(--primary) 35%, rgba(255, 255, 255, 0.4)) 65%, 
+        transparent 95%
+    );
+    z-index: 2;
+    opacity: 0.55;
+    transition: opacity 0.3s ease, height 0.3s ease;
+    pointer-events: none;
+}
+
+.hero-section:hover::before {
+    opacity: 0.95;
+    height: 1.5px;
+}
+
+.hero-section:hover {
+    border-color: color-mix(in srgb, var(--border) 40%, var(--foreground));
+    box-shadow: 0 12px 36px -12px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .hero-bg {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 150%;
-    height: 150%;
+    width: 160%;
+    height: 160%;
     transform: translate(-50%, -50%);
     /* 高饱和圆锥渐变极光 */
     background-image: conic-gradient(from 90deg at 50% 50%, color-mix(in srgb, var(--primary) 80%, transparent) 0%, color-mix(in srgb, var(--accent) 80%, transparent) 33%, color-mix(in srgb, var(--secondary) 80%, transparent) 66%, color-mix(in srgb, var(--primary) 80%, transparent) 100%);
     filter: blur(60px);
-    opacity: 0.15;
-    animation: hero-spin 12s linear infinite;
+    opacity: 0.12;
+    animation: hero-spin 20s linear infinite;
     z-index: 0;
     pointer-events: none;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-section:hover .hero-bg {
+    opacity: 0.24;
+    filter: blur(75px);
 }
 
 @media (prefers-color-scheme: dark) {
-    .hero-bg { opacity: 0.35; filter: blur(80px); }
+    .hero-bg { 
+        opacity: 0.25; 
+        filter: blur(80px); 
+    }
+    .hero-section:hover .hero-bg { 
+        opacity: 0.42; 
+        filter: blur(95px); 
+    }
 }
 
 @keyframes hero-spin {
@@ -178,6 +223,22 @@
     font-weight: 600;
     letter-spacing: -0.02em;
     color: var(--foreground);
+    display: inline-block;
+}
+
+.hero-version-info h2.version-loaded {
+    animation: version-pop-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes version-pop-in {
+    from {
+        opacity: 0.25;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .hero-version-meta {
@@ -245,36 +306,60 @@
     }
 }
 
-/* --- Vercel 级按钮光效 --- */
+/* --- 现代化高级物理按压与光效 --- */
 .hero-download-btn {
     position: relative;
     z-index: 1;
     height: 3rem;
     padding: 0 1.5rem;
     font-size: 0.9375rem;
+    font-weight: 600;
     border-radius: calc(var(--radius) - 4px);
-    overflow: visible; 
-    /* 重新构建均匀的玻璃体积感：顶部白线高光 + 底部黑线压底 + 极其轻柔的均匀下沉阴影 */
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     box-shadow: 
-        inset 0 1px 0 rgba(255, 255, 255, 0.2), 
-        inset 0 -1px 0 rgba(0, 0, 0, 0.1),
-        0 4px 6px rgba(0, 0, 0, 0.05); 
+        inset 0 1px 0 rgba(255, 255, 255, 0.22), 
+        inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+        0 4px 10px -2px color-mix(in srgb, var(--primary) 25%, transparent);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* 隐藏无用的旧效果 */
+/* 镜面微流光掠过 (Specular Light Sweep) */
 .hero-download-btn::before {
-    display: none;
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -130%;
+    width: 65%;
+    height: 100%;
+    background: linear-gradient(
+        105deg,
+        transparent 15%,
+        color-mix(in srgb, var(--primary-foreground) 30%, transparent) 50%,
+        transparent 85%
+    );
+    transform: skewX(-22deg);
+    pointer-events: none;
+    z-index: 2;
+    border-radius: inherit;
 }
 
-/* 构建边缘溢出光晕 (Border Glow) */
+.hero-download-btn:hover::before {
+    left: 170%;
+    transition: left 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 边缘柔和辉光扩散 */
 .hero-download-btn::after {
     content: "";
     position: absolute;
-    /* 取消负值的偏移，让光晕严格贴合按钮本身，依靠 blur 向外均匀扩散，避免单边变粗（左右不均的问题） */
     inset: 0;
     border-radius: inherit;
     z-index: -1;
-    /* 恢复动态渐变，但使用透明度更可控的主题色混合，确保光效柔和 */
     background: linear-gradient(135deg, var(--primary), var(--accent), var(--secondary));
     background-size: 200% 200%;
     filter: blur(8px);
@@ -283,30 +368,69 @@
     will-change: opacity, filter, background-position;
 }
 
-/* 深色模式下的玻璃质感微调 */
-@media (prefers-color-scheme: dark) {
-    .hero-download-btn {
-        box-shadow: 
-            inset 0 1px 0 rgba(255, 255, 255, 0.15), 
-            inset 0 -1px 0 rgba(255, 255, 255, 0.05),
-            0 4px 12px rgba(0, 0, 0, 0.3),
-            0 0 20px -5px color-mix(in srgb, var(--primary) 40%, transparent);
-    }
+/* 悬停时的微浮与扩散光晕 */
+.hero-download-btn:hover {
+    transform: translateY(-1.5px);
+    box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.3), 
+        inset 0 -1px 0 rgba(0, 0, 0, 0.15),
+        0 8px 24px -4px color-mix(in srgb, var(--primary) 40%, transparent);
 }
 
-/* 悬停时的光晕爆发 */
 .hero-download-btn:hover::after {
-    opacity: 0.85;
+    opacity: 0.75;
     filter: blur(12px);
-    animation: btn-border-spin 2s ease-in-out infinite alternate;
+    animation: btn-border-spin 2.2s ease-in-out infinite alternate;
 }
 
-/* 使用背景移动制造光芒流转的错觉 */
+/* 点击/按压真实物理下沉 */
+.hero-download-btn:active {
+    transform: translateY(0.5px) scale(0.975);
+    box-shadow: 
+        inset 0 1px 2px rgba(0, 0, 0, 0.25),
+        0 2px 6px color-mix(in srgb, var(--primary) 20%, transparent);
+    transition: transform 0.06s ease;
+}
+
+/* 下载箭头微互动动效 */
+.hero-download-btn .download-icon {
+    font-size: 1.25em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-download-btn:hover .download-icon {
+    transform: translateY(2px);
+    animation: download-arrow-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes download-arrow-pulse {
+    0% { transform: translateY(1px); }
+    100% { transform: translateY(3.5px); }
+}
+
 @keyframes btn-border-spin {
     0% { background-position: 0% 0%; }
     100% { background-position: 100% 100%; }
 }
 
+/* 深色模式下的微调 */
+@media (prefers-color-scheme: dark) {
+    .hero-download-btn {
+        box-shadow: 
+            inset 0 1px 0 rgba(255, 255, 255, 0.18), 
+            inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+            0 4px 14px -2px color-mix(in srgb, var(--primary) 30%, transparent);
+    }
+
+    .hero-download-btn:hover {
+        box-shadow: 
+            inset 0 1px 0 rgba(255, 255, 255, 0.28), 
+            0 8px 24px -4px color-mix(in srgb, var(--primary) 50%, transparent);
+    }
+}
 
 .hero-copy-btn {
     position: relative;
@@ -315,7 +439,22 @@
     padding: 0 1.125rem;
     border-radius: calc(var(--radius) - 4px);
     overflow: hidden;
-    transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease;
+    transition: background-color 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+                color 0.22s cubic-bezier(0.16, 1, 0.3, 1), 
+                border-color 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.22s ease;
+}
+
+.hero-copy-btn:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.hero-copy-btn:active {
+    transform: translateY(0.5px) scale(0.975);
+    transition: transform 0.06s ease;
 }
 
 .hero-copy-btn .copy-default,
@@ -327,7 +466,7 @@
     align-items: center;
     justify-content: center;
     white-space: nowrap;
-    transition: transform 0.5s ease, opacity 0.5s ease;
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hero-copy-btn .copy-default {
@@ -338,12 +477,13 @@
 .hero-copy-btn .copy-success {
     transform: translate(-50%, 100%);
     opacity: 0;
+    color: #10b981;
+    font-weight: 600;
 }
 
 .hero-copy-btn.copied {
-    background-color: var(--primary);
-    border-color: var(--primary);
-    color: var(--primary-foreground);
+    border-color: color-mix(in srgb, #10b981 45%, var(--border));
+    background-color: color-mix(in srgb, #10b981 8%, transparent);
 }
 
 .hero-copy-btn.copied .copy-default {
@@ -354,7 +494,16 @@
 .hero-copy-btn.copied .copy-success {
     transform: translate(-50%, -50%);
     opacity: 1;
-    transition-delay: 0.2s;
+}
+
+.hero-copy-btn.copied .copy-success .check-icon {
+    animation: copy-check-pop 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes copy-check-pop {
+    0% { transform: scale(0.4) rotate(-15deg); opacity: 0; }
+    65% { transform: scale(1.22) rotate(4deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
 .feature-matrix {
@@ -587,16 +736,16 @@
     background-color: var(--card);
     color: var(--card-foreground);
     padding: 16px;
-    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease;
-    animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
+    animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
-.card iconify-icon {
-    transition: transform 0.3s ease;
+.feature-card .feature-icon iconify-icon {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.card:hover iconify-icon[icon^="lucide:"] {
-    transform: rotate(8deg) scale(1.1);
+.feature-card:hover .feature-icon iconify-icon {
+    transform: scale(1.1);
 }
 
 .col-left .card:nth-child(1) { animation-delay: 0.1s; }
@@ -1610,5 +1759,20 @@ td .cmp-arrow.down {
 
     .hero-cell {
         gap: 6px;
+    }
+}
+
+/* ── 动效无障碍适配 (Reduced Motion) ── */
+@media (prefers-reduced-motion: reduce) {
+    .hero-bg,
+    .hero-download-btn:hover .download-icon,
+    .hero-download-btn:hover::before,
+    .hero-copy-btn.copied .copy-success .check-icon,
+    .hero-version-info h2.version-loaded,
+    .card,
+    .card:hover {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
     }
 }

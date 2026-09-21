@@ -318,7 +318,7 @@
         <div class="hero-info-panel">
           <div class="hero-version-info">
             <span class="badge">Android 客户端</span>
-            <h2 class:loading-pulse={versionName === '正在读取...'}>{versionName}</h2>
+            <h2 class:loading-pulse={versionName === '正在读取...'} class:version-loaded={versionName !== '正在读取...'}>{versionName}</h2>
             <div class="hero-version-meta">
               <span><iconify-icon icon="lucide:calendar"></iconify-icon> {publishedAt}</span>
               <span><iconify-icon icon="lucide:hard-drive-download"></iconify-icon> {apkSize}</span>
@@ -326,12 +326,12 @@
           </div>
           <div class="hero-actions">
             <a class="btn primary hero-download-btn" href={apkUrl} download>
-              <iconify-icon icon="lucide:download" style="margin-right: 8px; font-size: 1.2em;"></iconify-icon>
-              立即下载 APK
+              <iconify-icon icon="lucide:download" class="download-icon"></iconify-icon>
+              <span>立即下载 APK</span>
             </a>
             <button class:copied class="btn outline hero-copy-btn" onclick={copyDownloadLink}>
-              <span class="copy-default"><iconify-icon icon="lucide:copy" style="margin-right: 6px;"></iconify-icon>复制直链</span>
-              <span class="copy-success"><iconify-icon icon="lucide:check" style="margin-right: 6px;"></iconify-icon>已复制</span>
+              <span class="copy-default"><iconify-icon icon="lucide:copy" class="btn-icon"></iconify-icon>复制直链</span>
+              <span class="copy-success"><iconify-icon icon="lucide:check" class="btn-icon check-icon"></iconify-icon>已复制</span>
             </button>
           </div>
         </div>
