@@ -31,7 +31,7 @@ object MapRemoteSource {
 
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.MAP_LIST,
-            key = "mode_$templateName",
+            key = "mode_card_$templateName",
             forceRefresh = forceRefresh
         ) { WikiEngine.safeGet(url) } ?: return null
 
@@ -51,7 +51,7 @@ object MapRemoteSource {
     suspend fun loadCachedModeHtml(templateName: String): MapListSourceResult? {
         val entry = OfflineCache.getEntry(
             type = OfflineCache.Type.MAP_LIST,
-            key = "mode_$templateName"
+            key = "mode_card_$templateName"
         ) ?: return null
 
         val json = SharedJson.parseToJsonElement(entry.content).jsonObject
