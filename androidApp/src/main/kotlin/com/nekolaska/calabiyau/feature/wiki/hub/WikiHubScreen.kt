@@ -166,6 +166,22 @@ private object WikiHubWallpaperState {
     }
 }
 
+/**
+ * Hub 列表数据的进程级快照（仿 [WikiHubWallpaperState] 模式）：
+ * 主级页面切换会销毁 Hub 分支，重建时同步恢复数据避免重新转圈。
+ * 会话内不自动刷新，新数据由列表页下拉刷新覆盖。
+ */
+private object HubListDataSnapshot {
+    @Volatile
+    var factions: List<CharacterListApi.FactionData>? = null
+
+    @Volatile
+    var gameModes: List<GameModeData>? = null
+
+    @Volatile
+    var weaponCategories: List<WeaponListApi.WeaponCategoryData>? = null
+}
+
 @Composable
 private fun WikiHubWallpaperBackground(
     wallpaperUrl: String?,
@@ -275,30 +291,51 @@ fun WikiHubScreen(
     var mapListTab by rememberSaveable { mutableIntStateOf(0) }
 
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
+    // 快照单例：主级页面切换（留言板等）会销毁整个 Hub 分支，重建时从这里同步恢复
+    // 已加载数据——首帧直接渲染内容，不再转圈
+    val restoredFactions = HubListDataSnapshot.factions
+    val restoredModes = HubListDataSnapshot.gameModes
+    val restoredWeapons = HubListDataSnapshot.weaponCategories
     // 角色列表 state 提升到 Hub：从角色详情返回时数据仍非空，
     // 列表直接渲染真实卡片，共享元素动画不被骨架屏抢占
     val shouldLoadCharacterList = backStack.any { it is WikiRoute.Characters || it is WikiRoute.Home }
     val characterState = rememberLoadState(
-        initial = emptyList<CharacterListApi.FactionData>(),
+        initial = restoredFactions ?: emptyList<CharacterListApi.FactionData>(),
         enabled = shouldLoadCharacterList,
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
-        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) }
+        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) },
+        initiallyLoaded = restoredFactions != null,
+        reloadOnEnter = restoredFactions == null
     )
     val mapState = rememberLoadState(
-        initial = emptyList<GameModeData>(),
+        initial = restoredModes ?: emptyList<GameModeData>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { MapListApi.fetchAllModes(cacheOnly = true) },
-        fetch = { force -> MapListApi.fetchAllModes(forceRefresh = force) }
+        fetch = { force -> MapListApi.fetchAllModes(forceRefresh = force) },
+        initiallyLoaded = restoredModes != null,
+        reloadOnEnter = restoredModes == null
     )
     val shouldLoadWeaponList = backStack.any { it is WikiRoute.Weapons }
     val weaponState = rememberLoadState(
-        initial = emptyList<WeaponListApi.WeaponCategoryData>(),
+        initial = restoredWeapons ?: emptyList<WeaponListApi.WeaponCategoryData>(),
         enabled = shouldLoadWeaponList,
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
-        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) }
+        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) },
+        initiallyLoaded = restoredWeapons != null,
+        reloadOnEnter = restoredWeapons == null
     )
+    // 数据落地后写回快照，供下次 Hub 重建时恢复
+    LaunchedEffect(characterState.data) {
+        if (characterState.data.isNotEmpty()) HubListDataSnapshot.factions = characterState.data
+    }
+    LaunchedEffect(mapState.data) {
+        if (mapState.data.isNotEmpty()) HubListDataSnapshot.gameModes = mapState.data
+    }
+    LaunchedEffect(weaponState.data) {
+        if (weaponState.data.isNotEmpty()) HubListDataSnapshot.weaponCategories = weaponState.data
+    }
     val factions = characterState.data
     val isLoadingCharacters = characterState.isLoading
     val gameModes = mapState.data

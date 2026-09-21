@@ -215,13 +215,14 @@ class LoadState<T> internal constructor(
     private val scope: CoroutineScope,
     private val fetchRef: State<suspend (forceRefresh: Boolean) -> ApiResult<T>>,
     private val cachedFetchRef: State<(suspend () -> ApiResult<T>)?> = mutableStateOf(null),
-    private val cachedPrefetchDelayMs: Long = 0L
+    private val cachedPrefetchDelayMs: Long = 0L,
+    startLoading: Boolean = true
 ) {
     private var activeRequestJob: Job? = null
     private var requestVersion: Long = 0L
     var data: T by mutableStateOf(initial)
         private set
-    var isLoading: Boolean by mutableStateOf(true)
+    var isLoading: Boolean by mutableStateOf(startLoading)
         private set
     var error: ApiResult.Error? by mutableStateOf(null)
         private set
@@ -303,12 +304,19 @@ fun <T> rememberLoadState(
 
 /**
  * Remembers a [LoadState] that first attempts [cachedFetch] before the network fetch.
+ *
+ * [initiallyLoaded] marks [initial] as ready-to-show data restored from a process-level snapshot:
+ * the first frame renders content instead of a loading skeleton.
+ * [reloadOnEnter] = false skips the automatic reload in that case (stale data is refreshed
+ * manually via pull-to-refresh), so re-entering the screen does not flash a skeleton.
  */
 @Composable
 fun <T> rememberLoadState(
     initial: T,
     key: Any? = Unit,
     enabled: Boolean = true,
+    initiallyLoaded: Boolean = false,
+    reloadOnEnter: Boolean = true,
     cachedPrefetchDelayMs: Long = 0L,
     cachedFetch: suspend () -> ApiResult<T>,
     fetch: suspend (forceRefresh: Boolean) -> ApiResult<T>
@@ -316,8 +324,10 @@ fun <T> rememberLoadState(
     val scope = rememberCoroutineScope()
     val fetchRef = rememberUpdatedState(fetch)
     val cachedFetchRef = rememberUpdatedState<(suspend () -> ApiResult<T>)?>(cachedFetch)
-    val state = remember(scope) { LoadState(initial, scope, fetchRef, cachedFetchRef, cachedPrefetchDelayMs) }
-    LaunchedEffect(key, enabled) { if (enabled) state.reload() }
+    val state = remember(scope) {
+        LoadState(initial, scope, fetchRef, cachedFetchRef, cachedPrefetchDelayMs, startLoading = !initiallyLoaded)
+    }
+    LaunchedEffect(key, enabled) { if (enabled && reloadOnEnter) state.reload() }
     return state
 }
 
