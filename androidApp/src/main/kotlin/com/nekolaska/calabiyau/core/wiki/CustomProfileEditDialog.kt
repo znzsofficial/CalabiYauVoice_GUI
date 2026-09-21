@@ -16,11 +16,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Image
@@ -49,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.scale
 import coil3.compose.AsyncImage
 import data.ApiResult
 import data.CustomUserApi
@@ -363,7 +363,7 @@ private fun encodeSquareAvatar(source: Bitmap, targetSizePx: Int, quality: Int =
     val y = (source.height - side) / 2
     val square = Bitmap.createBitmap(source, x, y, side, side)
     val scaled = if (side > targetSizePx) {
-        Bitmap.createScaledBitmap(square, targetSizePx, targetSizePx, true)
+        square.scale(targetSizePx, targetSizePx)
     } else {
         square
     }

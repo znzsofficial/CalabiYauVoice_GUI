@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.core.navigation
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nekolaska.calabiyau.core.cache.OfflineCache
@@ -13,12 +14,11 @@ import data.CustomUserProfile
 import data.ProfileComment
 import data.ProfileCommentsResponse
 import data.SharedJson
-import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 internal data class BoardPage(
@@ -94,7 +94,7 @@ internal class MessageBoardState(
         private set
     var nextCursor by mutableStateOf<String?>(null)
         private set
-    var total by mutableStateOf(0)
+    var total by mutableIntStateOf(0)
         private set
     var loading by mutableStateOf(false)
         private set
@@ -105,7 +105,7 @@ internal class MessageBoardState(
     var error by mutableStateOf<String?>(null)
         private set
     private val drafts = BoardDraftStore({ AppPrefs.messageBoardDraftsJson }, { AppPrefs.messageBoardDraftsJson = it })
-    private var draftVersion by mutableStateOf(0)
+    private var draftVersion by mutableIntStateOf(0)
     val replyTargetUnavailable: Boolean
         get() { draftVersion; return drafts.get(threadId).targetUnavailable }
     var draft: String

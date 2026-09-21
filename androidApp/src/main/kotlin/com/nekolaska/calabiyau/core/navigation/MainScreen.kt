@@ -1,9 +1,8 @@
 package com.nekolaska.calabiyau.core.navigation
 
 import android.content.res.Configuration
-import androidx.activity.compose.PredictiveBackHandler
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -17,7 +16,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,15 +42,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Login
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.BuildCircle
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Forum
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PersonOff
@@ -147,8 +144,8 @@ import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 
 private data class ToolFileManagerOverlayState(
     val initialPath: String? = null,
@@ -307,22 +304,22 @@ fun MainScreen(
         if (!useExpandedLayout) coroutineScope.launch { drawerState.open() }
     }
 
-    // 预测性返回手势期间，主内容区跟随手指缩小/平移/淡出
-    val predictiveBackModifier = Modifier.graphicsLayer {
-        if (predictiveActive) {
-            val p = predictiveProgress.coerceIn(0f, 1f)
-            scaleX = 1f - 0.07f * p
-            scaleY = 1f - 0.07f * p
-            alpha = 1f - 0.25f * p
-            shape = androidx.compose.foundation.shape.RoundedCornerShape((24 * p).dp)
-            clip = p > 0.02f
-        }
-    }
-
     // ── 页面内容（Drawer 和 PermanentDrawer 共用） ──
     // 使用 movableContentOf 保持组合树身份，避免 Drawer 类型切换时子树重建
     val pageContent = remember { movableContentOf {
+        // 预测性返回手势期间，主内容区跟随手指缩小/淡出
+        val predictiveBackModifier = Modifier.graphicsLayer {
+            if (predictiveActive) {
+                val p = predictiveProgress.coerceIn(0f, 1f)
+                scaleX = 1f - 0.07f * p
+                scaleY = 1f - 0.07f * p
+                alpha = 1f - 0.25f * p
+                shape = androidx.compose.foundation.shape.RoundedCornerShape((24 * p).dp)
+                clip = p > 0.02f
+            }
+        }
         AnimatedContent(
+            modifier = predictiveBackModifier,
             targetState = currentDestination,
             transitionSpec = {
                 val enterTween = tween<Float>(300, easing = FastOutSlowInEasing)
@@ -671,9 +668,9 @@ private fun AppDrawerContent(
                             if (info != null && info.isLoggedIn) {
                                 wikiUserInfo = info
                                 // 同步获取自定义档案（失败静默，走官方回退展示）
-                                when (val profile = data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id)) {
-                                    is ApiResult.Success -> customProfile = profile.value
-                                    is ApiResult.Error -> customProfile = null
+                                customProfile = when (val profile = data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id)) {
+                                    is ApiResult.Success -> profile.value
+                                    is ApiResult.Error -> null
                                 }
                             }
                         }

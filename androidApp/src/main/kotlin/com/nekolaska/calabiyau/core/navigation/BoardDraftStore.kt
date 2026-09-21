@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.core.navigation
 
 import data.SharedJson
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import java.util.UUID
 
 @Serializable

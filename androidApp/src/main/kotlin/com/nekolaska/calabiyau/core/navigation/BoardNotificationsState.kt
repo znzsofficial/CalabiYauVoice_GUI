@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.core.navigation
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
@@ -19,7 +20,7 @@ internal class BoardNotificationsState(
 ) {
     var items by mutableStateOf<List<ReplyNotification>>(emptyList())
         private set
-    var unread by mutableStateOf(0)
+    var unread by mutableIntStateOf(0)
         private set
     var loading by mutableStateOf(false)
         private set
