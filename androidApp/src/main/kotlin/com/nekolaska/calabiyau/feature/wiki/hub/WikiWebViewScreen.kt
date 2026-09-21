@@ -165,7 +165,11 @@ private fun destroyWikiWebView(webView: WebView?, rendererGone: Boolean = false)
     runCatching { webView.destroy() }
 }
 
-private fun PendingApkDownload.withCompletedDownload(cursor: android.database.Cursor): PendingApkDownload {
+private fun PendingApkDownload.withCompletedDownload(
+    cursor: android.database.Cursor,
+    context: Context,
+    downloadId: Long
+): PendingApkDownload {
     val localUri = runCatching {
         cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
     }.getOrNull()
@@ -174,11 +178,28 @@ private fun PendingApkDownload.withCompletedDownload(cursor: android.database.Cu
         ?.takeIf { it.scheme.equals("file", ignoreCase = true) }
         ?.path
         ?.let(::File)
+        // API 29+ 常缺失 LOCAL_URI 或为 content scheme：按 id 从 MediaStore 反查绝对路径
+        ?: resolveMediaStoreFile(context, downloadId)
     return if (completedFile != null) {
         copy(file = completedFile, fileName = completedFile.name)
     } else {
         this
     }
+}
+
+private fun resolveMediaStoreFile(context: Context, downloadId: Long): File? {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return null
+    return runCatching {
+        context.contentResolver.query(
+            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            arrayOf(android.provider.MediaStore.MediaColumns.DATA),
+            "${android.provider.MediaStore.MediaColumns._ID} = ?",
+            arrayOf(downloadId.toString()),
+            null
+        )?.use { c ->
+            if (c.moveToFirst()) c.getString(0)?.let(::File) else null
+        }
+    }.getOrNull()
 }
 
 private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
@@ -544,7 +565,7 @@ fun WikiWebViewScreen(
                     if (cursor.moveToFirst()) {
                         val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
                         if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            pending.withCompletedDownload(cursor)
+                            pending.withCompletedDownload(cursor, receiverContext, downloadId)
                         } else {
                             null
                         }
@@ -925,7 +946,7 @@ fun WikiWebViewScreen(
                                 },
                                 onPassportDetected = showLoginReturnSnack,
                                 pendingApkDownloads = pendingApkDownloads,
-                                downloadScope = snackbarScope,
+                                downloadScope = com.nekolaska.calabiyau.core.AppScopes.io,
                                 showSnack = showSnack
                             ).also { wv ->
                                 webView = wv
@@ -1786,6 +1807,12 @@ private fun createWikiWebView(
                 // 仅处理主框架的错误（非子资源）
                 if (request?.isForMainFrame == true) {
                     val errorCode = error?.errorCode ?: ERROR_UNKNOWN
+                    if (errorCode == ERROR_UNKNOWN) {
+                        // ERROR_UNKNOWN 是兜底码：导航被新跳转打断、JS 拦截等非网络故障都报它。
+                        // 只有描述带网络语义（net::ERR_*）时才判网络错误，其余忽略
+                        val desc = error?.description?.toString().orEmpty()
+                        if (!desc.contains("net::")) return
+                    }
                     // 网络相关错误码
                     if (errorCode == ERROR_HOST_LOOKUP ||
                         errorCode == ERROR_CONNECT ||

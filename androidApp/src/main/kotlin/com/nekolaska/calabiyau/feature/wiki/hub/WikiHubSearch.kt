@@ -124,6 +124,11 @@ private object HubWeaponSearchIndex {
 
     suspend fun load(): List<WeaponListApi.WeaponCategoryData> = mutex.withLock {
         cachedCategories?.takeIf { it.isNotEmpty() }?.let { return@withLock it }
+        // 用户进过武器页时快照已是完整数据：直接复用，零请求
+        HubListDataSnapshot.weaponCategories?.takeIf { it.isNotEmpty() }?.let {
+            cachedCategories = it
+            return@withLock it
+        }
         val lightweight = when (val result = WeaponListApi.fetchAllCategories(forceRefresh = false, includeImages = false)) {
             is ApiResult.Success -> result.value
             is ApiResult.Error -> emptyList()

@@ -167,20 +167,8 @@ private object WikiHubWallpaperState {
 }
 
 /**
- * Hub 列表数据的进程级快照（仿 [WikiHubWallpaperState] 模式）：
- * 主级页面切换会销毁 Hub 分支，重建时同步恢复数据避免重新转圈。
- * 会话内不自动刷新，新数据由列表页下拉刷新覆盖。
+ * Hub 列表数据快照已移至独立文件 [HubListDataSnapshot]（internal，搜索索引共用）。
  */
-private object HubListDataSnapshot {
-    @Volatile
-    var factions: List<CharacterListApi.FactionData>? = null
-
-    @Volatile
-    var gameModes: List<GameModeData>? = null
-
-    @Volatile
-    var weaponCategories: List<WeaponListApi.WeaponCategoryData>? = null
-}
 
 @Composable
 private fun WikiHubWallpaperBackground(
@@ -547,6 +535,8 @@ fun WikiHubScreen(
                     },
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
+                    error = mapState.error?.message,
+                    onRetry = { mapState.reload(forceRefresh = true) },
                     initialTab = mapListTab,
                     onTabChanged = { mapListTab = it },
                     sharedTransitionScope = this@SharedTransitionLayout,

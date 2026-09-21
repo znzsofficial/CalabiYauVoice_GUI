@@ -120,12 +120,14 @@ import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.WallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.liquidGlassLight
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import data.ErrorKind
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
@@ -1387,6 +1389,8 @@ internal fun MapListFullScreen(
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     gameModes: List<GameModeData>,
     isLoading: Boolean,
+    error: String? = null,
+    onRetry: () -> Unit = {},
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -1428,6 +1432,15 @@ internal fun MapListFullScreen(
                         Spacer(Modifier.height(12.dp))
                         Text("正在加载地图数据…", style = MaterialTheme.typography.bodyMedium)
                     }
+                }
+            }
+
+            error != null && gameModes.isEmpty() -> {
+                Box(
+                    Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ErrorState(message = error, onRetry = onRetry, kind = ErrorKind.NETWORK)
                 }
             }
 
