@@ -79,8 +79,9 @@ object BioDeckShareCodecs {
     fun extractActualShareCode(rawInput: String): String {
         val cleaned = rawInput.trim()
         if (cleaned.isBlank()) return ""
-        if ('｜' !in cleaned && '|' !in cleaned) return cleaned
+        // 真实页面源码里分享码尾部带 MediaWiki 粗体残留 "**"
+        if ('｜' !in cleaned && '|' !in cleaned) return cleaned.removeSuffix("**")
         val parts = cleaned.split('｜', '|').map { it.trim() }.filter { it.isNotBlank() }
-        return parts.lastOrNull().orEmpty()
+        return parts.lastOrNull().orEmpty().removeSuffix("**")
     }
 }

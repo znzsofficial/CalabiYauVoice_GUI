@@ -71,6 +71,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -141,7 +144,7 @@ fun BioCardScreen(
     val copyText = rememberPlainTextClipboardCopier { showSnack("已复制分享码") }
     var isWikiLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
     var isSubmittingDeck by remember { mutableStateOf(false) }
-    var selectedTab by remember(initialTab) {
+    var selectedTab by rememberSaveable(initialTab) {
         mutableStateOf(
             when (initialTab) {
                 1 -> BioCardTab.MOBILE
@@ -150,16 +153,14 @@ fun BioCardScreen(
             }
         )
     }
-    // 从登录 WebView 返回常伴随页签切换；进入 DECK 时重查登录态
-    LaunchedEffect(selectedTab) { isWikiLoggedIn = hasWikiLoginCookie() }
-    var keyword by remember { mutableStateOf("") }
-    var pcFaction by remember { mutableStateOf("全部阵营") }
-    var pcCategory by remember { mutableStateOf("全部分类") }
-    var pcRarity by remember { mutableIntStateOf(0) }
-    var mobileFaction by remember { mutableStateOf("全部阵营") }
-    var mobileCategory by remember { mutableStateOf("全部分类") }
-    var mobileRarity by remember { mutableIntStateOf(0) }
-    var deckFaction by remember { mutableStateOf("全部卡组") }
+    var keyword by rememberSaveable { mutableStateOf("") }
+    var pcFaction by rememberSaveable { mutableStateOf("全部阵营") }
+    var pcCategory by rememberSaveable { mutableStateOf("全部分类") }
+    var pcRarity by rememberSaveable { mutableIntStateOf(0) }
+    var mobileFaction by rememberSaveable { mutableStateOf("全部阵营") }
+    var mobileCategory by rememberSaveable { mutableStateOf("全部分类") }
+    var mobileRarity by rememberSaveable { mutableIntStateOf(0) }
+    var deckFaction by rememberSaveable { mutableStateOf("全部卡组") }
     var selectedPcCard by remember { mutableStateOf<PcCard?>(null) }
     var selectedMobileCard by remember { mutableStateOf<MobileCard?>(null) }
     var selectedDeck by remember { mutableStateOf<SharedDeck?>(null) }
@@ -698,13 +699,13 @@ private fun DeckShareComposerCard(
     onShowMessage: (String) -> Unit,
     onSubmit: (SubmitDeckPayload) -> Unit
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
     var showCardSelector by remember { mutableStateOf(false) }
 
-    var deckName by remember { mutableStateOf("") }
-    var author by remember { mutableStateOf("") }
-    var intro by remember { mutableStateOf("") }
-    var shareCodeInput by remember { mutableStateOf("") }
+    var deckName by rememberSaveable { mutableStateOf("") }
+    var author by rememberSaveable { mutableStateOf("") }
+    var intro by rememberSaveable { mutableStateOf("") }
+    var shareCodeInput by rememberSaveable { mutableStateOf("") }
     var statusText by remember { mutableStateOf("") }
 
     val factionOptions = remember(cardMap) {
@@ -714,7 +715,10 @@ private fun DeckShareComposerCard(
     }
     var selectedFaction by remember(factionOptions) { mutableStateOf(factionOptions.firstOrNull().orEmpty()) }
 
-    val selectableIds = remember { mutableStateListOf<String>() }
+    // 已选卡牌跨旋转/进程恢复保留（40 张的挑选成本高）
+    val selectableIds = rememberSaveable(saver = listSaver(save = { it.toList() }, restore = { it.toMutableStateList() })) {
+        mutableStateListOf<String>()
+    }
     val cards = remember(cardMap, selectedFaction) { cardMap[selectedFaction].orEmpty() }
     val defaultCards = remember(cards) { cards.filter { it.isDefault } }
     val userSelectableCards = remember(cards) { cards.filter { !it.isDefault } }

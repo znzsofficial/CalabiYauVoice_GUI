@@ -167,7 +167,7 @@ object BioCardParsers {
         val cleaned = raw
             .substringAfterLast('｜', raw)
             .substringBefore("**")
-            .substringAfterLast(' ', "")
+            .substringAfterLast(' ') // 无空格时返回整段（缺省 "" 会空转靠正则兜底）
             .trim()
         if (cleaned.isNotBlank()) return cleaned
 
