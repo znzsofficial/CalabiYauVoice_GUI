@@ -62,6 +62,7 @@ import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
 import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.LoadState
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -80,15 +81,21 @@ fun CharacterListScreen(
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null,
     gridState: LazyGridState? = null,
+    loadState: LoadState<List<CharacterListApi.FactionData>>? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
-    val state = rememberLoadState(
-        initial = emptyList<CharacterListApi.FactionData>(),
-        cachedPrefetchDelayMs = 300L,
-        cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
-        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) }
-    )
+    // loadState 由 Hub 提升传入时跨路由存活：从详情返回不重建状态，
+    // 骨架屏不会抢占共享元素的返回落点
+    val localState = if (loadState == null) {
+        rememberLoadState(
+            initial = emptyList<CharacterListApi.FactionData>(),
+            cachedPrefetchDelayMs = 300L,
+            cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
+            fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) }
+        )
+    } else null
+    val state = loadState ?: localState!!
     var selectedTab by remember { mutableIntStateOf(initialTab) }
     var showBirthdayDialog by remember { mutableStateOf(false) }
     val hasWallpaper = LocalHasWallpaper.current

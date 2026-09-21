@@ -275,8 +275,14 @@ fun WikiHubScreen(
     var mapListTab by rememberSaveable { mutableIntStateOf(0) }
 
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
+    // 角色列表 state 提升到 Hub：从角色详情返回时数据仍非空，
+    // 列表直接渲染真实卡片，共享元素动画不被骨架屏抢占
+    val shouldLoadCharacterList = backStack.any { it is WikiRoute.Characters || it is WikiRoute.Home }
     val characterState = rememberLoadState(
         initial = emptyList<CharacterListApi.FactionData>(),
+        enabled = shouldLoadCharacterList,
+        cachedPrefetchDelayMs = 300L,
+        cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
         fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) }
     )
     val mapState = rememberLoadState(
@@ -441,6 +447,7 @@ fun WikiHubScreen(
                     initialTab = characterListTab,
                     onTabChanged = { characterListTab = it },
                     gridState = characterGridState,
+                    loadState = characterState,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )
