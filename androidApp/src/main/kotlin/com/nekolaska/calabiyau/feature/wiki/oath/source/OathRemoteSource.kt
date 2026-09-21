@@ -5,14 +5,13 @@ import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 
-typealias OathSourceResult = WikiHtmlPageSourceResult
 
 object OathRemoteSource {
 
     private const val PAGE_NAME = "誓约"
     private const val CACHE_KEY = "oath_page"
 
-    suspend fun fetchPage(forceRefresh: Boolean = false): OathSourceResult? {
+    suspend fun fetchPage(forceRefresh: Boolean = false): WikiHtmlPageSourceResult? {
         return fetchWikiHtmlPage(
             pageName = PAGE_NAME,
             cacheType = OfflineCache.Type.OATH,
@@ -21,7 +20,7 @@ object OathRemoteSource {
         )
     }
 
-    suspend fun loadCachedPage(): OathSourceResult? = loadCachedWikiHtmlPage(
+    suspend fun loadCachedPage(): WikiHtmlPageSourceResult? = loadCachedWikiHtmlPage(
         cacheType = OfflineCache.Type.OATH,
         cacheKey = CACHE_KEY
     )

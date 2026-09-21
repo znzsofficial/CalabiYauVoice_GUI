@@ -5,14 +5,13 @@ import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 
-typealias ImprintSourceResult = WikiHtmlPageSourceResult
 
 object ImprintRemoteSource {
 
     private const val PAGE_NAME = "印迹"
     private const val CACHE_KEY = "imprint_page"
 
-    suspend fun fetchPage(forceRefresh: Boolean = false): ImprintSourceResult? {
+    suspend fun fetchPage(forceRefresh: Boolean = false): WikiHtmlPageSourceResult? {
         return fetchWikiHtmlPage(
             pageName = PAGE_NAME,
             cacheType = OfflineCache.Type.IMPRINTS,
@@ -21,7 +20,7 @@ object ImprintRemoteSource {
         )
     }
 
-    suspend fun loadCachedPage(): ImprintSourceResult? = loadCachedWikiHtmlPage(
+    suspend fun loadCachedPage(): WikiHtmlPageSourceResult? = loadCachedWikiHtmlPage(
         cacheType = OfflineCache.Type.IMPRINTS,
         cacheKey = CACHE_KEY
     )

@@ -1,11 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery.api
 
+import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GallerySection
 import com.nekolaska.calabiyau.feature.wiki.gallery.parser.GalleryParsers
 import com.nekolaska.calabiyau.feature.wiki.gallery.source.GalleryRemoteSource
-import com.nekolaska.calabiyau.feature.wiki.gallery.source.GalleryPageSourceResult
 import data.ApiResult
 import data.ErrorKind
 import data.toErrorKind
@@ -55,7 +55,7 @@ object GalleryApi : KeyedCachedWikiApi<String, List<GallerySection>>("GalleryApi
         pageName: String,
         forceRefresh: Boolean,
         cacheOnly: Boolean,
-        loadSource: suspend () -> GalleryPageSourceResult?,
+        loadSource: suspend () -> WikiHtmlPageSourceResult?,
         networkErrorMessage: String
     ): ApiResult<List<GallerySection>> =
         withContext(Dispatchers.IO) {

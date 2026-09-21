@@ -7,11 +7,10 @@ import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
 import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 
-typealias GalleryPageSourceResult = WikiHtmlPageSourceResult
 
 object GalleryRemoteSource {
 
-    suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): GalleryPageSourceResult? {
+    suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): WikiHtmlPageSourceResult? {
         return fetchWikiHtmlPage(
             pageName = pageName,
             cacheType = OfflineCache.Type.GALLERY,
@@ -20,7 +19,7 @@ object GalleryRemoteSource {
         )
     }
 
-    suspend fun loadCachedPageHtml(pageName: String): GalleryPageSourceResult? = loadCachedWikiHtmlPage(
+    suspend fun loadCachedPageHtml(pageName: String): WikiHtmlPageSourceResult? = loadCachedWikiHtmlPage(
         cacheType = OfflineCache.Type.GALLERY,
         cacheKey = pageCacheKey(pageName)
     )

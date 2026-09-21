@@ -11,11 +11,10 @@ import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-typealias DecorationHtmlSourceResult = WikiHtmlPageSourceResult
 
 object PlayerDecorationRemoteSource {
 
-    suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): DecorationHtmlSourceResult? {
+    suspend fun fetchPageHtml(pageName: String, forceRefresh: Boolean): WikiHtmlPageSourceResult? {
         return fetchWikiHtmlPage(
             pageName = pageName,
             cacheType = OfflineCache.Type.DECORATIONS,
@@ -24,7 +23,7 @@ object PlayerDecorationRemoteSource {
         )
     }
 
-    suspend fun loadCachedPageHtml(pageName: String): DecorationHtmlSourceResult? = loadCachedWikiHtmlPage(
+    suspend fun loadCachedPageHtml(pageName: String): WikiHtmlPageSourceResult? = loadCachedWikiHtmlPage(
         cacheType = OfflineCache.Type.DECORATIONS,
         cacheKey = pageCacheKey(pageName)
     )

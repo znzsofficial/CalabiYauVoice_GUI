@@ -1,9 +1,9 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration.api
 
+import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
 import com.nekolaska.calabiyau.feature.wiki.decoration.parser.PlayerDecorationParsers
-import com.nekolaska.calabiyau.feature.wiki.decoration.source.DecorationHtmlSourceResult
 import com.nekolaska.calabiyau.feature.wiki.decoration.source.PlayerDecorationRemoteSource
 import data.ApiResult
 import data.ErrorKind
@@ -118,7 +118,7 @@ object PlayerDecorationApi : KeyedCachedWikiApi<String, List<DecorationSection>>
         pageName: String,
         forceRefresh: Boolean,
         cacheOnly: Boolean,
-        loadSource: suspend () -> DecorationHtmlSourceResult?,
+        loadSource: suspend () -> WikiHtmlPageSourceResult?,
         networkErrorMessage: String
     ): ApiResult<List<DecorationSection>> = withContext(Dispatchers.IO) {
         try {

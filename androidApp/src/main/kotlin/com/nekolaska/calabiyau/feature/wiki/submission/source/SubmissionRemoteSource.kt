@@ -6,12 +6,11 @@ import com.nekolaska.calabiyau.core.wiki.fetchWikiHtmlPage
 import com.nekolaska.calabiyau.core.wiki.loadCachedWikiHtmlPage
 import com.nekolaska.calabiyau.feature.wiki.submission.model.SUBMISSION_PAGE_NAME
 
-typealias SubmissionPageSourceResult = WikiHtmlPageSourceResult
 
 object SubmissionRemoteSource {
     private const val CACHE_KEY = "submission_page"
 
-    suspend fun fetchPage(forceRefresh: Boolean): SubmissionPageSourceResult? {
+    suspend fun fetchPage(forceRefresh: Boolean): WikiHtmlPageSourceResult? {
         return fetchWikiHtmlPage(
             pageName = SUBMISSION_PAGE_NAME,
             cacheType = OfflineCache.Type.SUBMISSIONS,
@@ -20,7 +19,7 @@ object SubmissionRemoteSource {
         )
     }
 
-    suspend fun loadCachedPage(): SubmissionPageSourceResult? {
+    suspend fun loadCachedPage(): WikiHtmlPageSourceResult? {
         return loadCachedWikiHtmlPage(
             cacheType = OfflineCache.Type.SUBMISSIONS,
             cacheKey = CACHE_KEY
