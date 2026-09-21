@@ -16,10 +16,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -279,16 +279,19 @@ fun WikiHubScreen(
     val homeListState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
     val homeCharacterRowState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
     val homeMapRowState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
-    val homeTopAppBarState = rememberTopAppBarState()
+    val homeTopAppBarState = remember(resetKey) {
+        TopAppBarState(initialHeightOffsetLimit = -Float.MAX_VALUE, initialHeightOffset = 0f, initialContentOffset = 0f)
+    }
 
-    // 内部分页 Tab 状态继续保留，因为它们不随压栈出栈而丢失（或者让它们由各个页面自行接管）
-    var homeFactionTab by rememberSaveable { mutableIntStateOf(0) }
-    var homeMapModeTab by rememberSaveable { mutableIntStateOf(0) }
-    var characterListTab by rememberSaveable { mutableIntStateOf(0) }
-    val characterGridState = rememberLazyGridState()
-    var weaponListTab by rememberSaveable { mutableIntStateOf(0) }
-    val weaponGridState = rememberLazyGridState()
-    var mapListTab by rememberSaveable { mutableIntStateOf(0) }
+    // Tab/滚动状态跟随 resetKey 重置：backStack 清空后残留的越界 tab 会命中空阵营/空模式，
+    // 下游消费点无法安全 coerce（数据量是动态的）
+    var homeFactionTab by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    var homeMapModeTab by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    var characterListTab by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    val characterGridState = rememberSaveable(resetKey, saver = LazyGridState.Saver) { LazyGridState() }
+    var weaponListTab by rememberSaveable(resetKey) { mutableIntStateOf(0) }
+    val weaponGridState = rememberSaveable(resetKey, saver = LazyGridState.Saver) { LazyGridState() }
+    var mapListTab by rememberSaveable(resetKey) { mutableIntStateOf(0) }
 
     // ── 数据缓存（提升到此层级，子页面切换不丢失） ──
     // 快照单例：主级页面切换（留言板等）会销毁整个 Hub 分支，重建时从这里同步恢复
@@ -346,10 +349,6 @@ fun WikiHubScreen(
     val hubBackdrop = rememberLayerBackdrop()
     LaunchedEffect(Unit) {
         val currentCachedUrl = AppPrefs.wallpaperUrl
-        if (!currentCachedUrl.isNullOrBlank() && wallpaperUrl != currentCachedUrl) {
-            wallpaperUrl = currentCachedUrl
-            WikiHubWallpaperState.updateUrl(currentCachedUrl)
-        }
         val needRefresh = WikiHubWallpaperState.shouldAutoRefresh(currentCachedUrl)
         if (needRefresh) {
             val refreshJob = WikiHubWallpaperState.ensureRefresh(forceRefresh = !currentCachedUrl.isNullOrBlank())
@@ -453,8 +452,8 @@ fun WikiHubScreen(
                     mapRowState = homeMapRowState,
                     topAppBarState = homeTopAppBarState,
                     wallpaperUrl = wallpaperUrl,
+                    resetKey = resetKey,
                     onNavigateTo = { navigateTo(it) },
-                    onNavigateRoute = { navigateTo(it) },
                     onOpenCharacterDetail = { name, portrait ->
                         navigateTo(WikiRoute.CharDetail(name, portrait, source = "home"))
                     },

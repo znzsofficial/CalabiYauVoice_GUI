@@ -128,6 +128,10 @@ fun CharacterListScreen(
             modifier = Modifier.padding(innerPadding),
             loading = { mod -> CharacterListSkeleton(mod) }
         ) { factions ->
+    // 数据缩水（阵营数变少）时回退选中 Tab，避免 TabRow 越界与内容空白
+    LaunchedEffect(factions) {
+        if (selectedTab > factions.lastIndex) selectedTab = factions.lastIndex.coerceAtLeast(0)
+    }
             val context = LocalContext.current
             LaunchedEffect(factions, selectedTab) {
                 val urls = buildList {

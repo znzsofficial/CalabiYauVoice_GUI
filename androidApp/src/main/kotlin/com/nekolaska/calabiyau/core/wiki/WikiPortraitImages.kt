@@ -11,8 +11,10 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.crossfade
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -55,32 +57,35 @@ suspend fun ImageLoader.prefetchWikiPortraits(
     if (pending.isEmpty()) return
 
     val semaphore = Semaphore(concurrency.coerceAtLeast(1))
-    for (url in pending) {
-        currentCoroutineContext().ensureActive()
-        if (!inflightPortraitUrls.add(url)) continue
-        try {
-            semaphore.withPermit {
-                val result = execute(
-                    ImageRequest.Builder(context)
-                        .data(url)
-                        .memoryCachePolicy(CachePolicy.DISABLED)
-                        .diskCachePolicy(CachePolicy.ENABLED)
-                        .decoderFactory(BlackholeDecoder.Factory())
-                        .build()
-                )
-                if (result !is SuccessResult) {
-                    inflightPortraitUrls.remove(url)
-                    if (result is ErrorResult && result.throwable is CancellationException) {
-                        throw result.throwable
+    coroutineScope {
+        pending.map { url ->
+            async {
+                if (!inflightPortraitUrls.add(url)) return@async
+                try {
+                    semaphore.withPermit {
+                        val result = execute(
+                            ImageRequest.Builder(context)
+                                .data(url)
+                                .memoryCachePolicy(CachePolicy.DISABLED)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .decoderFactory(BlackholeDecoder.Factory())
+                                .build()
+                        )
+                        if (result !is SuccessResult) {
+                            inflightPortraitUrls.remove(url)
+                            if (result is ErrorResult && result.throwable is CancellationException) {
+                                throw result.throwable
+                            }
+                        }
                     }
+                } catch (error: CancellationException) {
+                    inflightPortraitUrls.remove(url)
+                    throw error
+                } catch (_: Exception) {
+                    inflightPortraitUrls.remove(url)
                 }
             }
-        } catch (error: CancellationException) {
-            inflightPortraitUrls.remove(url)
-            throw error
-        } catch (_: Exception) {
-            inflightPortraitUrls.remove(url)
-        }
+        }.awaitAll()
     }
 }
 

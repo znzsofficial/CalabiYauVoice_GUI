@@ -243,14 +243,7 @@ internal fun HubSearchPanel(
     var isLoadingWeapons by remember { mutableStateOf(false) }
     var hasLoadedWeapons by remember { mutableStateOf(weaponCategories.isNotEmpty()) }
 
-    LaunchedEffect(query) {
-        if (textFieldState.text.toString() != query) {
-            textFieldState.edit {
-                replace(0, length, query)
-                selection = TextRange(length)
-            }
-        }
-    }
+    // 字段是唯一事实源，经 snapshotFlow 单向流出；不回写（快速输入时滞后镜像会覆写字段丢字）
     LaunchedEffect(textFieldState) {
         snapshotFlow { textFieldState.text.toString() }
             .distinctUntilChanged()

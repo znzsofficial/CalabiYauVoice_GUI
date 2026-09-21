@@ -86,6 +86,10 @@ fun WeaponListScreen(
             modifier = Modifier.padding(innerPadding),
             loading = { mod -> WeaponListSkeleton(mod) }
         ) { categories ->
+    // 数据缩水（分类数变少）时回退选中 Tab，避免 TabRow 越界与内容空白
+    LaunchedEffect(categories) {
+        if (selectedTab > categories.lastIndex) selectedTab = categories.lastIndex.coerceAtLeast(0)
+    }
             // 分类 Tab
             if (categories.size > 1) {
                 Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {

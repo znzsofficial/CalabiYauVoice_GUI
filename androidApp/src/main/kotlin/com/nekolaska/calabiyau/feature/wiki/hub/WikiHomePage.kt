@@ -148,8 +148,8 @@ internal fun WikiHomePage(
     mapRowState: LazyListState,
     topAppBarState: TopAppBarState,
     wallpaperUrl: String?,
+    resetKey: Int,
     onNavigateTo: (WikiRoute) -> Unit,
-    onNavigateRoute: (WikiRoute) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     factions: List<CharacterListApi.FactionData>,
@@ -167,7 +167,7 @@ internal fun WikiHomePage(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchQuery by rememberSaveable(resetKey) { mutableStateOf("") }
 
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
     val context = LocalContext.current
@@ -228,8 +228,8 @@ internal fun WikiHomePage(
         },
         containerColor = Color.Transparent
     ) { innerPadding ->
-        CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
-            CompositionLocalProvider(LocalOverscrollFactory provides null) {
+        // LocalHasWallpaper 已由 Hub 层 provide，这里只关 overscroll
+        CompositionLocalProvider(LocalOverscrollFactory provides null) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -242,7 +242,7 @@ internal fun WikiHomePage(
                         HubSearchPanel(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
-                            onNavigateTo = onNavigateRoute,
+                            onNavigateTo = onNavigateTo,
                             factions = factions,
                             gameModes = gameModes,
                             isIndexLoading = isLoadingCharacters || isLoadingMaps,
@@ -253,7 +253,6 @@ internal fun WikiHomePage(
                 // ── 快捷入口 ──
                     item(key = "quick_access", contentType = "grid") {
                         QuickAccessGrid(
-                            onOpenWikiUrl = onOpenWikiUrl,
                             onNavigateTo = onNavigateTo,
                             backdrop = backdrop
                         )
@@ -408,7 +407,6 @@ internal fun WikiHomePage(
             }
         }
     }
-}
 
 // ────────────────────────────────────────────
 //  聚合入口卡（通向 WikiAggregateScreens 的二级菜单页）
@@ -485,8 +483,7 @@ internal data class QuickEntry(
     val id: String,
     val label: String,
     val icon: ImageVector,
-    val targetRoute: WikiRoute?,       // null 表示使用 url
-    val url: String? = null
+    val targetRoute: WikiRoute?
 )
 
 internal val allQuickEntries = listOf(
@@ -523,7 +520,6 @@ private val mapGradient = Brush.verticalGradient(
 
 @Composable
 private fun QuickAccessGrid(
-    onOpenWikiUrl: (String) -> Unit,
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
@@ -536,14 +532,12 @@ private fun QuickAccessGrid(
     if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
         QuickAccessButtonGrid(
             quickEntries = quickEntries,
-            onOpenWikiUrl = onOpenWikiUrl,
             onNavigateTo = onNavigateTo,
             backdrop = backdrop
         )
     } else {
         QuickAccessGridCard(
             quickEntries = quickEntries,
-            onOpenWikiUrl = onOpenWikiUrl,
             onNavigateTo = onNavigateTo,
             backdrop = backdrop
         )
@@ -553,7 +547,6 @@ private fun QuickAccessGrid(
 @Composable
 private fun QuickAccessGridCard(
     quickEntries: List<QuickEntry>,
-    onOpenWikiUrl: (String) -> Unit,
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
@@ -597,10 +590,7 @@ private fun QuickAccessGridCard(
                                 entry = entry,
                                 iconTint = iconTint,
                                 cellShape = cellShape,
-                                onClick = {
-                                    if (entry.targetRoute != null) onNavigateTo(entry.targetRoute)
-                                    else entry.url?.let(onOpenWikiUrl)
-                                },
+                                onClick = { entry.targetRoute?.let(onNavigateTo) },
                                 modifier = Modifier.weight(1f)
                             )
                         } else {
@@ -632,7 +622,6 @@ private fun QuickAccessGridCard(
 @Composable
 private fun QuickAccessButtonGrid(
     quickEntries: List<QuickEntry>,
-    onOpenWikiUrl: (String) -> Unit,
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
@@ -656,10 +645,7 @@ private fun QuickAccessButtonGrid(
             ) {
                 row.forEach { entry ->
                     Surface(
-                        onClick = {
-                            if (entry.targetRoute != null) onNavigateTo(entry.targetRoute)
-                            else entry.url?.let(onOpenWikiUrl)
-                        },
+                        onClick = { entry.targetRoute?.let(onNavigateTo) },
                         modifier = Modifier
                             .weight(1f)
                             .height(72.dp)
@@ -1407,6 +1393,10 @@ internal fun MapListFullScreen(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     var selectedMode by remember { mutableIntStateOf(initialTab) }
+    // 模式数变少时回退选中项，避免“暂无地图”误报
+    LaunchedEffect(gameModes) {
+        if (selectedMode > gameModes.lastIndex) selectedMode = gameModes.lastIndex.coerceAtLeast(0)
+    }
     val hasWallpaper = LocalHasWallpaper.current
     val translucentSurface = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)
 
@@ -1476,7 +1466,7 @@ internal fun MapListFullScreen(
                     }
 
                     // 地图网格
-                    val currentMode = gameModes.getOrNull(selectedMode)
+                    val currentMode = gameModes.getOrNull(selectedMode.coerceIn(0, gameModes.lastIndex.coerceAtLeast(0)))
                     if (currentMode != null && currentMode.maps.isNotEmpty()) {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(minSize = 160.dp),
