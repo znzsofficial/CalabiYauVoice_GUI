@@ -109,6 +109,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.model.MobileCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SharedDeck
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckPayload
+import com.nekolaska.calabiyau.feature.wiki.bio.model.normalizeDeckQuality
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
@@ -122,7 +123,6 @@ fun BioCardScreen(
     onOpenWikiUrl: (String) -> Unit,
     initialTab: Int = 0
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val state = rememberLoadState(
@@ -132,8 +132,7 @@ fun BioCardScreen(
             decks = emptyList(),
             pcWikiUrl = "",
             mobileWikiUrl = "",
-            deckWikiUrl = "",
-            refreshProbabilityWikiUrl = ""
+            deckWikiUrl = ""
         )
     ) { force ->
         BioCardApi.fetchAll(force)
@@ -142,11 +141,6 @@ fun BioCardScreen(
     val copyText = rememberPlainTextClipboardCopier { showSnack("已复制分享码") }
     var isWikiLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
     var isSubmittingDeck by remember { mutableStateOf(false) }
-    val deckShareCardState = rememberLoadState(
-        initial = emptyMap<String, List<DeckCardOption>>()
-    ) { force ->
-        BioDeckShareApi.fetchDeckCardMap(force)
-    }
     var selectedTab by remember(initialTab) {
         mutableStateOf(
             when (initialTab) {
@@ -156,6 +150,8 @@ fun BioCardScreen(
             }
         )
     }
+    // 从登录 WebView 返回常伴随页签切换；进入 DECK 时重查登录态
+    LaunchedEffect(selectedTab) { isWikiLoggedIn = hasWikiLoginCookie() }
     var keyword by remember { mutableStateOf("") }
     var pcFaction by remember { mutableStateOf("全部阵营") }
     var pcCategory by remember { mutableStateOf("全部分类") }
@@ -167,6 +163,14 @@ fun BioCardScreen(
     var selectedPcCard by remember { mutableStateOf<PcCard?>(null) }
     var selectedMobileCard by remember { mutableStateOf<MobileCard?>(null) }
     var selectedDeck by remember { mutableStateOf<SharedDeck?>(null) }
+
+    // 卡表仅在 DECK 页签才需要：避免进页即 5 个并发 BWiki 请求触发 EdgeOne 封锁
+    val deckShareCardState = rememberLoadState(
+        initial = emptyMap<String, List<DeckCardOption>>(),
+        enabled = selectedTab == BioCardTab.DECK
+    ) { force ->
+        BioDeckShareApi.fetchDeckCardMap(force)
+    }
 
     val data = state.data
     val pcFactions = remember(data.pcCards) { listOf("全部阵营") + data.pcCards.map { it.faction }.filter { it.isNotBlank() }.distinct() }
@@ -217,7 +221,10 @@ fun BioCardScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    RefreshActionButton(onClick = {
+                        state.reload(forceRefresh = true)
+                        if (selectedTab == BioCardTab.DECK) deckShareCardState.reload(forceRefresh = true)
+                    })
                     OpenWikiActionButton(
                         wikiUrl = when (selectedTab) {
                             BioCardTab.PC -> data.pcWikiUrl
@@ -327,6 +334,7 @@ fun BioCardScreen(
                                 onOpenWikiUrl("https://wiki.biligame.com/wiki/Special:UserLogin?returnto=%E6%99%B6%E6%BA%90%E6%84%9F%E6%9F%93%E5%8D%A1%E7%BB%84%E5%88%86%E4%BA%AB")
                             },
                             onRefreshLoginState = { isWikiLoggedIn = hasWikiLoginCookie() },
+                            onShowMessage = showSnack,
                             onSubmit = { payload ->
                                 scope.launch {
                                     isSubmittingDeck = true
@@ -340,6 +348,7 @@ fun BioCardScreen(
                                                 }
                                             )
                                             state.reload(forceRefresh = true)
+                                            deckShareCardState.reload(forceRefresh = true)
                                         }
 
                                         is ApiResult.Error -> {
@@ -686,6 +695,7 @@ private fun DeckShareComposerCard(
     onReloadCardMap: () -> Unit,
     onOpenLogin: () -> Unit,
     onRefreshLoginState: () -> Unit,
+    onShowMessage: (String) -> Unit,
     onSubmit: (SubmitDeckPayload) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
@@ -985,7 +995,7 @@ private fun DeckShareComposerCard(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(userSelectableCards, key = { it.cardId }) { card ->
+                        items(userSelectableCards, key = { "${it.cardId}#${it.index}" }) { card ->
                             val selected = card.cardId in selectableIds
                             val q = normalizeDeckQuality(card.quality)
                             val imgUrl = pcCardImages[card.name] ?: mobileCardImages[card.name]
@@ -1004,8 +1014,8 @@ private fun DeckShareComposerCard(
                                     } else {
                                         val nextCount = (rarityCounts[q] ?: 0) + 1
                                         if (q in listOf("完美", "卓越", "精致") && nextCount > MAX_PER_RARITY) {
-                                            statusText = "$q 已达到上限（$MAX_PER_RARITY）"
-                                            showCardSelector = false
+                                            // 弹层保持打开：statusText 渲染在弹层后面看不见
+                                            onShowMessage("$q 已达到上限（$MAX_PER_RARITY）")
                                         } else {
                                             selectableIds.add(card.cardId)
                                         }
@@ -1058,13 +1068,6 @@ private fun DeckShareComposerCard(
             }
         }
     }
-}
-
-private fun normalizeDeckQuality(raw: String): String = when {
-    raw.contains("完") -> "完美"
-    raw.contains("卓") -> "卓越"
-    raw.contains("精") -> "精致"
-    else -> raw
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

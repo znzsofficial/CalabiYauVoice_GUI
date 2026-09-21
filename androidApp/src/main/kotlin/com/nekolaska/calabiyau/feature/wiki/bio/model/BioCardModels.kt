@@ -6,8 +6,7 @@ data class CardPageData(
     val decks: List<SharedDeck>,
     val pcWikiUrl: String,
     val mobileWikiUrl: String,
-    val deckWikiUrl: String,
-    val refreshProbabilityWikiUrl: String
+    val deckWikiUrl: String
 )
 
 data class CardRefreshProbability(
@@ -15,12 +14,7 @@ data class CardRefreshProbability(
     val stage2: String,
     val stage3: String,
     val stage4: String
-) {
-    val summary: String
-        get() = listOf(stage1, stage2, stage3, stage4)
-            .mapIndexed { index, value -> "${index + 1}阶段 $value" }
-            .joinToString(" · ")
-}
+)
 
 data class PcCard(
     val name: String,

@@ -42,9 +42,6 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
     suspend fun fetchDeckCardMap(forceRefresh: Boolean = false): ApiResult<Map<String, List<DeckCardOption>>> =
         fetch(forceRefresh = forceRefresh)
 
-    override suspend fun fetchFromCache(): ApiResult<Map<String, List<DeckCardOption>>> =
-        ApiResult.Error("卡牌清单不支持 cacheOnly", kind = ErrorKind.NETWORK)
-
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<Map<String, List<DeckCardOption>>> =
         ioApiCall("读取卡牌数据失败") {
             val url = buildWikiUrl(API,
@@ -108,7 +105,7 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
             ApiResult.Success(result)
         }
 
-    fun encodeShareCode(cardIndexes: List<Int>, faction: String): String =
+    private fun encodeShareCode(cardIndexes: List<Int>, faction: String): String =
         BioDeckShareCodecs.encodeShareCode(cardIndexes, faction)
 
     fun decodeShareCode(
@@ -232,7 +229,9 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
     private fun sanitizeDeckName(value: String): String {
         return value.trim()
             .replace("/", "／")
-            .replace(Regex("[<>\\[\\]|{}]"), "")
+            .replace("#", "＃") // MediaWiki 标题非法字符，触发 invalidtitle
+            .replace(Regex("[<>\\[\\]|{}\\p{Cntrl}]"), "")
+            .take(50)
             .ifBlank { "未命名卡组" }
     }
 
@@ -240,8 +239,6 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
         return s
             .replace(Regex("\\r?\\n"), " ")
             .replace("|", "｜")
-            .replace("{{", "{ {")
-            .replace("}}", "} }")
             .replace("<", "＜")
             .replace(">", "＞")
             .replace("[", "［")

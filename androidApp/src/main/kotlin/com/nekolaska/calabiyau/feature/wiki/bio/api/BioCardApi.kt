@@ -31,9 +31,6 @@ object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
     suspend fun fetchAll(forceRefresh: Boolean = false): ApiResult<CardPageData> =
         fetch(forceRefresh = forceRefresh)
 
-    override suspend fun fetchFromCache(): ApiResult<CardPageData> =
-        ApiResult.Error("卡牌整合页不支持 cacheOnly", kind = ErrorKind.NETWORK)
-
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<CardPageData> =
         withContext(Dispatchers.IO) {
             try {
@@ -47,7 +44,8 @@ object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
                 val pc = results[0] ?: return@withContext ApiResult.Error("无法获取 PC 卡牌数据", kind = ErrorKind.NETWORK)
                 val mobile = results[1] ?: return@withContext ApiResult.Error("无法获取移动端卡牌数据", kind = ErrorKind.NETWORK)
                 val decks = results[2] ?: return@withContext ApiResult.Error("无法获取卡组分享数据", kind = ErrorKind.NETWORK)
-                val mode = results[3] ?: return@withContext ApiResult.Error("无法获取刷新概率数据", kind = ErrorKind.NETWORK)
+                // 刷新概率是详情弹窗的装饰性数据：失败降级为空表，不拖垮整页
+                val mode = results[3]
 
                 val cardIndexMapByFaction = when (val deckCardMapResult = BioDeckShareApi.fetchDeckCardMap(forceRefresh)) {
                     is ApiResult.Success -> deckCardMapResult.value.mapValues { (_, options) ->
@@ -60,7 +58,8 @@ object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
                     is ApiResult.Error -> emptyMap()
                 }
 
-                val refreshProbabilityMap = BioCardParsers.parseRefreshProbabilities(mode.html)
+                val refreshProbabilityMap =
+                    if (mode != null) BioCardParsers.parseRefreshProbabilities(mode.html) else emptyMap()
 
                 val data = CardPageData(
                     pcCards = BioCardParsers.parsePcCards(pc.html, refreshProbabilityMap),
@@ -68,8 +67,7 @@ object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
                     decks = BioCardParsers.parseDecks(decks.html, cardIndexMapByFaction),
                     pcWikiUrl = BioCardRemoteSource.pageUrl(PC_PAGE),
                     mobileWikiUrl = BioCardRemoteSource.pageUrl(MOBILE_PAGE),
-                    deckWikiUrl = BioCardRemoteSource.pageUrl(DECK_PAGE),
-                    refreshProbabilityWikiUrl = BioCardRemoteSource.pageUrl(MODE_PAGE)
+                    deckWikiUrl = BioCardRemoteSource.pageUrl(DECK_PAGE)
                 )
 
                 if (data.pcCards.isEmpty() && data.mobileCards.isEmpty() && data.decks.isEmpty()) {
@@ -77,8 +75,8 @@ object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
                 } else {
                     ApiResult.Success(
                         data,
-                        isOffline = listOf(pc, mobile, decks, mode).any { it.isFromCache },
-                        cacheAgeMs = listOf(pc, mobile, decks, mode).maxOfOrNull { it.ageMs } ?: 0L
+                        isOffline = listOfNotNull(pc, mobile, decks, mode).any { it.isFromCache },
+                        cacheAgeMs = listOfNotNull(pc, mobile, decks, mode).maxOfOrNull { it.ageMs } ?: 0L
                     )
                 }
             } catch (e: CancellationException) {
