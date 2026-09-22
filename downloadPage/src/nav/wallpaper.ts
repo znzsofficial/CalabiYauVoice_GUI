@@ -187,3 +187,72 @@ export async function getRandomWallpaper(forceRefresh = false): Promise<Wallpape
 
   return result;
 }
+
+const TINT_CACHE_PREFIX = 'calabiyau.nav.wallpaper.tint.v2.';
+
+/** 把 Wiki 图源 URL 改写为同域代理，附带 CORS 头，画布可安全读像素 */
+export function proxiedWallpaperUrl(url: string): string {
+  try {
+    const absolute = new URL(url);
+    if (absolute.hostname === 'wiki.biligame.com' || absolute.hostname === 'patchwiki.biligame.com') {
+      return `/api/file-download?url=${encodeURIComponent(absolute.href)}`;
+    }
+  } catch {}
+  return url;
+}
+
+/** 从壁纸缩略采样主色，返回 `r g b` 供 CSS `rgb(var(--wp-tint) / alpha)` 使用 */
+export async function extractWallpaperTint(url: string): Promise<string | null> {
+  if (!url || typeof document === 'undefined') return null;
+
+  const cacheKey = TINT_CACHE_PREFIX + url;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached && /^\d{1,3} \d{1,3} \d{1,3}$/.test(cached)) return cached;
+  } catch {}
+
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = proxiedWallpaperUrl(url);
+    await img.decode();
+
+    const size = 24;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let w = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const pr = data[i];
+      const pg = data[i + 1];
+      const pb = data[i + 2];
+      const pa = data[i + 3];
+      if (pa < 128) continue;
+      const max = Math.max(pr, pg, pb);
+      const min = Math.min(pr, pg, pb);
+      if (max < 28 || min > 240) continue;
+      const sat = max === 0 ? 0 : (max - min) / max;
+      const weight = 0.35 + sat * 0.65;
+      r += pr * weight;
+      g += pg * weight;
+      b += pb * weight;
+      w += weight;
+    }
+    if (w < 1) return null;
+    const rgb = `${Math.round(r / w)} ${Math.round(g / w)} ${Math.round(b / w)}`;
+    try {
+      localStorage.setItem(cacheKey, rgb);
+    } catch {}
+    return rgb;
+  } catch {
+    return null;
+  }
+}

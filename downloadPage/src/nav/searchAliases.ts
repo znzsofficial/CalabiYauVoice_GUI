@@ -365,6 +365,35 @@ export const TITLE_ALIASES: Record<string, string[]> = {
   '猫娘的百宝箱': ['工具箱', '百宝箱', '生化卡牌', '贴纸生成器', '连连看', '玩家卡拼接', 'gugutalk']
 };
 
+export interface HighlightPart {
+  text: string;
+  hit: boolean;
+}
+
+/** 把查询在标题中的直接命中拆成可渲染片段；别名命中但标题不含查询时原样返回 */
+export function highlightNavTitle(title: string, rawQuery: string): HighlightPart[] {
+  const q = rawQuery.trim();
+  if (!q) return [{ text: title, hit: false }];
+
+  const lowerTitle = title.toLowerCase();
+  const lowerQ = q.toLowerCase();
+  const parts: HighlightPart[] = [];
+  let from = 0;
+  while (from < title.length) {
+    const idx = lowerTitle.indexOf(lowerQ, from);
+    if (idx === -1) {
+      parts.push({ text: title.slice(from), hit: false });
+      break;
+    }
+    if (idx > from) {
+      parts.push({ text: title.slice(from, idx), hit: false });
+    }
+    parts.push({ text: title.slice(idx, idx + q.length), hit: true });
+    from = idx + Math.max(q.length, 1);
+  }
+  return parts.length > 0 ? parts : [{ text: title, hit: false }];
+}
+
 /**
  * 核心匹配函数：判断词条标题与用户输入查询是否匹配
  * 支持：正向包含、同义词展开、双向别名索引匹配
@@ -375,8 +404,14 @@ export function matchNavTitle(title: string, rawQuery: string): boolean {
 
   const lowerTitle = title.toLowerCase();
 
-  // Avoid broad one-character matches such as "m" matching every M-prefixed weapon.
-  if (q.length === 1) return lowerTitle === q;
+  // Avoid broad one-character ASCII matches like "m" matching every M-prefixed weapon,
+  // but permit CJK characters which carry whole-word semantics like "枪", "猫", "图", "令"
+  if (q.length === 1) {
+    if (/^[a-z0-9]$/i.test(q)) {
+      return lowerTitle === q;
+    }
+    if (lowerTitle.includes(q)) return true;
+  }
 
   // 1. 直观包含匹配
   if (lowerTitle.includes(q)) return true;

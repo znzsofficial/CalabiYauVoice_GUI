@@ -207,27 +207,49 @@
 }
 
 .hero-info-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "title actions"
+        "meta actions";
+    column-gap: 24px;
+    row-gap: 8px;
+    align-items: center;
+}
+
+.hero-title-row {
+    grid-area: title;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 32px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-width: 0;
 }
 
-.hero-version-info {
-    padding: 6px 12px;
-}
-
-.hero-version-info h2 {
-    margin: 14px 0 10px;
+.hero-title-row h2 {
+    margin: 0;
     font-size: clamp(1.65rem, 4vw, 2.25rem);
     font-weight: 600;
     letter-spacing: -0.02em;
     color: var(--foreground);
-    display: inline-block;
+    line-height: 1.15;
 }
 
-.hero-version-info h2.version-loaded {
+.hero-title-row h2.version-loaded {
     animation: version-pop-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero-platform-badge {
+    flex-shrink: 0;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.hero-platform-badge iconify-icon {
+    font-size: 0.8125rem;
 }
 
 @keyframes version-pop-in {
@@ -242,6 +264,7 @@
 }
 
 .hero-version-meta {
+    grid-area: meta;
     display: flex;
     flex-wrap: wrap;
     gap: 18px;
@@ -256,53 +279,55 @@
 }
 
 .hero-actions {
+    grid-area: actions;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
+    align-items: center;
     gap: 12px;
-    flex: 0 0 auto;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
     .hero-section {
-        padding: 18px 16px 16px;
+        padding: 20px 16px 16px;
     }
 
     .hero-info-panel {
-        align-items: stretch;
-        flex-direction: column;
-        gap: 14px;
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "title"
+            "meta"
+            "actions";
+        row-gap: 10px;
     }
 
-    .hero-version-info {
-        position: relative;
-        min-height: 82px;
-        padding: 18px 0 0;
-        text-align: center;
-    }
-
-    .hero-version-info .badge {
-        position: absolute;
-        top: 0;
-        right: 0;
-    }
-
-    .hero-version-info h2 {
-        margin: 14px 0 8px;
-        text-align: center;
+    .hero-title-row {
+        align-items: baseline;
     }
 
     .hero-version-meta {
-        justify-content: center;
         gap: 10px 14px;
     }
 
     .hero-actions {
         justify-content: stretch;
+        margin-top: 4px;
     }
 
     .hero-actions .btn {
-        flex: 1 1 100%;
+        flex: 1 1 0;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 420px) {
+    .hero-actions {
+        flex-direction: column;
+    }
+
+    .hero-actions .btn {
+        flex: 1 1 auto;
+        width: 100%;
     }
 }
 
@@ -1768,7 +1793,7 @@ td .cmp-arrow.down {
     .hero-download-btn:hover .download-icon,
     .hero-download-btn:hover::before,
     .hero-copy-btn.copied .copy-success .check-icon,
-    .hero-version-info h2.version-loaded,
+    .hero-title-row h2.version-loaded,
     .card,
     .card:hover {
         animation: none !important;

@@ -56,6 +56,7 @@ button, a, input, select {
     );
     backdrop-filter: blur(8px) saturate(135%);
     -webkit-backdrop-filter: blur(8px) saturate(135%);
+    transition: background 0.6s ease;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -69,6 +70,53 @@ button, a, input, select {
         backdrop-filter: blur(10px) saturate(145%);
         -webkit-backdrop-filter: blur(10px) saturate(145%);
     }
+}
+
+/* 取色生效时：色罩叠在原 scrim 之上，只添色相、不加重白雾 */
+#nav-app[data-wp-tint] .wallpaper-scrim-gradient {
+    background:
+        linear-gradient(180deg,
+            rgb(var(--wp-tint) / 0.14) 0%,
+            rgb(var(--wp-tint) / 0.07) 45%,
+            rgb(var(--wp-tint) / 0.18) 100%
+        ),
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.24) 0%,
+            rgba(255, 255, 255, 0.42) 22%,
+            rgba(255, 255, 255, 0.60) 55%,
+            rgba(255, 255, 255, 0.76) 100%
+        );
+}
+
+@media (prefers-color-scheme: dark) {
+    #nav-app[data-wp-tint] .wallpaper-scrim-gradient {
+        background:
+            linear-gradient(180deg,
+                rgb(var(--wp-tint) / 0.18) 0%,
+                rgb(var(--wp-tint) / 0.09) 45%,
+                rgb(var(--wp-tint) / 0.22) 100%
+            ),
+            linear-gradient(180deg,
+                rgba(12, 14, 20, 0.32) 0%,
+                rgba(12, 14, 20, 0.52) 22%,
+                rgba(12, 14, 20, 0.68) 55%,
+                rgba(12, 14, 20, 0.82) 100%
+            );
+    }
+}
+
+#nav-app[data-wp-tint] .header {
+    border-bottom-color: rgb(var(--wp-tint) / 0.38);
+}
+
+#nav-app[data-wp-tint] .category-tabs-scroller {
+    border-color: rgb(var(--wp-tint) / 0.45);
+    box-shadow: 0 4px 16px -4px rgb(var(--wp-tint) / 0.28);
+}
+
+#nav-app[data-wp-tint] .category-tab-indicator {
+    background-color: rgb(var(--wp-tint) / 0.24);
+    box-shadow: inset 0 0 0 1px rgb(var(--wp-tint) / 0.30);
 }
 
 /* ── 顶部 Sticky Header ── */
@@ -583,6 +631,33 @@ button, a, input, select {
 .featured-tool-card:hover::before {
     opacity: 1;
     height: 2.5px;
+    z-index: 2;
+}
+
+.featured-tool-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    background: radial-gradient(
+        240px circle at var(--mx, 50%) var(--my, 50%),
+        color-mix(in srgb, var(--tool-color, var(--foreground)) 34%, transparent),
+        transparent 62%
+    );
+    transition: opacity 0.18s ease;
+}
+
+.featured-tool-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .featured-tool-card:hover::after {
+        opacity: 1;
+    }
 }
 
 .featured-tool-card.as-btn {
@@ -700,8 +775,7 @@ button, a, input, select {
 
 .category-tabs-scroller {
     display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    align-items: stretch;
     padding: 3px;
     border-radius: 999px;
     border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
@@ -710,6 +784,9 @@ button, a, input, select {
     -webkit-backdrop-filter: blur(20px);
     box-shadow: 0 4px 16px -4px color-mix(in srgb, var(--foreground) 8%, transparent);
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: none;
     scrollbar-width: none;
     max-width: 100%;
     pointer-events: auto; /* 允许点击 */
@@ -717,6 +794,39 @@ button, a, input, select {
 
 .category-tabs-scroller::-webkit-scrollbar {
     display: none;
+}
+
+.category-tabs-track {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    isolation: isolate;
+}
+
+.category-tab-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 32px;
+    width: var(--tab-w, 0px);
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 16%, transparent);
+    pointer-events: none;
+    z-index: 0;
+    transform: translateX(var(--tab-x, 0px));
+    opacity: 0;
+}
+
+.category-tab-indicator.ready {
+    opacity: 1;
+}
+
+.category-tab-indicator.animate {
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 0.18s ease;
 }
 
 .category-tab {
@@ -733,20 +843,21 @@ button, a, input, select {
     font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
     user-select: none;
+    position: relative;
+    z-index: 1;
 }
 
-.category-tab:hover {
+.category-tab:hover:not(.active) {
     color: var(--foreground);
     background-color: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
 .category-tab.active {
-    background-color: var(--primary);
-    color: var(--primary-foreground);
-    box-shadow: 0 2px 8px -1px color-mix(in srgb, var(--primary) 30%, transparent);
+    color: var(--foreground);
+    font-weight: 600;
 }
 
 .category-tab .tab-icon {
@@ -755,7 +866,6 @@ button, a, input, select {
 }
 
 .category-tab.active .tab-icon {
-    color: var(--primary-foreground) !important;
     opacity: 1;
 }
 
@@ -770,8 +880,8 @@ button, a, input, select {
 }
 
 .category-tab.active .tab-count {
-    background-color: color-mix(in srgb, var(--primary-foreground) 20%, transparent);
-    color: var(--primary-foreground);
+    background-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+    color: var(--foreground);
 }
 
 .filter-status-banner {
@@ -852,6 +962,44 @@ button, a, input, select {
 .filter-reset-btn:hover {
     color: var(--foreground);
     text-decoration: underline;
+}
+
+mark.nav-hit {
+    background-color: color-mix(in srgb, #f59e0b 28%, transparent);
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    padding: 0 0.12em;
+    margin: 0;
+    border-radius: 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+
+@media (prefers-color-scheme: dark) {
+    mark.nav-hit {
+        background-color: color-mix(in srgb, #fbbf24 32%, transparent);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .category-tab-indicator.animate {
+        transition: none;
+    }
+
+    .featured-tool-card::after {
+        display: none;
+    }
+
+    .section-card {
+        animation: none !important;
+    }
+
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation: none !important;
+    }
 }
 
 /* ── 容器 & 分区卡片 ── */
@@ -1269,6 +1417,7 @@ button, a, input, select {
 }
 
 .char-avatar-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2392,9 +2541,9 @@ button, a, input, select {
 
 .char-bday-flag {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    padding: 1px 5px;
+    top: 8px;
+    right: 8px;
+    padding: 2px 7px;
     border-radius: 999px;
     font-size: 0.625rem;
     font-weight: 800;
@@ -2886,6 +3035,13 @@ button, a, input, select {
     .char-avatar-card {
         padding: 8px 4px 6px;
         border-radius: 12px;
+    }
+
+    .char-bday-flag {
+        top: 4px;
+        right: 4px;
+        padding: 1px 4px;
+        font-size: 0.5625rem;
     }
 
     .char-avatar-frame {

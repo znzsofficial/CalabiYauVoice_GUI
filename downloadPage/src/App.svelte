@@ -316,13 +316,16 @@
       <div class="hero-bg"></div>
       <div class="hero-content">
         <div class="hero-info-panel">
-          <div class="hero-version-info">
-            <span class="badge">Android 客户端</span>
+          <div class="hero-title-row">
             <h2 class:loading-pulse={versionName === '正在读取...'} class:version-loaded={versionName !== '正在读取...'}>{versionName}</h2>
-            <div class="hero-version-meta">
-              <span><iconify-icon icon="lucide:calendar"></iconify-icon> {publishedAt}</span>
-              <span><iconify-icon icon="lucide:hard-drive-download"></iconify-icon> {apkSize}</span>
-            </div>
+            <span class="badge hero-platform-badge">
+              <iconify-icon icon="lucide:smartphone"></iconify-icon>
+              Android 客户端
+            </span>
+          </div>
+          <div class="hero-version-meta">
+            <span><iconify-icon icon="lucide:calendar"></iconify-icon> {publishedAt}</span>
+            <span><iconify-icon icon="lucide:hard-drive-download"></iconify-icon> {apkSize}</span>
           </div>
           <div class="hero-actions">
             <a class="btn primary hero-download-btn" href={apkUrl} download>

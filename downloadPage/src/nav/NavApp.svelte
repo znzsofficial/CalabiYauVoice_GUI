@@ -1,9 +1,11 @@
 <script lang="ts">
-import { onMount, tick } from 'svelte';
+import { onMount, tick, untrack } from 'svelte';
   import { fetchNavSections, type NavItem, type NavSection } from './sidebar';
   import {
+    extractWallpaperTint,
     getRandomWallpaper,
     isWallpaperEnabled,
+    proxiedWallpaperUrl,
     setWallpaperEnabled,
     type WallpaperInfo
   } from './wallpaper';
@@ -15,7 +17,7 @@ import { onMount, tick } from 'svelte';
     GAME_EXTENSIONS_MODAL,
     type CollectionModalData
   } from './toolboxes';
-  import { matchNavTitle } from './searchAliases';
+  import { highlightNavTitle, matchNavTitle } from './searchAliases';
   import {
     CHARACTER_BIRTHDAYS,
     BIRTHDAY_MAP,
@@ -35,6 +37,8 @@ import { onMount, tick } from 'svelte';
   let filter = $state('');
   let activeTab = $state<'all' | string>('all');
   let searchInputEl = $state<HTMLInputElement | null>(null);
+  let tabsTrackEl = $state<HTMLDivElement | null>(null);
+  let tabIndicator = $state({ x: 0, w: 0, visible: false, animate: false });
   let modalCloseEl = $state<HTMLButtonElement | null>(null);
   let modalTriggerEl = $state<HTMLElement | null>(null);
   let navReloading = $state(false);
@@ -61,9 +65,22 @@ import { onMount, tick } from 'svelte';
   let scrollY = $state(0);
   const showScrollTop = $derived(scrollY > 350);
 
+  // Dock 滚轮拦截：转发纵向滚动给页面，防止内容滚出视口
+  function handleDockWheel(event: WheelEvent): void {
+    const scroller = event.currentTarget as HTMLElement;
+    const isHorizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+    const hasHorizontalOverflow = scroller.scrollWidth > scroller.clientWidth + 1;
+    if (isHorizontal && hasHorizontalOverflow) {
+      return;
+    }
+    event.preventDefault();
+    window.scrollBy({ top: event.deltaY, behavior: 'auto' });
+  }
+
   // 壁纸与提示
   let currentWallpaper = $state<WallpaperInfo | null>(null);
   let wallpaperActive = $state(true);
+  let wallpaperTint = $state<string | null>(null);
   let changingWallpaper = $state(false);
   let wallpaperModalOpen = $state(false);
   let wallpaperToast = $state<string | null>(null);
@@ -476,7 +493,8 @@ import { onMount, tick } from 'svelte';
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (e.key === '/' && document.activeElement !== searchInputEl) {
+    const isInputFocused = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
+    if (e.key === '/' && !isInputFocused && !modalOpen) {
       e.preventDefault();
       searchInputEl?.focus();
     } else if (e.key === 'Escape') {
@@ -496,6 +514,14 @@ import { onMount, tick } from 'svelte';
     filter = tag;
     activeTab = 'all';
     searchInputEl?.focus();
+  }
+
+  function handleToolPointer(event: PointerEvent): void {
+    if (event.pointerType !== 'mouse') return;
+    const el = event.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty('--mx', `${((event.clientX - rect.left) / Math.max(rect.width, 1)) * 100}%`);
+    el.style.setProperty('--my', `${((event.clientY - rect.top) / Math.max(rect.height, 1)) * 100}%`);
   }
 
   async function loadData(): Promise<void> {
@@ -546,6 +572,9 @@ import { onMount, tick } from 'svelte';
     return () => {
       if (toastTimer) clearTimeout(toastTimer);
       document.body.style.overflow = '';
+      const host = document.getElementById('nav-app');
+      host?.style.removeProperty('--wp-tint');
+      delete host?.dataset.wpTint;
     };
   });
 
@@ -555,9 +584,102 @@ import { onMount, tick } from 'svelte';
       void tick().then(() => modalCloseEl?.focus());
     }
   });
+
+  function measureTabIndicator(opts?: { scroll?: boolean }): void {
+    const prev = untrack(() => tabIndicator);
+    const hide = () => {
+      if (prev.visible) {
+        tabIndicator = { ...prev, visible: false };
+      }
+    };
+    const track = tabsTrackEl;
+    if (!track || filterActive) {
+      hide();
+      return;
+    }
+    const active = track.querySelector<HTMLElement>('.category-tab.active');
+    if (!active) {
+      hide();
+      return;
+    }
+    const x = active.offsetLeft;
+    const w = active.offsetWidth;
+    if (prev.visible && prev.x === x && prev.w === w) return;
+    tabIndicator = { x, w, visible: true, animate: prev.visible };
+    if (opts?.scroll) {
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      active.scrollIntoView({
+        inline: 'nearest',
+        block: 'nearest',
+        behavior: prev.visible && !reduce ? 'smooth' : 'instant'
+      });
+    }
+  }
+
+  $effect(() => {
+    void activeTab;
+    void filterActive;
+    void sections.length;
+    void loading;
+    void tabsTrackEl;
+    void tick().then(() => measureTabIndicator({ scroll: true }));
+  });
+
+  $effect(() => {
+    const wp = currentWallpaper;
+    const active = wallpaperActive;
+    if (!wp?.url || !active) {
+      wallpaperTint = null;
+      return;
+    }
+    let cancelled = false;
+    void extractWallpaperTint(wp.url).then(tint => {
+      if (!cancelled) wallpaperTint = tint;
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  $effect(() => {
+    const host = document.getElementById('nav-app');
+    if (!host) return;
+    if (wallpaperTint && wallpaperActive) {
+      host.style.setProperty('--wp-tint', wallpaperTint);
+      host.dataset.wpTint = '1';
+    } else {
+      host.style.removeProperty('--wp-tint');
+      delete host.dataset.wpTint;
+    }
+  });
+
+  $effect(() => {
+    const track = tabsTrackEl;
+    if (!track) return;
+    const scroller = track.parentElement;
+    const ro = new ResizeObserver(() => measureTabIndicator());
+    ro.observe(track);
+    if (scroller) ro.observe(scroller);
+    const onResize = () => measureTabIndicator();
+    window.addEventListener('resize', onResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', onResize);
+    };
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} onscroll={() => scrollY = window.scrollY} />
+
+{#snippet highlightedTitle(title: string)}
+  {#if !filterActive}
+    {title}
+  {:else}
+    {#each highlightNavTitle(title, filter) as part, i (`${i}-${part.hit}-${part.text}`)}
+      {#if part.hit}<mark class="nav-hit">{part.text}</mark>{:else}{part.text}{/if}
+    {/each}
+  {/if}
+{/snippet}
 
 <!-- ── 随机全屏壁纸背景层 (移自 Android 端的 WikiHubWallpaperBackground) ── -->
 {#if wallpaperActive && currentWallpaper}
@@ -565,9 +687,10 @@ import { onMount, tick } from 'svelte';
     <img
       class="wallpaper-img"
       class:changing={changingWallpaper}
-      src={currentWallpaper.url}
+      src={proxiedWallpaperUrl(currentWallpaper.url)}
       alt=""
       loading="eager"
+      crossorigin="anonymous"
       referrerpolicy="no-referrer"
     >
     <div class="wallpaper-scrim-gradient"></div>
@@ -616,7 +739,7 @@ import { onMount, tick } from 'svelte';
             </button>
             <div class="wp-hover-preview-card" role="tooltip">
               <div class="wp-hover-preview-thumb">
-                <img src={currentWallpaper.url} alt="" loading="lazy" referrerpolicy="no-referrer" />
+                <img src={proxiedWallpaperUrl(currentWallpaper.url)} alt="" loading="lazy" referrerpolicy="no-referrer" />
               </div>
               <div class="wp-hover-preview-meta">
                 <span class="wp-hover-title">{currentWallpaper.title}</span>
@@ -722,6 +845,7 @@ import { onMount, tick } from 'svelte';
               class="featured-tool-card as-btn"
               type="button"
               onclick={(e) => tool.action?.(e.currentTarget as HTMLElement)}
+              onpointermove={handleToolPointer}
               style="--tool-color: {tool.color};"
             >
               <div class="tool-card-icon-box">
@@ -742,6 +866,7 @@ import { onMount, tick } from 'svelte';
               href={tool.url}
               target="_blank"
               rel="noopener noreferrer"
+              onpointermove={handleToolPointer}
               style="--tool-color: {tool.color};"
             >
               <div class="tool-card-icon-box">
@@ -765,32 +890,41 @@ import { onMount, tick } from 'svelte';
   <!-- ── 分区切换标签栏 (Segmented Scroller) ── -->
   {#if !loading && !errorMessage && sections.length > 0}
     <nav class="category-tabs-bar" aria-label="分类切换">
-      <div class="category-tabs-scroller">
-        <button
-          class="category-tab"
-          class:active={activeTab === 'all' && !filterActive}
-          type="button"
-          onclick={() => { activeTab = 'all'; filter = ''; }}
-        >
-          <iconify-icon icon="lucide:layout-grid" class="tab-icon"></iconify-icon>
-          <span class="tab-title">全部词条</span>
-          <span class="tab-count">{allEntriesCount}</span>
-        </button>
-
-        {#each sections as section (section.title)}
-          {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#6b7280', tag: '' }}
-          {@const count = countSectionTotal(section)}
+      <div class="category-tabs-scroller" onwheel={handleDockWheel}>
+        <div class="category-tabs-track" bind:this={tabsTrackEl}>
+          <span
+            class="category-tab-indicator"
+            class:ready={tabIndicator.visible}
+            class:animate={tabIndicator.animate}
+            style="--tab-x: {tabIndicator.x}px; --tab-w: {tabIndicator.w}px;"
+            aria-hidden="true"
+          ></span>
           <button
             class="category-tab"
-            class:active={activeTab === section.title && !filterActive}
+            class:active={activeTab === 'all' && !filterActive}
             type="button"
-            onclick={() => { activeTab = section.title; filter = ''; }}
+            onclick={() => { activeTab = 'all'; filter = ''; }}
           >
-            <iconify-icon icon={theme.icon} class="tab-icon" style="color: {theme.color};"></iconify-icon>
-            <span class="tab-title">{section.title}</span>
-            <span class="tab-count">{count}</span>
+            <iconify-icon icon="lucide:layout-grid" class="tab-icon"></iconify-icon>
+            <span class="tab-title">全部词条</span>
+            <span class="tab-count">{allEntriesCount}</span>
           </button>
-        {/each}
+
+          {#each sections as section (section.title)}
+            {@const theme = sectionThemes[section.title] || { icon: 'lucide:folder', color: '#6b7280', tag: '' }}
+            {@const count = countSectionTotal(section)}
+            <button
+              class="category-tab"
+              class:active={activeTab === section.title && !filterActive}
+              type="button"
+              onclick={() => { activeTab = section.title; filter = ''; }}
+            >
+              <iconify-icon icon={theme.icon} class="tab-icon" style="color: {theme.color};"></iconify-icon>
+              <span class="tab-title">{section.title}</span>
+              <span class="tab-count">{count}</span>
+            </button>
+          {/each}
+        </div>
       </div>
 
       {#if filterActive}
@@ -876,7 +1010,7 @@ import { onMount, tick } from 'svelte';
             </div>
             <div class="section-title-wrap">
               <div class="section-title-row">
-                <h2 class="section-title">{section.title}</h2>
+                <h2 class="section-title">{@render highlightedTitle(section.title)}</h2>
                 <span class="section-total-badge">{sectionCount} 条目</span>
               </div>
               <span class="section-subtitle">{theme.tag}</span>
@@ -905,7 +1039,7 @@ import { onMount, tick } from 'svelte';
                         <iconify-icon icon={getItemIcon(item.title)}></iconify-icon>
                       </div>
                       <div class="home-portal-texts">
-                        <strong class="home-portal-title">{item.title}</strong>
+                        <strong class="home-portal-title">{@render highlightedTitle(item.title)}</strong>
                         <span class="home-portal-sub">{getPortalSub(item.title)}</span>
                       </div>
                       <iconify-icon icon="lucide:arrow-up-right" class="home-portal-arrow"></iconify-icon>
@@ -932,7 +1066,7 @@ import { onMount, tick } from 'svelte';
                           </div>
                           <div class="home-coll-title-wrap">
                             <div class="home-coll-title-line">
-                              <strong class="home-coll-title">{group.title}</strong>
+                              <strong class="home-coll-title">{@render highlightedTitle(group.title)}</strong>
                               <span class="home-coll-count">{group.children.length} 项</span>
                             </div>
                             <span class="home-coll-desc">{getCollectionDesc(group.title)}</span>
@@ -960,7 +1094,7 @@ import { onMount, tick } from 'svelte';
                             rel="noopener noreferrer"
                             title={child.title}
                           >
-                            <span>{child.title}</span>
+                            <span>{@render highlightedTitle(child.title)}</span>
                             <iconify-icon icon="lucide:arrow-up-right" class="pill-mini-arrow"></iconify-icon>
                           </a>
                         {/each}
@@ -1027,7 +1161,7 @@ import { onMount, tick } from 'svelte';
                   <div class="faction-header-row">
                     <div class="faction-title-pill" style="background: color-mix(in srgb, {factionInfo.color} 12%, transparent); color: {factionInfo.color}; border: 1px solid color-mix(in srgb, {factionInfo.color} 25%, transparent);">
                       <iconify-icon icon={factionInfo.icon}></iconify-icon>
-                      <span>{factionGroup.title}</span>
+                      <span>{@render highlightedTitle(factionGroup.title)}</span>
                       <span class="faction-count-badge">{factionGroup.children.length}</span>
                     </div>
                     {#if factionInfo.slogan}
@@ -1049,7 +1183,7 @@ import { onMount, tick } from 'svelte';
                         title={bInfo ? `${charItem.title}（生日：${bInfo.birthday.dateText}${bInfo.isToday ? ' · 今天生日！' : ` · 还有${bInfo.days}天`}）` : `查看 ${charItem.title} 角色资料`}
                       >
                         {#if bInfo?.isToday}
-                          <span class="char-bday-flag today" title="今天生日！">🎂 生日!</span>
+                          <span class="char-bday-flag today" title="今天生日！">🎂 今天</span>
                         {:else if bInfo && bInfo.days <= 7}
                           <span class="char-bday-flag near" title={`${bInfo.days}天后生日`}>🎂 {bInfo.days}天</span>
                         {/if}
@@ -1069,7 +1203,7 @@ import { onMount, tick } from 'svelte';
                             </div>
                           {/if}
                         </div>
-                        <span class="char-name-label">{charItem.title}</span>
+                        <span class="char-name-label">{@render highlightedTitle(charItem.title)}</span>
                       </a>
                     {/each}
                   </div>
@@ -1096,7 +1230,7 @@ import { onMount, tick } from 'svelte';
                             <span class="core-pill-icon-box">
                               <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                             </span>
-                            <span class="pill-label">{item.title}</span>
+                            <span class="pill-label">{@render highlightedTitle(item.title)}</span>
                             <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
                           </a>
                         {:else}
@@ -1104,7 +1238,7 @@ import { onMount, tick } from 'svelte';
                             <span class="core-pill-icon-box">
                               <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                             </span>
-                            <span class="pill-label">{item.title}</span>
+                            <span class="pill-label">{@render highlightedTitle(item.title)}</span>
                           </span>
                       {/if}
                     {/each}
@@ -1135,7 +1269,7 @@ import { onMount, tick } from 'svelte';
                             <span class="core-pill-icon-box">
                               <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                             </span>
-                            <span class="pill-label">{item.title}</span>
+                            <span class="pill-label">{@render highlightedTitle(item.title)}</span>
                             <iconify-icon icon="lucide:arrow-up-right" class="pill-arrow"></iconify-icon>
                           </a>
                         {:else}
@@ -1143,7 +1277,7 @@ import { onMount, tick } from 'svelte';
                             <span class="core-pill-icon-box">
                               <iconify-icon icon={getItemIcon(item.title)} class="chip-item-icon"></iconify-icon>
                             </span>
-                            <span class="pill-label">{item.title}</span>
+                            <span class="pill-label">{@render highlightedTitle(item.title)}</span>
                           </span>
                       {/if}
                     {/each}
@@ -1169,7 +1303,7 @@ import { onMount, tick } from 'svelte';
                             <span class="subgroup-title-indicator">
                               <iconify-icon icon={getSubgroupIcon(group.title)} class="subgroup-dot-icon"></iconify-icon>
                             </span>
-                            <strong class="subgroup-card-title">{group.title}</strong>
+                            <strong class="subgroup-card-title">{@render highlightedTitle(group.title)}</strong>
                             <span class="subgroup-count-badge">{group.children.length}</span>
                           </div>
 
@@ -1225,7 +1359,7 @@ import { onMount, tick } from 'svelte';
                                 {:else}
                                   <iconify-icon icon={getItemIcon(child.title)} class="chip-prefix-icon"></iconify-icon>
                                 {/if}
-                                <span class="tag-chip-title">{child.title}</span>
+                                <span class="tag-chip-title">{@render highlightedTitle(child.title)}</span>
                                 {#if weaponOwner}
                                   <span class="weapon-owner-badge">
                                     {#if weaponOwner.avatarKey && (avatarMap[weaponOwner.avatarKey] || avatarMap[weaponOwner.name])}
@@ -1250,7 +1384,7 @@ import { onMount, tick } from 'svelte';
                                 {:else}
                                   <iconify-icon icon={getItemIcon(child.title)} class="chip-prefix-icon"></iconify-icon>
                                 {/if}
-                                <span class="tag-chip-title">{child.title}</span>
+                                <span class="tag-chip-title">{@render highlightedTitle(child.title)}</span>
                               </span>
                             {/if}
                           {/each}
@@ -1302,7 +1436,7 @@ import { onMount, tick } from 'svelte';
 
       <div class="wp-modal-img-wrap">
         <img
-          src={currentWallpaper.url}
+          src={proxiedWallpaperUrl(currentWallpaper.url)}
           alt={currentWallpaper.title}
           referrerpolicy="no-referrer"
         >
