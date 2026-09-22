@@ -148,6 +148,22 @@ class LiveWikiSnapshotTest {
         }
     }
 
+    /** Costume filter is rendered from the {{#invoke:角色|角色时装筛选}} Lua module, same family as weapon skins. */
+    @Test
+    fun fetchesAndParsesCostumeFilterWhenEnabled() {
+        org.junit.Assume.assumeTrue("Enable LIVE_WIKI_TEST=1 to fetch production HTML", System.getenv("LIVE_WIKI_TEST") == "1")
+        val url = "https://wiki.biligame.com/klbq/api.php?action=parse" +
+            "&text=${encoded("{{#invoke:角色|角色时装筛选}}")}&prop=text&format=json"
+        val body = fetchBody(url, json = true)
+        val json = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject
+        val html = json["parse"]?.jsonObject?.get("text")?.jsonObject?.get("*")
+            ?.jsonPrimitive?.content
+            ?: error("costume filter parse response missing text")
+        val costumes = com.nekolaska.calabiyau.feature.character.costume.CostumeFilterApi.parseCostumeHtml(html)
+        assertTrue(costumes.isNotEmpty(), "live costume filter parser returned no rows")
+        assertTrue(costumes.all { it.name.isNotBlank() }, "live costume rows missing name")
+    }
+
     /** Map list is rendered from the {{游戏地图}} template via action=parse (2026-09 klbq-map-card restructure). */
     @Test
     fun fetchesAndParsesMapListWhenEnabled() {
