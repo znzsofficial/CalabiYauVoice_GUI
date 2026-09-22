@@ -133,6 +133,19 @@ internal class MessageBoardState(
     private val guestId = AppPrefs.anonymousGuestId?.takeIf { it.isNotBlank() }
         ?: UUID.randomUUID().toString().also { AppPrefs.anonymousGuestId = it }
 
+    /** 登录用户可选择以匿名（访客）身份发言；跨会话记忆 */
+    var postingAsGuest by mutableStateOf(AppPrefs.boardPostAsGuest)
+        private set
+
+    fun togglePostingAsGuest() {
+        postingAsGuest = !postingAsGuest
+        AppPrefs.boardPostAsGuest = postingAsGuest
+    }
+
+    /** 上次发言身份的缓存文案，身份识别完成前先展示，避免转圈等待 */
+    val cachedIdentityLabel: String?
+        get() = AppPrefs.boardLastIdentity?.takeIf { it.isNotBlank() }
+
     init {
         refresh()
     }
@@ -171,6 +184,7 @@ internal class MessageBoardState(
                 drafts.useIdentity(userInfo?.id?.let { "wiki:$it" } ?: "guest:$guestId")
                 draftVersion++
                 identityLoaded = true
+                AppPrefs.boardLastIdentity = userInfo?.name ?: "访客"
                 restoreReplyTarget()
                 userInfo?.let { user ->
                     when (val result = CustomUserApi.fetchProfile(bid = user.name, wikiId = user.id)) {
@@ -350,11 +364,12 @@ internal class MessageBoardState(
 
     fun send() {
         val content = draft.trim()
-        if (posting || loading || deletingId != null || !identityLoaded || content.isEmpty()) return
+        // 匿名发帖身份即本地访客标识，无需等待在线身份识别
+        if (posting || loading || deletingId != null || (!identityLoaded && !postingAsGuest) || content.isEmpty()) return
         val selected = threadId
         if (selected != null && (root == null || root?.deleted == true)) return
-        val cookies = WikiAuthHelper.getWikiCookies()
-        if (cookies != identityCookie) { refreshIdentity(); error = "身份已变化，请确认后重新发送"; return }
+        val cookies = if (postingAsGuest) null else WikiAuthHelper.getWikiCookies()
+        if (!postingAsGuest && cookies != identityCookie) { refreshIdentity(); error = "身份已变化，请确认后重新发送"; return }
         val authorName = if (cookies.isNullOrBlank()) nickname.trim().ifBlank { null } else null
         val actor = if (cookies.isNullOrBlank()) "guest:$guestId" else "wiki:${userInfo!!.id}"
         val pending = try { drafts.prepare(selected, authorName, actor) }
@@ -370,7 +385,7 @@ internal class MessageBoardState(
                     is ApiResult.Success -> {
                         drafts.acknowledge(selected, pending.requestId, actor)
                         draftVersion++
-                        if (identityLoaded && identityCookie == cookies) replyTarget = null
+                        if (postingAsGuest || (identityLoaded && identityCookie == cookies)) replyTarget = null
                         load(null)
                     }
                     is ApiResult.Error -> {

@@ -15,7 +15,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.PushPin
@@ -635,46 +638,109 @@ private fun BoardIdentity(state: MessageBoardState) {
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .fillMaxWidth()
     ) {
-        Row(
+        Column(
             Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val user = state.userInfo
-            if (!state.identityLoaded) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Text("正在识别发言身份…", style = MaterialTheme.typography.bodySmall)
-            } else if (user != null) {
-                CustomProfileAvatar(state.profile, user.name, Modifier.size(36.dp))
-                Column {
-                    Text(
-                        state.profile?.displayName(user.name) ?: user.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        "以该身份发言", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            when {
+                // 登录用户主动选择匿名发言
+                user != null && state.postingAsGuest -> {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.VisibilityOff, contentDescription = null,
+                            modifier = Modifier.size(36.dp).padding(6.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("匿名（访客）", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "以访客身份发言，不关联 Wiki 账号",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = state::togglePostingAsGuest, enabled = !state.posting) {
+                            Icon(Icons.Outlined.SwapHoriz, contentDescription = "切回登录身份")
+                        }
+                    }
+                    BoardNicknameField(state)
                 }
-            } else {
-                OutlinedTextField(
-                    state.nickname,
-                    state::updateNickname,
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("访客昵称（可选，未登录以访客身份发言）") },
-                    singleLine = true,
-                    enabled = !state.posting,
-                    shape = smoothCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                        focusedBorderColor = MaterialTheme.colorScheme.primary
-                    )
-                )
+
+                user != null -> {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CustomProfileAvatar(state.profile, user.name, Modifier.size(36.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                state.profile?.displayName(user.name) ?: user.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "以该身份发言", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = state::togglePostingAsGuest, enabled = !state.posting) {
+                            Icon(Icons.Outlined.SwapHoriz, contentDescription = "切换为匿名发言")
+                        }
+                    }
+                }
+
+                !state.identityLoaded -> {
+                    val cached = state.cachedIdentityLabel
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (cached != null) {
+                            Icon(
+                                Icons.Outlined.History, contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "上次以 $cached 身份发言 · 正在刷新…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text("正在识别发言身份…", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                else -> BoardNicknameField(state)
             }
         }
     }
+}
+
+@Composable
+private fun BoardNicknameField(state: MessageBoardState) {
+    OutlinedTextField(
+        state.nickname,
+        state::updateNickname,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text("访客昵称（可选）") },
+        singleLine = true,
+        enabled = !state.posting,
+        shape = smoothCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+            focusedBorderColor = MaterialTheme.colorScheme.primary
+        )
+    )
 }
 
 @Composable

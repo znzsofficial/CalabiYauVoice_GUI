@@ -161,6 +161,8 @@ object AppPrefs {
     var wallpaperSeedColorCache by intPref(0)
     var wallpaperSeedColorUrl by stringPref()
     var anonymousNickname by stringPref()
+var boardPostAsGuest by booleanPref()
+var boardLastIdentity by stringPref()
     var anonymousGuestId by stringPref()
     var messageBoardDraftsJson by stringPref()
     /** Write-ahead barrier for a pending network mutation. Call on an IO dispatcher. */
