@@ -73,7 +73,7 @@ enum class CharacterSelectorGroupMode(val label: String) {
 }
 
 private val characterNameCollator: Collator = Collator.getInstance(Locale.CHINA)
-private val positionOrder = listOf("决斗", "守护", "支援", "先锋", "控场")
+    private val positionOrder = listOf("突击", "决斗", "守护", "支援", "先锋", "控场")
 
 private fun normalizeSelectorCharacterName(name: String): String {
     return name
