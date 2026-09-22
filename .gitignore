@@ -8,7 +8,8 @@ downloadPage/dist/
 .claude
 .agents
 .impeccable
-.github
+.github/*
+!.github/workflows/
 .wrangler/
 downloadPage/wrangler.toml
 

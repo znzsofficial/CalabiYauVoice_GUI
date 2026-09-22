@@ -1,0 +1,86 @@
+name: Wiki live smoke
+
+# 定时联网冒烟：验证 BWiki 页面/模板/SMW 查询是否仍然兼容 App 的解析器。
+# BWiki HTML 不是稳定 API——改版时这里会先于用户反馈发现（如 2026-09 的
+# 道具/公告/活动/武器/地图多次改版）。失败时自动开 issue 通知。
+
+on:
+  schedule:
+    - cron: '30 21 * * *' # UTC 21:30 = 北京 05:30，低峰期
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: 'Print fetched page sizes'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wiki-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # LIVE_WIKI_TEST=1 时 LiveWikiSnapshotTest 抓真实页面并跑生产 parser；
+      # 请求间隔 6.5s（测试内置），总量约 25 个请求，避开 EdgeOne 567 封锁。
+      # WikiRealPageGoldenTest 依赖本地快照（gitignored），CI 上自动跳过。
+      - name: Run live wiki smoke tests
+        env:
+          LIVE_WIKI_TEST: '1'
+        run: >
+          ./gradlew :androidApp:testDebugUnitTest
+          --tests "com.nekolaska.calabiyau.feature.wiki.LiveWikiSnapshotTest"
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-smoke-test-report
+          path: |
+            androidApp/build/reports/tests/testDebugUnitTest/
+            androidApp/build/test-results/testDebugUnitTest/
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = 'Wiki live smoke failed';
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            if (issues.data.some(i => i.title.startsWith(marker))) {
+              core.info('An open issue already tracks this failure; skipping.');
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: marker + ' (' + new Date().toISOString().slice(0, 10) + ')',
+              body:
+                'Live wiki smoke test failed — a BWiki page/template/SMW query may have changed ' +
+                'and broken an app parser.\n\n' +
+                'Run: ' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo +
+                '/actions/runs/' + context.runId + '\n\n' +
+                'Reproduce locally with `LIVE_WIKI_TEST=1 ' +
+                './gradlew :androidApp:testDebugUnitTest ' +
+                '--tests "com.nekolaska.calabiyau.feature.wiki.LiveWikiSnapshotTest"`.',
+            });

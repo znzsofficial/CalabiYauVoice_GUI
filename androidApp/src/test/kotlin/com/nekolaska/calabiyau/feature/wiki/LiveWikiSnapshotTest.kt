@@ -148,6 +148,25 @@ class LiveWikiSnapshotTest {
         }
     }
 
+    /** Map list is rendered from the {{游戏地图}} template via action=parse (2026-09 klbq-map-card restructure). */
+    @Test
+    fun fetchesAndParsesMapListWhenEnabled() {
+        org.junit.Assume.assumeTrue("Enable LIVE_WIKI_TEST=1 to fetch production HTML", System.getenv("LIVE_WIKI_TEST") == "1")
+        val url = "https://wiki.biligame.com/klbq/api.php?action=parse" +
+            "&text=${encoded("{{游戏地图|一般爆破}}")}&prop=text&format=json"
+        val body = fetchBody(url, json = true)
+        val json = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject
+        val html = json["parse"]?.jsonObject?.get("text")?.jsonObject?.get("*")
+            ?.jsonPrimitive?.content
+            ?: error("map list parse response missing text")
+        val maps = MapListParsers.parseMapsFromHtml(html)
+        assertTrue(maps.isNotEmpty(), "live map list parser returned no cards")
+        assertTrue(
+            maps.all { it.name.isNotBlank() && it.imageUrl.isNotBlank() },
+            "live map cards missing name/image: $maps"
+        )
+    }
+
     @Test
     fun parsesLocalLiveSnapshotsWhenPresent() {
         val items = snapshot("items.html")?.let(ItemCatalogParsers::parseItems)
@@ -278,15 +297,18 @@ class LiveWikiSnapshotTest {
             if (json) "application/json" else "text/html,application/xhtml+xml"
         )
         connection.setRequestProperty("Referer", "https://wiki.biligame.com/klbq/")
-        try {
+        val result: String = try {
             assertTrue(connection.responseCode in 200..299, "HTTP ${connection.responseCode} for $url")
             val expected = if (json) "application/json" else "text/html"
             assertTrue(connection.contentType?.contains(expected, ignoreCase = true) == true,
                 "Unexpected content type ${connection.contentType} for $url")
-            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()
         }
+        // 批量请求 BWiki 会触发 EdgeOne 封锁（HTTP 567）：请求间强制间隔
+        Thread.sleep(6_500)
+        return result
     }
 
     private fun fetchHtml(url: String): String = fetchBody(url)
