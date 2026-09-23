@@ -321,9 +321,10 @@ class LiveWikiSnapshotTest {
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()
+            // 节流：成功/失败路径都等待，避免被封锁后连发加重惩罚
+            Thread.sleep(6_500)
         }
-        // 批量请求 BWiki 会触发 EdgeOne 封锁（HTTP 567）：请求间强制间隔
-        Thread.sleep(6_500)
+
         return result
     }
 

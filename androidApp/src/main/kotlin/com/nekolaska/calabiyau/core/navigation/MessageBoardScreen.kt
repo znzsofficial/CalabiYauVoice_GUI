@@ -358,7 +358,7 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
                                 modifier = Modifier.weight(1f),
                                 placeholder = { Text(if (thread) "写下你的回复…" else "写下你的留言…") },
                                 maxLines = 4,
-                                enabled = !state.posting && state.identityLoaded,
+                                enabled = !state.posting && (state.identityLoaded || state.postingAsGuest),
                                 shape = smoothCornerShape(14.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
@@ -375,7 +375,7 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
                             )
                             FilledIconButton(
                                 onClick = state::send,
-                                enabled = !busy && !state.loading && state.identityLoaded && !state.replyTargetUnavailable && state.draft.isNotBlank() && (!thread || state.root != null),
+                                enabled = !busy && !state.loading && (state.identityLoaded || state.postingAsGuest) && !state.replyTargetUnavailable && state.draft.isNotBlank() && (!thread || state.root != null),
                                 modifier = Modifier.size(52.dp), shape = CircleShape
                             ) {
                                 if (state.posting) CircularProgressIndicator(

@@ -204,17 +204,19 @@ object WeaponDetailApi {
                 val head = allDamageParams("${d}米头部") ?: allDamageParams("${d}米头部伤害")
                 val upper = allDamageParams("${d}米上肢") ?: allDamageParams("${d}米上肢伤害")
                 val lower = allDamageParams("${d}米下肢") ?: allDamageParams("${d}米下肢伤害")
+                // 蓄力射击变体（霰弹枪拉栓：X米头部蓄力等），独立于基础行存在
+                val chargeHead = allDamageParams("${d}米头部蓄力") ?: allDamageParams("${d}米头部蓄力伤害")
+                val chargeUpper = allDamageParams("${d}米上肢蓄力") ?: allDamageParams("${d}米上肢蓄力伤害")
+                val chargeLower = allDamageParams("${d}米下肢蓄力") ?: allDamageParams("${d}米下肢蓄力伤害")
                 if (head != null || upper != null || lower != null) {
                     damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
-                    // 蓄力射击变体（霰弹枪拉栓：X米头部蓄力等）
-                    val chargeHead = allDamageParams("${d}米头部蓄力")
-                    val chargeUpper = allDamageParams("${d}米上肢蓄力")
-                    val chargeLower = allDamageParams("${d}米下肢蓄力")
-                    if (chargeHead != null || chargeUpper != null || chargeLower != null) {
-                        damageTable.add(
-                            DamageRow("${d}米·蓄力", chargeHead ?: "-", chargeUpper ?: "-", chargeLower ?: "-")
-                        )
-                    }
+                }
+                if (chargeHead != null || chargeUpper != null || chargeLower != null) {
+                    damageTable.add(
+                        DamageRow("${d}米·蓄力", chargeHead ?: "-", chargeUpper ?: "-", chargeLower ?: "-")
+                    )
+                }
+                if (head != null || upper != null || lower != null || chargeHead != null || chargeUpper != null || chargeLower != null) {
                     return@forEach
                 }
                 val pellet = allDamageParams("${d}米")
@@ -251,8 +253,8 @@ object WeaponDetailApi {
             // （单发间隔/散布/换弹时间等），按黑名单排除以免污染伤害表；
             // 近战键值行（伤害/攻击距离/判定范围）与移动端行必须保留。
             val perfKeys = listOf(
-                "单发间隔", "快速换弹", "空仓换弹", "拉栓时间",
-                "散布", "衰减速度", "射速", "弹匣容量"
+                "单发间隔", "快速换弹", "空仓换弹", "换弹时间", "拉栓时间",
+                "散布", "衰减速度", "射速", "弹匣容量", "有效射程", "切枪"
             )
             damageTable.addAll(
                 htmlDamages.filter { h ->
@@ -436,8 +438,8 @@ object WeaponDetailApi {
         }
 
         val headValues = valuesByPart["头部"]
-        val upperValues = valuesByPart["上肢"] ?: valuesByPart["上身"]
-        val lowerValues = valuesByPart["下肢"] ?: valuesByPart["下身"]
+        val upperValues = valuesByPart["上肢"]
+        val lowerValues = valuesByPart["下肢"]
         if (headValues == null && upperValues == null && lowerValues == null) return emptyList()
 
         return distances.mapIndexed { index, distance ->

@@ -371,7 +371,9 @@ internal class MessageBoardState(
         val cookies = if (postingAsGuest) null else WikiAuthHelper.getWikiCookies()
         if (!postingAsGuest && cookies != identityCookie) { refreshIdentity(); error = "身份已变化，请确认后重新发送"; return }
         val authorName = if (cookies.isNullOrBlank()) nickname.trim().ifBlank { null } else null
-        val actor = if (cookies.isNullOrBlank()) "guest:$guestId" else "wiki:${userInfo!!.id}"
+        // actor 必须与 drafts.useIdentity 的 owner 键一致（登录态固定为 wiki:<id>）：
+        // 匿名模式只影响提交凭证（不带 Cookie），不影响本地草稿的归属
+        val actor = userInfo?.id?.let { "wiki:$it" } ?: "guest:$guestId"
         val pending = try { drafts.prepare(selected, authorName, actor) }
             catch (e: IllegalStateException) { error = e.message; return }
         posting = true; error = null

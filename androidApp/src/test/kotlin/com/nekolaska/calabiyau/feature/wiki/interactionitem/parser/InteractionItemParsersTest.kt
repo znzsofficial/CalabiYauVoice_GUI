@@ -73,6 +73,5 @@ class InteractionItemParsersTest {
     @Test
     fun emptyHtmlReturnsEmptyList() {
         assertTrue(InteractionItemParsers.parseItems("<div></div>").isEmpty())
-        assertNull(InteractionItemParsers.parseItems("<div></div>").firstOrNull())
     }
 }

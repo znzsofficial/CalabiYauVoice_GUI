@@ -24,8 +24,8 @@ class WeaponDetailParsingTest {
             <table class="klbqtable" style="width:100%">
               <tr><td style="width:15%"></td><td>10米</td><td>15米</td><td>20米</td></tr>
               <tr><td>头部</td><td>85</td><td>49</td><td>36</td></tr>
-              <tr><td>上身</td><td>85</td><td>49</td><td>36</td></tr>
-              <tr><td>下身</td><td>85</td><td>49</td><td>36</td></tr>
+              <tr><td>上身</td><td>84</td><td>48</td><td>35</td></tr>
+              <tr><td>下身</td><td>83</td><td>47</td><td>34</td></tr>
             </table>
             <table class="klbqtable" style="width:100%">
               <caption>移动端，射击目标为靶场环形靶</caption>
@@ -50,13 +50,13 @@ class WeaponDetailParsingTest {
         val d10 = detail.damageTable.firstOrNull { it.distance == "10米" }
         assertNotNull(d10, "10米 row missing: ${detail.damageTable.map { it.distance }}")
         assertEquals("85", d10.head)
-        assertEquals("85", d10.upper)
-        assertEquals("85", d10.lower)
+        assertEquals("84", d10.upper) // 上身行归一为上肢
+        assertEquals("83", d10.lower) // 下身行归一为下肢
 
         val d15 = detail.damageTable.firstOrNull { it.distance == "15米" }
         assertNotNull(d15)
         assertEquals("49", d15.head)
-        assertEquals("49", d15.lower)
+        assertEquals("47", d15.lower)
 
         val d20 = detail.damageTable.firstOrNull { it.distance == "20米" }
         assertNotNull(d20)
@@ -65,6 +65,7 @@ class WeaponDetailParsingTest {
         val m10 = detail.damageTable.firstOrNull { it.distance == "移动端·10米" }
         assertNotNull(m10, "mobile row missing")
         assertEquals("85", m10.head)
+        assertEquals("", m10.upper)
 
         // 系数表（倍率说明）不得污染伤害表
         assertTrue(
