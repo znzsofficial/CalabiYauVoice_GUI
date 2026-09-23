@@ -12,6 +12,68 @@ import kotlin.test.assertTrue
  */
 class WeaponDetailParsingTest {
 
+    /**
+     * Uses structure captured from the live 谢幕曲 page (2026-09-22):
+     * 霰弹枪没有"基础伤害"参数，主 {{武器}} 模板直接带距离部位参数与蓄力变体
+     * （X米头部蓄力）；渲染 HTML 的"武器伤害"章节是性能参数键值表
+     * （单发间隔/散布等），不得被兜底解析污染成伤害行。
+     */
+    @Test
+    fun parsesShotgunChargeVariantsAndIgnoresPerfTable() {
+        val wikitext = """
+            {{武器
+            |使用者=名流
+            |类型=霰弹枪
+            |弦化伤害=67
+            |10米头部=262
+            |10米头部蓄力=487
+            |10米上肢=105
+            |10米上肢蓄力=195
+            |10米下肢=73
+            |10米下肢蓄力=136
+            |20米头部=260
+            |20米上肢=104
+            |20米下肢=73
+            }}
+            ==武器伤害==
+            <table class="klbqtable">
+              <tr><th>单发间隔</th><td>0.5</td></tr>
+              <tr><th>快速换弹时间</th><td>3.33 秒</td></tr>
+            </table>
+        """.trimIndent()
+        val renderedHtml = """
+            <span class="mw-headline" id="武器伤害">武器伤害</span>
+            <table class="klbqtable">
+              <tr><th>单发间隔</th><td>0.5</td></tr>
+              <tr><th>快速换弹时间</th><td>3.33 秒</td></tr>
+            </table>
+        """.trimIndent()
+
+        val detail = WeaponDetailApi.parseWeaponWikitext("谢幕曲", wikitext, renderedHtml = renderedHtml)
+        assertNotNull(detail)
+
+        val d10 = detail.damageTable.firstOrNull { it.distance == "10米" }
+        assertNotNull(d10, "10米 row missing: ${detail.damageTable.map { it.distance }}")
+        assertEquals("262", d10.head)
+        assertEquals("105", d10.upper)
+        assertEquals("73", d10.lower)
+
+        val c10 = detail.damageTable.firstOrNull { it.distance == "10米·蓄力" }
+        assertNotNull(c10, "charge row missing: ${detail.damageTable.map { it.distance }}")
+        assertEquals("487", c10.head)
+        assertEquals("195", c10.upper)
+        assertEquals("136", c10.lower)
+
+        val d20 = detail.damageTable.firstOrNull { it.distance == "20米" }
+        assertNotNull(d20)
+        assertEquals("260", d20.head)
+
+        assertTrue(
+            detail.damageTable.none { it.distance.contains("单发间隔") || it.distance.contains("换弹") },
+            "perf table leaked into damage table: ${detail.damageTable.map { it.distance }}"
+        )
+    }
+
     private val wikitext = """
         {{武器
         |使用者=米雪儿·李、信、心夏、芙拉薇娅

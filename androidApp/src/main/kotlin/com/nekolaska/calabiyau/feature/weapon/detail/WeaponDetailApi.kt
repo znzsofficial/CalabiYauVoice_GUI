@@ -194,14 +194,27 @@ object WeaponDetailApi {
         val damageTable = mutableListOf<DamageRow>()
 
         // 1. 尝试从模板解析 (PC / 霰弹枪单值)。新页面距离参数可能带"伤害"后缀（如 10米头部伤害）。
-        if (damageParams.isNotEmpty() || weaponParams.containsKey("基础伤害")) {
-            val distances = listOf("10", "15", "20", "25", "30", "40", "50")
+        // 霰弹枪等武器没有"基础伤害"参数，但主模板直接带距离部位参数（10米头部等），同样进入本路径。
+        val distances = listOf("10", "15", "20", "25", "30", "40", "50")
+        val hasDistanceBodyParams = distances.any { d ->
+            weaponParams.containsKey("${d}米头部") || weaponParams.containsKey("${d}米头部伤害")
+        }
+        if (damageParams.isNotEmpty() || weaponParams.containsKey("基础伤害") || hasDistanceBodyParams) {
             distances.forEach { d ->
                 val head = allDamageParams("${d}米头部") ?: allDamageParams("${d}米头部伤害")
                 val upper = allDamageParams("${d}米上肢") ?: allDamageParams("${d}米上肢伤害")
                 val lower = allDamageParams("${d}米下肢") ?: allDamageParams("${d}米下肢伤害")
                 if (head != null || upper != null || lower != null) {
                     damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
+                    // 蓄力射击变体（霰弹枪拉栓：X米头部蓄力等）
+                    val chargeHead = allDamageParams("${d}米头部蓄力")
+                    val chargeUpper = allDamageParams("${d}米上肢蓄力")
+                    val chargeLower = allDamageParams("${d}米下肢蓄力")
+                    if (chargeHead != null || chargeUpper != null || chargeLower != null) {
+                        damageTable.add(
+                            DamageRow("${d}米·蓄力", chargeHead ?: "-", chargeUpper ?: "-", chargeLower ?: "-")
+                        )
+                    }
                     return@forEach
                 }
                 val pellet = allDamageParams("${d}米")
@@ -233,8 +246,20 @@ object WeaponDetailApi {
         // 2. 尝试从 HTML 解析 (移动端/副武器/近战)
         val htmlDamages = parseWeaponDamageFromHtml(renderedHtml)
         if (htmlDamages.isNotEmpty()) {
-            // 合并时去重，但由于移动端通常带有“移动端”前缀，故直接添加
-            damageTable.addAll(htmlDamages.filter { h -> damageTable.none { it.distance == h.distance } })
+            // 合并时去重，但由于移动端通常带有“移动端”前缀，故直接添加。
+            // 谢幕曲等霰弹枪页面的"武器伤害"章节是性能参数键值表
+            // （单发间隔/散布/换弹时间等），按黑名单排除以免污染伤害表；
+            // 近战键值行（伤害/攻击距离/判定范围）与移动端行必须保留。
+            val perfKeys = listOf(
+                "单发间隔", "快速换弹", "空仓换弹", "拉栓时间",
+                "散布", "衰减速度", "射速", "弹匣容量"
+            )
+            damageTable.addAll(
+                htmlDamages.filter { h ->
+                    perfKeys.none { k -> h.distance.contains(k) } &&
+                        damageTable.none { it.distance == h.distance }
+                }
+            )
         }
 
         // 解析子页面
@@ -294,27 +319,39 @@ object WeaponDetailApi {
         wikitext: String,
         forceRefresh: Boolean
     ): String? {
-        val fileName = extractWeaponImageFileName(weaponName, wikitext) ?: return null
-        val cacheResult = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.WEAPON_DETAIL,
-            key = "image_$weaponName",
-            forceRefresh = forceRefresh
-        ) { fetchImageUrl(fileName) }
-        return cacheResult?.payload?.takeIf { it.isNotBlank() }
+        // 依次尝试候选文件名（不同页面时代的命名格式不同），命中即返回
+        for (fileName in extractWeaponImageFileNameCandidates(weaponName, wikitext)) {
+            val cacheResult = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.WEAPON_DETAIL,
+                key = "image_$fileName",
+                forceRefresh = forceRefresh
+            ) { fetchImageUrl(fileName) }
+            val url = cacheResult?.payload?.takeIf { it.isNotBlank() }
+            if (url != null) return url
+        }
+        return null
     }
 
-    private fun extractWeaponImageFileName(weaponName: String, wikitext: String): String? {
+    /**
+     * 候选文件名：显式"武器图片"参数优先；否则按模板类型合成。
+     * 2026-09 起副武器/近战/战术道具图库采用「武器-<名>.png」前缀格式，
+     * 主武器仍为「<名>-weapon.png」；两种格式互为回退候选。
+     */
+    private fun extractWeaponImageFileNameCandidates(weaponName: String, wikitext: String): List<String> {
         val templateNames = listOf("武器-近战武器", "武器-副武器", "武器-战术道具", "武器")
         for (tpl in templateNames) {
             val content = extractTemplate(wikitext, tpl) ?: continue
             val params = parseTemplateParams(content)
             val explicitImage = params["武器图片"].orEmpty()
-            return when {
-                explicitImage.isNotBlank() -> explicitImage
-                else -> "${weaponName}-weapon.png"
+            return if (explicitImage.isNotBlank()) {
+                listOf(explicitImage)
+            } else if (tpl == "武器") {
+                listOf("${weaponName}-weapon.png", "武器-$weaponName.png")
+            } else {
+                listOf("武器-$weaponName.png", "${weaponName}-weapon.png")
             }
         }
-        return null
+        return emptyList()
     }
 
     /** Wiki 将"武器伤害"章节改名为"武器详细数据"，两个标题都要能定位。 */
