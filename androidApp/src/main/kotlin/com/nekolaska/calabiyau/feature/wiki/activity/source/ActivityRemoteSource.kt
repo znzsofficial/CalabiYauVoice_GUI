@@ -74,7 +74,7 @@ object ActivityRemoteSource {
             ?: return null
 
         val fileTitle = com.nekolaska.calabiyau.feature.wiki.activity.parser.ActivityParsers.extractFirstFileTitle(detailHtml) ?: return null
-        val infoUrl = buildWikiUrl(API, "action" to "query", "titles" to fileTitle, "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
+        val infoUrl = buildWikiUrl(API, "action" to "query", "titles" to fileTitle, "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
         val infoJson = WikiEngine.safeGet(infoUrl) ?: return null
         val pages = SharedJson.parseToJsonElement(infoJson).jsonObject["query"]
             ?.jsonObject?.get("pages")?.jsonObject

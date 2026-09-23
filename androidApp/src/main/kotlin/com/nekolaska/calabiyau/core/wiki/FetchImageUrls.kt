@@ -35,6 +35,7 @@ suspend fun fetchBatchImageUrls(
             val url = buildWikiUrl(api,
                 "action" to "query", "titles" to titlesParam,
                 "prop" to "imageinfo", "iiprop" to "url",
+                "redirects" to "1",
                 "format" to "json"
             )
             val json = fetchJson(url) ?: return@async

@@ -181,7 +181,7 @@ object WikiEngine {
                 if (titles.isEmpty()) break
                 titles.chunked(50).forEach { chunk ->
                     val titlesParam = chunk.joinToString("|")
-                    val infoUrl = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "titles" to titlesParam, "prop" to "imageinfo", "iiprop" to "url|mime", "format" to "json")
+                    val infoUrl = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "titles" to titlesParam, "prop" to "imageinfo", "iiprop" to "url|mime", "redirects" to "1", "format" to "json")
                     val infoJson = fetchString(infoUrl, onError = { onLog?.invoke("[文件搜索] imageinfo请求: $it") }) ?: return@forEach
                     try {
                         val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)

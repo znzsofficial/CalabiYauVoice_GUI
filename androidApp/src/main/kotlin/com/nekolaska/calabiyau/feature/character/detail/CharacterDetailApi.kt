@@ -928,7 +928,7 @@ object CharacterDetailApi {
         val result = mutableMapOf<String, String>()
         try {
             val titles = fileNames.joinToString("|") { "文件:$it" }
-            val url = buildWikiUrl(API, "action" to "query", "titles" to titles, "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
+            val url = buildWikiUrl(API, "action" to "query", "titles" to titles, "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return result
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values?.forEach { page ->
@@ -1061,7 +1061,7 @@ object CharacterDetailApi {
      */
     private fun fetchAvatarUrl(characterName: String): String? {
         return try {
-            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:${characterName}头像.png", "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
+            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:${characterName}头像.png", "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values

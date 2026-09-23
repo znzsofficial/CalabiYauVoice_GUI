@@ -121,7 +121,7 @@ object WallpaperApi {
     private fun fetchImageUrl(fileName: String, forceRefresh: Boolean): String? {
         return try {
             val cacheFile = cacheFile("wallpaper_image_url_$fileName")
-            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
+            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = if (forceRefresh) {
                 WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
             } else {

@@ -590,7 +590,7 @@ object WeaponDetailApi {
     /** 获取图片 URL */
     private fun fetchImageUrl(fileName: String): String? {
         return try {
-            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "format" to "json")
+            val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return null
             val json = SharedJson.parseToJsonElement(body).jsonObject
             json["query"]?.jsonObject?.get("pages")?.jsonObject?.values
