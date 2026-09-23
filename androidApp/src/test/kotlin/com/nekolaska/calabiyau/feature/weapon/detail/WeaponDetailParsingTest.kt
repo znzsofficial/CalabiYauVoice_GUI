@@ -13,6 +13,67 @@ import kotlin.test.assertTrue
 class WeaponDetailParsingTest {
 
     /**
+     * Uses structure captured from the live 重焰 page (2026-09-22, editor-provided raw wikitext):
+     * 副武器霰弹枪的伤害表是转置结构（列为距离、行为部位，部位名用"上身/下身"），
+     * 另有移动端单值表；"武器部位伤害系数"表是倍率说明，必须整体排除。
+     */
+    @Test
+    fun parsesTransposedSecondaryShotgunDamageTable() {
+        val renderedHtml = """
+            <span class="mw-headline" id="武器伤害">武器伤害</span>
+            <table class="klbqtable" style="width:100%">
+              <tr><td style="width:15%"></td><td>10米</td><td>15米</td><td>20米</td></tr>
+              <tr><td>头部</td><td>85</td><td>49</td><td>36</td></tr>
+              <tr><td>上身</td><td>85</td><td>49</td><td>36</td></tr>
+              <tr><td>下身</td><td>85</td><td>49</td><td>36</td></tr>
+            </table>
+            <table class="klbqtable" style="width:100%">
+              <caption>移动端，射击目标为靶场环形靶</caption>
+              <tr><th style="width: 10%">10米</th><td>85</td></tr>
+              <tr><th>15米</th><td>61</td></tr>
+              <tr><th>20米</th><td>45</td></tr>
+            </table>
+            <table class="klbqtable" style="width: 100%">
+              <tr><th class="text-center" colspan="6">武器部位伤害系数</th></tr>
+              <tr><th colspan="3">基础伤害</th><td colspan="3">8.5</td></tr>
+              <tr><th>头部</th><td>1.0</td><th>上肢</th><td>1.0</td><th>下肢</th><td>1.0</td></tr>
+            </table>
+        """.trimIndent()
+
+        val detail = WeaponDetailApi.parseWeaponWikitext(
+            "重焰",
+            "{{武器-副武器\n|获得方式=账号等级16级解锁\n|弹丸数=10\n}}",
+            renderedHtml = renderedHtml
+        )
+        assertNotNull(detail)
+
+        val d10 = detail.damageTable.firstOrNull { it.distance == "10米" }
+        assertNotNull(d10, "10米 row missing: ${detail.damageTable.map { it.distance }}")
+        assertEquals("85", d10.head)
+        assertEquals("85", d10.upper)
+        assertEquals("85", d10.lower)
+
+        val d15 = detail.damageTable.firstOrNull { it.distance == "15米" }
+        assertNotNull(d15)
+        assertEquals("49", d15.head)
+        assertEquals("49", d15.lower)
+
+        val d20 = detail.damageTable.firstOrNull { it.distance == "20米" }
+        assertNotNull(d20)
+        assertEquals("36", d20.head)
+
+        val m10 = detail.damageTable.firstOrNull { it.distance == "移动端·10米" }
+        assertNotNull(m10, "mobile row missing")
+        assertEquals("85", m10.head)
+
+        // 系数表（倍率说明）不得污染伤害表
+        assertTrue(
+            detail.damageTable.none { it.distance.contains("系数") || it.distance == "基础伤害" || it.distance == "头部" },
+            "coefficient table leaked: ${detail.damageTable.map { it.distance }}"
+        )
+    }
+
+    /**
      * Uses structure captured from the live 谢幕曲 page (2026-09-22):
      * 霰弹枪没有"基础伤害"参数，主 {{武器}} 模板直接带距离部位参数与蓄力变体
      * （X米头部蓄力）；渲染 HTML 的"武器伤害"章节是性能参数键值表

@@ -375,6 +375,8 @@ object WeaponDetailApi {
 
     private fun parseDamageTable(table: Element): List<DamageRow> {
         val caption = table.selectFirst("caption")?.text()?.trim().orEmpty()
+        // 重焰等副武器页面的"武器部位伤害系数"表是倍率说明，不是伤害值，整体排除
+        if (table.text().contains("武器部位伤害系数")) return emptyList()
         val rows = table.select("tr")
 
         if (rows.isEmpty()) {
@@ -385,6 +387,13 @@ object WeaponDetailApi {
                 ?.takeIf { it.isNotBlank() }
                 ?.let { listOf(DamageRow("补充", it, "", "")) }
                 ?: emptyList()
+        }
+
+        // 转置表（重焰等）：首行为距离列（10米/15米/20米），后续行首为部位名。
+        // wiki 源码用 "|  | 10米 || 15米" 语法，距离列渲染为 td 而非 th
+        val transposedHeader = rows.firstOrNull()?.select("> th, > td") ?: emptyList()
+        if (transposedHeader.count { it.text().trim().matches(Regex("\\d+米")) } >= 2) {
+            return parseTransposedDamageTable(table)
         }
 
         val hasDistanceHeader = rows.any { row ->
@@ -398,6 +407,55 @@ object WeaponDetailApi {
         }
     }
 
+    /**
+     * 转置伤害表（重焰等副武器）：
+     * ```
+     * |      | 10米 | 15米 | 20米 |
+     * | 头部 | 85   | 49   | 36   |
+     * | 上身 | 85   | 49   | 36   |
+     * ```
+     * 列为距离、行为部位，且部位名用"上身/下身"而非"上肢/下肢"。
+     */
+    private fun parseTransposedDamageTable(table: Element): List<DamageRow> {
+        val rows = table.select("tr")
+        if (rows.isEmpty()) return emptyList()
+
+        val distances = (rows.firstOrNull() ?: return emptyList())
+            .select("> th, > td")
+            .map { it.text().trim() }
+            .filter { it.matches(Regex("\\d+米")) }
+        if (distances.isEmpty()) return emptyList()
+
+        val valuesByPart = mutableMapOf<String, List<String>>()
+        rows.drop(1).forEach { row ->
+            val cells = row.select("> th, > td")
+            if (cells.size < 2) return@forEach
+            val part = normalizeBodyPart(cells.firstOrNull()?.text()?.trim().orEmpty())
+            if (part.isBlank()) return@forEach
+            valuesByPart[part] = cells.drop(1).map { it.text().trim() }
+        }
+
+        val headValues = valuesByPart["头部"]
+        val upperValues = valuesByPart["上肢"] ?: valuesByPart["上身"]
+        val lowerValues = valuesByPart["下肢"] ?: valuesByPart["下身"]
+        if (headValues == null && upperValues == null && lowerValues == null) return emptyList()
+
+        return distances.mapIndexed { index, distance ->
+            DamageRow(
+                distance = distance,
+                head = headValues?.getOrNull(index).orEmpty().ifBlank { "-" },
+                upper = upperValues?.getOrNull(index).orEmpty().ifBlank { "-" },
+                lower = lowerValues?.getOrNull(index).orEmpty().ifBlank { "-" }
+            )
+        }
+    }
+
+    private fun normalizeBodyPart(raw: String): String = when (raw) {
+        "上身" -> "上肢"
+        "下身" -> "下肢"
+        else -> raw
+    }
+
     private fun parseDistanceDamageTable(table: Element, caption: String): List<DamageRow> {
         val isMobile = caption.contains("移动端")
         val prefix = if (isMobile) "移动端·" else ""
@@ -405,14 +463,19 @@ object WeaponDetailApi {
         return table.select("tr").mapNotNull { row ->
             val header = row.selectFirst("th")?.text()?.trim().orEmpty()
             val valueCells = row.select("td")
-            if (!header.matches(Regex("\\d+米")) || valueCells.size < 3) return@mapNotNull null
+            if (!header.matches(Regex("\\d+米")) || valueCells.isEmpty()) return@mapNotNull null
 
-            DamageRow(
-                distance = "$prefix$header",
-                head = valueCells.getOrNull(0)?.text()?.trim().orEmpty(),
-                upper = valueCells.getOrNull(1)?.text()?.trim().orEmpty(),
-                lower = valueCells.getOrNull(2)?.text()?.trim().orEmpty()
-            )
+            if (valueCells.size == 1) {
+                // 移动端单值表（重焰等）：| 10米 | 85 —— 全弹丸总伤
+                DamageRow(distance = "$prefix$header", head = valueCells[0].text().trim(), upper = "", lower = "")
+            } else {
+                DamageRow(
+                    distance = "$prefix$header",
+                    head = valueCells.getOrNull(0)?.text()?.trim().orEmpty(),
+                    upper = valueCells.getOrNull(1)?.text()?.trim().orEmpty(),
+                    lower = valueCells.getOrNull(2)?.text()?.trim().orEmpty()
+                )
+            }
         }
     }
 
