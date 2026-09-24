@@ -9,6 +9,11 @@ button, a, input, select {
 
 /* ── Header ── */
 
+:root {
+    /* sticky 子元素（下载 rail / 语音命中栏）的顶部偏移：sticky header 实高 ~57px + 呼吸空隙 */
+    --sticky-top: 76px;
+}
+
 .header {
     position: sticky;
     top: 0;
@@ -134,6 +139,45 @@ button, a, input, select {
     transform: scale(0.97);
 }
 
+button.header-link {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+button.header-link:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+/* 别名联想开关：激活态用与提示条一致的蓝调 */
+.alias-toggle.active {
+    border-color: color-mix(in srgb, #3b82f6 45%, var(--border));
+    background-color: color-mix(in srgb, #3b82f6 12%, var(--card));
+    color: #2563eb;
+}
+
+.alias-toggle.active .ext-icon {
+    opacity: 1;
+}
+
+.alias-toggle.active:hover {
+    background-color: color-mix(in srgb, #3b82f6 18%, var(--card));
+    border-color: color-mix(in srgb, #3b82f6 55%, var(--border));
+}
+
+@media (prefers-color-scheme: dark) {
+    .alias-toggle.active {
+        border-color: color-mix(in srgb, #60a5fa 45%, var(--border));
+        background-color: color-mix(in srgb, #60a5fa 14%, var(--card));
+        color: #60a5fa;
+    }
+
+    .alias-toggle.active:hover {
+        background-color: color-mix(in srgb, #60a5fa 20%, var(--card));
+        border-color: color-mix(in srgb, #60a5fa 55%, var(--border));
+    }
+}
+
 /* ── Main ── */
 
 .main {
@@ -150,6 +194,7 @@ button, a, input, select {
 
 .search-controls-shell {
     width: 100%;
+    /* 宽度上限：main 扩宽（wide profile）时，搜索控件仍保持舒适行宽，不跟随拉满 */
     max-width: 868px;
     margin: 0 auto;
 }
@@ -157,7 +202,8 @@ button, a, input, select {
 .wiki-workbench.has-rail,
 .category-workbench.has-rail {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
+    /* rail 宽度随视口收缩（240–280px），窄桌面下给结果列留出呼吸空间 */
+    grid-template-columns: minmax(0, 1fr) clamp(240px, 24vw, 280px);
     gap: 16px;
     align-items: start;
 }
@@ -170,7 +216,7 @@ button, a, input, select {
 .wiki-download-rail,
 .category-download-rail {
     position: sticky;
-    top: 76px;
+    top: var(--sticky-top);
 }
 
 /* ── Search Box ── */
@@ -592,72 +638,7 @@ button, a, input, select {
 }
 
 /* ── Bulk Download Bar ── */
-
-.bulk-download-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background-color: var(--card);
-    color: var(--card-foreground);
-    margin-bottom: 12px;
-    box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--foreground) 5%, transparent);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.bulk-download-bar:focus-within,
-.bulk-download-bar:hover {
-    border-color: color-mix(in srgb, var(--border) 60%, var(--foreground));
-    box-shadow: 0 12px 24px -10px color-mix(in srgb, var(--foreground) 10%, transparent);
-}
-
-.bulk-download-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    font-size: 0.8125rem;
-    min-width: 0;
-}
-
-.bulk-download-info strong {
-    font-size: 0.875rem;
-    white-space: nowrap;
-}
-
-.bulk-download-info span {
-    color: var(--muted-foreground);
-    white-space: nowrap;
-}
-
-.bulk-download-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-}
-
-@media (max-width: 640px) {
-    .bulk-download-bar {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-        padding: 12px;
-    }
-
-    .bulk-download-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-    }
-
-    .bulk-download-actions {
-        flex-wrap: wrap;
-    }
-}
+/* 样式由 src/search/BulkDownloadBar.svelte 的 scoped <style> 维护 */
 
 .result-card {
     position: relative;
@@ -907,7 +888,6 @@ button, a, input, select {
 
 /* ── Placeholder & Empty ── */
 
-.placeholder,
 .empty-state {
     display: flex;
     flex-direction: column;
@@ -917,7 +897,6 @@ button, a, input, select {
     text-align: center;
 }
 
-.placeholder-icon,
 .empty-icon {
     font-size: 2.5rem;
     margin-bottom: 12px;
@@ -925,38 +904,20 @@ button, a, input, select {
     opacity: 0.3;
 }
 
-.placeholder-icon svg,
 .empty-icon svg {
     width: 48px;
     height: 48px;
 }
 
-.placeholder p,
 .empty-state p {
     margin: 0;
     font-size: 0.875rem;
     color: var(--muted-foreground);
 }
 
-.placeholder-hint,
 .empty-hint {
     margin-top: 6px !important;
     font-size: 0.75rem !important;
-}
-
-.placeholder-hint kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    background-color: var(--muted);
-    font-size: 0.6875rem;
-    font-family: inherit;
-    margin: 0 1px;
 }
 
 /* ── 空搜索态：Wiki 导航指引卡 ── */
@@ -1090,6 +1051,175 @@ button, a, input, select {
     box-shadow: 0 4px 12px -2px color-mix(in srgb, #3b82f6 20%, transparent);
 }
 
+/* 模式分段控件（第一级意图）+ 子项 chips（第二级） */
+.mode-segment {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--muted);
+    flex-shrink: 0;
+}
+
+.mode-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.mode-seg-btn iconify-icon {
+    font-size: 1rem;
+    opacity: 0.75;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+}
+
+.mode-seg-btn:hover:not(.active):not([disabled]) {
+    color: var(--foreground);
+}
+
+.mode-seg-btn.active {
+    background: var(--card);
+    color: var(--foreground);
+    font-weight: 600;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 8%, transparent), inset 0 0 0 1px var(--border);
+}
+
+.mode-seg-btn.active iconify-icon {
+    opacity: 1;
+}
+
+.mode-seg-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+
+.mode-seg-btn[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.chip.chip-sub {
+    height: 26px;
+    padding: 0 10px;
+    font-size: 0.75rem;
+}
+
+.chip.chip-sub iconify-icon {
+    font-size: 0.875rem;
+    opacity: 0.8;
+}
+
+.chip.chip-sub.active iconify-icon {
+    opacity: 1;
+}
+
+@media (max-width: 640px) {
+    .mode-segment {
+        width: 100%;
+    }
+
+    .mode-seg-btn {
+        flex: 1;
+        justify-content: center;
+        padding: 0 8px;
+    }
+}
+
+/* portal-chip-item 用作按钮（分类快捷入口）时的适配 */
+button.portal-chip-item {
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.portal-chip-item iconify-icon {
+    font-size: 0.8125rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+/* ── 别名匹配提示（导航页词库联动） ── */
+.alias-notice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, #3b82f6 25%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, #3b82f6 8%, var(--card));
+    font-size: 0.8125rem;
+    color: var(--foreground);
+}
+
+.alias-notice > iconify-icon {
+    color: #3b82f6;
+    font-size: 0.9375rem;
+    flex-shrink: 0;
+}
+
+.alias-term {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: #2563eb;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.alias-notice .alias-alt-label {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+}
+
+.alias-alt {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    background: var(--background);
+    color: var(--muted-foreground);
+    font-family: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.alias-alt:hover {
+    color: var(--foreground);
+    border-color: color-mix(in srgb, var(--border) 50%, var(--foreground));
+}
+
+@media (prefers-color-scheme: dark) {
+    .alias-notice {
+        border-color: color-mix(in srgb, #60a5fa 30%, transparent);
+        background: color-mix(in srgb, #60a5fa 10%, var(--card));
+    }
+
+    .alias-notice > iconify-icon,
+    .alias-term {
+        color: #60a5fa;
+    }
+}
+
 .empty-nav-jump {
     margin-top: 16px;
 }
@@ -1164,8 +1294,6 @@ button, a, input, select {
 @media (prefers-color-scheme: dark) {
     .search-input-wrap:focus-within,
     .filters:focus-within,
-    .bulk-download-bar:hover,
-    .bulk-download-bar:focus-within,
     .result-card:hover {
         border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
         box-shadow: 0 0 20px -5px color-mix(in srgb, var(--primary) 15%, transparent);
@@ -1219,7 +1347,7 @@ button, a, input, select {
 
 /* ── Responsive ── */
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .header-content {
         gap: 8px;
     }
@@ -1233,6 +1361,10 @@ button, a, input, select {
         padding: 0 8px;
         font-size: 0.75rem;
         gap: 4px;
+    }
+
+    .btn-text-desktop {
+        display: none;
     }
 
     .search-input {
@@ -1286,11 +1418,6 @@ button, a, input, select {
         height: 48px;
     }
 
-    .result-thumb.placeholder svg {
-        width: 20px;
-        height: 20px;
-    }
-
     .result-title {
         font-size: 0.875rem;
     }
@@ -1336,7 +1463,7 @@ button, a, input, select {
 
 .voice-hit-pane {
     position: sticky;
-    top: 76px;
+    top: var(--sticky-top);
     max-height: calc(100vh - 96px);
     overflow: auto;
 }
@@ -1860,7 +1987,8 @@ button.notice-card {
     .wiki-download-rail,
     .category-download-rail {
         position: static;
-        order: -1;
+        /* 移动端放到结果下方：批量操作在看到结果后才用，置顶会挤占首屏并造成 ready 时的整页跳动 */
+        order: 2;
     }
 
     .voice-hit-pane {
@@ -1977,7 +2105,7 @@ button.notice-card {
     background-color: var(--card);
     color: var(--card-foreground);
     padding: 0;
-    max-width: 800px;
+    max-width: 1000px;
     width: calc(100% - 32px);
     max-height: calc(100vh - 48px);
     box-shadow: 0 24px 48px -12px color-mix(in srgb, var(--foreground) 25%, transparent);
@@ -2015,15 +2143,31 @@ button.notice-card {
 /* ── Sidebar ── */
 
 .voice-sidebar {
-    width: 200px;
+    width: 400px;
     flex-shrink: 0;
     overflow-y: auto;
     border-right: 1px solid var(--border);
     padding: 10px 12px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
     background-color: var(--muted);
+}
+
+/* 侧栏双列：导出与字幕并排，文件/预览全宽居下 */
+.voice-sidebar-cols {
+    display: flex;
+    align-items: flex-start;
+    gap: 0 14px;
+}
+
+.voice-sidebar-cols > .voice-sidebar-section {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.voice-sidebar-cols + .voice-sidebar-section {
+    border-top: 1px solid var(--border);
 }
 
 .voice-sidebar-section {
@@ -2119,6 +2263,94 @@ button.notice-card {
 
 .voice-sidebar .voice-toggle {
     margin-top: 2px;
+}
+
+/* ── 压缩包结构实时预览 ── */
+.zip-preview {
+    padding: 10px;
+    border: 1px dashed color-mix(in srgb, var(--border) 80%, var(--foreground));
+    border-radius: calc(var(--radius) - 4px);
+    background: color-mix(in srgb, var(--background) 55%, transparent);
+}
+
+.zip-preview-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+.zip-preview-head iconify-icon {
+    font-size: 0.8125rem;
+    color: var(--primary);
+}
+
+.zip-preview-meta {
+    margin-left: auto;
+    font-weight: 400;
+    color: var(--muted-foreground);
+}
+
+.zip-preview-empty {
+    font-size: 0.625rem;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+}
+
+.zip-preview-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 260px;
+    overflow: auto;
+    font-size: 0.6875rem;
+}
+
+.zip-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    color: var(--foreground);
+}
+
+.zip-preview-row iconify-icon {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.zip-preview-row.zip-root {
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.zip-preview-row.zip-root iconify-icon {
+    opacity: 1;
+}
+
+.zip-preview-row.sample {
+    color: var(--muted-foreground);
+}
+
+.zip-preview-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zip-preview-count {
+    flex-shrink: 0;
+    padding: 0 5px;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: var(--muted-foreground);
+    font-size: 0.5625rem;
+    font-weight: 600;
 }
 
 /* ── Main ── */
@@ -2234,115 +2466,6 @@ button.notice-card {
     width: 64px;
     height: 14px;
     border-radius: 4px;
-}
-
-/* ── Sidebar / Toolbar (compat block; keep in sync with Sidebar section) ── */
-
-.voice-sidebar {
-    width: 200px;
-    flex-shrink: 0;
-    overflow-y: auto;
-    border-right: 1px solid var(--border);
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    background-color: var(--muted);
-}
-
-.voice-sidebar-section {
-    padding: 8px 0;
-}
-
-.voice-sidebar-section + .voice-sidebar-section {
-    border-top: 1px solid var(--border);
-}
-
-.voice-sidebar-heading {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--foreground);
-    letter-spacing: 0.02em;
-    margin-bottom: 8px;
-}
-
-.voice-sidebar-heading iconify-icon {
-    font-size: 0.75rem;
-    opacity: 0.6;
-}
-
-.voice-sidebar-row {
-    margin-bottom: 8px;
-}
-
-.voice-sidebar-row:last-child {
-    margin-bottom: 0;
-}
-
-.voice-sidebar-label {
-    display: block;
-    font-size: 0.625rem;
-    color: var(--muted-foreground);
-    margin-bottom: 4px;
-}
-
-.voice-sidebar-hint {
-    font-size: 0.625rem;
-    line-height: 1.4;
-    color: var(--muted-foreground);
-    margin: 4px 0 0;
-}
-
-.voice-sidebar-hint-block {
-    margin: 0;
-    padding: 8px;
-    border: 1px solid var(--border);
-    border-radius: calc(var(--radius) - 4px);
-    background: color-mix(in srgb, var(--background) 70%, transparent);
-}
-
-.voice-sidebar-inline {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.voice-sidebar-chips-vert {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 3px;
-    min-width: fit-content;
-}
-
-.voice-sidebar-chips-vert .chip {
-    justify-content: flex-start;
-    gap: 4px;
-    font-size: 0.6875rem;
-    min-height: 28px;
-    height: auto;
-    padding: 4px 8px;
-    border-radius: calc(var(--radius) - 4px);
-    white-space: normal;
-    text-align: left;
-    line-height: 1.25;
-}
-
-.voice-sidebar-chips-vert .chip iconify-icon {
-    font-size: 0.7rem;
-    opacity: 0.5;
-    flex-shrink: 0;
-}
-
-.voice-sidebar .voice-concurrency {
-    width: 100%;
-    max-width: none;
-}
-
-.voice-sidebar .voice-toggle {
-    margin-top: 2px;
 }
 
 .voice-concurrency {
@@ -2785,10 +2908,9 @@ button.notice-card {
     color: var(--primary);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     .voice-dialog {
         width: 100%;
-        max-height: 100vh;
         max-height: 100dvh;
         border-radius: 0;
     }
