@@ -41,10 +41,19 @@ suspend fun fetchBatchImageUrls(
             val json = fetchJson(url) ?: return@async
             try {
                 val res = SharedJson.decodeFromString<WikiResponse>(json)
+                val urlByFullTitle = mutableMapOf<String, String>()
                 res.query?.pages?.values.orEmpty().forEach { page ->
                     val imageUrl = page.imageinfo?.firstOrNull()?.url ?: return@forEach
+                    urlByFullTitle[page.title] = imageUrl
                     val name = page.title.replace(filePrefixRegex, "")
                     result[name] = imageUrl
+                }
+                // 处理文件重定向（如 文件:武器-大剑.png -> 文件:武器外观图鉴 15701001.png）
+                // 使按原始文件名查询的调用方也能命中目标图片的 URL
+                res.query?.redirects.orEmpty().forEach { redirect ->
+                    val targetUrl = urlByFullTitle[redirect.to] ?: return@forEach
+                    val fromName = redirect.from.replace(filePrefixRegex, "")
+                    result[fromName] = targetUrl
                 }
             } catch (e: CancellationException) {
                 throw e

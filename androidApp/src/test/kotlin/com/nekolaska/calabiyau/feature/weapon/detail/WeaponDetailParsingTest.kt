@@ -75,6 +75,95 @@ class WeaponDetailParsingTest {
     }
 
     /**
+     * Uses structure captured from the live 潮音 page (2026-09-23):
+     * 霰弹枪主模板带 10米=120..30米=60 的常规全弹丸衰减，且末尾附带独头弹增幅数据
+     * （10米头部=132..50米下肢=51）；必须优先提取常规全弹丸单值衰减，避免把独头弹当成常规伤害。
+     */
+    @Test
+    fun parsesShotgunPelletOnlyEvenWhenSlugParametersPresent() {
+        val wikitext = """
+            {{武器
+            |使用者=汐
+            |类型=霰弹枪
+            |10米=120
+            |15米=116
+            |20米=88
+            |25米=60
+            |30米=60
+            |基础伤害=5.75
+            |头部倍率=1.0
+            |上肢倍率=1.0
+            |下肢倍率=1.0
+            |10米头部=132
+            |10米上肢=88
+            |10米下肢=61
+            |20米头部=131
+            |20米上肢=87
+            |20米下肢=61
+            |30米头部=127
+            |30米上肢=85
+            |30米下肢=59
+            |40米头部=120
+            |40米上肢=80
+            |40米下肢=56
+            |50米头部=109
+            |50米上肢=73
+            |50米下肢=51
+            }}
+        """.trimIndent()
+        val detail = WeaponDetailApi.parseWeaponWikitext("潮音", wikitext)
+        assertNotNull(detail)
+
+        val rows = detail.damageTable
+        assertEquals(listOf("10米", "15米", "20米", "25米", "30米"), rows.map { it.distance })
+        assertEquals("120", rows[0].head)
+        assertEquals("", rows[0].upper)
+        assertEquals("", rows[0].lower)
+        assertEquals("116", rows[1].head)
+        assertEquals("88", rows[2].head)
+        assertEquals("60", rows[3].head)
+        assertEquals("60", rows[4].head)
+    }
+
+    /**
+     * Uses structure captured from the live 自由意志 page (2026-09-23):
+     * 霰弹枪的移动端全弹丸衰减参数采用「10米移动端」后缀命名，且有「射速移动端」等参数；
+     * 需正确解析 PC 全弹丸单值与移动端全弹丸单值。
+     */
+    @Test
+    fun parsesShotgunMobilePelletRowsWithSuffixNaming() {
+        val wikitext = """
+            {{武器
+            |使用者=香奈美
+            |类型=霰弹枪
+            |10米=91
+            |15米=73
+            |20米=45
+            |25米=45
+            |30米=45
+            |10米移动端=72
+            |15米移动端=52
+            |20米移动端=38
+            |25米移动端=38
+            |30米移动端=38
+            |射速移动端=230
+            }}
+        """.trimIndent()
+        val detail = WeaponDetailApi.parseWeaponWikitext("自由意志", wikitext)
+        assertNotNull(detail)
+        assertEquals("230", detail.mobileFireRate)
+
+        val pcRows = detail.damageTable.filter { !it.distance.startsWith("移动端") }
+        assertEquals(listOf("10米", "15米", "20米", "25米", "30米"), pcRows.map { it.distance })
+        assertEquals("91", pcRows[0].head)
+
+        val mobileRows = detail.damageTable.filter { it.distance.startsWith("移动端") }
+        assertEquals(listOf("移动端·10米", "移动端·15米", "移动端·20米", "移动端·25米", "移动端·30米"), mobileRows.map { it.distance })
+        assertEquals("72", mobileRows[0].head)
+        assertEquals("", mobileRows[0].upper)
+    }
+
+    /**
      * Uses structure captured from the live 谢幕曲 page (2026-09-22):
      * 霰弹枪没有"基础伤害"参数，主 {{武器}} 模板直接带距离部位参数与蓄力变体
      * （X米头部蓄力）；渲染 HTML 的"武器伤害"章节是性能参数键值表

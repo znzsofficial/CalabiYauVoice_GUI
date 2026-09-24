@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.weapon.list
 
+import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -41,7 +43,7 @@ class WeaponListImageTest {
         )
 
         assertEquals(
-            listOf("武器-忍锋.png"),
+            listOf("武器-忍锋.png", "忍锋-weapon.png"),
             weaponImageFileNames(weapon, WeaponListApi.WeaponCategory.MELEE)
         )
     }
@@ -62,5 +64,41 @@ class WeaponListImageTest {
             weaponImageFileNames(weapon, WeaponListApi.WeaponCategory.PRIMARY)
         )
         assertEquals("令 等 3 名角色", weapon.displayUsers)
+    }
+
+    @Test
+    fun fetchBatchImageUrlsResolvesRedirectsToOriginalRequestedNames() = runBlocking {
+        val mockApiResponse = """
+            {
+              "query": {
+                "redirects": [
+                  {"from": "文件:武器-大剑.png", "to": "文件:武器外观图鉴 15701001.png"},
+                  {"from": "文件:武器-战镰.png", "to": "文件:武器外观图鉴 15401001.png"}
+                ],
+                "pages": {
+                  "101": {
+                    "pageid": 101,
+                    "title": "文件:武器外观图鉴 15701001.png",
+                    "imageinfo": [{"url": "https://patchwiki.biligame.com/dajian.png"}]
+                  },
+                  "102": {
+                    "pageid": 102,
+                    "title": "文件:武器外观图鉴 15401001.png",
+                    "imageinfo": [{"url": "https://patchwiki.biligame.com/zhanlian.png"}]
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+
+        val result = fetchBatchImageUrls(listOf("武器-大剑.png", "武器-战镰.png")) { _ ->
+            mockApiResponse
+        }
+
+        // 调用方传的是 "武器-大剑.png" 和 "武器-战镰.png"，应当能直接取到重定向目标的 URL
+        assertEquals("https://patchwiki.biligame.com/dajian.png", result["武器-大剑.png"])
+        assertEquals("https://patchwiki.biligame.com/zhanlian.png", result["武器-战镰.png"])
+        // 同时目标文件名也能取到
+        assertEquals("https://patchwiki.biligame.com/dajian.png", result["武器外观图鉴 15701001.png"])
     }
 }

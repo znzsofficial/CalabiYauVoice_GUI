@@ -322,7 +322,7 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
     }
 
     private fun imageCacheKey(category: WeaponCategory): String =
-        "category_images_v2_${category.name}"
+        "category_images_v3_${category.name}"
 
 }
 
@@ -339,5 +339,5 @@ internal fun weaponImageFileNames(
         }
     }
 } else {
-    listOf("武器-${weapon.name}.png")
+    listOf("武器-${weapon.name}.png", "${weapon.name}-weapon.png")
 }

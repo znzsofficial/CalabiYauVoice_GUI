@@ -194,53 +194,72 @@ object WeaponDetailApi {
         val damageTable = mutableListOf<DamageRow>()
 
         // 1. 尝试从模板解析 (PC / 霰弹枪单值)。新页面距离参数可能带"伤害"后缀（如 10米头部伤害）。
-        // 霰弹枪等武器没有"基础伤害"参数，但主模板直接带距离部位参数（10米头部等），同样进入本路径。
         val distances = listOf("10", "15", "20", "25", "30", "40", "50")
-        val hasDistanceBodyParams = distances.any { d ->
-            weaponParams.containsKey("${d}米头部") || weaponParams.containsKey("${d}米头部伤害")
-        }
-        if (damageParams.isNotEmpty() || weaponParams.containsKey("基础伤害") || hasDistanceBodyParams) {
+        val isShotgun = (weaponParams["类型"] ?: weaponParams["武器种类"]).orEmpty().contains("霰弹")
+        val hasShotgunPelletParams = isShotgun && distances.any { allDamageParams("${it}米") != null }
+
+        if (hasShotgunPelletParams) {
+            // 霰弹枪（潮音/自由意志/鸣火等）：全弹丸总伤害呈单值（10米=120等），
+            // 优先提取常规全弹丸衰减，避免被模板末尾附带的增幅独头弹参数（如10米头部=132）干扰。
             distances.forEach { d ->
-                val head = allDamageParams("${d}米头部") ?: allDamageParams("${d}米头部伤害")
-                val upper = allDamageParams("${d}米上肢") ?: allDamageParams("${d}米上肢伤害")
-                val lower = allDamageParams("${d}米下肢") ?: allDamageParams("${d}米下肢伤害")
-                // 蓄力射击变体（霰弹枪拉栓：X米头部蓄力等），独立于基础行存在
-                val chargeHead = allDamageParams("${d}米头部蓄力") ?: allDamageParams("${d}米头部蓄力伤害")
-                val chargeUpper = allDamageParams("${d}米上肢蓄力") ?: allDamageParams("${d}米上肢蓄力伤害")
-                val chargeLower = allDamageParams("${d}米下肢蓄力") ?: allDamageParams("${d}米下肢蓄力伤害")
-                if (head != null || upper != null || lower != null) {
-                    damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
-                }
-                if (chargeHead != null || chargeUpper != null || chargeLower != null) {
-                    damageTable.add(
-                        DamageRow("${d}米·蓄力", chargeHead ?: "-", chargeUpper ?: "-", chargeLower ?: "-")
-                    )
-                }
-                if (head != null || upper != null || lower != null || chargeHead != null || chargeUpper != null || chargeLower != null) {
-                    return@forEach
-                }
                 val pellet = allDamageParams("${d}米")
                 if (!pellet.isNullOrBlank()) {
                     damageTable.add(DamageRow("${d}米", pellet, "", ""))
                 }
             }
             distances.forEach { d ->
-                val pellet = allDamageParams("移动端${d}米")
-                if (!pellet.isNullOrBlank()) {
-                    damageTable.add(DamageRow("移动端·${d}米", pellet, "", ""))
-                    return@forEach
+                val mobilePellet = allDamageParams("${d}米移动端") ?: allDamageParams("移动端${d}米")
+                if (!mobilePellet.isNullOrBlank()) {
+                    damageTable.add(DamageRow("移动端·${d}米", mobilePellet, "", ""))
                 }
-                // 新一代页面移动端参数形态：10米头部移动端 / 10米上肢移动端 / 10米下肢移动端
-                val mobileHead = allDamageParams("${d}米头部移动端")
-                if (!mobileHead.isNullOrBlank()) {
-                    damageTable.add(
-                        DamageRow(
-                            "移动端·${d}米",
-                            mobileHead,
-                            allDamageParams("${d}米上肢移动端") ?: "-",
-                            allDamageParams("${d}米下肢移动端") ?: "-"
+            }
+        } else {
+            val hasDistanceBodyParams = distances.any { d ->
+                weaponParams.containsKey("${d}米头部") || weaponParams.containsKey("${d}米头部伤害")
+            }
+            if (damageParams.isNotEmpty() || weaponParams.containsKey("基础伤害") || hasDistanceBodyParams) {
+                distances.forEach { d ->
+                    val head = allDamageParams("${d}米头部") ?: allDamageParams("${d}米头部伤害")
+                    val upper = allDamageParams("${d}米上肢") ?: allDamageParams("${d}米上肢伤害")
+                    val lower = allDamageParams("${d}米下肢") ?: allDamageParams("${d}米下肢伤害")
+                    // 蓄力射击变体（霰弹枪拉栓：X米头部蓄力等），独立于基础行存在
+                    val chargeHead = allDamageParams("${d}米头部蓄力") ?: allDamageParams("${d}米头部蓄力伤害")
+                    val chargeUpper = allDamageParams("${d}米上肢蓄力") ?: allDamageParams("${d}米上肢蓄力伤害")
+                    val chargeLower = allDamageParams("${d}米下肢蓄力") ?: allDamageParams("${d}米下肢蓄力伤害")
+                    if (head != null || upper != null || lower != null) {
+                        damageTable.add(DamageRow("${d}米", head ?: "-", upper ?: "-", lower ?: "-"))
+                    }
+                    if (chargeHead != null || chargeUpper != null || chargeLower != null) {
+                        damageTable.add(
+                            DamageRow("${d}米·蓄力", chargeHead ?: "-", chargeUpper ?: "-", chargeLower ?: "-")
                         )
-                    )
+                    }
+                    if (head != null || upper != null || lower != null || chargeHead != null || chargeUpper != null || chargeLower != null) {
+                        return@forEach
+                    }
+                    val pellet = allDamageParams("${d}米")
+                    if (!pellet.isNullOrBlank()) {
+                        damageTable.add(DamageRow("${d}米", pellet, "", ""))
+                    }
+                }
+                distances.forEach { d ->
+                    val pellet = allDamageParams("${d}米移动端") ?: allDamageParams("移动端${d}米")
+                    if (!pellet.isNullOrBlank()) {
+                        damageTable.add(DamageRow("移动端·${d}米", pellet, "", ""))
+                        return@forEach
+                    }
+                    // 新一代页面移动端参数形态：10米头部移动端 / 10米上肢移动端 / 10米下肢移动端
+                    val mobileHead = allDamageParams("${d}米头部移动端")
+                    if (!mobileHead.isNullOrBlank()) {
+                        damageTable.add(
+                            DamageRow(
+                                "移动端·${d}米",
+                                mobileHead,
+                                allDamageParams("${d}米上肢移动端") ?: "-",
+                                allDamageParams("${d}米下肢移动端") ?: "-"
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -292,16 +311,16 @@ object WeaponDetailApi {
             obtainMethod = weaponParams["获得方式"] ?: weaponParams["获取方式"] ?: "",
             description = cleanDesc,
             fireRate = weaponParams["射速"] ?: "",
-            mobileFireRate = weaponParams["移动端射速"] ?: "",
+            mobileFireRate = weaponParams["移动端射速"] ?: weaponParams["射速移动端"] ?: "",
             aimSpeed = weaponParams["瞄准速度"] ?: "",
             spreadControl = weaponParams["散射控制"] ?: "",
             recoilControl = weaponParams["后坐力控制"] ?: "",
             reloadSpeed = weaponParams["装填速度"] ?: "",
             moveSpeedChange = weaponParams["移速变化"] ?: "",
-            stringDamage = weaponParams["弦化伤害"] ?: "",
+            stringDamage = weaponParams["弦化伤害"] ?: weaponParams["弦化伤害移动端"] ?: "",
             maxAmmo = weaponParams["最大备弹数"] ?: "",
             magCapacity = weaponParams["弹匣容量"] ?: "",
-            mobileMagCapacity = weaponParams["移动端弹匣容量"] ?: "",
+            mobileMagCapacity = weaponParams["移动端弹匣容量"] ?: weaponParams["弹匣容量移动端"] ?: "",
             secondaryAttack = weaponParams["辅助攻击"] ?: "",
             fireMode = weaponParams["开火模式"] ?: "",
             magnification = weaponParams["放大倍率"] ?: "",

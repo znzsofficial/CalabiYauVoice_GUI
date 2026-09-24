@@ -19,9 +19,13 @@ data class WikiResponse(
 )
 
 @Serializable
+data class WikiRedirect(val from: String, val to: String)
+
+@Serializable
 data class WikiQuery(
     val search: List<SearchItem>? = null,
     val categorymembers: List<CategoryMember>? = null,
+    val redirects: List<WikiRedirect>? = null,
     val pages: Map<String, WikiPage>? = null
 )
 
