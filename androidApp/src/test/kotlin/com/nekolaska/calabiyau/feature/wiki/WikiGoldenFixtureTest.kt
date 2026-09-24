@@ -50,6 +50,17 @@ class WikiGoldenFixtureTest {
             assertTrue(it.title.isNotBlank())
             assertTrue(it.wikiUrl.startsWith("https://wiki.biligame.com"))
         }
+        // 测试名说 WithDates 就必须锁住日期：真实结构是 SMW Date 类型
+        // {"timestamp":"1789516800","raw":"1/2026/9/16"}，timestamp 优先、剥离日历前缀
+        items.forEach {
+            assertTrue(it.date.isNotBlank(), "date blank for ${it.title} — Date-type parsing drifted")
+            assertTrue(it.sortTimestamp > 0, "sortTimestamp<=0 for ${it.title}")
+        }
+        assertEquals("2026/9/16", items.first().date, "first announcement date anchor drifted")
+        assertTrue(
+            items.map { it.sortTimestamp }.zipWithNext().all { (a, b) -> a >= b },
+            "announcements not sorted by date desc: ${items.map { it.date }}"
+        )
     }
 
     @Test

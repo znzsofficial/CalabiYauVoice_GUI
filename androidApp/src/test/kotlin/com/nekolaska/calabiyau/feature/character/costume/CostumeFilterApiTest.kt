@@ -1,15 +1,9 @@
 package com.nekolaska.calabiyau.feature.character.costume
 
-import data.SharedJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import org.jsoup.Jsoup
-import java.nio.file.Files
-import java.nio.file.Path
 
 class CostumeFilterApiTest {
 
@@ -80,28 +74,11 @@ class CostumeFilterApiTest {
         )
     }
 
-    @Test
-    fun parsesLiveWikiSnapshot() {
-        val snapshot = liveWikiHtml() ?: return
-        val expectedCards = Jsoup.parse(snapshot).select(".gallerygrid-item.klbq-skin-card, .klbq-skin-card").size
-        val costumes = CostumeFilterApi.parseCostumeHtml(snapshot)
-
-        assertTrue(expectedCards > 500, "expected a full costume page, got $expectedCards cards")
-        assertEquals(expectedCards, costumes.size)
-        assertTrue(costumes.none { it.name.endsWith("：未知") })
-        assertTrue(costumes.all { it.character.isNotBlank() })
-        assertTrue(costumes.all { it.fullImageUrl != null })
-        assertTrue(costumes.count { it.screenshotUrl != null } > 100)
-        assertTrue(costumes.any { it.quality == CostumeFilterApi.Quality.LEGENDARY })
-        assertEquals("诺诺：晦朔-常磐", costumes.first().name)
-        val akashi = costumes.first { it.name.contains("阿卡西之眼") }
-        assertEquals("梅瑞狄斯", akashi.character)
-        assertEquals(CostumeFilterApi.Quality.LEGENDARY, akashi.quality)
-        assertTrue(akashi.description.isNotBlank())
-        val screenshot = akashi.screenshotUrl.orEmpty()
-        assertTrue(screenshot.contains(".jpg") || screenshot.contains(".png"))
-    }
-
+    /**
+     * 线上真实页面的全量校验由 LiveWikiSnapshotTest.fetchesAndParsesCostumeFilterWhenEnabled
+     * （LIVE_WIKI_TEST=1 门禁）承担——真实响应约 2.6MB，不适合作为 tracked 夹具入库，
+     * 此前读取一次性 tool-output 缓存的死测试已移除。
+     */
     @Test
     fun fallsBackToLegacyDivsortTable() {
         val costumes = CostumeFilterApi.parseCostumeHtml(
@@ -116,18 +93,5 @@ class CostumeFilterApiTest {
         assertEquals("信", costumes.single().character)
         assertEquals(CostumeFilterApi.Quality.SUPERIOR, costumes.single().quality)
         assertTrue(costumes.single().description.contains("时装介绍"))
-    }
-
-    private fun liveWikiHtml(): String? {
-        val candidates = listOf(
-            Path.of("C:/Users/NekoLaska/.local/share/opencode/tool-output/tool_066e115bb001Mdb0AclL2VJtIC"),
-            Path.of(System.getProperty("user.home"), ".local/share/opencode/tool-output/tool_066e115bb001Mdb0AclL2VJtIC")
-        )
-        val file = candidates.firstOrNull { Files.exists(it) } ?: return null
-        val raw = Files.readString(file)
-        val start = raw.indexOf('{')
-        if (start < 0) return null
-        val json = SharedJson.parseToJsonElement(raw.substring(start)).jsonObject
-        return json["parse"]?.jsonObject?.get("text")?.jsonObject?.get("*")?.jsonPrimitive?.content
     }
 }

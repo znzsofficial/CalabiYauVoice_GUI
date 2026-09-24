@@ -16,7 +16,7 @@ class ItemCatalogParsersTest {
                 <div class="klbq-item-card__imagebox"><a href="/klbq/理想币" title="理想币"><img alt="道具图标 2.png" src="https://patchwiki.biligame.com/images/klbq/thumb/2/23/coin.png/120px-coin.png"/></a></div>
                 <div class="klbq-item-card__captionbox">
                   <div class="klbq-item-card__name"><a href="/klbq/理想币">理想币</a></div>
-                  <div class="klbq-item-card__desc">常驻货币，可山角色和部分道具兑换。</div>
+                  <div class="klbq-item-card__desc">常驻货币，可用于角色和部分道具兑换。</div>
                 </div>
               </div>
               <div class="gallerygrid-item klbq-item-card" data-param1="" data-param2="9">
@@ -31,7 +31,7 @@ class ItemCatalogParsersTest {
         assertEquals("货币", items[0].category)
         assertEquals(Quality.SUPERIOR, items[0].quality)
         assertEquals("卓越", items[0].qualityName)
-        assertEquals("常驻货币，可山角色和部分道具兑换。", items[0].description)
+        assertEquals("常驻货币，可用于角色和部分道具兑换。", items[0].description)
         assertEquals(
             "https://patchwiki.biligame.com/images/klbq/2/23/coin.png",
             items[0].iconUrl

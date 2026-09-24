@@ -125,9 +125,11 @@ class LiveWikiSnapshotTest {
         assertNotNull(detail, "weapon detail parse failed")
         assertTrue(detail.damageTable.isNotEmpty(), "live weapon damage table empty")
         assertTrue(detail.baseDamage.isNotBlank(), "live weapon baseDamage blank")
-        assertTrue(detail.user.contains("、") || detail.user.isNotBlank(), "live weapon user blank")
+        // 静风有 4 名使用者；若 parser 只取到单个名字（缺少顿号）说明多使用者解析回归
+        assertTrue(detail.user.contains("、"), "live weapon user lost multi-user split: ${detail.user}")
 
         // 其余三类模板的代表武器：新代主武器 / 近战 / 副武器（战术道具冷却依赖登录态外接口，不在此覆盖）
+        // 按武器分别锁定关键结构，任一解析路径回归都能定位
         for (weapon in listOf("北极星", "大剑", "小蜜蜂")) {
             val body = fetchBody(
                 "https://wiki.biligame.com/klbq/api.php?action=parse" +
@@ -140,11 +142,23 @@ class LiveWikiSnapshotTest {
             val html2 = p["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content ?: ""
             val d = WeaponDetailApi.parseWeaponWikitext(weapon, wt, renderedHtml = html2)
             assertNotNull(d, "$weapon detail parse failed")
-            // 近战模板没有 类型 参数，不做统一断言；只要求产出可用数据
-            assertTrue(
-                d.damageTable.isNotEmpty() || d.stringDamage.isNotBlank() || d.description.isNotBlank() || d.obtainMethod.isNotBlank(),
-                "$weapon produced no usable data"
-            )
+            when (weapon) {
+                // 新代主武器：移动端距离行（对齐 beijixing golden 的关键结构）
+                "北极星" -> assertTrue(
+                    d.damageTable.any { it.distance.startsWith("移动端·") },
+                    "北极星 mobile distance rows empty — new-gen mobile params drifted"
+                )
+                // 近战：嵌套列表展开的轻击/重击伤害行（对齐 dajian golden）
+                "大剑" -> assertTrue(
+                    d.damageTable.any { it.distance.contains("轻击") },
+                    "大剑 melee nested rows empty: ${d.damageTable.map { it.distance }}"
+                )
+                // 副武器：距离表行且上肢列非空（对齐 xiaomifeng golden）
+                "小蜜蜂" -> assertTrue(
+                    d.damageTable.any { it.distance.contains("米") && it.upper.isNotBlank() },
+                    "小蜜蜂 distance rows lost upper column: ${d.damageTable}"
+                )
+            }
         }
     }
 
@@ -219,7 +233,8 @@ class LiveWikiSnapshotTest {
 
         val meme = snapshot("meme.html")?.let(MemeParsers::parsePage)
         if (meme != null) {
-            assertTrue(meme.officialIssues.isNotEmpty() || meme.editorEntries.isNotEmpty())
+            assertTrue(meme.officialIssues.isNotEmpty(), "meme official issues empty")
+            assertTrue(meme.editorEntries.isNotEmpty(), "meme editor entries empty")
         }
 
         val story = snapshot("story.html")?.let(StoryParsers::parseSections)
@@ -229,12 +244,14 @@ class LiveWikiSnapshotTest {
 
         val history = snapshot("history.html")?.let(GameHistoryParsers::parseSections)
         if (history != null) {
-            assertTrue(history.any { it.entries.isNotEmpty() || it.description != null })
+            assertTrue(history.any { it.entries.isNotEmpty() }, "history entries empty")
+            assertTrue(history.any { it.description != null }, "history descriptions empty")
         }
 
         val collab = snapshot("collab.html")?.let(CollaborationParsers::parsePage)
         if (collab != null) {
-            assertTrue(collab.timelineYears.isNotEmpty() || collab.events.isNotEmpty())
+            assertTrue(collab.timelineYears.isNotEmpty(), "collab timeline empty")
+            assertTrue(collab.events.isNotEmpty(), "collab events empty")
         }
 
         val bgm = snapshot("bgm.html")?.let(BgmParsers::parsePage)
@@ -249,7 +266,8 @@ class LiveWikiSnapshotTest {
 
         val playerLevel = snapshot("playerlevel.html")?.let { PlayerLevelParsers.parseHtml(it) }
         if (playerLevel != null) {
-            assertTrue(playerLevel.levels.isNotEmpty() || playerLevel.rewards.isNotEmpty())
+            assertTrue(playerLevel.levels.isNotEmpty(), "player levels empty")
+            assertTrue(playerLevel.rewards.isNotEmpty(), "player rewards empty")
         }
 
         val talents = snapshot("stringer_talent.html")?.let(StringerTalentParsers::parseHtml)
@@ -294,7 +312,9 @@ class LiveWikiSnapshotTest {
     }
 
     private fun snapshot(name: String): String? {
-        val path = Path.of("C:/Users/NEKOLA~1/AppData/Local/Temp/opencode/live-wiki", name)
+        // 与本类抓取路径（build/live-wiki，见 fetchesAndParsesCurrentWikiHtmlWhenEnabled）一致：
+        // LIVE_WIKI_TEST=1 跑完抓取后，本用例即可直接复用刚写入的快照
+        val path = Path.of("build/live-wiki", name)
         if (!Files.exists(path)) return null
         val text = Files.readString(path)
         return text.takeIf { it.isNotBlank() }

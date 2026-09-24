@@ -279,7 +279,8 @@ object CharacterDetailApi {
     /**
      * 从 wikitext 解析 `{{超弦体|...}}` 或 `{{晶源体|...}}` 模板参数。
      */
-    private fun parseCharacterWikitext(name: String, wikitext: String, html: String? = null): CharacterDetail? {
+    /** internal：供离线审查测试直接解析线上抓取的 wikitext+HTML（不做网络 IO 以外的额外请求） */
+    internal fun parseCharacterWikitext(name: String, wikitext: String, html: String? = null): CharacterDetail? {
         // 先尝试超弦体模板，再尝试晶源体模板
         val isCrystal: Boolean
         val templateContent: String

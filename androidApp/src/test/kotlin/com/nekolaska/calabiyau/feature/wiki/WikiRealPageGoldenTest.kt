@@ -8,7 +8,6 @@ import com.nekolaska.calabiyau.feature.wiki.history.parser.GameHistoryParsers
 import com.nekolaska.calabiyau.feature.wiki.imprint.parser.ImprintParsers
 import com.nekolaska.calabiyau.feature.wiki.item.parser.ItemCatalogParsers
 import com.nekolaska.calabiyau.feature.wiki.map.parser.MapListParsers
-import com.nekolaska.calabiyau.feature.wiki.meme.parser.MemeParsers
 import com.nekolaska.calabiyau.feature.wiki.meow.parser.MeowLanguageParsers
 import com.nekolaska.calabiyau.feature.wiki.oath.parser.OathParsers
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.parser.PlayerLevelParsers
@@ -59,7 +58,9 @@ class WikiRealPageGoldenTest {
     @Test
     fun history() {
         val history = GameHistoryParsers.parseSections(page("history.html"))
-        assertTrue(history.any { it.entries.isNotEmpty() || it.description != null }, "history empty")
+        // 分开断言两条解析路径，任一回归都能定位（真实页面两个区块都有）
+        assertTrue(history.any { it.entries.isNotEmpty() }, "history entries empty — entry parsing drifted")
+        assertTrue(history.any { it.description != null }, "history descriptions empty — description parsing drifted")
     }
 
     @Test
@@ -86,7 +87,9 @@ class WikiRealPageGoldenTest {
     @Test
     fun collab() {
         val c = CollaborationParsers.parsePage(page("collab.html"))
-        assertTrue(c.timelineYears.isNotEmpty() || c.events.isNotEmpty(), "collab empty")
+        // 分开断言时间轴与具体事件两条路径（真实页面两个区块都有）
+        assertTrue(c.timelineYears.isNotEmpty(), "collab timeline empty — timeline parsing drifted")
+        assertTrue(c.events.isNotEmpty(), "collab events empty — event parsing drifted")
     }
 
     @Test
@@ -104,30 +107,8 @@ class WikiRealPageGoldenTest {
         assertTrue(sections.any { it.groups.isNotEmpty() })
     }
 
-    @Test
-    fun meme() {
-        // 梗百科条目是社区 UGC 创作内容，页面快照不入仓库；
-        // 用符合线上 DOM 假设（官方编写 tabs / 编辑编写 dl-li）的最小夹具锁定 parser 结构。
-        val mini = """
-            <div class="mw-parser-output">
-              <h2><span class="mw-headline" id="官方编写">官方编写</span></h2>
-              <div class="tab">
-                <ul class="tab-nav"><li class="active"><a href="#/tab/1">第一期【奖励你卡拉彼丘该有的热度】</a></li></ul>
-                <div class="tab-content">
-                  <img src="https://patchwiki.biligame.com/images/klbq/a/ab/meme1.png"/>
-                  <dl><dt>梗A：</dt></dl>
-                  <li>定义甲</li>
-                </div>
-              </div>
-              <h2><span class="mw-headline" id="编辑编写">编辑编写</span></h2>
-              <dl><dt>梗B：</dt></dl>
-              <ul><li>来源说明</li><li>含义补充</li></dl>
-            </div>
-        """.trimIndent()
-        val meme = MemeParsers.parsePage(mini)
-        assertTrue(meme.officialIssues.isNotEmpty(), "official issues empty")
-        assertTrue(meme.editorEntries.isNotEmpty(), "editor entries empty")
-    }
+    // 梗百科：MemeParsersTest（结构+值锚点）与 LiveWikiSnapshotTest 的本地快照
+    // （真实梗百科页，官方 issues 与编辑条目分别断言）已覆盖，不再保留弱化的小夹具用例。
 
     @Test
     fun oath() {
@@ -138,7 +119,9 @@ class WikiRealPageGoldenTest {
     @Test
     fun playerLevel() {
         val pl = PlayerLevelParsers.parseHtml(page("playerlevel.html"))
-        assertTrue(pl.levels.isNotEmpty() || pl.rewards.isNotEmpty(), "player level empty")
+        // 分开断言等级经验与奖励两条路径（真实页面两个区块都有）
+        assertTrue(pl.levels.isNotEmpty(), "player levels empty — level parsing drifted")
+        assertTrue(pl.rewards.isNotEmpty(), "player rewards empty — reward parsing drifted")
     }
 
     @Test
@@ -162,9 +145,12 @@ class WikiRealPageGoldenTest {
 
     @Test
     fun modes() {
-        // 战斗模式页：提取其中嵌置的模式 wikitext 片段非空白即可（模式详情走 GameModeParsers 单测）
+        // 战斗模式页：锚定模式入口结构（模式详情走 GameModeParsers 单测）
         val html = page("modes.html")
         assertTrue(html.contains("mw-parser-output"), "modes page structure drifted")
+        // 每个模式子页链接形如 /klbq/战斗模式/一般爆破
+        val modeLinks = Regex("href=\"/klbq/%E6%88%98%E6%96%97%E6%A8%A1%E5%BC%8F/").findAll(html).count()
+        assertTrue(modeLinks >= 10, "mode links=$modeLinks — modes page lost its mode entries")
     }
 
     @Test

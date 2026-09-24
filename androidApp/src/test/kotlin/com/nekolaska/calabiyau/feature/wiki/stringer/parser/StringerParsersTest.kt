@@ -14,12 +14,19 @@ class StringerParsersTest {
               <p>超弦推进由极限推进升级而来。</p>
               <h2><span id="卡牌" class="mw-headline">卡牌</span></h2>
               <div class="gallerygrid">
-                <div class="gallerygrid-item mobile-card" data-param1="伤害" data-param2="4">
+                <div class="gallerygrid-item mobile-card" data-param1="输出" data-param2="4">
                   <img src="https://x/card.png"/>
                   <div class="mobile-card-name">火力全开</div>
                   <div class="mobile-card-item"><span class="card-item-key">分类：</span><span class="card-item-value">伤害</span></div>
                   <div class="mobile-card-role"><span class="card-item-key">适用角色：</span><span class="card-item-value">米雪儿、信</span></div>
                   <div class="mobile-card-desc"><span class="card-item-value">提升武器伤害</span></div>
+                </div>
+                <div class="gallerygrid-item mobile-card" data-param1="" data-param2="3">
+                  <img src="https://x/card2.png"/>
+                  <div class="mobile-card-name">护盾强化</div>
+                  <div class="mobile-card-item"><span class="card-item-key">分类：</span><span class="card-item-value">守护</span></div>
+                  <div class="mobile-card-role"><span class="card-item-key">适用角色：</span><span class="card-item-value">信</span></div>
+                  <div class="mobile-card-desc"><span class="card-item-value">提升护盾值</span></div>
                 </div>
               </div>
             </div>
@@ -27,12 +34,16 @@ class StringerParsersTest {
         )
 
         assertEquals("超弦推进由极限推进升级而来。", page.summary)
-        val card = page.cards.single()
-        assertEquals("火力全开", card.name)
-        assertEquals("伤害", card.category)
+        // data-param1（"输出"）与行内标签（"伤害"）刻意不同值：
+        // 断言取的是属性值，若属性读取损坏而回退到行标签，此断言必须失败
+        assertEquals(listOf("火力全开" to "输出", "护盾强化" to "守护"), page.cards.map { it.name to it.category })
+        val card = page.cards.first()
         assertEquals(4, card.rarity)
         assertEquals("提升武器伤害", card.effect)
         assertEquals(listOf("米雪儿", "信"), card.roles)
+        // data-param1 为空时回退到行内标签（分类：守护）
+        assertEquals(3, page.cards[1].rarity)
+        assertEquals(listOf("信"), page.cards[1].roles)
     }
 
     @Test

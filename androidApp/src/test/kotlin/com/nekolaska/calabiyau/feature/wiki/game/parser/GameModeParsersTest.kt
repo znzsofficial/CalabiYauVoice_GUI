@@ -8,11 +8,6 @@ import kotlin.test.assertTrue
 class GameModeParsersTest {
 
     @Test
-    fun compilesOnClassLoad() {
-        assertTrue(GameModeParsers.parseModeMapMapping("").isEmpty())
-    }
-
-    @Test
     fun mapsModesFromGroupedLists() {
         val mapping = GameModeParsers.parseModeMapMapping(
             """
