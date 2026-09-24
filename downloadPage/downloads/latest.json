@@ -1,101 +1,108 @@
 {
-  "versionName": "2.1.18",
-  "versionCode": 48,
-  "apkUrl": "/downloads/CalabiYauVoice-2.1.17.apk?build=4f2e4e1a380a5937",
-  "apkSize": 3596284,
-  "releaseUrl": "/",
-  "changelog": [
-    "修复武器一览页大剑、战镰等武器图片不显示的问题",
-    "修复潮音、自由意志、鸣火等霰弹枪伤害数据错误，正确显示全弹丸衰减",
-    "重焰伤害详情补全：射速补充说明、基础伤害与部位伤害系数",
-    "伤害数据卡片优化：霰弹枪显示总弹丸伤害表头，蓄力伤害行视觉分组",
-    "修复角色技能图标与剧情封面图在文件重定向时可能缺失的问题"
-  ],
-  "publishedAt": "2026-09-24",
-  "releases": [
-    {
-      "versionName": "2.1.17",
-      "versionCode": 47,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.17.apk?build=4f2e4e1a380a5937",
-      "apkSize": 3596284,
-      "publishedAt": "2026-09-23"
-    },
-    {
-      "versionName": "2.1.16",
-      "versionCode": 46,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.16.apk?build=ac2eda78ee6d7a93",
-      "apkSize": 3596288,
-      "publishedAt": "2026-09-21"
-    },
-    {
-      "versionName": "2.1.15",
-      "versionCode": 45,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.15.apk?build=9e996878c9762ad4",
-      "apkSize": 3596288,
-      "publishedAt": "2026-09-19"
-    },
-    {
-      "versionName": "2.1.14",
-      "versionCode": 44,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.14.apk?build=ee800d16679a5276",
-      "apkSize": 3596288,
-      "publishedAt": "2026-09-18"
-    },
-    {
-      "versionName": "2.1.13",
-      "versionCode": 43,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.13.apk?build=f7121d27b23e95b4",
-      "apkSize": 3596288,
-      "publishedAt": "2026-09-18"
-    },
-    {
-      "versionName": "2.1.12",
-      "versionCode": 42,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.12.apk?build=71b6e4524ba1bb10",
-      "apkSize": 3579900,
-      "publishedAt": "2026-09-18"
-    },
-    {
-      "versionName": "2.1.11",
-      "versionCode": 41,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.11.apk?build=bf1abef9a809912a",
-      "apkSize": 3579876,
-      "publishedAt": "2026-09-18"
-    },
-    {
-      "versionName": "2.1.10",
-      "versionCode": 40,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.10.apk?build=ce703512a61f70b1",
-      "apkSize": 3547108,
-      "publishedAt": "2026-09-14"
-    },
-    {
-      "versionName": "2.1.9",
-      "versionCode": 39,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.9.apk?build=536fdab4c5033d28",
-      "apkSize": 3530720,
-      "publishedAt": "2026-09-10"
-    },
-    {
-      "versionName": "2.1.8",
-      "versionCode": 38,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.8.apk?build=38b47ce23c854cc5",
-      "apkSize": 3497668,
-      "publishedAt": "2026-09-05"
-    },
-    {
-      "versionName": "2.1.7",
-      "versionCode": 37,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.7.apk",
-      "apkSize": 3486900,
-      "publishedAt": "2026-09-03"
-    },
-    {
-      "versionName": "2.1.6",
-      "versionCode": 36,
-      "apkUrl": "/downloads/CalabiYauVoice-2.1.6.apk",
-      "apkSize": 3487008,
-      "publishedAt": "2026-08-18"
-    }
-  ]
+    "versionName": "2.1.18",
+    "versionCode": 48,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.18.apk?build=b43906ad9aad3289",
+    "apkSize": 3612672,
+    "releaseUrl": "/",
+    "changelog": [
+        "\u4fee\u590d\u6b66\u5668\u4e00\u89c8\u9875\u5927\u5251\u3001\u6218\u9570\u7b49\u6b66\u5668\u56fe\u7247\u4e0d\u663e\u793a\u7684\u95ee\u9898",
+        "\u4fee\u590d\u6f6e\u97f3\u3001\u81ea\u7531\u610f\u5fd7\u3001\u9e23\u706b\u7b49\u9730\u5f39\u67aa\u4f24\u5bb3\u6570\u636e\u9519\u8bef\uff0c\u6b63\u786e\u663e\u793a\u5168\u5f39\u4e38\u8870\u51cf",
+        "\u91cd\u7130\u4f24\u5bb3\u8be6\u60c5\u8865\u5168\uff1a\u5c04\u901f\u8865\u5145\u8bf4\u660e\u3001\u57fa\u7840\u4f24\u5bb3\u4e0e\u90e8\u4f4d\u4f24\u5bb3\u7cfb\u6570",
+        "\u4f24\u5bb3\u6570\u636e\u5361\u7247\u4f18\u5316\uff1a\u9730\u5f39\u67aa\u663e\u793a\u603b\u5f39\u4e38\u4f24\u5bb3\u8868\u5934\uff0c\u84c4\u529b\u4f24\u5bb3\u884c\u89c6\u89c9\u5206\u7ec4",
+        "\u4fee\u590d\u89d2\u8272\u6280\u80fd\u56fe\u6807\u4e0e\u5267\u60c5\u5c01\u9762\u56fe\u5728\u6587\u4ef6\u91cd\u5b9a\u5411\u65f6\u53ef\u80fd\u7f3a\u5931\u7684\u95ee\u9898"
+    ],
+    "publishedAt": "2026-09-24",
+    "releases": [
+        {
+            "versionName": "2.1.18",
+            "versionCode": 48,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.18.apk?build=b43906ad9aad3289",
+            "apkSize": 3612672,
+            "publishedAt": "2026-09-24"
+        },
+        {
+            "versionName": "2.1.17",
+            "versionCode": 47,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.17.apk?build=4f2e4e1a380a5937",
+            "apkSize": 3596284,
+            "publishedAt": "2026-09-23"
+        },
+        {
+            "versionName": "2.1.16",
+            "versionCode": 46,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.16.apk?build=ac2eda78ee6d7a93",
+            "apkSize": 3596288,
+            "publishedAt": "2026-09-21"
+        },
+        {
+            "versionName": "2.1.15",
+            "versionCode": 45,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.15.apk?build=9e996878c9762ad4",
+            "apkSize": 3596288,
+            "publishedAt": "2026-09-19"
+        },
+        {
+            "versionName": "2.1.14",
+            "versionCode": 44,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.14.apk?build=ee800d16679a5276",
+            "apkSize": 3596288,
+            "publishedAt": "2026-09-18"
+        },
+        {
+            "versionName": "2.1.13",
+            "versionCode": 43,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.13.apk?build=f7121d27b23e95b4",
+            "apkSize": 3596288,
+            "publishedAt": "2026-09-18"
+        },
+        {
+            "versionName": "2.1.12",
+            "versionCode": 42,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.12.apk?build=71b6e4524ba1bb10",
+            "apkSize": 3579900,
+            "publishedAt": "2026-09-18"
+        },
+        {
+            "versionName": "2.1.11",
+            "versionCode": 41,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.11.apk?build=bf1abef9a809912a",
+            "apkSize": 3579876,
+            "publishedAt": "2026-09-18"
+        },
+        {
+            "versionName": "2.1.10",
+            "versionCode": 40,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.10.apk?build=ce703512a61f70b1",
+            "apkSize": 3547108,
+            "publishedAt": "2026-09-14"
+        },
+        {
+            "versionName": "2.1.9",
+            "versionCode": 39,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.9.apk?build=536fdab4c5033d28",
+            "apkSize": 3530720,
+            "publishedAt": "2026-09-10"
+        },
+        {
+            "versionName": "2.1.8",
+            "versionCode": 38,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.8.apk?build=38b47ce23c854cc5",
+            "apkSize": 3497668,
+            "publishedAt": "2026-09-05"
+        },
+        {
+            "versionName": "2.1.7",
+            "versionCode": 37,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.7.apk",
+            "apkSize": 3486900,
+            "publishedAt": "2026-09-03"
+        },
+        {
+            "versionName": "2.1.6",
+            "versionCode": 36,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.6.apk",
+            "apkSize": 3487008,
+            "publishedAt": "2026-08-18"
+        }
+    ]
 }
