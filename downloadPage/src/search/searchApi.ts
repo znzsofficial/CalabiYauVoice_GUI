@@ -349,8 +349,12 @@ export async function fetchVoicePageParsetree(pageTitle: string, signal?: AbortS
   const pageIdUrl = `${API}?action=parse&pageid=${pageid}&prop=parsetree&format=json`;
   const data = await (await fetchWithTimeout(pageIdUrl, 15000, signal)).json() as { parse?: { parsetree?: { '*': string } } };
   const parsetree = data.parse?.parsetree?.['*'] || '';
-  if (parsetree) voiceParsetreeCache.set(pageTitle, parsetree);
-  return parsetree;
+  if (parsetree) {
+    voiceParsetreeCache.set(pageTitle, parsetree);
+    return parsetree;
+  }
+  // 页面存在但解析不到结构：按失败处理，而不是伪装成「暂无语音」
+  throw new Error('语音页存在但未包含台词结构');
 }
 
 const voicePageIdCache = new Map<string, number | null>();

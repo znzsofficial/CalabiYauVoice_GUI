@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { fetchAllCharacters, type CategoryPage } from '../searchApi';
+  import NoticeCard from '../NoticeCard.svelte';
   import { buildVoiceSearchIndexMap } from '../voice/voiceIndexBuilder';
   import { isVoiceIndexFresh, loadVoiceIndexCache, saveVoiceIndexCache } from '../voice/voiceIndexStore';
   import type { VoiceIndexFailure, VoiceIndexSections } from '../voice/voiceIndexTypes';
@@ -29,6 +30,8 @@
   let voiceDialogNavLine = $state(undefined) as number | undefined;
   let voiceDialogNavQuery = $state('');
   let indexAbortController: AbortController | null = null;
+  /** 首次构建是否已启动：用于区分「还没轮到」与「已取消/失败」 */
+  let voiceIndexAttempted = $state(false);
   const VOICE_HIT_LIMIT = 30;
 
   let voiceIndexFailed = $derived(voiceIndexFailures.length);
@@ -206,6 +209,8 @@
     const controller = new AbortController();
     indexAbortController = controller;
     voiceIndexLoading = true;
+    voiceIndexAttempted = true;
+    voiceCharsError = '';
     if (!options.background) voiceIndexFromCache = false;
     voiceIndexDone = 0;
     voiceIndexTotal = 0;
@@ -270,6 +275,16 @@
     const titles = missingTitles(voiceCharacters, voiceSearchIndex, voiceIndexFailures);
     if (titles.length === 0) return;
     runIndexBuild(voiceCharacters, { keepExisting: true, onlyTitles: titles });
+  }
+
+  /** 索引未完成时的续跑入口：优先补缺失，其次重试失败项 */
+  function resumeIndexBuild(): void {
+    if (voiceCharacters.length === 0) return;
+    if (voiceIndexPending > 0) {
+      indexMissingCharacters();
+      return;
+    }
+    retryFailedVoiceIndex();
   }
 
   function rebuildVoiceIndex(): void {
@@ -382,16 +397,7 @@
             {/each}
           </div>
           {#if voiceFilterResult.hitTotal > VOICE_HIT_LIMIT}
-            <div class="notice-card" role="status">
-              <div class="notice-card-glow"></div>
-              <div class="notice-card-head">
-                <span class="notice-card-icon muted"><iconify-icon icon="lucide:list-filter"></iconify-icon></span>
-                <span>
-                  <strong class="notice-card-title">仅显示前 {VOICE_HIT_LIMIT} 条</strong>
-                  <small class="notice-card-desc">结果较多，可缩小关键词继续筛选</small>
-                </span>
-              </div>
-            </div>
+            <NoticeCard icon="lucide:list-filter" tone="muted" title={`仅显示前 ${VOICE_HIT_LIMIT} 条`} desc="结果较多，可缩小关键词继续筛选" />
           {/if}
         {:else if query.trim()}
           <div class="voice-pane-empty">
@@ -406,19 +412,12 @@
         {/if}
 
         {#if voiceIndexLoading}
-          <div class="notice-card" role="status">
-            <div class="notice-card-glow"></div>
-            <div class="notice-card-head">
-              <span class="notice-card-icon loading"><span class="suggest-spinner"></span></span>
-              <span>
-                <strong class="notice-card-title">{voiceIndexFromCache || voiceIndexReady ? '正在更新索引' : '正在建立索引'}</strong>
-                <small class="notice-card-desc">章节与字幕 {voiceIndexDone}/{voiceIndexTotal || '…'}</small>
-              </span>
-            </div>
-            <div class="notice-card-actions">
+          <NoticeCard tone="loading" title={voiceIndexFromCache || voiceIndexReady ? '正在更新索引' : '正在建立索引'} desc={`章节与字幕 ${voiceIndexDone}/${voiceIndexTotal || '…'}`}>
+            {#snippet iconSnippet()}<span class="suggest-spinner"></span>{/snippet}
+            {#snippet actions()}
               <button class="btn outline" type="button" onclick={cancelIndexBuild}>取消</button>
-            </div>
-          </div>
+            {/snippet}
+          </NoticeCard>
         {:else if voiceIndexReady}
           <button class="notice-card tone-success notice-card-action" type="button" onclick={rebuildVoiceIndex} title="点击重新建立索引">
             <div class="notice-card-glow"></div>
@@ -443,21 +442,13 @@
           </button>
 
           {#if voiceIndexFailed > 0}
-            <div class="notice-card tone-error" role="alert">
-              <div class="notice-card-glow"></div>
-              <div class="notice-card-head">
-                <span class="notice-card-icon error"><iconify-icon icon="lucide:alert-circle"></iconify-icon></span>
-                <span>
-                  <strong class="notice-card-title">{voiceIndexFailed} 个角色索引失败</strong>
-                  <small class="notice-card-desc">网络异常或上游限制，可逐个或批量重试</small>
-                </span>
-              </div>
-              <div class="notice-card-actions">
+            <NoticeCard icon="lucide:alert-circle" tone="error" role="alert" title={`${voiceIndexFailed} 个角色索引失败`} desc="网络异常或上游限制，可逐个或批量重试">
+              {#snippet actions()}
                 <button class="btn outline" type="button" onclick={retryFailedVoiceIndex}>重试全部失败</button>
                 <button class="btn outline" type="button" onclick={() => voiceFailedListOpen = !voiceFailedListOpen}>
                   {voiceFailedListOpen ? '收起列表' : '查看失败项'}
                 </button>
-              </div>
+              {/snippet}
               {#if voiceFailedListOpen}
                 <ul class="voice-failed-list">
                   {#each voiceIndexFailures as item (item.title)}
@@ -471,21 +462,27 @@
                   {/each}
                 </ul>
               {/if}
-            </div>
+            </NoticeCard>
           {/if}
 
           {#if voiceIndexNoVoice > 0}
-            <div class="notice-card tone-warn" role="status">
-              <div class="notice-card-glow"></div>
-              <div class="notice-card-head">
-                <span class="notice-card-icon warn"><iconify-icon icon="lucide:mic-off"></iconify-icon></span>
-                <span>
-                  <strong class="notice-card-title">{voiceIndexNoVoice} 个角色暂无语音</strong>
-                  <small class="notice-card-desc">这些角色目前没有可检索的台词页</small>
-                </span>
-              </div>
-            </div>
+            <NoticeCard icon="lucide:mic-off" tone="warn" title={`${voiceIndexNoVoice} 个角色暂无语音`} desc="这些角色目前没有可检索的台词页" />
           {/if}
+        {:else if voiceCharacters.length > 0 && voiceIndexAttempted}
+          <!-- 未就绪且未在构建：取消后的死态 / 首次构建失败，都给出重启入口 -->
+          <NoticeCard
+            icon={voiceCharsError ? 'lucide:alert-circle' : 'lucide:database-zap'}
+            tone={voiceCharsError ? 'error' : 'muted'}
+            role={voiceCharsError ? 'alert' : 'status'}
+            title={voiceCharsError ? '建立索引失败' : '索引未完成'}
+            desc={voiceCharsError || '已取消或尚未建立，可随时继续，已完成部分会保留'}
+          >
+            {#snippet actions()}
+              <button class="btn outline" type="button" onclick={resumeIndexBuild}>
+                {voiceCharsError ? '重试建立索引' : '继续建立索引'}
+              </button>
+            {/snippet}
+          </NoticeCard>
         {/if}
       </aside>
     </div>

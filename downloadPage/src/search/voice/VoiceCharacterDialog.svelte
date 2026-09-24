@@ -75,10 +75,135 @@
     return count;
   });
 
-  function closeOnBackdrop(event: MouseEvent): void {
-    if (event.target === dialogRef) { dialogRef?.close(); onClose(); }
+  interface ZipPreviewRow {
+    key: string;
+    depth: number;
+    kind: 'zip' | 'folder' | 'file';
+    name: string;
+    count?: number;
   }
-  function handleClose(): void { dialogRef?.close(); onClose(); }
+
+  /** 预览专用：父目录推导（去掉空文件名残留的尾部斜杠） */
+  function previewStrip(p: string): string {
+    return p.replace(/\/*$/, '');
+  }
+
+  /** 预览专用：镜像 handleDownload 的命名规则，取该行作为示例文件名 */
+  function previewAudioName(line: VoiceLine, lang: LangKey, audioName: string, index: number): string {
+    if (namingMode === 'both') return withAudioExt(`${safeFileName(line.category || 'voice', '')}_${safeFileName(getText(line, lang), audioName)}`);
+    if (namingMode === 'category') return withAudioExt(`${safeFileName(line.category || 'voice', '')}_001`);
+    if (namingMode === 'subtitle') return withAudioExt(safeFileName(getText(line, lang), audioName));
+    if (namingMode === 'template') return withAudioExt(resolveNameTemplate(line, lang, audioName, index));
+    return withAudioExt(audioName);
+  }
+
+  /** 实时推导当前选项下的压缩包结构；目录规则与 handleDownload 逐条对齐 */
+  let zipPreview = $derived.by<{ rows: ZipPreviewRow[]; audioCount: number; extraCount: number }>(() => {
+    const rows: ZipPreviewRow[] = [];
+    let audioCount = 0;
+    let extraCount = 0;
+
+    const selLines: Array<{ line: VoiceLine; sectionIdx: number }> = [];
+    for (let si = 0; si < sectionGroups.length; si++) {
+      const sel = sectionSelections[si];
+      if (!sel || sel.size === 0) continue;
+      for (const i of sel) {
+        const line = sectionGroups[si].lines[i];
+        if (line && hasAnyAudio(line)) selLines.push({ line, sectionIdx: si });
+      }
+    }
+    if (selLines.length === 0 || downloadLangs.size === 0) return { rows, audioCount, extraCount };
+
+    const folders = new Map<string, { sample: string; count: number }>();
+    const rootFiles: string[] = [];
+    const addEntry = (parent: string, sample: string): void => {
+      if (!parent) {
+        rootFiles.push(sample);
+        return;
+      }
+      const hit = folders.get(parent);
+      if (hit) hit.count += 1;
+      else folders.set(parent, { sample, count: 1 });
+    };
+    const langFolder = (lang: LangKey, category: string, chapter?: string): string =>
+      previewStrip(buildFolderPath(folderMode, lang, category, '', chapter));
+
+    if (mergeMode === 'all') {
+      // 全部合成一条：永远在根目录
+      rootFiles.push(`${character.title}-合并.${exportFormat}`);
+      audioCount = 1;
+    } else if (mergeMode === 'byLang') {
+      // 每语言合成一条：仅「按语言/语言+分类」时入目录；只列实际有台词的语言
+      const inFolder = folderMode === 'lang' || folderMode === 'both';
+      for (const lang of downloadLangs) {
+        const clips = selLines.filter(({ line }) => getAudio(line, lang)).length;
+        if (clips === 0) continue;
+        const name = `${character.title}-${langLabels[lang]}-合并.${exportFormat}`;
+        addEntry(inFolder ? previewStrip(buildFolderPath(folderMode, lang, 'merged', '')) : '', name);
+        audioCount += 1;
+      }
+    } else {
+      for (const { line, sectionIdx } of selLines) {
+        for (const lang of downloadLangs) {
+          const audioName = getAudio(line, lang);
+          if (!audioName) continue;
+          addEntry(langFolder(lang, line.category, chapterName(sectionIdx)), previewAudioName(line, lang, audioName, 0));
+          audioCount += 1;
+        }
+      }
+    }
+
+    if (subtitleMode === 'merged') {
+      // 每语言一份：与合并产物相同的目录规则（仅按语言/语言+分类时入目录）
+      const inFolder = folderMode === 'lang' || folderMode === 'both';
+      for (const lang of downloadLangs) {
+        addEntry(inFolder ? previewStrip(buildFolderPath(folderMode, lang, 'subtitles', '')) : '', `subtitles_${langLabels[lang]}.txt`);
+        extraCount += 1;
+      }
+    } else if (subtitleMode === 'perLine') {
+      // 每句一份：跟随语言/分类目录，但不进章节目录
+      for (const { line } of selLines) {
+        for (const lang of downloadLangs) {
+          if (!getText(line, lang)) continue;
+          addEntry(langFolder(lang, line.category), `001_${safeFileName(line.category || 'other', 'other')}_${lang}.txt`);
+          extraCount += 1;
+        }
+      }
+    }
+    if (exportDetailFiles) {
+      // 详情文件：跟随语言/分类目录，不进章节目录
+      for (const { line } of selLines) {
+        addEntry(langFolder('cn', line.category), `${safeFileName(line.category || 'other', '1')}_001.txt`);
+        extraCount += 1;
+      }
+    }
+
+    rows.push({ key: 'zip', depth: 0, kind: 'zip', name: `${character.title}-语音-${new Date().toISOString().slice(0, 10)}.zip` });
+    rootFiles.forEach((name, fi) => rows.push({ key: `r-${fi}`, depth: 0, kind: 'file', name }));
+
+    const sortedFolders = [...folders.entries()].sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'));
+    const MAX_FOLDERS = 6;
+    sortedFolders.slice(0, MAX_FOLDERS).forEach(([parent, info], fi) => {
+      const depth = parent.split('/').filter(Boolean).length;
+      rows.push({ key: `f-${fi}`, depth, kind: 'folder', name: `${parent}/`, count: info.count });
+      rows.push({ key: `s-${fi}`, depth: depth + 1, kind: 'file', name: info.sample });
+    });
+    if (sortedFolders.length > MAX_FOLDERS) {
+      rows.push({ key: 'more', depth: 1, kind: 'folder', name: `…另有 ${sortedFolders.length - MAX_FOLDERS} 个目录` });
+    }
+    return { rows, audioCount, extraCount };
+  });
+
+  function closeOnBackdrop(event: MouseEvent): void {
+    // close() 会触发 onclose -> onClose，这里不重复调用
+    if (event.target === dialogRef) dialogRef?.close();
+  }
+  function handleClose(): void {
+    // 关闭弹窗（按钮或 Esc）都终止后台下载，避免销毁后仍继续写 blob
+    downloadAbortController?.abort();
+    if (dialogRef?.open) dialogRef.close();
+    else onClose();
+  }
   function getVoicePageTitle(charName: string): string { return `${charName}/语音台词`; }
 
   function getTabLang(index: number): LangKey {
@@ -536,7 +661,7 @@
   });
 </script>
 
-<dialog class="voice-dialog" bind:this={dialogRef} onclick={closeOnBackdrop}>
+<dialog class="voice-dialog" bind:this={dialogRef} onclick={closeOnBackdrop} onclose={() => { downloadAbortController?.abort(); onClose(); }}>
   <div class="voice-dialog-inner">
     <div class="voice-dialog-header">
       <h2 class="voice-dialog-title">
@@ -564,6 +689,7 @@
       <!-- Sidebar -->
       {#if status === 'ready'}
         <aside class="voice-sidebar">
+          <div class="voice-sidebar-cols">
           <div class="voice-sidebar-section">
             <div class="voice-sidebar-heading">导出</div>
             <div class="voice-sidebar-row">
@@ -577,11 +703,11 @@
               </div>
             </div>
             <div class="voice-sidebar-row">
-              <span class="voice-sidebar-label">合并</span>
+              <span class="voice-sidebar-label">音频组织</span>
               <div class="chip-group voice-sidebar-chips-vert">
-                <button class:active={mergeMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'none'}>不合并</button>
-                <button class:active={mergeMode === 'byLang'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'byLang'}>按语言合并</button>
-                <button class:active={mergeMode === 'all'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'all'}>全部合并</button>
+                <button class:active={mergeMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'none'}>逐条文件</button>
+                <button class:active={mergeMode === 'byLang'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'byLang'}>每语言合成一条</button>
+                <button class:active={mergeMode === 'all'} class="chip chip-sm" disabled={downloading} onclick={() => mergeMode = 'all'}>全部合成一条</button>
               </div>
             </div>
             <div class="voice-sidebar-row">
@@ -611,8 +737,8 @@
             <div class="voice-sidebar-row">
               <span class="voice-sidebar-label">模式</span>
               <div class="chip-group voice-sidebar-chips-vert">
-                <button class:active={subtitleMode === 'merged'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'merged'}>按语言汇总</button>
-                <button class:active={subtitleMode === 'perLine'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'perLine'}>按台词拆分</button>
+                <button class:active={subtitleMode === 'merged'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'merged'}>每语言一份</button>
+                <button class:active={subtitleMode === 'perLine'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'perLine'}>每句一份</button>
                 <button class:active={subtitleMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => subtitleMode = 'none'}>不导出</button>
               </div>
             </div>
@@ -631,18 +757,19 @@
               </label>
             {/if}
           </div>
+          </div>
 
           {#if mergeMode === 'none'}
             <div class="voice-sidebar-section">
               <div class="voice-sidebar-heading">文件</div>
               <div class="voice-sidebar-row">
                 <span class="voice-sidebar-label">命名</span>
-                <div class="chip-group voice-sidebar-chips-vert">
-                  <button class:active={namingMode === 'both'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'both'}>分类 + 字幕</button>
-                  <button class:active={namingMode === 'category'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'category'}>分类</button>
-                  <button class:active={namingMode === 'subtitle'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'subtitle'}>字幕</button>
+                <div class="chip-group">
+                  <button class:active={namingMode === 'both'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'both'}>分类_台词</button>
+                  <button class:active={namingMode === 'category'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'category'}>分类_编号</button>
+                  <button class:active={namingMode === 'subtitle'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'subtitle'}>仅台词</button>
                   <button class:active={namingMode === 'original'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'original'}>原始文件名</button>
-                  <button class:active={namingMode === 'template'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'template'}>模板</button>
+                  <button class:active={namingMode === 'template'} class="chip chip-sm" disabled={downloading} onclick={() => namingMode = 'template'}>自定义模板</button>
                 </div>
               </div>
               {#if namingMode === 'template'}
@@ -653,16 +780,41 @@
               {/if}
               <div class="voice-sidebar-row">
                 <span class="voice-sidebar-label">目录</span>
-                <div class="chip-group voice-sidebar-chips-vert">
-                  <button class:active={folderMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'none'}>无</button>
-                  <button class:active={folderMode === 'lang'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'lang'}>语言</button>
-                  <button class:active={folderMode === 'category'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'category'}>分类</button>
-                  <button class:active={folderMode === 'chapter'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'chapter'}>章节</button>
+                <div class="chip-group">
+                  <button class:active={folderMode === 'none'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'none'}>不建目录</button>
+                  <button class:active={folderMode === 'lang'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'lang'}>按语言</button>
+                  <button class:active={folderMode === 'category'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'category'}>按分类</button>
+                  <button class:active={folderMode === 'chapter'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'chapter'}>按章节</button>
                   <button class:active={folderMode === 'both'} class="chip chip-sm" disabled={downloading} onclick={() => folderMode = 'both'}>语言 / 分类</button>
                 </div>
               </div>
             </div>
           {/if}
+
+          <div class="voice-sidebar-section zip-preview-section">
+            <div class="zip-preview">
+              <div class="zip-preview-head">
+                <iconify-icon icon="lucide:archive"></iconify-icon>
+                <span>压缩包预览</span>
+                {#if zipPreview.audioCount > 0}
+                  <span class="zip-preview-meta">{zipPreview.audioCount} 音频 · {zipPreview.extraCount} 附属</span>
+                {/if}
+              </div>
+              {#if zipPreview.rows.length === 0}
+                <div class="zip-preview-empty">勾选台词后，这里实时显示压缩包内的文件结构</div>
+              {:else}
+                <div class="zip-preview-tree">
+                  {#each zipPreview.rows as row (row.key)}
+                    <div class="zip-preview-row" class:zip-root={row.kind === 'zip'} class:sample={row.kind === 'file' && row.depth > 0} style="padding-left: {6 + row.depth * 12}px;">
+                      <iconify-icon icon={row.kind === 'zip' ? 'lucide:file-archive' : row.kind === 'folder' ? 'lucide:folder' : row.name.endsWith('.txt') ? 'lucide:file-text' : 'lucide:file'}></iconify-icon>
+                      <span class="zip-preview-name">{row.name}</span>
+                      {#if row.count && row.count > 1}<span class="zip-preview-count">×{row.count}</span>{/if}
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
         </aside>
       {/if}
 
