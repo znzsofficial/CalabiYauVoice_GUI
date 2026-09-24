@@ -1,9 +1,19 @@
 <script lang="ts">
   import BulkDownloadBar from '../BulkDownloadBar.svelte';
+  import Pagination from '../Pagination.svelte';
   import SearchResults from '../SearchResults.svelte';
+  import type { SearchAliasResolution } from '../../nav/searchAliases';
   import type { ProfileValue, SearchResult, Status } from '../searchTypes';
 
   type CategoryProfileValue = Extract<ProfileValue, 'voiceCategory' | 'categoryDownload'>;
+
+  const QUICK_CATEGORIES: Array<{ label: string; icon: string; term: string }> = [
+    { label: '角色', icon: 'lucide:users', term: '角色' },
+    { label: '武器', icon: 'lucide:swords', term: '武器' },
+    { label: '地图', icon: 'lucide:map', term: '地图' },
+    { label: '时装', icon: 'lucide:shirt', term: '时装' },
+    { label: '语音', icon: 'lucide:mic', term: '语音' }
+  ];
 
   let {
     activeProfile = 'categoryDownload' as CategoryProfileValue,
@@ -32,7 +42,10 @@
     pages = [] as Array<number | '...'>,
     currentPage = 1,
     totalPages = 0,
+    aliasNotice = null as SearchAliasResolution | null,
     onRetry = () => {},
+    onQuickSearch = (_term: string) => {},
+    onSearchTerm = (_term: string) => {},
     onToggleCategory = (title: string) => {},
     onToggleCategoryExpanded = (title: string) => {},
     onToggleRootCollapsed = (title: string) => {},
@@ -73,7 +86,10 @@
     pages?: Array<number | '...'>;
     currentPage?: number;
     totalPages?: number;
+    aliasNotice?: SearchAliasResolution | null;
     onRetry?: () => void;
+    onQuickSearch?: (term: string) => void;
+    onSearchTerm?: (term: string) => void;
     onToggleCategory?: (title: string) => void;
     onToggleCategoryExpanded?: (title: string) => void;
     onToggleRootCollapsed?: (title: string) => void;
@@ -99,6 +115,46 @@
 
 <div class={`category-workbench ${categorySelectionEnabled && status === 'ready' ? 'has-rail' : ''}`}>
   <section class="category-results-pane">
+    {#if aliasNotice && (status === 'ready' || status === 'empty')}
+      <div class="alias-notice" role="status">
+        <iconify-icon icon="lucide:sparkles"></iconify-icon>
+        <span>已将「{aliasNotice.from}」匹配为</span>
+        <button class="alias-term" type="button" onclick={() => onSearchTerm(aliasNotice.primary)}>{aliasNotice.primary}</button>
+        {#if aliasNotice.alternates.length > 0}
+          <span class="alias-alt-label">相关：</span>
+          {#each aliasNotice.alternates as alt (alt)}
+            <button class="alias-alt" type="button" onclick={() => onSearchTerm(alt)}>{alt}</button>
+          {/each}
+        {/if}
+      </div>
+    {/if}
+    {#if status === 'idle'}
+      <div class="search-idle-portal">
+        <div class="idle-portal-main">
+          <div class="idle-portal-icon-box">
+            <iconify-icon icon="lucide:folder-down"></iconify-icon>
+          </div>
+          <div class="idle-portal-texts">
+            <h2 class="idle-portal-title">按分类浏览并打包下载</h2>
+            <p class="idle-portal-desc">搜索 Wiki 分类，勾选后批量下载分类内文件；支持展开子分类逐级选择，语音分类可直接打包音频。</p>
+          </div>
+          <a class="idle-portal-btn" href="/nav/">
+            <span>前往 Wiki 导航</span>
+            <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+          </a>
+        </div>
+        <div class="idle-portal-chips">
+          <span class="portal-chips-label">热门分类：</span>
+          {#each QUICK_CATEGORIES as item (item.term)}
+            <button class="portal-chip-item" type="button" onclick={() => onQuickSearch(item.term)}>
+              <iconify-icon icon={item.icon}></iconify-icon>
+              <span>{item.label}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     {#if status === 'ready'}
       <div class="category-result-toolbar">
         <div class="result-meta">
@@ -119,7 +175,7 @@
     {/if}
 
     {#if pages.length > 0 && status === 'ready'}
-      <div class="pagination"><button class="page-btn" disabled={currentPage <= 1} onclick={() => onGoPage(currentPage - 1)}>‹</button>{#each pages as page}<button class:active={page === currentPage} class="page-btn" disabled={page === '...'} onclick={() => typeof page === 'number' && onGoPage(page)}>{page}</button>{/each}<button class="page-btn" disabled={currentPage >= totalPages} onclick={() => onGoPage(currentPage + 1)}>›</button></div>
+      <Pagination {pages} {currentPage} {totalPages} onGoPage={onGoPage} />
     {/if}
   </section>
 

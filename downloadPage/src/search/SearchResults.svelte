@@ -1,5 +1,6 @@
 <script lang="ts">
   import CategoryTreeNode from './CategoryTreeNode.svelte';
+  import NoticeCard from './NoticeCard.svelte';
   import { highlightMatch, categoryDisplayName } from './utils';
   import type { SearchResult, Status } from './searchTypes';
 
@@ -147,9 +148,7 @@
 </script>
 
 <div class="results" id="results">
-  {#if status === 'idle'}
-    <div class="placeholder"><div class="placeholder-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>输入关键词开始搜索卡拉彼丘 Wiki</p></div>
-  {:else if status === 'loading'}
+  {#if status === 'loading'}
     {#each Array(5) as _}<div class="result-card skeleton-card"><div class="result-body"><div class="skeleton-line" style="width: 40%; height: 18px;"></div><div class="skeleton-line" style="width: 100%; height: 14px; margin-top: 8px;"></div><div class="skeleton-line" style="width: 80%; height: 14px; margin-top: 4px;"></div><div class="skeleton-line" style="width: 30%; height: 12px; margin-top: 8px;"></div></div></div>{/each}
   {:else if status === 'empty'}
     <div class="empty-state">
@@ -169,19 +168,11 @@
       </div>
     </div>
   {:else if status === 'error'}
-    <div class="notice-card notice-card-center" role="alert">
-      <div class="notice-card-glow"></div>
-      <div class="notice-card-head">
-        <span class="notice-card-icon error"><iconify-icon icon="lucide:alert-circle"></iconify-icon></span>
-        <span>
-          <strong class="notice-card-title">搜索失败</strong>
-          <small class="notice-card-desc">{errorMessage}</small>
-        </span>
-      </div>
-      <div class="notice-card-actions">
+    <NoticeCard center icon="lucide:alert-circle" tone="error" role="alert" title="搜索失败" desc={errorMessage}>
+      {#snippet actions()}
         <button class="btn outline" type="button" onclick={onRetry}>重试</button>
-      </div>
-    </div>
+      {/snippet}
+    </NoticeCard>
   {:else}
     {#each results as result (result.title)}
       <article class:category-tree-card={categorySearchActive && result.ns === 14} class="result-card" style={`animation-delay: ${result.delay}`}>

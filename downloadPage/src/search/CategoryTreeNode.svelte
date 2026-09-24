@@ -105,7 +105,7 @@
 
     <button class="tree-select" type="button" disabled={selectionDisabled} onclick={handleSelect} onkeydown={handleRowKeydown}>
       <iconify-icon class="tree-check" icon={selected ? 'lucide:check-square' : 'lucide:square'} aria-hidden="true"></iconify-icon>
-      <iconify-icon class="tree-folder" icon={expanded ? 'lucide:folder-open' : knownEmpty ? 'lucide:folder' : 'lucide:folder'} aria-hidden="true"></iconify-icon>
+      <iconify-icon class="tree-folder" icon={expanded ? 'lucide:folder-open' : 'lucide:folder'} aria-hidden="true"></iconify-icon>
       <span class="tree-name">{displayName}</span>
       {#if childCount != null && childCount > 0}
         <span class="tree-count">{childCount}</span>

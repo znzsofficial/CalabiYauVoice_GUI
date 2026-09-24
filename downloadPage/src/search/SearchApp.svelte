@@ -6,6 +6,7 @@
   import { apiErrorMessage, ensureProxyDownloadUrl, fetchCategoryFiles, fetchCategoryMembers, fetchFileAssets, fetchPageExtra, fetchPrefixSuggestions, formatFileSize, httpErrorMessage, mediaFileNameFromUrl, searchWiki, WIKI_BASE, type CategoryFile, type FileAsset, type ResultImage, type Suggestion, type WikiSearchItem } from './searchApi';
   import type { NamespaceOption, ProfileValue, SearchResult, SortValue, Status } from './searchTypes';
   import { toError, categoryDisplayName } from './utils';
+  import { isAliasSearchEnabled, resolveSearchAlias, setAliasSearchEnabled, type SearchAliasResolution } from '../nav/searchAliases';
   import SearchFilters from './SearchFilters.svelte';
   import SearchBox from './SearchBox.svelte';
   import VoiceSubtitlePanel from './panels/VoiceSubtitlePanel.svelte';
@@ -42,6 +43,8 @@
   let searchModePrefix = $state('');
   let searchModeLabel = $state('内容');
   let searchRequestId = $state(0);
+  let aliasNotice = $state(null) as SearchAliasResolution | null;
+  let aliasSearchEnabled = $state(true);
   let searchAbortController = $state(null) as AbortController | null;
   let status = $state('idle' as Status);
   let errorMessage = $state('');
@@ -58,6 +61,8 @@
   let lightboxSrc = $state('');
   let lightboxOpen = $state(false);
   let lightboxDownloading = $state(false);
+  let lightboxImages = $state([]) as string[];
+  let lightboxIndex = $state(-1);
   let categoryDownloading = $state(false);
   let categoryAbortController = $state(null) as AbortController | null;
   let categoryStatusText = $state('');
@@ -101,6 +106,7 @@
   let categoryAllResultsCountStr = $derived((categoryAllResults.length || categoryResults.length).toLocaleString());
 
   onMount(() => {
+    aliasSearchEnabled = isAliasSearchEnabled();
     const urlQ = new URLSearchParams(location.search).get('q');
     if (urlQ) {
       inputValue = urlQ;
@@ -108,6 +114,12 @@
       doSearch(urlQ);
     }
   });
+
+  function toggleAliasSearch(): void {
+    aliasSearchEnabled = !aliasSearchEnabled;
+    setAliasSearchEnabled(aliasSearchEnabled);
+    if (!aliasSearchEnabled) aliasNotice = null;
+  }
 
   function abortActiveSearch(): void {
     searchAbortController?.abort();
@@ -151,6 +163,7 @@
     expandedCategories = new Set();
     collapsedRootCategories = new Set();
     categorySubcatErrors = {};
+    aliasNotice = null as SearchAliasResolution | null;
     currentPage = 1;
     categoryStatusText = '';
     if (query.trim()) doSearch();
@@ -165,7 +178,7 @@
   }
 
   function setSort(value: SortValue): void {
-    if (downloadBusy) return;
+    if (downloadBusy || voiceSubtitleActive) return;
     activeSort = value;
     currentPage = 1;
     clearSelections();
@@ -250,6 +263,7 @@
     totalHits = 0;
     results = [];
     resultSuggestion = '';
+    aliasNotice = null as SearchAliasResolution | null;
     clearSelections();
     categoryAllResults = [];
     expandedCategories = new Set();
@@ -289,7 +303,18 @@
     doSearch(value);
   }
 
-  async function doSearch(searchValue = query): Promise<void> {
+  /** 别名提示条中的词条已是正式名称，直接搜索，不再做二次别名解析 */
+  function searchCanonical(term: string): void {
+    if (downloadBusy) return;
+    inputValue = term;
+    query = term;
+    currentPage = 1;
+    clearSelections();
+    if (categorySearchActive) resetCategoryTreeUi();
+    doSearch(term, true);
+  }
+
+  async function doSearch(searchValue = query, skipAlias = false): Promise<void> {
     if (!searchValue.trim()) return;
     query = searchValue;
     const requestProfile = activeProfile;
@@ -297,7 +322,10 @@
     const requestNamespace = getActiveNSParam();
     const requestSort = activeSort;
     const requestPage = currentPage;
-    const requestSearch = getSearchQuery(searchValue);
+    // 别名联想开启且整词命中时（如 小绘/糖猫/生化），解释为主词条再搜索，其余展开项做相关推荐
+    const alias = aliasSearchEnabled && !skipAlias ? resolveSearchAlias(searchValue) : null;
+    const requestSearch = getSearchQuery(alias ? alias.primary : searchValue);
+    aliasNotice = alias;
     searchAbortController?.abort();
     const controller = new AbortController();
     searchAbortController = controller;
@@ -826,14 +854,37 @@
   }
 
   function openLightbox(src: string): void {
+    // 图片 profile 下在结果序列内打开，支持 ‹ › 翻页；其它入口（如分类弹窗预览）退化为单张
+    const list = activeProfile === 'images'
+      ? results.filter(result => result.image).map(result => result.image!.full)
+      : [];
+    const index = list.indexOf(src);
+    lightboxImages = index >= 0 ? list : [src];
+    lightboxIndex = index >= 0 ? index : 0;
     lightboxSrc = src;
     lightboxOpen = true;
     document.body.style.overflow = 'hidden';
   }
 
+  function lightboxPrev(): void {
+    if (lightboxIndex > 0) {
+      lightboxIndex -= 1;
+      lightboxSrc = lightboxImages[lightboxIndex];
+    }
+  }
+
+  function lightboxNext(): void {
+    if (lightboxIndex < lightboxImages.length - 1) {
+      lightboxIndex += 1;
+      lightboxSrc = lightboxImages[lightboxIndex];
+    }
+  }
+
   function closeLightbox(): void {
     lightboxOpen = false;
     lightboxSrc = '';
+    lightboxImages = [];
+    lightboxIndex = -1;
     document.body.style.overflow = '';
   }
 
@@ -862,6 +913,17 @@
     <a href="/" class="header-back" aria-label="返回下载页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></a>
     <h1 class="header-title"><img src="/icon.svg" alt="" class="header-logo">卡拉彼丘 Wiki 搜索</h1>
     <div class="header-actions">
+      <button
+        class="header-link alias-toggle"
+        class:active={aliasSearchEnabled}
+        type="button"
+        aria-pressed={aliasSearchEnabled}
+        onclick={toggleAliasSearch}
+        title={aliasSearchEnabled ? '别名联想已开启：小绘、糖猫、生化等别名将自动匹配为正式词条。点击关闭' : '别名联想已关闭：搜索词将原样发给 Wiki。点击开启'}
+      >
+        <iconify-icon icon="lucide:sparkles" class="ext-icon"></iconify-icon>
+        <span class="btn-text-desktop">别名联想</span>
+      </button>
       <a class="header-link" href="/nav/" title="前往全站 Wiki 导航目录">
         <iconify-icon icon="lucide:compass" class="ext-icon"></iconify-icon>
         <span>Wiki 导航</span>
@@ -878,7 +940,7 @@
   <div class="search-controls-shell">
     <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} disabled={downloadBusy} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
 
-    <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} disabled={downloadBusy} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => { if (!downloadBusy) nsExpanded = !nsExpanded; }} />
+    <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} disabled={downloadBusy} {voiceSubtitleActive} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => { if (!downloadBusy) nsExpanded = !nsExpanded; }} />
   </div>
 
   {#if voiceSubtitleActive}
@@ -886,16 +948,16 @@
   {/if}
 
   {#if !voiceSubtitleActive && categorySearchActive}
-    <CategoryDownloadPanel activeProfile={activeProfile === 'voiceCategory' ? 'voiceCategory' : 'categoryDownload'} {status} {query} {errorMessage} {results} {categoryResults} {categoryResultsCountStr} {categoryAllResultsCountStr} categoryShowAllResults={categoryShowAllResults} categoryIncludeSubcats={categoryIncludeSubcats} {categorySelectionEnabled} {selectedCategoryResults} {selectedCategoryResultItems} selectedCategoriesTotal={selectedCategoriesTotal} {categoryStatusText} {categoryDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {expandedCategories} {collapsedRootCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} {pages} {currentPage} {totalPages} onRetry={doSearch} onToggleCategory={toggleCategoryResultSelection} onToggleCategoryExpanded={toggleCategoryExpanded} onToggleRootCollapsed={toggleRootCategoryCollapsed} onOpenCategoryFiles={openCategoryFileDialog} onRetryCategorySubcats={ensureCategorySubcats} onToggleAllCategories={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onClearAllSelections={clearAllSelections} onDownloadCategories={downloadSelectedCategoriesZip} onCancelCategories={cancelSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} onSetCategoryShowAllResults={setCategoryShowAllResults} onSetCategoryIncludeSubcats={(value) => { if (!downloadBusy) categoryIncludeSubcats = value; }} onGoPage={goPage} />
+    <CategoryDownloadPanel activeProfile={activeProfile === 'voiceCategory' ? 'voiceCategory' : 'categoryDownload'} {status} {query} {errorMessage} {results} {categoryResults} {categoryResultsCountStr} {categoryAllResultsCountStr} categoryShowAllResults={categoryShowAllResults} categoryIncludeSubcats={categoryIncludeSubcats} {categorySelectionEnabled} {selectedCategoryResults} {selectedCategoryResultItems} selectedCategoriesTotal={selectedCategoriesTotal} {categoryStatusText} {categoryDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {expandedCategories} {collapsedRootCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} {pages} {currentPage} {totalPages} onRetry={() => doSearch()} onToggleCategory={toggleCategoryResultSelection} onToggleCategoryExpanded={toggleCategoryExpanded} onToggleRootCollapsed={toggleRootCategoryCollapsed} onOpenCategoryFiles={openCategoryFileDialog} onRetryCategorySubcats={ensureCategorySubcats} onToggleAllCategories={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onClearAllSelections={clearAllSelections} onDownloadCategories={downloadSelectedCategoriesZip} onCancelCategories={cancelSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} onSetCategoryShowAllResults={setCategoryShowAllResults} onSetCategoryIncludeSubcats={(value) => { if (!downloadBusy) categoryIncludeSubcats = value; }} onGoPage={goPage} onQuickSearch={submitSearch} aliasNotice={aliasNotice} onSearchTerm={searchCanonical} />
   {:else if !voiceSubtitleActive}
-    <WikiSearchPanel {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} selectedFilesTotal={selectedFilesTotal} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={doSearch} onSuggestion={searchSuggestion} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onClearAllSelections={clearAllSelections} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
+    <WikiSearchPanel {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} selectedFilesTotal={selectedFilesTotal} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={() => doSearch()} onSuggestion={searchSuggestion} aliasNotice={aliasNotice} onSearchTerm={searchCanonical} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onClearAllSelections={clearAllSelections} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
   {/if}
 </main>
 
 <footer class="footer"><p>数据来源：<a href="https://wiki.biligame.com/klbq/" target="_blank" rel="noopener noreferrer">卡拉彼丘 Wiki</a> · Powered by MediaWiki API</p></footer>
 
 {#if lightboxOpen}
-  <Lightbox src={lightboxSrc} downloading={lightboxDownloading} onClose={closeLightbox} onDownload={downloadLightboxImage} />
+  <Lightbox src={lightboxSrc} downloading={lightboxDownloading} hasPrev={lightboxIndex > 0} hasNext={lightboxIndex < lightboxImages.length - 1} counter={lightboxImages.length > 1 ? `${lightboxIndex + 1} / ${lightboxImages.length}` : ''} onPrev={lightboxPrev} onNext={lightboxNext} onClose={closeLightbox} onDownload={downloadLightboxImage} />
 {/if}
 
   {#if categoryFileDialogOpen}

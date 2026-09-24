@@ -1,6 +1,8 @@
 <script lang="ts">
   import BulkDownloadBar from '../BulkDownloadBar.svelte';
+  import Pagination from '../Pagination.svelte';
   import SearchResults from '../SearchResults.svelte';
+  import type { SearchAliasResolution } from '../../nav/searchAliases';
   import type { SearchResult, Status } from '../searchTypes';
 
   let {
@@ -22,8 +24,10 @@
     pages = [] as Array<number | '...'>,
     currentPage = 1,
     totalPages = 0,
+    aliasNotice = null as SearchAliasResolution | null,
     onRetry = () => {},
     onSuggestion = (value: string) => {},
+    onSearchTerm = (_term: string) => {},
     onToggleFile = (title: string) => {},
     onOpenLightbox = (src: string) => {},
     onToggleAllFiles = () => {},
@@ -51,8 +55,10 @@
     pages?: Array<number | '...'>;
     currentPage?: number;
     totalPages?: number;
+    aliasNotice?: SearchAliasResolution | null;
     onRetry?: () => void;
     onSuggestion?: (value: string) => void;
+    onSearchTerm?: (term: string) => void;
     onToggleFile?: (title: string) => void;
     onOpenLightbox?: (src: string) => void;
     onToggleAllFiles?: () => void;
@@ -73,6 +79,19 @@
 
 <div class={`wiki-workbench ${status === 'ready' && fileSelectionEnabled ? 'has-rail' : ''}`}>
   <section class="wiki-results-pane">
+    {#if aliasNotice && (status === 'ready' || status === 'empty')}
+      <div class="alias-notice" role="status">
+        <iconify-icon icon="lucide:sparkles"></iconify-icon>
+        <span>已将「{aliasNotice.from}」匹配为</span>
+        <button class="alias-term" type="button" onclick={() => onSearchTerm(aliasNotice.primary)}>{aliasNotice.primary}</button>
+        {#if aliasNotice.alternates.length > 0}
+          <span class="alias-alt-label">相关：</span>
+          {#each aliasNotice.alternates as alt (alt)}
+            <button class="alias-alt" type="button" onclick={() => onSearchTerm(alt)}>{alt}</button>
+          {/each}
+        {/if}
+      </div>
+    {/if}
     {#if status === 'ready'}
       <div class="result-meta">
         找到 <strong>{totalHitsStr}</strong> 条结果
@@ -97,11 +116,11 @@
         </div>
         <div class="idle-portal-chips">
           <span class="portal-chips-label">常用快捷入口：</span>
-          <a class="portal-chip-item" href="/nav/">🌟 角色时装投票</a>
-          <a class="portal-chip-item" href="/nav/">🎯 武器筛选</a>
-          <a class="portal-chip-item" href="/nav/">📊 主武器理论数据</a>
-          <a class="portal-chip-item" href="/nav/">🗺️ 地图一览</a>
-          <a class="portal-chip-item" href="/nav/">🎁 兑换码</a>
+          <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:shirt"></iconify-icon><span>角色时装投票</span></a>
+          <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:crosshair"></iconify-icon><span>武器筛选</span></a>
+          <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon><span>主武器理论数据</span></a>
+          <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:map"></iconify-icon><span>地图一览</span></a>
+          <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:gift"></iconify-icon><span>兑换码</span></a>
         </div>
       </div>
     {/if}
@@ -111,7 +130,7 @@
     {/if}
 
     {#if pages.length > 0 && status === 'ready'}
-      <div class="pagination"><button class="page-btn" disabled={currentPage <= 1} onclick={() => onGoPage(currentPage - 1)}>‹</button>{#each pages as page}<button class:active={page === currentPage} class="page-btn" disabled={page === '...'} onclick={() => typeof page === 'number' && onGoPage(page)}>{page}</button>{/each}<button class="page-btn" disabled={currentPage >= totalPages} onclick={() => onGoPage(currentPage + 1)}>›</button></div>
+      <Pagination {pages} {currentPage} {totalPages} onGoPage={onGoPage} />
     {/if}
   </section>
 

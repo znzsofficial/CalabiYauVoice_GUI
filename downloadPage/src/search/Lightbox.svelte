@@ -1,12 +1,29 @@
 <script lang="ts">
-  let { src = '', downloading = false, onClose = () => {}, onDownload = () => {} }: {
+  let {
+    src = '',
+    downloading = false,
+    hasPrev = false,
+    hasNext = false,
+    counter = '',
+    onClose = () => {},
+    onDownload = () => {},
+    onPrev = () => {},
+    onNext = () => {},
+  }: {
     src?: string;
     downloading?: boolean;
+    hasPrev?: boolean;
+    hasNext?: boolean;
+    /** 形如 `3 / 12` 的位置计数，空串不显示 */
+    counter?: string;
     onClose?: () => void;
     onDownload?: () => void;
+    onPrev?: () => void;
+    onNext?: () => void;
   } = $props();
 
   let loaded = $state(false);
+  let loadError = $state(false);
   let zoomed = $state(false);
   let pinching = $state(false);
 
@@ -151,6 +168,7 @@
   $effect(() => {
     src;
     loaded = false;
+    loadError = false;
     resetTransform();
   });
 
@@ -159,15 +177,30 @@
   });
 </script>
 
-<svelte:window onkeydown={(event) => event.key === 'Escape' && onClose()} />
+<svelte:window onkeydown={(event) => {
+  if (event.key === 'Escape') onClose();
+  else if (event.key === 'ArrowLeft' && hasPrev) onPrev();
+  else if (event.key === 'ArrowRight' && hasNext) onNext();
+}} />
 
 <div class="lightbox open">
   <button class="lightbox-backdrop" aria-label="关闭" onclick={onClose}></button>
     <button class:zoomed class:dragging class:pinching class="lightbox-container" type="button" ondblclick={toggleZoom} onwheel={handleWheel} onpointerdown={startDrag} onpointermove={moveDrag} onpointerup={endDrag} onpointercancel={endDrag}>
-    <img bind:this={imgEl} class="lightbox-img" {src} alt="" onload={() => loaded = true}>
-    {#if !loaded}<div class="lightbox-loading"><div class="lightbox-spinner"></div></div>{/if}
+    <img bind:this={imgEl} class="lightbox-img" {src} alt="" onload={() => loaded = true} onerror={() => loadError = true}>
+    {#if !loaded}
+      <div class="lightbox-loading">
+        {#if loadError}
+          <span class="lightbox-load-error">图片加载失败</span>
+        {:else}
+          <div class="lightbox-spinner"></div>
+        {/if}
+      </div>
+    {/if}
   </button>
   <button class="lightbox-action lightbox-download" type="button" aria-label="下载图片" title="下载图片" disabled={downloading} onclick={(e) => { e.stopPropagation(); onDownload(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
+  {#if counter}<span class="lightbox-counter">{counter}</span>{/if}
+  {#if hasPrev}<button class="lightbox-action lightbox-nav lightbox-prev" type="button" aria-label="上一张" title="上一张（←）" onclick={(e) => { e.stopPropagation(); onPrev(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>{/if}
+  {#if hasNext}<button class="lightbox-action lightbox-nav lightbox-next" type="button" aria-label="下一张" title="下一张（→）" onclick={(e) => { e.stopPropagation(); onNext(); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>{/if}
   <button class="lightbox-action lightbox-close" aria-label="关闭" onclick={onClose}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
 </div>
 
@@ -264,6 +297,14 @@
     animation: spin 0.8s linear infinite;
   }
 
+  .lightbox-load-error {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    background-color: color-mix(in srgb, var(--background) 78%, transparent);
+  }
+
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
@@ -290,6 +331,39 @@
 
   .lightbox-download { right: 68px; }
   .lightbox-close { right: 16px; }
+
+  .lightbox-nav {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .lightbox-nav:hover {
+    transform: translateY(-50%) scale(1.05);
+  }
+
+  .lightbox-nav:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  .lightbox-prev { left: 16px; }
+  .lightbox-next { right: 16px; }
+
+  .lightbox-counter {
+    position: absolute;
+    top: 26px;
+    left: 16px;
+    z-index: 2;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--foreground);
+    background-color: color-mix(in srgb, var(--card) 92%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, var(--foreground));
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    user-select: none;
+  }
 
   .lightbox-action:hover {
     background-color: var(--accent);

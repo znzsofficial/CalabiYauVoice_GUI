@@ -370,6 +370,60 @@ export interface HighlightPart {
   hit: boolean;
 }
 
+export interface SearchAliasResolution {
+  /** 用户输入的原始词 */
+  from: string;
+  /** 解释后的主词条（用于执行 wiki 搜索） */
+  primary: string;
+  /** 其余可一键搜索的相关词条 */
+  alternates: string[];
+}
+
+const PREF_ALIAS_SEARCH_KEY = 'calabiyau.search.alias.enabled';
+
+/** 别名联想总开关（持久化；缺省开启） */
+export function isAliasSearchEnabled(): boolean {
+  if (typeof localStorage === 'undefined') return true;
+  return localStorage.getItem(PREF_ALIAS_SEARCH_KEY) !== 'false';
+}
+
+export function setAliasSearchEnabled(enabled: boolean): void {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(PREF_ALIAS_SEARCH_KEY, enabled ? 'true' : 'false');
+}
+
+/**
+ * 查询词 → 别名解释（供全文搜索使用）。
+ * 仅做整词精确匹配，避免劫持正常的部分匹配搜索；
+ * 覆盖同义词表（生化→晶源感染…）与词条别名反向表（糖猫→米雪儿·李…）。
+ */
+const canonicalNames = new Set(
+  Object.values(SYNONYM_MAP).flat().map(value => value.toLowerCase())
+);
+
+export function resolveSearchAlias(rawQuery: string): SearchAliasResolution | null {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q || q.length < 2) return null;
+
+  for (const [key, targets] of Object.entries(SYNONYM_MAP)) {
+    if (q === key.toLowerCase() && targets.length > 0) {
+      return { from: rawQuery.trim(), primary: targets[0], alternates: targets.slice(1) };
+    }
+  }
+  for (const [title, aliases] of Object.entries(TITLE_ALIASES)) {
+    // 若别名本身是另一个词条的正式名称（如 星绘/警探），不能当别名劫持——
+    // 用户搜的就是那个词条，全文搜索自己能找到
+    const hit = aliases.find(alias => {
+      const lowered = alias.toLowerCase();
+      return lowered === q && !canonicalNames.has(lowered);
+    });
+    if (hit) {
+      return { from: rawQuery.trim(), primary: title, alternates: aliases.filter(a => a.toLowerCase() !== q) };
+    }
+  }
+  return null;
+}
+
 /** 把查询在标题中的直接命中拆成可渲染片段；别名命中但标题不含查询时原样返回 */
 export function highlightNavTitle(title: string, rawQuery: string): HighlightPart[] {
   const q = rawQuery.trim();
