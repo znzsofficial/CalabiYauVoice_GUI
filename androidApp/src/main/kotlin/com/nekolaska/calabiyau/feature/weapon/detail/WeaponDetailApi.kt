@@ -304,6 +304,9 @@ object WeaponDetailApi {
         // 战术道具：获取冷却时间
         val cooldowns = if (isTacticalEquipment) fetchCooldowns(name) else emptyMap()
 
+        // 重焰等页面：基础伤害/部位倍率仅存在于渲染的系数表中，模板参数缺失时回填
+        val coefficients = parseDamageCoefficientsFromHtml(renderedHtml)
+
         return WeaponDetail(
             name = name,
             user = user,
@@ -325,10 +328,10 @@ object WeaponDetailApi {
             fireMode = weaponParams["开火模式"] ?: "",
             magnification = weaponParams["放大倍率"] ?: "",
             damageTable = damageTable,
-            baseDamage = allDamageParams("基础伤害") ?: "",
-            headMultiplier = allDamageParams("头部倍率") ?: "",
-            upperMultiplier = allDamageParams("上肢倍率") ?: "",
-            lowerMultiplier = allDamageParams("下肢倍率") ?: "",
+            baseDamage = allDamageParams("基础伤害") ?: coefficients?.baseDamage ?: "",
+            headMultiplier = allDamageParams("头部倍率") ?: coefficients?.head ?: "",
+            upperMultiplier = allDamageParams("上肢倍率") ?: coefficients?.upper ?: "",
+            lowerMultiplier = allDamageParams("下肢倍率") ?: coefficients?.lower ?: "",
             imageUrl = imageUrl,
             subPages = subPages,
             cooldowns = cooldowns
@@ -389,10 +392,59 @@ object WeaponDetailApi {
             .takeWhile { !it.tagName().matches(Regex("h[1-6]")) }
             .toList()
 
-        return sectionElements
-            .filter { it.tagName() == "table" && it.hasClass("klbqtable") }
-            .flatMap { table -> parseDamageTable(table) }
+        return sectionElements.flatMap { element ->
+            when {
+                element.tagName() == "table" && element.hasClass("klbqtable") -> parseDamageTable(element)
+                // 章节内的补充说明段落（如重焰的「补充：射速为200发/分钟。」）
+                element.tagName() == "p" -> element.text().trim()
+                    .takeIf { it.startsWith("补充：") }
+                    ?.removePrefix("补充：")?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { listOf(DamageRow("补充", it, "", "")) }
+                    ?: emptyList()
+                else -> emptyList()
+            }
+        }
     }
+
+    /**
+     * 从「武器部位伤害系数」表提取基础伤害与部位倍率（重焰等副武器页面：
+     * 模板不带这些参数，仅存在于渲染的系数表中）。跳过（移动端）变体。
+     */
+    private fun parseDamageCoefficientsFromHtml(html: String): DamageCoefficients? {
+        if (html.isBlank()) return null
+        val document = Jsoup.parse(html)
+        val table = document.select("table.klbqtable").firstOrNull { t ->
+            t.text().contains("武器部位伤害系数") && !t.text().contains("（移动端）")
+        } ?: return null
+
+        var base = ""
+        var head = ""
+        var upper = ""
+        var lower = ""
+        table.select("tr").forEach { row ->
+            val cells = row.select("> th, > td").map { it.text().trim() }
+            var i = 0
+            while (i + 1 < cells.size) {
+                when (cells[i]) {
+                    "基础伤害" -> base = cells[i + 1]
+                    "头部" -> head = cells[i + 1]
+                    "上肢" -> upper = cells[i + 1]
+                    "下肢" -> lower = cells[i + 1]
+                }
+                i += 2
+            }
+        }
+        if (base.isBlank() && head.isBlank()) return null
+        return DamageCoefficients(base, head, upper, lower)
+    }
+
+    private data class DamageCoefficients(
+        val baseDamage: String,
+        val head: String,
+        val upper: String,
+        val lower: String
+    )
 
     private fun parseDamageTable(table: Element): List<DamageRow> {
         val caption = table.selectFirst("caption")?.text()?.trim().orEmpty()

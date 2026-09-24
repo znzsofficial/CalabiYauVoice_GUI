@@ -931,18 +931,33 @@ object CharacterDetailApi {
             val url = buildWikiUrl(API, "action" to "query", "titles" to titles, "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return result
             val json = SharedJson.parseToJsonElement(body).jsonObject
-            json["query"]?.jsonObject?.get("pages")?.jsonObject?.values?.forEach { page ->
+            val query = json["query"]?.jsonObject
+            // 完整标题（含 文件: 前缀）→ URL；重定向目标与普通页面统一记录
+            val urlByFullTitle = mutableMapOf<String, String>()
+            query?.get("pages")?.jsonObject?.values?.forEach { page ->
                 val pageObj = page.jsonObject
                 val pageTitle = pageObj["title"]?.jsonPrimitive?.content ?: return@forEach
                 val imageUrl = pageObj["imageinfo"]
                     ?.let { it as? JsonArray }
                     ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
                 if (imageUrl != null) {
+                    urlByFullTitle[pageTitle] = imageUrl
                     // 去掉 "文件:" 前缀还原文件名
-                    val fileName = pageTitle.removePrefix("文件:")
-                    result[fileName] = imageUrl
+                    result[pageTitle.removePrefix("文件:")] = imageUrl
                 }
             }
+            // 文件重定向（如 文件:武器-大剑.png -> 文件:武器外观图鉴 15701001.png）：
+            // 使按原始文件名查询的调用方（技能图标/剧情封面）也能命中目标图片
+            query?.get("redirects")
+                ?.let { it as? JsonArray }
+                ?.forEach { redirect ->
+                    val redirectObj = redirect.jsonObject
+                    val from = redirectObj["from"]?.jsonPrimitive?.content ?: return@forEach
+                    val to = redirectObj["to"]?.jsonPrimitive?.content ?: return@forEach
+                    urlByFullTitle[to]?.let { targetUrl ->
+                        result[from.removePrefix("文件:")] = targetUrl
+                    }
+                }
         } catch (_: Exception) { }
         return result
     }

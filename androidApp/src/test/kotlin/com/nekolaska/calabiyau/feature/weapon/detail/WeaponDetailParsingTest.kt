@@ -19,25 +19,101 @@ class WeaponDetailParsingTest {
      */
     @Test
     fun parsesTransposedSecondaryShotgunDamageTable() {
+        // 2026-09-23 线上抓取的真实渲染 HTML（action=parse&prop=text），节选武器伤害章节：
+        // 转置表（列为距离、行为部位，部位名用"上身/下身"）、移动端单值表、
+        // 补充段落、两张"武器部位伤害系数"表（含移动端变体，必须整体排除）
         val renderedHtml = """
-            <span class="mw-headline" id="武器伤害">武器伤害</span>
+            <h2><span class="mw-headline" id="武器伤害">武器伤害</span></h2>
+            <ul><li>以下数据为靶场人形靶测得</li></ul>
             <table class="klbqtable" style="width:100%">
-              <tr><td style="width:15%"></td><td>10米</td><td>15米</td><td>20米</td></tr>
-              <tr><td>头部</td><td>85</td><td>49</td><td>36</td></tr>
-              <tr><td>上身</td><td>84</td><td>48</td><td>35</td></tr>
-              <tr><td>下身</td><td>83</td><td>47</td><td>34</td></tr>
-            </table>
+            <tbody><tr>
+            <td style="width:15%"></td>
+            <td>10米</td>
+            <td>15米</td>
+            <td>20米
+            </td></tr>
+            <tr>
+            <td>头部</td>
+            <td>85</td>
+            <td>49</td>
+            <td>36
+            </td></tr>
+            <tr>
+            <td>上身</td>
+            <td>84</td>
+            <td>48</td>
+            <td>35
+            </td></tr>
+            <tr>
+            <td>下身</td>
+            <td>83</td>
+            <td>47</td>
+            <td>34
+            </td></tr></tbody></table>
             <table class="klbqtable" style="width:100%">
-              <caption>移动端，射击目标为靶场环形靶</caption>
-              <tr><th style="width: 10%">10米</th><td>85</td></tr>
-              <tr><th>15米</th><td>61</td></tr>
-              <tr><th>20米</th><td>45</td></tr>
-            </table>
+            <caption>移动端，射击目标为靶场环形靶
+            </caption>
+            <tbody><tr>
+            <th style="width: 10%">10米
+            </th>
+            <td>85
+            </td></tr>
+            <tr>
+            <th>15米
+            </th>
+            <td>61
+            </td></tr>
+            <tr>
+            <th>20米
+            </th>
+            <td>45
+            </td></tr></tbody></table>
+            <p>补充：射速为200发/分钟。
+            </p>
             <table class="klbqtable" style="width: 100%">
-              <tr><th class="text-center" colspan="6">武器部位伤害系数</th></tr>
-              <tr><th colspan="3">基础伤害</th><td colspan="3">8.5</td></tr>
-              <tr><th>头部</th><td>1.0</td><th>上肢</th><td>1.0</td><th>下肢</th><td>1.0</td></tr>
-            </table>
+            <tbody><tr>
+            <th class="text-center" colspan="6">武器部位伤害系数
+            </th></tr>
+            <tr>
+            <th colspan="3">基础伤害
+            </th>
+            <td colspan="3">8.5
+            </td></tr>
+            <tr>
+            <th>头部
+            </th>
+            <td>1.0
+            </td>
+            <th>上肢
+            </th>
+            <td>1.0
+            </td>
+            <th>下肢
+            </th>
+            <td>1.0
+            </td></tr></tbody></table>
+            <table class="klbqtable" style="width: 100%">
+            <tbody><tr>
+            <th class="text-center" colspan="6">武器部位伤害系数（移动端）
+            </th></tr>
+            <tr>
+            <th colspan="3">基础伤害
+            </th>
+            <td colspan="3">7.0
+            </td></tr>
+            <tr>
+            <th>头部
+            </th>
+            <td>1.25
+            </td>
+            <th>上肢
+            </th>
+            <td>1.0
+            </td>
+            <th>下肢
+            </th>
+            <td>0.7
+            </td></tr></tbody></table>
         """.trimIndent()
 
         val detail = WeaponDetailApi.parseWeaponWikitext(
@@ -67,11 +143,22 @@ class WeaponDetailParsingTest {
         assertEquals("85", m10.head)
         assertEquals("", m10.upper)
 
+        // 补充说明段落提取进补充行
+        val note = detail.damageTable.firstOrNull { it.distance == "补充" }
+        assertNotNull(note, "supplementary note missing")
+        assertEquals("射速为200发/分钟。", note.head)
+
         // 系数表（倍率说明）不得污染伤害表
         assertTrue(
             detail.damageTable.none { it.distance.contains("系数") || it.distance == "基础伤害" || it.distance == "头部" },
             "coefficient table leaked: ${detail.damageTable.map { it.distance }}"
         )
+
+        // 模板无基础伤害/倍率参数时，从系数表回填（取非移动端的那张）
+        assertEquals("8.5", detail.baseDamage)
+        assertEquals("1.0", detail.headMultiplier)
+        assertEquals("1.0", detail.upperMultiplier)
+        assertEquals("1.0", detail.lowerMultiplier)
     }
 
     /**

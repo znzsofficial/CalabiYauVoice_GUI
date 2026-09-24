@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.weapon.detail
 
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -553,7 +554,7 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold)
                         if (pelletOnly) {
-                            Text("伤害", Modifier.weight(1f),
+                            Text("总弹丸伤害", Modifier.weight(1f),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 textAlign = TextAlign.Center)
@@ -582,14 +583,41 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                         )
                     }
+                    val isChargeRow = row.distance.contains("蓄力")
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            // 蓄力行浅色底纹，与普通行形成视觉分组（如狙击枪谢幕曲的开镜蓄力伤害）
+                            .background(
+                                if (isChargeRow) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f)
+                                else Color.Transparent
+                            )
                             .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        Text(normalizeDistanceLabel(row.distance), Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium)
+                        Row(
+                            Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                normalizeDistanceLabel(row.distance).substringBefore("·蓄力"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (isChargeRow) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    shape = smoothCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        "蓄力",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                         if (pelletOnly) {
                             Text(row.head, Modifier.weight(1f),
                                 style = MaterialTheme.typography.bodyMedium,
