@@ -49,7 +49,10 @@ suspend fun fetchBatchImageUrls(
                     result[name] = imageUrl
                 }
                 // 处理文件重定向（如 文件:武器-大剑.png -> 文件:武器外观图鉴 15701001.png）
-                // 使按原始文件名查询的调用方也能命中目标图片的 URL
+                // 使按原始文件名查询的调用方也能命中目标图片的 URL。
+                // 注：MediaWiki 在标题需要规范化（下划线/空格互换）时会返回 normalized 数组，
+                // 届时 redirects.from 指向规范化后的标题；本项目查询的文件名均为
+                // 中文/数字/连字符/扩展名的原样组合，规范化不改变拼写，故无需处理。
                 res.query?.redirects.orEmpty().forEach { redirect ->
                     val targetUrl = urlByFullTitle[redirect.to] ?: return@forEach
                     val fromName = redirect.from.replace(filePrefixRegex, "")

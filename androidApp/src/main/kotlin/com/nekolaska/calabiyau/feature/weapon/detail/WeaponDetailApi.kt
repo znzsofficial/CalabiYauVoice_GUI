@@ -222,7 +222,7 @@ object WeaponDetailApi {
                     val head = allDamageParams("${d}米头部") ?: allDamageParams("${d}米头部伤害")
                     val upper = allDamageParams("${d}米上肢") ?: allDamageParams("${d}米上肢伤害")
                     val lower = allDamageParams("${d}米下肢") ?: allDamageParams("${d}米下肢伤害")
-                    // 蓄力射击变体（霰弹枪拉栓：X米头部蓄力等），独立于基础行存在
+                    // 蓄力射击变体（如狙击枪谢幕曲的开镜蓄力：X米头部蓄力等），独立于基础行存在
                     val chargeHead = allDamageParams("${d}米头部蓄力") ?: allDamageParams("${d}米头部蓄力伤害")
                     val chargeUpper = allDamageParams("${d}米上肢蓄力") ?: allDamageParams("${d}米上肢蓄力伤害")
                     val chargeLower = allDamageParams("${d}米下肢蓄力") ?: allDamageParams("${d}米下肢蓄力伤害")

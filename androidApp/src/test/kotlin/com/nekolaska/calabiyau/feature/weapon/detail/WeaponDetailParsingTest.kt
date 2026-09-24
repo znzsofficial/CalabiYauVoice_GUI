@@ -164,18 +164,23 @@ class WeaponDetailParsingTest {
     }
 
     /**
-     * Uses structure captured from the live 谢幕曲 page (2026-09-22):
-     * 霰弹枪没有"基础伤害"参数，主 {{武器}} 模板直接带距离部位参数与蓄力变体
-     * （X米头部蓄力）；渲染 HTML 的"武器伤害"章节是性能参数键值表
-     * （单发间隔/散布等），不得被兜底解析污染成伤害行。
+     * Uses structure captured from the live 谢幕曲 page (2026-09-23):
+     * 狙击步枪（巴雷特M82）带部位参数与开镜蓄力变体（X米头部蓄力=487 等）；
+     * 渲染 HTML 的"武器伤害"章节是性能参数键值表（单发间隔/散布等），
+     * 不得被兜底解析污染成伤害行。
      */
     @Test
-    fun parsesShotgunChargeVariantsAndIgnoresPerfTable() {
+    fun parsesChargedSniperVariantsAndIgnoresPerfTable() {
         val wikitext = """
             {{武器
             |使用者=名流
-            |类型=霰弹枪
+            |类型=狙击步枪
             |弦化伤害=67
+            |弦化伤害移动端=60
+            |基础伤害=105.0
+            |头部倍率=2.5
+            |上肢倍率=1.0
+            |下肢倍率=0.7
             |10米头部=262
             |10米头部蓄力=487
             |10米上肢=105
