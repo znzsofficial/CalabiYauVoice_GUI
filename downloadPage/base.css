@@ -112,25 +112,14 @@ body::before {
     100% { background-position: 0 30px; } /* 移动一个网格单位 */
 }
 
-/* 顶部边缘环境高光 (Top Edge Halo) */
+/* 顶部边缘环境高光：已由下载页 .bg 灵动光斑层取代 */
 .layout-wrapper::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80vw; /* 覆盖绝大部分宽度 */
-    height: 120px;
-    z-index: -1;
-    pointer-events: none;
-    /* 极高对比度的椭圆发光体，紧贴顶部 */
-    background: radial-gradient(ellipse at top, color-mix(in srgb, var(--primary) 25%, transparent) 0%, transparent 70%);
-    opacity: 0.8;
+    display: none;
 }
 
 @media (prefers-color-scheme: dark) {
     .layout-wrapper::before {
-        opacity: 0.5; /* 深色模式下光晕更明显，需稍微压低透明度 */
+        display: none;
     }
 }
 

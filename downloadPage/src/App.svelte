@@ -261,11 +261,19 @@
   }
 
   async function loadGithubStars(): Promise<void> {
+    // 先用上次已知星数兜底（本地 GitHub API 可能被墙）
+    try {
+      const cached = Number(localStorage.getItem('calabiyau.home.stars'));
+      if (Number.isFinite(cached) && cached > 0) githubStars = cached;
+    } catch {}
     try {
       const resp = await fetch('/api/github-stars');
       if (!resp.ok) return;
       const data = await resp.json() as { stars?: number };
-      if (typeof data.stars === 'number' && data.stars > 0) githubStars = data.stars;
+      if (typeof data.stars === 'number' && data.stars > 0) {
+        githubStars = data.stars;
+        try { localStorage.setItem('calabiyau.home.stars', String(data.stars)); } catch {}
+      }
     } catch {
       // silently ignore
     }
@@ -291,6 +299,29 @@
   onMount(() => {
     loadLatestInfo();
     loadGithubStars();
+
+    // 灵动背景：指针视差（幅度刻意压小，仅精细指针且未开启减动效时启用）
+    const bg = document.querySelector<HTMLElement>('.bg');
+    const fine = window.matchMedia('(pointer: fine)').matches;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!bg || !fine || reduced) return;
+    let tx = 0, ty = 0, cx = 0, cy = 0, raf = 0;
+    const onMove = (event: PointerEvent) => {
+      tx = (event.clientX / window.innerWidth - 0.5) * 26;
+      ty = (event.clientY / window.innerHeight - 0.5) * 18;
+    };
+    const loop = () => {
+      cx += (tx - cx) * 0.045;
+      cy += (ty - cy) * 0.045;
+      bg.style.transform = `translate(${cx.toFixed(2)}px, ${cy.toFixed(2)}px)`;
+      raf = requestAnimationFrame(loop);
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    raf = requestAnimationFrame(loop);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      cancelAnimationFrame(raf);
+    };
   });
 </script>
 
@@ -301,91 +332,103 @@
 <svelte:window onclick={() => { if (balanceOpenSelect) balanceOpenSelect = ''; }} />
 
 <div class="layout-wrapper">
+  <div class="bg" aria-hidden="true"></div>
+
   <header class="header">
     <div class="header-content">
-      <h1 class="header-title">
+      <span class="header-brand">
         <img src="/icon.svg" alt="Logo" class="header-logo">
-        卡丘 Wiki 助手
-      </h1>
+        CalabiYauVoice
+      </span>
+      <a class="header-github" href="https://github.com/znzsofficial/CalabiYauVoice_GUI" target="_blank" rel="noopener noreferrer" title="GitHub 仓库">
+        <iconify-icon icon="lucide:github"></iconify-icon>
+        {#if githubStars > 0}
+          <iconify-icon icon="lucide:star"></iconify-icon>
+          <span>{githubStars.toLocaleString()}</span>
+        {:else}
+          <span>GitHub</span>
+        {/if}
+      </a>
     </div>
   </header>
 
   <main class="main-content" id="main-content">
-    <!-- Suggestion 1: Hero Section -->
-    <section class="card shadow-sm hero-section">
-      <div class="hero-bg"></div>
-      <div class="hero-content">
-        <div class="hero-info-panel">
-          <div class="hero-title-row">
-            <h2 class:loading-pulse={versionName === '正在读取...'} class:version-loaded={versionName !== '正在读取...'}>{versionName}</h2>
-            <span class="badge hero-platform-badge">
-              <iconify-icon icon="lucide:smartphone"></iconify-icon>
-              Android 客户端
-            </span>
-          </div>
-          <div class="hero-version-meta">
-            <span><iconify-icon icon="lucide:calendar"></iconify-icon> {publishedAt}</span>
-            <span><iconify-icon icon="lucide:hard-drive-download"></iconify-icon> {apkSize}</span>
-          </div>
-          <div class="hero-actions">
-            <a class="btn primary hero-download-btn" href={apkUrl} download>
-              <iconify-icon icon="lucide:download" class="download-icon"></iconify-icon>
-              <span>立即下载 APK</span>
-            </a>
-            <button class:copied class="btn outline hero-copy-btn" onclick={copyDownloadLink}>
-              <span class="copy-default"><iconify-icon icon="lucide:copy" class="btn-icon"></iconify-icon>复制直链</span>
-              <span class="copy-success"><iconify-icon icon="lucide:check" class="btn-icon check-icon"></iconify-icon>已复制</span>
-            </button>
-          </div>
-        </div>
+    <!-- 沉浸式首屏：唯一焦点为版本与下载 -->
+    <section class="hero-section">
+      <img class="hero-icon fade-up" src="/icon.svg" alt="">
+      <h1 class="hero-wordmark fade-up fd1">
+        卡丘 Wiki 助手
+        <small class="hero-caption">CALABIYAU WIKI COMPANION</small>
+      </h1>
+      <div class="hero-meta-line fade-up fd2">
+        <span class="ver" class:loading-pulse={versionName === '正在读取...'} class:version-loaded={versionName !== '正在读取...'}>{versionName === '正在读取...' ? versionName : `v${versionName}`}</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span>{publishedAt} 发布</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span>{apkSize}</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span>Android</span>
       </div>
+      <div class="hero-actions fade-up fd3">
+        <a class="btn primary hero-download-btn" href={apkUrl} download>
+          <iconify-icon icon="lucide:download" class="download-icon"></iconify-icon>
+          <span>立即下载 APK</span>
+        </a>
+        <button class:copied class="btn outline hero-copy-btn" onclick={copyDownloadLink}>
+          <span class="copy-default"><iconify-icon icon="lucide:copy" class="btn-icon"></iconify-icon>复制直链</span>
+          <span class="copy-success"><iconify-icon icon="lucide:check" class="btn-icon check-icon"></iconify-icon>已复制</span>
+        </button>
+      </div>
+      <div class="scroll-hint fade-up fd4" aria-hidden="true">SCROLL</div>
     </section>
 
-    <nav class="feature-matrix" aria-label="站内工具">
-      <a href="/search/" class="card shadow-sm feature-card index-card">
-        <div class="feature-icon wiki-icon"><iconify-icon icon="lucide:book-open"></iconify-icon></div>
-        <span class="feature-title">Wiki 搜索</span>
-        <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
+    <nav class="links-row fade-up fd4" aria-label="站内工具">
+      <a class="link-item" href="/search/">
+        <span class="t">Wiki 搜索 <span class="arrow">→</span></span>
+        <span class="d">全站素材、图片与文件的检索和批量下载</span>
       </a>
-      <a href="/nav/" class="card shadow-sm feature-card index-card">
-        <div class="feature-icon nav-icon"><iconify-icon icon="lucide:compass"></iconify-icon></div>
-        <span class="feature-title">Wiki 导航</span>
-        <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
+      <a class="link-item" href="/nav/">
+        <span class="t">Wiki 导航 <span class="arrow">→</span></span>
+        <span class="d">200+ 词条分区速查目录，支持别名直达</span>
       </a>
-      <button class="card shadow-sm feature-card index-card" type="button" onclick={openBalance}>
-        <div class="feature-icon balance-icon"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon></div>
-        <span class="feature-title">平衡数据</span>
-        <iconify-icon icon="lucide:chevron-right" class="feature-arrow"></iconify-icon>
+      <button class="link-item" type="button" onclick={openBalance}>
+        <span class="t">平衡数据 <span class="arrow">→</span></span>
+        <span class="d">官方胜率、登场率与武器伤害比对看板</span>
       </button>
+      <a class="link-item" href="#changelog">
+        <span class="t">更新日志 <span class="arrow">→</span></span>
+        <span class="d">版本历史与变更明细，保持透明</span>
+      </a>
     </nav>
+
+    <section class="changelog-slim" id="changelog">
+      <h2 class="changelog-slim-head">
+        更新日志
+        <small>{publishedAt} · v{versionName}</small>
+      </h2>
+      <div class="timeline-container">
+        {#if changelog}
+          {#each changelog.filter(Boolean).slice(0, 8) as item, index (index)}
+            <div class="timeline-item" style={`animation: fadeInUp 0.5s ease backwards ${index * 0.05}s`}>
+              <div class="timeline-dot"></div>
+              <div class="timeline-content">{String(item).replace(/^[-*•]\s*/, '')}</div>
+            </div>
+          {/each}
+        {:else}
+          <div class="skeleton-timeline">
+            <div class="skeleton-line" style="width: 80%;"></div>
+            <div class="skeleton-line" style="width: 65%;"></div>
+            <div class="skeleton-line" style="width: 70%;"></div>
+          </div>
+        {/if}
+      </div>
+      <button class="changelog-history-link" type="button" onclick={() => historyDialogRef?.showModal()} disabled={historyReleases.length === 0}>
+        另有 {historyReleases.length} 个历史版本 · 查看归档安装包
+      </button>
+    </section>
 
     <div class="grid-layout">
       <div class="col-left">
-        <!-- Suggestion 3: Update Log Timeline Style -->
-        <section class="card shadow-sm">
-          <div class="card-header">
-            <div class="card-title"><iconify-icon icon="lucide:history"></iconify-icon>更新日志</div>
-          </div>
-          <div class="card-body">
-            <div class="timeline-container">
-              {#if changelog}
-                {#each changelog.filter(Boolean).slice(0, 8) as item, index (index)}
-                  <div class="timeline-item" style={`animation: fadeInUp 0.5s ease backwards ${index * 0.05}s`}>
-                    <div class="timeline-dot"></div>
-                    <div class="timeline-content">{String(item).replace(/^[-*•]\s*/, '')}</div>
-                  </div>
-                {/each}
-              {:else}
-                <div class="skeleton-timeline">
-                  <div class="skeleton-line" style="width: 80%;"></div>
-                  <div class="skeleton-line" style="width: 65%;"></div>
-                  <div class="skeleton-line" style="width: 70%;"></div>
-                </div>
-              {/if}
-            </div>
-          </div>
-        </section>
-
         <section class="card shadow-sm qq-group-card">
           <div class="card-header">
             <div class="card-title"><iconify-icon icon="lucide:messages-square"></iconify-icon>QQ 交流群</div>
