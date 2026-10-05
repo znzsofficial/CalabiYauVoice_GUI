@@ -501,17 +501,7 @@ body:has(.layout-wrapper)::before {
         padding-inline: 16px;
     }
 
-    .hero-actions {
-        width: 100%;
-    }
-
-    .hero-actions .btn {
-        flex: 1 1 0;
-        min-width: 0;
-    }
-}
-
-@media (max-width: 420px) {
+    /* 手机上双按钮竖排全宽：并排在窄屏会把「立即下载 APK」挤到折行裁切 */
     .hero-actions {
         flex-direction: column;
         width: 100%;
@@ -519,6 +509,8 @@ body:has(.layout-wrapper)::before {
 
     .hero-actions .btn {
         width: 100%;
+        flex: none;
+        min-height: 3rem;
     }
 }
 
@@ -529,6 +521,7 @@ body:has(.layout-wrapper)::before {
     height: 3rem;
     padding: 0 1.5rem;
     font-size: 0.9375rem;
+    white-space: nowrap;
     font-weight: 600;
     border-radius: calc(var(--radius) - 4px);
     overflow: hidden;
