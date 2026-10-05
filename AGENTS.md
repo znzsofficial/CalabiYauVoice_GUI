@@ -42,11 +42,17 @@ R2 binding is `RELEASES` in `downloadPage/wrangler.jsonc` (Pages project `calabi
 
 ## Wiki structure golden fixtures & EdgeOne rate limits
 
-BWiki HTML is not a stable API: 2026-09 drift broke items/announcements/activities/weapon-detail parsers. Real-page snapshots live under `androidApp/src/test/resources/fixtures/pages/` (gitignored, local-only) — `WikiRealPageGoldenTest` runs real-structure assertions when files exist and skips on fresh clones. Refresh via `action=parse&page=<名>&prop=text`; update anchor assertions after refresh. `WikiGoldenFixtureTest` holds captured API JSON (announcement ask, weapon parses) — tracked, keep small.
+BWiki HTML is not a stable API: 2026-09 drift broke items/announcements/activities/weapon-detail/map-list parsers. Real-page snapshots live under `androidApp/src/test/resources/fixtures/pages/` (gitignored, local-only) — `WikiRealPageGoldenTest` runs real-structure assertions when files exist and skips on fresh clones. Refresh via `action=parse&page=<名>&prop=text`; update anchor assertions after refresh. `WikiGoldenFixtureTest` holds captured API JSON (announcement ask, activity/weapon parses) — tracked, keep small.
 
-Batch-fetching BWiki triggers Tencent EdgeOne blocks (HTTP 567) — keep >= 6s between requests; on block, wait minutes and retry. Live e2e tests (`LIVE_WIKI_TEST=1`) now cover announcements ask, activity cards, weapon detail for 静风/北极星/大剑/小蜜蜂.
+Batch-fetching BWiki triggers Tencent EdgeOne blocks (HTTP 567) — blocks persist long after the burst; diagnostics can use the browser session (same IP gets blocked too) or wait tens of minutes. Live e2e tests (`LIVE_WIKI_TEST=1`) cover announcements ask, activity cards, weapon detail for 静风/北极星/大剑/小蜜蜂 (per-weapon key structure: 北极星 mobile rows / 大剑 melee nested rows / 小蜜蜂 upper column), **map list template** and **costume filter Lua module**. `fetchBody` throttles 6.5s after every request (inside try — failure paths also back off); keep that if you add requests.
+
+Local snapshots: fetch writes AND `parsesLocalLiveSnapshotsWhenPresent` reads `androidApp/build/live-wiki/` (paths unified). `CharacterDetailLiveAuditTest` audits full character parsing from `androidApp/build/char-audit/` captures; `CharacterDetailApi.parseCharacterWikitext` is internal for that. Both skip when their dirs are absent.
 
 Account-chain caches invalidate on mutation: `updateProfile` clears `profileCache` (60s profile memo), `syncResponseCookies` clears `cookieMemo` (500ms cookie memo). New caches must follow the same invalidate-on-write pattern.
+
+## MediaWiki image queries
+
+All 8 imageinfo call sites pass `redirects=1` (files like 武器-大剑.png redirect to 武器外观图鉴 <id>.png). **Batch sites must also map `query.redirects[].from` → target URL** — title-keyed misses silently drop redirect files: `fetchBatchImageUrls` (FetchImageUrls.kt; weapon list / portraits / 壁纸) and `CharacterDetailApi.fetchImageUrls` (skill icons / story covers) both do; single-title sites are transparent. Weapon-detail images try candidate filenames in order (`武器-<名>.png` for secondary/melee/tactical, `<名>-weapon.png` for primary, each other as fallback) and backfill base damage / body multipliers from the coefficient table (武器部位伤害系数) when the template lacks them.
 
 ## Android Wiki pages
 
@@ -56,4 +62,4 @@ When adding/refactoring `androidApp/.../feature/wiki`, follow `docs/android-wiki
 
 - Commit signing material (`local.properties`, keystores) or APKs
 - Edit `androidApp/build` outputs
-- Treat `.github/` or `.agents/` as repo source of truth (gitignored)
+- Treat `.agents/` as repo source of truth (gitignored). `.github/*` is also ignored **except** `.github/workflows/` (tracked — the daily live-smoke CI lives there)
