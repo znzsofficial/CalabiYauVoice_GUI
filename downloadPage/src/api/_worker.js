@@ -19,7 +19,7 @@ export default {
         if (url.pathname.startsWith("/api/admin/")) return await admin(request, env, url, ctx);
         switch (`${request.method} ${url.pathname}`) {
           case "GET /api/user/profile": return await getProfile(request, env, url);
-          case "GET /api/user/session": return await getSession(request);
+          case "GET /api/user/session": return await getSession(request, env);
           case "PUT /api/user/profile": return await saveProfile(request, env, url, false, ctx);
           case "POST /api/user/avatar": return await uploadAvatar(request, env);
           case "GET /api/user/comments": return await listComments(request, env, url);

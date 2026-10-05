@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -104,21 +105,9 @@ private val lazyListStateSaver = listSaver<LazyListState, Int>(
 private object WikiHubWallpaperState {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    var url: String? = AppPrefs.wallpaperUrl
-        private set
     private var refreshJob: Deferred<String?>? = null
     private var autoRefreshAttempted = false
     private var displayedImageCacheKey: String? = null
-
-    @Synchronized
-    fun updateUrl(newUrl: String?) {
-        if (!newUrl.isNullOrBlank()) {
-            url = newUrl
-        }
-    }
-
-    @Synchronized
-    fun currentUrl(): String? = url
 
     @Synchronized
     fun imageCacheKey(imageUrl: String): String = "wiki-hub-wallpaper:${imageUrl.hashCode()}"
@@ -333,18 +322,15 @@ fun WikiHubScreen(
     val isLoadingMaps = mapState.isLoading
 
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
-    var wallpaperUrl by remember { mutableStateOf(WikiHubWallpaperState.currentUrl() ?: AppPrefs.wallpaperUrl) }
+    val wallpaperUrl by AppPrefs.wallpaperUrlState.collectAsState()
     val hubBackdrop = rememberLayerBackdrop()
     LaunchedEffect(Unit) {
         val currentCachedUrl = AppPrefs.wallpaperUrl
         val needRefresh = WikiHubWallpaperState.shouldAutoRefresh(currentCachedUrl)
         if (needRefresh) {
             val refreshJob = WikiHubWallpaperState.ensureRefresh(forceRefresh = !currentCachedUrl.isNullOrBlank())
-            val loadedUrl = refreshJob.await()
-            if (!loadedUrl.isNullOrBlank()) {
-                wallpaperUrl = loadedUrl
-                WikiHubWallpaperState.updateUrl(loadedUrl)
-            }
+            // WallpaperApi persists the result; all consumers observe that same state.
+            refreshJob.await()
         }
     }
     val hasWallpaper = !wallpaperUrl.isNullOrBlank()

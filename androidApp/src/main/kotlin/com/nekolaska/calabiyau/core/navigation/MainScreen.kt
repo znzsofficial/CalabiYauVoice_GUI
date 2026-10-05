@@ -129,6 +129,7 @@ import com.nekolaska.calabiyau.core.wiki.CustomProfileAvatar
 import com.nekolaska.calabiyau.core.wiki.CustomProfileEditDialog
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 import com.nekolaska.calabiyau.core.wiki.WikiUserApi
+import com.nekolaska.calabiyau.core.wiki.WikiAccountState
 import com.nekolaska.calabiyau.feature.download.DownloadHistoryScreen
 import com.nekolaska.calabiyau.feature.download.DownloadViewModel
 import com.nekolaska.calabiyau.feature.download.DownloaderScreen
@@ -142,7 +143,6 @@ import com.nekolaska.calabiyau.feature.tools.ToolsHomeScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
-import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -577,12 +577,14 @@ private fun AppDrawerContent(
     highReadabilityDrawer: Boolean = AppPrefs.highReadabilityDrawer
 ) {
     // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
-    val hasLoginCookie = remember { mutableStateOf(hasWikiLoginCookie()) }
-    var wikiUserInfo by remember { mutableStateOf<WikiUserApi.UserInfo?>(null) }
-    var customProfile by remember { mutableStateOf<data.CustomUserProfile?>(null) }
-    var isLoadingUserInfo by remember { mutableStateOf(false) }
+    val accountScope = rememberCoroutineScope()
+    val account = remember(accountScope) { WikiAccountState(accountScope) }
+    val wikiUserInfo = account.userInfo
+    val customProfile = account.profile
+    val isLoadingUserInfo = account.loading
     var showUserInfoSheet by remember { mutableStateOf(false) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
+    var editorProfile by remember { mutableStateOf<data.CustomUserProfile?>(null) }
     var showLoginConfirmDialog by remember { mutableStateOf(false) }
     val drawerContentShape = smoothCornerShape(28.dp)
     val useHighReadability = liquidGlassEnabled && highReadabilityDrawer
@@ -656,52 +658,28 @@ private fun AppDrawerContent(
             )
         }
 
-        // 每次侧栏显示时刷新登录状态
-        LaunchedEffect(currentDestination) {
-            hasLoginCookie.value = hasWikiLoginCookie()
-            if (hasLoginCookie.value && wikiUserInfo == null && !isLoadingUserInfo) {
-                isLoadingUserInfo = true
-                try {
-                    when (val result = WikiUserApi.fetchCurrentUserInfo()) {
-                        is ApiResult.Success -> {
-                            val info = result.value
-                            if (info != null && info.isLoggedIn) {
-                                wikiUserInfo = info
-                                // 同步获取自定义档案（失败静默，走官方回退展示）
-                                customProfile = when (val profile = data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id)) {
-                                    is ApiResult.Success -> profile.value
-                                    is ApiResult.Error -> null
-                                }
-                            }
-                        }
-                        is ApiResult.Error -> { /* 忽略错误 */ }
-                    }
-                } catch (_: Exception) {
-                    /* 网络异常，保持 null 状态 */
-                } finally {
-                    isLoadingUserInfo = false
-                }
+        // Cookie 变化驱动身份，而不是“已有用户信息便不再刷新”。
+        LaunchedEffect(account) {
+            while (true) {
+                account.syncAccount()
+                kotlinx.coroutines.delay(500)
             }
-            if (!hasLoginCookie.value) {
-                wikiUserInfo = null
-                customProfile = null
-                showUserInfoSheet = false
-            }
+        }
+        LaunchedEffect(account.revision) {
+            showUserInfoSheet = false
+            showEditProfileDialog = false
+            editorProfile = null
         }
 
         // 打开用户信息弹窗时刷新自定义档案（同步其他端的修改）
         LaunchedEffect(showUserInfoSheet) {
             if (!showUserInfoSheet) return@LaunchedEffect
-            val info = wikiUserInfo ?: return@LaunchedEffect
-            when (val profile = data.CustomUserApi.fetchProfile(bid = info.name, wikiId = info.id)) {
-                is ApiResult.Success -> if (profile.value != null) customProfile = profile.value
-                is ApiResult.Error -> { /* 静默保留当前数据 */ }
-            }
+            account.refreshProfile()
         }
 
         if (wikiUserInfo != null) {
             WikiUserInfoCard(
-                userInfo = wikiUserInfo!!,
+                userInfo = wikiUserInfo,
                 customProfile = customProfile,
                 onClick = { showUserInfoSheet = true },
                 modifier = Modifier
@@ -754,7 +732,7 @@ private fun AppDrawerContent(
                 onClick = { onDestinationSelected(DrawerDestination.WIKI) },
                 colors = drawerItemColors,
                 badge = {
-                    if (hasLoginCookie.value) {
+                    if (wikiUserInfo != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
                             shape = smoothCornerShape(8.dp)
@@ -825,10 +803,17 @@ private fun AppDrawerContent(
     // ── 用户信息底部弹窗 ──
     if (showUserInfoSheet && wikiUserInfo != null) {
         WikiUserInfoBottomSheet(
-            userInfo = wikiUserInfo!!,
+            userInfo = wikiUserInfo,
             customProfile = customProfile,
             onDismiss = { showUserInfoSheet = false },
-            onEditProfile = { showEditProfileDialog = true }
+            profileReady = account.profileLoaded,
+            profileLoading = account.loading,
+            onEditProfile = {
+                if (account.profileLoaded && !account.loading) {
+                    editorProfile = customProfile
+                    showEditProfileDialog = true
+                } else account.refreshProfile()
+            }
         )
     }
 
@@ -836,12 +821,12 @@ private fun AppDrawerContent(
         val dialogUserInfo = wikiUserInfo
         if (dialogUserInfo != null) {
             CustomProfileEditDialog(
-                currentProfile = customProfile,
+                currentProfile = editorProfile,
                 bid = dialogUserInfo.name,
                 wikiUserId = dialogUserInfo.id,
                 onDismiss = { showEditProfileDialog = false },
                 onSaved = { saved ->
-                    customProfile = saved
+                    account.acceptSavedProfile(saved)
                     showEditProfileDialog = false
                 }
             )
@@ -1077,6 +1062,8 @@ private fun WikiUserInfoBottomSheet(
     userInfo: WikiUserApi.UserInfo,
     customProfile: data.CustomUserProfile? = null,
     onDismiss: () -> Unit,
+    profileReady: Boolean = true,
+    profileLoading: Boolean = false,
     onEditProfile: () -> Unit = {}
 ) {
     val sheetState = rememberBottomSheetState(
@@ -1223,10 +1210,10 @@ private fun WikiUserInfoBottomSheet(
                         )
                     }
                 }
-                FilledTonalButton(onClick = onEditProfile) {
+                FilledTonalButton(onClick = onEditProfile, enabled = !profileLoading) {
                     Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("编辑资料")
+                    Text(if (profileLoading) "正在载入资料" else if (profileReady) "编辑资料" else "重试载入资料")
                 }
             }
 

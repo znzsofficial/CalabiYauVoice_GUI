@@ -469,9 +469,10 @@ private fun BioCardSkeleton(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                repeat(3) { index ->
+                // 图标 + 文字页签统一为 72dp，选中项不应改变占位尺寸。
+                repeat(BioCardTab.entries.size) {
                     ShimmerBox(
-                        modifier = Modifier.weight(1f).height(if (index == 0) 64.dp else 56.dp),
+                        modifier = Modifier.weight(1f).height(72.dp),
                         shape = smoothCornerShape(18.dp)
                     )
                 }

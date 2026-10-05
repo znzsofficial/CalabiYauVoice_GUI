@@ -20,23 +20,38 @@ export function avatarPath(value, origin) {
 
 // Legacy keys encode BID followed by EXACTLY 16 hash digits. Do not use a loose prefix check.
 function legacyOwner(key, bid) {
+  return legacyOwnerBid(key) === bid;
+}
+function legacyOwnerBid(key) {
   const match = /^avatars\/(.+)_([a-f0-9]{16})\.(png|jpg|webp)$/.exec(key);
-  return match?.[1] === bid;
+  return match?.[1] ?? null;
 }
 
-export async function validateAvatar(env, path, bid) {
+export async function validateAvatar(env, path, bid, wikiUserId = null) {
   if (!path) return;
   if (!env.USER_ASSETS) throw new HttpError(503, "头像存储未配置");
   const key = decodeURIComponent(path.slice(PREFIX.length));
-  let asset = await env.DB.prepare("SELECT owner_bid,state FROM avatar_assets WHERE object_key=?").bind(key).first();
+  let asset = await env.DB.prepare("SELECT owner_bid,owner_wiki_user_id,state FROM avatar_assets WHERE object_key=?").bind(key).first();
   if (!asset) {
-    if (!legacyOwner(key, bid)) throw new HttpError(403, "只能使用自己上传的头像");
+    const legacyBid = legacyOwnerBid(key);
+    const ownsLegacy = legacyBid === bid || (wikiUserId != null && legacyBid != null && !!(await env.DB.prepare(
+      "SELECT 1 FROM wiki_user_aliases WHERE bid=? AND wiki_user_id=?").bind(legacyBid, wikiUserId).first()));
+    if (!ownsLegacy) throw new HttpError(403, "只能使用自己上传的头像");
     if (!(await env.USER_ASSETS.head(key))) throw new HttpError(400, "头像文件不存在，请重新上传");
-    await env.DB.prepare("INSERT INTO avatar_assets(object_key,owner_bid,created_at) VALUES(?,?,unixepoch()) ON CONFLICT DO NOTHING").bind(key, bid).run();
-    asset = await env.DB.prepare("SELECT owner_bid,state FROM avatar_assets WHERE object_key=?").bind(key).first();
+    await env.DB.prepare("INSERT INTO avatar_assets(object_key,owner_bid,owner_wiki_user_id,created_at) VALUES(?,?,?,unixepoch()) ON CONFLICT DO NOTHING")
+      .bind(key, legacyBid, wikiUserId).run();
+    asset = await env.DB.prepare("SELECT owner_bid,owner_wiki_user_id,state FROM avatar_assets WHERE object_key=?").bind(key).first();
   }
-  if (asset?.owner_bid !== bid) throw new HttpError(403, "只能使用自己上传的头像");
+  const owns = asset?.owner_wiki_user_id != null
+    ? asset.owner_wiki_user_id === wikiUserId
+    : asset?.owner_bid === bid || (wikiUserId != null && !!(await env.DB.prepare(
+      "SELECT 1 FROM wiki_user_aliases WHERE bid=? AND wiki_user_id=?").bind(asset?.owner_bid ?? "", wikiUserId).first()));
+  if (!owns) throw new HttpError(403, "只能使用自己上传的头像");
   if (asset.state !== "active" || !(await env.USER_ASSETS.head(key))) throw new HttpError(409, "头像已过期，请重新上传");
+  if (wikiUserId != null && asset.owner_wiki_user_id == null) {
+    await env.DB.prepare("UPDATE avatar_assets SET owner_wiki_user_id=? WHERE object_key=? AND owner_wiki_user_id IS NULL")
+      .bind(wikiUserId, key).run();
+  }
 }
 
 export function avatarKey(path) { return path ? decodeURIComponent(path.slice(PREFIX.length)) : null; }
@@ -74,16 +89,23 @@ export async function cleanupAvatars(env, origin, limit = 20) {
 export async function retireAvatar(env, path, bid, origin) {
   if (!path || !env.USER_ASSETS) return;
   const key = avatarKey(path);
+  const identity = await env.DB.prepare("SELECT wiki_user_id FROM wiki_user_aliases WHERE bid=?").bind(bid).first();
   // Never delete an unowned object, even if a historic profile referenced another user.
-  if (legacyOwner(key, bid)) {
-    await env.DB.prepare("INSERT INTO avatar_assets(object_key,owner_bid,created_at) VALUES(?,?,0) ON CONFLICT DO NOTHING").bind(key, bid).run();
+  const legacyBid = legacyOwnerBid(key);
+  const ownsLegacy = legacyOwner(key, bid) || (identity && legacyBid != null && !!(await env.DB.prepare(
+    "SELECT 1 FROM wiki_user_aliases WHERE bid=? AND wiki_user_id=?").bind(legacyBid, identity.wiki_user_id).first()));
+  if (ownsLegacy) {
+    await env.DB.prepare("INSERT INTO avatar_assets(object_key,owner_bid,owner_wiki_user_id,created_at) VALUES(?,?,?,0) ON CONFLICT DO NOTHING")
+      .bind(key, legacyBid, identity?.wiki_user_id ?? null).run();
   }
-  await env.DB.prepare(`UPDATE avatar_assets SET state='deleting' WHERE object_key=? AND owner_bid=?
+  await env.DB.prepare(`UPDATE avatar_assets SET state='deleting' WHERE object_key=?
+    AND (owner_wiki_user_id=? OR (owner_wiki_user_id IS NULL AND owner_bid=?))
     AND NOT EXISTS(SELECT 1 FROM user_profiles WHERE avatar_url=? OR avatar_url=?)`)
-    .bind(key, bid, path, origin + path).run();
+    .bind(key, identity?.wiki_user_id ?? null, bid, path, origin + path).run();
   // Deletion is retriable: retain the tombstone if R2 fails. Do not scan the bucket
   // on every profile save; the maintenance endpoint handles aged orphans in batches.
-  const row = await env.DB.prepare("SELECT state FROM avatar_assets WHERE object_key=? AND owner_bid=?").bind(key, bid).first();
+  const row = await env.DB.prepare(`SELECT state FROM avatar_assets WHERE object_key=?
+    AND (owner_wiki_user_id=? OR (owner_wiki_user_id IS NULL AND owner_bid=?))`).bind(key, identity?.wiki_user_id ?? null, bid).first();
   if (row?.state === "deleting") {
     await env.USER_ASSETS.delete(key);
     await env.DB.prepare("DELETE FROM avatar_assets WHERE object_key=? AND state='deleting'").bind(key).run();
@@ -98,7 +120,7 @@ function sniff(bytes) {
 }
 
 export async function uploadAvatar(request, env) {
-  const user = await wikiUser(request, true);
+  const user = await wikiUser(request, true, env.DB);
   if (!env.USER_ASSETS) throw new HttpError(503, "头像存储未配置");
   const type = request.headers.get("Content-Type") || "";
   const raw = await readLimited(request, MAX_IMAGE + 64 * 1024);
@@ -121,10 +143,11 @@ export async function uploadAvatar(request, env) {
   const key = `avatars/${crypto.randomUUID()}.${ext}`;
   // R2 cannot join a D1 transaction. Hold a bounded lease, compensate failures, and
   // record the object BEFORE put so a process interruption remains collectible.
-  const gate = writeGate(env.DB, `uav:${user.bid}`, 30);
+  const gate = writeGate(env.DB, `uav:wiki:${user.wikiUserId}`, 30);
   requireClaim(await gate.claim.run(), 30);
   try {
-    await env.DB.prepare("INSERT INTO avatar_assets(object_key,owner_bid,created_at) VALUES(?,?,?)").bind(key, user.bid, gate.now).run();
+    await env.DB.prepare("INSERT INTO avatar_assets(object_key,owner_bid,owner_wiki_user_id,created_at) VALUES(?,?,?,?)")
+      .bind(key, user.bid, user.wikiUserId, gate.now).run();
     await env.USER_ASSETS.put(key, bytes, { httpMetadata: { contentType: mime, cacheControl: "public, max-age=86400" } });
   } catch (error) {
     try {

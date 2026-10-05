@@ -13,6 +13,31 @@ import kotlin.test.assertFailsWith
 
 class BoardRecoveryTest {
     @Test
+    fun uncertainPayloadCannotBeRetriedUnderADifferentSubmissionActor() {
+        var disk: String? = null
+        val store = BoardDraftStore({ disk }, { disk = it })
+        store.useIdentity("wiki:1")
+        store.edit(null, "uncertain", null, null)
+        val pending = store.prepare(null, null, "wiki:1", "guest:installation")
+        val restored = BoardDraftStore({ disk }, { disk = it })
+        restored.useIdentity("wiki:1")
+        assertEquals(pending.requestId, restored.prepare(null, null, "wiki:1", "guest:installation").requestId)
+        assertFailsWith<IllegalStateException> { restored.prepare(null, null, "wiki:1", "wiki:1") }
+        assertEquals(pending, restored.get(null).pending)
+    }
+
+    @Test
+    fun legacyUncertainWikiOwnerWithoutTransportIdentityFailsClosed() {
+        val legacy = """{"wiki:1:0":{"content":"uncertain","pending":{"content":"uncertain","authorName":null,"actor":"wiki:1","replyToId":null,"requestId":"old-request","createdAt":0}}}"""
+        val store = BoardDraftStore({ legacy }, {}, { 1L })
+        store.useIdentity("wiki:1")
+        assertFailsWith<IllegalStateException> { store.prepare(null, null, "wiki:1") }
+        assertEquals("old-request", store.get(null).pending!!.requestId)
+        store.edit(null, "explicit new content", null, null)
+        assertNotEquals("old-request", store.prepare(null, null, "wiki:1").requestId)
+    }
+
+    @Test
     fun completionAcknowledgesOriginalAccountAfterSwitch() {
         var disk: String? = null
         val store = BoardDraftStore({ disk }, { disk = it })

@@ -13,6 +13,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.movableContentOf
@@ -54,6 +56,7 @@ val LocalColorSpec2025 = staticCompositionLocalOf { mutableStateOf(AppPrefs.colo
 fun AppTheme(content: @Composable () -> Unit) {
     val themeMode = remember { mutableIntStateOf(AppPrefs.themeMode) }
     val seedColor = remember { mutableIntStateOf(AppPrefs.customSeedColor) }
+    val wallpaperUrl by AppPrefs.wallpaperUrlState.collectAsState()
     val wallpaperSeedColor = remember {
         mutableIntStateOf(WallpaperSeedColor.applyCachedColor(AppPrefs.wallpaperUrl))
     }
@@ -67,9 +70,9 @@ fun AppTheme(content: @Composable () -> Unit) {
     val movableContent = remember { movableContentOf { currentContent.value() } }
     val context = LocalContext.current
 
-    LaunchedEffect(seedColor.intValue, AppPrefs.wallpaperUrl) {
+    LaunchedEffect(seedColor.intValue, wallpaperUrl) {
         if (seedColor.intValue != AppPrefs.SEED_WALLPAPER) return@LaunchedEffect
-        val url = AppPrefs.wallpaperUrl
+        val url = wallpaperUrl
         val cached = WallpaperSeedColor.applyCachedColor(url)
         if (cached != 0) {
             wallpaperSeedColor.intValue = cached

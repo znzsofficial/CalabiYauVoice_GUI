@@ -198,7 +198,12 @@ fun CostumeFilterScreen(
 
 @Composable
 private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
-    CatalogGridSkeleton(modifier = modifier)
+    CatalogGridSkeleton(
+        modifier = modifier,
+        selectorLabel = "按角色筛选",
+        chipLabels = listOf("全部品质") + Quality.entries
+            .filter { it != Quality.INITIAL }.sortedByDescending { it.level }.map { it.displayName }
+    )
 }
 
 // ────────────────────────────────────────────

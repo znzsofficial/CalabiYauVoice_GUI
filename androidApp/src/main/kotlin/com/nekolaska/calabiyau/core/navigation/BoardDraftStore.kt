@@ -11,7 +11,11 @@ internal data class PendingBoardPost(
     val actor: String,
     val replyToId: Long?,
     val requestId: String,
-    val createdAt: Long
+    val createdAt: Long,
+    // Local draft owner is not necessarily the server's submitting identity.
+    // null marks a pre-fix uncertain request whose transport identity is unknown.
+    val submissionActor: String? = null,
+    val targetBid: String? = null
 )
 
 @Serializable
@@ -34,6 +38,7 @@ internal class BoardDraftStore(
     }.getOrDefault(emptyMap()).toMutableMap()
 
     private var owner: String? = null
+    val currentOwner: String? get() = owner
     fun useIdentity(identity: String?) { owner = identity }
     private fun key(threadId: Long?) = "${checkNotNull(owner) { "请先确认发言身份" }}:${threadId ?: 0L}"
     fun get(threadId: Long?) = owner?.let { drafts[key(threadId)] } ?: BoardDraft()
@@ -56,13 +61,21 @@ internal class BoardDraftStore(
         put(threadId, old.copy(replyToId = replyToId, replyToName = replyToName, targetUnavailable = false))
     }
 
-    fun prepare(threadId: Long?, authorName: String?, actor: String): PendingBoardPost {
+    fun prepare(threadId: Long?, authorName: String?, actor: String, submissionActor: String = actor,
+                targetBid: String = "__public__"): PendingBoardPost {
         check(owner == actor) { "发言身份已变化，请先确认当前账号" }
         val draft = get(threadId)
         check(!draft.targetUnavailable) { "原回复目标已不可用。请先核对上次是否发送成功，再明确选择新的回复目标。" }
         val content = draft.content.trim()
         val replyTo = if (threadId == null) null else draft.replyToId ?: threadId
         val previous = draft.pending
+        if (previous != null && previous.content == content && previous.replyToId == replyTo) {
+            val previousSubmission = previous.submissionActor
+                ?: previous.actor.takeIf { it.startsWith("guest:") }
+            check(previousSubmission != null && previousSubmission == submissionActor) {
+                "上次发送结果尚未确认，不能更换发言身份重试。请先核对是否已发送成功。"
+            }
+        }
         if (previous != null && previous.content == content && previous.authorName == authorName &&
             previous.actor == actor && previous.replyToId == replyTo) {
             // Server retains deduplication records for seven days. Do not silently
@@ -72,7 +85,7 @@ internal class BoardDraftStore(
             }
             return previous
         }
-        val pending = PendingBoardPost(content, authorName, actor, replyTo, UUID.randomUUID().toString(), now())
+        val pending = PendingBoardPost(content, authorName, actor, replyTo, UUID.randomUUID().toString(), now(), submissionActor, targetBid)
         put(threadId, draft.copy(pending = pending))
         return pending
     }

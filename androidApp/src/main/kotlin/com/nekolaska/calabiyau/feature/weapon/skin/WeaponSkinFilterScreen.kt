@@ -204,7 +204,12 @@ fun WeaponSkinFilterScreen(
 
 @Composable
 private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
-    CatalogGridSkeleton(modifier = modifier)
+    CatalogGridSkeleton(
+        modifier = modifier,
+        selectorLabel = "按武器筛选",
+        chipLabels = listOf("全部品质") + Quality.entries.sortedByDescending { it.level }.map { it.displayName },
+        weaponSelector = true
+    )
 }
 
 // ────────────────────────────────────────────

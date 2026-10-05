@@ -42,10 +42,14 @@ object AppPrefs {
 
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
+    private lateinit var wallpaperPreference: ObservablePreference<String?>
 
     fun init(context: Context) {
         appContext = context.applicationContext
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        wallpaperPreference = ObservablePreference(prefs.getString("wallpaperUrl", null)) { value ->
+            prefs.edit { putString("wallpaperUrl", value) }
+        }
     }
 
     private fun intPref(def: Int = 0) = object : ReadWriteProperty<Any?, Int> {
@@ -156,7 +160,10 @@ object AppPrefs {
             putInt("launcherIconTheme", if (value == LAUNCHER_ICON_SYSTEM) LAUNCHER_ICON_SYSTEM else LAUNCHER_ICON_BRAND)
         }
 
-    var wallpaperUrl by stringPref()
+    val wallpaperUrlState get() = wallpaperPreference.state
+    var wallpaperUrl: String?
+        get() = wallpaperPreference.value
+        set(value) { wallpaperPreference.value = value }
     var wallpaperAutoRefresh by booleanPref(false)
     var wallpaperSeedColorCache by intPref(0)
     var wallpaperSeedColorUrl by stringPref()

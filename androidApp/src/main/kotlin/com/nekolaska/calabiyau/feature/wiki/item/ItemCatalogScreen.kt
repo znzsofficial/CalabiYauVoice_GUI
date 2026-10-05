@@ -182,7 +182,13 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
 
 @Composable
 private fun ItemCatalogSkeleton(modifier: Modifier = Modifier) {
-    CatalogGridSkeleton(modifier = modifier, showSelector = false, chipCount = 7)
+    CatalogGridSkeleton(
+        modifier = modifier,
+        minCellSize = 108.dp,
+        selectorLabel = "按分类筛选",
+        qualityLabel = "按稀有度筛选",
+        chipLabels = listOf("全部稀有度") + Quality.entries.sortedByDescending { it.level }.map { it.displayName }
+    )
 }
 
 @Composable

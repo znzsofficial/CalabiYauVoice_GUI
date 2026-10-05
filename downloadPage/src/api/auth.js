@@ -1,4 +1,5 @@
 import { HttpError, readLimited } from "./http.js";
+import { recordWikiIdentity } from "./identity.js";
 export const WIKI_API = "https://wiki.biligame.com/klbq/api.php";
 export const WIKI_HEADERS = {
   Accept: "application/json",
@@ -6,7 +7,7 @@ export const WIKI_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   Referer: "https://wiki.biligame.com/klbq/", Origin: "https://wiki.biligame.com",
 };
-export async function wikiUser(request, required = false) {
+export async function wikiUser(request, required = false, db = null) {
   // Do not forward ambient site cookies to a third party.
   const cookie = request.headers.get("X-Wiki-Cookie");
   if (!cookie?.trim()) {
@@ -25,7 +26,9 @@ export async function wikiUser(request, required = false) {
   } catch { throw new HttpError(503, "Wiki 身份验证暂不可用，请稍后重试"); }
   if (user.id === 0 || user.anon !== undefined) throw new HttpError(401, "Wiki 登录已失效，请重新登录");
   if (user.id < 1 || typeof user.name !== "string" || !user.name.trim()) throw new HttpError(503, "Wiki 身份数据无效");
-  return { bid: user.name.trim(), wikiUserId: user.id };
+  const identity = { bid: user.name.trim(), wikiUserId: user.id };
+  if (db) await recordWikiIdentity(db, identity);
+  return identity;
 }
 function hex(buffer) { return Array.from(new Uint8Array(buffer), b => b.toString(16).padStart(2, "0")).join(""); }
 export async function sha256(value) {

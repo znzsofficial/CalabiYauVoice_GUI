@@ -37,8 +37,8 @@ object CustomUserApi {
     // 60 秒内免一次 Worker→SMW 两跳请求。账号切换由 Cookie 变化自然失效。
     private var sessionCache: Pair<String, Pair<TimeSource.Monotonic.ValueTimeMark, UserSession>>? = null
 
-    suspend fun fetchSession(wikiCookie: String): ApiResult<UserSession> = withContext(Dispatchers.IO) {
-        sessionCache?.let { (ck, cached) ->
+    suspend fun fetchSession(wikiCookie: String, forceRefresh: Boolean = false): ApiResult<UserSession> = withContext(Dispatchers.IO) {
+        sessionCache?.takeUnless { forceRefresh }?.let { (ck, cached) ->
             val (mark, session) = cached
             if (ck == wikiCookie && mark.elapsedNow() < 60.seconds) {
                 return@withContext ApiResult.Success(session)
@@ -97,17 +97,16 @@ object CustomUserApi {
      * （资料弹窗/留言板头像高频重复打开）。
      */
     private val profileCache = java.util.concurrent.ConcurrentHashMap<String, Pair<TimeSource.Monotonic.ValueTimeMark, CustomUserProfile?>>()
+    private val profileCacheGeneration = java.util.concurrent.atomic.AtomicLong(0)
 
     suspend fun fetchProfile(
         bid: String? = null,
         wikiId: Long? = null
     ): ApiResult<CustomUserProfile?> = withContext(Dispatchers.IO) {
-        val queryParam = when {
-            !bid.isNullOrBlank() -> "bid=${bid.trim().wikiPathEncode()}"
-            wikiId != null && wikiId > 0 -> "wiki_id=$wikiId"
-            else -> return@withContext ApiResult.Error("缺少查询参数 bid 或 wiki_id", kind = ErrorKind.UNKNOWN)
-        }
-        val cacheKey = bid?.trim() ?: "wiki_id=$wikiId"
+        val queryParam = profileQuery(bid, wikiId)
+            ?: return@withContext ApiResult.Error("缺少查询参数 bid 或 wiki_id", kind = ErrorKind.UNKNOWN)
+        val cacheKey = queryParam
+        val requestGeneration = profileCacheGeneration.get()
         profileCache[cacheKey]?.let { (mark, profile) ->
             if (mark.elapsedNow() < 60.seconds) return@withContext ApiResult.Success(profile)
         }
@@ -130,7 +129,11 @@ object CustomUserApi {
                 }
                 ApiResult.Success(parsed.profile).also {
                     parsed.profile?.let { profile ->
-                        profileCache[cacheKey] = TimeSource.Monotonic.markNow() to profile
+                        synchronized(profileCache) {
+                            if (requestGeneration == profileCacheGeneration.get()) {
+                                profileCache[cacheKey] = TimeSource.Monotonic.markNow() to profile
+                            }
+                        }
                     }
                 }
             }
@@ -211,7 +214,8 @@ object CustomUserApi {
         avatarUrl: String? = null,
         bio: String? = null,
         badge: String? = null,
-        wikiCookie: String
+        wikiCookie: String,
+        expectedWikiUserId: Long? = null
     ): ApiResult<CustomUserProfile> = withContext(Dispatchers.IO) {
         if (wikiCookie.isBlank()) {
             return@withContext ApiResult.Error("未登录 Wiki，无法保存资料", kind = ErrorKind.UNKNOWN)
@@ -223,6 +227,7 @@ object CustomUserApi {
             if (avatarUrl != null) put("avatarUrl", avatarUrl)
             if (bio != null) put("bio", bio)
             if (badge != null) put("badge", badge)
+            if (expectedWikiUserId != null) put("expectedWikiUserId", expectedWikiUserId)
         }.toString()
 
         try {
@@ -241,7 +246,10 @@ object CustomUserApi {
                 val parsed = json.decodeFromString<CustomUserUpdateResponse>(body)
                 if (parsed.success && parsed.profile != null) {
                     // 资料已变更：失效读取缓存，避免弹窗重开显示旧资料
-                    profileCache.clear()
+                    synchronized(profileCache) {
+                        profileCacheGeneration.incrementAndGet()
+                        profileCache.clear()
+                    }
                     ApiResult.Success(parsed.profile)
                 } else {
                     ApiResult.Error(parsed.error ?: "更新失败", kind = ErrorKind.UNKNOWN)
@@ -455,4 +463,11 @@ object CustomUserApi {
             ApiResult.Error(e.message ?: "点赞网络异常", kind = e.toErrorKind())
         }
     }
+}
+
+/** Immutable ID takes precedence even when a stale display name is supplied. */
+internal fun profileQuery(bid: String?, wikiId: Long?): String? = when {
+    wikiId != null && wikiId > 0 -> "wiki_id=$wikiId"
+    !bid.isNullOrBlank() -> "bid=${bid.trim().wikiPathEncode()}"
+    else -> null
 }

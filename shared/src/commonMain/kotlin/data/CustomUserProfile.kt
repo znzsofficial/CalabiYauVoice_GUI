@@ -61,10 +61,15 @@ data class ProfileComment(
     val pinnedAt: Long? = null,
     val targetBid: String? = null
 ) {
+    val isGuest: Boolean get() = authorWikiUserId == null && authorBid == "anon"
+
+    fun isOwnedBy(wikiUserId: Long, bid: String): Boolean = !deleted && !isGuest &&
+        (authorWikiUserId?.let { it == wikiUserId } ?: (authorBid == bid))
+
     fun displayAuthor(): String {
         if (deleted) return "已删除留言"
-        val name = authorName?.takeIf { it.isNotBlank() } ?: if (authorBid == "anon") "访客" else authorBid
-        return if (authorBid == "anon" && !authorTag.isNullOrBlank()) "$name#$authorTag" else name
+        val name = authorName?.takeIf { it.isNotBlank() } ?: if (isGuest) "访客" else authorBid
+        return if (isGuest && !authorTag.isNullOrBlank()) "$name#$authorTag" else name
     }
 }
 

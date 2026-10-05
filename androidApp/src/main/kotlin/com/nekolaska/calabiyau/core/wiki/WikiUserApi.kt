@@ -121,8 +121,7 @@ object WikiUserApi {
     /**
      * 获取当前已登录用户的详细信息（通过 WebView Cookie）。
      */
-    suspend fun fetchCurrentUserInfo(): ApiResult<UserInfo?> = withContext(Dispatchers.IO) {
-        val cookies = getWikiCookies()
+    suspend fun fetchCurrentUserInfo(cookies: String? = getWikiCookies()): ApiResult<UserInfo?> = withContext(Dispatchers.IO) {
         if (cookies.isNullOrBlank()) {
             return@withContext ApiResult.Error("未检测到登录 Cookie")
         }

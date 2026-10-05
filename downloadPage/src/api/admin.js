@@ -1,12 +1,14 @@
 import { HttpError, json, text, integer, escapeLike, absoluteProfile } from "./http.js";
 import { requireAdmin } from "./auth.js";
-import { PROFILE_COLUMNS, saveProfile } from "./profiles.js";
+import { PROFILE_COLUMNS, saveProfile, getProfile } from "./profiles.js";
+import { storedProfileBid } from "./identity.js";
 import { deleteComment } from "./comments.js";
 import { avatarPath, retireAvatar, cleanupAvatars } from "./avatars.js";
 import { moderate, auditList, auditStatement } from "./moderation.js";
 
 export async function admin(request, env, url, ctx) {
   await requireAdmin(request, env);
+  if (request.method === "GET" && url.pathname === "/api/admin/profile") return getProfile(request, env, url);
   if (request.method === "PUT" && url.pathname === "/api/admin/comment") return moderate(request, env);
   if (request.method === "GET" && url.pathname === "/api/admin/audit") return auditList(env, url);
   if (request.method === "PUT" && url.pathname === "/api/admin/profile") return saveProfile(request, env, url, true, ctx);
@@ -21,7 +23,8 @@ export async function admin(request, env, url, ctx) {
     return json({ success: true });
   }
   if (request.method === "DELETE" && url.pathname === "/api/admin/profile") {
-    const bid = text(url.searchParams.get("bid"), "bid", 128, true);
+    const requestedBid = text(url.searchParams.get("bid"), "bid", 128, true);
+    const bid = await storedProfileBid(env.DB, requestedBid) ?? requestedBid;
     const results = await env.DB.batch([
       env.DB.prepare("SELECT avatar_url FROM user_profiles WHERE bid=?").bind(bid),
       env.DB.prepare("DELETE FROM user_profiles WHERE bid=?").bind(bid),
@@ -42,8 +45,8 @@ export async function admin(request, env, url, ctx) {
     let where = "", bindings = [];
     if (q) {
       if (profiles) {
-        where = "WHERE bid LIKE ? ESCAPE '\\' OR custom_name LIKE ? ESCAPE '\\' OR wiki_user_id=?";
-        bindings = [escapeLike(q), escapeLike(q), /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1];
+        where = "WHERE bid LIKE ? ESCAPE '\\' OR custom_name LIKE ? ESCAPE '\\' OR wiki_user_id=? OR wiki_user_id IN (SELECT wiki_user_id FROM wiki_user_names WHERE current_bid LIKE ? ESCAPE '\\')";
+        bindings = [escapeLike(q), escapeLike(q), /^\d+$/.test(q) && Number.isSafeInteger(Number(q)) ? Number(q) : -1, escapeLike(q)];
       } else {
         where = "WHERE c.content LIKE ? ESCAPE '\\' OR c.author_bid LIKE ? ESCAPE '\\' OR c.target_bid LIKE ? ESCAPE '\\' OR c.author_name LIKE ? ESCAPE '\\' OR p.custom_name LIKE ? ESCAPE '\\' OR c.author_tag LIKE ? ESCAPE '\\'";
         bindings = Array(6).fill(escapeLike(q));

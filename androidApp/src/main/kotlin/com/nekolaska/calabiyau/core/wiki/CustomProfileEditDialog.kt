@@ -112,6 +112,20 @@ fun CustomProfileEditDialog(
         isBusy = true
         errorMessage = null
         scope.launch {
+            // The editor label is not authority. Verify its immutable owner before
+            // uploading anything, and send the same precondition to the backend.
+            when (val session = CustomUserApi.fetchSession(cookies, forceRefresh = true)) {
+                is ApiResult.Success -> if (session.value.wikiUserId != wikiUserId || WikiAuthHelper.getWikiCookies() != cookies) {
+                    errorMessage = "登录账号已变化，请重新打开资料编辑"
+                    isBusy = false
+                    return@launch
+                }
+                is ApiResult.Error -> {
+                    errorMessage = session.message
+                    isBusy = false
+                    return@launch
+                }
+            }
             var avatarUrl: String? = currentProfile?.avatarUrl
             if (cropped != null) {
                 // 裁切结果已是方形：限制 512px → WEBP 压缩
@@ -140,7 +154,8 @@ fun CustomProfileEditDialog(
                 avatarUrl = avatarUrl,
                 bio = finalBio,
                 badge = finalBadge,
-                wikiCookie = cookies
+                wikiCookie = cookies,
+                expectedWikiUserId = wikiUserId
             )) {
                 is ApiResult.Success -> {
                     onSaved(save.value)

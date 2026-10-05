@@ -7,6 +7,18 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CustomUserProfileTest {
+    @Test
+    fun immutableIdWinsOverStaleBidAndAnonSentinelHasNoOwner() {
+        assertEquals("wiki_id=7", profileQuery("old-name", 7))
+        assertEquals("bid=Alice", profileQuery("Alice", null))
+        val guest = ProfileComment(1, "anon", content = "guest")
+        assertFalse(guest.isOwnedBy(7, "anon")); assertTrue(guest.isGuest)
+        val member = guest.copy(authorWikiUserId = 7)
+        assertTrue(member.isOwnedBy(7, "renamed")); assertFalse(member.isGuest)
+        assertFalse(member.isOwnedBy(8, "anon"))
+        assertEquals("anon", member.displayAuthor())
+    }
+
 
     @Test
     fun testDisplayNameFallback() {

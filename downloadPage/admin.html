@@ -366,12 +366,12 @@
 
       async function openEdit(bid) {
         // 从当前列表数据取行内容
-        const params = new URLSearchParams({ q: bid, page: "1", size: "1" });
+        const params = new URLSearchParams({ bid });
         try {
-          const resp = await fetch(`/api/admin/profiles?${params}`, { headers: headers() });
+          const resp = await fetch(`/api/admin/profile?${params}`, { headers: headers() });
           if (!resp.ok) throw new Error((await resp.json()).error || `HTTP ${resp.status}`);
           const data = await resp.json();
-          editRow = data.profiles.find((p) => p.bid === bid);
+          editRow = data.profile;
           if (!editRow) { showError($("listError"), "未找到该档案"); return; }
         } catch (err) {
           showError($("listError"), err.message || "加载档案失败");

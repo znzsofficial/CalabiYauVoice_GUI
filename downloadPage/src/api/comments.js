@@ -3,23 +3,26 @@ import { wikiUser, guestIdentity, sha256 } from "./auth.js";
 import { writeGate, gateCondition, requireClaim } from "./writes.js";
 import { auditStatement } from "./moderation.js";
 import { replyNotificationStatement } from "./notifications.js";
+import { storedProfileBid } from "./identity.js";
 
-const COMMENT_COLUMNS = `c.id,c.target_bid AS targetBid,c.author_bid AS authorBid,c.author_wiki_user_id AS authorWikiUserId,c.author_tag AS authorTag,
+const COMMENT_COLUMNS = `c.id,c.target_bid AS targetBid,
+  COALESCE((SELECT current_bid FROM wiki_user_names WHERE wiki_user_id=c.author_wiki_user_id),c.author_bid) AS authorBid,
+  c.author_wiki_user_id AS authorWikiUserId,c.author_tag AS authorTag,
   COALESCE(NULLIF((SELECT up.custom_name FROM user_profiles up
     WHERE (c.author_wiki_user_id IS NOT NULL AND up.wiki_user_id=c.author_wiki_user_id)
-      OR (c.author_wiki_user_id IS NULL AND up.bid=c.author_bid)
+      OR (c.author_wiki_user_id IS NULL AND c.author_bid<>'anon' AND up.bid=c.author_bid)
     ORDER BY up.updated_at DESC LIMIT 1),''),c.author_name,c.author_bid) AS authorName,
   (SELECT up.avatar_url FROM user_profiles up
     WHERE (c.author_wiki_user_id IS NOT NULL AND up.wiki_user_id=c.author_wiki_user_id)
-      OR (c.author_wiki_user_id IS NULL AND up.bid=c.author_bid)
+      OR (c.author_wiki_user_id IS NULL AND c.author_bid<>'anon' AND up.bid=c.author_bid)
     ORDER BY up.updated_at DESC LIMIT 1) AS authorAvatarUrl,c.content,c.created_at AS createdAt,
   c.root_id AS rootId,c.reply_to_id AS replyToId,c.deleted_at AS deletedAt,c.hidden_at AS hiddenAt,c.pinned_at AS pinnedAt,
   CASE WHEN c.root_id IS NULL THEN (SELECT COUNT(*) FROM profile_comments r WHERE r.root_id=c.id AND r.deleted_at IS NULL AND r.hidden_at IS NULL) ELSE 0 END AS replyCount,
   CASE WHEN parent.hidden_at IS NOT NULL THEN '已隐藏留言' WHEN parent.deleted_at IS NULL THEN COALESCE(NULLIF((SELECT up.custom_name FROM user_profiles up
     WHERE (parent.author_wiki_user_id IS NOT NULL AND up.wiki_user_id=parent.author_wiki_user_id)
-      OR (parent.author_wiki_user_id IS NULL AND up.bid=parent.author_bid)
+      OR (parent.author_wiki_user_id IS NULL AND parent.author_bid<>'anon' AND up.bid=parent.author_bid)
     ORDER BY up.updated_at DESC LIMIT 1),''),parent.author_name,parent.author_bid) ELSE '已删除留言' END AS replyToName,
-  CASE WHEN parent.hidden_at IS NULL AND parent.deleted_at IS NULL AND parent.author_bid='anon' THEN parent.author_tag ELSE NULL END AS replyToTag`;
+  CASE WHEN parent.hidden_at IS NULL AND parent.deleted_at IS NULL AND parent.author_wiki_user_id IS NULL AND parent.author_bid='anon' THEN parent.author_tag ELSE NULL END AS replyToTag`;
 const JOIN = `FROM profile_comments c LEFT JOIN profile_comments parent ON parent.id=c.reply_to_id`;
 function absoluteComment(row, origin) {
   if (!row) return row;
@@ -32,11 +35,15 @@ const VISIBLE_ROOT = `c.root_id IS NULL AND c.hidden_at IS NULL AND (c.deleted_a
   SELECT 1 FROM profile_comments r WHERE r.root_id=c.id AND r.deleted_at IS NULL AND r.hidden_at IS NULL))`;
 
 export async function targetExists(db, bid) {
-  if (bid !== "__public__" && !(await db.prepare("SELECT 1 FROM user_profiles WHERE bid=?").bind(bid).first())) throw new HttpError(404, "目标用户不存在");
+  if (bid === "__public__") return bid;
+  const stored = await storedProfileBid(db, bid);
+  if (!stored) throw new HttpError(404, "目标用户不存在");
+  return stored;
 }
 
 export async function listComments(request, env, url) {
-  const bid = text(url.searchParams.get("bid"), "bid", 128, true);
+  const requestedBid = text(url.searchParams.get("bid"), "bid", 128, true);
+  const bid = requestedBid === "__public__" ? requestedBid : (await storedProfileBid(env.DB, requestedBid) ?? requestedBid);
   const size = integer(url.searchParams.get("size"), 20, 50);
   const page = integer(url.searchParams.get("page"), 1, 100000);
   const cursor = url.searchParams.get("before");
@@ -111,9 +118,9 @@ async function replay(db, actor, key, fingerprint, origin) {
 }
 
 export async function postComment(request, env, url, reply = false) {
-  const user = await wikiUser(request);
+  const user = await wikiUser(request, false, env.DB);
   const body = await readJson(request);
-  const target = text(body.targetBid, "targetBid", 128, true);
+  const requestedTarget = text(body.targetBid, "targetBid", 128, true);
   const content = text(body.content, "content", 200, true);
   const name = user ? null : text(body.authorName, "authorName", 20) || "访客";
   let replyToId = null;
@@ -127,10 +134,10 @@ export async function postComment(request, env, url, reply = false) {
   const actor = user ? `wiki:${user.wikiUserId}` : guest.actor;
   const requestKey = request.headers.get("Idempotency-Key") || crypto.randomUUID();
   if (!/^[a-zA-Z0-9_-]{8,128}$/.test(requestKey)) throw new HttpError(400, "请求编号无效");
-  const fingerprint = await sha256(JSON.stringify(reply ? [target, content, name, replyToId] : [target, content, name]));
+  const fingerprint = await sha256(JSON.stringify(reply ? [requestedTarget, content, name, replyToId] : [requestedTarget, content, name]));
   const previous = await replay(env.DB, actor, requestKey, fingerprint, url.origin);
   if (previous) return previous;
-  await targetExists(env.DB, target);
+  const target = await targetExists(env.DB, requestedTarget);
   let rootId = null;
   if (reply) {
     const parent = await env.DB.prepare("SELECT id,root_id,target_bid,deleted_at,hidden_at FROM profile_comments WHERE id=?").bind(replyToId).first();
@@ -168,10 +175,10 @@ export async function postComment(request, env, url, reply = false) {
 }
 
 export async function deleteComment(request, env, url, admin = false) {
-  const user = admin ? null : await wikiUser(request, true);
+  const user = admin ? null : await wikiUser(request, true, env.DB);
   const id = integer(url.searchParams.get("id"));
   if (!id) throw new HttpError(400, "缺少留言 id");
-  const owner = admin ? "" : "AND (author_wiki_user_id=? OR (author_wiki_user_id IS NULL AND author_bid=?))";
+  const owner = admin ? "" : "AND (author_wiki_user_id=? OR (author_wiki_user_id IS NULL AND author_bid<>'anon' AND author_bid=?))";
   const statement = env.DB.prepare(`UPDATE profile_comments SET content='',pinned_at=NULL,deleted_at=COALESCE(deleted_at,unixepoch())
     WHERE id=? AND deleted_at IS NULL ${owner}`)
     .bind(...(admin ? [id] : [id, user.wikiUserId, user.bid]));

@@ -32,7 +32,7 @@
 - 数据模型：`shared/src/commonMain/kotlin/data/CustomUserProfile.kt`
 
 Worker 按职责拆分：`_worker.js` 只负责路由和统一错误处理；`http.js` 负责限量读取与参数校验，
-`auth.js` 负责 Wiki/管理员鉴权及访客 HMAC，`writes.js` 负责原子写入门禁，
+`auth.js` 负责 Wiki/管理员鉴权及访客 HMAC，`identity.js` 负责已验证名字别名及旧行归属补全，`writes.js` 负责原子写入门禁，
 `profiles.js`、`avatars.js`、`comments.js`、`likes.js`、`admin.js` 是业务模块，
 `releases.js` 负责 APK Range/HEAD/ETag，`proxy.js` 负责上游代理。
 `pnpm build` 使用 esbuild 将模块打包为 `dist/_worker.js`；`webStatic` 不再覆盖此产物。
@@ -77,10 +77,10 @@ CREATE TABLE user_profiles (
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX idx_user_profiles_wiki_id ON user_profiles(wiki_user_id);  -- 非唯一：允许改名重建
+CREATE INDEX idx_user_profiles_wiki_id ON user_profiles(wiki_user_id);  -- 初始结构；0010 另加唯一索引
 ```
 
-- `bid` 是主键：用户在 Wiki 改名（新 bid）会生成新档案，旧档保留但不可达。
+- `bid` 是档案的稳定存储主键，不再因改名重建档案。0010 通过 Wiki ID 与已验证名字别名查找同一档案；对外返回最近验证过的名字。
 - 头像只存相对路径，读取时由 Worker 拼请求 origin 返回绝对 URL。
 
 ### 0002_create_comments_likes.sql — 留言板与点赞
@@ -131,14 +131,29 @@ CREATE TABLE write_throttle (
 此迁移必须先于内容管理 Worker 部署执行。
 
 `0008_reply_notifications.sql` 增加登录用户回复通知表。回复写入和通知生成在同一个 D1 batch 中；
-通知只发送给直接被回复的登录用户，匿名作者、自回复不产生通知。通知不保存原文快照，
+通知只发送给直接被回复的登录用户，匿名收件人、自回复不产生通知；匿名作者回复登录用户仍会通知。通知不保存原文快照，
 内容在读取时按当前隐藏/删除状态返回。
 
 `0009_stable_user_identity.sql` 将留言作者和通知收件人绑定到不可变的 MediaWiki 用户 ID：
 留言保存 `author_wiki_user_id`，通知保存 `recipient_wiki_user_id`；删除归属、自回复判断、
 通知读写都优先按 Wiki 用户 ID 匹配，BID 仅用于显示和迁移前旧行的兼容回退。
 迁移按 `user_profiles.wiki_user_id` 回填旧行，用户改名后仍能读取旧通知、删除自己的旧留言，
-也不会因 BID 变化被误当成新身份。同一 Wiki 用户即使 BID 相同也不会跨账号合并。
+也不会因 BID 变化被误当成新身份。不同 Wiki ID 不能仅因 BID 相同而合并。
+
+### 0010_account_identity.sql — 档案、头像、点赞的稳定归属
+
+- `wiki_user_aliases` 保存已验证的 BID → Wiki ID 映射；`wiki_user_names` 保存最近验证的名字。
+  正常鉴权成功后同步映射，并补全这些别名下的旧留言/通知/点赞归属；不依赖用户是否建过自定义档案。
+  名字与另一个非空 Wiki ID 冲突时返回 `IDENTITY_CONFLICT`，不能覆盖或自动合并对方档案。
+- `avatar_assets.owner_wiki_user_id` 与 `profile_likes.author_wiki_user_id` 优先用于所有权判断。
+  老头像按精确文件名/已验证别名兼容，不能使用另一个用户的对象；改名不会重置档案/头像限流。
+- 一个非空 Wiki ID 只保留一个活动档案。已有重复档案按 `updated_at DESC,bid ASC` 确定活动版本，
+  其余原始字段先存入 `user_profile_archive`，旧名字别名仍保留；重复版本的个人板和点赞合并到活动档案的存储 BID。
+  归档是资料元数据备份，不是 R2 文件备份；不用的头像仍遵循既有孤儿清理规则。
+- 匿名身份判定是 `author_wiki_user_id IS NULL AND author_bid='anon'`，不能仅凭字符串判定。
+  BID 兼容授权和旧留言档案关联均排除匿名占位，真实同名账号只可操作其 Wiki ID 所属留言。
+- **部署前先备份 D1，检查重复 Wiki ID 与名字冲突，再应用 0010；随后部署新版 Worker，最后发布客户端。**
+  迁移中的归档/合并已在本地 D1 回归验证，不代表已经操作线上数据库。名字冲突应由管理员核对，不能直接改写归属 ID。
 
 所有响应带 CORS 头；错误统一为 `{"error": "..."}` + 非 200；业务错误额外带结构化
 `errorCode`（如 `DISCUSSION_UNAVAILABLE`、`FOCUS_UNAVAILABLE`、`REPLY_TARGET_UNAVAILABLE`、
@@ -150,17 +165,21 @@ CREATE TABLE write_throttle (
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/api/user/profile?bid=` 或 `?wiki_id=` | 公开 | 单查；未建档返回 `{"profile": null}`，no-store |
+| GET | `/api/user/session` | Cookie | 返回权威 Wiki ID 与当前 BID，同步已验证名字别名 |
 | PUT | `/api/user/profile` | Cookie | 更新自己的档案；`avatarUrl` 只接受本服务 `/api/user/avatar/` 路径（相对/绝对均可，落库存相对路径）；替换头像时删旧 R2 对象 |
 
 PUT 请求体：
 
 ```json
-{ "customName": "...", "avatarUrl": "...", "bio": "...", "badge": "..." }
+{ "customName": "...", "avatarUrl": "...", "bio": "...", "badge": "...", "expectedWikiUserId": 123 }
 ```
 
 字段校验：昵称 ≤30、签名 ≤200、徽章 ≤20；超长或地址非法返回 400。
 用户 PUT 保持全量替换语义以兼容旧客户端；管理员 PUT 为部分更新，省略字段保留、null 清空。
 保存头像时还验证对象确实存在且属于目标用户；只允许自己的 active 对象。
+新客户端编辑前重新验证身份，保存时附带 `expectedWikiUserId`；与 Cookie 的权威 ID 不符时返回
+409 / `IDENTITY_CHANGED`，不能把旧账号编辑内容保存给新账号。此字段可省略以兼容旧版本。
+读取同时提供 `wiki_id` 和 `bid` 时，Wiki ID 优先；改名后的名字与旧别名都解析到同一存储档案。
 
 ### 头像
 
@@ -213,6 +232,10 @@ PUT 请求体：
 - 草稿与未确认发送的原始内容、回复目标、身份标识、幂等 key 按讨论一起保存在本地，不存 Cookie。
   切换讨论、页面重建后重试同一内容继续使用原 key；确认成功才清除。超过服务端 7 天去重窗口的
   未确认请求不会自动作为新请求重发，需先核对发送结果或明确修改内容。
+- 显式匿名与实名草稿分别保存；匿名输入/发帖不依赖 Wiki 身份请求成功，也不会将失效登录凭据静默降级成匿名。
+  待确认请求额外固定 `submissionActor`、`targetBid`，原身份重试沿用原 key；未确认前切换身份会被阻止。
+  升级前的 Wiki-owner 待确认请求若缺少提交身份，不能推断当时是否匿名，重试时要求先核对并明确编辑内容。
+- 磁盘列表预取只允许在网络成功之前渲染；服务器成功返回空列表也是权威结果，迟到缓存不得使旧留言重新出现。
 - 刷新发现原回复目标已删除时，只标记目标不可用，保留原目标及待确认请求；不会自动改为回复主楼。
   用户核对发送结果后可明确选择新的回复目标，再创建新请求。此不可用状态也随草稿持久化。
 - 删除成功立即将本地内容及引用改为占位、关闭已删除主留言的回复输入；刷新失败不会恢复原文。
@@ -237,6 +260,7 @@ PUT 请求体：
 - 未读数在进入留言板、刷新、打开通知列表时拉取；本阶段不包含后台系统推送或长连接。
 - 通知按不可变的 Wiki 用户 ID（`recipient_wiki_user_id`）归属；迁移前的旧行按 `recipient_bid` 兼容读取，
   0009 回填后改名不影响归属。
+- 没有可回填 Wiki ID 的旧实名留言仍可按非匿名 BID 生成通知；收件人验证登录后再补全稳定归属。
 
 公共留言板 `target_bid = "__public__"`；个人档案留言板 `target_bid = <该用户 bid>`。
 发留言与点赞的 `targetBid` 为 `__public__` 之外时，要求 `user_profiles` 中该档案已存在
@@ -262,11 +286,11 @@ PUT 请求体：
 - 每个板最多 3 条置顶，只允许未删除且未隐藏的主留言；隐藏或删除自动取消置顶，恢复不自动重新置顶。
 - 主列表返回独立 `pinnedComments`；普通 `comments` 保持完整时间序列（含置顶），游标不依赖置顶状态。
   新 Android 顶部展示置顶区，并按 ID 从普通展示区去重；旧客户端继续看到普通时间序列。
-- `GET /api/admin/audit?page=` 返回管理操作记录，倒序分页。记录置顶/隐藏/恢复、留言删除、档案编辑及删除。
+- `GET /api/admin/audit?before=` 返回管理操作记录，按 ID 倒序游标分页。记录置顶/隐藏/恢复、留言删除、档案编辑及删除。
 - 状态修改和审计写入使用同一 D1 事务，审计失败整体回滚。重复设定同一状态不重复记录。
 - 当前管理员鉴权只有共享密码，因此 actor 固定为 `admin`，不能区分具体个人；不记录凭据、Cookie 或原文快照。
   moderation 操作支持填写原因；档案编辑/删除及旧留言删除接口的原因留空。
-- Android 每次进入讨论重新校验可见性；401/403/404/410 清空失效讨论，超时、断网、503 等临时失败保留已有内容及游标。
+- Android 每次进入讨论重新校验可见性；仅 `DISCUSSION_UNAVAILABLE` 清空失效讨论，不能按所有 404 等状态码笼统清缓存；超时、断网、503 等临时失败保留已有内容及游标。
 - 已删除主留言仍可隐藏或取消隐藏整条讨论；取消隐藏仅恢复讨论可见性，不恢复原文，也不能重新置顶。
   已删除回复不能恢复原文。重复删除返回幂等成功，仅首次发生删除状态变化时写审计；不存在或无权访问返回 404。
 - 通知列表临时刷新失败保留上次未读数、列表、游标和“全部已读”边界，并显示数据未刷新的提示；鉴权失效或账号切换清空缓存。
@@ -278,6 +302,7 @@ PUT 请求体：
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/admin/profiles?q=&page=&size=` | 搜索（BID/昵称模糊、WikiID 精确），按 updated_at 倒序 |
+| GET | `/api/admin/profile?bid=` 或 `?wiki_id=` | 精确载入待编辑档案，不使用模糊搜索首项代替 |
 | PUT | `/api/admin/profile` | 编辑任意档案（`bid` 必填；头像校验与用户接口一致；清空头像删 R2 对象） |
 | DELETE | `/api/admin/profile?bid=` | 删除档案 + R2 头像 + 该用户留言板与点赞 |
 | GET | `/api/admin/comments?page=&size=&q=` | 全站留言列表（跨目标，含匿名昵称；按内容/作者/目标搜索） |
@@ -300,9 +325,9 @@ PUT 请求体：
 - **鉴权失败分类**：无凭据才允许匿名；凭据失效返回 401；上游超时/风控/数据错误返回 503。
   鉴权请求超时 5 秒，不会把登录用户悄悄降级成匿名。站点普通 Cookie 不转发。
 - **限流**：留言、档案使用 D1 batch 条件写入事务；并发只有一次 claim 成功，SQL 失败连同计数回滚：
-  - 保存档案：登录 10 秒/次（key=`uprof:<bid>`）
-  - 上传头像：登录 30 秒/次（key=`uav:<bid>`）
-  - 发留言：登录 10 秒/条（key=`bid:<bid>`）、匿名 30 秒/条（key=`ip:<HMAC>`）
+   - 保存档案：登录 10 秒/次（key=`uprof:wiki:<id>`）
+   - 上传头像：登录 30 秒/次（key=`uav:wiki:<id>`）
+   - 发留言：登录 10 秒/条（key=`wiki:<id>`）、匿名 30 秒/条（key=`ip:<HMAC>`）
   - 点赞：幂等设定状态，无限流
   - 拒绝响应带 `Retry-After`；过期清理移至维护接口，不再每次写入扫描表。
 - **匿名留言**：不可自行删除（无身份凭证），违规内容由管理后台清理。
@@ -321,11 +346,16 @@ PUT 请求体：
 - Android 上传管线：选图 → 采样解码 → 全屏方形裁切（拖动/双指缩放，
   `AvatarCropDialog.kt`）→ 限制 512px →
   WEBP 质量 85（API 30+ 用 `WEBP_LOSSY`）→ 上传。
+- 侧栏 `WikiAccountState` 按 Cookie 和代数隔离身份、档案响应；切换账号会关闭旧编辑窗口。
+  资料加载失败不等于“未建档”，需载入成功后才可打开编辑，编辑时固定资料快照避免刷新清空输入。
+  保存成功会使在途旧档案读取失效，身份临时请求失败可在 20 秒退避后重试。
+- 桌面端编辑窗口固定 Wiki ID；导入新账号时关闭旧窗口。上传/保存前重新验证身份，并向保存接口发送
+  `expectedWikiUserId`；旧账号操作完成后不能把结果写入新账号 UI。
 
 ## 8. 部署与运维
 
 ```powershell
-# 必须先迁移（包含 0005、0006）、配置密钥，再部署新版 Worker
+# 必须先备份并迁移（至 0010）、配置密钥，再部署新版 Worker
 # 以下命令在 downloadPage 目录执行
 cd downloadPage
 npx wrangler@4.130.0 d1 migrations apply calabiyau-db --remote
@@ -340,7 +370,7 @@ npx wrangler@4.130.0 d1 export calabiyau-db --remote --output backup.sql
 
 - `npx wrangler` 可能拉到新版导致 OAuth 授权异常（7403），
   固定 `npx wrangler@4.130.0` 可复现已验证行为。
-- 迁移和密钥准备好后，在项目根目录执行 `.\gradlew.bat webPush`。
+- 迁移和密钥准备好后，在项目根目录执行 `.\gradlew.bat webPush`；新版业务代码依赖 0010，不可省略。
 - 测试：downloadPage 目录 `pnpm test:worker`（Miniflare/workerd + 本地 D1/R2），`pnpm check`、`pnpm build`。
 - `node -c` 只能验证语法，不能替代并发、鉴权、事务和 Range 回归测试。
 - 维护调用不会自动调度；部署后定期使用管理凭据调用 `/api/admin/maintenance`。

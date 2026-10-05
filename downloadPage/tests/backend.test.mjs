@@ -21,18 +21,18 @@ async function call(path, method = "GET", body, headers = {}) {
   return mf.dispatchFetch(base + path, { method, headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
 }
 async function reset() {
-  for (const table of ["admin_audit", "write_requests", "profile_comments", "profile_likes", "user_profiles", "write_throttle", "avatar_assets"]) await db.prepare(`DELETE FROM ${table}`).run();
+  for (const table of ["admin_audit", "write_requests", "profile_comments", "profile_likes", "user_profiles", "write_throttle", "avatar_assets", "wiki_user_aliases", "wiki_user_names", "user_profile_archive"]) await db.prepare(`DELETE FROM ${table}`).run();
   await db.prepare("DELETE FROM reply_notifications").run();
 }
 async function seed(bid) {
-  await db.prepare("INSERT INTO user_profiles(bid,wiki_user_id) VALUES(?,1)").bind(bid).run();
+  await db.prepare("INSERT INTO user_profiles(bid,wiki_user_id) VALUES(?,?)").bind(bid, fixedWikiIds[bid] ?? 1).run();
 }
 
 before(async () => {
   const bundle = await build({ entryPoints: ["src/api/_worker.js"], bundle: true, format: "esm", write: false, platform: "browser" });
   mf = new Miniflare({
     modules: true, script: bundle.outputFiles[0].text, compatibilityDate: "2026-05-25",
-    d1Databases: ["DB"], r2Buckets: ["USER_ASSETS", "RELEASES"],
+    d1Databases: ["DB", "MIGRATION_DB"], r2Buckets: ["USER_ASSETS", "RELEASES"],
     bindings: { ADMIN_PASSWORD: "test-admin", GUEST_SECRET: secret },
     outboundService: async (request) => {
       const cookie = request.headers.get("Cookie");
@@ -634,4 +634,132 @@ test("audit cursor pages stay stable when newer records arrive", async () => {
   assert.equal(next.records.length, 5);
   assert.equal(next.nextCursor, null);
   assert.equal(new Set([...first.records, ...next.records].map(r => r.id)).size, 25);
+});
+
+test("anon sentinel is neither a real account's delete permission nor its public profile", async () => {
+  await reset();
+  const stranger = (await (await call('/api/user/comments', 'POST', {targetBid:'__public__',content:'guest'}, guest('203.0.113.101'))).json()).comment;
+  const namedAnon = renamedUser(9101, 'anon');
+  assert.equal((await call('/api/user/profile', 'PUT', {customName:'Registered anon'}, namedAnon)).status, 200);
+  assert.equal((await call(`/api/user/comments?id=${stranger.id}`, 'DELETE', null, namedAnon)).status, 404);
+  const board = await (await call('/api/user/comments?bid=__public__')).json();
+  assert.equal(board.comments[0].authorName, '访客');
+  assert.equal(board.comments[0].authorAvatarUrl, null);
+  const own = (await (await call('/api/user/comments', 'POST', {targetBid:'__public__',content:'registered'}, namedAnon)).json()).comment;
+  assert.equal(own.authorWikiUserId, 9101);
+  assert.equal((await call(`/api/user/comments?id=${own.id}`, 'DELETE', null, namedAnon)).status, 200);
+});
+
+test("profile edits reject an editor bound to another immutable user", async () => {
+  await reset();
+  assert.equal((await call('/api/user/profile','PUT',{customName:'A'},renamedUser(9201,'A'))).status,200);
+  const rejected=await call('/api/user/profile','PUT',{customName:'A draft',expectedWikiUserId:9201},renamedUser(9202,'B'));
+  assert.equal(rejected.status,409); assert.equal((await rejected.json()).errorCode,'IDENTITY_CHANGED');
+  assert.equal((await (await call('/api/user/profile?wiki_id=9201')).json()).profile.customName,'A');
+  assert.equal((await (await call('/api/user/profile?wiki_id=9202')).json()).profile,null);
+});
+
+test("rename retains one profile, original avatars, old board links and ID-scoped throttling", async () => {
+  await reset();
+  const before=renamedUser(9301,'Before'), after=renamedUser(9301,'After');
+  const upload=await mf.dispatchFetch(base+'/api/user/avatar',{method:'POST',headers:{...before,'Content-Type':'image/png'},body:png});
+  assert.equal(upload.status,200);
+  const {avatarUrl}=await upload.json();
+  assert.equal((await call('/api/user/profile','PUT',{customName:'Saved',avatarUrl,bio:'kept'},before)).status,200);
+  const root=(await (await call('/api/user/comments','POST',{targetBid:'Before',content:'board root'},user('Bob'))).json()).comment;
+  assert.equal((await call('/api/user/session','GET',null,after)).status,200);
+  let profile=(await (await call('/api/user/profile?bid=After')).json()).profile;
+  assert.equal(profile.customName,'Saved'); assert.equal(profile.bio,'kept'); assert.equal(profile.bid,'After');
+  assert.equal((await (await call('/api/user/profile?bid=wrong&wiki_id=9301')).json()).profile.customName,'Saved');
+  assert.equal((await call('/api/user/profile','PUT',{avatarUrl,customName:'Changed'},after)).status,429);
+  await db.prepare('DELETE FROM write_throttle').run();
+  assert.equal((await call('/api/user/profile','PUT',{avatarUrl,customName:'Changed'},after)).status,200);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM user_profiles WHERE wiki_user_id=9301').first()).n,1);
+  const board=(await (await call('/api/user/comments?bid=After')).json());
+  assert.equal(board.comments[0].id,root.id);
+  assert.equal((await call('/api/user/replies','POST',{targetBid:'After',replyToId:root.id,content:'renamed board'},user('Carol'))).status,200);
+});
+
+test("rename keeps likes attached to the stable recipient and giver", async () => {
+  await reset();
+  const target=renamedUser(9401,'Target'), renamedTarget=renamedUser(9401,'TargetNew');
+  const giver=renamedUser(9402,'Giver'), renamedGiver=renamedUser(9402,'GiverNew');
+  assert.equal((await call('/api/user/profile','PUT',{customName:'Target'},target)).status,200);
+  assert.equal((await call('/api/user/likes','PUT',{targetBid:'Target'},giver)).status,200);
+  assert.equal((await call('/api/user/session','GET',null,renamedTarget)).status,200);
+  let response=await call('/api/user/likes?bid=TargetNew','GET',null,renamedGiver);
+  let result=await response.json(); assert.equal(result.count,1); assert.equal(result.likedByMe,true);
+  assert.equal((await call('/api/user/likes','PUT',{targetBid:'TargetNew'},renamedGiver)).status,200);
+  result=await (await call('/api/user/likes','DELETE',{targetBid:'TargetNew'},renamedGiver)).json();
+  assert.equal(result.count,0); assert.equal(result.liked,false);
+});
+
+test("verified alias conflicts cannot overwrite another user's profile or avatar", async () => {
+  await reset();
+  assert.equal((await call('/api/user/profile','PUT',{customName:'Original'},renamedUser(9501,'Protected'))).status,200);
+  const response=await call('/api/user/profile','PUT',{customName:'Hijacked'},renamedUser(9502,'Protected'));
+  assert.equal(response.status,409); assert.equal((await response.json()).errorCode,'IDENTITY_CONFLICT');
+  assert.equal((await (await call('/api/user/profile?wiki_id=9501')).json()).profile.customName,'Original');
+});
+
+test("legacy authors without profiles receive notifications and are claimed only after verified login", async () => {
+  await reset();
+  const root=(await db.prepare("INSERT INTO profile_comments(target_bid,author_bid,content) VALUES('__public__','LegacyNoProfile','old')").run()).meta.last_row_id;
+  assert.equal((await call('/api/user/replies','POST',{targetBid:'__public__',replyToId:root,content:'reply'},user('Bob'))).status,200);
+  const notice=await db.prepare('SELECT recipient_bid,recipient_wiki_user_id FROM reply_notifications').first();
+  assert.equal(notice.recipient_bid,'LegacyNoProfile'); assert.equal(notice.recipient_wiki_user_id,null);
+  const owner=renamedUser(9601,'LegacyNoProfile');
+  const inbox=await (await call('/api/user/notifications','GET',null,owner)).json();
+  assert.equal(inbox.unreadCount,1);
+  assert.equal((await db.prepare('SELECT author_wiki_user_id FROM profile_comments WHERE id=?').bind(root).first()).author_wiki_user_id,9601);
+  assert.equal((await db.prepare('SELECT recipient_wiki_user_id FROM reply_notifications').first()).recipient_wiki_user_id,9601);
+  await db.prepare('DELETE FROM write_throttle').run();
+  assert.equal((await call('/api/user/replies','POST',{targetBid:'__public__',replyToId:root,content:'self'},owner)).status,200);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM reply_notifications').first()).n,1);
+  assert.equal((await (await call('/api/user/notifications','GET',null,renamedUser(9601,'LegacyRenamed'))).json()).unreadCount,1);
+});
+
+test("admin exact lookup does not confuse a newer substring match with the requested profile", async () => {
+  await reset();
+  await db.prepare("INSERT INTO user_profiles(bid,wiki_user_id,updated_at) VALUES('Exact',9701,100),('ExactOther',9702,101)").run();
+  const headers={'X-Admin-Password':'test-admin'};
+  assert.equal((await call('/api/admin/profile?bid=Exact')).status,401);
+  const result=await (await call('/api/admin/profile?bid=Exact','GET',null,headers)).json();
+  assert.equal(result.profile.bid,'Exact'); assert.equal(result.profile.wikiUserId,9701);
+});
+
+test("0010 archives duplicate profiles and keeps aliases, boards, likes and avatar owners", async () => {
+  const migrationDb=await mf.getD1Database('MIGRATION_DB');
+  const sqlStatements=sql=>sql.replace(/^--.*$/gm,'').split(';').map(s=>s.trim()).filter(Boolean);
+  const files=(await readdir('migrations')).filter(f=>f.endsWith('.sql')).sort();
+  for(const file of files.filter(f=>f<'0010_account_identity.sql')) {
+    for(const sql of sqlStatements(await readFile(`migrations/${file}`,'utf8'))) await migrationDb.prepare(sql).run();
+  }
+  await migrationDb.prepare("INSERT INTO user_profiles(bid,wiki_user_id,custom_name,updated_at) VALUES('Old',9801,'Old profile',100),('New',9801,'Newest profile',101)").run();
+  await migrationDb.prepare("INSERT INTO avatar_assets(object_key,owner_bid,created_at) VALUES('avatars/old.png','Old',100)").run();
+  await migrationDb.prepare("INSERT INTO profile_comments(target_bid,author_bid,content) VALUES('Old','Bob','kept board')").run();
+  await migrationDb.prepare("INSERT INTO profile_likes(target_bid,author_bid) VALUES('Old','Giver'),('New','Giver')").run();
+  await migrationDb.batch(sqlStatements(await readFile('migrations/0010_account_identity.sql','utf8')).map(sql=>migrationDb.prepare(sql)));
+  assert.equal((await migrationDb.prepare('SELECT COUNT(*) AS n FROM user_profiles').first()).n,1);
+  assert.equal((await migrationDb.prepare('SELECT custom_name FROM user_profiles').first()).custom_name,'Newest profile');
+  assert.equal((await migrationDb.prepare('SELECT custom_name FROM user_profile_archive').first()).custom_name,'Old profile');
+  assert.equal((await migrationDb.prepare("SELECT wiki_user_id FROM wiki_user_aliases WHERE bid='Old'").first()).wiki_user_id,9801);
+  assert.equal((await migrationDb.prepare('SELECT owner_wiki_user_id FROM avatar_assets').first()).owner_wiki_user_id,9801);
+  assert.equal((await migrationDb.prepare('SELECT target_bid FROM profile_comments').first()).target_bid,'New');
+  assert.equal((await migrationDb.prepare('SELECT COUNT(*) AS n FROM profile_likes').first()).n,1);
+});
+
+test("untracked legacy avatar aliases remain usable after profile canonicalization and are retired by ID", async () => {
+  await reset();
+  await db.prepare("INSERT INTO user_profiles(bid,wiki_user_id) VALUES('Canonical',9901)").run();
+  await db.prepare("INSERT INTO wiki_user_aliases(bid,wiki_user_id) VALUES('OldAlias',9901),('Canonical',9901)").run();
+  const key='avatars/OldAlias_0123456789abcdef.png';
+  await assets.put(key,png);
+  const owner=renamedUser(9901,'Canonical');
+  const response=await call('/api/user/profile','PUT',{avatarUrl:'/api/user/avatar/'+key},owner);
+  assert.equal(response.status,200,await response.text());
+  assert.equal((await db.prepare('SELECT owner_wiki_user_id FROM avatar_assets WHERE object_key=?').bind(key).first()).owner_wiki_user_id,9901);
+  await db.prepare('DELETE FROM write_throttle').run();
+  assert.equal((await call('/api/user/profile','PUT',{avatarUrl:null},owner)).status,200);
+  assert.equal(await assets.head(key),null);
 });

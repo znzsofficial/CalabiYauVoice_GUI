@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -49,6 +50,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -139,109 +142,115 @@ fun CatalogGridCard(
 @Composable
 fun CatalogGridSkeleton(
     modifier: Modifier = Modifier,
-    showSelector: Boolean = true,
-    chipCount: Int = 6
+    minCellSize: Dp = 110.dp,
+    selectorLabel: String,
+    qualityLabel: String = "按品质筛选",
+    chipLabels: List<String>,
+    weaponSelector: Boolean = false
 ) {
-    Column(
+    // 与内容页一样：搜索和筛选占满一行，卡片随同一个网格滚动/测量。
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = minCellSize),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        userScrollEnabled = false
     ) {
-        ShimmerBox(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp)
-                .height(52.dp),
-            shape = smoothCornerShape(28.dp)
-        )
-        if (showSelector) {
-            Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                ShimmerBox(
-                    modifier = Modifier
-                        .width(72.dp)
-                        .height(14.dp),
-                    shape = smoothCornerShape(6.dp)
-                )
-                ShimmerBox(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = smoothCornerShape(20.dp)
-                )
-                ShimmerBox(
-                    modifier = Modifier
-                        .width(72.dp)
-                        .height(14.dp),
-                    shape = smoothCornerShape(6.dp)
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    repeat(chipCount) {
-                        ShimmerBox(
-                            modifier = Modifier
-                                .width(if (it == 0) 72.dp else 60.dp)
-                                .height(32.dp),
-                            shape = AppShapes.capsule
-                        )
-                    }
-                }
-            }
-        } else {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                repeat(chipCount) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(Modifier.clearAndSetSemantics { }) {
+                // TextField 默认最小高度 56dp；底部间距与各页 SearchBar 相同。
+                Box(Modifier.padding(bottom = 12.dp)) {
                     ShimmerBox(
-                        modifier = Modifier
-                            .width(if (it == 0) 88.dp else 64.dp)
-                            .height(32.dp),
-                        shape = AppShapes.capsule
+                        Modifier.fillMaxWidth().height(56.dp),
+                        shape = smoothCornerShape(AppShapes.sheetRadius)
                     )
                 }
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 110.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            userScrollEnabled = false
-        ) {
-            items(12) {
-                Card(
-                    shape = smoothCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        ShimmerBox(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(1f),
-                            shape = smoothCornerShape(14.dp)
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        ShimmerBox(Modifier.fillMaxWidth(0.75f).height(12.dp))
-                        Spacer(Modifier.height(6.dp))
-                        ShimmerBox(Modifier.fillMaxWidth(0.5f).height(10.dp))
-                        Spacer(Modifier.height(8.dp))
+                    CatalogSkeletonText(selectorLabel, MaterialTheme.typography.labelMedium)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = smoothCornerShape(if (weaponSelector) 24.dp else 20.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer
+                    ) {
+                        Row(
+                            modifier = if (weaponSelector) Modifier.padding(20.dp)
+                                else Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (!weaponSelector) {
+                                ShimmerBox(Modifier.size(40.dp), shape = smoothCornerShape(14.dp))
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            Column(Modifier.weight(1f)) {
+                                CatalogSkeletonText("分类", MaterialTheme.typography.labelMedium)
+                                CatalogSkeletonText("全部分类", MaterialTheme.typography.bodyLarge)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            ShimmerBox(Modifier.size(24.dp))
+                        }
+                    }
+                    CatalogSkeletonText(qualityLabel, MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+                    ) {
+                        chipLabels.forEach { label ->
+                            // 使用真实 FilterChip 测量文字、内边距和最小触控高度。
+                            FilterChip(
+                                selected = false,
+                                enabled = false,
+                                onClick = {},
+                                shape = smoothCornerShape(AppShapes.chipRadius),
+                                label = { CatalogSkeletonText(label, MaterialTheme.typography.labelLarge) }
+                            )
+                        }
                     }
                 }
             }
         }
+        items(12) {
+            Card(
+                modifier = Modifier.fillMaxWidth().clearAndSetSemantics { },
+                shape = smoothCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ShimmerBox(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                        shape = smoothCornerShape(14.dp)
+                    )
+                    // 与 CatalogGridCard 的固定 48dp 标题区一致，避免加载完成时跳高。
+                    Box(
+                        Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            ShimmerBox(Modifier.fillMaxWidth(0.75f).height(12.dp))
+                            ShimmerBox(Modifier.fillMaxWidth(0.5f).height(10.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Measure with the real typography so placeholders also follow system font scaling. */
+@Composable
+private fun CatalogSkeletonText(text: String, style: TextStyle) {
+    Box {
+        Text(text, style = style, color = Color.Transparent, maxLines = 1)
+        ShimmerBox(Modifier.matchParentSize(), shape = smoothCornerShape(6.dp))
     }
 }
 

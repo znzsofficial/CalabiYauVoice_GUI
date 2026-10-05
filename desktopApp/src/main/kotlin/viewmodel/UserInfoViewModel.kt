@@ -192,6 +192,8 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     private var lookupLogJob: Job? = null
     private var currentUserRequestToken = 0L
     private var lookupRequestToken = 0L
+    private var editingWikiUserId: Long? = null
+    private var customProfileLoaded = false
 
     init {
         // 如果已有 Cookie 且未登录，尝试自动登录
@@ -269,6 +271,8 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         if (_cookieInput.value.isBlank() && !WikiCookieManager.hasCookies) return
 
         _statusMessage.value = ""
+        closeEditProfile()
+        _customProfile.value = null
         WikiUserApi.clearCurrentUser()
 
         if (_cookieInput.value.isNotBlank()) {
@@ -298,6 +302,7 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         resetLookupState()
         _customProfile.value = null
         _isEditingProfile.value = false
+        editingWikiUserId = null
         _isUploadingAvatar.value = false
         _isSavingProfile.value = false
         _editError.value = null
@@ -310,6 +315,12 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     fun fetchUserInfo() {
         fetchUserInfoJob?.cancel()
         val requestToken = ++currentUserRequestToken
+        closeEditProfile()
+        _isUploadingAvatar.value = false
+        _isSavingProfile.value = false
+        _customProfile.value = null
+        customProfileLoaded = false
+        _isLoadingInfo.value = true
         fetchUserInfoJob = scope.launch {
             _isLoadingInfo.value = true
             _blockStatus.value = null
@@ -345,7 +356,10 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
                                 is ApiResult.Error -> errors += lastEditResult.message
                             }
                             when (customProfileResult) {
-                                is data.ApiResult.Success -> _customProfile.value = customProfileResult.value
+                                is data.ApiResult.Success -> {
+                                    _customProfile.value = customProfileResult.value
+                                    customProfileLoaded = true
+                                }
                                 is data.ApiResult.Error -> _customProfile.value = null
                             }
                             _userSummaryState.value = if (errors.isEmpty()) {
@@ -586,12 +600,22 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
     }
 
     fun openEditProfile() {
+        val info = userInfo.value?.takeIf { it.isLoggedIn } ?: return
+        if (_isLoadingInfo.value) return
+        if (!customProfileLoaded) {
+            _statusMessage.value = "请先刷新并确认自定义资料，再打开编辑"
+            return
+        }
+        val profileId = _customProfile.value?.wikiUserId
+        if (profileId != null && profileId != info.id.toLong()) return
+        editingWikiUserId = info.id.toLong()
         _editError.value = null
         _isEditingProfile.value = true
     }
 
     fun closeEditProfile() {
         _isEditingProfile.value = false
+        editingWikiUserId = null
         _editError.value = null
     }
 
@@ -603,23 +627,29 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         badge: String? = _customProfile.value?.badge
     ) {
         val cookies = WikiCookieManager.currentCookieString
+        val expectedId = editingWikiUserId
+        val token = currentUserRequestToken
         if (cookies.isBlank()) {
             _editError.value = "未登录 Wiki"
             return
         }
+        if (expectedId == null) { _editError.value = "请先确认当前登录身份"; return }
         scope.launch {
             _isUploadingAvatar.value = true
             _editError.value = null
-            when (val uploadRes = data.CustomUserApi.uploadAvatar(imageBytes, mimeType, cookies)) {
-                is data.ApiResult.Success -> {
-                    _isUploadingAvatar.value = false
-                    saveProfile(customName = customName, avatarUrl = uploadRes.value, bio = bio, badge = badge)
+            try {
+                if (!validateProfileIdentity(cookies, expectedId, token)) return@launch
+                when (val uploadRes = data.CustomUserApi.uploadAvatar(imageBytes, mimeType, cookies)) {
+                    is data.ApiResult.Success -> {
+                        if (!isProfileIdentityCurrent(cookies, expectedId, token)) return@launch
+                        saveProfile(customName = customName, avatarUrl = uploadRes.value, bio = bio, badge = badge)
+                    }
+                    is data.ApiResult.Error -> {
+                        if (!isProfileIdentityCurrent(cookies, expectedId, token)) return@launch
+                        _editError.value = uploadRes.message
+                    }
                 }
-                is data.ApiResult.Error -> {
-                    _editError.value = uploadRes.message
-                    _isUploadingAvatar.value = false
-                }
-            }
+            } finally { if (token == currentUserRequestToken) _isUploadingAvatar.value = false }
         }
     }
 
@@ -630,30 +660,56 @@ class UserInfoViewModel(private val scope: CoroutineScope) {
         badge: String? = _customProfile.value?.badge
     ) {
         val cookies = WikiCookieManager.currentCookieString
+        val expectedId = editingWikiUserId
+        val token = currentUserRequestToken
         if (cookies.isBlank()) {
             _editError.value = "未登录 Wiki"
             return
         }
+        if (expectedId == null) { _editError.value = "请先确认当前登录身份"; return }
         scope.launch {
             _isSavingProfile.value = true
             _editError.value = null
-            when (val updateRes = data.CustomUserApi.updateProfile(
-                customName = customName,
-                avatarUrl = avatarUrl,
-                bio = bio,
-                badge = badge,
-                wikiCookie = cookies
-            )) {
-                is data.ApiResult.Success -> {
-                    _customProfile.value = updateRes.value
-                    _isEditingProfile.value = false
-                    _statusMessage.value = "✅ 自定义资料已保存"
+            try {
+                if (!validateProfileIdentity(cookies, expectedId, token)) return@launch
+                when (val updateRes = data.CustomUserApi.updateProfile(
+                    customName = customName,
+                    avatarUrl = avatarUrl,
+                    bio = bio,
+                    badge = badge,
+                    wikiCookie = cookies,
+                    expectedWikiUserId = expectedId
+                )) {
+                    is data.ApiResult.Success -> {
+                        if (!isProfileIdentityCurrent(cookies, expectedId, token)) return@launch
+                        _customProfile.value = updateRes.value
+                        customProfileLoaded = true
+                        closeEditProfile()
+                        _statusMessage.value = "✅ 自定义资料已保存"
+                    }
+                    is data.ApiResult.Error -> {
+                        if (!isProfileIdentityCurrent(cookies, expectedId, token)) return@launch
+                        _editError.value = updateRes.message
+                    }
                 }
-                is data.ApiResult.Error -> {
-                    _editError.value = updateRes.message
-                }
+            } finally { if (token == currentUserRequestToken) _isSavingProfile.value = false }
+        }
+    }
+
+    private fun isProfileIdentityCurrent(cookie: String, id: Long, token: Long): Boolean =
+        token == currentUserRequestToken && WikiCookieManager.currentCookieString == cookie && userInfo.value?.id?.toLong() == id
+
+    private suspend fun validateProfileIdentity(cookie: String, id: Long, token: Long): Boolean {
+        val result = data.CustomUserApi.fetchSession(cookie, forceRefresh = true)
+        if (!isProfileIdentityCurrent(cookie, id, token)) {
+            if (token == currentUserRequestToken) _editError.value = "登录账号已变化，请重新打开资料编辑"
+            return false
+        }
+        return when (result) {
+            is data.ApiResult.Success -> (result.value.wikiUserId == id).also {
+                if (!it) _editError.value = "登录账号已变化，请重新打开资料编辑"
             }
-            _isSavingProfile.value = false
+            is data.ApiResult.Error -> false.also { _editError.value = result.message }
         }
     }
 

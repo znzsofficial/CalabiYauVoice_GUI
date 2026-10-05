@@ -68,7 +68,7 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
     LaunchedEffect(state.userInfo?.id) {
         if (state.userInfo != null) notifications.refresh()
     }
-    var profileBid by remember { mutableStateOf<String?>(null) }
+    var profileAuthor by remember { mutableStateOf<ProfileComment?>(null) }
     var deleteTarget by remember { mutableStateOf<ProfileComment?>(null) }
     val thread = state.threadId != null
     val busy = state.posting || state.deletingId != null
@@ -160,11 +160,10 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
                             CommentItem(
                                 comment,
                                 canDelete = !busy && !state.loading && state.userInfo?.let { user ->
-                                    comment.authorWikiUserId?.let { it == user.id }
-                                        ?: (comment.authorBid == user.name)
+                                    comment.isOwnedBy(user.id, user.name)
                                 } == true,
                                 onDelete = { deleteTarget = comment },
-                                onAuthor = { profileBid = comment.authorBid },
+                                onAuthor = { profileAuthor = comment },
                                 action = {
                                     ReplyPill(
                                         icon = {
@@ -194,11 +193,10 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
                                 CommentItem(
                                     root,
                                     canDelete = !busy && !state.loading && !root.deleted && state.userInfo?.let { user ->
-                                        root.authorWikiUserId?.let { it == user.id }
-                                            ?: (root.authorBid == user.name)
+                                        root.isOwnedBy(user.id, user.name)
                                     } == true,
                                     onDelete = { deleteTarget = root },
-                                    onAuthor = { profileBid = root.authorBid })
+                                    onAuthor = { profileAuthor = root })
                             }
                             item(key = "heading") {
                                 Column {
@@ -221,11 +219,10 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
                         CommentItem(
                             comment,
                             canDelete = !busy && !state.loading && !comment.deleted && state.userInfo?.let { user ->
-                                comment.authorWikiUserId?.let { it == user.id }
-                                    ?: (comment.authorBid == user.name)
+                                comment.isOwnedBy(user.id, user.name)
                             } == true,
                             onDelete = { deleteTarget = comment },
-                            onAuthor = { profileBid = comment.authorBid },
+                            onAuthor = { profileAuthor = comment },
                             action = if (!thread) {
                                 {
                                     ReplyPill(
@@ -407,7 +404,9 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("取消") } }
         )
     }
-    profileBid?.let { bid -> ProfileDetailSheet(bid) { profileBid = null } }
+    profileAuthor?.let { author ->
+        ProfileDetailSheet(author.authorBid, author.authorWikiUserId) { profileAuthor = null }
+    }
     if (showNotifications) NotificationsSheet(
         notifications,
         onDismiss = { showNotifications = false },
@@ -649,7 +648,7 @@ private fun BoardIdentity(state: MessageBoardState) {
             val user = state.userInfo
             when {
                 // 登录用户主动选择匿名发言
-                user != null && state.postingAsGuest -> {
+                state.postingAsGuest -> {
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -663,7 +662,7 @@ private fun BoardIdentity(state: MessageBoardState) {
                         Column(Modifier.weight(1f)) {
                             Text("匿名（访客）", style = MaterialTheme.typography.titleSmall)
                             Text(
-                                "以访客身份发言，不关联 Wiki 账号",
+                                "不关联 Wiki 账号；匿名与实名草稿分别保存",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -722,6 +721,9 @@ private fun BoardIdentity(state: MessageBoardState) {
                             Text("正在识别发言身份…", style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                    TextButton(onClick = state::togglePostingAsGuest, enabled = !state.posting) {
+                        Text("改用匿名身份发言")
+                    }
                 }
 
                 else -> BoardNicknameField(state)
@@ -755,7 +757,7 @@ private fun CommentItem(
     onAuthor: () -> Unit,
     action: (@Composable () -> Unit)? = null
 ) {
-    val authorClickable = !comment.deleted && comment.authorBid != "anon"
+    val authorClickable = !comment.deleted && !comment.isGuest
     Card(
         Modifier.fillMaxWidth(), shape = smoothCornerShape(14.dp),
         colors = CardDefaults.cardColors(
@@ -850,20 +852,20 @@ private fun CommentItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProfileDetailSheet(bid: String, onDismiss: () -> Unit) {
+private fun ProfileDetailSheet(bid: String, wikiId: Long? = null, onDismiss: () -> Unit) {
     var profile by remember(bid) { mutableStateOf<CustomUserProfile?>(null) }
     var loading by remember(bid) { mutableStateOf(true) }
     var likes by remember(bid) { mutableStateOf<Int?>(null) }
     var error by remember(bid) { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
-    LaunchedEffect(bid, retry) {
+    LaunchedEffect(bid, wikiId, retry) {
         loading = true; error = null
         try {
-            when (val result = CustomUserApi.fetchProfile(bid = bid)) {
+            when (val result = CustomUserApi.fetchProfile(bid = bid, wikiId = wikiId)) {
                 is ApiResult.Success -> profile = result.value
                 is ApiResult.Error -> error = result.message
             }
-            when (val result = CustomUserApi.fetchLikes(bid = bid)) {
+            when (val result = CustomUserApi.fetchLikes(bid = profile?.bid ?: bid)) {
                 is ApiResult.Success -> likes = result.value.count
                 is ApiResult.Error -> error = result.message
             }

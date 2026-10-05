@@ -38,6 +38,10 @@ Reply notifications additionally require `0008_reply_notifications.sql`. Notific
 
 Stable identity additionally requires `0009_stable_user_identity.sql`. Comments store `author_wiki_user_id` and notifications `recipient_wiki_user_id`; ownership, self-reply detection and notification routing match the immutable MediaWiki user ID first with BID only as legacy fallback. `GET /api/user/session` returns the authoritative identity. Business errors may carry a structured `errorCode`; clients invalidate caches only on those.
 
+Account/board audit fixes additionally require **`0010_account_identity.sql` before deploying the Worker**. It adds verified BID aliases/current names, stable avatar/like owner IDs, archives superseded duplicate profiles, and enforces one profile per Wiki ID. Profile storage BID stays stable; public responses expose the latest verified name. Never claim anonymous `author_bid='anon'` rows via BID fallback. Profile editors send `expectedWikiUserId`; prefer `wiki_id` over BID in reads. Alias collisions fail closed (`IDENTITY_CONFLICT`), not automatic account merges. See `docs/user-system-backend.md` for backup/migration constraints.
+
+Board drafts: explicit anonymous and authenticated drafts have separate owners. Pending posts persist both local owner and `submissionActor`/`targetBid`; unresolved sends cannot switch identity, and pre-fix uncertain Wiki-owner requests without a transport identity fail closed. Disk prefetch must never override ANY successful network response (including empty). Drawer account/profile results are guarded by cookie + generation; saved profiles invalidate pending reads.
+
 R2 binding is `RELEASES` in `downloadPage/wrangler.jsonc` (Pages project `calabiyauwiki`). Do not commit `downloadPage/wrangler.toml` (gitignored; dashboard download can contain secrets). `GITHUB_TOKEN` is a Pages dashboard secret, not in `wrangler.jsonc`.
 
 ## Wiki structure golden fixtures & EdgeOne rate limits

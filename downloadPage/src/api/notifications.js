@@ -9,13 +9,15 @@ export function replyNotificationStatement(db, actor, requestKey) {
     FROM write_requests w JOIN profile_comments c ON c.id=w.comment_id
     JOIN profile_comments parent ON parent.id=c.reply_to_id
     WHERE changes()=1 AND w.actor=? AND w.request_key=? AND c.root_id IS NOT NULL
-      AND parent.author_wiki_user_id IS NOT NULL
-      AND (c.author_wiki_user_id IS NULL OR parent.author_wiki_user_id<>c.author_wiki_user_id)
+      AND (parent.author_wiki_user_id IS NOT NULL OR parent.author_bid<>'anon')
+      AND CASE WHEN parent.author_wiki_user_id IS NOT NULL THEN
+        (c.author_wiki_user_id IS NULL OR parent.author_wiki_user_id<>c.author_wiki_user_id)
+        ELSE (c.author_wiki_user_id IS NULL OR parent.author_bid<>c.author_bid) END
     ON CONFLICT(recipient_bid,comment_id) DO NOTHING`).bind(actor, requestKey);
 }
 
 export async function notifications(request, env, url) {
-  const user = await wikiUser(request, true);
+  const user = await wikiUser(request, true, env.DB);
   if (request.method === "PUT") {
     const body = await readJson(request);
     const id = body.id;
