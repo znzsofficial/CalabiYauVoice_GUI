@@ -1,19 +1,26 @@
 {
     "versionName": "2.1.19",
     "versionCode": 49,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.19.apk",
-    "apkSize": 3612672,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.19.apk?build=965d70ec69577790",
+    "apkSize": 3612668,
     "releaseUrl": "/",
     "changelog": [
-        "修复设置中更换 Hub 壁纸需要重启的问题，壁纸与主题取色即时同步",
-        "校正生化卡组页、道具图鉴、角色时装和武器外观的骨架屏尺寸与布局",
-        "修复切换账号时用户资料错配，完善改名后的档案、头像和点赞归属校验",
-        "修复留言板匿名与实名切换、发送重试、草稿保存及旧缓存回显问题",
-        "补全旧留言回复通知，修复管理后台档案编辑定位并加强匿名留言权限校验",
-        "优化网站首页与搜索体验，完善素材、语音检索和下载异常恢复"
+        "\u4fee\u590d\u8bbe\u7f6e\u4e2d\u66f4\u6362 Hub \u58c1\u7eb8\u9700\u8981\u91cd\u542f\u7684\u95ee\u9898\uff0c\u58c1\u7eb8\u4e0e\u4e3b\u9898\u53d6\u8272\u5373\u65f6\u540c\u6b65",
+        "\u6821\u6b63\u751f\u5316\u5361\u7ec4\u9875\u3001\u9053\u5177\u56fe\u9274\u3001\u89d2\u8272\u65f6\u88c5\u548c\u6b66\u5668\u5916\u89c2\u7684\u9aa8\u67b6\u5c4f\u5c3a\u5bf8\u4e0e\u5e03\u5c40",
+        "\u4fee\u590d\u5207\u6362\u8d26\u53f7\u65f6\u7528\u6237\u8d44\u6599\u9519\u914d\uff0c\u5b8c\u5584\u6539\u540d\u540e\u7684\u6863\u6848\u3001\u5934\u50cf\u548c\u70b9\u8d5e\u5f52\u5c5e\u6821\u9a8c",
+        "\u4fee\u590d\u7559\u8a00\u677f\u533f\u540d\u4e0e\u5b9e\u540d\u5207\u6362\u3001\u53d1\u9001\u91cd\u8bd5\u3001\u8349\u7a3f\u4fdd\u5b58\u53ca\u65e7\u7f13\u5b58\u56de\u663e\u95ee\u9898",
+        "\u8865\u5168\u65e7\u7559\u8a00\u56de\u590d\u901a\u77e5\uff0c\u4fee\u590d\u7ba1\u7406\u540e\u53f0\u6863\u6848\u7f16\u8f91\u5b9a\u4f4d\u5e76\u52a0\u5f3a\u533f\u540d\u7559\u8a00\u6743\u9650\u6821\u9a8c",
+        "\u4f18\u5316\u7f51\u7ad9\u9996\u9875\u4e0e\u641c\u7d22\u4f53\u9a8c\uff0c\u5b8c\u5584\u7d20\u6750\u3001\u8bed\u97f3\u68c0\u7d22\u548c\u4e0b\u8f7d\u5f02\u5e38\u6062\u590d"
     ],
     "publishedAt": "2026-10-05",
     "releases": [
+        {
+            "versionName": "2.1.19",
+            "versionCode": 49,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.19.apk?build=965d70ec69577790",
+            "apkSize": 3612668,
+            "publishedAt": "2026-10-05"
+        },
         {
             "versionName": "2.1.18",
             "versionCode": 48,
