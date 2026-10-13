@@ -52,7 +52,6 @@ private val HeaderCardVerticalPadding = 10.dp
 @Composable
 private fun headerCardShape() = smoothCornerShape(16.dp)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapDetailScreen(
     mapName: String,
@@ -236,7 +235,6 @@ private fun MapDetailBody(
 //  信息卡片（支持模式 + 平台）
 // ────────────────────────────────────────────
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MapInfoCard(detail: MapDetail) {
     Card(

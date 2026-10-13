@@ -39,7 +39,6 @@ import coil3.request.crossfade
 //  武器列表页 —— 按分类展示武器卡片网格 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeaponListScreen(
     onBack: () -> Unit,

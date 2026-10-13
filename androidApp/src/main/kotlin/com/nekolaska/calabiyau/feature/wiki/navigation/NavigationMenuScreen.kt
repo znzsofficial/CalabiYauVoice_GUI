@@ -51,7 +51,6 @@ private fun sectionIcon(title: String): ImageVector = when {
     else -> Icons.AutoMirrored.Outlined.Article
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NavigationMenuScreen(
     onBack: () -> Unit,

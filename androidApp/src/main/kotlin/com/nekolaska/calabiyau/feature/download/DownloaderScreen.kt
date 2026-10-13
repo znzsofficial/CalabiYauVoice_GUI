@@ -329,7 +329,6 @@ internal fun DownloaderScreen(
             } // Column
 
             // 浮动工具栏模式
-            @OptIn(ExperimentalMaterial3ExpressiveApi::class)
             if (useDockedToolbar) {
                 val surfaceColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f)
                 val tintColor = MaterialTheme.colorScheme.secondaryContainer

@@ -48,7 +48,6 @@ import com.kyant.backdrop.Backdrop
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiGameplayHubScreen(
     onBack: () -> Unit,
@@ -148,7 +147,6 @@ internal fun WikiGameplayHubScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiCatalogHubScreen(
     onBack: () -> Unit,
@@ -207,7 +205,6 @@ internal fun WikiCatalogHubScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiExtensionHubScreen(
     onBack: () -> Unit,
@@ -309,7 +306,6 @@ internal fun WikiExtensionHubScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiDecorationHubScreen(
     onBack: () -> Unit,
@@ -389,7 +385,6 @@ internal fun WikiDecorationHubScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AggregatePageScaffold(
     title: String,

@@ -63,7 +63,6 @@ private const val FILTER_ALL = "全部"
 private const val FILTER_OFFICIAL = "官方编写"
 private const val FILTER_EDITOR = "编辑编写"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemeScreen(
     onBack: () -> Unit,

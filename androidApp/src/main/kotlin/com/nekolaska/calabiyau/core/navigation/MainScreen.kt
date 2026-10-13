@@ -146,6 +146,7 @@ import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import data.ApiResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 private data class ToolFileManagerOverlayState(
     val initialPath: String? = null,
@@ -180,7 +181,7 @@ private fun shortcutTargetToHubPage(shortcutTarget: String?): WikiRoute = when (
     else -> WikiRoute.Home
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun MainScreen(
     searchVM: SearchViewModel,
@@ -662,7 +663,7 @@ private fun AppDrawerContent(
         LaunchedEffect(account) {
             while (true) {
                 account.syncAccount()
-                kotlinx.coroutines.delay(500)
+                kotlinx.coroutines.delay(500.milliseconds)
             }
         }
         LaunchedEffect(account.revision) {

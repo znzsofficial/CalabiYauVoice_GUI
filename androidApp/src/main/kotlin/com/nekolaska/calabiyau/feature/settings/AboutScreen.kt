@@ -26,7 +26,6 @@ import androidx.core.net.toUri
 import com.nekolaska.calabiyau.R
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current

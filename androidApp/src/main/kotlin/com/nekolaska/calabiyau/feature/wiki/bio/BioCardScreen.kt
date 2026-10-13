@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -71,11 +70,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.toMutableStateList
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,7 +83,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -119,7 +117,6 @@ import kotlinx.coroutines.launch
 
 private enum class BioCardTab { PC, MOBILE, DECK }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BioCardScreen(
     onBack: () -> Unit,
@@ -540,7 +537,6 @@ private fun BioInfoCardSkeleton() {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PcFilterBar(
     factions: List<String>,
@@ -561,7 +557,6 @@ private fun PcFilterBar(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MobileFilterBar(
     factions: List<String>,
@@ -593,7 +588,6 @@ private fun DeckFilterBar(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FilterCard(content: @Composable () -> Unit) {
     Card(
@@ -615,7 +609,6 @@ private fun FilterCard(content: @Composable () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RarityChips(selectedRarity: Int, onRarityChange: (Int) -> Unit) {
     QualityFilterChips(
@@ -684,7 +677,7 @@ private val DECK_RARITY_THRESHOLDS = mapOf(
     "晶源体" to mapOf("完美" to 8, "卓越" to 11, "精致" to 11)
 )
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeckShareComposerCard(
     isLoggedIn: Boolean,
@@ -1075,7 +1068,6 @@ private fun DeckShareComposerCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PcCardDetailSheet(card: PcCard, onDismiss: () -> Unit) {
     val isTalent = card.category.contains("天赋")
@@ -1157,7 +1149,6 @@ private fun ProbabilitySection(probability: CardRefreshProbability) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MobileCardDetailSheet(card: MobileCard, onDismiss: () -> Unit) {
     val isTalent = card.category.contains("天赋")
@@ -1177,7 +1168,7 @@ private fun MobileCardDetailSheet(card: MobileCard, onDismiss: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeckDetailSheet(
     deck: SharedDeck,
@@ -1394,7 +1385,6 @@ private fun DetailLine(label: String, value: String) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipSection(title: String, items: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

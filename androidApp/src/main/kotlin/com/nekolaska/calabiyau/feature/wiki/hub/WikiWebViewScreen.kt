@@ -477,7 +477,6 @@ fun hasWikiLoginCookie(): Boolean {
 
 
 @SuppressLint("SetJavaScriptEnabled")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiWebViewScreen(
     onExitWiki: (() -> Unit)? = null,
@@ -1158,7 +1157,6 @@ fun WikiWebViewScreen(
  * Wiki 底部工具栏 —— 导航 + 溢出菜单。
  * 采用 BottomAppBar 风格，按钮宽松分布，易于单手操作。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WikiBottomToolbar(
     canGoBack: Boolean,

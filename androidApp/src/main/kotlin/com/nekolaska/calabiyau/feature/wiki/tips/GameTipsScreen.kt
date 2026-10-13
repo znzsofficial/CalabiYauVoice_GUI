@@ -59,7 +59,6 @@ import com.nekolaska.calabiyau.feature.wiki.tips.api.GameTipsApi
 import com.nekolaska.calabiyau.feature.wiki.tips.model.GAME_TIPS_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.tips.model.GameTipsSection
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameTipsScreen(
     onBack: () -> Unit,
@@ -268,7 +267,6 @@ private fun GameTipsSectionCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CopyableTipText(
     text: String,

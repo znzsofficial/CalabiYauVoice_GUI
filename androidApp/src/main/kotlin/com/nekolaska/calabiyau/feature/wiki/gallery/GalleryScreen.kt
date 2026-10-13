@@ -83,7 +83,6 @@ import java.io.File
 //  画廊页 —— 壁纸 / 表情包 / 四格漫画 通用
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
     title: String,

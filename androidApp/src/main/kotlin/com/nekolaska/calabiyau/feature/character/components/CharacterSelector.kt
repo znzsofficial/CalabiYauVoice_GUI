@@ -100,7 +100,6 @@ private fun findCompatibleCharacterMeta(
         ?.value
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterSelector(
     options: List<CharacterSelectorOption>,

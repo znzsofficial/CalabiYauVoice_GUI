@@ -59,7 +59,6 @@ import com.nekolaska.calabiyau.feature.wiki.imprint.model.ImprintSection
 private const val ALL_CHARACTERS = "全部角色"
 private const val ALL_LEVELS = "全部等级"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImprintScreen(
     onBack: () -> Unit,

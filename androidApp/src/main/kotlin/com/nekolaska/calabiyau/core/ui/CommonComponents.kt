@@ -145,7 +145,6 @@ fun SearchBar(
 /**
  * Minimal exposed dropdown for single-choice filters.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SimpleDropdownSelector(
     label: String,

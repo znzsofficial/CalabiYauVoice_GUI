@@ -62,7 +62,6 @@ private val CharacterHeaderAvatarHeight = 240.dp
 //  角色详情页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterDetailScreen(
     characterName: String,
@@ -440,7 +439,6 @@ private fun HeaderSection(
             Spacer(Modifier.height(16.dp))
 
             // 标签行
-            @OptIn(ExperimentalLayoutApi::class)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

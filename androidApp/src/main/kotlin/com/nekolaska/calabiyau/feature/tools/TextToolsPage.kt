@@ -72,7 +72,6 @@ private data class HistoryState(
 private const val MIN_CLIP_MS = 100L
 private const val MAX_CLIPS = 8000
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TextToolsPage(
     outputPath: String,

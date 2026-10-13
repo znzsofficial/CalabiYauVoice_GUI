@@ -71,7 +71,6 @@ import com.nekolaska.calabiyau.feature.wiki.item.model.ItemCatalogPlatform
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
 import androidx.compose.foundation.lazy.items as lazyItems
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemCatalogScreen(platform: ItemCatalogPlatform, onBack: () -> Unit) {
     val state = rememberLoadState(

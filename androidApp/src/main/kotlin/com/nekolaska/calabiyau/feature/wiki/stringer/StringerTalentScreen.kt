@@ -53,7 +53,6 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentItem
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentSection
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StringerTalentScreen(
     onBack: () -> Unit,

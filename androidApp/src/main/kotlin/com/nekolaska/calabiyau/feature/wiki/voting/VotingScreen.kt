@@ -33,7 +33,6 @@ import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteState
 import data.ApiResult
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
     val scope = rememberCoroutineScope()
@@ -660,9 +659,9 @@ private fun hasVoteChanges(
     selectedNames: Set<String>
 ): Boolean {
     if (voteState == null) return false
-    for (candidate in voteState.config.candidates) {
-        val wasVoted = voteState.pollDataMap[candidate.name]?.userVoted ?: false
-        val isSelected = candidate.name in selectedNames
+    for ((name) in voteState.config.candidates) {
+        val wasVoted = voteState.pollDataMap[name]?.userVoted ?: false
+        val isSelected = name in selectedNames
         if (wasVoted != isSelected) return true
     }
     return false

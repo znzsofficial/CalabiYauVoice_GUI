@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 private class TestBoardPreferences : BoardPreferences {
     override var nickname: String? = null
@@ -65,11 +66,11 @@ class MessageBoardStateTest {
             assertFalse(state.identityLoaded)
             state.draft = "anonymous draft"
             assertEquals("anonymous draft", state.draft)
-            state.send(); withTimeout(5000) { first.await() }; yield()
+            state.send(); withTimeout(5000.milliseconds) { first.await() }; yield()
             state.togglePostingAsGuest()
             assertTrue(state.postingAsGuest)
             assertTrue(state.error!!.contains("尚未确认"))
-            state.send(); withTimeout(5000) { second.await() }; yield()
+            state.send(); withTimeout(5000.milliseconds) { second.await() }; yield()
             assertEquals(sent[0].first.requestId, sent[1].first.requestId)
             assertEquals(listOf<String?>(null, null), sent.map { it.second })
             assertTrue(sent.all { it.first.submissionActor == "guest:${prefs.guestId}" })

@@ -31,7 +31,6 @@ import com.nekolaska.calabiyau.feature.wiki.announcement.model.Announcement
 //  公告资讯页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnnouncementScreen(
     onBack: () -> Unit,

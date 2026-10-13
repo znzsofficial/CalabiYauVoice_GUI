@@ -59,7 +59,6 @@ private const val CRYSTAL_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Sp
 private const val BASE_ICON_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E9%81%93%E5%85%B7%E5%9B%BE%E6%A0%87_6.png"
 private const val BASE_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E5%9B%BE%E6%A0%87-%E5%B0%8F%E5%9F%BA%E5%BC%A6.png"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeaponSkinFilterScreen(
     initialWeapon: String? = null,
@@ -216,7 +215,6 @@ private fun WeaponSkinFilterSkeleton(modifier: Modifier = Modifier) {
 //  筛选栏
 // ────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WeaponSkinFilterBar(
     weaponOptions: List<WeaponSelectorOption>,

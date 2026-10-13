@@ -74,9 +74,9 @@ object VotingApi {
             val submitCookies = VotingRemoteSource.getWikiCookies()?.takeIf { it.isNotBlank() } ?: cookies
 
             val operations = mutableListOf<VoteSubmitOperation>()
-            for (candidate in voteState.config.candidates) {
-                val data = voteState.pollDataMap[candidate.name] ?: continue
-                val isSelected = candidate.name in selectedNames
+            for ((name) in voteState.config.candidates) {
+                val data = voteState.pollDataMap[name] ?: continue
+                val isSelected = name in selectedNames
                 if (isSelected && !data.userVoted) operations.add(VoteSubmitOperation(data.pollId, "1"))
                 else if (!isSelected && data.userVoted) operations.add(VoteSubmitOperation(data.pollId, "0"))
             }

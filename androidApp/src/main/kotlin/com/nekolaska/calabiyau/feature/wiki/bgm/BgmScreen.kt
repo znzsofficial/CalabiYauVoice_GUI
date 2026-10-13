@@ -70,7 +70,6 @@ private const val GROUP_CATEGORY = "分类"
 private const val GROUP_CHARACTER = "角色"
 private const val GROUP_ALBUM = "专辑"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BgmScreen(
     onBack: () -> Unit,

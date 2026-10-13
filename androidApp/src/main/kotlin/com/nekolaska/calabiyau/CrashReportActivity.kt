@@ -121,7 +121,6 @@ class CrashReportActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CrashReportScreen(
     crashLog: String,

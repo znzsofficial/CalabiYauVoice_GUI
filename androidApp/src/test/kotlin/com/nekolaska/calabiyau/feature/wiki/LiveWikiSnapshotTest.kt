@@ -32,6 +32,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.net.HttpURLConnection
 import java.net.URI
+import kotlin.test.assertEquals
 
 class LiveWikiSnapshotTest {
 
@@ -89,7 +90,11 @@ class LiveWikiSnapshotTest {
         )
         val parse = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject["parse"]?.jsonObject
             ?: error("${platform.pageName}: missing parse response")
-        assertTrue(parse["title"]?.jsonPrimitive?.content == platform.pageName, "unexpected catalog redirect: $platform")
+        assertEquals(
+            parse["title"]?.jsonPrimitive?.content,
+            platform.pageName,
+            "unexpected catalog redirect: $platform"
+        )
         val html = parse["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content
             ?: error("${platform.pageName}: missing rendered HTML")
         Files.writeString(Path.of("build/live-wiki", platform.snapshotName), html)
@@ -104,7 +109,7 @@ class LiveWikiSnapshotTest {
         assertTrue(items.all { it.name.isNotBlank() }, "${platform.pageName}: blank name")
         val currency = items.firstOrNull { it.name == anchor }
         assertNotNull(currency, "${platform.pageName}: lost $anchor")
-        assertTrue(currency.category == "货币", "${platform.pageName}: currency category drifted")
+        assertEquals(currency.category, "货币", "${platform.pageName}: currency category drifted")
         assertTrue(currency.description.isNotBlank(), "${platform.pageName}: description missing")
         val iconUrl = currency.iconUrl
         assertNotNull(iconUrl, "${platform.pageName}: icon missing")
@@ -375,8 +380,11 @@ class LiveWikiSnapshotTest {
         val result: String = try {
             assertTrue(connection.responseCode in 200..299, "HTTP ${connection.responseCode} for $url")
             val expected = if (json) "application/json" else "text/html"
-            assertTrue(connection.contentType?.contains(expected, ignoreCase = true) == true,
-                "Unexpected content type ${connection.contentType} for $url")
+            assertEquals(
+                connection.contentType?.contains(expected, ignoreCase = true),
+                true,
+                "Unexpected content type ${connection.contentType} for $url"
+            )
             connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()

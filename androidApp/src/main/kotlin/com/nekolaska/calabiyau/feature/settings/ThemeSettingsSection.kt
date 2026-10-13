@@ -647,7 +647,6 @@ private fun ThemeColorSourceRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ColorChannelSlider(
     label: String,

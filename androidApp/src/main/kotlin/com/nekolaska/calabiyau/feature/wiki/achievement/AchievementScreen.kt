@@ -60,7 +60,6 @@ import com.nekolaska.calabiyau.feature.wiki.achievement.model.AchievementSection
 private const val ALL_CATEGORIES = "全部分类"
 private const val ALL_LEVELS = "全部等级"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AchievementScreen(
     onBack: () -> Unit,

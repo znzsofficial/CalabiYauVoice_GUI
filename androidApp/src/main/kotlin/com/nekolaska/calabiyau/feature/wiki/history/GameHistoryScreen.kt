@@ -54,7 +54,6 @@ import com.nekolaska.calabiyau.feature.wiki.history.model.GAME_HISTORY_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.history.model.GameHistoryEntry
 import com.nekolaska.calabiyau.feature.wiki.history.model.GameHistorySection
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun GameHistoryScreen(
     onBack: () -> Unit,

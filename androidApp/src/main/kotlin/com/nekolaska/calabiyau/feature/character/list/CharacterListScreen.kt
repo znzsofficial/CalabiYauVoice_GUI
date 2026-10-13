@@ -73,7 +73,6 @@ import java.util.Calendar
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterListScreen(
     onBack: () -> Unit,

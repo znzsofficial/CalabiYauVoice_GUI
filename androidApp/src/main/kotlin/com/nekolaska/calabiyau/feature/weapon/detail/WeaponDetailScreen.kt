@@ -84,7 +84,6 @@ import util.wikiPathEncode
 //  武器详情页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeaponDetailScreen(
     weaponName: String,
@@ -332,7 +331,6 @@ private fun WeaponHeaderCard(
                     || detail.fireMode.isNotBlank() || detail.obtainMethod.isNotBlank()
             if (hasChips) {
                 Spacer(Modifier.height(8.dp))
-                @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -511,7 +509,6 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
             // 倍率信息
             if (detail.baseDamage.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
-                @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)

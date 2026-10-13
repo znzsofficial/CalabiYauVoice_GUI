@@ -6,7 +6,6 @@ import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
-import com.nekolaska.calabiyau.feature.character.list.CharacterListApi.FACTIONS
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson

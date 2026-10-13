@@ -60,7 +60,6 @@ import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelPage
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelReward
 import com.nekolaska.calabiyau.feature.wiki.playerlevel.model.PlayerLevelRewardItem
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerLevelScreen(
     onBack: () -> Unit,

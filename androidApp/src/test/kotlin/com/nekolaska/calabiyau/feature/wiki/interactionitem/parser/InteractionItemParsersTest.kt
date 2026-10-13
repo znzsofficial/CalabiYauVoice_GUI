@@ -3,7 +3,6 @@ package com.nekolaska.calabiyau.feature.wiki.interactionitem.parser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InteractionItemParsersTest {

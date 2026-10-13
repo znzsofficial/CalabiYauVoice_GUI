@@ -62,7 +62,6 @@ import com.nekolaska.calabiyau.feature.wiki.meow.model.MEOW_LANGUAGE_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.meow.model.MeowLanguageGroup
 import com.nekolaska.calabiyau.feature.wiki.meow.model.MeowLanguageSection
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeowLanguageScreen(
     onBack: () -> Unit,
@@ -362,7 +361,6 @@ private fun MeowLanguageGroupBlock(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CopyableMeowText(
     text: String,

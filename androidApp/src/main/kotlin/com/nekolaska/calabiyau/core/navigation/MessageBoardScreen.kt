@@ -51,7 +51,6 @@ import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MessageBoardScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()

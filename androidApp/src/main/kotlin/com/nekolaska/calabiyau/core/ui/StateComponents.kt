@@ -337,7 +337,6 @@ fun <T> rememberLoadState(
  * It handles initial loading, empty error, offline cache banner, and optional pull-to-refresh while
  * leaving the actual success content to the caller.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun <T> ApiResourceContent(
     state: LoadState<T>,

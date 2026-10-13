@@ -105,7 +105,6 @@ enum class CacheCategory(
     WEBVIEW("网页缓存", "WebView 页面与脚本缓存", Icons.Outlined.Language, 0xFFF59E0B),
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StorageSettingsScreen(
     snapshot: StorageSnapshot?,

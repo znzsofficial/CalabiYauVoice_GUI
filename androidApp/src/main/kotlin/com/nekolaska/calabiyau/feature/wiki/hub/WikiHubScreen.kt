@@ -240,7 +240,6 @@ private fun WikiHubWallpaperBackground(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiHubScreen(
     onOpenDrawer: () -> Unit,

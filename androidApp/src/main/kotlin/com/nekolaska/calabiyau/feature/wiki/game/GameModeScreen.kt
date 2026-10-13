@@ -31,7 +31,6 @@ import util.wikiPathEncode
 //  战斗模式页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameModeScreen(
     onBack: () -> Unit,
@@ -90,7 +89,6 @@ fun GameModeScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GameModeCard(
     mode: GameModeDetail,

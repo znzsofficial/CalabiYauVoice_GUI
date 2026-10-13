@@ -56,7 +56,6 @@ private fun resolveSectionOutputDirectory(basePath: String, section: ToolsSectio
     return resolveOutputDirectory(basePath, child)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ToolsHomeScreen(
     onBack: () -> Unit,

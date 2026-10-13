@@ -146,7 +146,6 @@ fun PortraitGrid(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PortraitDetailContent(
     characterName: String,

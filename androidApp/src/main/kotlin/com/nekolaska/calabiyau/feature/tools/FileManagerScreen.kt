@@ -72,7 +72,7 @@ enum class FileManagerPickerMode {
  * - 重命名、删除、分享
  * - 返回上级目录
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileManagerScreen(
     rootPath: String,
@@ -878,7 +878,6 @@ private fun DirectoryPickerBanner(
 
 // ─────────────────────── 子组件 ───────────────────────
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileListItem(
     file: File,
@@ -1055,9 +1054,7 @@ private fun forceDelete(file: File): Boolean {
     if (deleteBottomUp(file, retryWithChmod = false)) return true
 
     chmodWithShell(file)
-    if (deleteBottomUp(file, retryWithChmod = true)) return true
-
-    return shellRemove(file)
+    return deleteBottomUp(file, retryWithChmod = true) || shellRemove(file)
 }
 
 private fun makeWritableRecursively(file: File) {

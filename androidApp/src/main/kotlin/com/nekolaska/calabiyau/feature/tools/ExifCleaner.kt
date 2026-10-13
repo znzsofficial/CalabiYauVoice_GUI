@@ -46,8 +46,7 @@ object ExifCleaner {
     )
 
     fun cleanPrivacyFields(imageFile: File): Boolean {
-        if (!imageFile.exists() || !imageFile.isFile) return false
-        return runCatching {
+        return !(!imageFile.exists() || !imageFile.isFile) && runCatching {
             val exif = ExifInterface(imageFile.absolutePath)
             PRIVACY_TAGS.forEach { tag ->
                 exif.setAttribute(tag, null)

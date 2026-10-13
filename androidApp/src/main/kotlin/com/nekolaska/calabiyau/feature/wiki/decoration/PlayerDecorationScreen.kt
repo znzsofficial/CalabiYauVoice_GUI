@@ -90,7 +90,6 @@ private fun qualityColor(quality: Int): Color = when (quality) {
  * @param pageName Wiki 页面名（传给 PlayerDecorationApi.fetch）
  * @param onBack 返回回调
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerDecorationScreen(
     title: String,

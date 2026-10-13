@@ -62,7 +62,6 @@ import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
 
 private const val FILTER_ALL = "全部"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InteractionItemScreen(
     onBack: () -> Unit,

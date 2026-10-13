@@ -58,7 +58,6 @@ import com.nekolaska.calabiyau.feature.wiki.submission.model.SubmissionPage
 
 private const val FILTER_ALL = "全部"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubmissionScreen(
     onBack: () -> Unit,

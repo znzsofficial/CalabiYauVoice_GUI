@@ -140,7 +140,6 @@ import util.wikiPathEncode
 /** 是否有壁纸背景（用于非液态玻璃模式下的半透明卡片） */
 internal val LocalHasWallpaper = staticCompositionLocalOf { false }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun WikiHomePage(
     onOpenDrawer: () -> Unit,
@@ -1187,7 +1186,6 @@ private fun MapCard(
 
 private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ContentBlockCard(
     title: String,
@@ -1383,7 +1381,6 @@ internal fun ActionCard(
 //  地图一览全屏页（从主页"查看全部"或快捷入口进入）
 // ────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MapListFullScreen(
     onBack: () -> Unit,

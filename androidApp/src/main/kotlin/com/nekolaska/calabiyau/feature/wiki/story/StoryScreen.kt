@@ -53,7 +53,6 @@ import com.nekolaska.calabiyau.feature.wiki.story.model.STORY_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.story.model.StoryEntry
 import com.nekolaska.calabiyau.feature.wiki.story.model.StorySection
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun StoryScreen(
     onBack: () -> Unit,
