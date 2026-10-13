@@ -37,7 +37,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # LIVE_WIKI_TEST=1 时 LiveWikiSnapshotTest 抓真实页面并跑生产 parser；
-      # 请求间隔 6.5s（测试内置），总量约 25 个请求，避开 EdgeOne 567 封锁。
+      # PC / 移动端道具图鉴分别检查（旧合并页已下线）。请求间隔 6.5s（成功/失败均节流）。
       # WikiRealPageGoldenTest 依赖本地快照（gitignored），CI 上自动跳过。
       - name: Run live wiki smoke tests
         env:
@@ -45,6 +45,7 @@ jobs:
         run: >
           ./gradlew :androidApp:testDebugUnitTest
           --tests "com.nekolaska.calabiyau.feature.wiki.LiveWikiSnapshotTest"
+          --tests "com.nekolaska.calabiyau.feature.wiki.item.*"
 
       - name: Upload test report
         if: failure()

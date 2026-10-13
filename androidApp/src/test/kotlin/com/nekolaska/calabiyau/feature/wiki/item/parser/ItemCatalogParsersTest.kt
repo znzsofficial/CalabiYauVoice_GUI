@@ -3,7 +3,6 @@ package com.nekolaska.calabiyau.feature.wiki.item.parser
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class ItemCatalogParsersTest {
 
@@ -60,17 +59,15 @@ class ItemCatalogParsersTest {
     }
 
     @Test
-    fun newCardStructureTakesPrecedenceOverLegacyTable() {
+    fun blankNamesAreSkippedButMissingOptionalFieldsAreKept() {
         val items = ItemCatalogParsers.parseItems(
             """
             <div class="gallerygrid-item klbq-item-card" data-param1="货币" data-param2="3">
               <div class="klbq-item-card__name">新结构道具</div>
             </div>
-            <table id="CardSelectTr">
-              <tr class="divsort" data-param1="消耗品" data-param2="4">
-                <td><b>旧结构道具</b></td><td>完美</td><td>应被忽略</td>
-              </tr>
-            </table>
+            <div class="gallerygrid-item klbq-item-card" data-param1="消耗品" data-param2="4">
+              <div class="klbq-item-card__name"> </div>
+            </div>
             """.trimIndent()
         )
 
@@ -78,42 +75,25 @@ class ItemCatalogParsersTest {
     }
 
     @Test
-    fun parsesNamedRowsAndSkipsHeader() {
-        val items = ItemCatalogParsers.parseItems(
-            """
-            <table id="CardSelectTr">
-              <tr><th>名称</th><th>品质</th><th>简介</th></tr>
-              <tr class="divsort" data-param1="消耗品" data-param2="4">
-                <td>
-                  <a class="image"><img src="https://patchwiki.biligame.com/images/klbq/thumb/a/ab/coin.png/70px-coin.png"/></a>
-                  <b>金币</b>
-                </td>
-                <td><span class="quality-badge" data-quality="4"><span style="display: none">4</span>完美</span></td>
-                <td>通用货币</td>
-              </tr>
-              <tr class="divsort" data-param1="">
-                <td>无名</td>
-                <td>精致</td>
-                <td>无粗体名称应跳过</td>
-              </tr>
-            </table>
-            """.trimIndent()
-        )
-
-        assertEquals(1, items.size)
-        assertEquals("金币", items.single().name)
-        assertEquals("消耗品", items.single().category)
-        assertEquals(Quality.PERFECT, items.single().quality)
-        assertEquals("完美", items.single().qualityName)
-        assertEquals("通用货币", items.single().description)
-        assertEquals(
-            "https://patchwiki.biligame.com/images/klbq/a/ab/coin.png",
-            items.single().iconUrl
-        )
+    fun capturedPcCardUsesRealEncodedClassesAndOriginalIcon() {
+        val item = ItemCatalogParsers.parseItems(fixture("items_pc_card.html")).single()
+        assertEquals("理想币", item.name)
+        assertEquals("货币", item.category)
+        assertEquals(Quality.SUPERIOR, item.quality)
+        assertEquals("比赛获得，可解锁角色和部分外观物品。", item.description)
+        assertEquals("https://patchwiki.biligame.com/images/klbq/2/23/ge71imt32rw400mpfpoydjw6ylka3wi.png", item.iconUrl)
     }
 
     @Test
-    fun emptyTableReturnsEmpty() {
-        assertTrue(ItemCatalogParsers.parseItems("<table id='CardSelectTr'></table>").isEmpty())
+    fun capturedMobileCardDoesNotMistakeIntroImageForItemIcon() {
+        val item = ItemCatalogParsers.parseItems(fixture("items_mobile_card.html")).single()
+        assertEquals("排位币", item.name)
+        assertEquals("货币", item.category)
+        assertEquals(Quality.SUPERIOR, item.quality)
+        assertEquals("可用于购买排位商店的物品。", item.description)
+        assertEquals("https://patchwiki.biligame.com/images/klbq/9/9d/b3558my6gm6tgcd7o1dehuv5gvqpfzd.png", item.iconUrl)
     }
+
+    private fun fixture(name: String): String = checkNotNull(javaClass.getResource("/fixtures/items/$name"))
+        .readText(Charsets.UTF_8)
 }

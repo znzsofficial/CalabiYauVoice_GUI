@@ -42,10 +42,17 @@ class WikiRealPageGoldenTest {
     }
 
     @Test
-    fun items() {
-        val items = ItemCatalogParsers.parseItems(page("items.html"))
+    fun pcItems() {
+        val items = ItemCatalogParsers.parseItems(page("items_pc.html"))
         assertTrue(items.size > 300, "items=${items.size}")
-        assertTrue(items.all { it.name.isNotBlank() })
+        assertTrue(items.any { it.name == "理想币" && it.category == "货币" && it.iconUrl != null })
+    }
+
+    @Test
+    fun mobileItems() {
+        val items = ItemCatalogParsers.parseItems(page("items_mobile.html"))
+        assertTrue(items.size >= 20, "mobile items=${items.size}")
+        assertTrue(items.any { it.name == "排位币" && it.category == "货币" && it.iconUrl != null })
     }
 
     @Test

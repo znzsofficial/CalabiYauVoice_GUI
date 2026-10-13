@@ -146,7 +146,8 @@ fun CatalogGridSkeleton(
     selectorLabel: String,
     qualityLabel: String = "按品质筛选",
     chipLabels: List<String>,
-    weaponSelector: Boolean = false
+    weaponSelector: Boolean = false,
+    beforeSearch: @Composable () -> Unit = {}
 ) {
     // 与内容页一样：搜索和筛选占满一行，卡片随同一个网格滚动/测量。
     LazyVerticalGrid(
@@ -159,6 +160,7 @@ fun CatalogGridSkeleton(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(Modifier.clearAndSetSemantics { }) {
+                beforeSearch()
                 // TextField 默认最小高度 56dp；底部间距与各页 SearchBar 相同。
                 Box(Modifier.padding(bottom = 12.dp)) {
                     ShimmerBox(

@@ -168,10 +168,19 @@ internal fun WikiCatalogHubScreen(
         ) {
             item {
                 ActionCard(
-                    title = "道具图鉴",
-                    subtitle = "浏览功能道具、货币与礼盒礼包",
+                    title = "PC 道具图鉴",
+                    subtitle = "PC 端及双端共有的功能道具、货币与礼包",
                     icon = Icons.Outlined.Inventory2,
                     onClick = { onNavigateTo(WikiRoute.Items) },
+                    backdrop = backdrop
+                )
+            }
+            item {
+                ActionCard(
+                    title = "移动端道具图鉴",
+                    subtitle = "浏览移动端独有的功能道具、货币与礼包",
+                    icon = Icons.Outlined.Inventory2,
+                    onClick = { onNavigateTo(WikiRoute.MobileItems) },
                     backdrop = backdrop
                 )
             }

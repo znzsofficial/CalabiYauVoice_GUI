@@ -68,6 +68,7 @@ import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.imprint.ImprintScreen
 import com.nekolaska.calabiyau.feature.wiki.interactionitem.InteractionItemScreen
 import com.nekolaska.calabiyau.feature.wiki.item.ItemCatalogScreen
+import com.nekolaska.calabiyau.feature.wiki.item.model.ItemCatalogPlatform
 import com.nekolaska.calabiyau.feature.wiki.map.MapDetailScreen
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
@@ -551,6 +552,14 @@ fun WikiHubScreen(
 
             is WikiRoute.Items -> {
                 ItemCatalogScreen(
+                    platform = ItemCatalogPlatform.PC,
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.MobileItems -> {
+                ItemCatalogScreen(
+                    platform = ItemCatalogPlatform.MOBILE,
                     onBack = { popBackStack() }
                 )
             }

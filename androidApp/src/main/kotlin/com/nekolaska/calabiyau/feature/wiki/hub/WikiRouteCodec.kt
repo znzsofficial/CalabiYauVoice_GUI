@@ -31,6 +31,7 @@ internal fun WikiRoute.encode(): String = when (this) {
     }$ROUTE_SEPARATOR${encodeRoutePart(source)}"
 
     WikiRoute.Items -> "items"
+    WikiRoute.MobileItems -> "mobileItems"
     is WikiRoute.Costumes -> "costumes$ROUTE_SEPARATOR${encodeRoutePart(character)}"
     is WikiRoute.WeaponSkins -> "weaponSkins$ROUTE_SEPARATOR${encodeRoutePart(weapon)}"
     WikiRoute.Activities -> "activities"
@@ -100,6 +101,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         )
 
         "items" -> WikiRoute.Items
+        "mobileItems" -> WikiRoute.MobileItems
         "costumes" -> WikiRoute.Costumes(decodeRoutePart(parts.getOrNull(1)))
         "weaponSkins" -> WikiRoute.WeaponSkins(decodeRoutePart(parts.getOrNull(1)))
         "activities" -> WikiRoute.Activities

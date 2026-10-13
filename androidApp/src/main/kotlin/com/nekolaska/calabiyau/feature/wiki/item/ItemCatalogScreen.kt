@@ -67,17 +67,18 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.item.api.ItemCatalogApi
 import com.nekolaska.calabiyau.feature.wiki.item.model.ItemInfo
+import com.nekolaska.calabiyau.feature.wiki.item.model.ItemCatalogPlatform
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
 import androidx.compose.foundation.lazy.items as lazyItems
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ItemCatalogScreen(onBack: () -> Unit) {
+fun ItemCatalogScreen(platform: ItemCatalogPlatform, onBack: () -> Unit) {
     val state = rememberLoadState(
         initial = emptyList<ItemInfo>(),
         cachedPrefetchDelayMs = 300L,
-        cachedFetch = { ItemCatalogApi.fetch(cacheOnly = true) },
-        fetch = { force -> ItemCatalogApi.fetch(forceRefresh = force) }
+        cachedFetch = { ItemCatalogApi.fetch(platform, cacheOnly = true) },
+        fetch = { force -> ItemCatalogApi.fetch(platform, forceRefresh = force, allowMemoryCache = false) }
     )
     val allItems = state.data
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
@@ -103,7 +104,7 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("道具图鉴", fontWeight = FontWeight.Bold) },
+                title = { Text(platform.title, fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
                     if (allItems.isNotEmpty()) {
@@ -121,7 +122,7 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> ItemCatalogSkeleton(mod) }
+            loading = { mod -> ItemCatalogSkeleton(platform, mod) }
         ) {
             var selectedItem by remember { mutableStateOf<ItemInfo?>(null) }
             LazyVerticalGrid(
@@ -133,6 +134,7 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column {
+                        ItemCatalogNotice(platform)
                         SearchBar(
                             keyword = searchQuery,
                             onKeywordChange = { searchQuery = it },
@@ -181,14 +183,27 @@ fun ItemCatalogScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun ItemCatalogSkeleton(modifier: Modifier = Modifier) {
+private fun ItemCatalogSkeleton(platform: ItemCatalogPlatform, modifier: Modifier = Modifier) {
     CatalogGridSkeleton(
         modifier = modifier,
         minCellSize = 108.dp,
         selectorLabel = "按分类筛选",
         qualityLabel = "按稀有度筛选",
-        chipLabels = listOf("全部稀有度") + Quality.entries.sortedByDescending { it.level }.map { it.displayName }
+        chipLabels = listOf("全部稀有度") + Quality.entries.sortedByDescending { it.level }.map { it.displayName },
+        beforeSearch = { ItemCatalogNotice(platform) }
     )
+}
+
+@Composable
+private fun ItemCatalogNotice(platform: ItemCatalogPlatform) {
+    if (platform == ItemCatalogPlatform.MOBILE) {
+        Text(
+            "仅收录移动端独有道具；双端共有道具请查看 PC 道具图鉴。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
+        )
+    }
 }
 
 @Composable

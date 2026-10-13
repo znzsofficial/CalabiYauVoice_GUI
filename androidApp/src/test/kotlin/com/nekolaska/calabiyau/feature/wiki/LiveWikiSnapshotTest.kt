@@ -10,6 +10,7 @@ import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
 import com.nekolaska.calabiyau.feature.wiki.history.parser.GameHistoryParsers
 import com.nekolaska.calabiyau.feature.wiki.imprint.parser.ImprintParsers
 import com.nekolaska.calabiyau.feature.wiki.item.parser.ItemCatalogParsers
+import com.nekolaska.calabiyau.feature.wiki.item.model.ItemCatalogPlatform
 import com.nekolaska.calabiyau.feature.wiki.map.parser.MapListParsers
 import com.nekolaska.calabiyau.feature.wiki.meme.parser.MemeParsers
 import com.nekolaska.calabiyau.feature.wiki.meow.parser.MeowLanguageParsers
@@ -39,7 +40,6 @@ class LiveWikiSnapshotTest {
     fun fetchesAndParsesCurrentWikiHtmlWhenEnabled() {
         org.junit.Assume.assumeTrue("Enable LIVE_WIKI_TEST=1 to fetch production HTML", System.getenv("LIVE_WIKI_TEST") == "1")
         val pages = listOf(
-            "items.html" to "功能道具筛选表",
             "tips.html" to "游戏Tips",
             "history.html" to "游戏历史",
             "achievements.html" to "成就",
@@ -63,12 +63,53 @@ class LiveWikiSnapshotTest {
             assertTrue(html.contains("mw-content-text") || html.contains("mw-parser-output"), "$name has no MediaWiki content")
             Files.writeString(Path.of("build/live-wiki", name), html)
         }
-        val items = Files.readString(Path.of("build/live-wiki/items.html")).let(ItemCatalogParsers::parseItems)
-        assertTrue(items.isNotEmpty(), "live items parser returned no rows")
         val tips = Files.readString(Path.of("build/live-wiki/tips.html")).let(GameTipsParsers::parseSections)
         assertTrue(tips.isNotEmpty(), "live tips parser returned no sections")
         val history = Files.readString(Path.of("build/live-wiki/history.html")).let(GameHistoryParsers::parseSections)
         assertTrue(history.isNotEmpty(), "live history parser returned no sections")
+    }
+
+    /** Use the same page names as the production source; never read the retired combined catalog. */
+    @Test
+    fun fetchesAndParsesPcItemCatalogWhenEnabled() {
+        fetchItemCatalogWhenEnabled(ItemCatalogPlatform.PC)
+    }
+
+    @Test
+    fun fetchesAndParsesMobileItemCatalogWhenEnabled() {
+        fetchItemCatalogWhenEnabled(ItemCatalogPlatform.MOBILE)
+    }
+
+    private fun fetchItemCatalogWhenEnabled(platform: ItemCatalogPlatform) {
+        org.junit.Assume.assumeTrue("Enable LIVE_WIKI_TEST=1 to fetch production HTML", System.getenv("LIVE_WIKI_TEST") == "1")
+        Files.createDirectories(Paths.get("build/live-wiki"))
+        val body = fetchBody(
+            "https://wiki.biligame.com/klbq/api.php?action=parse&page=${encoded(platform.pageName)}&prop=text&format=json",
+            json = true
+        )
+        val parse = kotlinx.serialization.json.Json.parseToJsonElement(body).jsonObject["parse"]?.jsonObject
+            ?: error("${platform.pageName}: missing parse response")
+        assertTrue(parse["title"]?.jsonPrimitive?.content == platform.pageName, "unexpected catalog redirect: $platform")
+        val html = parse["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content
+            ?: error("${platform.pageName}: missing rendered HTML")
+        Files.writeString(Path.of("build/live-wiki", platform.snapshotName), html)
+        assertItemCatalog(platform, html)
+    }
+
+    private fun assertItemCatalog(platform: ItemCatalogPlatform, html: String) {
+        val items = ItemCatalogParsers.parseItems(html)
+        val anchor = if (platform == ItemCatalogPlatform.PC) "理想币" else "排位币"
+        assertTrue(items.size >= if (platform == ItemCatalogPlatform.PC) 300 else 20,
+            "${platform.pageName}: too few cards (${items.size})")
+        assertTrue(items.all { it.name.isNotBlank() }, "${platform.pageName}: blank name")
+        val currency = items.firstOrNull { it.name == anchor }
+        assertNotNull(currency, "${platform.pageName}: lost $anchor")
+        assertTrue(currency.category == "货币", "${platform.pageName}: currency category drifted")
+        assertTrue(currency.description.isNotBlank(), "${platform.pageName}: description missing")
+        val iconUrl = currency.iconUrl
+        assertNotNull(iconUrl, "${platform.pageName}: icon missing")
+        assertTrue(iconUrl.startsWith("https://") && !iconUrl.contains("/thumb/"),
+            "${platform.pageName}: original icon missing")
     }
 
     /** Weapon skins are rendered from a Lua module through action=parse, not a normal page. */
@@ -199,10 +240,8 @@ class LiveWikiSnapshotTest {
 
     @Test
     fun parsesLocalLiveSnapshotsWhenPresent() {
-        val items = snapshot("items.html")?.let(ItemCatalogParsers::parseItems)
-        if (items != null) {
-            assertTrue(items.size > 20, "items=${items.size}")
-            assertTrue(items.all { it.name.isNotBlank() })
+        for (platform in ItemCatalogPlatform.entries) {
+            snapshot(platform.snapshotName)?.let { assertItemCatalog(platform, it) }
         }
 
         val achievements = snapshot("achievements.html")?.let(AchievementParsers::parseHtml)

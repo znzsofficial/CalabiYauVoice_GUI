@@ -60,6 +60,8 @@ All 8 imageinfo call sites pass `redirects=1` (files like 武器-大剑.png redi
 
 ## Android Wiki pages
 
+Item catalogs were split in 2026-10: `功能道具图鉴PC端` and `功能道具图鉴移动端` (mobile-exclusive items only). `ItemCatalogPlatform` owns page names/cache keys; never fetch the retired combined page or reuse its `item_catalog` cache. `WikiRoute.Items` keeps old saved routes/shortcuts as PC; `MobileItems` is separate. Current card-only parser and tracked `fixtures/items/` replace retired table tests; live smoke validates both pages independently with 6.5s request spacing.
+
 When adding/refactoring `androidApp/.../feature/wiki`, follow `docs/android-wiki-feature-guide.md`: split `model` / `source` / `parser` / `api` / `Screen`. BWiki HTML is not a stable API; keep parse failures diagnosable.
 
 ## Do not

@@ -205,11 +205,19 @@ export const FILTER_TOOLS_MODAL: CollectionModalData = {
       color: '#f59e0b'
     },
     {
-      title: '功能道具筛选表',
-      desc: '晶核、芯片、升级耗材、誓约礼物等全游戏道具资料库',
-      url: 'https://wiki.biligame.com/klbq/%E5%8A%9F%E8%83%BD%E9%81%93%E5%85%B7%E7%AD%9B%E9%80%89%E8%A1%A8',
+      title: '功能道具图鉴PC端',
+      desc: 'PC端及双端共有的货币、功能道具与礼包资料库',
+      url: 'https://wiki.biligame.com/klbq/%E5%8A%9F%E8%83%BD%E9%81%93%E5%85%B7%E5%9B%BE%E9%89%B4PC%E7%AB%AF',
       icon: 'lucide:package-search',
       tag: '道具清单',
+      color: '#3b82f6'
+    },
+    {
+      title: '功能道具图鉴移动端',
+      desc: '移动端独有道具资料库；共有道具请查看PC端图鉴',
+      url: 'https://wiki.biligame.com/klbq/%E5%8A%9F%E8%83%BD%E9%81%93%E5%85%B7%E5%9B%BE%E9%89%B4%E7%A7%BB%E5%8A%A8%E7%AB%AF',
+      icon: 'lucide:package-search',
+      tag: '移动专属',
       color: '#3b82f6'
     },
     {
