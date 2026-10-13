@@ -20,17 +20,17 @@
 
 ## 2. 模块关系
 
-根项目声明四个模块：
+根项目默认声明三个模块，另保留一个需显式启用的归档原型：
 
 ```text
 CalabiYauVoice_GUI
 ├── desktopApp   Kotlin/JVM + Compose Desktop 桌面应用
 ├── androidApp   Android 应用
 ├── shared       Kotlin Multiplatform 共享业务与媒体核心
-└── webApp       Compose Web JS/Wasm 应用
+└── webApp       已归档 Compose JS/Wasm UI 原型（默认不包含）
 ```
 
-模块定义位于 `settings.gradle.kts:47-50`。
+模块定义位于 `settings.gradle.kts`；归档原型仅在 `-PincludeArchivedWebApp=true` 时包含。
 
 桌面端实际依赖关系：
 
@@ -60,7 +60,7 @@ desktopApp
 | `shared/build.gradle.kts` | JVM/Android 共享 source set |
 | `gradle/libs.versions.toml` | Kotlin、Compose、OkHttp、JNA 和媒体依赖版本 |
 
-`webApp` 不参与桌面窗口渲染，也不是桌面端内嵌前端。桌面端内的 Wiki 浏览器使用 Compose WebView，但主应用 UI 是 Compose Desktop 原生渲染。
+`webApp` 不参与桌面窗口渲染，也不是桌面端内嵌前端；它已停止维护，仅保留假数据与模拟下载 UI，详见 `webApp/README.md`。正式网页工具是独立的 `downloadPage/`。桌面端内的 Wiki 浏览器使用 Compose WebView，但主应用 UI 是 Compose Desktop 原生渲染。
 
 ## 3. 运行模型
 

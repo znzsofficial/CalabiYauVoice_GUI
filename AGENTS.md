@@ -1,6 +1,6 @@
 # Agent notes
 
-Kotlin Multiplatform app (`androidApp`, `desktopApp`, `shared`, `webApp`) plus a separate Vite/Svelte 5 site in `downloadPage/` (not a Gradle module).
+Kotlin Multiplatform app (`androidApp`, `desktopApp`, `shared`) plus a separate Vite/Svelte 5 site in `downloadPage/` (not a Gradle module). `webApp/` is an archived, unmaintained Compose JS/Wasm UI prototype (sample data and simulated downloads, not a working client). Excluded from default Gradle settings; opt in with `-PincludeArchivedWebApp=true` only for experiments. See `webApp/README.md`; never use it for production web deployments or duplicate the active Svelte tools there.
 
 ## Commands
 

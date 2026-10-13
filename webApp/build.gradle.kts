@@ -1,5 +1,8 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
+// Archived, unmaintained UI prototype. Explicit opt-in via settings.gradle.kts.
+// This module is not part of the production downloadPage release pipeline.
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)

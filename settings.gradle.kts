@@ -47,4 +47,8 @@ dependencyResolutionManagement {
 include(":androidApp")
 include(":desktopApp")
 include(":shared")
-include(":webApp")
+// Archived UI prototype; excluded from normal builds, IDE sync and release tasks.
+// Explicit opt-in: -PincludeArchivedWebApp=true (see webApp/README.md).
+if (providers.gradleProperty("includeArchivedWebApp").orNull == "true") {
+    include(":webApp")
+}

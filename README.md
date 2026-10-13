@@ -198,7 +198,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 │           ├── wallpaper.ts            #   Random official wallpaper system
 │           ├── birthdays.ts            #   Character birthdays, countdowns and calendar
 │           └── nav.css
-├── webApp/                             # Optional Compose/Web related module
+├── webApp/                             # Archived UI prototype; excluded from default builds
 ├── gradle/libs.versions.toml           # Centralized dependency versions
 ├── build.gradle.kts
 └── settings.gradle.kts
@@ -231,6 +231,13 @@ pnpm build
 ```
 
 > For macOS/Linux, use `./gradlew` instead of `./gradlew.bat`.
+
+### Archived Compose Web prototype
+
+`webApp/` is an **unmaintained UI prototype**, not the production website or a working
+downloader. It uses sample data and simulated progress. Normal Gradle builds exclude it;
+optional experiments require `-PincludeArchivedWebApp=true`.
+See [`webApp/README.md`](webApp/README.md). Active browser features are maintained in `downloadPage/`.
 
 ## ⚠️ Notes
 

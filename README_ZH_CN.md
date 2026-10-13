@@ -198,7 +198,7 @@
 │           ├── wallpaper.ts            #   官方随机壁纸系统与缓存
 │           ├── birthdays.ts            #   超弦体生日档案、倒计时与生日日历
 │           └── nav.css
-├── webApp/                             # 可选 Compose/Web 相关模块
+├── webApp/                             # 已归档的 UI 原型，默认不参与构建
 ├── gradle/libs.versions.toml           # 集中管理依赖版本
 ├── build.gradle.kts
 └── settings.gradle.kts
@@ -231,6 +231,12 @@ pnpm build
 ```
 
 > macOS / Linux 请使用 `./gradlew` 代替 `./gradlew.bat`。
+
+### 已归档的 Compose Web 原型
+
+`webApp/` 已停止维护，**不是正式网页客户端，也不是可用的下载器**：数据与下载进度均为演示。
+默认 Gradle 构建不包含此模块；仅实验时通过 `-PincludeArchivedWebApp=true` 显式启用。
+详见 [`webApp/README.md`](webApp/README.md)。正式浏览器功能继续维护在 `downloadPage/` 中。
 
 ## ⚠️ 注意事项
 

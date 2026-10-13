@@ -73,7 +73,7 @@ private data class WebDownloadItem(
     val enabled: Boolean = true
 )
 
-private const val LatestReleaseUrl = "https://calabiyauwiki.pages.dev/"
+private const val LatestReleaseUrl = "https://wiki.nekolaska.vip/"
 
 @Composable
 internal fun DownloaderWebApp() {
@@ -156,8 +156,8 @@ private fun DownloaderContent() {
     var showApkDialog by remember { mutableStateOf(false) }
     val logs = remember {
         mutableStateListOf(
-            "Web 下载器界面已初始化",
-            "欢迎使用 CalabiYauVoice Web 客户端 (MD3 模糊剔透版)。"
+            "已归档的 Web UI 原型已初始化",
+            "仅展示示例数据和模拟进度，不会请求或下载资源。"
         )
     }
 
@@ -176,9 +176,15 @@ private fun DownloaderContent() {
                 keyword = keyword,
                 onKeywordChange = { keyword = it },
                 onSearch = {
-                    logs.add(0, "发现索引：${keyword.ifBlank { "全部资源" }} / ${mode.label}")
+                    logs.add(0, "本地示例筛选：${keyword.ifBlank { "全部示例" }} / ${mode.label}")
                 },
                 onShowApkDialog = { showApkDialog = true }
+            )
+
+            Text(
+                "已归档 · 停止维护：此界面仅展示假数据和模拟进度。真实搜索与下载请使用正式网页工具。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             if (showApkDialog) {
@@ -210,12 +216,12 @@ private fun DownloaderContent() {
                             onStartDownload = {
                                 isDownloading = true
                                 progress = 0.42f
-                                logs.add(0, "🚀 进程激活：${selectedItem?.title ?: mode.label}")
+                                logs.add(0, "开始模拟：${selectedItem?.title ?: mode.label}")
                             },
                             onStopDownload = {
                                 isDownloading = false
                                 progress = 0f
-                                logs.add(0, "⏹ 进程已终止")
+                                logs.add(0, "模拟已停止")
                             }
                         )
                     }
@@ -242,12 +248,12 @@ private fun DownloaderContent() {
                         onStartDownload = {
                             isDownloading = true
                             progress = 0.42f
-                            logs.add(0, "🚀 进程激活：${selectedItem?.title ?: mode.label}")
+                            logs.add(0, "开始模拟：${selectedItem?.title ?: mode.label}")
                         },
                         onStopDownload = {
                             isDownloading = false
                             progress = 0f
-                            logs.add(0, "⏹ 进程已终止")
+                            logs.add(0, "模拟已停止")
                         },
                         modifier = Modifier.weight(0.95f).fillMaxHeight()
                     )
@@ -283,7 +289,7 @@ private fun Header(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Text(
-                    text = "Web 资源枢纽中心",
+                    text = "已归档的 Compose Web UI 原型",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -312,7 +318,7 @@ private fun Header(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                 contentPadding = PaddingValues(horizontal = 30.dp, vertical = 16.dp)
             ) {
-                Text("检索", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("筛选示例", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
             OutlinedButton(
                 onClick = onShowApkDialog,
@@ -320,7 +326,7 @@ private fun Header(
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f)),
                 contentPadding = PaddingValues(horizontal = 22.dp, vertical = 16.dp)
             ) {
-                Text("下载 APK", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                Text("正式网站", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
             }
         }
     }
@@ -335,7 +341,7 @@ private fun ApkDownloadDialog(onDismiss: () -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Android APK 下载", fontWeight = FontWeight.ExtraBold)
                 Text(
-                    text = "最新版本：GitHub Releases Latest",
+                    text = "正式下载页由独立的 Svelte 站点提供",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -355,15 +361,13 @@ private fun ApkDownloadDialog(onDismiss: () -> Unit) {
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("更新日志", fontWeight = FontWeight.Bold)
-                    Text("• 新增 Compose Web 下载器入口")
-                    Text("• 支持 Web 端浏览资源分类与下载队列 UI")
-                    Text("• 修复 Web 中文字体显示问题")
-                    Text("• 优化 Wasm 打包资源与启动页")
+                    Text("原型状态", fontWeight = FontWeight.Bold)
+                    Text("此 Compose 界面已停止维护，不接入真实资源或下载队列。")
+                    Text("最新版本与真实更新日志请查看正式下载页。")
                 }
 
                 Text(
-                    text = "如果浏览器没有自动开始下载，请检查是否被浏览器拦截了新窗口。",
+                    text = "点击按钮只会打开正式网站，不会在本原型中直接下载。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -572,7 +576,7 @@ private fun DownloadPanel(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("流数据接收中...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text("模拟进度（不下载文件）", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         Text("${(progress * 100).toInt()}%", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                     }
                     LinearProgressIndicator(
@@ -596,7 +600,7 @@ private fun DownloadPanel(
                     ),
                     contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
-                    Text("核心驱动下载", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("开始模拟", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
                 OutlinedButton(
                     onClick = onStopDownload,
@@ -609,7 +613,7 @@ private fun DownloadPanel(
                     ),
                     border = androidx.compose.foundation.BorderStroke(1.dp, if (isDownloading) MaterialTheme.colorScheme.error.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.1f))
                 ) {
-                    Text("阻断进程", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text("停止模拟", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
             }
 
