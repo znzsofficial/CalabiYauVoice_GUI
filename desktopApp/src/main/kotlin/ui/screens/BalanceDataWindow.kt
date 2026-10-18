@@ -190,6 +190,10 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
 
         isLoadingData = true
         errorMessage = null
+        if (sortField == SortField.SCORE && !data.BalanceSeasons.supportsScore(request.seasonCode)) {
+            sortField = SortField.WIN_RATE
+            sortOrder = SortOrder.DESC
+        }
         try {
             when (val result = BalanceDataApi.fetchBalanceData(
                 modeCode = request.modeCode,
@@ -444,7 +448,10 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                                             sortOrder = SortOrder.DESC
                                         }
                                     },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
+                                    enabled = field != SortField.SCORE || data.BalanceSeasons.supportsScore(
+                                        s.seasons.getOrNull(selectedSeasonIndex)?.code.orEmpty()
+                                    )
                                 )
                             }
                         }
@@ -454,7 +461,7 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                         if (sortedList.isEmpty() && !isLoadingData) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    errorMessage ?: "暂无数据",
+                                    errorMessage ?: "当前赛季、筛选条件及攻防方暂无有效数据，请切换赛季或筛选条件。",
                                     fontSize = 13.sp,
                                     color = if (errorMessage != null) Color(0xFFE57373) else FluentTheme.colors.text.text.secondary,
                                     textAlign = TextAlign.Center,
@@ -482,7 +489,10 @@ private fun BalanceDataContent(modifier: Modifier = Modifier) {
                                         hero = hero,
                                         meta = meta,
                                         positionName = position?.name ?: "",
-                                        highlightField = sortField
+                                        highlightField = sortField,
+                                        scoreAvailable = data.BalanceSeasons.supportsScore(
+                                            settings?.seasons?.getOrNull(selectedSeasonIndex)?.code.orEmpty()
+                                        )
                                     )
 
                                     if (index < sortedList.lastIndex) {
@@ -512,11 +522,12 @@ private fun SortableHeaderCell(
     isActive: Boolean,
     order: SortOrder?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Row(
         modifier
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 2.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -558,7 +569,8 @@ private fun HeroRow(
     hero: BalanceDataApi.HeroBalanceData,
     meta: BalanceDataApi.CharacterMeta?,
     positionName: String,
-    highlightField: SortField
+    highlightField: SortField,
+    scoreAvailable: Boolean
 ) {
     // 角色头像
     var avatarBitmap by remember(meta?.imageUrl) { mutableStateOf<ImageBitmap?>(null) }
@@ -657,7 +669,7 @@ private fun HeroRow(
             modifier = Modifier.weight(1f)
         )
         DataCell(
-            value = "%.0f".format(hero.score),
+            value = if (scoreAvailable) "%.0f".format(hero.score) else "—",
             isHighlight = highlightField == SortField.SCORE,
             modifier = Modifier.weight(1f)
         )

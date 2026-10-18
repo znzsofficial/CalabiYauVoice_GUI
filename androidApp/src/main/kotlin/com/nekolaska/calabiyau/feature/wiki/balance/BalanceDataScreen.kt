@@ -1,7 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.balance
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
@@ -29,7 +25,6 @@ import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -39,17 +34,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,17 +46,12 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LoadingState
@@ -81,21 +65,11 @@ import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
 import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
 import data.ApiResult
-import kotlinx.coroutines.launch
-import kotlin.math.abs
+import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceMetric as SortField
 
 // ════════════════════════════════════════════════════════
 //  平衡数据页面 —— 官网角色胜率/选取率/KD/伤害/评分
 // ════════════════════════════════════════════════════════
-
-/** 排序字段 */
-private enum class SortField(val label: String) {
-    WIN_RATE("胜率"),
-    SELECT_RATE("选取率"),
-    KD("KD"),
-    DAMAGE("场均伤害"),
-    SCORE("场均得分")
-}
 
 /** 排序方向 */
 private enum class SortOrder { ASC, DESC }
@@ -180,6 +154,10 @@ fun BalanceDataScreen(
 
         isLoadingData = true
         dataError = null
+        if (sortField == SortField.SCORE && !data.BalanceSeasons.supportsScore(season.code)) {
+            sortField = SortField.WIN_RATE
+            sortOrder = SortOrder.DESC
+        }
         val rankCodes = if (selectedRanks.isEmpty()) listOf("-255") else selectedRanks.map { it.code }
         when (val result = BalanceDataApi.fetchBalanceData(
             modeCode = mode.code,
@@ -266,7 +244,10 @@ fun BalanceDataScreen(
                             selectedRanks = selectedRanks,
                             onModeChange = { selectedMode = it },
                             onMapChange = { selectedMap = it },
-                            onSeasonChange = { selectedSeason = it },
+                            onSeasonChange = {
+                                selectedSeason = it
+                                if (selectedSeason2?.code == it.code) selectedSeason2 = null
+                            },
                             onSeason2Change = { selectedSeason2 = it },
                             onRanksChange = { selectedRanks = it }
                         )
@@ -276,6 +257,7 @@ fun BalanceDataScreen(
                             showAttackers = showAttackers,
                             sortField = sortField,
                             sortOrder = sortOrder,
+                            scoreAvailable = data.BalanceSeasons.supportsScore(selectedSeason?.code.orEmpty()),
                             onSideToggle = {
                                 if (showAttackers != it) {
                                     showAttackers = it
@@ -293,7 +275,7 @@ fun BalanceDataScreen(
 
                         // ── 数据列表 ──
                         Box(Modifier.fillMaxSize()) {
-                            if (isLoadingData && balanceResult == null) {
+                            if (isLoadingData) {
                                 CircularProgressIndicator(Modifier.align(Alignment.Center))
                             } else if (dataError != null && balanceResult == null) {
                                 ErrorState(
@@ -311,7 +293,7 @@ fun BalanceDataScreen(
                                 )
                             } else if (sortedList.isEmpty() && !isLoadingData) {
                                 Text(
-                                    "暂无数据",
+                                    "当前赛季、筛选条件及攻防方暂无有效数据，请切换赛季或筛选条件。",
                                     Modifier.align(Alignment.Center),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -323,11 +305,14 @@ fun BalanceDataScreen(
                                 }
                                 HeroBalanceList(
                                     list = sortedList,
-                                    listKey = "$showAttackers-${sortField.name}-${sortOrder.name}-${selectedSeason2?.code.orEmpty()}",
+                                    listKey = "$showAttackers-${sortField.name}-${sortOrder.name}-${selectedSeason?.code.orEmpty()}-${selectedSeason2?.code.orEmpty()}",
                                     characterMap = characterMap,
                                     positionMap = positionMap,
                                     sortField = sortField,
                                     compareMap = compareMap,
+                                    scoreAvailable = data.BalanceSeasons.supportsScore(selectedSeason?.code.orEmpty()),
+                                    compareScoreAvailable = data.BalanceSeasons.supportsScore(selectedSeason2?.code.orEmpty()),
+                                    compareSeasonName = selectedSeason2?.name,
                                     isLoading = isLoadingData
                                 )
                             }
@@ -387,7 +372,7 @@ private fun FilterBar(
 
         FilterDropdown(
             label = "对比赛季",
-            options = settings.seasons,
+            options = settings.seasons.filter { it.code != selectedSeason?.code },
             selected = selectedSeason2,
             onSelect = onSeason2Change,
             onClearSelection = { onSeason2Change(null) },
@@ -565,6 +550,7 @@ private fun SideAndSortBar(
     showAttackers: Boolean,
     sortField: SortField,
     sortOrder: SortOrder,
+    scoreAvailable: Boolean,
     onSideToggle: (Boolean) -> Unit,
     onSortChange: (SortField) -> Unit
 ) {
@@ -596,62 +582,27 @@ private fun SideAndSortBar(
             )
         }
 
-        // 排序表头
+        // 卡片的指标自带标签，不再保留与窄表格列对齐的表头。
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 角色列（只显示头像）
-            Spacer(Modifier.width(52.dp))
-
-            // 5 列数据
+            Text("排序", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             SortField.entries.forEach { field ->
-                SortableHeader(
-                    label = field.label,
-                    isActive = sortField == field,
-                    order = if (sortField == field) sortOrder else null,
+                FilterChip(
+                    selected = sortField == field,
+                    enabled = field != SortField.SCORE || scoreAvailable,
                     onClick = { onSortChange(field) },
-                    modifier = Modifier.weight(1f)
+                    label = { Text(field.label) },
+                    trailingIcon = if (sortField == field) {
+                        { Icon(if (sortOrder == SortOrder.DESC) Icons.Default.ArrowDropDown else Icons.Default.ArrowDropUp, contentDescription = if (sortOrder == SortOrder.DESC) "降序" else "升序", modifier = Modifier.size(18.dp)) }
+                    } else null
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun SortableHeader(
-    label: String,
-    isActive: Boolean,
-    order: SortOrder?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier
-            .defaultMinSize(minWidth = 0.dp, minHeight = 0.dp)
-            .height(28.dp),
-        contentPadding = PaddingValues(horizontal = 1.dp, vertical = 0.dp)
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-            color = if (isActive) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
-        if (isActive && order != null) {
-            Icon(
-                if (order == SortOrder.DESC) Icons.Default.ArrowDropDown
-                else Icons.Default.ArrowDropUp,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }
@@ -668,248 +619,66 @@ private fun HeroBalanceList(
     positionMap: Map<String, PositionMeta>,
     sortField: SortField,
     compareMap: Map<Int, HeroBalanceData>?,
+    scoreAvailable: Boolean,
+    compareScoreAvailable: Boolean,
+    compareSeasonName: String?,
     isLoading: Boolean
 ) {
     key(listKey) {
         val listState = rememberLazyListState()
 
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            itemsIndexed(list, key = { _, item -> item.id }) { index, hero ->
-                val meta = characterMap[hero.id]
-                val position = meta?.let { positionMap[it.positionCode] }
-                val compareHero = compareMap?.get(hero.id)
-
-                HeroRow(
-                    rank = index + 1,
-                    hero = hero,
-                    compareHero = compareHero,
-                    meta = meta,
-                    positionName = position?.name ?: "",
-                    highlightField = sortField
-                )
-
-                if (index < list.lastIndex) {
-                    HorizontalDivider(
-                        Modifier.padding(horizontal = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                }
-            }
-        }
-
-        // 加载中遮罩
-        if (isLoading) {
-            CircularProgressIndicator(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp)
-            )
-        }
-    }
-    }
-}
-
-// ────────────────────────────────────────────
-//  单行角色数据
-// ────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun HeroRow(
-    rank: Int,
-    hero: HeroBalanceData,
-    compareHero: HeroBalanceData?,
-    meta: CharacterMeta?,
-    positionName: String,
-    highlightField: SortField
-) {
-    val tooltipState = rememberTooltipState()
-    val scope = rememberCoroutineScope()
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // 排名
-        Text(
-            text = "$rank",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = when (rank) {
-                1 -> Color(0xFFFFD700)
-                2 -> Color(0xFFC0C0C0)
-                3 -> Color(0xFFCD7F32)
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.width(18.dp),
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(Modifier.width(4.dp))
-
-        // 角色头像（点击浮动显示角色名 + 定位）
-        TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-            tooltip = {
-                PlainTooltip {
-                    val name = meta?.name ?: hero.heroName
-                    Text(if (positionName.isNotEmpty()) "$name · $positionName" else name)
-                }
-            },
-            state = tooltipState
-        ) {
-            Box(
-                Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .clickable { scope.launch { tooltipState.show() } },
-                contentAlignment = Alignment.Center
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (meta != null) {
-                    AsyncImage(
-                        model = meta.imageUrl,
-                        contentDescription = meta.name,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
+                if (compareSeasonName != null) {
+                    item(key = "comparison-legend") {
                         Text(
-                            hero.heroName.take(1),
+                            "当前值在上 · 原值来自 $compareSeasonName\npp 表示百分点；数值变化不代表角色强弱。",
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
+                if (!scoreAvailable || (compareSeasonName != null && !compareScoreAvailable)) {
+                    item(key = "score-availability") {
+                        Text(
+                            "S8 以前无表现分，以 — 标示。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                itemsIndexed(list, key = { _, item -> item.id }) { index, hero ->
+                    val meta = characterMap[hero.id]
+                    val position = meta?.let { positionMap[it.positionCode] }
+                    val compareHero = compareMap?.get(hero.id)
+
+                    BalanceHeroCard(
+                        rank = index + 1,
+                        hero = hero,
+                        compareHero = compareHero,
+                        meta = meta,
+                        positionName = position?.name ?: "",
+                        highlightField = sortField,
+                        hasCompare = compareSeasonName != null,
+                        scoreAvailable = scoreAvailable,
+                        compareScoreAvailable = compareScoreAvailable
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.width(2.dp))
-
-        // 5 列数据
-        DataCell(
-            field = SortField.WIN_RATE,
-            current = hero.winRate,
-            compare = compareHero?.winRate,
-            isHighlight = highlightField == SortField.WIN_RATE,
-            modifier = Modifier.weight(1f)
-        )
-        DataCell(
-            field = SortField.SELECT_RATE,
-            current = hero.selectRate,
-            compare = compareHero?.selectRate,
-            isHighlight = highlightField == SortField.SELECT_RATE,
-            modifier = Modifier.weight(1f)
-        )
-        DataCell(
-            field = SortField.KD,
-            current = hero.kd,
-            compare = compareHero?.kd,
-            isHighlight = highlightField == SortField.KD,
-            modifier = Modifier.weight(1f)
-        )
-        DataCell(
-            field = SortField.DAMAGE,
-            current = hero.damageAve,
-            compare = compareHero?.damageAve,
-            isHighlight = highlightField == SortField.DAMAGE,
-            modifier = Modifier.weight(1f)
-        )
-        DataCell(
-            field = SortField.SCORE,
-            current = hero.score,
-            compare = compareHero?.score,
-            isHighlight = highlightField == SortField.SCORE,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun DataCell(
-    modifier: Modifier = Modifier,
-    field: SortField,
-    current: Double,
-    compare: Double?,
-    isHighlight: Boolean,
-) {
-    val currentText = field.formatValue(current)
-    val compareText = compare?.let { field.formatValue(it) }
-    val changeColor = compare?.let { if (current >= it) Color(0xFF4CAF50) else Color(0xFFF44336) }
-    val hasBigChange = compare?.let { field.isBigChange(current, it) } == true
-    val mainColor = when {
-        changeColor != null && hasBigChange -> changeColor
-        isHighlight -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    val compareColor = MaterialTheme.colorScheme.onSurfaceVariant
-
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = currentText,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = if (isHighlight) FontWeight.Bold else FontWeight.Normal,
-                color = mainColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
-            if (compare != null) {
-                Spacer(Modifier.width(2.dp))
-                Text(
-                    text = if (current >= compare) "▲" else "▼",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = changeColor ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+            // 保留筛选刷新时的加载反馈。
+            if (isLoading) {
+                CircularProgressIndicator(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
                 )
             }
         }
-        if (compareText != null) {
-            Text(
-                text = compareText,
-                style = MaterialTheme.typography.labelSmall,
-                color = compareColor,
-                textAlign = TextAlign.Center,
-                maxLines = 1
-            )
-        }
     }
-}
-
-private fun SortField.formatValue(value: Double): String = when (this) {
-    SortField.WIN_RATE, SortField.SELECT_RATE -> "%.1f%%".format(value)
-    SortField.KD -> "%.2f".format(value)
-    SortField.DAMAGE, SortField.SCORE -> "%.0f".format(value)
-}
-
-private fun SortField.compareThresholdPercent(): Double = when (this) {
-    SortField.WIN_RATE -> 15.0
-    SortField.SELECT_RATE -> 25.0
-    SortField.KD -> 20.0
-    SortField.DAMAGE -> 20.0
-    SortField.SCORE -> 18.0
-}
-
-private fun SortField.isBigChange(current: Double, compare: Double): Boolean {
-    if (compare == 0.0) return current != 0.0
-    val pctDiff = abs((current - compare) / compare) * 100
-    return pctDiff >= compareThresholdPercent()
 }

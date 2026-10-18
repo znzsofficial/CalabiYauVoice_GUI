@@ -8,6 +8,7 @@ import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
 import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
 import data.SharedJson
+import data.BalanceSeasons
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -70,7 +71,9 @@ object BalanceDataParsers {
         val modes = parseOptions(setting["mode"]!!.jsonArray)
         val maps = parseOptions(setting["map"]!!.jsonArray)
         val ranks = parseOptions(setting["rank"]!!.jsonArray)
-        val seasons = parseOptions(setting["season"]!!.jsonArray)
+        val seasons = BalanceSeasons.merge(
+            parseOptions(setting["season"]!!.jsonArray), FilterOption::code, ::FilterOption
+        )
 
         val positions = roleList["position"]!!.jsonArray.map { item ->
             val content = json.parseToJsonElement(

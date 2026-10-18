@@ -46,6 +46,9 @@ class BalanceDataParsersTest {
         assertEquals("爆破", settings.modes.single().name)
         assertEquals("对枪", settings.positions.single().name)
         assertEquals("信", settings.characters.single().name)
+        assertEquals("敕魂命途", settings.seasons.first().name)
+        assertEquals("赤刃行动", settings.seasons.single { it.code == "1" }.name)
+        assertEquals("S1", settings.seasons.single { it.code == "s1" }.name)
     }
 
     @Test

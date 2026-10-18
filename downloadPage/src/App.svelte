@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { toError, formatFileSize as _formatFileSize } from './search/utils';
   import BalanceDialog from './BalanceDialog.svelte';
+  import { mergeBalanceSeasons, supportsBalanceScore } from './balanceSeasons';
 
   const formatFileSize = (bytes: number) => _formatFileSize(bytes, '未知');
 
@@ -56,7 +57,7 @@
   let showAttackers = $state(false);
   let sortField: SortField = $state('winRate');
   let sortDesc = $state(true);
-  let balanceOpenSelect = $state('' as '' | 'mode' | 'season' | 'season2');
+  let balanceQueryGeneration = 0;
   let activeNoticeTab = $state('notice');
 
   function resolveUrl(url: string | null | undefined): string {
@@ -162,7 +163,7 @@
     const parseOptions = (arr: RawContentItem[]) => arr.map(parseBalanceOption);
     return {
       modes: parseOptions(setting.mode), maps: parseOptions(setting.map), ranks: parseOptions(setting.rank),
-      seasons: parseOptions(setting.season), positions: roleList.position.map(parseBalanceOption), characters: roleList.role_list.map(parseBalanceOption)
+      seasons: mergeBalanceSeasons(parseOptions(setting.season)), positions: roleList.position.map(parseBalanceOption), characters: roleList.role_list.map(parseBalanceOption)
     };
   }
 
@@ -208,6 +209,11 @@
 
   async function loadBalanceData(): Promise<void> {
     if (!settings || !selectedModeCode || !selectedSeasonCode) return;
+    if (sortField === 'score' && !supportsBalanceScore(selectedSeasonCode)) {
+      sortField = 'winRate';
+      sortDesc = true;
+    }
+    const generation = ++balanceQueryGeneration;
     balanceStatus = 'loading';
     balanceError = '';
     const payload = {
@@ -219,12 +225,14 @@
     try {
       const resp = await fetchWithTimeout('/api/balance/data', { method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(payload) }, 10000);
       const json = await resp.json() as BalanceDataResponse;
+      if (generation !== balanceQueryGeneration) return;
       const jData = json.jData;
       if (!jData || String(jData.iRet) !== '0') throw new Error(jData?.sMsg || '查询失败');
       balanceResult = { attackers: (jData.data1?.side1 || []).map(parseHero), defenders: (jData.data1?.side2 || []).map(parseHero) };
       compareData = jData.data2 && selectedSeason2Code ? { attackers: jData.data2.side1 || {}, defenders: jData.data2.side2 || {} } : null;
       balanceStatus = 'ready';
     } catch (err) {
+      if (generation !== balanceQueryGeneration) return;
       const error = toError(err);
       balanceStatus = 'error';
       balanceError = error.name === 'AbortError' ? '查询官网接口超时，请检查网络或使用客户端查看。' : error.message || '查询失败，请稍后重试';
@@ -238,7 +246,6 @@
       if (selectedSeason2Code === selectedSeasonCode) selectedSeason2Code = '';
     }
     if (kind === 'season2') selectedSeason2Code = code;
-    balanceOpenSelect = '';
     loadBalanceData();
   }
 
@@ -254,6 +261,18 @@
 
   function handleSetSort(field: SortField): void {
     if (sortField === field) { sortDesc = !sortDesc; } else { sortField = field; sortDesc = true; }
+  }
+
+  function handleResetBalanceFilters(): void {
+    selectedMapCode = '';
+    selectedRankCodes = [];
+    loadBalanceData();
+  }
+
+  function handleSwapBalanceSeasons(): void {
+    if (!selectedSeason2Code) return;
+    [selectedSeasonCode, selectedSeason2Code] = [selectedSeason2Code, selectedSeasonCode];
+    loadBalanceData();
   }
 
   function handleRetry(): void {
@@ -328,8 +347,6 @@
 <svelte:head>
   <meta property="og:image" content="/icon.svg">
 </svelte:head>
-
-<svelte:window onclick={() => { if (balanceOpenSelect) balanceOpenSelect = ''; }} />
 
 <div class="layout-wrapper">
   <div class="bg" aria-hidden="true"></div>
@@ -559,11 +576,13 @@
   {settings} {characterMap} {positionMap}
   {selectedModeCode} {selectedMapCode} {selectedSeasonCode} {selectedSeason2Code} {selectedRankCodes}
   {balanceResult} {compareData} {showAttackers} {sortField} {sortDesc}
-  {balanceOpenSelect} {balanceStatus} {balanceError}
+  {balanceStatus} {balanceError}
   onSelectMode={(code) => handleSetBalanceSelect('mode', code)}
   onSelectSeason={(code) => handleSetBalanceSelect('season', code)}
   onSelectSeason2={(code) => handleSetBalanceSelect('season2', code)}
-  onToggleSelect={(kind) => balanceOpenSelect = kind}
+  onResetFilters={handleResetBalanceFilters}
+  onClearRanks={() => { selectedRankCodes = []; loadBalanceData(); }}
+  onSwapSeasons={handleSwapBalanceSeasons}
   onToggleMap={handleToggleMap}
   onToggleRank={handleToggleRank}
   onSetSort={handleSetSort}

@@ -123,7 +123,9 @@ object BalanceDataApi {
                 val modes = parseOptions(setting["mode"]!!.jsonArray)
                 val maps = parseOptions(setting["map"]!!.jsonArray)
                 val ranks = parseOptions(setting["rank"]!!.jsonArray)
-                val seasons = parseOptions(setting["season"]!!.jsonArray)
+                val seasons = BalanceSeasons.merge(
+                    parseOptions(setting["season"]!!.jsonArray), FilterOption::code, ::FilterOption
+                )
 
                 val positions = roleList["position"]!!.jsonArray.map { item ->
                     val content = json.parseToJsonElement(
