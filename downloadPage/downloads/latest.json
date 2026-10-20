@@ -1,20 +1,27 @@
 {
     "versionName": "2.1.21",
     "versionCode": 51,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.21.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.21.apk?build=b5b835fcaa2c8b4f",
+    "apkSize": 3644476,
     "releaseUrl": "/",
     "changelog": [
-        "恢复 S1–S10 历史赛季（赤刃行动至敕魂命途），三端同步补齐赛季选择；S8 以前不再显示不可用的表现分",
-        "Android 平衡数据改为自适应角色卡片；网页新增角色搜索与更清晰的赛季对比，统一指标标签、数值和百分点差值",
-        "资源下载新增取消、原任务重试和重启后手动继续，修复分类漏下载、弹窗串数据及搜索失败误显示为空；移除运行日志入口",
-        "下载文件新增长度与 SHA-256 校验，损坏文件会重新下载；旧清单首次继续时会重新下载以建立校验",
-        "修复文件管理空目录无法选择、单多选约束与列表刷新问题，改进重命名、删除和文件读取错误提示",
-        "改进 Wiki 登录与 WebView 稳定性：修复切号或退出后的 Cookie 回写、上传回调串用、临时窗口回收及恢复后缩放不一致",
-        "修复缓存旧响应覆盖刷新结果、强刷丢失离线副本、网络状态误判和身份接口错误后不再重试的问题"
+        "\u6062\u590d S1\u2013S10 \u5386\u53f2\u8d5b\u5b63\uff08\u8d64\u5203\u884c\u52a8\u81f3\u6555\u9b42\u547d\u9014\uff09\uff0c\u4e09\u7aef\u540c\u6b65\u8865\u9f50\u8d5b\u5b63\u9009\u62e9\uff1bS8 \u4ee5\u524d\u4e0d\u518d\u663e\u793a\u4e0d\u53ef\u7528\u7684\u8868\u73b0\u5206",
+        "Android \u5e73\u8861\u6570\u636e\u6539\u4e3a\u81ea\u9002\u5e94\u89d2\u8272\u5361\u7247\uff1b\u7f51\u9875\u65b0\u589e\u89d2\u8272\u641c\u7d22\u4e0e\u66f4\u6e05\u6670\u7684\u8d5b\u5b63\u5bf9\u6bd4\uff0c\u7edf\u4e00\u6307\u6807\u6807\u7b7e\u3001\u6570\u503c\u548c\u767e\u5206\u70b9\u5dee\u503c",
+        "\u8d44\u6e90\u4e0b\u8f7d\u65b0\u589e\u53d6\u6d88\u3001\u539f\u4efb\u52a1\u91cd\u8bd5\u548c\u91cd\u542f\u540e\u624b\u52a8\u7ee7\u7eed\uff0c\u4fee\u590d\u5206\u7c7b\u6f0f\u4e0b\u8f7d\u3001\u5f39\u7a97\u4e32\u6570\u636e\u53ca\u641c\u7d22\u5931\u8d25\u8bef\u663e\u793a\u4e3a\u7a7a\uff1b\u79fb\u9664\u8fd0\u884c\u65e5\u5fd7\u5165\u53e3",
+        "\u4e0b\u8f7d\u6587\u4ef6\u65b0\u589e\u957f\u5ea6\u4e0e SHA-256 \u6821\u9a8c\uff0c\u635f\u574f\u6587\u4ef6\u4f1a\u91cd\u65b0\u4e0b\u8f7d\uff1b\u65e7\u6e05\u5355\u9996\u6b21\u7ee7\u7eed\u65f6\u4f1a\u91cd\u65b0\u4e0b\u8f7d\u4ee5\u5efa\u7acb\u6821\u9a8c",
+        "\u4fee\u590d\u6587\u4ef6\u7ba1\u7406\u7a7a\u76ee\u5f55\u65e0\u6cd5\u9009\u62e9\u3001\u5355\u591a\u9009\u7ea6\u675f\u4e0e\u5217\u8868\u5237\u65b0\u95ee\u9898\uff0c\u6539\u8fdb\u91cd\u547d\u540d\u3001\u5220\u9664\u548c\u6587\u4ef6\u8bfb\u53d6\u9519\u8bef\u63d0\u793a",
+        "\u6539\u8fdb Wiki \u767b\u5f55\u4e0e WebView \u7a33\u5b9a\u6027\uff1a\u4fee\u590d\u5207\u53f7\u6216\u9000\u51fa\u540e\u7684 Cookie \u56de\u5199\u3001\u4e0a\u4f20\u56de\u8c03\u4e32\u7528\u3001\u4e34\u65f6\u7a97\u53e3\u56de\u6536\u53ca\u6062\u590d\u540e\u7f29\u653e\u4e0d\u4e00\u81f4",
+        "\u4fee\u590d\u7f13\u5b58\u65e7\u54cd\u5e94\u8986\u76d6\u5237\u65b0\u7ed3\u679c\u3001\u5f3a\u5237\u4e22\u5931\u79bb\u7ebf\u526f\u672c\u3001\u7f51\u7edc\u72b6\u6001\u8bef\u5224\u548c\u8eab\u4efd\u63a5\u53e3\u9519\u8bef\u540e\u4e0d\u518d\u91cd\u8bd5\u7684\u95ee\u9898"
     ],
     "publishedAt": "2026-10-20",
     "releases": [
+        {
+            "versionName": "2.1.21",
+            "versionCode": 51,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.21.apk?build=b5b835fcaa2c8b4f",
+            "apkSize": 3644476,
+            "publishedAt": "2026-10-20"
+        },
         {
             "versionName": "2.1.20",
             "versionCode": 50,
