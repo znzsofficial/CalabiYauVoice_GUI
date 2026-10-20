@@ -57,7 +57,7 @@ fun CategoryGroupList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(sorted, key = { it.characterName }) { group ->
+        items(sorted, key = { it.rootCategory }) { group ->
             GroupCard(
                 group = group,
                 avatarUrl = characterAvatars[group.characterName],

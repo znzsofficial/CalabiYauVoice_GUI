@@ -434,7 +434,7 @@ class MainViewModel(
             scanJob = scope.launch {
                 try {
                     addLog("正在获取 [${group.characterName}] 的所有分类...")
-                    val tree = WikiEngine.scanCategoryTree(group.rootCategory)
+                    val tree = WikiEngine.scanCategoryTrees(listOf(group.rootCategory) + group.subCategories)
                     currentCoroutineContext().ensureActive()
                     if (requestId != scanRequestId) return@launch
                     categoryCache[group.rootCategory] = tree

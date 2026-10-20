@@ -1,13 +1,17 @@
 package portrait
 
+import kotlinx.serialization.Serializable
+
 // 立绘相关纯逻辑：数据类、解析函数、常量
 // 不依赖任何平台 API，可在 commonMain 中被 desktop/android 共用
 
+@Serializable
 data class PortraitAsset(
     val title: String,
     val url: String
 )
 
+@Serializable
 data class PortraitCostume(
     val key: String,
     val name: String,

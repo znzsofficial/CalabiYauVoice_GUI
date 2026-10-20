@@ -12,6 +12,109 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WikiEngineCoreDownloadTest {
+    @Test
+    fun productionAdapterRepairsCorruptionAndLegacyZeroFileThroughTheWholePipeline() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-production-adapter").toFile()
+        try {
+            val files = listOf("voice.wav" to "https://example.test/voice.wav")
+            var requests = 0
+            suspend fun download(): List<File> = WikiEngineCore.downloadSpecificFiles(files, dir, 1, {}, { _, _, _ -> },
+                { url, target -> util.downloadResourceAtomically(url, target, { _, tmp ->
+                    requests++; tmp.writeText("correct"); true
+                }) })
+            val target = download().single()
+            target.writeText("broken!")
+            download(); assertEquals(2, requests); assertEquals("correct", target.readText())
+            download(); assertEquals(2, requests)
+            target.writeText("")
+            download(); assertEquals(3, requests); assertEquals("correct", target.readText())
+            assertEquals("voice.wav", target.name)
+        } finally { dir.deleteRecursively() }
+    }
+    @Test
+    fun repairsNonzeroAndSameLengthCorruptionButKeepsValidFiles() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-integrity").toFile()
+        try {
+            val input = listOf("voice.wav" to "https://example.test/voice.wav")
+            var calls = 0
+            suspend fun download(): List<File> = WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> },
+                { _, file -> calls++; file.writeText("complete") })
+            val file = download().single()
+            download(); assertEquals(1, calls)
+            file.writeText("damaged!") // Same length; size-only checks must not accept it.
+            download(); assertEquals(2, calls); assertEquals("complete", file.readText())
+            file.writeText("short")
+            download(); assertEquals(3, calls)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
+    fun legacyManifestRetainsItsFilenameButRevalidatesUnverifiedFilesOnce() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-legacy-manifest").toFile()
+        try {
+            File(dir, "voice.wav").writeText("old unverified")
+            File(dir, ".calabiyau-downloads.tsv").writeText("voice.wav\thttps://example.test/voice.wav\n")
+            val file = WikiEngineCore.downloadSpecificFiles(listOf("voice.wav" to "https://example.test/voice.wav"), dir, 1,
+                {}, { _, _, _ -> }, { _, target -> target.writeText("verified") }).single()
+            assertEquals("voice.wav", file.name)
+            assertEquals("verified", file.readText())
+            assertEquals(4, File(dir, ".calabiyau-downloads.tsv").readLines().single().split('\t').size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
+    fun partialFailureSavesSuccessfulChecksumsForOriginalTaskRetry() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-partial-retry").toFile()
+        try {
+            val inputs = listOf("good.wav" to "https://example.test/good", "bad.wav" to "https://example.test/bad")
+            val calls = mutableListOf<String>()
+            assertFailsWith<java.io.IOException> {
+                WikiEngineCore.downloadSpecificFiles(inputs, dir, 1, {}, { _, _, _ -> }, { url, target ->
+                    calls.add(url)
+                    if (url.endsWith("bad")) throw java.io.IOException("network error")
+                    target.writeText("complete")
+                })
+            }
+            calls.clear()
+            WikiEngineCore.downloadSpecificFiles(inputs, dir, 1, {}, { _, _, _ -> }, { url, target ->
+                calls.add(url); target.writeText("complete")
+            })
+            assertEquals(listOf("https://example.test/bad"), calls)
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
+    fun missingOutputCannotBeReportedAsSuccessful() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-empty-output").toFile()
+        try {
+            assertFailsWith<java.io.IOException> {
+                WikiEngineCore.downloadSpecificFiles(listOf("file.wav" to "https://example.test/file"), dir, 1,
+                    {}, { _, _, _ -> }, { _, _ -> })
+            }
+        } finally { dir.deleteRecursively() }
+        Unit
+    }
+
+    @Test
+    fun cancellationReleasesDirectoryLockAndNeverCertifiesUnfinishedFile() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-cancel").toFile()
+        try {
+            val started = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val input = listOf("voice.wav" to "https://example.test/voice.wav")
+            val job = async {
+                WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> }, { _, file ->
+                    file.writeText("unfinished"); started.complete(Unit); kotlinx.coroutines.awaitCancellation()
+                })
+            }
+            started.await(); job.cancel(); job.join()
+            var calls = 0
+            val file = WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> }, { _, target ->
+                calls++; target.writeText("repaired")
+            }).single()
+            assertEquals(1, calls); assertEquals("repaired", file.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
 
     @Test
     fun sanitizesDotSegmentsAndWindowsDeviceNames() {
@@ -52,7 +155,7 @@ class WikiEngineCoreDownloadTest {
                 maxConcurrency = 3,
                 onLog = {},
                 onProgress = { _, _, _ -> },
-                downloadFileFn = { url, target -> targetsByUrl[url] = target.name }
+                downloadFileFn = { url, target -> targetsByUrl[url] = target.name; target.writeText(url) }
             )
 
             assertEquals("voice_a.wav", targetsByUrl["https://example.test/1.wav"])

@@ -17,6 +17,24 @@ import kotlin.test.assertTrue
 
 class WikiAccountStateTest {
     @Test
+    fun nullOrAnonymousIdentityCanRecoverWithTheSameCookiesAfterBackoff() {
+        for (initial in listOf(null, WikiUserApi.UserInfo(id = 0, name = "anon"))) {
+            val scope = CoroutineScope(Dispatchers.Unconfined + Job())
+            try {
+                var time = 0L; var calls = 0
+                val state = WikiAccountState(scope, { "unchanged" }, {
+                    calls++
+                    ApiResult.Success(if (calls == 1) initial else WikiUserApi.UserInfo(1, "A"))
+                }, { ApiResult.Success(null) }, { time })
+                state.syncAccount(); assertNull(state.userInfo)
+                time = 19_999; state.syncAccount(); assertEquals(1, calls)
+                time = 20_000; state.syncAccount(); assertEquals(2, calls)
+                assertEquals(1L, state.userInfo?.id)
+            } finally { scope.cancel() }
+        }
+    }
+
+    @Test
     fun temporaryIdentityFailureCanRetryWithoutChangingCookiesAndRespectsBackoff() {
         val scope = CoroutineScope(Dispatchers.Unconfined + Job())
         try {

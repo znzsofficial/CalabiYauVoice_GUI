@@ -7,6 +7,9 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.system.Os
+import android.system.OsConstants
+import android.system.ErrnoException
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
@@ -18,6 +21,13 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.pow
+
+/** lstat observes the link itself; File.isDirectory follows it and canonical-path heuristics are not sufficient. */
+internal fun isAndroidFileLink(file: File): Boolean = try {
+    OsConstants.S_ISLNK(Os.lstat(file.absolutePath).st_mode)
+} catch (e: ErrnoException) {
+    if (e.errno == OsConstants.ENOENT) false else throw e
+}
 
 fun formatFileSize(bytes: Long): String {
     if (bytes <= 0) return "0 B"

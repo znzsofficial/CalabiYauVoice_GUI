@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 import util.awaitGet
 import util.awaitGetToFile
+import util.downloadResourceAtomically
 import util.executeGet
 
 object WikiEngine {
@@ -206,6 +207,9 @@ object WikiEngine {
     suspend fun scanCategoryTree(rootCategory: String): List<String> =
         WikiEngineCore.scanCategoryTree(rootCategory, ::fetchString, jsonParser)
 
+    suspend fun scanCategoryTrees(roots: List<String>): List<String> =
+        WikiEngineCore.scanCategoryTrees(roots, ::fetchString, jsonParser)
+
     suspend fun getAllCharacterNames(): List<String> =
         WikiEngineCore.getAllCharacterNames(::fetchString, jsonParser)
 
@@ -248,18 +252,9 @@ object WikiEngine {
     }
 
     private suspend fun downloadFile(url: String, targetFile: File) {
-        if (targetFile.exists() && targetFile.length() > 0) return
         val parent = targetFile.absoluteFile.parentFile
             ?: throw IOException("Target file has no parent: $targetFile")
         Files.createDirectories(parent.toPath())
-        val tmp = Files.createTempFile(parent.toPath(), "wiki-download-", ".tmp").toFile()
-        try {
-            if (!client.awaitGetToFile(url, tmp)) throw IOException("HTTP download failed for $url")
-            if (tmp.length() == 0L) throw IOException("Empty response body for $url")
-            currentCoroutineContext().ensureActive()
-            Files.move(tmp.toPath(), targetFile.toPath())
-        } finally {
-            Files.deleteIfExists(tmp.toPath())
-        }
+        downloadResourceAtomically(url, targetFile, fetch = { source, tmp -> client.awaitGetToFile(source, tmp) })
     }
 }

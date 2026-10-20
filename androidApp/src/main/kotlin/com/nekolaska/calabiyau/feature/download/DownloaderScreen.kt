@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -33,7 +32,6 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.DownloadStatusBar
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.core.ui.LogsDialog
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import data.SearchMode
@@ -68,6 +66,7 @@ internal fun DownloaderScreen(
     val dialogFileList by searchVM.dialogFileList.collectAsState()
     val dialogIsLoading by searchVM.dialogIsLoading.collectAsState()
     val dialogSelectedUrls by searchVM.dialogSelectedUrls.collectAsState()
+    val dialogError by searchVM.dialogError.collectAsState()
     val manualSelectionMap by searchVM.manualSelectionMap.collectAsState()
     val searchError by searchVM.searchError.collectAsState()
 
@@ -75,9 +74,9 @@ internal fun DownloaderScreen(
     val isDownloading by downloadVM.isDownloading.collectAsState()
     val downloadProgress by downloadVM.downloadProgress.collectAsState()
     val downloadStatusText by downloadVM.downloadStatusText.collectAsState()
-    val logs by downloadVM.logs.collectAsState()
     val favorites by downloadVM.favorites.collectAsState()
     val isNetworkAvailable by downloadVM.isNetworkAvailable.collectAsState()
+    val recoverableRequest by downloadVM.recoverableRequest.collectAsState()
 
     // ── PortraitViewModel 状态 ──
     val selectedPortraitCharacter by portraitVM.selectedPortraitCharacter.collectAsState()
@@ -130,7 +129,6 @@ internal fun DownloaderScreen(
     }
 
     val focusManager = LocalFocusManager.current
-    var showLogs by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
     val useDockedToolbar = bottomBarStyle == AppPrefs.BAR_STYLE_DOCKED_TOOLBAR
@@ -151,10 +149,10 @@ internal fun DownloaderScreen(
                     .let { if (it == SnackbarResult.ActionPerformed) searchVM.performSearch() }
             }
         }
-        downloadVM.errorEvent.collect { message ->
+        downloadVM.errorEvent.collect { failure ->
             snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(message, "重试", duration = SnackbarDuration.Short)
-                .let { if (it == SnackbarResult.ActionPerformed) buildDownloadTask()?.let { t -> downloadVM.startDownload(t) } }
+            snackbarHostState.showSnackbar(failure.message, "重试", duration = SnackbarDuration.Short)
+                .let { if (it == SnackbarResult.ActionPerformed) downloadVM.retryDownload(failure.request) }
         }
     }
 
@@ -171,11 +169,9 @@ internal fun DownloaderScreen(
             DownloaderTopBar(
                 searchKeyword = searchKeyword,
                 isSearching = isSearching,
-                logs = logs,
                 searchHistoryList = searchHistoryList,
                 onOpenDrawer = onOpenDrawer,
                 onOpenDownloadHistory = onOpenDownloadHistory,
-                onShowLogs = { showLogs = true },
                 onKeywordChange = { searchVM.onSearchKeywordChange(it) },
                 onSearch = {
                     focusManager.clearFocus()
@@ -202,7 +198,8 @@ internal fun DownloaderScreen(
                 ) {
                     DownloadStatusBar(
                         progress = downloadProgress,
-                        statusText = downloadStatusText
+                        statusText = downloadStatusText,
+                        onCancel = downloadVM::cancelDownload
                     )
                 }
                 // 经典底部应用栏模式
@@ -274,6 +271,15 @@ internal fun DownloaderScreen(
             ) {
                 // 无网络横幅
                 NetworkBanner(isNetworkAvailable)
+                recoverableRequest?.takeIf { !isDownloading }?.let { request ->
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text("有未完成的下载任务；继续时会核验并跳过已完成文件。", style = MaterialTheme.typography.bodySmall)
+                        Row {
+                            TextButton(onClick = { downloadVM.retryDownload(request) }) { Text("继续原任务") }
+                            TextButton(onClick = downloadVM::discardRecoverableDownload) { Text("放弃任务（保留文件）") }
+                        }
+                    }
+                }
                 // 搜索失败提示横幅
                 SearchErrorBanner(
                     searchError = searchError,
@@ -494,9 +500,6 @@ internal fun DownloaderScreen(
     // --- Overlays / Sheets ---
 
     // 日志弹窗
-    if (showLogs) {
-        LogsDialog(logs = logs, onDismiss = { showLogs = false })
-    }
 
     // 立绘详情 BottomSheet
     if (selectedPortraitCharacter != null) {
@@ -561,7 +564,9 @@ internal fun DownloaderScreen(
             onClear = { searchVM.clearDialogSelection() },
             onInvert = { searchVM.invertDialogSelection() },
             onConfirm = { searchVM.confirmFileDialog() },
-            onDismiss = { searchVM.closeFileDialog() }
+            onDismiss = { searchVM.closeFileDialog() },
+            error = dialogError,
+            onRetry = searchVM::retryFileDialog
         )
     }
 }
@@ -572,11 +577,9 @@ internal fun DownloaderScreen(
 private fun DownloaderTopBar(
     searchKeyword: String,
     isSearching: Boolean,
-    logs: List<String>,
     searchHistoryList: List<String>,
     onOpenDrawer: () -> Unit,
     onOpenDownloadHistory: () -> Unit,
-    onShowLogs: () -> Unit,
     onKeywordChange: (String) -> Unit,
     onSearch: () -> Unit,
     onClearHistory: () -> Unit,
@@ -612,21 +615,6 @@ private fun DownloaderTopBar(
                     )
                 ) {
                     Icon(Icons.Outlined.History, contentDescription = "下载历史", modifier = Modifier.size(20.dp))
-                }
-                // 日志按钮
-                FilledTonalIconButton(
-                    onClick = onShowLogs,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
-                ) {
-                    BadgedBox(
-                        badge = {
-                            if (logs.isNotEmpty()) Badge { Text("${logs.size}") }
-                        }
-                    ) {
-                        Icon(Icons.AutoMirrored.Outlined.Article, "日志", modifier = Modifier.size(20.dp))
-                    }
                 }
             }
 

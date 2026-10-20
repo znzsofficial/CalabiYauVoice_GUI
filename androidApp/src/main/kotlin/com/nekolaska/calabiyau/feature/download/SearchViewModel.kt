@@ -77,20 +77,13 @@ class SearchViewModel : ViewModel() {
     val fileSearchSelectedUrls: StateFlow<Set<String>> = _fileSearchSelectedUrls.asStateFlow()
 
     // 分类文件选择对话框
-    private val _showFileDialog = MutableStateFlow(false)
-    val showFileDialog: StateFlow<Boolean> = _showFileDialog.asStateFlow()
-
-    private val _dialogCategoryName = MutableStateFlow("")
-    val dialogCategoryName: StateFlow<String> = _dialogCategoryName.asStateFlow()
-
-    private val _dialogFileList = MutableStateFlow<List<Pair<String, String>>>(emptyList())
-    val dialogFileList: StateFlow<List<Pair<String, String>>> = _dialogFileList.asStateFlow()
-
-    private val _dialogIsLoading = MutableStateFlow(false)
-    val dialogIsLoading: StateFlow<Boolean> = _dialogIsLoading.asStateFlow()
-
-    private val _dialogSelectedUrls = MutableStateFlow<Set<String>>(emptySet())
-    val dialogSelectedUrls: StateFlow<Set<String>> = _dialogSelectedUrls.asStateFlow()
+    private val fileSelection = CategoryFileSelectionState(viewModelScope, WikiEngine::fetchFilesInCategory)
+    val showFileDialog = fileSelection.visible
+    val dialogCategoryName = fileSelection.category
+    val dialogFileList = fileSelection.files
+    val dialogIsLoading = fileSelection.loading
+    val dialogSelectedUrls = fileSelection.selected
+    val dialogError = fileSelection.error
 
     // 手动选择的文件映射 (分类名 -> 选中的文件列表)
     private val _manualSelectionMap = MutableStateFlow<Map<String, List<Pair<String, String>>>>(emptyMap())
@@ -354,7 +347,7 @@ class SearchViewModel : ViewModel() {
         _isScanningTree.value = true
         categoryScanJob = viewModelScope.launch {
             try {
-                val cats = WikiEngine.scanCategoryTree(group.rootCategory)
+                val cats = WikiEngine.scanCategoryTrees(listOf(group.rootCategory) + group.subCategories)
                 currentCoroutineContext().ensureActive()
                 if (scanVersion != categoryScanVersion || _selectedGroup.value != group) return@launch
                 _subCategories.value = cats
@@ -383,6 +376,7 @@ class SearchViewModel : ViewModel() {
     }
 
     private fun cancelCategoryScan() {
+        fileSelection.close()
         categoryScanJob?.cancel()
         categoryScanJob = null
         categoryScanVersion++
@@ -421,54 +415,31 @@ class SearchViewModel : ViewModel() {
     // ── 分类文件选择对话框 ──
 
     fun openFileDialog(cat: String) {
-        _dialogCategoryName.value = cat
-        _dialogFileList.value = emptyList()
-        _dialogSelectedUrls.value = emptySet()
-        _showFileDialog.value = true
-        _dialogIsLoading.value = true
         val selectionMode = _searchMode.value
-        viewModelScope.launch {
-            try {
-                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = selectionMode == SearchMode.VOICE_ONLY)
-                _dialogFileList.value = files
-                val manual = manualSelectionsByMode[selectionMode]?.get(cat)
-                _dialogSelectedUrls.value = manual?.map { it.second }?.toSet()
-                    ?: files.map { it.second }.toSet()
-            } catch (e: Exception) {
-                onLog?.invoke("加载分类文件失败: ${e.message}")
-            } finally {
-                _dialogIsLoading.value = false
-            }
-        }
+        if (cat !in _subCategories.value) return
+        fileSelection.open(cat, selectionMode, manualSelectionsByMode[selectionMode]?.get(cat))
     }
 
-    fun closeFileDialog() { _showFileDialog.value = false }
+    fun retryFileDialog() { if (showFileDialog.value) openFileDialog(dialogCategoryName.value) }
+    fun closeFileDialog() = fileSelection.close()
 
     fun toggleDialogFileSelection(url: String) {
-        val current = _dialogSelectedUrls.value.toMutableSet()
-        if (url in current) current.remove(url) else current.add(url)
-        _dialogSelectedUrls.value = current
+        fileSelection.toggle(url)
     }
 
     fun selectAllDialogFiles() {
-        _dialogSelectedUrls.value = _dialogFileList.value.map { it.second }.toSet()
+        fileSelection.selectAll()
     }
 
-    fun clearDialogSelection() { _dialogSelectedUrls.value = emptySet() }
+    fun clearDialogSelection() = fileSelection.clear()
 
     fun invertDialogSelection() {
-        val current = _dialogSelectedUrls.value
-        _dialogSelectedUrls.value = _dialogFileList.value
-            .map { it.second }
-            .filterNot { it in current }
-            .toSet()
+        fileSelection.invert()
     }
 
     fun confirmFileDialog() {
-        val cat = _dialogCategoryName.value
-        val selectedFiles = _dialogFileList.value.filter { it.second in _dialogSelectedUrls.value }
         val selectionMode = _searchMode.value
-        _showFileDialog.value = false
+        val (cat, selectedFiles) = fileSelection.confirm(selectionMode) ?: return
 
         val selections = manualSelectionsByMode.getOrPut(selectionMode) { mutableMapOf() }
         selections[cat] = selectedFiles

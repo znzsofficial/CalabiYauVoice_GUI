@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import util.buildWikiUrl
 import util.executeRequest
 import java.text.SimpleDateFormat
@@ -208,7 +209,7 @@ object WikiUserApi {
      */
     private fun fetchWithCookies(url: String, cookies: String): ApiResult<UserInfo?> {
         return fetchJsonWithCookies(url, cookies, "解析用户信息失败") {
-            json.decodeFromString<UserInfoResponse>(it).query?.userinfo
+            parseUserInfoJson(it)
         }
     }
 
@@ -236,7 +237,7 @@ object WikiUserApi {
                         ApiResult.Error("返回了非 JSON 页面，可能未登录或被网关拦截")
                     else -> {
                         try {
-                            ApiResult.Success(transform(body))
+                            decodeWikiQueryPayload(body, parseErrorMessage) { transform(it) }
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
@@ -251,6 +252,17 @@ object WikiUserApi {
             ApiResult.Error(e.message ?: "网络请求失败")
         }
     }
+
+    internal fun parseUserInfoJson(body: String): UserInfo =
+        checkNotNull(json.decodeFromString<UserInfoResponse>(body).query?.userinfo) { "响应缺少用户身份" }
+
+    internal fun <T> decodeWikiQueryPayload(body: String, errorMessage: String, transform: (String) -> T): ApiResult<T> = try {
+        val root = json.parseToJsonElement(body) as? JsonObject
+        if (root == null || root["error"] != null || root["query"] !is JsonObject) {
+            ApiResult.Error("Wiki 接口暂时不可用或响应缺少查询结果")
+        } else ApiResult.Success(transform(body))
+    } catch (e: CancellationException) { throw e }
+    catch (_: Exception) { ApiResult.Error(errorMessage) }
 
     /** ISO 8601 时间戳转本地可读格式 */
     fun formatTimestamp(ts: String): String {

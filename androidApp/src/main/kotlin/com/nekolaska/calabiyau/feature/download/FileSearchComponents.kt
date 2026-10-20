@@ -260,7 +260,9 @@ fun FileSelectionSheet(
     onClear: () -> Unit,
     onInvert: () -> Unit,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    error: String? = null,
+    onRetry: () -> Unit = {}
 ) {
     var previewImage by remember { mutableStateOf<Pair<String, String>?>(null) }
     var searchKeyword by remember { mutableStateOf("") }
@@ -432,6 +434,14 @@ fun FileSelectionSheet(
                         }
                     }
                 }
+                error != null -> {
+                    Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(error, color = MaterialTheme.colorScheme.error)
+                        OutlinedButton(onClick = onRetry) { Text("重试加载") }
+                    }
+                }
                 filteredFiles.isEmpty() -> {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -476,7 +486,7 @@ fun FileSelectionSheet(
                     .fillMaxWidth()
                     .height(56.dp)
                     .padding(horizontal = 24.dp),
-                enabled = !isLoading,
+                enabled = !isLoading && error == null,
                 shape = smoothCornerShape(28.dp)
             ) {
                 Icon(Icons.Default.Check, null)

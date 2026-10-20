@@ -6,6 +6,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -14,8 +16,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import java.io.File
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
@@ -147,20 +151,30 @@ object WikiEngineCore {
         rootCategory: String,
         fetchStringFn: suspend (String) -> String?,
         jsonParser: Json
+    ): List<String> = scanCategoryTrees(listOf(rootCategory), fetchStringFn, jsonParser)
+
+    /** Search families are name-based and need not be linked in the Wiki category tree. */
+    suspend fun scanCategoryTrees(
+        roots: List<String>,
+        fetchStringFn: suspend (String) -> String?,
+        jsonParser: Json
     ): List<String> = withContext(Dispatchers.IO) {
+        val seeds = roots.distinct()
         val found = ConcurrentHashMap.newKeySet<String>()
-        found.add(rootCategory)
-        var currentLayer = listOf(rootCategory)
+        found.addAll(seeds)
+        val semaphore = Semaphore(4)
+        var currentLayer = seeds
         while (currentLayer.isNotEmpty()) {
             val nextLayer = currentLayer.map { cat ->
-                async { getCategoryMembers(cat, 14, fetchStringFn, jsonParser) }
+                async {
+                    semaphore.acquire()
+                    try { getCategoryMembers(cat, 14, fetchStringFn, jsonParser) }
+                    finally { semaphore.release() }
+                }
             }.awaitAll().flatten().filter { found.add(it) }
             currentLayer = nextLayer
         }
-        val list = found.toMutableList()
-        list.sort()
-        if (list.remove(rootCategory)) list.add(0, rootCategory)
-        list
+        seeds + (found - seeds.toSet()).sorted()
     }
 
     /**
@@ -263,7 +277,7 @@ object WikiEngineCore {
         val uniqueFiles = files.distinctBy { it.second }
         val total = uniqueFiles.size
         if (total == 0) return@withContext emptyList()
-        val normalizedDir = saveDir.absoluteFile.normalize()
+        val normalizedDir = saveDir.canonicalFile
         val directoryLock = downloadDirectoryLocks.computeIfAbsent(normalizedDir.path.lowercase()) { Mutex() }
 
         directoryLock.withLock {
@@ -277,8 +291,8 @@ object WikiEngineCore {
                 ?.mapTo(HashSet()) { it.name.lowercase() }
                 ?: HashSet()
             val downloads = uniqueFiles.map { (name, url) ->
-                manifest[url]?.let { mappedName ->
-                    val mappedTarget = File(normalizedDir, mappedName).absoluteFile.normalize()
+                manifest[url]?.let { entry ->
+                    val mappedTarget = File(normalizedDir, entry.name).absoluteFile.normalize()
                     if (mappedTarget.parentFile == normalizedDir) {
                         usedNames.add(mappedTarget.name.lowercase())
                         return@map url to mappedTarget
@@ -304,7 +318,7 @@ object WikiEngineCore {
                 }
                 val target = File(normalizedDir, targetName).absoluteFile.normalize()
                 if (target.parentFile != normalizedDir) throw IOException("Unsafe download target: $targetName")
-                manifest[url] = target.name
+                manifest[url] = DownloadManifestEntry(target.name)
                 url to target
             }
             writeDownloadManifest(normalizedDir, manifest)
@@ -312,18 +326,32 @@ object WikiEngineCore {
             val semaphore = Semaphore(maxConcurrency)
             val counter = AtomicInteger(0)
             val failures = ConcurrentLinkedQueue<String>()
+            val progressLock = Mutex()
+            val expectedFiles = manifest.toMap()
             downloads.map { (url, targetFile) ->
                 launch(Dispatchers.IO) {
                     semaphore.acquire()
                     try {
-                        if (!targetFile.isFile || targetFile.length() == 0L) {
+                        val saved = expectedFiles[url]
+                        val existingHash = if (saved?.sha256 != null && targetFile.isFile && targetFile.length() > 0 &&
+                            targetFile.length() == saved.size) fileSha256(targetFile) else null
+                        val valid = existingHash != null && existingHash == saved?.sha256
+                        if (!valid) {
                             if (targetFile.exists() && !targetFile.delete()) {
                                 throw IOException("Could not replace incomplete file: ${targetFile.name}")
                             }
                             downloadFileFn(url, targetFile)
                         }
-                        val current = counter.incrementAndGet()
-                        onProgress(current, total, targetFile.name)
+                        currentCoroutineContext().ensureActive()
+                        if (!targetFile.isFile || targetFile.length() == 0L) throw IOException("Download produced no file: ${targetFile.name}")
+                        val verified = DownloadManifestEntry(targetFile.name, targetFile.length(),
+                            if (valid) existingHash else fileSha256(targetFile))
+                        progressLock.withLock {
+                            manifest[url] = verified
+                            writeDownloadManifest(normalizedDir, manifest)
+                            val current = counter.incrementAndGet()
+                            onProgress(current, total, targetFile.name)
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -342,30 +370,49 @@ object WikiEngineCore {
         }
     }
 
-    private fun readDownloadManifest(directory: File): LinkedHashMap<String, String> {
-        val result = LinkedHashMap<String, String>()
+    private data class DownloadManifestEntry(val name: String, val size: Long? = null, val sha256: String? = null)
+
+    private suspend fun fileSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun readDownloadManifest(directory: File): LinkedHashMap<String, DownloadManifestEntry> {
+        val result = LinkedHashMap<String, DownloadManifestEntry>()
         val file = File(directory, DOWNLOAD_MANIFEST)
         if (!file.isFile) return result
         runCatching {
             file.forEachLine { line ->
-                val separator = line.indexOf('\t')
-                if (separator <= 0 || separator == line.lastIndex) return@forEachLine
-                val targetName = line.substring(0, separator)
-                val url = line.substring(separator + 1)
-                if (sanitizeFileName(targetName) == targetName && url.isNotBlank()) result[url] = targetName
+                val parts = line.split('\t')
+                if (parts.size < 2) return@forEachLine
+                val targetName = parts[0]
+                val url = parts[1]
+                if (sanitizeFileName(targetName) == targetName && url.isNotBlank()) {
+                    val sha = parts.getOrNull(3)?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
+                    result[url] = DownloadManifestEntry(targetName, parts.getOrNull(2)?.toLongOrNull(), sha)
+                }
             }
         }
         return result
     }
 
-    private fun writeDownloadManifest(directory: File, manifest: Map<String, String>) {
+    private fun writeDownloadManifest(directory: File, manifest: Map<String, DownloadManifestEntry>) {
         val file = File(directory, DOWNLOAD_MANIFEST)
         val temp = File(directory, "$DOWNLOAD_MANIFEST.tmp")
         val content = manifest.entries
             .sortedBy { it.key }
             .joinToString("\n", postfix = if (manifest.isEmpty()) "" else "\n") { (url, target) ->
                 require(!url.contains('\t') && !url.contains('\r') && !url.contains('\n')) { "Invalid download URL" }
-                "$target\t$url"
+                "${target.name}\t$url\t${target.size ?: ""}\t${target.sha256 ?: ""}"
         }
         temp.writeText(content)
         try {
@@ -402,15 +449,19 @@ object WikiEngineCore {
             val resolvedName = if (nameCache.cache.isNotEmpty()) {
                 when {
                     nameCache.cache.contains(coreName) -> coreName
-                    else -> nameCache.cache.firstOrNull { coreName.startsWith(it) }
-                        ?: nameCache.cache.firstOrNull { it.startsWith(coreName) }
+                    else -> nameCache.cache.sortedWith(compareByDescending<String> { it.length }.thenBy { it })
+                        .firstOrNull { coreName.startsWith(it) }
+                        ?: nameCache.cache.sorted().firstOrNull { it.startsWith(coreName) }
                         ?: coreName
                 }
             } else coreName
             groups.add(CharacterGroup(resolvedName, originalName, familyMembers))
             assigned.addAll(familyMembers)
         }
-        return groups.sortedBy { it.characterName }
+        return groups.groupBy { it.characterName }.map { (name, family) ->
+            CharacterGroup(name, family.first().rootCategory,
+                family.flatMap { listOf(it.rootCategory) + it.subCategories }.distinct())
+        }.sortedBy { it.characterName }
     }
 
     internal suspend fun fetchPagedCategoryMembers(
@@ -481,6 +532,10 @@ object WikiEngineCore {
     private fun requireWikiJson(body: String?, action: String): String {
         if (body.isNullOrBlank()) throw WikiQueryFailure("${action}请求失败")
         if (body.trimStart().startsWith("<")) throw WikiQueryFailure("${action}被拦截")
+        val root = try { SharedJson.parseToJsonElement(body).jsonObject }
+            catch (e: Exception) { throw WikiQueryFailure("${action}响应不是有效 JSON", e) }
+        root["error"]?.let { throw WikiQueryFailure("${action}接口错误: $it") }
+        if ("query" !in root && "batchcomplete" !in root) throw WikiQueryFailure("${action}响应缺少查询结果")
         return body
     }
 }

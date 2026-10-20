@@ -232,7 +232,7 @@ object OfflineCache {
      * 带缓存的网络请求封装。
      *
      * 行为：
-     * 1. `forceRefresh` → 先 [invalidate]，再跳过内存 inflight
+     * 1. `forceRefresh` → 更新写入代数但保留旧磁盘副本，使用独立 inflight
      * 2. 并发相同 key 的请求共享同一个 [CompletableDeferred]（请求去重）
      * 3. 有网络：网络请求成功则写入并返回；失败则回退到任何磁盘缓存（即便已过期）
      * 4. 无网络：直接读磁盘缓存（即便已过期）
@@ -243,6 +243,7 @@ object OfflineCache {
         type: Type,
         key: String,
         forceRefresh: Boolean = false,
+        validatePayload: (String) -> Boolean = { true },
         networkFetch: suspend () -> String?
     ): CacheResult? {
         // 强制刷新走独立命名空间，避免搭便车拿到旧数据；
@@ -261,12 +262,16 @@ object OfflineCache {
         return try {
             cacheLock.withLock {
                 val cacheGeneration = if (forceRefresh) {
-                    invalidate(type, key)
-                    generation(type, key)
+                    cacheMutationLock.withLock {
+                        keyGeneration(type, key).incrementAndGet()
+                        generation(type, key)
+                    }
                 } else {
                     val currentGeneration = generation(type, key)
                     if (currentGeneration != requestedGeneration) {
-                        getEntry(type, key)?.let {
+                        getEntry(type, key)?.takeIf { entry ->
+                            runCatching { validatePayload(entry.content) }.getOrDefault(false)
+                        }?.let {
                             val cachedResult = it.toCacheResult()
                             deferred.complete(cachedResult)
                             return@withLock cachedResult
@@ -274,7 +279,7 @@ object OfflineCache {
                     }
                     currentGeneration
                 }
-                val result = doFetch(type, key, cacheGeneration, networkFetch)
+                val result = doFetch(type, key, cacheGeneration, validatePayload, networkFetch)
                 if (result == null && ::appContext.isInitialized) {
                     CrashContextStore.record(
                         appContext,
@@ -313,6 +318,7 @@ object OfflineCache {
         type: Type,
         key: String,
         cacheGeneration: CacheGeneration,
+        validatePayload: (String) -> Boolean,
         networkFetch: suspend () -> String?
     ): CacheResult? {
         val isOnline = try {
@@ -321,9 +327,8 @@ object OfflineCache {
             true
         }
 
-        if (isOnline) {
-            // 有网络：先尝试网络请求
-            val fresh = try {
+        return fetchValidatedCachePayload(isOnline, network = {
+            try {
                 networkFetch()
             } catch (e: CancellationException) {
                 throw e
@@ -337,23 +342,8 @@ object OfflineCache {
                 }
                 null
             }
-            if (fresh != null) {
-                putIfCurrent(type, key, fresh, cacheGeneration)
-                return CacheResult(payload = fresh, isFromCache = false, ageMs = 0L)
-            }
-            if (::appContext.isInitialized) {
-                CrashContextStore.record(
-                    appContext,
-                    "OfflineCache.doFetch",
-                    "networkFetch returned null | type=${type.dir} | key=$key | fallback=cache"
-                )
-            }
-            // 网络失败，回退到任意磁盘缓存（包含过期条目）
-            return getEntry(type, key)?.toCacheResult()
-        }
-
-        // 无网络：读任意磁盘缓存（包含过期条目）
-        return getEntry(type, key)?.toCacheResult()
+        }, read = { getEntry(type, key)?.toCacheResult() },
+            publish = { putIfCurrent(type, key, it, cacheGeneration) }, validate = validatePayload)
     }
 
     private fun CacheEntry.toCacheResult(): CacheResult =

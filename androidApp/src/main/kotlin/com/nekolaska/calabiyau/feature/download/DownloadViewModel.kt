@@ -9,13 +9,14 @@ import com.nekolaska.calabiyau.NotificationHelper
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.network.NetworkMonitor
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
-import data.CharacterGroup
 import data.DownloadRecord
 import data.sanitizeFileName
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
-import portrait.PortraitCostume
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /** Android 端下载记录持久化辅助 */
@@ -26,31 +27,6 @@ private object DownloadRecordStore {
     fun saveAll(records: List<DownloadRecord>) {
         AppPrefs.downloadHistoryJson = DownloadRecord.encodeToJson(records)
     }
-}
-
-/**
- * 下载任务描述 —— 从 UI 层收集好所有需要的数据后传入，
- * 避免 DownloadViewModel 直接依赖 SearchViewModel / PortraitViewModel。
- */
-sealed class DownloadTask {
-    /** 立绘下载 */
-    data class Portrait(
-        val characterName: String,
-        val costume: PortraitCostume
-    ) : DownloadTask()
-
-    /** 文件搜索结果下载 */
-    data class FileSearch(
-        val files: List<Pair<String, String>>   // name to url
-    ) : DownloadTask()
-
-    /** 分类下载（语音 / 全分类） */
-    data class Category(
-        val group: CharacterGroup,
-        val checkedCategories: List<String>,
-        val manualSelectionMap: Map<String, List<Pair<String, String>>>,
-        val voiceOnly: Boolean
-    ) : DownloadTask()
 }
 
 /**
@@ -68,8 +44,12 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     /** 一次性错误事件 */
-    private val _errorEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val errorEvent: SharedFlow<String> = _errorEvent.asSharedFlow()
+    private val _errorEvent = MutableSharedFlow<ResourceDownloadFailure>(extraBufferCapacity = 1)
+    val errorEvent = _errorEvent.asSharedFlow()
+    private val _recoverableRequest = MutableStateFlow(ResourceDownloadRequest.restore(AppPrefs.pendingResourceDownload))
+    val recoverableRequest = _recoverableRequest.asStateFlow()
+    private var downloadJob: Job? = null
+    private var activeConcurrency = 1
 
     // ========== 下载状态 ==========
     private val _isDownloading = MutableStateFlow(false)
@@ -103,7 +83,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun addLog(msg: String) {
-        _logs.value += msg
+        _logs.update { (it + msg).takeLast(1000) }
     }
 
     private fun addDownloadRecord(record: DownloadRecord) {
@@ -133,30 +113,58 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
      * 启动下载。由 UI 层从 SearchViewModel / PortraitViewModel 收集数据后构造 [DownloadTask] 传入。
      */
     fun startDownload(task: DownloadTask) {
+        startRequest(ResourceDownloadRequest.snapshot(task, AppPrefs.savePath, AppPrefs.maxConcurrency))
+    }
+
+    fun retryDownload(request: ResourceDownloadRequest? = _recoverableRequest.value) {
+        request?.let(::startRequest)
+    }
+
+    fun cancelDownload() { downloadJob?.cancel() }
+
+    fun discardRecoverableDownload() {
         if (_isDownloading.value) return
-        if (!isNetworkAvailable.value) {
-            _errorEvent.tryEmit("无网络连接，无法开始下载")
-            addLog("[错误] 下载失败: 无网络连接")
-            return
-        }
+        _isDownloading.value = true
+        _downloadStatusText.value = "清除任务记录..."
         viewModelScope.launch {
-            _isDownloading.value = true
+            try {
+                if (withContext(Dispatchers.IO) { AppPrefs.persistResourceDownload(null) }) _recoverableRequest.value = null
+            } finally { _isDownloading.value = false; _downloadStatusText.value = "" }
+        }
+    }
+
+    private fun startRequest(request: ResourceDownloadRequest) {
+        if (_isDownloading.value) return
+        _isDownloading.value = true // Claim synchronously, before launch, to reject double taps.
+        _recoverableRequest.value = request
+        activeConcurrency = request.maxConcurrency
+        downloadJob = viewModelScope.launch {
             _downloadProgress.value = 0f
             _downloadStatusText.value = "准备下载..."
 
             try {
-                val baseDir = File(AppPrefs.savePath)
+                if (!withContext(Dispatchers.IO) { AppPrefs.persistResourceDownload(request.encode()) }) {
+                    throw java.io.IOException("无法保存下载任务，请重试")
+                }
+                _recoverableRequest.value = request
+                if (!NetworkMonitor.isNetworkAvailable(getApplication())) throw java.io.IOException("无网络连接")
+                val baseDir = File(request.savePath)
 
-                when (task) {
+                when (val task = request.task) {
                     is DownloadTask.Portrait -> downloadPortrait(task, baseDir)
                     is DownloadTask.FileSearch -> downloadFileSearch(task, baseDir)
                     is DownloadTask.Category -> downloadCategory(task, baseDir)
                 }
+                if (!withContext(Dispatchers.IO) { AppPrefs.persistResourceDownload(null) }) {
+                    throw java.io.IOException("文件已完成，但无法清除任务记录；可重试核验")
+                }
+                _recoverableRequest.value = null
             } catch (e: CancellationException) {
+                addLog("下载已取消；已完成文件保留，可继续原任务")
                 throw e
             } catch (e: Exception) {
                 val msg = if (!isNetworkAvailable.value) "网络连接失败，下载中断" else "下载失败: ${e.message}"
-                _errorEvent.tryEmit(msg)
+                _errorEvent.tryEmit(ResourceDownloadFailure(msg, request))
                 addLog("[错误] 下载失败: ${e.message}")
                 addDownloadRecord(DownloadRecord(
                     name = "下载失败",
@@ -168,6 +176,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             } finally {
                 _isDownloading.value = false
                 _downloadStatusText.value = ""
+                downloadJob = null
             }
         }
     }
@@ -193,14 +202,14 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         val downloadedFiles = WikiEngine.downloadSpecificFiles(
             files = files,
             saveDir = saveDir,
-            maxConcurrency = AppPrefs.maxConcurrency,
+            maxConcurrency = activeConcurrency,
             onLog = { addLog(it) },
             onProgress = { current, total, name ->
                 _downloadProgress.value = current.toFloat() / total
                 _downloadStatusText.value = "[$current/$total] $name"
             }
         )
-        scanMediaFiles(saveDir)
+        scanMediaFiles(downloadedFiles)
         addLog("下载完成！保存至: ${saveDir.absolutePath}")
         addDownloadRecord(DownloadRecord(
             name = "$characterName / ${costume.name}",
@@ -221,14 +230,14 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         val downloadedFiles = WikiEngine.downloadSpecificFiles(
             files = files,
             saveDir = saveDir,
-            maxConcurrency = AppPrefs.maxConcurrency,
+            maxConcurrency = activeConcurrency,
             onLog = { addLog(it) },
             onProgress = { current, total, name ->
                 _downloadProgress.value = current.toFloat() / total
                 _downloadStatusText.value = "[$current/$total] $name"
             }
         )
-        scanMediaFiles(saveDir)
+        scanMediaFiles(downloadedFiles)
         addLog("下载完成！保存至: ${saveDir.absolutePath}")
         addDownloadRecord(DownloadRecord(
             name = "文件搜索 (${downloadedFiles.size}个)",
@@ -270,7 +279,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             val downloadedFiles = WikiEngine.downloadSpecificFiles(
                 files = files,
                 saveDir = saveDir,
-                maxConcurrency = AppPrefs.maxConcurrency,
+                maxConcurrency = activeConcurrency,
                 onLog = { addLog(it) },
                 onProgress = { current, _, name ->
                     val overallCurrent = progressOffset + current
@@ -280,8 +289,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             )
             progressOffset += files.size
             totalDownloaded += downloadedFiles.size
+            scanMediaFiles(downloadedFiles)
         }
-        scanMediaFiles(charDir)
         addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")
         addDownloadRecord(DownloadRecord(
             name = group.characterName,
@@ -292,8 +301,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         ))
     }
 
-    private fun scanMediaFiles(dir: File) {
-        if (!dir.exists()) return
+    private suspend fun scanMediaFiles(files: List<File>) = withContext(Dispatchers.IO) {
         val imageExtensions = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp")
         val app = getApplication<Application>()
         val pathsBatch = ArrayList<String>(MEDIA_SCAN_BATCH_SIZE)
@@ -312,7 +320,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             mimeTypesBatch.clear()
         }
 
-        dir.walkTopDown()
+        files.asSequence().distinctBy { it.absolutePath }
             .filter { it.isFile && it.extension.lowercase() in imageExtensions }
             .forEach { file ->
                 pathsBatch += file.absolutePath

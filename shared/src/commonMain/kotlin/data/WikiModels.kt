@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 // === 搜索结果分组 ===
+@Serializable
 data class CharacterGroup(
     val characterName: String,
     val rootCategory: String,

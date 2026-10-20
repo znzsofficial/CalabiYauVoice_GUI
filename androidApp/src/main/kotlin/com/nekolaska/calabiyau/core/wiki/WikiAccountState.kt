@@ -53,7 +53,8 @@ internal class WikiAccountState(
                 val result = fetchUser(cookie)
                 if (!isCurrent(token, cookie)) return@launch
                 if (result is ApiResult.Error) { nextRetryAt = now() + 20_000; return@launch }
-                val user = (result as? ApiResult.Success)?.value?.takeIf { it.isLoggedIn } ?: return@launch
+                val user = (result as? ApiResult.Success)?.value?.takeIf { it.isLoggedIn }
+                if (user == null) { nextRetryAt = now() + 20_000; return@launch }
                 userInfo = user
                 val custom = fetchProfile(user.id)
                 if (isCurrent(token, cookie) && profileToken == profileRevision && custom is ApiResult.Success) {

@@ -30,6 +30,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.media.AudioPlayButton
 import com.nekolaska.calabiyau.core.media.AudioPlayerManager
@@ -41,6 +43,7 @@ import com.nekolaska.calabiyau.core.ui.ZoomableImage
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -84,18 +87,22 @@ fun FileManagerScreen(
 ) {
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
-    val rootDir = remember(rootPath) { File(rootPath).absoluteFile }
+    val rootDir = remember(rootPath) { File(rootPath).absoluteFile.normalize() }
     var currentDir by remember(rootPath, initialPath) {
         mutableStateOf(
             initialPath
-                ?.let(::File)
-                ?.takeIf { it.exists() && it.isWithinRoot(rootDir) }
+                ?.let { File(it).absoluteFile.normalize() }
+                ?.takeIf { it.isDirectory && runCatching { it.isWithinManagedRoot(rootDir) }.getOrDefault(false) }
                 ?: rootDir
         )
     }
     var files by remember { mutableStateOf<List<File>>(emptyList()) }
-    var apkInfoByPath by remember { mutableStateOf<Map<String, ApkFileInfo>>(emptyMap()) }
+    var entries by remember { mutableStateOf<List<ManagedFileEntry>>(emptyList()) }
+    var metadataByPath by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var loadedDirectory by remember { mutableStateOf<File?>(null) }
+    var isMutating by remember { mutableStateOf(false) }
     var refreshCounter by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
@@ -119,29 +126,42 @@ fun FileManagerScreen(
     }
 
     // 切换目录时退出多选模式
-    LaunchedEffect(currentDir) {
+    LaunchedEffect(currentDir, directoryPickerConfig?.pickMode, directoryPickerConfig?.allowMultiSelect) {
         isSelectionMode = false
         selectedFiles = emptySet()
+        selectedFile = null
+        showRenameDialog = false; showDeleteDialog = false; showBatchDeleteDialog = false
+        showGallery = false
     }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refreshCounter++ }
 
     // 加载当前目录文件列表
     LaunchedEffect(currentDir, refreshCounter) {
         isLoading = true
-        val snapshot = withContext(Dispatchers.IO) {
-            val dir = currentDir
-            if (!dir.exists()) dir.mkdirs()
-            val list = dir.listFiles()?.toList() ?: emptyList()
-            // 文件夹在前，文件在后，各自按名称排序
-            val sortedFiles = list.sortedWith(compareByDescending<File> { it.isDirectory }.thenBy { it.name.lowercase() })
-            val apkInfo = sortedFiles
-                .filter { it.isFile && it.isApkFile() }
-                .mapNotNull { file -> readApkFileInfo(context, file)?.let { info -> file.absolutePath to info } }
-                .toMap()
-            sortedFiles to apkInfo
+        loadError = null
+        try {
+            val directory = currentDir
+            val snapshot = withContext(Dispatchers.IO) {
+                val rows = readManagedDirectory(rootDir, directory)
+                val apks = rows.filter { !it.directory && it.file.isApkFile() }
+                    .mapNotNull { row -> readApkFileInfo(context, row.file)?.let { row.file.absolutePath to it } }.toMap()
+                rows to rows.associate { it.file.absolutePath to fileMetaText(it, apks[it.file.absolutePath]) }
+            }
+            entries = snapshot.first
+            files = entries.map { it.file }
+            metadataByPath = snapshot.second
+            loadedDirectory = directory
+            selectedFiles = selectedFiles.intersect(files.map { it.absolutePath }.toSet())
+            if (selectedFiles.isEmpty()) isSelectionMode = false
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
+            files = emptyList(); entries = emptyList(); metadataByPath = emptyMap()
+            selectedFiles = emptySet(); isSelectionMode = false
+            loadError = e.message ?: "读取目录失败，请检查存储权限"
+        } finally {
+            isLoading = false
         }
-        files = snapshot.first
-        apkInfoByPath = snapshot.second
-        isLoading = false
     }
 
     val isPickerMode = directoryPickerConfig != null && (onDirectoryPicked != null || onFilesPicked != null)
@@ -150,6 +170,23 @@ fun FileManagerScreen(
     val pickDirectory = if (pickerMode == FileManagerPickerMode.DIRECTORY) onDirectoryPicked else null
     val pickFiles = if (pickerMode == FileManagerPickerMode.FILES) onFilesPicked else null
     val canPickFiles = pickerMode == FileManagerPickerMode.FILES && pickFiles != null
+    val eligibleFiles = selectableManagedFiles(entries, isPickerMode)
+    val fileOnlyPaths = remember(entries) { entries.filter { !it.directory }.map { it.file.absolutePath }.toSet() }
+
+    fun submitPickedFiles(selection: List<File>) {
+        if (isLoading || isMutating || loadError != null || loadedDirectory != currentDir) return
+        isMutating = true
+        scope.launch {
+            try {
+                val checked = withContext(Dispatchers.IO) {
+                    validateManagedFileSelection(rootDir, selection, pickerConfig?.allowMultiSelect == true)
+                }
+                pickFiles?.invoke(checked)
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { showSnack(e.message ?: "所选文件不可用"); refreshCounter++ }
+            finally { isMutating = false }
+        }
+    }
 
     fun clearSelection() {
         isSelectionMode = false
@@ -166,25 +203,22 @@ fun FileManagerScreen(
     }
 
     fun toggleAllSelection() {
-        selectedFiles = if (selectedFiles.size == files.size && files.isNotEmpty()) {
+        selectedFiles = if (selectedFiles.size == eligibleFiles.size && eligibleFiles.isNotEmpty()) {
             emptySet()
         } else {
-            files.map { it.absolutePath }.toSet()
+            eligibleFiles.map { it.absolutePath }.toSet()
         }
     }
 
     // 返回键处理：多选模式下先退出多选，子目录时返回上级，在根目录时退出
     val isAtRoot = currentDir.isAtSamePath(rootDir)
     BackHandler(enabled = isSelectionMode) {
-        if (directoryPickerConfig?.pickMode == FileManagerPickerMode.FILES && onFilesPicked != null) {
-            onBack()
-        } else {
-            clearSelection()
-        }
+        clearSelection()
     }
     BackHandler(enabled = !isAtRoot && !isSelectionMode) {
         currentDir = currentDir.parentFile ?: currentDir
     }
+    BackHandler(enabled = isAtRoot && !isSelectionMode) { onBack() }
 
     // 多选模式下选中的文件对象列表
     val selectedFileObjects by remember(selectedFiles, files) {
@@ -221,7 +255,7 @@ fun FileManagerScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             // 全选 / 取消全选
-                            val allSelected = selectedFiles.size == files.size && files.isNotEmpty()
+                            val allSelected = selectedFiles.size == eligibleFiles.size && eligibleFiles.isNotEmpty()
                             IconButton(onClick = {
                                 toggleAllSelection()
                             }) {
@@ -230,26 +264,25 @@ fun FileManagerScreen(
                                     if (allSelected) "取消全选" else "全选"
                                 )
                             }
-                            // 批量分享（仅文件，不含文件夹）
-                            val shareableCount = selectedFileObjects.count { it.isFile }
-                            IconButton(
-                                onClick = { shareFiles(context, selectedFileObjects.filter { it.isFile }, showSnack) },
-                                enabled = shareableCount > 0
-                            ) {
-                                Icon(Icons.Outlined.Share, "批量分享")
-                            }
-                            // 批量删除
-                            IconButton(
-                                onClick = { showBatchDeleteDialog = true },
-                                enabled = selectedFiles.isNotEmpty()
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Delete, "批量删除",
-                                    tint = if (selectedFiles.isNotEmpty())
-                                        MaterialTheme.colorScheme.error
-                                    else
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                )
+                            if (!isPickerMode) {
+                                val shareableFiles = entries
+                                    .filter { !it.directory && it.file.absolutePath in selectedFiles }.map { it.file }
+                                IconButton(
+                                    onClick = { shareFiles(context, shareableFiles, showSnack) },
+                                    enabled = shareableFiles.isNotEmpty() && !isMutating
+                                ) {
+                                    Icon(Icons.Outlined.Share, "批量分享")
+                                }
+                                IconButton(
+                                    onClick = { showBatchDeleteDialog = true },
+                                    enabled = selectedFiles.isNotEmpty() && !isMutating
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Delete, "批量删除",
+                                        tint = if (selectedFiles.isNotEmpty()) MaterialTheme.colorScheme.error
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -282,7 +315,11 @@ fun FileManagerScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${files.size} 项" + if (!isAtRoot) " · ${
+                                    text = (when {
+                                        loadError != null -> "读取失败"
+                                        isLoading || loadedDirectory != currentDir -> "读取中…"
+                                        else -> "${files.size} 项"
+                                    }) + if (!isAtRoot) " · ${
                                         currentDir.relativePathWithin(rootDir).orEmpty()
                                     }" else "",
                                     style = AppTextStyles.topBarSubtitle,
@@ -291,6 +328,9 @@ fun FileManagerScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+                            IconButton(onClick = { refreshCounter++ }, enabled = !isLoading && !isMutating) {
+                                Icon(Icons.Default.Refresh, "刷新文件列表")
+                            }
                         }
                     }
                 }
@@ -298,15 +338,51 @@ fun FileManagerScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            if (isMutating) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (isPickerMode) {
+                DirectoryPickerBanner(
+                    config = pickerConfig!!,
+                    currentDir = currentDir,
+                    selectedFiles = selectedFileObjects.filter { it.absolutePath in fileOnlyPaths },
+                    enabled = !isLoading && !isMutating && loadError == null && loadedDirectory == currentDir,
+                    onPickCurrentDirectory = {
+                        if (!isLoading && !isMutating && loadError == null && loadedDirectory == currentDir) {
+                            val pickedDirectory = currentDir
+                            isMutating = true
+                            scope.launch {
+                                try {
+                                    val directory = withContext(Dispatchers.IO) {
+                                        require(pickedDirectory.isDirectory && pickedDirectory.isWithinManagedRoot(rootDir)) { "当前目录不可用" }
+                                        pickedDirectory
+                                    }
+                                    pickDirectory?.invoke(directory)
+                                } catch (e: CancellationException) { throw e }
+                                catch (e: Exception) { showSnack(e.message ?: "目录不可用"); refreshCounter++ }
+                                finally { isMutating = false }
+                            }
+                        }
+                    },
+                    onPickSelectedFiles = { submitPickedFiles(selectedFileObjects) }
+                )
+            }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                isLoading -> {
+                isLoading || loadedDirectory != currentDir && loadError == null -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
+                    }
+                }
+                loadError != null -> {
+                    Column(Modifier.fillMaxSize().padding(AppSpacing.screen),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center) {
+                        Text(loadError!!, color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = { refreshCounter++ }) { Text("重试读取") }
                     }
                 }
                 files.isEmpty() -> {
@@ -339,46 +415,36 @@ fun FileManagerScreen(
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
                     ) {
-                        if (isPickerMode) {
-                            item {
-                                DirectoryPickerBanner(
-                                    config = pickerConfig!!,
-                                    currentDir = currentDir,
-                                    selectedFiles = selectedFileObjects,
-                                    onPickCurrentDirectory = { pickDirectory?.invoke(currentDir) },
-                                    onPickSelectedFiles = {
-                                        if (selectedFileObjects.isNotEmpty()) {
-                                            pickFiles?.invoke(selectedFileObjects.filter { it.isFile })
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                        items(files, key = { it.absolutePath }) { file ->
+                        items(entries, key = { it.file.absolutePath }) { entry ->
+                            val file = entry.file
                             val isSelected = file.absolutePath in selectedFiles
                             FileListItem(
                                 file = file,
-                                apkInfo = apkInfoByPath[file.absolutePath],
+                                directory = entry.directory,
+                                metadata = metadataByPath[file.absolutePath].orEmpty(),
+                                showMore = !isPickerMode && !isMutating,
                                 isSelectionMode = isSelectionMode,
                                 isSelected = isSelected,
                                 onClick = {
+                                    if (isMutating || loadedDirectory != currentDir) return@FileListItem
                                     if (isSelectionMode) {
                                         // 多选模式下：点击切换选中
-                                        toggleSelectedPath(file.absolutePath, isSelected)
+                                        if (isPickerMode && entry.directory) showSnack("请选择文件，不能选择文件夹")
+                                        else toggleSelectedPath(file.absolutePath, isSelected)
                                     } else {
-                                        if (file.isDirectory) {
+                                        if (entry.directory) {
                                             currentDir = file
                                         } else if (pickerMode == FileManagerPickerMode.DIRECTORY && isPickerMode) {
                                             showSnack("当前模式仅支持选择目录")
-                                        } else if (canPickFiles && file.isFile) {
+                                        } else if (canPickFiles) {
                                             if (pickerConfig?.allowMultiSelect == true) {
                                                 toggleSelectedPath(file.absolutePath, isSelected)
                                                 isSelectionMode = selectedFiles.isNotEmpty()
                                             } else {
-                                                pickFiles.invoke(listOf(file))
+                                                submitPickedFiles(listOf(file))
                                             }
                                         } else if (file.isImageFile()) {
-                                            val images = files.filter { it.isImageFile() }
+                                            val images = managedGalleryFiles(entries)
                                             galleryImages = images
                                             galleryInitialIndex = images.indexOf(file).coerceAtLeast(0)
                                             showGallery = true
@@ -390,13 +456,18 @@ fun FileManagerScreen(
                                     }
                                 },
                                 onLongClick = {
-                                    if (canPickFiles && file.isFile) {
+                                    if (isMutating || loadedDirectory != currentDir) return@FileListItem
+                                    if (isPickerMode && entry.directory) {
+                                        if (!isSelectionMode) currentDir = file
+                                    } else if (canPickFiles) {
                                         if (pickerConfig?.allowMultiSelect == true) {
                                             isSelectionMode = true
                                             toggleSelectedPath(file.absolutePath, isSelected)
                                         } else {
-                                            pickFiles.invoke(listOf(file))
+                                            submitPickedFiles(listOf(file))
                                         }
+                                    } else if (isPickerMode) {
+                                        showSnack("当前模式仅支持选择目录")
                                     } else if (!isSelectionMode) {
                                         // 长按进入多选模式并选中当前项
                                         enterSelectionWith(file.absolutePath)
@@ -413,13 +484,14 @@ fun FileManagerScreen(
                     }
                 }
             }
+            }
         }
     }
 
     // ── 文件操作菜单 BottomSheet ──
     if (selectedFile != null) {
         val file = selectedFile!!
-        val apkInfo = apkInfoByPath[file.absolutePath]
+        val directory = entries.firstOrNull { it.file == file }?.directory ?: false
         ModalBottomSheet(
             onDismissRequest = { selectedFile = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -436,7 +508,7 @@ fun FileManagerScreen(
                     modifier = Modifier.padding(horizontal = AppSpacing.medium, vertical = AppSpacing.medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FileIcon(file, size = 48)
+                    FileIcon(file, size = 48, directory = directory)
                     Spacer(Modifier.width(AppSpacing.sectionGap))
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -447,7 +519,7 @@ fun FileManagerScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            fileMetaText(file, apkInfo),
+                            metadataByPath[file.absolutePath].orEmpty(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -459,7 +531,7 @@ fun FileManagerScreen(
                 Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // 打开
-                if (file.isFile) {
+                if (!directory) {
                     FileActionItem(
                         icon = Icons.AutoMirrored.Outlined.OpenInNew,
                         label = "打开",
@@ -471,12 +543,12 @@ fun FileManagerScreen(
                 }
 
                 // 预览（仅图片）
-                if (file.isFile && file.isImageFile()) {
+                if (!directory && file.isImageFile()) {
                     FileActionItem(
                         icon = Icons.Outlined.Image,
                         label = "预览",
                         onClick = {
-                            val images = files.filter { it.isFile && it.isImageFile() }
+                            val images = managedGalleryFiles(entries)
                             galleryImages = images
                             galleryInitialIndex = images.indexOf(file).coerceAtLeast(0)
                             showGallery = true
@@ -486,7 +558,7 @@ fun FileManagerScreen(
                 }
 
                 // 播放（仅音频）
-                if (file.isFile && file.isAudioFile()) {
+                if (!directory && file.isAudioFile()) {
                     val isThisPlaying = AudioPlayerManager.playingSource.value == file.absolutePath &&
                             AudioPlayerManager.isPlaying.value
                     FileActionItem(
@@ -504,7 +576,7 @@ fun FileManagerScreen(
                 }
 
                 // 分享
-                if (file.isFile) {
+                if (!directory) {
                     FileActionItem(
                         icon = Icons.Outlined.Share,
                         label = "分享",
@@ -540,7 +612,7 @@ fun FileManagerScreen(
     // ── 重命名对话框 ──
     if (showRenameDialog && selectedFile != null) {
         val file = selectedFile!!
-        var newName by remember { mutableStateOf(file.name) }
+        var newName by remember(file.absolutePath) { mutableStateOf(file.name) }
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
             title = { Text("重命名") },
@@ -558,20 +630,22 @@ fun FileManagerScreen(
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
-                        val target = File(file.parent, newName)
-                        if (target.exists()) {
-                            showSnack("同名文件已存在")
-                        } else if (file.renameTo(target)) {
-                            showSnack("已重命名")
-                            refreshCounter++
-                            selectedFile = null
-                            showRenameDialog = false
-                        } else {
-                            showSnack("重命名失败")
+                        if (!isMutating) {
+                            val requestedName = newName
+                            isMutating = true
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { renameManagedFile(rootDir, file, requestedName) }
+                                    showSnack("已重命名")
+                                    selectedFile = null; showRenameDialog = false
+                                } catch (e: CancellationException) { throw e }
+                                catch (e: Exception) { showSnack(e.message ?: "重命名失败") }
+                                finally { isMutating = false; refreshCounter++ }
+                            }
                         }
                     },
-                    enabled = newName.isNotBlank() && newName != file.name
-                ) { Text("确定") }
+                    enabled = validManagedFileName(newName) && newName != file.name && !isMutating
+                ) { Text(if (isMutating) "处理中…" else "确定") }
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false }) { Text("取消") }
@@ -587,7 +661,7 @@ fun FileManagerScreen(
             title = { Text("删除确认") },
             text = {
                 Text(
-                    if (file.isDirectory) "确定要删除文件夹「${file.name}」及其所有内容吗？"
+                    if (entries.any { it.file == file && it.directory }) "确定要删除文件夹「${file.name}」及其所有内容吗？"
                     else "确定要删除「${file.name}」吗？"
                 )
             },
@@ -595,18 +669,17 @@ fun FileManagerScreen(
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
+                        if (isMutating) return@FilledTonalButton
+                        isMutating = true
                         showDeleteDialog = false
                         selectedFile = null
                         scope.launch {
-                            val success = withContext(Dispatchers.IO) {
-                                forceDelete(file)
-                            }
-                            if (success) {
-                                showSnack("已删除")
-                                refreshCounter++
-                            } else {
-                                showSnack("删除失败，请检查存储权限")
-                            }
+                            try {
+                                val success = withContext(Dispatchers.IO) { deleteManagedFile(rootDir, file, ::isAndroidFileLink) }
+                                showSnack(if (success) "已删除" else "部分或全部删除失败，请检查存储权限")
+                            } catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { showSnack(e.message ?: "删除失败") }
+                            finally { isMutating = false; refreshCounter++ }
                         }
                     },
                     colors = ButtonDefaults.filledTonalButtonColors(
@@ -624,7 +697,7 @@ fun FileManagerScreen(
     // ── 批量删除确认对话框 ──
     if (showBatchDeleteDialog && selectedFiles.isNotEmpty()) {
         val count = selectedFiles.size
-        val folderCount = selectedFileObjects.count { it.isDirectory }
+        val folderCount = entries.count { it.directory && it.file.absolutePath in selectedFiles }
         val fileCount = count - folderCount
         AlertDialog(
             onDismissRequest = { showBatchDeleteDialog = false },
@@ -646,24 +719,31 @@ fun FileManagerScreen(
             confirmButton = {
                 FilledTonalButton(
                     onClick = {
+                        if (isMutating) return@FilledTonalButton
+                        isMutating = true
                         showBatchDeleteDialog = false
-                        val toDelete = selectedFileObjects.withoutDescendantsCoveredBySelection()
+                        // Selections are restricted to this directory, never ancestors and descendants together.
+                        val toDelete = selectedFileObjects.toList()
                         isSelectionMode = false
                         selectedFiles = emptySet()
                         scope.launch {
                             var successCount = 0
                             var failCount = 0
-                            withContext(Dispatchers.IO) {
-                                toDelete.forEach { file ->
-                                    if (forceDelete(file)) successCount++ else failCount++
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    toDelete.forEach { file ->
+                                        val deleted = try { deleteManagedFile(rootDir, file, ::isAndroidFileLink) }
+                                            catch (e: CancellationException) { throw e }
+                                            catch (_: Exception) { false }
+                                        if (deleted) successCount++ else failCount++
+                                    }
                                 }
-                            }
-                            val msg = buildString {
-                                append("已删除 $successCount 项")
-                                if (failCount > 0) append("，$failCount 项失败")
-                            }
-                            showSnack(msg)
-                            refreshCounter++
+                                val msg = buildString {
+                                    append("已删除 $successCount 项")
+                                    if (failCount > 0) append("，$failCount 项失败")
+                                }
+                                showSnack(msg)
+                            } finally { isMutating = false; refreshCounter++ }
                         }
                     },
                     colors = ButtonDefaults.filledTonalButtonColors(
@@ -753,7 +833,7 @@ fun FileManagerScreen(
                     Spacer(Modifier.height(AppSpacing.itemGap))
                     if (currentFile != null) {
                         Text(
-                            text = "${formatFileSize(currentFile.length())} · ${formatDateTime(currentFile.lastModified())}",
+                            text = metadataByPath[currentFile.absolutePath].orEmpty(),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -769,6 +849,7 @@ private fun DirectoryPickerBanner(
     config: FileManagerDirectoryPickerConfig,
     currentDir: File,
     selectedFiles: List<File>,
+    enabled: Boolean,
     onPickCurrentDirectory: () -> Unit,
     onPickSelectedFiles: () -> Unit
 ) {
@@ -823,6 +904,7 @@ private fun DirectoryPickerBanner(
                     ) {
                         FilledTonalButton(
                             onClick = onPickCurrentDirectory,
+                            enabled = enabled,
                             shape = AppShapes.capsule,
                             modifier = Modifier.weight(1f)
                         ) {
@@ -847,7 +929,7 @@ private fun DirectoryPickerBanner(
                     ) {
                         FilledTonalButton(
                             onClick = onPickSelectedFiles,
-                            enabled = selectedFiles.isNotEmpty(),
+                            enabled = enabled && selectedFiles.isNotEmpty() && (config.allowMultiSelect || selectedFiles.size == 1),
                             shape = AppShapes.capsule,
                             modifier = Modifier.weight(1f)
                         ) {
@@ -881,14 +963,16 @@ private fun DirectoryPickerBanner(
 @Composable
 private fun FileListItem(
     file: File,
-    apkInfo: ApkFileInfo? = null,
+    directory: Boolean,
+    metadata: String,
+    showMore: Boolean,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMoreClick: () -> Unit = {}
 ) {
-    val isAudio = file.isFile && file.isAudioFile()
+    val isAudio = !directory && file.isAudioFile()
     val isThisPlaying by remember {
         derivedStateOf {
             AudioPlayerManager.playingSource.value == file.absolutePath &&
@@ -917,7 +1001,7 @@ private fun FileListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 多选模式显示勾选框
-            if (isSelectionMode) {
+                                    if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,
                     onCheckedChange = { onClick() },
@@ -929,7 +1013,7 @@ private fun FileListItem(
                     size = 44
                 )
             } else {
-                FileIcon(file, size = 44)
+                FileIcon(file, size = 44, directory = directory)
             }
             Spacer(Modifier.width(AppSpacing.iconGap))
             Column(Modifier.weight(1f)) {
@@ -938,17 +1022,17 @@ private fun FileListItem(
                     style = AppTextStyles.listItemTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontWeight = if (file.isDirectory) FontWeight.Medium else FontWeight.Normal
+                    fontWeight = if (directory) FontWeight.Medium else FontWeight.Normal
                 )
                 Text(
-                    text = fileMetaText(file, apkInfo),
+                    text = metadata,
                     style = AppTextStyles.listItemMeta,
                     color = AppTextColors.muted,
                     maxLines = 1
                 )
             }
             // 多选模式下隐藏更多操作按钮
-            if (!isSelectionMode) {
+            if (!isSelectionMode && showMore) {
                 IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
                     Icon(
                         Icons.Default.MoreVert, "操作",
@@ -962,8 +1046,8 @@ private fun FileListItem(
 }
 
 @Composable
-private fun FileIcon(file: File, size: Int) {
-    if (file.isDirectory) {
+private fun FileIcon(file: File, size: Int, directory: Boolean) {
+    if (directory) {
         Surface(
             modifier = Modifier.size(size.dp),
             shape = smoothCornerShape(12.dp),
@@ -1043,124 +1127,16 @@ private fun FileActionItem(
 
 // ─────────────────────── 工具函数 ───────────────────────
 
-/**
- * 强制删除文件/文件夹：先递归放宽权限并自底向上删除，失败后再尝试 shell rm。
- * 公共 Downloads 目录在 Android 11+ 可能无法通过 Java File API 删除。
- */
-private fun forceDelete(file: File): Boolean {
-    if (!file.exists()) return true
-
-    makeWritableRecursively(file)
-    if (deleteBottomUp(file, retryWithChmod = false)) return true
-
-    chmodWithShell(file)
-    return deleteBottomUp(file, retryWithChmod = true) || shellRemove(file)
-}
-
-private fun makeWritableRecursively(file: File) {
-    runCatching {
-        if (file.isDirectory) {
-            file.walkTopDown().forEach(::makeWritable)
-        } else {
-            makeWritable(file)
-        }
-    }
-}
-
-private fun makeWritable(file: File) {
-    runCatching { file.setWritable(true, true) }
-    if (file.isDirectory) {
-        runCatching { file.setExecutable(true, true) }
-    }
-}
-
-private fun deleteBottomUp(file: File, retryWithChmod: Boolean = false): Boolean {
-    return runCatching {
-        if (file.isDirectory) {
-            file.walkBottomUp()
-                .onEnter { !it.isLikelySymbolicLink() }
-                .forEach { target ->
-                    if (target.isLikelySymbolicLink()) {
-                        target.delete()
-                    } else if (target.exists() && !target.delete()) {
-                        if (retryWithChmod) {
-                            makeWritable(target)
-                            target.delete()
-                        }
-                    }
-                }
-            !file.exists()
-        } else {
-            file.delete() || !file.exists()
-        }
-    }.getOrDefault(false)
-}
-
-private fun File.isLikelySymbolicLink(): Boolean {
-    return runCatching { absoluteFile != canonicalFile }.getOrDefault(false)
-}
-
-private fun chmodWithShell(file: File) {
-    runCatching {
-        val process = ProcessBuilder("chmod", "-R", "u+rwX", file.absolutePath)
-            .redirectErrorStream(true)
-            .start()
-        process.inputStream.bufferedReader().readText()
-        waitForProcess(process, timeoutMillis = 10_000L)
-    }
-}
-
-private fun shellRemove(file: File): Boolean {
-    return runCatching {
-        val process = ProcessBuilder("rm", "-rf", file.absolutePath)
-            .redirectErrorStream(true)
-            .start()
-        process.inputStream.bufferedReader().readText()
-        val finished = waitForProcess(process, timeoutMillis = 10_000L)
-        finished && process.exitValue() == 0 && !file.exists()
-    }.getOrDefault(false)
-}
-
-private fun waitForProcess(process: Process, timeoutMillis: Long): Boolean {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    while (System.currentTimeMillis() < deadline) {
-        runCatching { process.exitValue() }.onSuccess { return true }
-        Thread.sleep(50L)
-    }
-    process.destroy()
-    return false
-}
-
-
-private fun List<File>.withoutDescendantsCoveredBySelection(): List<File> {
-    val selectedDirectories = filter { it.isDirectory }
-        .map { it.absoluteFile.normalizePath() }
-        .sortedBy { it.length }
-
-    return filter { file ->
-        val path = file.absoluteFile.normalizePath()
-        selectedDirectories.none { directoryPath ->
-            path != directoryPath && path.startsWith("$directoryPath/")
-        }
-    }
-}
-
 private fun File.normalizePath(): String = absolutePath.replace('\\', '/')
 
 private fun File.isAtSamePath(rootDir: File): Boolean =
     absoluteFile.normalizePath() == rootDir.absoluteFile.normalizePath()
 
-private fun File.isWithinRoot(rootDir: File): Boolean {
-    val rootPath = rootDir.absoluteFile.normalizePath().trimEnd('/')
-    val candidatePath = absoluteFile.normalizePath().trimEnd('/')
-    return candidatePath == rootPath || candidatePath.startsWith("$rootPath/")
-}
-
 private fun File.relativePathWithin(rootDir: File): String? {
-    if (!isWithinRoot(rootDir)) return null
-
     val rootPath = rootDir.absoluteFile.normalizePath().trimEnd('/')
     val candidatePath = absoluteFile.normalizePath().trimEnd('/')
+    // Display only. All access/mutations use canonical checks in FileManagerFileSystem on IO.
+    if (candidatePath != rootPath && !candidatePath.startsWith("$rootPath/")) return null
     return candidatePath
         .removePrefix(rootPath)
         .trimStart('/')
@@ -1184,13 +1160,13 @@ private fun File.isVideoFile(): Boolean {
 
 private fun File.isApkFile(): Boolean = extension.equals("apk", ignoreCase = true)
 
-private fun fileMetaText(file: File, apkInfo: ApkFileInfo? = null): String {
+private fun fileMetaText(entry: ManagedFileEntry, apkInfo: ApkFileInfo? = null): String {
+    val file = entry.file
     return buildString {
-        if (file.isDirectory) {
-            val count = file.listFiles()?.size ?: 0
-            append("$count 项")
+        if (entry.directory) {
+            append(entry.childCount?.let { "$it 项" } ?: "无法读取")
         } else {
-            append(formatFileSize(file.length()))
+            append(formatFileSize(entry.size))
             if (file.isApkFile()) {
                 append(" · 安装包")
                 apkInfo?.versionName?.takeIf { it.isNotBlank() }?.let { versionName ->
@@ -1203,7 +1179,7 @@ private fun fileMetaText(file: File, apkInfo: ApkFileInfo? = null): String {
             }
         }
         append(" · ")
-        append(formatDateTime(file.lastModified()))
+        append(formatDateTime(entry.modified))
     }
 }
 
@@ -1222,7 +1198,6 @@ private fun readApkFileInfo(context: Context, file: File): ApkFileInfo? {
 
 private fun getFileIcon(file: File): ImageVector {
     return when {
-        file.isDirectory -> Icons.Default.Folder
         file.isApkFile() -> Icons.Outlined.InstallMobile
         file.isAudioFile() -> Icons.Outlined.AudioFile
         file.isVideoFile() -> Icons.Outlined.VideoFile

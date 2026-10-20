@@ -151,6 +151,10 @@ object AppPrefs {
         get() = prefs.getString("downloadHistoryJson", "[]") ?: "[]"
         set(value) = prefs.edit { putString("downloadHistoryJson", value) }
 
+    var pendingResourceDownload by stringPref()
+    /** Journal must reach disk before the first request; never put this data in a cache directory. */
+    fun persistResourceDownload(value: String?): Boolean = prefs.edit().putString("pendingResourceDownload", value).commit()
+
     var liquidGlassEnabled by booleanPref(false)
     var highReadabilityDrawer by booleanPref(false)
 

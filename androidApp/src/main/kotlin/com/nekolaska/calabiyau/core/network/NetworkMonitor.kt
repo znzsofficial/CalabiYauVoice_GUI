@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -37,15 +36,15 @@ object NetworkMonitor {
 
         // 发送初始状态
         trySend(isNetworkAvailable(context))
+        val state = DefaultNetworkState<Network>()
 
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                trySend(true)
+                trySend(state.available(network))
             }
 
             override fun onLost(network: Network) {
-                // 检查是否仍有其他可用网络
-                trySend(isNetworkAvailable(context))
+                state.lost(network)?.let { trySend(it) }
             }
 
             override fun onCapabilitiesChanged(
@@ -57,15 +56,11 @@ object NetworkMonitor {
                 ) && networkCapabilities.hasCapability(
                     NetworkCapabilities.NET_CAPABILITY_VALIDATED
                 )
-                trySend(hasInternet)
+                state.capabilities(network, hasInternet)?.let { trySend(it) }
             }
         }
 
-        val request = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-
-        cm.registerNetworkCallback(request, callback)
+        cm.registerDefaultNetworkCallback(callback)
 
         awaitClose {
             cm.unregisterNetworkCallback(callback)

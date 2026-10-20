@@ -15,7 +15,7 @@
 4. 桌面应用虽然引用 `compose.desktop.currentOs`，但主窗口启动链直接使用 User32、DWM、注册表和 Windows 版本 API，当前产品实际上是 Windows 定向实现。
 5. 主界面采用普通 Kotlin 类 `MainViewModel` 加 `StateFlow` 管理业务状态；全局 `AppState` 只负责主题和窗口背景效果。
 6. 主窗口和大部分子窗口共享 `StyledWindow`、`WindowsWindowFrame` 及自定义 Win32 WndProc，实现无边框标题栏、系统缩放边框和 Mica/Acrylic 等背景效果。
-7. 下载流程具备目录级互斥、并发限制、安全文件名、临时文件和下载清单，但上层没有显式的用户取消入口。
+7. 下载流程具备目录级互斥、并发限制、安全文件名、临时文件和带完整性指纹的下载清单；主下载保存 Job，支持主按钮、菜单和 Esc 取消。
 8. 当前主要维护风险集中在 Compose 私有 API 反射、Windows 平台硬绑定、网络错误被降级为空结果、媒体内存峰值、部分同步 I/O，以及若干资源生命周期边界。
 
 ## 2. 模块关系
@@ -375,10 +375,13 @@ Compose 控件事件
 -> Semaphore 限制并发
 -> 同目录临时文件下载
 -> 移动到正式目标
+-> 核验本地长度/SHA-256，逐项原子更新清单
 -> 汇总进度和失败
 ```
 
-共享下载核心位于 `shared/src/commonMain/kotlin/data/WikiEngineCore.kt:224-347`，桌面流式写文件位于 `desktopApp/src/main/kotlin/data/WikiEngine.kt:247-260`。
+共享下载核心位于 `shared/src/commonMain/kotlin/data/WikiEngineCore.kt`，桌面流式写文件位于 `desktopApp/src/main/kotlin/data/WikiEngine.kt`。
+2026-10 的共享分组、多种子分类树和清单校验语义见 [资源下载专题](resource-download-implementation.md)。
+Android 的持久请求日志/重启恢复提示是平台专有功能，不代表桌面端新增了同样的任务恢复机制。
 
 下载后还可继续：
 
@@ -518,15 +521,16 @@ Cookie 仅保存在进程内存中，不写入 `prefs.json`，应用重启后需
 
 ### 9.3 下载清单
 
-每个下载目录使用 `.calabiyau-downloads.tsv` 记录 URL 到本地文件名的映射，以保持重名文件的稳定命名并避免重复下载。
+每个下载目录使用 `.calabiyau-downloads.tsv` 记录 URL 到本地文件名的映射与已确认的完整性指纹，保持重名文件的稳定命名。只有非空文件的长度和 SHA-256 均匹配才跳过。
 
 格式：
 
 ```text
-本地文件名<TAB>原始 URL
+本地文件名<TAB>原始 URL<TAB>字节数<TAB>SHA-256
 ```
 
-清单同样通过临时文件和原子替换发布。
+清单逐项通过临时文件和原子替换发布。旧两列清单仍保留名称映射，但首次继续会重下以建立指纹；
+取消/部分失败不会丢掉已成功项的校验记录。哈希不是上游签名，不判断远端同 URL 内容是否更新。
 
 ## 10. 媒体与原生能力
 
@@ -633,7 +637,8 @@ URL
 
 共享 OkHttp DSL 中的异步请求会在协程取消时调用 `Call.cancel()`。但部分 API 和图片逻辑仍使用同步 `execute()`；取消协程不能立即中止这类阻塞调用。
 
-主搜索相关 Job 有显式保存和替换。主下载流程只保存 `_isDownloading` 等状态，没有保存可由 UI 调用的下载 Job，因此用户当前不能主动取消长下载，只能依赖所属 scope 销毁。
+主搜索相关 Job 有显式保存和替换。主下载流程保存 `downloadJob`，可通过 `cancelDownload()` 取消；
+取消保留已完成文件，后续下载核验共享清单后跳过。阻塞式转换/素材工具操作不一定立即响应取消。
 
 ### 11.3 资源清理
 
@@ -749,11 +754,11 @@ Release 构建启用 ProGuard optimize，并使用 `desktopApp/proguard-rules.pr
 
 #### 网络失败被降级为空结果或部分结果
 
-2026-08-17 已修：`WikiEngineCore` 的搜索、文件搜索、分类成员和分类文件在请求失败、WAF HTML 或解析失败时抛 `WikiQueryFailure`，不再把失败当成空列表。桌面空状态会显示 `searchError`。零结果仍返回空列表。立绘冷索引未改，仍可能缓存不完整结果。
+2026-08-17 已修传输/HTML 失败；2026-10 继续收紧共享查询，MediaWiki JSON `error` 和缺少结果的无效响应也抛 `WikiQueryFailure`。桌面空状态显示 `searchError`；合法零结果仍为空列表。立绘冷索引的缓存/刷新策略未在本轮重做。
 
 #### 下载只校验 HTTP 成功和非零长度
 
-2026-08-17 已修：`awaitGetToFile` 拒绝 `text/html`，并在落盘后检查 `<!doctype html` / `<html` 前缀。桌面下载保存了 Job，主按钮、菜单和 Esc 可取消。仍未校验 Content-Length、文件签名或 checksum。
+2026-08-17 增加 HTML 响应拒绝；2026-10 的共享清单进一步记录长度和 SHA-256，继续任务时校验本地文件，损坏则重下。没有上游预期哈希/签名，不应声称校验了来源真实性或远端同 URL 的更新；详见资源下载专题。
 
 #### 媒体内存峰值
 

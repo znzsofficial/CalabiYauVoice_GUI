@@ -73,7 +73,7 @@ class CachedWikiApiTest {
     }
 
     @Test
-    fun memoryCachePreservesOfflineMetadata() = runBlocking {
+    fun offlineMetadataIsReturnedWithoutBecomingAPermanentMemoryHit() = runBlocking {
         val api = TestCachedWikiApi()
         api.nextResult = ApiResult.Success("disk-fallback", isOffline = true, cacheAgeMs = 1234L)
 
@@ -84,6 +84,8 @@ class CachedWikiApiTest {
         assertTrue(second is ApiResult.Success)
         assertTrue(second.isOffline)
         assertEquals(1234L, second.cacheAgeMs)
+        assertEquals(2, api.networkFetchCount)
+        assertEquals(null, api.cachedValue())
     }
 
     @Test

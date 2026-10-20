@@ -58,6 +58,8 @@ object VotingRemoteSource {
     }
 
     fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
+        val ticket = WikiAuthHelper.beginCookieRequest(cookies)
+        if (!WikiAuthHelper.isCurrentRequest(ticket)) return VoteSubmitResult(false, 0, "登录状态已变化，请重新确认后投票")
         return WikiEngine.client.executeRequest(API) {
             post(formBodyOf(
                 "action" to "pollsubmitvote",
@@ -73,7 +75,7 @@ object VotingRemoteSource {
             header("Referer", VOTE_PAGE_URL)
             header("X-Requested-With", "XMLHttpRequest")
         }.use { resp ->
-            WikiAuthHelper.syncResponseCookies(resp.headers("Set-Cookie"))
+            WikiAuthHelper.syncResponseCookies(resp.headers("Set-Cookie"), ticket)
             val body = resp.body.string()
             val success = resp.isSuccessful && isSubmitBodySuccessful(body)
             VoteSubmitResult(

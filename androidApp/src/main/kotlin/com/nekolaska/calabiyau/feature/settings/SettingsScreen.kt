@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.feature.settings
 
 import android.content.Intent
 import android.os.Build
-import android.webkit.CookieManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -513,8 +512,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 shape = AppShapes.dialog,
                                 confirmButton = {
                                     FilledTonalButton(onClick = {
-                                        CookieManager.getInstance().removeAllCookies(null)
-                                        CookieManager.getInstance().flush()
+                                        com.nekolaska.calabiyau.core.wiki.WikiAuthHelper.clearLoginCookies()
                                         showClearCookieDialog = false
                                     }) { Text("确定清除") }
                                 },
@@ -562,7 +560,7 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.20"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.21"
                     } catch (_: Exception) {
                         "2.1.15"
                     }

@@ -2,22 +2,19 @@ package com.nekolaska.calabiyau.core.wiki
 
 import com.nekolaska.calabiyau.CalabiYauApplication
 import com.nekolaska.calabiyau.CrashContextStore
+import com.nekolaska.calabiyau.core.network.SafeReadRetryInterceptor
 import data.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import java.io.File
-import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
-import util.buildWikiUrl
+import kotlinx.serialization.json.JsonObject
 import util.awaitGet
 import util.awaitGetToFile
+import util.downloadResourceAtomically
 import util.executeGet
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -26,6 +23,8 @@ object WikiEngine {
     private val browserProfile = WikiUserAgent.randomProfile(desktopMode = false)
 
     val client: OkHttpClient = OkHttpClient.Builder()
+        // Mutations share this client; transport recovery must not silently replay them.
+        .retryOnConnectionFailure(false)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
@@ -51,17 +50,7 @@ object WikiEngine {
                 .build()
             chain.proceed(req)
         }
-        .addInterceptor { chain ->
-            var response = chain.proceed(chain.request())
-            var tryCount = 0
-            while (!response.isSuccessful && tryCount < 3 && response.code in setOf(429, 403, 503)) {
-                tryCount++
-                response.close()
-                Thread.sleep((1000L shl tryCount) + Random.nextLong(0, 500))
-                response = chain.proceed(chain.request())
-            }
-            response
-        }
+        .addInterceptor(SafeReadRetryInterceptor())
         .build()
 
     private val jsonParser = SharedJson
@@ -87,7 +76,8 @@ object WikiEngine {
                     return null
                 }
                 val body = response.body.string()
-                if (!body.trimStart().startsWith("{")) {
+                val root = runCatching { SharedJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
+                if (root == null || root["error"] != null) {
                     CalabiYauApplication.instanceOrNull?.let {
                         CrashContextStore.recordWikiRequest(
                             it,
@@ -124,6 +114,9 @@ object WikiEngine {
     suspend fun scanCategoryTree(rootCategory: String): List<String> =
         WikiEngineCore.scanCategoryTree(rootCategory, ::fetchStringSimple, jsonParser)
 
+    suspend fun scanCategoryTrees(roots: List<String>): List<String> =
+        WikiEngineCore.scanCategoryTrees(roots, ::fetchStringSimple, jsonParser)
+
     suspend fun fetchFilesInCategory(category: String, audioOnly: Boolean = true): List<Pair<String, String>> =
         WikiEngineCore.fetchFilesInCategory(category, audioOnly, ::fetchStringSimple, jsonParser)
 
@@ -144,69 +137,8 @@ object WikiEngine {
         keyword: String,
         audioOnly: Boolean,
         onLog: ((String) -> Unit)? = null
-    ): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        fun matchesFilter(url: String, mime: String?): Boolean {
-            if (!audioOnly) return true
-            val clean = url.substringBefore('?')
-            return mime?.startsWith("audio/") == true ||
-                clean.endsWith(".wav") || clean.endsWith(".mp3") || clean.endsWith(".ogg")
-        }
-        val path1 = LinkedHashMap<String, String>()
-        var aicontinue: String? = null
-        do {
-            val url = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "list" to "allimages", "aiprefix" to keyword, "aiprop" to "url|mime", "ailimit" to "500", "format" to "json", *(if (aicontinue != null) arrayOf("aicontinue" to aicontinue) else emptyArray()))
-            val json = fetchString(url, onError = { onLog?.invoke("[文件搜索] 前缀搜索: $it") })
-            if (json == null) { onLog?.invoke("[文件搜索] 前缀搜索请求失败"); break }
-            if (json.trimStart().startsWith("<")) { onLog?.invoke("[文件搜索] 前缀搜索被WAF拦截"); break }
-            try {
-                val res = jsonParser.decodeFromString<AiResponse>(json)
-                res.query?.allimages?.forEach { item ->
-                    if (item.url != null && matchesFilter(item.url!!, item.mime)) path1[item.name] = item.url!!
-                }
-                aicontinue = res.continuation?.get("aicontinue")?.jsonPrimitive?.content
-            } catch (e: Exception) { onLog?.invoke("[文件搜索] 前缀搜索解析失败: ${e.message}"); break }
-        } while (aicontinue != null)
-        onLog?.invoke("[文件搜索] 前缀搜索找到 ${path1.size} 个文件")
-
-        val path2 = LinkedHashMap<String, String>()
-        var sroffset = 0
-        do {
-            val url = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "list" to "search", "srsearch" to keyword, "srnamespace" to "6", "format" to "json", "srlimit" to "100", "sroffset" to sroffset.toString())
-            val json = fetchString(url, onError = { onLog?.invoke("[文件搜索] 全文搜索: $it") })
-            if (json == null) { onLog?.invoke("[文件搜索] 全文搜索请求失败"); break }
-            if (json.trimStart().startsWith("<")) { onLog?.invoke("[文件搜索] 全文搜索被WAF拦截"); break }
-            try {
-                val res = jsonParser.decodeFromString<WikiResponse>(json)
-                val titles = res.query?.search?.map { it.title } ?: emptyList()
-                if (titles.isEmpty()) break
-                titles.chunked(50).forEach { chunk ->
-                    val titlesParam = chunk.joinToString("|")
-                    val infoUrl = buildWikiUrl(WikiEngineCore.API_BASE_URL, "action" to "query", "titles" to titlesParam, "prop" to "imageinfo", "iiprop" to "url|mime", "redirects" to "1", "format" to "json")
-                    val infoJson = fetchString(infoUrl, onError = { onLog?.invoke("[文件搜索] imageinfo请求: $it") }) ?: return@forEach
-                    try {
-                        val infoRes = jsonParser.decodeFromString<WikiResponse>(infoJson)
-                        infoRes.query?.pages?.values?.forEach { page ->
-                            val info = page.imageinfo?.firstOrNull()
-                            if (info?.url != null && matchesFilter(info.url!!, info.mime)) {
-                                path2.putIfAbsent(page.title.replace(filePrefixRegex, ""),
-                                    info.url!!
-                                )
-                            }
-                        }
-                    } catch (e: Exception) { onLog?.invoke("[文件搜索] imageinfo解析失败: ${e.message}") }
-                }
-                val nextOffset = res.continuation?.get("sroffset")?.jsonPrimitive?.content?.toIntOrNull()
-                if (nextOffset == null || nextOffset <= sroffset) break
-                sroffset = nextOffset
-            } catch (e: Exception) { onLog?.invoke("[文件搜索] 全文搜索解析失败: ${e.message}"); break }
-        } while (path2.size < 1000)
-        onLog?.invoke("[文件搜索] 全文搜索找到 ${path2.size} 个文件")
-
-        val merged = LinkedHashMap<String, String>(path1)
-        path2.forEach { (k, v) -> merged.putIfAbsent(k, v) }
-        val seenUrls = HashSet<String>()
-        merged.entries.filter { seenUrls.add(it.value) }.map { (k, v) -> k to v }
-    }
+    ): List<Pair<String, String>> = WikiEngineCore.searchFiles(keyword, audioOnly,
+        { url -> fetchString(url) { onLog?.invoke("[文件搜索] $it") } }, jsonParser)
 
     /**
      * 通用：批量获取文件名→图片 URL 映射。
@@ -251,17 +183,7 @@ object WikiEngine {
     }
 
     private suspend fun downloadFile(url: String, targetFile: File) {
-        if (targetFile.exists() && targetFile.length() > 0) return
-        val tmp = File.createTempFile("wiki-download-", ".tmp", targetFile.parentFile)
-        try {
-            if (!client.awaitGetToFile(url, tmp)) throw IOException("HTTP download failed for $url")
-            currentCoroutineContext().ensureActive()
-            if (tmp.length() == 0L) throw IOException("Empty response body for $url")
-            if (targetFile.exists() || !tmp.renameTo(targetFile)) {
-                throw IOException("Could not publish download: ${targetFile.name}")
-            }
-        } finally {
-            tmp.delete()
-        }
+        downloadResourceAtomically(url, targetFile,
+            fetch = { source, tmp -> client.awaitGetToFile(source, tmp) })
     }
 }

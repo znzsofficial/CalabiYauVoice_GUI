@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,7 +47,7 @@ import kotlinx.coroutines.launch
  * Inline download progress surface shown by long-running file operations.
  */
 @Composable
-fun DownloadStatusBar(progress: Float, statusText: String) {
+fun DownloadStatusBar(progress: Float, statusText: String, onCancel: (() -> Unit)? = null) {
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
         modifier = Modifier.fillMaxWidth()
@@ -70,6 +71,7 @@ fun DownloadStatusBar(progress: Float, statusText: String) {
                     Spacer(Modifier.width(AppSpacing.itemGap))
                     Text("下载中", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
+                if (onCancel != null) TextButton(onClick = onCancel) { Text("取消下载") }
                 Surface(color = MaterialTheme.colorScheme.primary, shape = AppShapes.chip) {
                     Text(
                         "${(progress * 100).toInt()}%",
@@ -136,7 +138,8 @@ fun LogsDialog(logs: List<String>, onDismiss: () -> Unit) {
                     }
                 } else {
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)) {
-                        items(logs.reversed(), key = { it }) { log ->
+                        // Messages may repeat; list positions, not text, identify log rows.
+                        items(logs.reversed()) { log ->
                             val isError = log.startsWith("[错误]")
                             Surface(
                                 color = if (isError) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f) else Color.Transparent,

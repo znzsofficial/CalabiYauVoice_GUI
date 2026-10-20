@@ -10,6 +10,8 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Message
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -20,6 +22,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -94,6 +97,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -117,29 +121,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.UUID
 
 /** Wiki 主页地址 */
 const val WIKI_HOME_URL = "https://wiki.biligame.com/klbq/%E9%A6%96%E9%A1%B5"
-
-/** WebView 域名白名单：在这些域名下的页面保留在 WebView 中 */
-private val WEBVIEW_ALLOWED_DOMAINS = listOf(
-    "wiki.biligame.com",
-    "patchwiki.biligame.com",
-    "biligame.com",
-    "bilibili.com",
-    "line.biligame.net",
-    "passport.bilibili.com",
-    "api.bilibili.com",
-    "calabiyauwiki.pages.dev",
-    "nekolaska.vip"
-)
-
-/** 需要直接拦截（不加载也不打开外部浏览器）的域名 */
-private val BLOCKED_HOSTS = listOf(
-    "d.bilibili.com"   // B站 APP 下载页
-)
 
 private val WIKI_BOTTOM_TOOLBAR_SNACKBAR_OFFSET = 88.dp
 private const val MAX_IN_MEMORY_DOWNLOAD_BYTES = 64L * 1024 * 1024
@@ -218,19 +205,15 @@ private fun wikiRequestHeaders(referer: String? = null): Map<String, String> {
 }
 
 private fun WebView.loadWikiUrl(url: String, referer: String? = this.url) {
-    loadUrl(url, wikiRequestHeaders(referer))
-}
-
-private fun isAllowedWebViewHost(host: String): Boolean {
-    return WEBVIEW_ALLOWED_DOMAINS.any { domain ->
-        host.equals(domain, ignoreCase = true) || host.endsWith(".$domain", ignoreCase = true)
-    }
+    WikiNavigationPolicy.documentUrl(url)?.let { loadUrl(it, wikiRequestHeaders(referer)) }
 }
 
 private fun isAllowedWebViewUrl(url: String): Boolean {
-    val uri = url.toUri()
-    return uri.scheme.equals("https", ignoreCase = true) && isAllowedWebViewHost(uri.host.orEmpty())
+    return WikiNavigationPolicy.mayLoadDocument(url)
 }
+
+private fun blockedWikiResponse() = WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(),
+    ByteArrayInputStream("Navigation blocked".toByteArray()))
 
 private fun ensureWikiSaveDirectory(): File {
     return File(AppPrefs.savePath).apply { mkdirs() }
@@ -354,43 +337,19 @@ private fun handleWikiNavigation(
     url: String,
     loadInWebView: (String) -> Unit
 ): Boolean {
-    val uri = url.toUri()
-    val scheme = uri.scheme.orEmpty()
-    val host = uri.host.orEmpty()
-
-    if (BLOCKED_HOSTS.any { host.equals(it, ignoreCase = true) }) {
-        return true
-    }
-
-    if (url.isHttpOrHttpsUrl()) {
-        return if (isAllowedWebViewUrl(url)) {
-            loadInWebView(url)
-            true
-        } else {
-            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            true
+    when (val navigation = WikiNavigationPolicy.classify(url)) {
+        is WikiNavigation.Internal -> loadInWebView(navigation.url)
+        is WikiNavigation.External -> runCatching {
+            if (navigation.intent) {
+                val parsed = Intent.parseUri(navigation.url, Intent.URI_INTENT_SCHEME)
+                val data = parsed.data ?: return@runCatching
+                if (WikiNavigationPolicy.classify(data.toString()) is WikiNavigation.Blocked) return@runCatching
+                context.startActivity(Intent(Intent.ACTION_VIEW, data).addCategory(Intent.CATEGORY_BROWSABLE))
+            } else context.startActivity(Intent(Intent.ACTION_VIEW, navigation.url.toUri()))
         }
+        WikiNavigation.Blocked -> Unit
     }
-
-    if (scheme.equals("intent", ignoreCase = true)) {
-        val fallbackUrl = uri.getQueryParameter("browser_fallback_url")
-            ?: Regex("S\\.browser_fallback_url=([^;]+)")
-                .find(url)
-                ?.groupValues
-                ?.getOrNull(1)
-                ?.let(Uri::decode)
-
-        if (!fallbackUrl.isNullOrBlank() && fallbackUrl.isHttpOrHttpsUrl()) {
-            return handleWikiNavigation(context, fallbackUrl, loadInWebView)
-        }
-    }
-
-    return try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-        true
-    } catch (_: Exception) {
-        true
-    }
+    return true
 }
 
 private fun WebChromeClient.FileChooserParams?.normalizedAcceptTypes(): List<String> {
@@ -486,13 +445,10 @@ fun WikiWebViewScreen(
     useTopBarMode: Boolean = false
 ) {
     val context = LocalContext.current
-    val allowedInitialUrl = remember(initialUrl) { initialUrl.takeIf(::isAllowedWebViewUrl) }
+    val allowedInitialUrl = remember(initialUrl) { WikiNavigationPolicy.documentUrl(initialUrl) }
     if (allowedInitialUrl == null) {
         LaunchedEffect(initialUrl) {
-            val uri = initialUrl.toUri()
-            if (initialUrl.isHttpOrHttpsUrl()) {
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            }
+            handleWikiNavigation(context, initialUrl) {}
             onInitialUrlConsumed?.invoke()
             onExitWiki?.invoke()
         }
@@ -502,16 +458,9 @@ fun WikiWebViewScreen(
 
     // 状态
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var webViewGeneration by remember { mutableIntStateOf(0) }
-    var recoveryUrl by remember { mutableStateOf<String?>(null) }
-
-    // WebView 生命周期管理：组件销毁时释放 WebView 资源
-    DisposableEffect(Unit) {
-        onDispose {
-            destroyWikiWebView(webView)
-            webView = null
-        }
-    }
+    var webViewGeneration by remember(initialUrl) { mutableIntStateOf(0) }
+    var recoveryUrl by remember(initialUrl) { mutableStateOf<String?>(null) }
+    val viewLifetime = remember { WikiWebViewLifetime<WebView>(::destroyWikiWebView) }
 
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
@@ -527,6 +476,7 @@ fun WikiWebViewScreen(
     // 网络错误状态
     var hasNetworkError by remember { mutableStateOf(false) }
     var networkErrorUrl by remember { mutableStateOf<String?>(null) }
+    var blockedNavigationUrl by remember { mutableStateOf<String?>(null) }
 
     // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
@@ -615,19 +565,22 @@ fun WikiWebViewScreen(
     var longPressImageUrl by remember { mutableStateOf<String?>(null) }
 
     // 文件上传回调
-    var fileChooserCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    var pickerPending by rememberSaveable { mutableStateOf(false) }
+    val fileChooser = remember(viewLifetime) {
+        WikiFileChooserState<WebView, Array<Uri>>(pickerPending, viewLifetime::isMain) { pickerPending = it }
+    }
     val fileChooserLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result: ActivityResult ->
         val uris = extractChosenUris(result)
-        fileChooserCallback?.onReceiveValue(uris)
-        fileChooserCallback = null
+        fileChooser.complete(uris)
     }
     // 销毁时清理未完成的文件选择回调，防止 WebView 挂起
     DisposableEffect(Unit) {
         onDispose {
-            fileChooserCallback?.onReceiveValue(null)
-            fileChooserCallback = null
+            fileChooser.dispose()
+            viewLifetime.close()
+            webView = null
         }
     }
 
@@ -865,19 +818,23 @@ fun WikiWebViewScreen(
             Box(
                 modifier = Modifier.fillMaxSize()
             ) {
-                key(webViewGeneration) {
+                key(allowedInitialUrl, webViewGeneration) {
                     AndroidView(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background),
                         factory = { ctx ->
                             createWikiWebView(
-                                context = ctx,
+                                 context = ctx,
+                                 lifetime = viewLifetime,
+                                 initialTextZoom = textZoomLevel,
                                 backgroundColor = webViewBackgroundColor,
-                                onPageStarted = { url ->
-                                    currentUrl = url
-                                    isLoading = true
-                                    isToolbarVisible = true
+                                 onPageStarted = { url ->
+                                     webView?.let { fileChooser.invalidate(it) }
+                                     currentUrl = url
+                                     isLoading = true
+                                     isToolbarVisible = true
+                                     blockedNavigationUrl = null
                                     // about:blank 是网络错误时主动加载的空白页，不应重置错误状态
                                     if (url != "about:blank") {
                                         hasNetworkError = false
@@ -887,18 +844,25 @@ fun WikiWebViewScreen(
                                     currentUrl = url
                                     isLoading = false
                                 },
-                                onNetworkError = { url ->
+                                 onNetworkError = { url ->
+                                     webView?.let { fileChooser.invalidate(it) }
                                     hasNetworkError = true
                                     networkErrorUrl = url
                                     isLoading = false
-                                },
-                                onRendererProcessGone = { crashedWebView, detail ->
+                                 },
+                                 onNavigationBlocked = { url ->
+                                     webView?.let { fileChooser.invalidate(it) }
+                                     blockedNavigationUrl = url
+                                     hasNetworkError = false
+                                     isLoading = false
+                                 },
+                                 onRendererProcessGone = { crashedWebView, detail ->
+                                     if (webView !== crashedWebView) return@createWikiWebView
                                     val failedUrl = latestCurrentUrl.value.takeIf { it.isHttpOrHttpsUrl() }
                                         ?: allowedInitialUrl
-                                    destroyWikiWebView(crashedWebView, rendererGone = true)
-                                    webView = null
-                                    fileChooserCallback?.onReceiveValue(null)
-                                    fileChooserCallback = null
+                                     fileChooser.invalidate(crashedWebView)
+                                     viewLifetime.release(crashedWebView, rendererGone = true)
+                                     webView = null
                                     recoveryUrl = failedUrl
                                     webViewGeneration++
                                     hasNetworkError = false
@@ -907,7 +871,8 @@ fun WikiWebViewScreen(
                                     canGoBack = false
                                     canGoForward = false
                                     showSnack(
-                                        if (detail.didCrash()) {
+                                        // This callback is API 26+, but Lint cannot carry that contract through the lambda.
+                                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && detail.didCrash()) {
                                             "网页渲染进程已崩溃，正在重新加载。前进后退记录会丢失"
                                         } else {
                                             "网页渲染进程已退出，正在重新加载。前进后退记录会丢失"
@@ -931,24 +896,24 @@ fun WikiWebViewScreen(
                                         isToolbarVisible = isUp
                                     }
                                 },
-                                onFileChooser = { callback, params ->
-                                    fileChooserCallback?.onReceiveValue(null) // 取消之前的回调
-                                    fileChooserCallback = callback
-                                    try {
-                                        val chooserIntent = buildWikiFileChooserIntent(params)
-                                        fileChooserLauncher.launch(chooserIntent)
-                                    } catch (_: Exception) {
-                                        callback.onReceiveValue(null)
-                                        fileChooserCallback = null
-                                    }
+                                 onFileChooser = { owner, callback, params ->
+                                     val multiple = params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE
+                                     val ticket = fileChooser.begin(owner) { values ->
+                                         callback.onReceiveValue(if (multiple) values else values?.take(1)?.toTypedArray())
+                                     }
+                                     if (ticket != null) {
+                                         try { fileChooserLauncher.launch(buildWikiFileChooserIntent(params)) }
+                                         catch (_: Exception) { fileChooser.launchFailed(ticket) }
+                                     }
                                     true
                                 },
                                 onPassportDetected = showLoginReturnSnack,
                                 pendingApkDownloads = pendingApkDownloads,
                                 downloadScope = com.nekolaska.calabiyau.core.AppScopes.io,
                                 showSnack = showSnack
-                            ).also { wv ->
-                                webView = wv
+                             ).also { wv ->
+                                 viewLifetime.attach(wv)
+                                 webView = wv
                                 // 长按图片检测
                                 wv.setOnLongClickListener {
                                     val result = wv.hitTestResult
@@ -970,7 +935,14 @@ fun WikiWebViewScreen(
                                 }
                             }
                         },
-                        update = { wv -> wv.setBackgroundColor(webViewBackgroundColor) }
+                        onReset = null,
+                        onRelease = { wv -> fileChooser.invalidate(wv); viewLifetime.release(wv) },
+                        update = { wv ->
+                            if (viewLifetime.isMain(wv)) {
+                                wv.setBackgroundColor(webViewBackgroundColor)
+                                wv.settings.textZoom = textZoomLevel
+                            }
+                        }
                     )
                 }
 
@@ -988,7 +960,7 @@ fun WikiWebViewScreen(
 
                 // 网络错误覆盖层
                 AnimatedVisibility(
-                    visible = hasNetworkError,
+                    visible = hasNetworkError || blockedNavigationUrl != null,
                     enter = fadeIn(),
                     exit = fadeOut()
                 ) {
@@ -1010,7 +982,7 @@ fun WikiWebViewScreen(
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        Icons.Outlined.WifiOff,
+                                        if (blockedNavigationUrl != null) Icons.Outlined.OpenInBrowser else Icons.Outlined.WifiOff,
                                         contentDescription = null,
                                         modifier = Modifier.size(56.dp),
                                         tint = MaterialTheme.colorScheme.error
@@ -1019,13 +991,14 @@ fun WikiWebViewScreen(
                             }
                             Spacer(Modifier.height(24.dp))
                             Text(
-                                "网络连接失败",
+                                if (blockedNavigationUrl != null) "已阻止外部页面" else "网络连接失败",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "无法加载页面，请检查网络连接后重试",
+                                if (blockedNavigationUrl != null) "为保护登录信息，内置 Wiki 不加载此外站页面或提交表单。请返回 Wiki，或在系统浏览器中打开原地址。"
+                                else "无法加载页面，请检查网络连接后重试",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -1033,8 +1006,9 @@ fun WikiWebViewScreen(
                             Spacer(Modifier.height(24.dp))
                             FilledTonalButton(
                                 onClick = {
-                                    hasNetworkError = false
-                                    val urlToLoad = networkErrorUrl ?: WIKI_HOME_URL
+                                     hasNetworkError = false
+                                     val urlToLoad = if (blockedNavigationUrl != null) WIKI_HOME_URL else networkErrorUrl ?: WIKI_HOME_URL
+                                     blockedNavigationUrl = null
                                     webView?.loadWikiUrl(urlToLoad, currentUrl)
                                 }
                             ) {
@@ -1044,7 +1018,10 @@ fun WikiWebViewScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("重新加载")
+                                Text(if (blockedNavigationUrl != null) "返回 Wiki 首页" else "重新加载")
+                            }
+                            blockedNavigationUrl?.takeIf { WikiNavigationPolicy.classify(it) is WikiNavigation.External }?.let { url ->
+                                TextButton(onClick = { handleWikiNavigation(context, url) {} }) { Text("在系统浏览器中打开") }
                             }
                         }
                     }
@@ -1448,6 +1425,8 @@ private fun WikiOverflowMenu(
 @SuppressLint("SetJavaScriptEnabled")
 private fun createWikiWebView(
     context: Context,
+    lifetime: WikiWebViewLifetime<WebView>,
+    initialTextZoom: Int,
     backgroundColor: Int,
     onPageStarted: (String) -> Unit,
     onPageFinished: (String) -> Unit,
@@ -1456,9 +1435,10 @@ private fun createWikiWebView(
     onNavigationChanged: (canGoBack: Boolean, canGoForward: Boolean) -> Unit,
     onScrollDirectionChanged: (isUp: Boolean) -> Unit,
     onNetworkError: (String) -> Unit = {},
+    onNavigationBlocked: (String) -> Unit = {},
     onRendererProcessGone: (WebView, RenderProcessGoneDetail) -> Unit = { _, _ -> },
     onPassportDetected: () -> Unit = {},
-    onFileChooser: (ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams?) -> Boolean,
+    onFileChooser: (WebView, ValueCallback<Array<Uri>>, WebChromeClient.FileChooserParams?) -> Boolean,
     pendingApkDownloads: MutableMap<Long, PendingApkDownload>,
     downloadScope: CoroutineScope,
     showSnack: (String) -> Unit
@@ -1467,10 +1447,12 @@ private fun createWikiWebView(
     val cookieManager = CookieManager.getInstance()
     cookieManager.setAcceptCookie(true)
     val blobDownloadToken = UUID.randomUUID().toString()
+    val mainHandler = Handler(Looper.getMainLooper())
 
     return object : WebView(context) {
         override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
             super.onScrollChanged(l, t, oldl, oldt)
+            if (!lifetime.isMain(this)) return
             val dy = t - oldt
             if (dy > 10 && t > 0) {
                 onScrollDirectionChanged(false) // 向下滚动，隐藏
@@ -1515,7 +1497,7 @@ private fun createWikiWebView(
             setGeolocationEnabled(false)
 
             // 文本缩放（跟随系统字体大小）
-            textZoom = 100
+            textZoom = initialTextZoom
 
             // 媒体自动播放
             mediaPlaybackRequiresUserGesture = false
@@ -1529,12 +1511,12 @@ private fun createWikiWebView(
         addJavascriptInterface(object {
             @JavascriptInterface
             fun onBlobError(token: String, message: String) {
-                if (token == blobDownloadToken) showSnack(message)
+                if (token == blobDownloadToken && lifetime.isMain(this@apply)) showSnack(message)
             }
 
             @JavascriptInterface
             fun onBlobData(token: String, base64Data: String, mimeType: String, fileName: String) {
-                if (token != blobDownloadToken) return
+                if (token != blobDownloadToken || !lifetime.isMain(this@apply)) return
                 if (base64Data.isBlank()) {
                     showSnack("文件保存失败：无法读取文件内容")
                     return
@@ -1568,6 +1550,7 @@ private fun createWikiWebView(
 
         // ── 下载监听 ──
         setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+            if (!lifetime.isMain(this) || !isAllowedWebViewUrl(this.url.orEmpty())) return@setDownloadListener
             // blob: URL 通过 JS 读取内容后传回 native 保存
             if (url.startsWith("blob:")) {
                 val guessedName = URLUtil.guessFileName(url, contentDisposition, mimeType)
@@ -1683,6 +1666,7 @@ private fun createWikiWebView(
                 view: WebView?,
                 detail: RenderProcessGoneDetail?
             ): Boolean {
+                if (!lifetime.isMain(view)) return true
                 view?.let { onRendererProcessGone(it, detail ?: return true) }
                 return true
             }
@@ -1694,25 +1678,31 @@ private fun createWikiWebView(
                 }
 
                 passportHintShown = false
-                view?.post {
-                    view.loadWikiUrl(WIKI_HOME_URL, url)
+                mainHandler.post {
+                    if (lifetime.isMain(view)) view?.loadWikiUrl(WIKI_HOME_URL, url)
                 }
                 return true
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 super.onPageStarted(view, url, favicon)
+                if (!lifetime.isMain(view) || url == null || url == "about:blank") return
+                // A final-origin check also covers redirects, which request interception alone cannot cover.
+                if (!isAllowedWebViewUrl(url)) {
+                    view?.stopLoading()
+                    view?.loadUrl("about:blank")
+                    onNavigationBlocked(url)
+                    return
+                }
 
                 if (maybeRedirectLoginCompletion(view, url)) {
                     return
                 }
 
-                url?.let {
-                    onPageStarted(it)
-                    view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
-                }
+                onPageStarted(url)
+                view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
                 // 检测进入登录页，弹出提示
-                if (url != null && url.toUri().host.equals(
+                if (url.toUri().host.equals(
                         "passport.bilibili.com",
                         ignoreCase = true
                     )
@@ -1725,15 +1715,14 @@ private fun createWikiWebView(
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                if (!lifetime.isMain(view) || url == null || !isAllowedWebViewUrl(url)) return
 
                 if (maybeRedirectLoginCompletion(view, url)) {
                     return
                 }
 
-                url?.let {
-                    onPageFinished(it)
-                    view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
-                }
+                onPageFinished(url)
+                view?.let { v -> onNavigationChanged(v.canGoBack(), v.canGoForward()) }
                 // 刷新 Cookie
                 CookieManager.getInstance().flush()
 
@@ -1778,6 +1767,8 @@ private fun createWikiWebView(
                 request: WebResourceRequest?
             ): Boolean {
                 val url = request?.url?.toString() ?: return false
+                if (!lifetime.isMain(view)) return true
+                if (!request.isForMainFrame) return WikiNavigationPolicy.classify(url) is WikiNavigation.Blocked
                 val host = url.toUri().host ?: ""
 
                 if (passportHintShown && isWikiLoginCompletionHost(host)) {
@@ -1792,8 +1783,21 @@ private fun createWikiWebView(
                 }
 
                 return handleWikiNavigation(context, url) { navigatedUrl ->
-                    view?.loadWikiUrl(navigatedUrl)
+                    if (lifetime.isMain(view)) view?.loadWikiUrl(navigatedUrl)
                 }
+            }
+
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                if (!lifetime.isMain(view)) return blockedWikiResponse()
+                if (request?.url?.toString() == "about:blank") return null // Internal error/recovery document, no network request.
+                if (request?.isForMainFrame == true && !isAllowedWebViewUrl(request.url.toString())) {
+                    // shouldOverrideUrlLoading never sees form POSTs. Do not send their bodies to an external origin.
+                    mainHandler.post {
+                        if (lifetime.isMain(view)) onNavigationBlocked(request.url.toString())
+                    }
+                    return blockedWikiResponse()
+                }
+                return super.shouldInterceptRequest(view, request)
             }
 
             override fun onReceivedError(
@@ -1802,6 +1806,7 @@ private fun createWikiWebView(
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
+                if (!lifetime.isMain(view)) return
                 // 仅处理主框架的错误（非子资源）
                 if (request?.isForMainFrame == true) {
                     val errorCode = error?.errorCode ?: ERROR_UNKNOWN
@@ -1831,11 +1836,11 @@ private fun createWikiWebView(
         // ── WebChromeClient ──
         webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                onProgressChanged(newProgress)
+                if (lifetime.isMain(view)) onProgressChanged(newProgress)
             }
 
             override fun onReceivedTitle(view: WebView?, title: String?) {
-                title?.let { onTitleChanged(it) }
+                if (lifetime.isMain(view) && isAllowedWebViewUrl(view?.url.orEmpty())) title?.let { onTitleChanged(it) }
             }
 
             // 文件上传支持
@@ -1844,7 +1849,10 @@ private fun createWikiWebView(
                 filePathCallback: ValueCallback<Array<Uri>>?,
                 fileChooserParams: FileChooserParams?
             ): Boolean {
-                filePathCallback?.let { return onFileChooser(it, fileChooserParams) }
+                filePathCallback?.let {
+                    if (!lifetime.isMain(webView)) { it.onReceiveValue(null); return true }
+                    return onFileChooser(checkNotNull(webView), it, fileChooserParams)
+                }
                 return false
             }
 
@@ -1856,15 +1864,24 @@ private fun createWikiWebView(
                 resultMsg: Message?
             ): Boolean {
                 val parentWebView = view ?: return false
+                val message = resultMsg ?: return false
+                val transport = message.obj as? WebView.WebViewTransport ?: return false
+                if (!lifetime.isMain(parentWebView)) return false
 
                 // 创建临时 WebView 来拦截 URL，避免父 WebView 承载自身弹窗
                 val tempWebView = WebView(parentWebView.context)
+                val timeout = Runnable { lifetime.closePopup(tempWebView) }
+                if (!lifetime.addPopup(parentWebView, tempWebView) { mainHandler.removeCallbacks(timeout) }) return false
+                mainHandler.postDelayed(timeout, 30_000L)
+                tempWebView.webChromeClient = object : WebChromeClient() {
+                    override fun onCloseWindow(window: WebView?) { lifetime.closePopup(window ?: tempWebView) }
+                }
                 tempWebView.webViewClient = object : WebViewClient() {
                     override fun onRenderProcessGone(
                         view: WebView?,
                         detail: RenderProcessGoneDetail?
                     ): Boolean {
-                        destroyWikiWebView(view, rendererGone = true)
+                        lifetime.closePopup(view ?: tempWebView, rendererGone = true)
                         return true
                     }
 
@@ -1873,19 +1890,38 @@ private fun createWikiWebView(
                         request: WebResourceRequest?
                     ): Boolean {
                         val url = request?.url?.toString() ?: return false
-                        val handled =
+                        if (!lifetime.isPopup(tempWebView) || !lifetime.isMain(parentWebView)) return true
+                        if (url == "about:blank") return false
+                        if (!request.isForMainFrame) return WikiNavigationPolicy.classify(url) is WikiNavigation.Blocked
+                        return try {
                             handleWikiNavigation(parentWebView.context, url) { navigatedUrl ->
-                                parentWebView.loadWikiUrl(navigatedUrl)
+                                if (lifetime.isMain(parentWebView)) parentWebView.loadWikiUrl(navigatedUrl)
                             }
-                        destroyWikiWebView(tempWebView)
-                        return handled
+                        } finally { lifetime.closePopup(tempWebView) }
+                    }
+
+                    override fun shouldInterceptRequest(v: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        if (!lifetime.isPopup(tempWebView) || !lifetime.isMain(parentWebView)) return blockedWikiResponse()
+                        if (request?.url?.toString() == "about:blank") return null
+                        if (request?.isForMainFrame == true &&
+                            (request.method !in setOf("GET", "HEAD") || !isAllowedWebViewUrl(request.url.toString()))) {
+                            mainHandler.post {
+                                if (lifetime.isPopup(tempWebView) && lifetime.isMain(parentWebView)) {
+                                    showSnack("此弹窗操作请在当前页面或系统浏览器中完成")
+                                    lifetime.closePopup(tempWebView)
+                                }
+                            }
+                            return blockedWikiResponse()
+                        }
+                        return super.shouldInterceptRequest(v, request)
                     }
                 }
-                val transport = resultMsg?.obj as? WebView.WebViewTransport
-                transport?.webView = tempWebView
-                resultMsg?.sendToTarget()
+                transport.webView = tempWebView
+                message.sendToTarget()
                 return true
             }
+
+            override fun onCloseWindow(window: WebView?) { window?.let { lifetime.closePopup(it) } }
         }
 
         // 确保第三方 Cookie 可用（登录需要）

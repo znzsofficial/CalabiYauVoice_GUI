@@ -5,14 +5,13 @@ import data.ApiResult
 /**
  * Wiki API 对象的通用缓存基类。
  *
- * 封装了 [MemoryCacheRegistry] 注册、`@Volatile` 内存缓存、
+ * 封装了 [MemoryCacheRegistry] 注册、带请求版本保护的线程安全内存缓存、
  * 以及 fetch 的缓存优先策略。子类只需实现 [fetchFromNetwork]，
  * 需要离线缓存支持时额外实现 [fetchFromCache]。
  */
 abstract class CachedWikiApi<T>(private val name: String) {
 
-    @Volatile
-    private var cachedValue: CachedValue<T>? = null
+    private val cache = VersionedMemoryCache<Unit, CachedValue<T>>()
 
     private data class CachedValue<T>(
         val value: T,
@@ -21,13 +20,13 @@ abstract class CachedWikiApi<T>(private val name: String) {
     )
 
     init {
-        MemoryCacheRegistry.register(name) { cachedValue = null }
+        MemoryCacheRegistry.register(name) { cache.clear() }
     }
 
-    protected fun getCachedValue(): T? = cachedValue?.value
+    protected fun getCachedValue(): T? = cache.get(Unit)?.value
 
     protected fun updateCache(value: T?) {
-        cachedValue = value?.let { CachedValue(it, isOffline = false, cacheAgeMs = 0L) }
+        cache.put(Unit, value?.let { CachedValue(it, isOffline = false, cacheAgeMs = 0L) })
     }
 
     /**
@@ -43,13 +42,14 @@ abstract class CachedWikiApi<T>(private val name: String) {
         allowMemoryCache: Boolean = true
     ): ApiResult<T> {
         if (!forceRefresh && !cacheOnly && allowMemoryCache) {
-            cachedValue?.let {
+            cache.get(Unit)?.let {
                 return ApiResult.Success(it.value, isOffline = it.isOffline, cacheAgeMs = it.cacheAgeMs)
             }
         }
+        val token = if (cacheOnly) null else cache.begin(Unit)
         val result = if (cacheOnly) fetchFromCache() else fetchFromNetwork(forceRefresh)
-        if (!cacheOnly && result is ApiResult.Success) {
-            cachedValue = CachedValue(result.value, result.isOffline, result.cacheAgeMs)
+        if (token != null && result is ApiResult.Success && !result.isOffline) {
+            cache.publish(Unit, token, CachedValue(result.value, false, 0L))
         }
         return result
     }

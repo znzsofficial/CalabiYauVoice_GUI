@@ -2,8 +2,8 @@ package com.nekolaska.calabiyau.core.wiki
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import data.SharedJson
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import util.buildParseUrl
 
 data class WikiParseSourceResult(
@@ -42,6 +42,11 @@ object WikiParseSource {
         cacheKey: String
     ): WikiParseSourceResult? = loadCached(cacheType, cacheKey)?.takeIf { it.wikitext != null }
 
+    suspend fun loadCachedHtml(
+        cacheType: OfflineCache.Type,
+        cacheKey: String
+    ): WikiParseSourceResult? = loadCached(cacheType, cacheKey)?.takeIf { it.html != null }
+
     suspend fun loadCachedHtmlAndWikitext(
         cacheType: OfflineCache.Type,
         cacheKey: String
@@ -58,7 +63,8 @@ object WikiParseSource {
         val result = OfflineCache.fetchWithCache(
             type = cacheType,
             key = cacheKey,
-            forceRefresh = forceRefresh
+            forceRefresh = forceRefresh,
+            validatePayload = { isValidParsePayload(it, prop) }
         ) { WikiEngine.safeGet(url) } ?: return null
 
         return parsePayload(result.payload, result.isFromCache, result.ageMs)
@@ -72,14 +78,25 @@ object WikiParseSource {
         return parsePayload(entry.content, isFromCache = true, ageMs = entry.ageMs)
     }
 
+    internal fun isValidParsePayload(payload: String, prop: String): Boolean = runCatching {
+        val result = parsePayload(payload, false, 0) ?: return@runCatching false
+        ("text" !in prop.split('|') || result.html != null) &&
+            ("wikitext" !in prop.split('|') || result.wikitext != null)
+    }.getOrDefault(false)
+
     private fun parsePayload(
         payload: String,
         isFromCache: Boolean,
         ageMs: Long
     ): WikiParseSourceResult? {
-        val parse = SharedJson.parseToJsonElement(payload).jsonObject["parse"]?.jsonObject ?: return null
-        val html = parse["text"]?.jsonObject?.get("*")?.jsonPrimitive?.content
-        val wikitext = parse["wikitext"]?.jsonObject?.get("*")?.jsonPrimitive?.content
+        val root = runCatching { SharedJson.parseToJsonElement(payload) as? JsonObject }.getOrNull() ?: return null
+        if (root["error"] != null) return null
+        val parse = root["parse"] as? JsonObject ?: return null
+        fun text(key: String): String? = ((parse[key] as? JsonObject)?.get("*") as? JsonPrimitive)
+            ?.takeIf { it.isString }?.content
+        val html = text("text")
+        val wikitext = text("wikitext")
+        if (html == null && wikitext == null) return null
 
         return WikiParseSourceResult(
             html = html,
