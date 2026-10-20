@@ -61,3 +61,16 @@ Run at least the Android Kotlin compile check after changing release metadata:
 ```
 
 If desktop packaging metadata changed and you need stronger confidence, run the relevant desktop packaging task before publishing.
+
+## Tested release sequence
+
+1. Find the last published metadata commit and enumerate **all** commits since it. Include features already committed or first deployed to the website, not just the current dirty tree. Keep the existing history; do not squash unrelated earlier work.
+2. Update every version field and write the new changelog **before webDist**. The task deliberately reuses that changelog. Preserve all older release entries, especially 2.1.6.
+3. Run Android/shared/Desktop tests and Android Lint. For downloadPage, run `pnpm check`, `pnpm test:balance`, `pnpm test:worker`, and its production build. Optional live/fixture skips are not live-test passes.
+4. Build `:androidApp:assembleRelease`; verify package/version/minSdk with Android SDK tools and verify the APK signature against the previous release's certificate. Do not print signing passwords or commit signing files.
+5. Commit the release source/version preparation. `webDist` then assembles from that source commit, generates the actual APK size/hash URL/archive entry, and uploads versioned + latest R2 objects. A preparation-time apkSize=0 must never reach the deployed site.
+6. Re-verify the final staged APK, metadata, certificate and R2-served bytes. Commit the generated metadata, push normally, then run `webPush` to build/static-copy/deploy Pages. This is the explicit two-phase equivalent of `webDeploy`.
+7. Confirm Pages reports **Production / main** and the expected source commit. Compare latest.json on the primary domain, backup domain and deployment URL; verify downloaded bytes/SHA-256, HEAD and Range, plus preserved old releases. Check the visible changelog and relevant feature entry points in the browser without mutating user accounts.
+8. Record source/deployment IDs, artifact digest, test results and limitations in `docs/releases/<version>.md`; push the documentation closeout and leave the working tree clean.
+
+Do not rebuild and silently replace a published version after generating its fingerprint: APK VCS metadata can change the bytes when Git HEAD changes, even if Kotlin source did not. If a rebuild is required, regenerate/upload/verify the corresponding metadata again rather than mixing artifacts.
