@@ -8,6 +8,7 @@
   import { toError, categoryDisplayName } from './utils';
   import { isAliasSearchEnabled, resolveSearchAlias, setAliasSearchEnabled, type SearchAliasResolution } from '../nav/searchAliases';
   import SearchFilters from './SearchFilters.svelte';
+  import { SEARCH_TASKS, initialSearchProfile, searchGuide, searchTask } from './searchExperience';
   import SearchBox from './SearchBox.svelte';
   import VoiceSubtitlePanel from './panels/VoiceSubtitlePanel.svelte';
   import WikiSearchPanel from './panels/WikiSearchPanel.svelte';
@@ -34,7 +35,8 @@
   const nsNameMap: Record<number, string> = Object.fromEntries(NS_EXTENDED.map(ns => [ns.id, ns.name]));
   let query = $state('');
   let inputValue = $state('');
-  let activeProfile = $state('default' as ProfileValue);
+  let activeProfile = $state('voiceSubtitle' as ProfileValue);
+  let guide = $derived(searchGuide(activeProfile));
   let selectedNS = $state([0]) as number[];
   let nsExpanded = $state(false);
   let activeSort = $state('relevance' as SortValue);
@@ -107,11 +109,13 @@
 
   onMount(() => {
     aliasSearchEnabled = isAliasSearchEnabled();
-    const urlQ = new URLSearchParams(location.search).get('q');
+    const params = new URLSearchParams(location.search);
+    const urlQ = params.get('q');
+    setProfile(initialSearchProfile(params));
     if (urlQ) {
       inputValue = urlQ;
       query = urlQ;
-      doSearch(urlQ);
+      if (activeProfile !== 'voiceSubtitle') doSearch(urlQ);
     }
   });
 
@@ -137,6 +141,10 @@
     if (downloadBusy) return;
     if (activeProfile !== value) abortActiveSearch();
     activeProfile = value;
+    query = inputValue.trim();
+    searchModePrefix = '';
+    searchModeLabel = '全文';
+    aliasNotice = null;
     if (value === 'voiceSubtitle') {
       selectedNS = [0];
       nsExpanded = false;
@@ -167,6 +175,7 @@
     currentPage = 1;
     categoryStatusText = '';
     if (query.trim()) doSearch();
+    else { status = 'idle'; results = []; totalHits = 0; errorMessage = ''; }
   }
 
   function isCategorySearchProfile(value: ProfileValue): value is 'voiceCategory' | 'categoryDownload' {
@@ -911,9 +920,9 @@
 <header class="header">
   <div class="header-content">
     <a href="/" class="header-back" aria-label="返回下载页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></a>
-    <h1 class="header-title"><img src="/icon.svg" alt="" class="header-logo">卡拉彼丘 Wiki 搜索</h1>
+    <h1 class="header-title"><img src="/icon.svg" alt="" class="header-logo">卡拉彼丘素材与 Wiki</h1>
     <div class="header-actions">
-      <button
+      {#if !voiceSubtitleActive}<button
         class="header-link alias-toggle"
         class:active={aliasSearchEnabled}
         type="button"
@@ -923,7 +932,7 @@
       >
         <iconify-icon icon="lucide:sparkles" class="ext-icon"></iconify-icon>
         <span class="btn-text-desktop">别名联想</span>
-      </button>
+      </button>{/if}
       <a class="header-link" href="/nav/" title="前往全站 Wiki 导航目录">
         <iconify-icon icon="lucide:compass" class="ext-icon"></iconify-icon>
         <span>Wiki 导航</span>
@@ -938,9 +947,21 @@
 
 <main class:main-wide={activeProfile === 'images' || categorySearchActive || voiceSubtitleActive} class="main">
   <div class="search-controls-shell">
-    <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} disabled={downloadBusy} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
-
+    <nav class="search-task-nav" aria-label="搜索模块">
+      {#each SEARCH_TASKS as task (task.profile)}
+        <button type="button" class:task-active={searchTask(activeProfile) === searchTask(task.profile)} aria-pressed={searchTask(activeProfile) === searchTask(task.profile)} disabled={downloadBusy} onclick={() => { if (searchTask(activeProfile) !== searchTask(task.profile)) setProfile(task.profile); }}>
+          <iconify-icon icon={task.icon}></iconify-icon><span><strong>{task.title}</strong><small>{task.description}</small></span>
+        </button>
+      {/each}
+    </nav>
+    <div class="search-task-intro"><h2>{guide.title}</h2><p>{guide.description}</p></div>
     <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} disabled={downloadBusy} {voiceSubtitleActive} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => { if (!downloadBusy) nsExpanded = !nsExpanded; }} />
+    <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} placeholder={guide.placeholder} showSearchMode={activeProfile === 'advanced'} disabled={downloadBusy} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
+    <p class="search-task-hint">{guide.hint}</p>
+    {#if !inputValue.trim()}
+      <div class="search-task-examples"><span>快捷检索：</span>{#each guide.examples as example (example)}<button type="button" disabled={downloadBusy} onclick={() => { if (voiceSubtitleActive) inputValue = example; else submitSearch(example); }}>{example}<iconify-icon icon="lucide:arrow-up-left"></iconify-icon></button>{/each}</div>
+    {/if}
+
   </div>
 
   {#if voiceSubtitleActive}
@@ -950,7 +971,7 @@
   {#if !voiceSubtitleActive && categorySearchActive}
     <CategoryDownloadPanel activeProfile={activeProfile === 'voiceCategory' ? 'voiceCategory' : 'categoryDownload'} {status} {query} {errorMessage} {results} {categoryResults} {categoryResultsCountStr} {categoryAllResultsCountStr} categoryShowAllResults={categoryShowAllResults} categoryIncludeSubcats={categoryIncludeSubcats} {categorySelectionEnabled} {selectedCategoryResults} {selectedCategoryResultItems} selectedCategoriesTotal={selectedCategoriesTotal} {categoryStatusText} {categoryDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {expandedCategories} {collapsedRootCategories} {categorySubcats} {categorySubcatLoading} {categorySubcatErrors} {pages} {currentPage} {totalPages} onRetry={() => doSearch()} onToggleCategory={toggleCategoryResultSelection} onToggleCategoryExpanded={toggleCategoryExpanded} onToggleRootCollapsed={toggleRootCategoryCollapsed} onOpenCategoryFiles={openCategoryFileDialog} onRetryCategorySubcats={ensureCategorySubcats} onToggleAllCategories={() => setAllCategoryResultSelection(selectedCategoryResultItems.length !== categoryResults.length)} onClearAllSelections={clearAllSelections} onDownloadCategories={downloadSelectedCategoriesZip} onCancelCategories={cancelSelectedCategoriesZip} onConcurrencyChange={setDownloadConcurrency} onSetCategoryShowAllResults={setCategoryShowAllResults} onSetCategoryIncludeSubcats={(value) => { if (!downloadBusy) categoryIncludeSubcats = value; }} onGoPage={goPage} onQuickSearch={submitSearch} aliasNotice={aliasNotice} onSearchTerm={searchCanonical} />
   {:else if !voiceSubtitleActive}
-    <WikiSearchPanel {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} selectedFilesTotal={selectedFilesTotal} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={() => doSearch()} onSuggestion={searchSuggestion} aliasNotice={aliasNotice} onSearchTerm={searchCanonical} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onClearAllSelections={clearAllSelections} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
+    <WikiSearchPanel assetsMode={activeProfile === 'images'} {status} {query} {resultSuggestion} {errorMessage} {results} {totalHitsStr} {fileSelectionEnabled} {fileResults} {selectedFileResults} selectedFilesTotal={selectedFilesTotal} {selectedFiles} {zipProgress} {zipDownloading} selectionDisabled={downloadBusy} {downloadConcurrency} {pages} {currentPage} {totalPages} onRetry={() => doSearch()} onSuggestion={searchSuggestion} aliasNotice={aliasNotice} onSearchTerm={searchCanonical} onToggleFile={toggleFileSelection} onOpenLightbox={openLightbox} onToggleAllFiles={() => setAllFileSelection(selectedFileResults.length !== fileResults.length)} onClearAllSelections={clearAllSelections} onDownloadFiles={downloadSelectedFilesZip} onCancelFiles={cancelSelectedFilesZip} onConcurrencyChange={setDownloadConcurrency} onGoPage={goPage} />
   {/if}
 </main>
 

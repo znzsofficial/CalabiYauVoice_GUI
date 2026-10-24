@@ -7,6 +7,7 @@
 
   let {
     status = 'idle' as Status,
+    assetsMode = false,
     query = '',
     resultSuggestion = '',
     errorMessage = '',
@@ -38,6 +39,7 @@
     onGoPage = (page: number) => {},
   }: {
     status?: Status;
+    assetsMode?: boolean;
     query?: string;
     resultSuggestion?: string;
     errorMessage?: string;
@@ -106,22 +108,22 @@
             <iconify-icon icon="lucide:compass"></iconify-icon>
           </div>
           <div class="idle-portal-texts">
-            <h2 class="idle-portal-title">探索 Wiki 全站导航目录</h2>
-            <p class="idle-portal-desc">不知道确切词条？按分区快速浏览角色、武器、地图与系统玩法，200+ 词条一目了然。</p>
+            <h2 class="idle-portal-title">{assetsMode ? '文件与媒体资源检索' : 'Wiki 全站词条检索'}</h2>
+            <p class="idle-portal-desc">{assetsMode ? '检索图片、音频及各类附件素材，支持大图预览、单文件下载与批量打包。' : '检索百科正文与资料条目，亦可通过 Wiki 导航按分类层级浏览。'}</p>
           </div>
           <a class="idle-portal-btn" href="/nav/">
             <span>前往 Wiki 导航</span>
             <iconify-icon icon="lucide:arrow-right"></iconify-icon>
           </a>
         </div>
-        <div class="idle-portal-chips">
+        {#if !assetsMode}<div class="idle-portal-chips">
           <span class="portal-chips-label">常用快捷入口：</span>
           <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:shirt"></iconify-icon><span>角色时装投票</span></a>
           <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:crosshair"></iconify-icon><span>武器筛选</span></a>
           <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:bar-chart-3"></iconify-icon><span>主武器理论数据</span></a>
           <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:map"></iconify-icon><span>地图一览</span></a>
           <a class="portal-chip-item" href="/nav/"><iconify-icon icon="lucide:gift"></iconify-icon><span>兑换码</span></a>
-        </div>
+        </div>{/if}
       </div>
     {/if}
 

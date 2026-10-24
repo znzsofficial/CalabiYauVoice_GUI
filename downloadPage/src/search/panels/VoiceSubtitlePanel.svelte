@@ -30,6 +30,7 @@
   let voiceDialogNavLine = $state(undefined) as number | undefined;
   let voiceDialogNavQuery = $state('');
   let indexAbortController: AbortController | null = null;
+  let disposed = false;
   /** 首次构建是否已启动：用于区分「还没轮到」与「已取消/失败」 */
   let voiceIndexAttempted = $state(false);
   const VOICE_HIT_LIMIT = 30;
@@ -99,6 +100,7 @@
   });
 
   onDestroy(() => {
+    disposed = true;
     indexAbortController?.abort();
     indexAbortController = null;
   });
@@ -165,6 +167,7 @@
       voiceCharsLoading = true;
       try {
         chars = await fetchAllCharacters();
+        if (disposed) return;
         voiceCharacters = chars;
       } catch (err) {
         voiceCharsError = toError(err).message || '加载角色列表失败';
@@ -176,6 +179,7 @@
 
     if (!forceRebuild) {
       const cached = await loadVoiceIndexCache();
+      if (disposed) return;
       if (cached && applyCachedIndex(chars, cached)) {
         const missing = missingTitles(chars, voiceSearchIndex, voiceIndexFailures);
         const failedTitles = voiceIndexFailures.map(item => item.title);
@@ -192,7 +196,9 @@
       }
     }
 
-    await runIndexBuild(chars, { keepExisting: false, background: false });
+    // First-time visitors can open any character immediately. Full-text search is
+    // opt-in rather than fetching every voice page just by opening this default tab.
+    if (forceRebuild) await runIndexBuild(chars, { keepExisting: false, background: false });
   }
 
   async function runIndexBuild(
@@ -204,6 +210,7 @@
       background?: boolean;
     },
   ): Promise<void> {
+    if (disposed) return;
     // Supersede any in-flight build instead of rejecting while loading.
     indexAbortController?.abort();
     const controller = new AbortController();
@@ -311,6 +318,7 @@
 </script>
 
 <div class="voice-char-section">
+  <div class="voice-start-guide">点击任意角色卡片即可浏览其全部台词，支持单句在线试听与音频、多语言字幕打包导出。</div>
   {#if voiceCharsLoading}
     <div class="voice-char-skeleton">
       {#each Array(18) as _, i (i)}
@@ -327,14 +335,14 @@
     <div class="voice-workbench">
       <section class="voice-character-pane">
         <div class="voice-pane-header">
-          <strong>角色</strong>
+          <strong>角色列表</strong>
           <span>{voiceFilterResult.characters.length} / {voiceCharacters.length}</span>
         </div>
         {#if voiceFilterResult.characters.length > 0}
           <div class="voice-char-grid">
             {#each voiceFilterResult.characters as character (character.pageid)}
               {@const state = characterIndexState(character.title)}
-              <button class:is-failed={state === 'failed'} class:is-no-voice={state === 'no-voice'} class:is-pending={state === 'pending'} class="voice-char-item" onclick={() => openVoiceDialog(character)}>
+              <button aria-label={`${character.title}：语音与字幕`} class:is-failed={state === 'failed'} class:is-no-voice={state === 'no-voice'} class:is-pending={state === 'pending' && voiceIndexAttempted} class="voice-char-item" onclick={() => openVoiceDialog(character)}>
                 <div class="voice-char-avatar">
                   {#if character.thumbnail}
                     <img src={character.thumbnail} alt="" loading="lazy">
@@ -345,8 +353,8 @@
                     <span class="voice-char-badge failed" title="索引失败">!</span>
                   {:else if state === 'no-voice'}
                     <span class="voice-char-badge muted" title="暂无语音">–</span>
-                  {:else if state === 'pending'}
-                    <span class="voice-char-badge pending" title="未索引">…</span>
+                  {:else if state === 'pending' && voiceIndexAttempted}
+                    <span class="voice-char-badge pending" title="台词索引构建中">…</span>
                   {/if}
                 </div>
                 <span class="voice-char-name">{character.title}</span>
@@ -361,9 +369,9 @@
         {/if}
       </section>
 
-      <aside class={`voice-hit-pane ${query.trim() ? 'has-query' : ''}`}>
+      <aside class={`voice-hit-pane ${query.trim() && (voiceFilterResult.hits?.length || 0) > 0 ? 'has-query' : ''}`}>
         <div class="voice-pane-header">
-          <strong>台词命中</strong>
+          <strong>台词检索</strong>
           <span>
             {#if voiceFilterResult.hits}
               {voiceFilterResult.hitTotal > VOICE_HIT_LIMIT
@@ -402,17 +410,17 @@
         {:else if query.trim()}
           <div class="voice-pane-empty">
             <iconify-icon icon="lucide:search-x"></iconify-icon>
-            <span>{voiceIndexReady || voiceIndexDone > 0 ? '没有匹配台词' : '索引完成后显示台词命中'}</span>
+            <span>{voiceIndexReady || voiceIndexDone > 0 ? '无匹配台词' : '启用全量台词索引后支持对白全文搜索'}</span>
           </div>
         {:else}
           <div class="voice-pane-empty">
-            <iconify-icon icon="lucide:message-square-search"></iconify-icon>
-            <span>输入台词、章节或角色名以检索</span>
+            <iconify-icon icon="lucide:text-search"></iconify-icon>
+            <span>输入关键词检索台词与出处</span>
           </div>
         {/if}
 
         {#if voiceIndexLoading}
-          <NoticeCard tone="loading" title={voiceIndexFromCache || voiceIndexReady ? '正在更新索引' : '正在建立索引'} desc={`章节与字幕 ${voiceIndexDone}/${voiceIndexTotal || '…'}`}>
+          <NoticeCard tone="loading" title={voiceIndexFromCache || voiceIndexReady ? '正在更新索引' : '正在构建台词索引'} desc={`已同步 ${voiceIndexDone}/${voiceIndexTotal || '…'} 个角色数据`}>
             {#snippet iconSnippet()}<span class="suggest-spinner"></span>{/snippet}
             {#snippet actions()}
               <button class="btn outline" type="button" onclick={cancelIndexBuild}>取消</button>
@@ -424,9 +432,9 @@
             <div class="notice-card-head notice-card-head-default">
               <span class="notice-card-icon success"><iconify-icon icon={voiceIndexFromCache ? 'lucide:database' : 'lucide:check-circle-2'}></iconify-icon></span>
               <span>
-                <strong class="notice-card-title">{voiceIndexFromCache ? '本地缓存索引' : '索引已就绪'}</strong>
+                <strong class="notice-card-title">{voiceIndexFromCache ? '已载入本地索引' : '台词索引已就绪'}</strong>
                 <small class="notice-card-desc">
-                  {voiceSearchIndex.size} 角色已索引
+                  已读取 {voiceSearchIndex.size} 个角色
                   {#if voiceIndexBuiltLabel} · {voiceIndexBuiltLabel}{/if}
                   {#if voiceIndexPending > 0} · 未索引 {voiceIndexPending}{/if}
                 </small>
@@ -435,8 +443,8 @@
             <div class="notice-card-head notice-card-head-hover" aria-hidden="true">
               <span class="notice-card-icon success"><iconify-icon icon="lucide:refresh-cw"></iconify-icon></span>
               <span>
-                <strong class="notice-card-title">重新建立索引</strong>
-                <small class="notice-card-desc">点击刷新全部角色台词索引</small>
+                <strong class="notice-card-title">重新构建索引</strong>
+                <small class="notice-card-desc">刷新全部角色台词数据</small>
               </span>
             </div>
           </button>
@@ -474,14 +482,18 @@
             icon={voiceCharsError ? 'lucide:alert-circle' : 'lucide:database-zap'}
             tone={voiceCharsError ? 'error' : 'muted'}
             role={voiceCharsError ? 'alert' : 'status'}
-            title={voiceCharsError ? '建立索引失败' : '索引未完成'}
-            desc={voiceCharsError || '已取消或尚未建立，可随时继续，已完成部分会保留'}
+            title={voiceCharsError ? '索引构建失败' : '台词索引未完成'}
+            desc={voiceCharsError || '索引尚未完整构建，已缓存部分依然有效'}
           >
             {#snippet actions()}
               <button class="btn outline" type="button" onclick={resumeIndexBuild}>
-                {voiceCharsError ? '重试建立索引' : '继续建立索引'}
+                {voiceCharsError ? '重试构建' : '继续构建'}
               </button>
             {/snippet}
+          </NoticeCard>
+        {:else if voiceCharacters.length > 0}
+          <NoticeCard icon="lucide:text-search" tone="muted" title="台词全文检索" desc="首次使用需读取各角色台词数据；如仅浏览单个角色可不开启。">
+            {#snippet actions()}<button class="btn outline" type="button" onclick={resumeIndexBuild}>开启台词全文索引</button>{/snippet}
           </NoticeCard>
         {/if}
       </aside>

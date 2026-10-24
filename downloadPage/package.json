@@ -7,6 +7,7 @@
     "build:worker": "esbuild src/api/_worker.js --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/_worker.js",
     "test:worker": "node --test tests/backend.test.mjs",
     "test:balance": "node --test tests/balance-seasons.test.mjs tests/balance-view.test.mjs",
+    "test:search": "node --test tests/search-experience.test.mjs",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "preview": "vite preview"
   },

@@ -135,8 +135,8 @@
             <iconify-icon icon="lucide:folder-down"></iconify-icon>
           </div>
           <div class="idle-portal-texts">
-            <h2 class="idle-portal-title">按分类浏览并打包下载</h2>
-            <p class="idle-portal-desc">搜索 Wiki 分类，勾选后批量下载分类内文件；支持展开子分类逐级选择，语音分类可直接打包音频。</p>
+            <h2 class="idle-portal-title">Wiki 分类资源目录</h2>
+            <p class="idle-portal-desc">按 Wiki 分类结构检索资源集合，支持展开层级查看文件列表并批量打包导出。</p>
           </div>
           <a class="idle-portal-btn" href="/nav/">
             <span>前往 Wiki 导航</span>

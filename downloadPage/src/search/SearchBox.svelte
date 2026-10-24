@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import { highlightMatch } from './utils';
   import type { Suggestion } from './searchApi';
   import type { Status } from './searchTypes';
@@ -9,6 +9,8 @@
     modePrefix = $bindable(''),
     modeLabel = $bindable('内容'),
     voiceSubtitleActive = false,
+    placeholder = '搜索角色、武器、地图、技能…',
+    showSearchMode = false,
     disabled = false,
     status = 'idle' as Status,
     onSubmit = (value: string) => {},
@@ -20,6 +22,8 @@
     modePrefix?: string;
     modeLabel?: string;
     voiceSubtitleActive?: boolean;
+    placeholder?: string;
+    showSearchMode?: boolean;
     disabled?: boolean;
     status?: Status;
     onSubmit?: (value: string) => void;
@@ -29,7 +33,7 @@
   } = $props();
 
   const DEBOUNCE_MS = 300;
-  const modes: Array<[string, string]> = [['', '内容'], ['intitle:', '标题'], ['insource:', '源码']];
+  const modes: Array<[string, string]> = [['', '全文'], ['intitle:', '标题'], ['insource:', '源码']];
 
   let modeOpen = $state(false);
   let suggestions: Suggestion[] = $state([]);
@@ -46,6 +50,18 @@
   onMount(() => {
     document.addEventListener('click', handleDocumentClick);
     return () => document.removeEventListener('click', handleDocumentClick);
+  });
+  onDestroy(() => { clearTimeout(searchTimer); requestId++; });
+  $effect(() => {
+    void voiceSubtitleActive; void showSearchMode;
+    untrack(() => {
+      requestId++;
+      clearTimeout(searchTimer);
+      modeOpen = false;
+      closeSuggestions();
+      suggestionsLoading = false;
+      suggestionsReady = false;
+    });
   });
 
   function setMode(prefix: string, label: string): void {
@@ -92,6 +108,7 @@
 
   function handleKeydown(event: KeyboardEvent): void {
     if (disabled) return;
+    if (event.isComposing) return;
     if (voiceSubtitleActive) {
       if (event.key === 'Enter') {
         event.preventDefault();
@@ -202,7 +219,7 @@
 
 <div class="search-box">
   <div class="search-input-wrap">
-    {#if !voiceSubtitleActive}
+    {#if !voiceSubtitleActive && showSearchMode}
       <div class:open={modeOpen} class="mode-select">
         <button class="mode-trigger" type="button" aria-expanded={modeOpen} aria-haspopup="listbox" disabled={disabled} onclick={() => modeOpen = !modeOpen}><span class="mode-value">{modeLabel}</span><svg class="mode-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
         <div class="mode-menu" role="listbox">
@@ -213,12 +230,13 @@
       </div>
     {:else}
       <span class="search-mode-badge">
-        <iconify-icon icon="lucide:volume-2" style="font-size:0.85rem;"></iconify-icon>
+        <iconify-icon icon={voiceSubtitleActive ? 'lucide:audio-lines' : 'lucide:search'} style="font-size:0.85rem;"></iconify-icon>
       </span>
     {/if}
-    <input bind:value oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" placeholder={voiceSubtitleActive ? '筛选角色名…' : '搜索角色、武器、地图、技能…'} autocomplete="off" disabled={disabled}>
+    <input bind:value oninput={handleInput} onfocus={handleInputFocus} onkeydown={handleKeydown} type="text" class="search-input" aria-label={voiceSubtitleActive ? '筛选角色或台词' : '搜索关键词'} {placeholder} autocomplete="off" disabled={disabled}>
     {#if value}<button class="search-clear" aria-label="清空搜索" disabled={disabled} onclick={clear}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>{/if}
   </div>
+  {#if !voiceSubtitleActive}<button class="task-search-submit" type="button" disabled={disabled || !value.trim()} onclick={() => { closeSuggestions(); onSubmit(value); }}><iconify-icon icon="lucide:search"></iconify-icon><span>搜索</span></button>{/if}
   {#if showSuggestDropdown}
     <div class="suggest-dropdown" role="listbox" tabindex="-1" onmousedown={handleSuggestMousedown}>
       {#if suggestionsLoading}
