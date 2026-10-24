@@ -46,6 +46,8 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
     /** 一次性错误事件 */
     private val _errorEvent = MutableSharedFlow<ResourceDownloadFailure>(extraBufferCapacity = 1)
     val errorEvent = _errorEvent.asSharedFlow()
+    private val _noticeEvent = MutableSharedFlow<String>(extraBufferCapacity = 2)
+    val noticeEvent = _noticeEvent.asSharedFlow()
     private val _recoverableRequest = MutableStateFlow(ResourceDownloadRequest.restore(AppPrefs.pendingResourceDownload))
     val recoverableRequest = _recoverableRequest.asStateFlow()
     private var downloadJob: Job? = null
@@ -142,30 +144,34 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             _downloadProgress.value = 0f
             _downloadStatusText.value = "准备下载..."
 
+            val warnings = mutableListOf<String>()
             try {
-                if (!withContext(Dispatchers.IO) { AppPrefs.persistResourceDownload(request.encode()) }) {
-                    throw java.io.IOException("无法保存下载任务，请重试")
-                }
-                _recoverableRequest.value = request
-                if (!NetworkMonitor.isNetworkAvailable(getApplication())) throw java.io.IOException("无网络连接")
-                val baseDir = File(request.savePath)
-
-                when (val task = request.task) {
-                    is DownloadTask.Portrait -> downloadPortrait(task, baseDir)
-                    is DownloadTask.FileSearch -> downloadFileSearch(task, baseDir)
-                    is DownloadTask.Category -> downloadCategory(task, baseDir)
-                }
-                if (!withContext(Dispatchers.IO) { AppPrefs.persistResourceDownload(null) }) {
-                    throw java.io.IOException("文件已完成，但无法清除任务记录；可重试核验")
-                }
-                _recoverableRequest.value = null
+                val cleared = runResourceDownload(
+                    request,
+                    persist = { value -> withContext(Dispatchers.IO) { AppPrefs.persistResourceDownload(value) } },
+                    download = { active ->
+                        val baseDir = File(active.savePath)
+                        when (val task = active.task) {
+                            is DownloadTask.Portrait -> downloadPortrait(task, baseDir)
+                            is DownloadTask.FileSearch -> downloadFileSearch(task, baseDir)
+                            is DownloadTask.Category -> downloadCategory(task, baseDir)
+                        }
+                    },
+                    warn = { message ->
+                        warnings += message
+                        addLog(message)
+                        _noticeEvent.tryEmit(message)
+                    }
+                )
+                if (cleared) _recoverableRequest.value = null
             } catch (e: CancellationException) {
                 addLog("下载已取消；已完成文件保留，可继续原任务")
                 throw e
             } catch (e: Exception) {
-                val msg = if (!isNetworkAvailable.value) "网络连接失败，下载中断" else "下载失败: ${e.message}"
+                val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
+                val msg = downloadFailureMessage(warnings, detail)
                 _errorEvent.tryEmit(ResourceDownloadFailure(msg, request))
-                addLog("[错误] 下载失败: ${e.message}")
+                addLog("[错误] $msg")
                 addDownloadRecord(DownloadRecord(
                     name = "下载失败",
                     fileCount = 0,
@@ -255,41 +261,53 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             addLog("请至少勾选一个分类"); return
         }
         val charDir = File(baseDir, sanitizeFileName(group.characterName))
-        var totalDownloaded = 0
-        val categoryFiles = cats.distinct().mapNotNull { cat ->
-            val manual = task.manualSelectionMap[cat]
-            val files = if (manual != null) {
-                addLog("[${cat.removePrefix("Category:").removePrefix("分类:")}] 使用手动选择 (${manual.size}项)")
-                manual
-            } else {
-                WikiEngine.fetchFilesInCategory(cat, audioOnly = task.voiceOnly)
-            }
-            files.distinctBy { it.second }.takeIf { it.isNotEmpty() }?.let { cat to it }
+        val resolved = resolveCategoryDownloads(cats, task.manualSelectionMap) { cat ->
+            WikiEngine.fetchFilesInCategory(cat, audioOnly = task.voiceOnly)
         }
-        val totalFiles = categoryFiles.sumOf { it.second.size }
-        if (totalFiles == 0) {
-            addLog("所选分类没有可下载的文件")
+        resolved.failures.forEach { addLog("[错误] 分类获取失败: $it") }
+        if (resolved.batches.isEmpty()) {
+            if (resolved.failures.isEmpty()) addLog("所选分类没有可下载的文件")
+            else throw java.io.IOException(incompleteDownloadMessage(null, resolved.failures))
             return
         }
+        val totalFiles = resolved.batches.sumOf { it.files.size }
         var progressOffset = 0
-        for ((cat, files) in categoryFiles) {
-            val catName = sanitizeFileName(cat.removePrefix("Category:").removePrefix("分类:"))
-            val saveDir = File(charDir, catName)
-            addLog("下载分类 [$catName]: ${files.size} 个文件")
-            val downloadedFiles = WikiEngine.downloadSpecificFiles(
-                files = files,
-                saveDir = saveDir,
-                maxConcurrency = activeConcurrency,
-                onLog = { addLog(it) },
-                onProgress = { current, _, name ->
-                    val overallCurrent = progressOffset + current
-                    _downloadProgress.value = overallCurrent.toFloat() / totalFiles.coerceAtLeast(1)
-                    _downloadStatusText.value = "[$catName] $overallCurrent/$totalFiles: $name"
+        var totalDownloaded = 0
+        var downloadError: Exception? = null
+        try {
+            for (batch in resolved.batches) {
+                val catName = sanitizeFileName(categoryDisplayName(batch.category))
+                val saveDir = File(charDir, catName)
+                if (batch.category in task.manualSelectionMap) {
+                    addLog("[$catName] 使用手动选择 (${batch.files.size}项)")
                 }
+                addLog("下载分类 [$catName]: ${batch.files.size} 个文件")
+                val downloadedFiles = WikiEngine.downloadSpecificFiles(
+                    files = batch.files,
+                    saveDir = saveDir,
+                    maxConcurrency = activeConcurrency,
+                    onLog = { addLog(it) },
+                    onProgress = { current, _, name ->
+                        val overallCurrent = progressOffset + current
+                        _downloadProgress.value = overallCurrent.toFloat() / totalFiles.coerceAtLeast(1)
+                        _downloadStatusText.value = "[$catName] $overallCurrent/$totalFiles: $name"
+                    }
+                )
+                progressOffset += batch.files.size
+                totalDownloaded += downloadedFiles.size
+                scanMediaFiles(downloadedFiles)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            downloadError = e
+        }
+        if (downloadError != null || resolved.failures.isNotEmpty()) {
+            if (totalDownloaded > 0) addLog("已保存 $totalDownloaded 个文件，其余分类未完成")
+            throw java.io.IOException(
+                incompleteDownloadMessage(downloadError?.message, resolved.failures),
+                downloadError
             )
-            progressOffset += files.size
-            totalDownloaded += downloadedFiles.size
-            scanMediaFiles(downloadedFiles)
         }
         addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")
         addDownloadRecord(DownloadRecord(

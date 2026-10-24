@@ -129,7 +129,9 @@ object UpdateApi {
         val apkUrl = resolveApkUrl(info).takeIf { it.startsWith("http") }
             ?: error("没有可用的安装包地址")
         val fileName = apkFileName(info)
-        val dir = context.getExternalFilesDir(null) ?: context.filesDir
+        // DownloadManager file destinations must be on external storage, not filesDir.
+        val dir = context.getExternalFilesDir(null)
+            ?: throw IllegalStateException("应用外部存储不可用，无法下载更新")
         val file = java.io.File(dir, fileName)
         if (file.exists()) file.delete()
         val id = context.enqueueDownload(

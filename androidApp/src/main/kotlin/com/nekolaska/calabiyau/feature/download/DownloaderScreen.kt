@@ -149,9 +149,16 @@ internal fun DownloaderScreen(
                     .let { if (it == SnackbarResult.ActionPerformed) searchVM.performSearch() }
             }
         }
+        launch {
+            downloadVM.noticeEvent.collect { message ->
+                snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Long)
+            }
+        }
         downloadVM.errorEvent.collect { failure ->
+            // Failure text already includes any resume warning. Dismissing the notice must not drop it.
             snackbarHostState.currentSnackbarData?.dismiss()
-            snackbarHostState.showSnackbar(failure.message, "重试", duration = SnackbarDuration.Short)
+            val duration = if ('\n' in failure.message) SnackbarDuration.Long else SnackbarDuration.Short
+            snackbarHostState.showSnackbar(failure.message, "重试", duration = duration)
                 .let { if (it == SnackbarResult.ActionPerformed) downloadVM.retryDownload(failure.request) }
         }
     }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,6 +23,7 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 import util.buildWikiUrl
@@ -271,7 +273,8 @@ object WikiEngineCore {
         maxConcurrency: Int,
         onLog: (String) -> Unit,
         onProgress: (Int, Int, String) -> Unit,
-        downloadFileFn: suspend (String, File) -> Unit
+        downloadFileFn: suspend (String, File) -> Unit,
+        manifestFile: File? = null
     ): List<File> = withContext(Dispatchers.IO) {
         require(maxConcurrency > 0) { "maxConcurrency must be greater than 0" }
         val uniqueFiles = files.distinctBy { it.second }
@@ -286,10 +289,14 @@ object WikiEngineCore {
             }
             if (!normalizedDir.isDirectory) throw IOException("Download target is not a directory: $normalizedDir")
 
-            val manifest = readDownloadManifest(normalizedDir)
+            val legacyManifest = File(normalizedDir, DOWNLOAD_MANIFEST)
+            val recordFile = (manifestFile ?: legacyManifest).canonicalFile
+            // Android stores records privately. Import a readable old sidecar once, but never write/delete it.
+            val manifest = readDownloadManifest(if (recordFile.exists()) recordFile else legacyManifest)
             val usedNames = normalizedDir.listFiles()
                 ?.mapTo(HashSet()) { it.name.lowercase() }
                 ?: HashSet()
+            var namesChanged = false
             val downloads = uniqueFiles.map { (name, url) ->
                 manifest[url]?.let { entry ->
                     val mappedTarget = File(normalizedDir, entry.name).absoluteFile.normalize()
@@ -298,6 +305,7 @@ object WikiEngineCore {
                         return@map url to mappedTarget
                     }
                     manifest.remove(url)
+                    namesChanged = true
                 }
 
                 var safeName = sanitizeFileName(name)
@@ -319,16 +327,19 @@ object WikiEngineCore {
                 val target = File(normalizedDir, targetName).absoluteFile.normalize()
                 if (target.parentFile != normalizedDir) throw IOException("Unsafe download target: $targetName")
                 manifest[url] = DownloadManifestEntry(target.name)
+                namesChanged = true
                 url to target
             }
-            writeDownloadManifest(normalizedDir, manifest)
+            // Reserve names once. Skip items and unchanged retries must not republish the record.
+            if (namesChanged) writeDownloadManifest(recordFile, manifest)
 
             val semaphore = Semaphore(maxConcurrency)
             val counter = AtomicInteger(0)
             val failures = ConcurrentLinkedQueue<String>()
             val progressLock = Mutex()
+            val verifiedChanged = AtomicBoolean(false)
             val expectedFiles = manifest.toMap()
-            downloads.map { (url, targetFile) ->
+            val jobs = downloads.map { (url, targetFile) ->
                 launch(Dispatchers.IO) {
                     semaphore.acquire()
                     try {
@@ -336,19 +347,17 @@ object WikiEngineCore {
                         val existingHash = if (saved?.sha256 != null && targetFile.isFile && targetFile.length() > 0 &&
                             targetFile.length() == saved.size) fileSha256(targetFile) else null
                         val valid = existingHash != null && existingHash == saved?.sha256
-                        if (!valid) {
-                            if (targetFile.exists() && !targetFile.delete()) {
-                                throw IOException("Could not replace incomplete file: ${targetFile.name}")
-                            }
-                            downloadFileFn(url, targetFile)
-                        }
+                        if (!valid) downloadFileFn(url, targetFile)
                         currentCoroutineContext().ensureActive()
                         if (!targetFile.isFile || targetFile.length() == 0L) throw IOException("Download produced no file: ${targetFile.name}")
-                        val verified = DownloadManifestEntry(targetFile.name, targetFile.length(),
-                            if (valid) existingHash else fileSha256(targetFile))
+                        if (!valid) {
+                            val verified = DownloadManifestEntry(targetFile.name, targetFile.length(), fileSha256(targetFile))
+                            progressLock.withLock {
+                                manifest[url] = verified
+                                verifiedChanged.set(true)
+                            }
+                        }
                         progressLock.withLock {
-                            manifest[url] = verified
-                            writeDownloadManifest(normalizedDir, manifest)
                             val current = counter.incrementAndGet()
                             onProgress(current, total, targetFile.name)
                         }
@@ -362,7 +371,31 @@ object WikiEngineCore {
                         semaphore.release()
                     }
                 }
-            }.joinAll()
+            }
+            var cancellation: CancellationException? = null
+            try {
+                jobs.joinAll()
+            } catch (e: CancellationException) {
+                cancellation = e
+            }
+            // A cancelled joinAll returns before siblings finish. Publish only after they leave the map.
+            try {
+                if (cancellation != null) {
+                    withContext(NonCancellable) {
+                        jobs.joinAll()
+                        if (verifiedChanged.get()) {
+                            val snapshot = progressLock.withLock { LinkedHashMap(manifest) }
+                            writeDownloadManifest(recordFile, snapshot)
+                        }
+                    }
+                } else if (verifiedChanged.get()) {
+                    val snapshot = progressLock.withLock { LinkedHashMap(manifest) }
+                    writeDownloadManifest(recordFile, snapshot)
+                }
+            } catch (e: Exception) {
+                if (cancellation == null) throw e
+            }
+            cancellation?.let { throw it }
             if (failures.isNotEmpty()) {
                 throw IOException("${failures.size} of $total downloads failed")
             }
@@ -386,9 +419,8 @@ object WikiEngineCore {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun readDownloadManifest(directory: File): LinkedHashMap<String, DownloadManifestEntry> {
+    private fun readDownloadManifest(file: File): LinkedHashMap<String, DownloadManifestEntry> {
         val result = LinkedHashMap<String, DownloadManifestEntry>()
-        val file = File(directory, DOWNLOAD_MANIFEST)
         if (!file.isFile) return result
         runCatching {
             file.forEachLine { line ->
@@ -405,9 +437,10 @@ object WikiEngineCore {
         return result
     }
 
-    private fun writeDownloadManifest(directory: File, manifest: Map<String, DownloadManifestEntry>) {
-        val file = File(directory, DOWNLOAD_MANIFEST)
-        val temp = File(directory, "$DOWNLOAD_MANIFEST.tmp")
+    private fun writeDownloadManifest(file: File, manifest: Map<String, DownloadManifestEntry>) {
+        val parent = checkNotNull(file.parentFile)
+        if (!parent.isDirectory && !parent.mkdirs()) throw IOException("Could not create download records directory: $parent")
+        val temp = File(parent, "${file.name}.tmp")
         val content = manifest.entries
             .sortedBy { it.key }
             .joinToString("\n", postfix = if (manifest.isEmpty()) "" else "\n") { (url, target) ->

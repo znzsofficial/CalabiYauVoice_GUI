@@ -6,10 +6,31 @@
 **2.1.21 / 51 已于 2026-10-20 发布。** 源码准备提交 `c55aec6`、最终构建元数据提交 `ccc5a90`；
 Pages 生产部署 `20ea53d6-9cf6-46db-9eb0-5334473092e3`，APK SHA-256 为
 `b5b835fcaa2c8b4f323b2c3b7f75d54ff2d11c02ef21acb99c560d923ea23358`。
-发布收尾现以 [2.1.21 发布记录](releases/2.1.21.md) 为准。下方“未提交/未发版”和测试数量均为此前会话快照，
-保留用于追溯，不是当前工作区或线上版本的实时状态。
+发布收尾现以 [2.1.21 发布记录](releases/2.1.21.md) 为准。下方旧快照保留用于追溯。
+
+**2.1.22 / 52 源码已准备，部署校验完成前不要把它写成已上线。** 更新日志在
+`downloadPage/downloads/latest.json`；`apkSize=0` 只是 webDist 前的占位，不能部署。
 
 ## 同日后续：底层类与文件管理修复
+
+### 2026-10-24：Android 下载清单迁入私有存储（尚未发布）
+
+用户报告 `Could not publish download manifest`，已授权移除公共下载目录的清单写入。
+Android `WikiEngine.downloadSpecificFiles` 统一传入内部 `filesDir/download_manifests/<canonical 保存目录 SHA-256>.tsv`。
+shared 支持指定独立清单文件；Android 首次仅尝试只读导入旧 sidecar，不能读取/被同名目录占用也不阻断，不修改旧清单。
+Desktop 默认保留 sidecar。文件名去重、旧映射迁移、重试与完整性检查保留。新增 3 项针对性回归已通过，
+Android/shared 测试及桌面编译通过。没有真机复现原报告，不把公共目录音频文件本身的权限问题也宣称为已解决。
+这些更改与下方更新 APK 清理改进纳入 2.1.22/52 源码准备；在 webDist/webPush 校验完成前，线上仍是 2.1.21/51。
+
+同日继续去掉 Android 下载里的辅助门槛：网络状态和恢复记录不再拒绝下载或把已完成文件报成失败；分类查询失败保留已取到的分类并单独汇总；清单只在名称变化和本批新指纹时发布，已校验文件不重写；调度层不再先删除目标。未提交、未发版。
+
+### 2.1.21 发布后更新 APK 清理改进（尚未发布）
+
+用户发现更新后 `Android/data/.../files` 安装包残留并授权启动时清理。实现位于 `UpdateApkCleanup.kt`：
+安装前持久记录目标 versionCode/版本名/精确 APK 路径；下次启动确认已达目标版本后，才删除受 canonical 根目录保护的目标并移除对应 DownloadManager 记录。
+另外按 APK 文件名、应用包名和 versionCode 清理旧 updater 包；活跃/状态不明任务、未来版本、非应用包和路径越界均保留。
+若外部私有目录不可用，更新下载明确失败，不再使用不适合 DownloadManager 的内部 filesDir。回归在 `UpdateApkCleanupTest.kt`。
+此改进纳入 2.1.22/52，不能说已包含在 2.1.21 中。最终测试与部署结果以 2.1.22 发布记录为准。
 
 ### 更晚的 WebView / 登录链路修复
 

@@ -21,6 +21,7 @@
 - Android 与 Desktop 统一调用共享 `util.downloadResourceAtomically`。
   **是否跳过文件只能由共享调度层的长度/SHA-256 校验决定**，平台适配器不得再按非零长度提前返回。
 - 同目录临时文件下载完成后调用平台原子替换，允许替换已存在的损坏/零字节目标；失败或取消保留旧目标、清理临时文件。
+  调度层不得先删除目标再调用适配器，否则失败路径无法保留旧文件。
 - shared JVM 整链测试同时执行“调度→实际公共适配器→发布→清单”，不能只用直接写目标的假下载函数测试哈希。
 
 ## 文件管理
@@ -41,6 +42,9 @@
   行组件使用已加载的元数据，不在重组中反复 listFiles。
 - 两个图片画廊入口共用 `managedGalleryFiles`，既检查图片扩展名也排除目录。
 - 资源下载页不再提供运行日志按钮/弹窗；底层仍保留最多 1000 条诊断消息，进度、失败重试与下载历史不受影响。
+- 更新 APK 保存在应用私有外部目录。安装前将目标 versionCode、版本名和 APK 路径同步写入 SharedPreferences；下次启动确认已升级且 DownloadManager 状态可核实时，只清理这一个 APK，并移除对应任务记录。
+  启动时还迁移清理旧版本遗留的 app-owned updater APK：必须满足文件名、APK 包名和 archive versionCode 均匹配；活跃下载、未来版本、外部/嵌套路径、非 updater 文件、其他包 APK，以及 DownloadManager 状态未知时保留。
+  未安装（包括取消或安装失败）时保留 APK 以便重试。外部私有目录不可用时不再把内部 `filesDir` 错传给 DownloadManager。
 
 ## 回归与复审（2026-10-20）
 
@@ -48,6 +52,7 @@
 - `NetworkInfrastructureTest`：默认网络交接、未验证网络、写请求不重放、GET 有界重试和取消。
 - `AtomicResourceDownloadTest` + shared 的整链用例：损坏/零字节替换、失败保留、取消清理、有效文件跳过。
 - `FileManagerFileSystemTest`：路径边界、非法重命名、空目录/读取失败、单多选、目录排除、外部刷新、删除与符号链接。
+- `UpdateApkCleanupTest`：安装目标版本门槛、精确私有路径、包名/版本验证、活跃下载保护和删除失败留待下次启动。
 - 复审另外补齐了多选后的目录点击旁路、目录切换时快照确认保护，以及 Desktop 下载适配器的同类遗漏。
 - WebView 渲染退出回调本来只在 API 26+ 执行；加局部 SDK 判断是让 Lint 识别 lambda 的调用条件，
   不是将 didCrash 判定为 API 25 的真实运行时故障，也没有改变 API 26+ 的恢复逻辑。

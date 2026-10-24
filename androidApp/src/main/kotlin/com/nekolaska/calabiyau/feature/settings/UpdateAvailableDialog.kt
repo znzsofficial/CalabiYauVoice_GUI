@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import java.io.File
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
@@ -66,6 +69,7 @@ internal fun UpdateAvailableDialog(
     onOpenBrowser: () -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var ui by remember { mutableStateOf(ApkDownloadUi.Idle) }
     var progress by remember { mutableFloatStateOf(0f) }
     var progressText by remember { mutableStateOf("") }
@@ -236,7 +240,23 @@ internal fun UpdateAvailableDialog(
                                 onClick = {
                                     val file = apkFile
                                     if (file != null && file.exists()) {
-                                        openFile(context, file) { errorText = it; ui = ApkDownloadUi.Failed }
+                                        scope.launch {
+                                            val persisted = withContext(Dispatchers.IO) {
+                                                AppPrefs.persistPendingAppUpdateInstall(
+                                                    PendingAppUpdateInstall(info.versionCode, info.versionName, file.absolutePath).encode()
+                                                )
+                                            }
+                                            if (!persisted) {
+                                                errorText = "无法保存安装状态，请重试"
+                                                ui = ApkDownloadUi.Failed
+                                                return@launch
+                                            }
+                                            openFile(context, file) { message ->
+                                                scope.launch(Dispatchers.IO) { AppPrefs.persistPendingAppUpdateInstall(null) }
+                                                errorText = message
+                                                ui = ApkDownloadUi.Failed
+                                            }
+                                        }
                                     } else {
                                         errorText = "安装包未找到"
                                         ui = ApkDownloadUi.Failed

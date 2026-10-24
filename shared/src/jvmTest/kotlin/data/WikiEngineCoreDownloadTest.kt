@@ -13,6 +13,98 @@ import kotlin.test.assertTrue
 
 class WikiEngineCoreDownloadTest {
     @Test
+    fun privateRecordsAvoidBrokenPublicManifestAndKeepRetriesStable() = runBlocking {
+        val root = Files.createTempDirectory("wiki-private-records").toFile()
+        try {
+            val media = File(root, "media").apply { mkdirs() }
+            val record = File(root, "private/records.tsv")
+            // This public name cannot be atomically replaced. Android must not try to publish here at all.
+            val blockedSidecar = File(media, ".calabiyau-downloads.tsv").apply { mkdirs() }
+            File(blockedSidecar, "keep").writeText("untouched")
+            File(media, "voice.wav").writeText("user file")
+            var calls = 0
+            suspend fun download() = WikiEngineCore.downloadSpecificFiles(
+                listOf("voice.wav" to "https://example.test/voice.wav"), media, 1, {}, { _, _, _ -> },
+                { _, target -> calls++; target.writeText("complete") }, manifestFile = record)
+            val downloaded = download().single()
+            assertEquals("voice (2).wav", downloaded.name)
+            download()
+            assertEquals(1, calls)
+            downloaded.writeText("damaged!")
+            download()
+            assertEquals(2, calls); assertEquals("complete", downloaded.readText())
+            assertTrue(record.isFile)
+            assertEquals("user file", File(media, "voice.wav").readText())
+            assertEquals("untouched", File(blockedSidecar, "keep").readText())
+            assertTrue(!File(media, ".calabiyau-downloads.tsv.tmp").exists())
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test
+    fun privateRecordsImportOldManifestWithoutRewritingIt() = runBlocking {
+        val root = Files.createTempDirectory("wiki-manifest-migration").toFile()
+        try {
+            val media = File(root, "media").apply { mkdirs() }
+            val record = File(root, "private/records.tsv")
+            val old = File(media, ".calabiyau-downloads.tsv")
+            val text = "old-name.wav\thttps://example.test/voice.wav\n"
+            old.writeText(text)
+            File(media, "old-name.wav").writeText("unverified")
+            var calls = 0
+            suspend fun download() = WikiEngineCore.downloadSpecificFiles(
+                listOf("different-name.wav" to "https://example.test/voice.wav"), media, 1, {}, { _, _, _ -> },
+                { _, target -> calls++; target.writeText("verified") }, manifestFile = record)
+            assertEquals("old-name.wav", download().single().name)
+            assertEquals(text, old.readText())
+            // Once migrated, the private record remains authoritative even if the public record changes.
+            old.writeText("wrong.wav\thttps://example.test/voice.wav\n")
+            assertEquals("old-name.wav", download().single().name)
+            assertEquals(1, calls)
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test
+    fun failedReplacementKeepsTheExistingFile() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-keep-existing").toFile()
+        try {
+            val input = listOf("voice.wav" to "https://example.test/voice.wav")
+            val file = WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> },
+                { _, target -> target.writeText("keep") }).single()
+            file.writeText("damaged")
+            assertFailsWith<java.io.IOException> {
+                WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> },
+                    { _, _ -> throw java.io.IOException("network down") })
+            }
+            assertEquals("damaged", file.readText())
+            assertFailsWith<java.io.IOException> {
+                WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> }, { url, target ->
+                    util.downloadResourceAtomically(url, target, { _, _ -> throw java.io.IOException("fetch failed") })
+                })
+            }
+            assertEquals("damaged", file.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
+    fun verifiedRetryDoesNotRepublishTheManifest() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-manifest-skip-write").toFile()
+        try {
+            val input = listOf("a.wav" to "https://example.test/a", "b.wav" to "https://example.test/b")
+            WikiEngineCore.downloadSpecificFiles(input, dir, 2, {}, { _, _, _ -> },
+                { _, target -> target.writeText("complete") })
+            val manifest = File(dir, ".calabiyau-downloads.tsv")
+            val before = manifest.readText()
+            assertTrue(manifest.setLastModified(1_577_836_800_000L))
+            val stored = manifest.lastModified()
+            var calls = 0
+            WikiEngineCore.downloadSpecificFiles(input, dir, 2, {}, { _, _, _ -> }, { _, _ -> calls++ })
+            assertEquals(0, calls)
+            assertEquals(before, manifest.readText())
+            assertEquals(stored, manifest.lastModified())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
     fun productionAdapterRepairsCorruptionAndLegacyZeroFileThroughTheWholePipeline() = runBlocking {
         val dir = Files.createTempDirectory("wiki-production-adapter").toFile()
         try {
@@ -112,6 +204,42 @@ class WikiEngineCoreDownloadTest {
                 calls++; target.writeText("repaired")
             }).single()
             assertEquals(1, calls); assertEquals("repaired", file.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
+    fun cancellationKeepsVerifiedSiblingAndRetriesOnlyTheUnfinishedFile() = runBlocking {
+        val dir = Files.createTempDirectory("wiki-cancel-sibling").toFile()
+        try {
+            val slowStarted = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val doneReported = kotlinx.coroutines.CompletableDeferred<Unit>()
+            val input = listOf(
+                "done.wav" to "https://example.test/done",
+                "slow.wav" to "https://example.test/slow"
+            )
+            val job = async {
+                WikiEngineCore.downloadSpecificFiles(input, dir, 2, {}, { _, _, name ->
+                    if (name == "done.wav") doneReported.complete(Unit)
+                }, { url, file ->
+                    if (url.endsWith("slow")) {
+                        slowStarted.complete(Unit)
+                        kotlinx.coroutines.awaitCancellation()
+                    } else file.writeText("complete")
+                })
+            }
+            slowStarted.await()
+            doneReported.await()
+            job.cancel()
+            job.join()
+            val calls = mutableListOf<String>()
+            WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> }, { url, target ->
+                calls += url
+                target.writeText("retried")
+            })
+            assertEquals(listOf("https://example.test/slow"), calls)
+            assertEquals("complete", File(dir, "done.wav").readText())
+            assertEquals("retried", File(dir, "slow.wav").readText())
+            assertTrue(File(dir, "done (2).wav").exists().not())
         } finally { dir.deleteRecursively() }
     }
 

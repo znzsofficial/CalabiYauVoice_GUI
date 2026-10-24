@@ -126,7 +126,11 @@ object WikiEngine {
         maxConcurrency: Int,
         onLog: (String) -> Unit,
         onProgress: (Int, Int, String) -> Unit
-    ) = WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, ::downloadFile)
+    ) = withContext(Dispatchers.IO) {
+        val app = checkNotNull(CalabiYauApplication.instanceOrNull) { "Application is not initialized" }
+        WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, ::downloadFile,
+            manifestFile = privateDownloadManifestFile(app.filesDir, saveDir))
+    }
 
     // === Android 专有功能 ===
 

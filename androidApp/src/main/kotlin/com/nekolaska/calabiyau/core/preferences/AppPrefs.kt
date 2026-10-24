@@ -155,6 +155,15 @@ object AppPrefs {
     /** Journal must reach disk before the first request; never put this data in a cache directory. */
     fun persistResourceDownload(value: String?): Boolean = prefs.edit().putString("pendingResourceDownload", value).commit()
 
+    var pendingAppUpdateInstallJson: String?
+        get() = prefs.getString("pendingAppUpdateInstallJson", null)
+        set(value) { prefs.edit { if (value == null) remove("pendingAppUpdateInstallJson") else putString("pendingAppUpdateInstallJson", value) } }
+
+    /** Synchronous write-ahead record; call from Dispatchers.IO before opening the installer. */
+    fun persistPendingAppUpdateInstall(value: String?): Boolean = prefs.edit()
+        .apply { if (value == null) remove("pendingAppUpdateInstallJson") else putString("pendingAppUpdateInstallJson", value) }
+        .commit()
+
     var liquidGlassEnabled by booleanPref(false)
     var highReadabilityDrawer by booleanPref(false)
 

@@ -30,6 +30,7 @@ import com.nekolaska.calabiyau.core.launcher.LauncherIconTheme
 import com.nekolaska.calabiyau.core.cache.AppCacheBootstrap
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.feature.settings.UpdateApi
+import com.nekolaska.calabiyau.feature.settings.UpdateApkCleanup
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.core.ui.AppTheme
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
 
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
+        lifecycleScope.launch(Dispatchers.IO) { UpdateApkCleanup.cleanupAfterLaunch(applicationContext) }
         LauncherIconTheme.syncWithPreference(this, AppPrefs.launcherIconTheme)
         OfflineCache.init(this)
         AppCacheBootstrap.ensureRegistered()
