@@ -164,19 +164,19 @@ object BioCardParsers {
     }
 
     private fun extractShareId(raw: String): String {
-        val cleaned = raw
-            .substringAfterLast('｜', raw)
-            .substringBefore("**")
-            .substringAfterLast(' ') // 无空格时返回整段（缺省 "" 会空转靠正则兜底）
-            .trim()
-        // 合法分享码只含 base64 字符集；编辑者随手填写的内容（如“看不懂”）
-        // 置空处理，避免列表出现复制后必然解码失败的假码
-        if (cleaned.matches(Regex("[A-Za-z0-9+/=_-]{12,}"))) return cleaned
+        val tail = raw.substringAfterLast('｜', raw).substringAfterLast('|').trim()
+        val body = tail.removeSuffix("**").substringAfterLast(' ').trim()
+        val code = if (body.matches(SHARE_CODE_BODY)) body
+        else SHARE_CODE_BODY.find(raw)?.value.orEmpty()
+        // 游戏和 Wiki 按钮都带 "**"。去掉后粘贴进游戏会被当成不完整码。
+        return if (code.isBlank()) "" else code.padBase64() + "**"
+    }
 
-        return Regex("""[A-Za-z0-9+/=_-]{12,}""")
-            .find(raw)
-            ?.value
-            .orEmpty()
+    private val SHARE_CODE_BODY = Regex("[A-Za-z0-9+/=_-]{12,}")
+
+    private fun String.padBase64(): String {
+        val pad = (4 - length % 4) % 4
+        return this + "=".repeat(pad)
     }
 
     private fun normalizeDeckFaction(raw: String): String {

@@ -719,8 +719,9 @@ private fun DeckShareComposerCard(
     val cardById = remember(cards) { cards.filter { it.cardId.isNotBlank() }.associateBy { it.cardId } }
     val indexToCardId = remember(cards) { cards.filter { it.cardId.isNotBlank() && it.index >= 0 }.associate { it.index to it.cardId } }
 
-    val pcCardImages = remember(pcCards) { pcCards.associate { it.name to it.imageUrl } }
-    val mobileCardImages = remember(mobileCards) { mobileCards.associate { it.name to it.imageUrl } }
+    val cardImages = remember(cards, pcCards, mobileCards, selectedFaction) {
+        cards.associate { it.cardId to deckCardImageUrl(it, selectedFaction, pcCards, mobileCards) }
+    }
 
     LaunchedEffect(selectedFaction) {
         selectableIds.clear()
@@ -996,7 +997,7 @@ private fun DeckShareComposerCard(
                         items(userSelectableCards, key = { "${it.cardId}#${it.index}" }) { card ->
                             val selected = card.cardId in selectableIds
                             val q = normalizeDeckQuality(card.quality)
-                            val imgUrl = pcCardImages[card.name] ?: mobileCardImages[card.name]
+                            val imgUrl = cardImages[card.cardId]
 
                             val rarityColor = when (q) {
                                 "完美" -> Color(0xFFD4AF37) // Gold-ish

@@ -1,7 +1,9 @@
 package com.nekolaska.calabiyau.feature.settings
 
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -31,12 +34,30 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val versionName = remember(context) {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.22"
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.23"
         } catch (_: Exception) {
-            "2.1.15"
+            "2.1.23"
         }
     }
 
+    val pageBackground = MaterialTheme.colorScheme.background
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(pageBackground)
+    ) {
+        AboutMeshBackdrop(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.72f)
+        )
+        AboutScaffold(onBack, versionName, pageBackground)
+    }
+}
+
+@Composable
+private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackground: Color) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             Row(
@@ -50,7 +71,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     onClick = onBack,
                     modifier = Modifier.size(40.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
                     )
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
@@ -63,7 +84,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 )
             }
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -74,19 +95,27 @@ fun AboutScreen(onBack: () -> Unit) {
         ) {
             Spacer(Modifier.height(24.dp))
 
-            // 应用图标 — 圆形大图标
             Surface(
-                modifier = Modifier.size(96.dp),
+                modifier = Modifier.size(108.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary
+                color = pageBackground.copy(alpha = 0.72f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
-                    contentDescription = "应用图标",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp)
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Surface(
+                        modifier = Modifier.size(88.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_launcher_foreground),
+                            contentDescription = "应用图标",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(8.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(20.dp))

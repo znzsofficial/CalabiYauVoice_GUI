@@ -1,15 +1,16 @@
 package com.nekolaska.calabiyau.feature.wiki.balance
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,25 +19,33 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -46,11 +55,14 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
@@ -101,6 +113,7 @@ fun BalanceDataScreen(
 
     // 显示状态：进攻方 / 防守方
     var showAttackers by remember { mutableStateOf(false) } // false = 防守方(side2), true = 进攻方(side1)
+    var showFilters by rememberSaveable { mutableStateOf(false) }
 
     // 排序
     var sortField by remember { mutableStateOf(SortField.WIN_RATE) }
@@ -234,23 +247,34 @@ fun BalanceDataScreen(
                         .padding(padding)
                 ) {
                     Column(Modifier.fillMaxSize()) {
-                        // ── 筛选栏 ──
-                        FilterBar(
-                            settings = settings!!,
-                            selectedMode = selectedMode,
-                            selectedMap = selectedMap,
-                            selectedSeason = selectedSeason,
-                            selectedSeason2 = selectedSeason2,
-                            selectedRanks = selectedRanks,
-                            onModeChange = { selectedMode = it },
-                            onMapChange = { selectedMap = it },
-                            onSeasonChange = {
-                                selectedSeason = it
-                                if (selectedSeason2?.code == it.code) selectedSeason2 = null
-                            },
-                            onSeason2Change = { selectedSeason2 = it },
-                            onRanksChange = { selectedRanks = it }
+                        // 模式 / 赛季 / 地图 / 段位收进弹层，避免短屏上把角色列表挤没。
+                        FilterSummaryBar(
+                            mode = selectedMode?.name,
+                            season = selectedSeason?.name,
+                            map = selectedMap?.name,
+                            rankNames = selectedRanks.map { it.name },
+                            compareSeason = selectedSeason2?.name,
+                            onOpen = { showFilters = true }
                         )
+                        if (showFilters) {
+                            BalanceFilterSheet(
+                                settings = settings!!,
+                                selectedMode = selectedMode,
+                                selectedMap = selectedMap,
+                                selectedSeason = selectedSeason,
+                                selectedSeason2 = selectedSeason2,
+                                selectedRanks = selectedRanks,
+                                onModeChange = { selectedMode = it },
+                                onMapChange = { selectedMap = it },
+                                onSeasonChange = {
+                                    selectedSeason = it
+                                    if (selectedSeason2?.code == it.code) selectedSeason2 = null
+                                },
+                                onSeason2Change = { selectedSeason2 = it },
+                                onRanksChange = { selectedRanks = it },
+                                onDismiss = { showFilters = false }
+                            )
+                        }
 
                         // ── 进攻/防守切换 + 排序 ──
                         SideAndSortBar(
@@ -325,11 +349,75 @@ fun BalanceDataScreen(
 }
 
 // ────────────────────────────────────────────
-//  筛选栏
+//  筛选摘要 + 底部弹层
 // ────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilterBar(
+private fun FilterSummaryBar(
+    mode: String?,
+    season: String?,
+    map: String?,
+    rankNames: List<String>,
+    compareSeason: String?,
+    onOpen: () -> Unit
+) {
+    val summary = balanceFilterSummary(mode, season, map, rankNames, compareSeason)
+    Surface(
+        onClick = onOpen,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = smoothCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = smoothCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Outlined.Tune,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("筛选", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    summary.headline,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                summary.compareLabel?.let { label ->
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BalanceFilterSheet(
     settings: BalanceSettings,
     selectedMode: FilterOption?,
     selectedMap: FilterOption?,
@@ -340,141 +428,147 @@ private fun FilterBar(
     onMapChange: (FilterOption?) -> Unit,
     onSeasonChange: (FilterOption) -> Unit,
     onSeason2Change: (FilterOption?) -> Unit,
-    onRanksChange: (List<FilterOption>) -> Unit
+    onRanksChange: (List<FilterOption>) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+        ),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = smoothCornerShape(28.dp),
+        tonalElevation = 0.dp
     ) {
-        // 第一行：模式 + 赛季
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterDropdown(
-                label = "模式",
-                options = settings.modes,
-                selected = selectedMode,
-                onSelect = onModeChange,
-                modifier = Modifier.weight(1f)
-            )
-            FilterDropdown(
-                label = "赛季",
-                options = settings.seasons,
-                selected = selectedSeason,
-                onSelect = onSeasonChange,
-                modifier = Modifier.weight(1f)
-            )
+        val maxSheetHeight = with(LocalDensity.current) {
+            LocalWindowInfo.current.containerSize.height.toDp() * 0.92f
         }
-
-        Spacer(Modifier.height(4.dp))
-
-        FilterDropdown(
-            label = "对比赛季",
-            options = settings.seasons.filter { it.code != selectedSeason?.code },
-            selected = selectedSeason2,
-            onSelect = onSeason2Change,
-            onClearSelection = { onSeason2Change(null) },
-            clearLabel = "不对比",
-            placeholderText = "不对比",
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (selectedSeason2 != null) {
-            Text(
-                text = "正在对比：${selectedSeason?.name.orEmpty()} → ${selectedSeason2.name}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
-            )
-        }
-
-        Spacer(Modifier.height(4.dp))
-
-        // 第二行：地图 + 段位（横向滚动 Chip）
-        Row(
-            Modifier
+        Column(
+            modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .heightIn(max = maxSheetHeight)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
         ) {
+            Text("筛选条件", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "地图",
-                style = MaterialTheme.typography.labelSmall,
+                "修改后自动查询",
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(32.dp),
-                textAlign = TextAlign.Center
+                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
-            Row(
-                Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                FilterChip(
-                    selected = selectedMap == null,
-                    onClick = { onMapChange(null) },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text("全选", maxLines = 1) }
-                )
-                settings.maps.forEach { map ->
-                    FilterChip(
-                        selected = selectedMap == map,
-                        onClick = { onMapChange(map) },
-                        shape = smoothCornerShape(12.dp),
-                        label = { Text(map.name, maxLines = 1) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterDropdown(
+                        label = "模式",
+                        options = settings.modes,
+                        selected = selectedMode,
+                        onSelect = onModeChange,
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterDropdown(
+                        label = "赛季",
+                        options = settings.seasons,
+                        selected = selectedSeason,
+                        onSelect = onSeasonChange,
+                        modifier = Modifier.weight(1f)
                     )
                 }
-            }
-        }
-
-        Spacer(Modifier.height(2.dp))
-
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "段位",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(32.dp),
-                textAlign = TextAlign.Center
-            )
-            Row(
-                Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                FilterChip(
-                    selected = selectedRanks.isEmpty(),
-                    onClick = { onRanksChange(emptyList()) },
-                    shape = smoothCornerShape(12.dp),
-                    label = { Text("全选", maxLines = 1) }
+                FilterDropdown(
+                    label = "对比赛季",
+                    options = settings.seasons.filter { it.code != selectedSeason?.code },
+                    selected = selectedSeason2,
+                    onSelect = onSeason2Change,
+                    onClearSelection = { onSeason2Change(null) },
+                    clearLabel = "不对比",
+                    placeholderText = "不对比",
+                    modifier = Modifier.fillMaxWidth()
                 )
-                settings.ranks.forEach { rank ->
-                    FilterChip(
-                        selected = selectedRanks.contains(rank),
-                        onClick = {
-                            onRanksChange(
-                                if (selectedRanks.contains(rank)) selectedRanks - rank
-                                else selectedRanks + rank
-                            )
-                        },
-                        shape = smoothCornerShape(12.dp),
-                        label = { Text(rank.name, maxLines = 1) }
+                if (selectedSeason2 != null) {
+                    Text(
+                        "正在对比：${selectedSeason?.name.orEmpty()} → ${selectedSeason2.name}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                FilterChipGroup(
+                    label = "地图",
+                    options = settings.maps,
+                    isSelected = { selectedMap == it },
+                    onClick = { onMapChange(if (selectedMap == it) null else it) },
+                    allSelected = selectedMap == null,
+                    onSelectAll = { onMapChange(null) }
+                )
+                FilterChipGroup(
+                    label = "段位",
+                    hint = "可多选",
+                    options = settings.ranks,
+                    isSelected = { selectedRanks.contains(it) },
+                    onClick = { rank ->
+                        onRanksChange(
+                            if (selectedRanks.contains(rank)) selectedRanks - rank else selectedRanks + rank
+                        )
+                    },
+                    allSelected = selectedRanks.isEmpty(),
+                    onSelectAll = { onRanksChange(emptyList()) }
+                )
+            }
+            FilledTonalButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                shape = smoothCornerShape(16.dp)
+            ) {
+                Text("完成")
             }
         }
+    }
+}
 
-        HorizontalDivider(Modifier.padding(top = 6.dp))
+@Composable
+private fun FilterChipGroup(
+    label: String,
+    options: List<FilterOption>,
+    isSelected: (FilterOption) -> Boolean,
+    onClick: (FilterOption) -> Unit,
+    allSelected: Boolean,
+    onSelectAll: () -> Unit,
+    hint: String? = null
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            if (hint != null) {
+                Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = allSelected,
+                onClick = onSelectAll,
+                shape = smoothCornerShape(12.dp),
+                label = { Text("全选", maxLines = 1) }
+            )
+            options.forEach { option ->
+                FilterChip(
+                    selected = isSelected(option),
+                    onClick = { onClick(option) },
+                    shape = smoothCornerShape(12.dp),
+                    label = { Text(option.name, maxLines = 1) }
+                )
+            }
+        }
     }
 }
 

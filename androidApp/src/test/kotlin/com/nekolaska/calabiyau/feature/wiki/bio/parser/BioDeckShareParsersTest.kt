@@ -74,7 +74,7 @@ class BioDeckShareParsersTest {
         val decks = BioCardParsers.parseDecks(html, emptyMap())
         val byTitle = decks.associateBy { it.title }
         assertEquals(
-            "MDAwQnwwMDAyfDEwQUYxNEEyMDg0MEI4MEE2RkQ1NDNFMUU=",
+            "MDAwQnwwMDAyfDEwQUYxNEEyMDg0MEI4MEE2RkQ1NDNFMUU=**",
             byTitle.getValue("(喵喵喵)人类核爆").shareId
         )
         // 纯码（缺提示语和卡组名）仍能取到码
