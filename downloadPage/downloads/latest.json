@@ -1,18 +1,25 @@
 {
     "versionName": "2.1.23",
     "versionCode": 53,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.23.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.23.apk?build=2b1a2eb132dd3f31",
+    "apkSize": 3659136,
     "releaseUrl": "/",
     "changelog": [
-        "生化卡组页：人类和晶源体的同名卡（如破釜沉舟）按卡牌本身显示对应图片，不再串成另一阵营的卡面",
-        "复制卡组分享码时保留游戏和 Wiki 使用的 ** 结尾，避免粘贴后被当成不完整的码",
-        "平衡数据页把模式、赛季、地图和段位收进底部弹层，短屏幕上角色列表不再被挤得很矮；攻防和排序仍留在列表上方",
-        "关于页增加随当前主题色流动的网格渐变背景",
-        "下载站搜索把语音和字幕放在最前，全文台词索引改为进入时自行开启"
+        "\u751f\u5316\u5361\u7ec4\u9875\uff1a\u4eba\u7c7b\u548c\u6676\u6e90\u4f53\u7684\u540c\u540d\u5361\uff08\u5982\u7834\u91dc\u6c89\u821f\uff09\u6309\u5361\u724c\u672c\u8eab\u663e\u793a\u5bf9\u5e94\u56fe\u7247\uff0c\u4e0d\u518d\u4e32\u6210\u53e6\u4e00\u9635\u8425\u7684\u5361\u9762",
+        "\u590d\u5236\u5361\u7ec4\u5206\u4eab\u7801\u65f6\u4fdd\u7559\u6e38\u620f\u548c Wiki \u4f7f\u7528\u7684 ** \u7ed3\u5c3e\uff0c\u907f\u514d\u7c98\u8d34\u540e\u88ab\u5f53\u6210\u4e0d\u5b8c\u6574\u7684\u7801",
+        "\u5e73\u8861\u6570\u636e\u9875\u628a\u6a21\u5f0f\u3001\u8d5b\u5b63\u3001\u5730\u56fe\u548c\u6bb5\u4f4d\u6536\u8fdb\u5e95\u90e8\u5f39\u5c42\uff0c\u77ed\u5c4f\u5e55\u4e0a\u89d2\u8272\u5217\u8868\u4e0d\u518d\u88ab\u6324\u5f97\u5f88\u77ee\uff1b\u653b\u9632\u548c\u6392\u5e8f\u4ecd\u7559\u5728\u5217\u8868\u4e0a\u65b9",
+        "\u5173\u4e8e\u9875\u589e\u52a0\u968f\u5f53\u524d\u4e3b\u9898\u8272\u6d41\u52a8\u7684\u7f51\u683c\u6e10\u53d8\u80cc\u666f",
+        "\u4e0b\u8f7d\u7ad9\u641c\u7d22\u628a\u8bed\u97f3\u548c\u5b57\u5e55\u653e\u5728\u6700\u524d\uff0c\u5168\u6587\u53f0\u8bcd\u7d22\u5f15\u6539\u4e3a\u8fdb\u5165\u65f6\u81ea\u884c\u5f00\u542f"
     ],
     "publishedAt": "2026-10-29",
     "releases": [
+        {
+            "versionName": "2.1.23",
+            "versionCode": 53,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.23.apk?build=2b1a2eb132dd3f31",
+            "apkSize": 3659136,
+            "publishedAt": "2026-10-29"
+        },
         {
             "versionName": "2.1.22",
             "versionCode": 52,
