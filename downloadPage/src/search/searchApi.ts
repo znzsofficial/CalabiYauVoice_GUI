@@ -14,6 +14,7 @@ export type WikiSearchItem = {
 export type Suggestion = { title: string; desc: string; url: string; ns: number; pageid?: number };
 
 import { formatFileSize, fileNameFromTitle } from './utils';
+import { abortError, createWikiRequestScheduler, WikiBackoffError } from './wikiRequestScheduler';
 export type CategoryPage = { title: string; pageid: number; thumbnail?: string; url: string };
 export type VoiceLine = {
   category: string;
@@ -50,6 +51,7 @@ const API = '/api/wiki';
 const CACHE_TTL = 60_000;
 const MAX_CACHE = 100;
 const requestCache = new Map<string, { response: Response; time: number }>();
+const wikiRequests = createWikiRequestScheduler();
 
 function setCache(url: string, response: Response): void {
   if (requestCache.size >= MAX_CACHE) {
@@ -111,20 +113,52 @@ async function responseErrorMessage(response: Response): Promise<string> {
 }
 
 export async function fetchWithTimeout(url: string, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
-  const cached = requestCache.get(url);
-  if (cached && Date.now() - cached.time < CACHE_TTL) return cached.response.clone();
+  if (signal?.aborted) throw abortError();
+  const readCache = () => {
+    const cached = requestCache.get(url);
+    return cached && Date.now() - cached.time < CACHE_TTL ? cached.response.clone() : undefined;
+  };
+  const cached = readCache();
+  if (cached) return cached;
+  const isWiki = new URL(url, WIKI_BASE).pathname === '/api/wiki';
+  const request = async () => {
+    if (signal?.aborted) throw abortError();
+    return await fetchNow(url, timeoutMs, signal, isWiki);
+  };
+  return isWiki ? wikiRequests.schedule(request, signal, readCache) : request();
+}
+
+async function fetchNow(url: string, timeoutMs: number, signal: AbortSignal | undefined, isWiki: boolean): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error(await responseErrorMessage(response));
-    const contentType = response.headers.get('content-type') || '';
-    // Proxy should always return JSON for wiki API; HTML means WAF/interstitial slipped through.
-    if (url.includes('/api/wiki') && contentType.includes('text/html')) {
-      throw new Error('Wiki 访问被风控拦截，请更换网络/VPN 节点后重试');
+    if (controller.signal.aborted) throw abortError();
+    if (isWiki) {
+      let upstreamStatus = response.status;
+      const contentType = response.headers.get('content-type') || '';
+      let body: { upstreamStatus?: number; error?: { code?: string; info?: string } | string; errors?: Array<{ code?: string; info?: string }> } | null = null;
+      if (contentType.includes('application/json')) {
+        // Production proxy wraps EdgeOne 567 as 502 + upstreamStatus.
+        body = await response.clone().json().catch(() => null);
+        upstreamStatus = body?.upstreamStatus || response.status;
+        // A successful upstream wrapped as 502 is the proxy's HTML/WAF branch.
+        if (response.status === 502 && body?.upstreamStatus === 200) upstreamStatus = 567;
+      }
+      const apiError = typeof body?.error === 'object' ? body.error : body?.errors?.[0];
+      if (apiError?.code === 'ratelimited' || apiError?.code === 'toomanyconcurrent') upstreamStatus = 429;
+      if (upstreamStatus === 429 || upstreamStatus === 567 || contentType.includes('text/html')) {
+        const retryAfter = response.headers.get('retry-after');
+        const seconds = retryAfter == null ? NaN : Number(retryAfter);
+        const retryMs = Number.isFinite(seconds) ? seconds * 1000 : Math.max(0, Date.parse(retryAfter || '') - Date.now());
+        throw wikiRequests.backoff(upstreamStatus === 429 ? 429 : 567, Number.isFinite(retryMs) ? retryMs : 0);
+      }
+      if (apiError && apiError.code !== 'missingtitle') throw new Error(apiError.info || apiError.code || 'Wiki 接口返回错误');
     }
+    if (!response.ok) throw new Error(await responseErrorMessage(response));
+    if (controller.signal.aborted) throw abortError();
     setCache(url, response);
     return response;
   } finally {
@@ -154,9 +188,10 @@ export async function fetchPrefixSuggestions(params: {
   namespace: string;
   limit: number;
   nsNameMap: Record<number, string>;
+  signal?: AbortSignal;
 }): Promise<Suggestion[]> {
   const query = new URLSearchParams({ action: 'query', list: 'prefixsearch', pssearch: params.search, pslimit: String(params.limit), psnamespace: params.namespace || '0', format: 'json' });
-  const data = await (await fetchWithTimeout(`${API}?${query}`, 5000)).json() as PrefixSearchResponse;
+  const data = await (await fetchWithTimeout(`${API}?${query}`, 5000, params.signal)).json() as PrefixSearchResponse;
   return (data.query?.prefixsearch || []).map(item => ({
     title: item.title,
     desc: params.nsNameMap[item.ns] || '页面',
@@ -278,14 +313,14 @@ function isAudioFile(url: string, mime?: string): boolean {
   return mime?.startsWith('audio/') === true || /\.(wav|mp3|ogg)$/i.test(clean);
 }
 
-export async function fetchCategoryPages(category: string): Promise<CategoryPage[]> {
+export async function fetchCategoryPages(category: string, signal?: AbortSignal): Promise<CategoryPage[]> {
   const pages: CategoryPage[] = [];
   let cmcontinue = '';
 
   do {
     const params = new URLSearchParams({ action: 'query', list: 'categorymembers', cmtitle: category, cmnamespace: '0', cmtype: 'page', cmlimit: '500', format: 'json' });
     if (cmcontinue) params.set('cmcontinue', cmcontinue);
-    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000)).json() as { continue?: { cmcontinue?: string }; query?: { categorymembers?: Array<{ ns: number; title: string; pageid: number }> } };
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000, signal)).json() as { continue?: { cmcontinue?: string }; query?: { categorymembers?: Array<{ ns: number; title: string; pageid: number }> } };
     const members = data.query?.categorymembers || [];
     for (const member of members) {
       pages.push({ title: member.title, pageid: member.pageid, url: WIKI_BASE + encodeURIComponent(member.title.replace(/ /g, '_')) });
@@ -305,10 +340,10 @@ async function fillPageThumbnails(pages: CategoryPage[]): Promise<void> {
 
 const CHARACTER_CATEGORIES = ['超弦体', '晶源体'];
 
-export async function fetchAllCharacters(): Promise<CategoryPage[]> {
+export async function fetchAllCharacters(signal?: AbortSignal): Promise<CategoryPage[]> {
   const pages: CategoryPage[] = [];
   for (const cat of CHARACTER_CATEGORIES) {
-    const categoryPages = await fetchCategoryPages(`Category:${cat}`);
+    const categoryPages = await fetchCategoryPages(`Category:${cat}`, signal);
     for (const page of categoryPages) pages.push(page);
   }
   if (pages.length > 0) await fillPageThumbnails(pages);
@@ -322,6 +357,7 @@ export function getCachedVoiceParsetree(pageTitle: string): string | undefined {
 }
 
 export async function fetchVoicePageParsetree(pageTitle: string, signal?: AbortSignal): Promise<string> {
+  if (signal?.aborted) throw abortError();
   const cached = voiceParsetreeCache.get(pageTitle);
   if (cached) return cached;
   if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
@@ -329,19 +365,21 @@ export async function fetchVoicePageParsetree(pageTitle: string, signal?: AbortS
   const pageUrl = `${API}?action=parse&page=${encodeURIComponent(pageTitle)}&prop=parsetree&format=json`;
   let pageError: unknown;
   try {
-    const data = await (await fetchWithTimeout(pageUrl, 15000, signal)).json() as { parse?: { parsetree?: { '*': string } } };
+    const data = await (await fetchWithTimeout(pageUrl, 15000, signal)).json() as { parse?: { parsetree?: { '*': string } }; error?: { code?: string } };
     const parsetree = data.parse?.parsetree?.['*'] || '';
     if (parsetree) {
       voiceParsetreeCache.set(pageTitle, parsetree);
       return parsetree;
     }
+    if (data.error?.code !== 'missingtitle') throw new Error('语音页未包含有效台词结构');
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
+    if (err instanceof WikiBackoffError) throw err;
     pageError = err;
   }
 
   if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-  const pageid = await resolveVoicePageId(pageTitle);
+  const pageid = await resolveVoicePageId(pageTitle, signal);
   if (!pageid) {
     if (pageError) throw pageError;
     return '';
@@ -358,7 +396,6 @@ export async function fetchVoicePageParsetree(pageTitle: string, signal?: AbortS
 }
 
 const voicePageIdCache = new Map<string, number | null>();
-let voicePageIdCatalogPromise: Promise<void> | null = null;
 
 function rememberVoicePageId(title: string, pageid: number | null): void {
   voicePageIdCache.set(title, pageid);
@@ -369,69 +406,47 @@ function rememberVoicePageId(title: string, pageid: number | null): void {
   }
 }
 
-async function resolveVoicePageId(pageTitle: string): Promise<number | null> {
+async function resolveVoicePageId(pageTitle: string, signal?: AbortSignal): Promise<number | null> {
+  if (signal?.aborted) throw abortError();
   if (voicePageIdCache.has(pageTitle)) return voicePageIdCache.get(pageTitle)!;
   const charName = pageTitle.replace(/\/语音台词$/, '');
   if (voicePageIdCache.has(charName)) return voicePageIdCache.get(charName)!;
 
   // Prefer a direct title lookup before scanning the whole voice category.
-  try {
-    const titles = Array.from(new Set([pageTitle, `${charName}/语音台词`, charName]));
-    const params = new URLSearchParams({
-      action: 'query',
-      titles: titles.join('|'),
-      format: 'json',
-    });
-    const data = await (await fetchWithTimeout(`${API}?${params}`, 8000)).json() as {
-      query?: { pages?: Record<string, { pageid?: number; title?: string; missing?: string }> };
-    };
-    for (const page of Object.values(data.query?.pages || {})) {
-      if (!page.title) continue;
-      if (page.missing != null || !page.pageid || page.pageid < 0) {
-        rememberVoicePageId(page.title, null);
-        continue;
-      }
-      rememberVoicePageId(page.title, page.pageid);
+  const titles = Array.from(new Set([pageTitle, `${charName}/语音台词`, charName]));
+  const params = new URLSearchParams({ action: 'query', titles: titles.join('|'), format: 'json' });
+  const data = await (await fetchWithTimeout(`${API}?${params}`, 8000, signal)).json() as {
+    query?: { pages?: Record<string, { pageid?: number; title?: string; missing?: string }> };
+  };
+  if (!data.query?.pages) throw new Error('语音页面查询响应无效');
+  for (const page of Object.values(data.query.pages)) {
+    if (!page.title) continue;
+    if (page.missing != null || !page.pageid || page.pageid < 0) {
+      rememberVoicePageId(page.title, null);
+      continue;
     }
-    if (voicePageIdCache.has(pageTitle)) return voicePageIdCache.get(pageTitle)!;
-    if (voicePageIdCache.has(charName)) return voicePageIdCache.get(charName)!;
-  } catch {
-    // fall through to category catalog
+    rememberVoicePageId(page.title, page.pageid);
   }
+  if (voicePageIdCache.has(pageTitle)) return voicePageIdCache.get(pageTitle)!;
+  if (voicePageIdCache.has(charName)) return voicePageIdCache.get(charName)!;
 
-  if (!voicePageIdCatalogPromise) {
-    voicePageIdCatalogPromise = (async () => {
-      let cmcontinue = '';
-      do {
-        const params = new URLSearchParams({
-          action: 'query',
-          list: 'categorymembers',
-          cmtitle: 'Category:语音台词',
-          cmnamespace: '0',
-          cmtype: 'page',
-          cmlimit: '500',
-          format: 'json',
-        });
-        if (cmcontinue) params.set('cmcontinue', cmcontinue);
-        const data = await (await fetchWithTimeout(`${API}?${params}`, 10000)).json() as {
-          continue?: { cmcontinue?: string };
-          query?: { categorymembers?: Array<{ pageid: number; title: string }> };
-        };
-        for (const m of data.query?.categorymembers || []) {
-          rememberVoicePageId(m.title, m.pageid);
-        }
-        cmcontinue = data.continue?.cmcontinue || '';
-      } while (cmcontinue);
-    })().finally(() => {
-      voicePageIdCatalogPromise = null;
+  // Keep the catalog in this caller's cancellation scope. Successful responses are
+  // already shared by the request cache, without a detached global promise.
+  let cmcontinue = '';
+  do {
+    const params = new URLSearchParams({
+      action: 'query', list: 'categorymembers', cmtitle: 'Category:语音台词',
+      cmnamespace: '0', cmtype: 'page', cmlimit: '500', format: 'json',
     });
-  }
-
-  try {
-    await voicePageIdCatalogPromise;
-  } catch {
-    // ignore catalog failure; return null below
-  }
+    if (cmcontinue) params.set('cmcontinue', cmcontinue);
+    const data = await (await fetchWithTimeout(`${API}?${params}`, 10000, signal)).json() as {
+      continue?: { cmcontinue?: string };
+      query?: { categorymembers?: Array<{ pageid: number; title: string }> };
+    };
+    if (!data.query?.categorymembers) throw new Error('语音分类查询响应无效');
+    for (const m of data.query.categorymembers) rememberVoicePageId(m.title, m.pageid);
+    cmcontinue = data.continue?.cmcontinue || '';
+  } while (cmcontinue);
 
   if (voicePageIdCache.has(pageTitle)) return voicePageIdCache.get(pageTitle)!;
   if (voicePageIdCache.has(charName)) return voicePageIdCache.get(charName)!;

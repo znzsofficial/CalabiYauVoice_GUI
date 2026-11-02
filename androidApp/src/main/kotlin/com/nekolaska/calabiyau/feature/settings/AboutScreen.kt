@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -34,9 +35,9 @@ fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val versionName = remember(context) {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.23"
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.24"
         } catch (_: Exception) {
-            "2.1.23"
+            "2.1.24"
         }
     }
 
@@ -58,6 +59,10 @@ fun AboutScreen(onBack: () -> Unit) {
 @Composable
 private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackground: Color) {
     val context = LocalContext.current
+    val scheme = MaterialTheme.colorScheme
+    val textProtection = aboutTextProtection(scheme.surface, scheme.onSurface)
+    val cardProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurface)
+    val versionProtection = aboutTextProtection(scheme.secondaryContainer, scheme.onSecondaryContainer)
     Scaffold(
         topBar = {
             Row(
@@ -71,17 +76,25 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
                     onClick = onBack,
                     modifier = Modifier.size(40.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
+                        containerColor = textProtection.background,
+                        contentColor = textProtection.foreground
                     )
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    "关于",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Surface(
+                    shape = smoothCornerShape(16.dp),
+                    color = textProtection.background
+                ) {
+                    Text(
+                        "关于",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textProtection.foreground,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    )
+                }
             }
         },
         containerColor = Color.Transparent
@@ -120,24 +133,32 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
 
             Spacer(Modifier.height(20.dp))
 
-            // 标题和版本
-            Text(
-                text = "卡拉彼丘 Wiki 助手",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            // 文字拥有不透明的主题底层；网格即使经过 90% primary 节点也不会改变对比度。
+            Surface(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                shape = smoothCornerShape(16.dp),
+                color = textProtection.background
+            ) {
+                Text(
+                    text = "卡拉彼丘 Wiki 助手",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = textProtection.foreground,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                )
+            }
 
             Spacer(Modifier.height(6.dp))
 
             Surface(
                 shape = smoothCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer
+                color = versionProtection.background
             ) {
                 Text(
                     text = "Version $versionName",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = versionProtection.foreground,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )
             }
@@ -150,7 +171,7 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
+                color = cardProtection.background
             ) {
                 Text(
                     text = "一款基于 Kotlin Multiplatform 开发的现代化工具，" +
@@ -159,7 +180,7 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
                             "为卡拉彼丘玩家提供便捷、流畅的一站式 Wiki 体验。",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = cardProtection.foreground,
                     lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
                     modifier = Modifier.padding(24.dp)
                 )
@@ -167,28 +188,22 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
 
             Spacer(Modifier.height(28.dp))
 
-            // 链接区域
-            Text(
-                text = "相关链接",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .align(Alignment.Start)
-                    .padding(start = 36.dp)
-            )
-
-            Spacer(Modifier.height(10.dp))
-
             // 链接卡片
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
                 shape = smoothCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow
+                color = cardProtection.background
             ) {
                 Column {
+                    Text(
+                        text = "相关链接",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = aboutTextProtection(cardProtection.background, scheme.primary).foreground,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
+                    )
                     LinkItem(
                         title = "发布页",
                         subtitle = "wiki.nekolaska.vip",
@@ -236,11 +251,19 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
             Spacer(Modifier.height(32.dp))
 
             // 版权声明
-            Text(
-                text = "© 2025 Developed by NekoLaska",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
+            Surface(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                shape = smoothCornerShape(12.dp),
+                color = textProtection.background
+            ) {
+                Text(
+                    text = "© 2025 Developed by NekoLaska",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = aboutTextProtection(textProtection.background, scheme.onSurfaceVariant).foreground,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
 
             Spacer(Modifier.height(32.dp))
         }
@@ -254,9 +277,13 @@ private fun LinkItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val titleProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.primary)
+    val subtitleProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurfaceVariant)
+    val iconProtection = aboutTextProtection(scheme.surfaceContainerHigh, scheme.onSurfaceVariant)
     Surface(
         onClick = onClick,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = titleProtection.background,
         shape = smoothCornerShape(16.dp)
     ) {
         Row(
@@ -268,13 +295,13 @@ private fun LinkItem(
             Surface(
                 modifier = Modifier.size(40.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                color = iconProtection.background
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = iconProtection.foreground,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -285,20 +312,41 @@ private fun LinkItem(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = titleProtection.foreground
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = subtitleProtection.foreground
                 )
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = subtitleProtection.foreground,
                 modifier = Modifier.size(18.dp)
             )
         }
     }
+}
+
+internal data class AboutTextProtection(val background: Color, val foreground: Color)
+
+/** Preserve the theme's surface, including AMOLED, but never let mesh colors bleed under text. */
+internal fun aboutTextProtection(background: Color, foreground: Color): AboutTextProtection {
+    val opaqueBackground = background.copy(alpha = 1f)
+    val opaqueForeground = foreground.copy(alpha = 1f)
+    val backgroundLuminance = opaqueBackground.luminance()
+    val foregroundLuminance = opaqueForeground.luminance()
+    val contrast = (maxOf(backgroundLuminance, foregroundLuminance) + 0.05f) /
+        (minOf(backgroundLuminance, foregroundLuminance) + 0.05f)
+    // Custom/reduced-contrast palettes (also mid-theme transitions) may not supply an AA pair.
+    val readableForeground = if (contrast >= 4.5f) opaqueForeground else {
+        if ((backgroundLuminance + 0.05f) / 0.05f >= 1.05f / (backgroundLuminance + 0.05f)) {
+            Color.Black
+        } else {
+            Color.White
+        }
+    }
+    return AboutTextProtection(opaqueBackground, readableForeground)
 }

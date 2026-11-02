@@ -16,7 +16,8 @@ data class SubmitDeckPayload(
     val author: String,
     val intro: String,
     val faction: String,
-    val selectedCardIds: List<String>
+    val selectedCardIds: List<String>,
+    val allowMissingShareCode: Boolean = false
 )
 
 data class SubmitDeckResult(

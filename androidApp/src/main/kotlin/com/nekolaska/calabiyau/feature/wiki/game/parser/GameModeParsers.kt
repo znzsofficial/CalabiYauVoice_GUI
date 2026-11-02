@@ -2,6 +2,8 @@ package com.nekolaska.calabiyau.feature.wiki.game.parser
 
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAGE
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import util.wikiPathEncode
 
 object GameModeParsers {
@@ -57,13 +59,25 @@ object GameModeParsers {
             KEY_TEMPLATE_REGEX.replace(GALLERY_REGEX.replace(wikitext, ""), "$1")
         )
         val enc = mode.pageName.wikiPathEncode()
+        val extraction = mode.pageName == EXTRACTION_MODE_PAGE
+        val summary = firstProseLine(body.substringBefore("\n==")).ifBlank {
+            if (extraction) GALLERY_REGEX.find(wikitext)?.value.orEmpty().lineSequence()
+                .filter { it.trim().startsWith("文件:") || it.trim().startsWith("File:") }
+                .filter { '|' in it }.map { HtmlText.clean(it.substringAfter('|').replace("'''", "")) }
+                .filter { it.isNotBlank() }.joinToString("\n") else ""
+        }
+        val modeMaps = if (extraction && maps.isEmpty()) {
+            Regex("(?m)^\\*\\s*模式地图[：:](.*)$").find(wikitext)?.groupValues?.get(1)
+                ?.let { line -> Regex("""\[\[([^]|]+)(?:\|[^]]+)?]]""").findAll(line).map { it.groupValues[1].trim() }.toList() }
+                .orEmpty()
+        } else maps
 
         return GameModeDetail(
             name = mode.displayName,
-            summary = firstProseLine(body.substringBefore("\n==")),
+            summary = summary,
             winCondition = cleanSection(extractSection(body, "获胜条件")),
             settings = cleanSection(extractSection(body, "模式设定")),
-            maps = maps,
+            maps = modeMaps,
             wikiUrl = "$WIKI_BASE$enc"
         )
     }
@@ -137,6 +151,7 @@ object GameModeParsers {
             when {
                 trimmed.isEmpty() -> ""
                 trimmed.startsWith(":") -> null
+                trimmed.startsWith(";") -> trimmed.trimStart(';').trim().removeSuffix("：")
                 else -> trimmed.replace(BULLET_REGEX, "• ").takeUnless(EMPTY_MAP_LINE_REGEX::matches)
             }
         }

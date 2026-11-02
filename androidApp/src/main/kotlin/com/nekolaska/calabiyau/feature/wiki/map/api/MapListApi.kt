@@ -37,6 +37,7 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
         "枪王乱斗" to "枪王乱斗",
         "晶能冲突" to "晶能冲突",
         "炸弹派对" to "炸弹派对",
+        "弦溯战线" to "弦溯战线",
     )
 
     suspend fun fetchAllModes(
@@ -60,7 +61,7 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
         cacheOnly: Boolean = false
     ): ApiResult<List<GameModeData>> =
         ioApiCall("获取地图列表失败") {
-            // 13 个模式各自渲染一个模板页面；限制并发为 4，
+            // 各模式独立渲染模板页面；限制并发为 4，
             // 避免一次性打满连接触发 EdgeOne 频率拦截（567），导致整批模式图缺失。
             val semaphore = Semaphore(4)
             val results = coroutineScope {

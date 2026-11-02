@@ -1,5 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SharedTransitionLayout
@@ -21,14 +22,18 @@ import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -64,6 +69,7 @@ import com.nekolaska.calabiyau.feature.wiki.decoration.PlayerDecorationScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.GalleryScreen
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.game.GameModeScreen
+import com.nekolaska.calabiyau.feature.wiki.extraction.ExtractionCatalogScreen
 import com.nekolaska.calabiyau.feature.wiki.history.GameHistoryScreen
 import com.nekolaska.calabiyau.feature.wiki.imprint.ImprintScreen
 import com.nekolaska.calabiyau.feature.wiki.interactionitem.InteractionItemScreen
@@ -256,7 +262,7 @@ fun WikiHubScreen(
     val homeListState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
     val homeCharacterRowState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
     val homeMapRowState = rememberSaveable(resetKey, saver = lazyListStateSaver) { LazyListState() }
-    val homeTopAppBarState = remember(resetKey) {
+    val homeTopAppBarState = rememberSaveable(resetKey, saver = TopAppBarState.Saver) {
         TopAppBarState(initialHeightOffsetLimit = -Float.MAX_VALUE, initialHeightOffset = 0f, initialContentOffset = 0f)
     }
 
@@ -321,7 +327,8 @@ fun WikiHubScreen(
     val gameModes = mapState.data
     val isLoadingMaps = mapState.isLoading
 
-    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
+    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val effectiveGlass = remember(liquidGlassEnabled) { mutableStateOf(liquidGlassEnabled) }
     val wallpaperUrl by AppPrefs.wallpaperUrlState.collectAsState()
     val hubBackdrop = rememberLayerBackdrop()
     LaunchedEffect(Unit) {
@@ -337,6 +344,8 @@ fun WikiHubScreen(
 
     var isNavigatingBack by remember { mutableStateOf(false) }
     val transitionState = rememberPredictiveBackTransition(currentRoute, resetKey)
+    val routeStates = key(resetKey) { rememberSaveableStateHolder() }
+    val retainedRoutes by rememberUpdatedState(backStack)
 
     fun popBackStack() {
         if (backStack.size > 1) {
@@ -389,14 +398,17 @@ fun WikiHubScreen(
             backdrop = hubBackdrop
         )
 
-        androidx.compose.runtime.CompositionLocalProvider(LocalHasWallpaper provides hasWallpaper) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalHasWallpaper provides hasWallpaper,
+            LocalLiquidGlassEnabled provides effectiveGlass
+        ) {
             SharedTransitionLayout {
             val transition = rememberTransition(transitionState, label = "WikiHubPageTransition")
             transition.AnimatedContent(
                 modifier = Modifier.fillMaxSize(),
                 transitionSpec = {
-                    val duration = 400
                     val isDetailTransition = targetState.isDetailRoute || initialState.isDetailRoute
+                    val duration = if (isDetailTransition) 400 else 220
                     if (isDetailTransition) {
                         fadeIn(tween(duration)) togetherWith fadeOut(tween(duration / 2))
                     } else if (isNavigatingBack) {
@@ -416,6 +428,14 @@ fun WikiHubScreen(
                     }
                 }
             ) { route ->
+            val routeKey = route.encode()
+            routeStates.SaveableStateProvider(routeKey) {
+            DisposableEffect(routeKey) {
+                onDispose {
+                    // A popped page must not leave filters/drafts behind indefinitely.
+                    if (route !in retainedRoutes) routeStates.removeState(routeKey)
+                }
+            }
             when (route) {
             is WikiRoute.Home -> {
                 WikiHomePage(
@@ -593,6 +613,10 @@ fun WikiHubScreen(
                     }
                 )
             }
+
+            is WikiRoute.ExtractionCatalog -> ExtractionCatalogScreen(
+                kind = route.kind, onBack = { popBackStack() }, onOpenWikiUrl = onOpenWikiUrl
+            )
 
             is WikiRoute.Voting -> {
                 VotingScreen(onBack = { popBackStack() })
@@ -862,7 +886,8 @@ fun WikiHubScreen(
                 )
             }
         }
-            }
+            } // SaveableStateProvider
+            } // AnimatedContent
             } // SharedTransitionLayout
         }
     }

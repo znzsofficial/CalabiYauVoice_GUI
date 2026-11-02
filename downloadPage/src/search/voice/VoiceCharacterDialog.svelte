@@ -54,6 +54,7 @@
   let downloadConcurrency = $state(4);
   let downloadAbortController = $state(null) as AbortController | null;
   let highlightedLineIndex = $state(undefined) as number | undefined;
+  const metadataController = new AbortController();
 
   const langLabels: Record<LangKey, string> = { cn: '中文', jp: '日文', en: '英文' };
   const langShort: Record<LangKey, string> = { cn: '中', jp: '日', en: '英' };
@@ -638,11 +639,17 @@
     visibleSelectable.length > 0 && visibleSelectable.every(i => selectedIndices.has(i))
   );
 
-  onMount(async () => {
+  onMount(() => {
     dialogRef?.showModal();
+    void loadMetadata();
+    return () => { metadataController.abort(); downloadAbortController?.abort(); };
+  });
+
+  async function loadMetadata(): Promise<void> {
     try {
       const pageTitle = getVoicePageTitle(character.title);
-      const parsetree = await fetchVoicePageParsetree(pageTitle);
+      const parsetree = await fetchVoicePageParsetree(pageTitle, metadataController.signal);
+      if (metadataController.signal.aborted) return;
       sectionGroups = parseVoiceSections(parsetree);
       if (sectionGroups.length > 0) {
         const secIdx = Math.max(0, Math.min(initialSection, sectionGroups.length - 1));
@@ -655,13 +662,14 @@
         errorMessage = '未解析到语音台词数据';
       }
     } catch (err) {
+      if (metadataController.signal.aborted) return;
       status = 'error';
       errorMessage = toError(err).message || '加载语音台词失败';
     }
-  });
+  }
 </script>
 
-<dialog class="voice-dialog" bind:this={dialogRef} onclick={closeOnBackdrop} onclose={() => { downloadAbortController?.abort(); onClose(); }}>
+<dialog class="voice-dialog" bind:this={dialogRef} onclick={closeOnBackdrop} onclose={() => { metadataController.abort(); downloadAbortController?.abort(); onClose(); }}>
   <div class="voice-dialog-inner">
     <div class="voice-dialog-header">
       <h2 class="voice-dialog-title">

@@ -26,6 +26,7 @@ import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import util.wikiPathEncode
+import androidx.compose.runtime.saveable.rememberSaveable
 
 // ════════════════════════════════════════════════════════
 //  战斗模式页 —— 原生客户端版 (MD3 Expressive)
@@ -41,9 +42,9 @@ fun GameModeScreen(
         initial = emptyList<GameModeDetail>(),
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { GameModeApi.fetchAllModes(cacheOnly = true) },
-        fetch = { force -> GameModeApi.fetchAllModes(forceRefresh = force) }
+        fetch = { force -> GameModeApi.fetchAllModes(forceRefresh = force, allowMemoryCache = false) }
     )
-    var expandedMode by remember { mutableStateOf<String?>(null) }
+    var expandedMode by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -284,6 +285,7 @@ private fun modeIcon(name: String): ImageVector {
         "弦区争夺" -> Icons.Outlined.Flag
         "大头乱斗" -> Icons.Outlined.Face
         "炸弹派对" -> Icons.Outlined.Whatshot
+        "弦溯战线" -> Icons.Outlined.Explore
         else -> Icons.Outlined.SportsEsports
     }
 }

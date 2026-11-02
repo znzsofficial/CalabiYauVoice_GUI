@@ -89,6 +89,7 @@
     controller: AbortController;
     waiters: number;
   }>();
+  const metadataLifetime = new AbortController();
   let nsList = $derived(nsExpanded ? NS_EXTENDED : NS_PRIMARY);
   let totalPages = $derived(Math.ceil(totalHits / PAGE_SIZE));
   let pages = $derived(paginationPages(currentPage, totalPages));
@@ -117,6 +118,13 @@
       query = urlQ;
       if (activeProfile !== 'voiceSubtitle') doSearch(urlQ);
     }
+    return () => {
+      metadataLifetime.abort();
+      abortActiveSearch();
+      for (const entry of categoryFilesInFlight.values()) entry.controller.abort();
+      zipAbortController?.abort();
+      categoryAbortController?.abort();
+    };
   });
 
   function toggleAliasSearch(): void {
@@ -282,8 +290,8 @@
     categoryStatusText = '';
   }
 
-  async function fetchSearchSuggestions(value: string, modePrefix: string): Promise<Suggestion[]> {
-    return await fetchPrefixSuggestions({ search: buildSearchQuery(value, modePrefix), limit: SUGGEST_LIMIT, namespace: getActiveNSParam() || '0', nsNameMap });
+  async function fetchSearchSuggestions(value: string, modePrefix: string, signal?: AbortSignal): Promise<Suggestion[]> {
+    return await fetchPrefixSuggestions({ search: buildSearchQuery(value, modePrefix), limit: SUGGEST_LIMIT, namespace: getActiveNSParam() || '0', nsNameMap, signal });
   }
 
   function resetCategoryTreeUi(): void {
@@ -545,7 +553,7 @@
     categorySubcatLoading = loading;
     categorySubcatErrors = { ...categorySubcatErrors, [category]: '' };
     try {
-      const subcats = await fetchCategoryMembers(category, 14, 'subcat');
+      const subcats = await fetchCategoryMembers(category, 14, 'subcat', metadataLifetime.signal);
       categorySubcats = { ...categorySubcats, [category]: subcats };
       const nextErrors = { ...categorySubcatErrors };
       delete nextErrors[category];
@@ -956,7 +964,7 @@
     </nav>
     <div class="search-task-intro"><h2>{guide.title}</h2><p>{guide.description}</p></div>
     <SearchFilters {activeProfile} {activeSort} {selectedNS} {nsList} {nsExpanded} disabled={downloadBusy} {voiceSubtitleActive} onSetProfile={setProfile} onSetSort={setSort} onToggleNS={toggleNamespace} onToggleAllNS={toggleAllNamespaces} onToggleNSExpanded={() => { if (!downloadBusy) nsExpanded = !nsExpanded; }} />
-    <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} placeholder={guide.placeholder} showSearchMode={activeProfile === 'advanced'} disabled={downloadBusy} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
+    <SearchBox bind:value={inputValue} bind:modePrefix={searchModePrefix} bind:modeLabel={searchModeLabel} {voiceSubtitleActive} suggestionScope={activeProfile + ':' + getActiveNSParam()} placeholder={guide.placeholder} showSearchMode={activeProfile === 'advanced'} disabled={downloadBusy} {status} fetchSuggestions={fetchSearchSuggestions} onInputChange={handleSearchInputChange} onSubmit={submitSearch} onClear={clearSearch} />
     <p class="search-task-hint">{guide.hint}</p>
     {#if !inputValue.trim()}
       <div class="search-task-examples"><span>快捷检索：</span>{#each guide.examples as example (example)}<button type="button" disabled={downloadBusy} onclick={() => { if (voiceSubtitleActive) inputValue = example; else submitSearch(example); }}>{example}<iconify-icon icon="lucide:arrow-up-left"></iconify-icon></button>{/each}</div>

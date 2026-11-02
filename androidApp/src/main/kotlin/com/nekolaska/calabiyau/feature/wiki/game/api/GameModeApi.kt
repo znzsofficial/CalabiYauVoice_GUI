@@ -5,6 +5,7 @@ import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
 import com.nekolaska.calabiyau.feature.wiki.game.parser.GameModeParsers
 import com.nekolaska.calabiyau.feature.wiki.game.source.GameModeRemoteSource
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.EXTRACTION_MODE_PAGE
 import data.ApiResult
 import data.ErrorKind
 import data.ioApiCall
@@ -22,6 +23,7 @@ import kotlinx.coroutines.coroutineScope
 object GameModeApi : CachedWikiApi<List<GameModeDetail>>("GameModeApi") {
 
     val MODES = listOf(
+        ModeEntry("弦溯战线", EXTRACTION_MODE_PAGE),
         ModeEntry("一般爆破", "战斗模式/一般爆破"),
         ModeEntry("团队乱斗", "战斗模式/团队乱斗"),
         ModeEntry("排位爆破", "战斗模式/排位爆破"),

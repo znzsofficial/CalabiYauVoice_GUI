@@ -3,6 +3,10 @@ package com.nekolaska.calabiyau.feature.weapon.detail
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.feature.weapon.detail.parser.TacticalItemEffectParser
+import com.nekolaska.calabiyau.feature.weapon.detail.parser.WeaponSupplementaryDataParser
+import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
+import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDamageCoefficients
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -66,7 +70,13 @@ object WeaponDetailApi {
         val lowerMultiplier: String,// 下肢倍率
         val imageUrl: String?,      // 武器图片
         val subPages: List<SubPage>,// 子页面
-        val cooldowns: Map<String, Int> = emptyMap() // 冷却时间（模式名→秒数），仅战术道具
+        val cooldowns: Map<String, Int> = emptyMap(), // 冷却时间（模式名→秒数），仅战术道具
+        val itemEffect: String = "", // 战术道具效果（ITEM EFFECT），独立于介绍
+        val performanceData: List<WeaponDataSection> = emptyList(),
+        val mechanics: List<WeaponDataSection> = emptyList(),
+        val extraStats: Map<String, String> = emptyMap(),
+        val damageDescription: String = "",
+        val mobileDamageCoefficients: WeaponDamageCoefficients? = null
     )
 
     data class DamageRow(
@@ -132,7 +142,7 @@ object WeaponDetailApi {
                     forceRefresh = forceRefresh
                 )
 
-                val detail = parseWeaponWikitext(
+                val parsedDetail = parseWeaponWikitext(
                     weaponName,
                     wikitext,
                     renderedHtml = renderedHtml,
@@ -143,6 +153,13 @@ object WeaponDetailApi {
                         kind = ErrorKind.NOT_FOUND
                     )
 
+                // Current tactical pages embed the cooldown table. Only older payloads need
+                // the secondary request; pure parsing itself must never fetch the network.
+                val tactical = parsedDetail.type == "战术道具" ||
+                    extractTemplate(wikitext, "武器-战术道具") != null
+                val detail = if (tactical && parsedDetail.cooldowns.isEmpty()) {
+                    parsedDetail.copy(cooldowns = fetchCooldowns(weaponName, forceRefresh))
+                } else parsedDetail
                 detailCache[weaponName] = detail
 
                 ApiResult.Success(
@@ -179,7 +196,8 @@ object WeaponDetailApi {
         if (weaponParams.isEmpty()) return null
 
         // 判断是否为战术道具
-        val isTacticalEquipment = isTactical || matchedTemplate == "武器-战术道具"
+        val isTacticalEquipment = isTactical || matchedTemplate == "武器-战术道具" ||
+            (weaponParams["类型"] ?: weaponParams["武器种类"]) == "战术道具"
 
         // 解析伤害数值模板。Wiki 已将 {{武器伤害}} 改名为 {{武器详细数据}}，
         // 距离伤害/基础伤害参数同时存在于主 {{武器}} 模板，读取时按 新模板 → 旧模板 → 主模板 回退。
@@ -187,7 +205,7 @@ object WeaponDetailApi {
             ?: extractTemplate(wikitext, "武器详细数据")
         val damageParams = if (damageContent != null) parseTemplateParams(damageContent) else emptyMap()
         val allDamageParams: (String) -> String? = { key ->
-            damageParams[key] ?: weaponParams[key]
+            damageParams[key]?.takeIf { it.isNotBlank() } ?: weaponParams[key]?.takeIf { it.isNotBlank() }
         }
 
         // 构建伤害表
@@ -301,11 +319,17 @@ object WeaponDetailApi {
             .replace(Regex("""\n{3,}"""), "\n\n")                       // 多余空行
             .trim()
 
-        // 战术道具：获取冷却时间
-        val cooldowns = if (isTacticalEquipment) fetchCooldowns(name) else emptyMap()
+        val cooldowns = if (isTacticalEquipment) parseCooldownTable(renderedHtml, name) else emptyMap()
+        val itemEffect = if (isTacticalEquipment) {
+            TacticalItemEffectParser.parse(renderedHtml, weaponParams["效果"].orEmpty())
+        } else ""
 
         // 重焰等页面：基础伤害/部位倍率仅存在于渲染的系数表中，模板参数缺失时回填
         val coefficients = parseDamageCoefficientsFromHtml(renderedHtml)
+        val mobileCoefficients = parseDamageCoefficientsFromHtml(renderedHtml, mobile = true)
+        val mobileValues = listOf("基础伤害", "头部倍率", "上肢倍率", "下肢倍率").map { key ->
+            allDamageParams("${key}移动端") ?: allDamageParams("移动端$key")
+        }
 
         return WeaponDetail(
             name = name,
@@ -334,7 +358,24 @@ object WeaponDetailApi {
             lowerMultiplier = allDamageParams("下肢倍率") ?: coefficients?.lower ?: "",
             imageUrl = imageUrl,
             subPages = subPages,
-            cooldowns = cooldowns
+            cooldowns = cooldowns,
+            itemEffect = itemEffect,
+            performanceData = WeaponSupplementaryDataParser.performance(renderedHtml, damageParams),
+            mechanics = WeaponSupplementaryDataParser.mechanics(renderedHtml),
+            extraStats = buildMap {
+                listOf("蓄力速度", "蓄力速度移动端", "瞄准速度移动端", "弦化伤害移动端").forEach { key ->
+                    weaponParams[key]?.takeIf { it.isNotBlank() }?.let { put(key, it) }
+                }
+            },
+            damageDescription = TacticalItemEffectParser.parse("", weaponParams["伤害说明"].orEmpty()),
+            mobileDamageCoefficients = if (mobileValues.any { !it.isNullOrBlank() } || mobileCoefficients != null) {
+                WeaponDamageCoefficients(
+                    mobileValues[0] ?: mobileCoefficients?.baseDamage.orEmpty(),
+                    mobileValues[1] ?: mobileCoefficients?.head.orEmpty(),
+                    mobileValues[2] ?: mobileCoefficients?.upper.orEmpty(),
+                    mobileValues[3] ?: mobileCoefficients?.lower.orEmpty()
+                )
+            } else null
         )
     }
 
@@ -409,13 +450,14 @@ object WeaponDetailApi {
 
     /**
      * 从「武器部位伤害系数」表提取基础伤害与部位倍率（重焰等副武器页面：
-     * 模板不带这些参数，仅存在于渲染的系数表中）。跳过（移动端）变体。
+     * 模板不带这些参数，仅存在于渲染的系数表中）。按 mobile 分别读取 PC/移动端，不能交叉回填。
      */
-    private fun parseDamageCoefficientsFromHtml(html: String): DamageCoefficients? {
+    private fun parseDamageCoefficientsFromHtml(html: String, mobile: Boolean = false): WeaponDamageCoefficients? {
         if (html.isBlank()) return null
         val document = Jsoup.parse(html)
         val table = document.select("table.klbqtable").firstOrNull { t ->
-            t.text().contains("武器部位伤害系数") && !t.text().contains("（移动端）")
+            val title = t.selectFirst("tr")?.text().orEmpty()
+            title.contains("武器部位伤害系数") && title.contains("移动端") == mobile
         } ?: return null
 
         var base = ""
@@ -436,15 +478,8 @@ object WeaponDetailApi {
             }
         }
         if (base.isBlank() && head.isBlank()) return null
-        return DamageCoefficients(base, head, upper, lower)
+        return WeaponDamageCoefficients(base, head, upper, lower)
     }
-
-    private data class DamageCoefficients(
-        val baseDamage: String,
-        val head: String,
-        val upper: String,
-        val lower: String
-    )
 
     private fun parseDamageTable(table: Element): List<DamageRow> {
         val caption = table.selectFirst("caption")?.text()?.trim().orEmpty()
@@ -685,21 +720,23 @@ object WeaponDetailApi {
         return params
     }
 
-    /** 按 | 分割模板参数，跳过嵌套 {{...}} 内的 | */
+    /** 按 | 分割模板参数，跳过嵌套模板和 Wiki 链接显示名内的 |。 */
     private fun splitTemplateParams(content: String): List<String> {
         val parts = mutableListOf<String>()
         var depth = 0
+        var linkDepth = 0
         val current = StringBuilder()
-        for (i in content.indices) {
-            val c = content[i]
-            if (i < content.length - 1 && c == '{' && content[i + 1] == '{') {
-                depth++; current.append(c)
-            } else if (i < content.length - 1 && c == '}' && content[i + 1] == '}') {
-                depth--; current.append(c)
-            } else if (c == '|' && depth == 0) {
-                parts.add(current.toString()); current.clear()
-            } else {
-                current.append(c)
+        var i = 0
+        while (i < content.length) {
+            when {
+                content.startsWith("{{", i) -> { depth++; current.append("{{"); i += 2 }
+                content.startsWith("}}", i) -> { depth--; current.append("}}"); i += 2 }
+                content.startsWith("[[", i) -> { linkDepth++; current.append("[["); i += 2 }
+                content.startsWith("]]", i) -> { linkDepth--; current.append("]]"); i += 2 }
+                content[i] == '|' && depth == 0 && linkDepth == 0 -> {
+                    parts.add(current.toString()); current.clear(); i++
+                }
+                else -> { current.append(content[i]); i++ }
             }
         }
         if (current.isNotEmpty()) parts.add(current.toString())
@@ -740,14 +777,20 @@ object WeaponDetailApi {
      * 从「战术道具冷却时间表」页面获取指定道具的冷却时间。
      * @return 模式名→冷却秒数 的映射，如 {"极限推进模式" to 40, "弦区争夺模式" to 60}
      */
-    private fun fetchCooldowns(weaponName: String): Map<String, Int> {
+    private suspend fun fetchCooldowns(weaponName: String, forceRefresh: Boolean): Map<String, Int> {
         return try {
             val url = buildParseUrl(API, "战术道具冷却时间表", "text")
-            val body = WikiEngine.safeGet(url) ?: return emptyMap()
+            val body = OfflineCache.fetchWithCache(
+                type = OfflineCache.Type.WEAPON_DETAIL,
+                key = "tactical_cooldowns_v1",
+                forceRefresh = forceRefresh
+            ) { WikiEngine.safeGet(url) }?.payload ?: return emptyMap()
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val html = json["parse"]?.jsonObject?.get("text")
                 ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return emptyMap()
             parseCooldownTable(html, weaponName)
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             emptyMap()
         }

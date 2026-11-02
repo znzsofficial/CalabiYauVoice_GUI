@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -45,6 +46,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -56,9 +58,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
+import com.nekolaska.calabiyau.core.wiki.portraitPrefetchIndices
 import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
@@ -68,6 +74,8 @@ import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.hub.LocalHasWallpaper
 import java.util.Calendar
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 // ════════════════════════════════════════════════════════
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
@@ -131,23 +139,14 @@ fun CharacterListScreen(
     LaunchedEffect(factions) {
         if (selectedTab > factions.lastIndex) selectedTab = factions.lastIndex.coerceAtLeast(0)
     }
-            val context = LocalContext.current
-            LaunchedEffect(factions, selectedTab) {
-                val urls = buildList {
-                    factions.getOrNull(selectedTab)?.characters?.let(::addAll)
-                    factions.forEachIndexed { index, faction ->
-                        if (index != selectedTab) addAll(faction.characters)
-                    }
-                }.map { it.portraitUrl ?: it.imageUrl }
-                SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
-            }
+            val safeSelectedTab = selectedTab.coerceIn(0, factions.lastIndex.coerceAtLeast(0))
             // 阵营 Tab
             if (factions.size > 1) {
                 Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
-                    PrimaryTabRow(selectedTabIndex = selectedTab, containerColor = Color.Transparent) {
+                    PrimaryTabRow(selectedTabIndex = safeSelectedTab, containerColor = Color.Transparent) {
                         factions.forEachIndexed { index, faction ->
                             Tab(
-                                selected = selectedTab == index,
+                                selected = safeSelectedTab == index,
                                 onClick = {
                                     selectedTab = index
                                     onTabChanged?.invoke(index)
@@ -166,7 +165,7 @@ fun CharacterListScreen(
             }
 
             // 角色网格
-            val currentFaction = factions.getOrNull(selectedTab)
+            val currentFaction = factions.getOrNull(safeSelectedTab)
             if (currentFaction != null) {
                 CharacterGrid(
                     characters = currentFaction.characters,
@@ -316,25 +315,55 @@ private fun CharacterGrid(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
-    LazyVerticalGrid(
-        state = gridState ?: rememberLazyGridState(),
-        columns = GridCells.Adaptive(minSize = 100.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(characters, key = { it.name }) { character ->
-            CharacterCard(
-                character = character,
-                onClick = { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope
-            )
+    val resolvedGridState = gridState ?: rememberLazyGridState()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(characters, resolvedGridState, context, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            snapshotFlow {
+                val layout = resolvedGridState.layoutInfo
+                val visible = layout.visibleItemsInfo.filter { item ->
+                    // A tab change can briefly retain the previous faction's layout.
+                    characters.getOrNull(item.index)?.name == item.key &&
+                        item.offset.y + item.size.height > layout.viewportStartOffset &&
+                        item.offset.y < layout.viewportEndOffset
+                }.map { it.index }
+                portraitPrefetchIndices(
+                    characters.size,
+                    visible,
+                    isVisible = !resolvedGridState.isScrollInProgress
+                ).map { index -> characters[index].let { it.portraitUrl ?: it.imageUrl } }
+            }.collectLatest { urls ->
+                if (urls.isNotEmpty()) {
+                    // Cancel obsolete windows immediately; coalesce short scroll/tab bursts.
+                    delay(160)
+                    SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
+                }
+            }
         }
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        LazyVerticalGrid(
+            state = resolvedGridState,
+            modifier = Modifier.widthIn(max = 960.dp).fillMaxWidth(),
+            columns = GridCells.Adaptive(minSize = 100.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(characters, key = { it.name }) { character ->
+                CharacterCard(
+                    character = character,
+                    onClick = { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+            }
 
-        // 底部留白
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Spacer(Modifier.height(16.dp))
+            // 底部留白
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(Modifier.height(16.dp))
+            }
         }
     }
 }

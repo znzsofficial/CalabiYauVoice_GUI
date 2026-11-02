@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.Tab
 import androidx.compose.material.icons.outlined.ViewInAr
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -111,6 +112,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SharedDeck
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckPayload
 import com.nekolaska.calabiyau.feature.wiki.bio.model.normalizeDeckQuality
+import com.nekolaska.calabiyau.feature.wiki.bio.parser.BioDeckShareParsers
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
@@ -171,6 +173,9 @@ fun BioCardScreen(
     }
 
     val data = state.data
+    val completeDeckCardMap = remember(deckShareCardState.data, data.pcCards) {
+        BioDeckShareParsers.completeFromPcCatalog(deckShareCardState.data, data.pcCards)
+    }
     val pcFactions = remember(data.pcCards) { listOf("全部阵营") + data.pcCards.map { it.faction }.filter { it.isNotBlank() }.distinct() }
     val pcCategories = remember(data.pcCards) { listOf("全部分类") + data.pcCards.map { it.category }.filter { it.isNotBlank() }.distinct() }
     val mobileFactions = remember(data.mobileCards) { listOf("全部阵营") + data.mobileCards.map { it.faction }.filter { it.isNotBlank() }.distinct() }
@@ -322,12 +327,15 @@ fun BioCardScreen(
                         DeckShareComposerCard(
                             isLoggedIn = isWikiLoggedIn,
                             isSubmitting = isSubmittingDeck,
-                            cardMap = deckShareCardState.data,
+                            cardMap = completeDeckCardMap,
                             pcCards = data.pcCards,
                             mobileCards = data.mobileCards,
                             isLoadingCardMap = deckShareCardState.isLoading,
                             cardMapError = deckShareCardState.error?.message,
-                            onReloadCardMap = { deckShareCardState.reload(forceRefresh = true) },
+                            onReloadCardMap = {
+                                state.reload(forceRefresh = true)
+                                deckShareCardState.reload(forceRefresh = true)
+                            },
                             onOpenLogin = {
                                 onOpenWikiUrl("https://wiki.biligame.com/wiki/Special:UserLogin?returnto=%E6%99%B6%E6%BA%90%E6%84%9F%E6%9F%93%E5%8D%A1%E7%BB%84%E5%88%86%E4%BA%AB")
                             },
@@ -336,7 +344,7 @@ fun BioCardScreen(
                             onSubmit = { payload ->
                                 scope.launch {
                                     isSubmittingDeck = true
-                                    when (val result = BioDeckShareApi.submitDeck(payload, deckShareCardState.data)) {
+                                    when (val result = BioDeckShareApi.submitDeck(payload, completeDeckCardMap)) {
                                         is ApiResult.Success -> {
                                             showSnack(
                                                 if (result.value.isPending) {
@@ -719,8 +727,9 @@ private fun DeckShareComposerCard(
     val cardById = remember(cards) { cards.filter { it.cardId.isNotBlank() }.associateBy { it.cardId } }
     val indexToCardId = remember(cards) { cards.filter { it.cardId.isNotBlank() && it.index >= 0 }.associate { it.index to it.cardId } }
 
-    val cardImages = remember(cards, pcCards, mobileCards, selectedFaction) {
-        cards.associate { it.cardId to deckCardImageUrl(it, selectedFaction, pcCards, mobileCards) }
+    val imageIndex = remember(pcCards, mobileCards) { BioDeckCardImageIndex(pcCards, mobileCards) }
+    val cardImages = remember(cards, imageIndex, selectedFaction) {
+        cards.associate { it.cardId to imageIndex.imageUrl(it, selectedFaction) }
     }
 
     LaunchedEffect(selectedFaction) {
@@ -729,6 +738,8 @@ private fun DeckShareComposerCard(
     }
 
     val mergedSelectedIds = (selectableIds + defaultCards.map { it.cardId }).filter { it.isNotBlank() }.distinct()
+    val unindexedCards = mergedSelectedIds.mapNotNull { cardById[it] }.filter { it.index < 0 }
+    var allowCardListOnly by rememberSaveable(selectedFaction, mergedSelectedIds) { mutableStateOf(false) }
 
     val rarityCounts = remember(mergedSelectedIds, cardById) {
         mutableMapOf("完美" to 0, "卓越" to 0, "精致" to 0).apply {
@@ -918,6 +929,19 @@ private fun DeckShareComposerCard(
                         Text(statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
+                    if (unindexedCards.isNotEmpty()) {
+                        Text(
+                            "${unindexedCards.joinToString("、") { it.name }}：Wiki 尚未提供分享码索引，不能生成包含这些卡牌的分享码。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = allowCardListOnly, onCheckedChange = { allowCardListOnly = it })
+                            Text("仅发布完整卡牌列表，不生成分享码", style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f))
+                        }
+                    }
+
                     FilledTonalButton(
                         onClick = {
                             if (!isLoggedIn) {
@@ -936,17 +960,23 @@ private fun DeckShareComposerCard(
                                 statusText = "至少需要选择 1 张卡牌"
                                 return@FilledTonalButton
                             }
+                            if (unindexedCards.isNotEmpty() && !allowCardListOnly) {
+                                statusText = "请确认仅发布卡牌列表，或等待 Wiki 补充分享码索引"
+                                return@FilledTonalButton
+                            }
                             onSubmit(
                                 SubmitDeckPayload(
                                     deckName = deckName.trim(),
                                     author = author.trim(),
                                     intro = intro.trim(),
                                     faction = selectedFaction,
-                                    selectedCardIds = mergedSelectedIds
+                                    selectedCardIds = mergedSelectedIds,
+                                    allowMissingShareCode = allowCardListOnly
                                 )
                             )
                         },
-                        enabled = !isSubmitting && !isLoadingCardMap && cardMapError.isNullOrBlank(),
+                        enabled = !isSubmitting && !isLoadingCardMap && cardMapError.isNullOrBlank() &&
+                            (unindexedCards.isEmpty() || allowCardListOnly),
                         shape = smoothCornerShape(24.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -955,7 +985,7 @@ private fun DeckShareComposerCard(
                             Spacer(Modifier.width(8.dp))
                             Text("发布中…")
                         } else {
-                            Text("发布卡组")
+                            Text(if (unindexedCards.isEmpty()) "发布卡组" else "发布卡牌列表（无分享码）")
                         }
                     }
                 }
@@ -1047,6 +1077,10 @@ private fun DeckShareComposerCard(
                                         Text(card.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
                                         if (q.isNotBlank()) {
                                             Text(q, style = MaterialTheme.typography.bodySmall, color = rarityColor)
+                                        }
+                                        if (card.index < 0) {
+                                            Text("可加入卡组，暂不能生成分享码", style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     }
                                     if (selected) {

@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.core.navigation
 
 import android.content.res.Configuration
+import android.os.Build
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
@@ -10,8 +11,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -98,7 +97,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,10 +109,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -142,6 +148,8 @@ import com.nekolaska.calabiyau.feature.tools.FileManagerScreen
 import com.nekolaska.calabiyau.feature.tools.ToolsHomeScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
+import com.nekolaska.calabiyau.feature.wiki.hub.decodeRoute
+import com.nekolaska.calabiyau.feature.wiki.hub.encode
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiWebViewScreen
 import data.ApiResult
 import kotlinx.coroutines.CancellationException
@@ -205,16 +213,25 @@ fun MainScreen(
     var currentDestination by rememberSaveable {
         mutableStateOf(initialDestination)
     }
-    var hubStartPage by remember {
+    var hubStartPage by rememberSaveable(stateSaver = Saver<WikiRoute, String>(
+        save = { it.encode() }, restore = { decodeRoute(it) ?: WikiRoute.Home }
+    )) {
         mutableStateOf(shortcutTargetToHubPage(shortcutTarget))
     }
     var hubResetToken by rememberSaveable { mutableIntStateOf(0) }
+    val destinationState = rememberSaveableStateHolder()
+    val drawerNavigation = remember(coroutineScope) { DrawerNavigationQueue(coroutineScope) }
+    var drawerWidthPx by remember { mutableIntStateOf(0) }
     var lastHandledShortcutRequestKey by rememberSaveable { mutableIntStateOf(shortcutRequestKey) }
 
     // ── 自适应布局：平板/折叠屏使用常驻侧栏 ──
     val activity = LocalActivity.current
     val windowSizeClass = activity?.let { calculateWindowSizeClass(it) }
     val useExpandedLayout = windowSizeClass?.widthSizeClass == WindowWidthSizeClass.Expanded
+    LaunchedEffect(useExpandedLayout) {
+        drawerNavigation.cancel()
+        if (useExpandedLayout) drawerState.snapTo(DrawerValue.Closed)
+    }
     var toolFileManagerOverlay by remember { mutableStateOf<ToolFileManagerOverlayState?>(null) }
     // 记录 Wiki 浏览器是从哪里打开的（Hub 或侧栏）
     var wikiEnteredFromHub by rememberSaveable { mutableStateOf(false) }
@@ -229,7 +246,10 @@ fun MainScreen(
     fun openWikiHub(page: WikiRoute = WikiRoute.Home, resetStack: Boolean = true) {
         wikiEnteredFromHub = false
         hubStartPage = page
-        if (resetStack) hubResetToken++
+        if (resetStack) {
+            destinationState.removeState(mainDestinationStateKey(DrawerDestination.WIKI_HUB, hubResetToken))
+            hubResetToken++
+        }
         hubWebViewUrl = null
         currentDestination = DrawerDestination.WIKI_HUB
     }
@@ -238,6 +258,8 @@ fun MainScreen(
         val target = shortcutTarget ?: return@LaunchedEffect
         if (shortcutRequestKey == lastHandledShortcutRequestKey) return@LaunchedEffect
 
+        drawerNavigation.cancel()
+        coroutineScope.launch { drawerState.close() }
         toolFileManagerOverlay = null
         when (target) {
             "characters" -> openWikiHub(page = WikiRoute.Characters)
@@ -269,13 +291,14 @@ fun MainScreen(
     var predictiveProgress by remember { mutableFloatStateOf(0f) }
 
     fun performBack() {
+        drawerNavigation.cancel()
         when (backTarget) {
             MainBackTarget.CloseDrawer -> coroutineScope.launch { drawerState.close() }
             MainBackTarget.CloseToolOverlay -> toolFileManagerOverlay = null
             MainBackTarget.CloseHubWebView -> hubWebViewUrl = null
             MainBackTarget.ExitWikiToPrevious -> currentDestination = previousDestination
             MainBackTarget.BackToDownloader -> currentDestination = DrawerDestination.DOWNLOADER
-            MainBackTarget.GoHome -> openWikiHub()
+            MainBackTarget.GoHome -> openWikiHub(resetStack = false)
             null -> Unit
         }
     }
@@ -306,8 +329,8 @@ fun MainScreen(
     }
 
     // ── 页面内容（Drawer 和 PermanentDrawer 共用） ──
-    // 使用 movableContentOf 保持组合树身份，避免 Drawer 类型切换时子树重建
-    val pageContent = remember { movableContentOf {
+    // Movable content keeps identity on resize; updated content keeps callbacks and VMs fresh.
+    val latestPageContent by rememberUpdatedState<@Composable () -> Unit> {
         // 预测性返回手势期间，主内容区跟随手指缩小/淡出
         val predictiveBackModifier = Modifier.graphicsLayer {
             if (predictiveActive) {
@@ -320,16 +343,16 @@ fun MainScreen(
             }
         }
         AnimatedContent(
-            modifier = predictiveBackModifier,
+            modifier = Modifier.fillMaxSize().then(predictiveBackModifier),
             targetState = currentDestination,
             transitionSpec = {
-                val enterTween = tween<Float>(300, easing = FastOutSlowInEasing)
-                val exitTween = tween<Float>(250, easing = FastOutLinearInEasing)
-                (fadeIn(enterTween) + scaleIn(enterTween, initialScale = 0.95f))
-                    .togetherWith(fadeOut(exitTween) + scaleOut(exitTween, targetScale = 0.98f))
+                fadeIn(tween(200, easing = FastOutSlowInEasing))
+                    .togetherWith(fadeOut(tween(100, easing = FastOutLinearInEasing)))
             },
             label = "MainPageTransition"
         ) { destination ->
+        // Only Bundle-safe UI state is retained. Inactive pages/WebViews are still disposed.
+        destinationState.SaveableStateProvider(mainDestinationStateKey(destination, hubResetToken)) {
         when (destination) {
             DrawerDestination.DOWNLOADER -> {
                 DownloaderScreen(
@@ -354,7 +377,7 @@ fun MainScreen(
                 Box {
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
-                        isOverlaid = hubWebViewUrl != null,
+                        isOverlaid = hubWebViewUrl != null || currentDestination != DrawerDestination.WIKI_HUB,
                         initialPage = hubStartPage,
                         resetKey = hubResetToken,
                         onOpenWikiUrl = { url ->
@@ -373,19 +396,19 @@ fun MainScreen(
             }
             DrawerDestination.MESSAGE_BOARD -> {
                 MessageBoardScreen(
-                    onBack = { openWikiHub() }
+                    onBack = { openWikiHub(resetStack = false) }
                 )
             }
             DrawerDestination.FILE_MANAGER -> {
                 FileManagerScreen(
                     rootPath = AppPrefs.savePath,
-                    onBack = { openWikiHub() }
+                    onBack = { openWikiHub(resetStack = false) }
                 )
             }
             DrawerDestination.TOOLS -> {
                 Box(Modifier.fillMaxSize()) {
                     ToolsHomeScreen(
-                        onBack = { openWikiHub() },
+                        onBack = { openWikiHub(resetStack = false) },
                         backEnabled = toolFileManagerOverlay == null,
                         onOpenFileManager = { path ->
                             toolFileManagerOverlay = ToolFileManagerOverlayState(initialPath = path)
@@ -464,12 +487,14 @@ fun MainScreen(
 
             DrawerDestination.SETTINGS -> {
                 SettingsScreen(
-                    onBack = { openWikiHub() }
+                    onBack = { openWikiHub(resetStack = false) }
                 )
             }
         }
         }
-    } }
+        }
+    }
+    val pageContent = remember { movableContentOf { latestPageContent() } }
 
     // ── 全局 Snackbar 宿主，替代 Toast + 接收 SearchViewModel.errorEvent ──
     val snackbarHostState = remember { SnackbarHostState() }
@@ -482,41 +507,64 @@ fun MainScreen(
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val highReadabilityDrawer = LocalHighReadabilityDrawer.current.value
     val configuration = LocalConfiguration.current
-    val useLiquidGlassDrawer = liquidGlassEnabled && configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    val useLiquidGlassDrawer = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+    val recordDrawerBackdrop by remember(useLiquidGlassDrawer, useExpandedLayout, drawerState, drawerWidthPx) {
+        androidx.compose.runtime.derivedStateOf {
+            shouldRecordDrawerBackdrop(
+                useLiquidGlassDrawer, useExpandedLayout,
+                drawerState.currentValue == DrawerValue.Open || drawerState.targetValue == DrawerValue.Open,
+                drawerState.isAnimationRunning,
+                drawerState.currentOffset,
+                drawerWidthPx
+            )
+        }
+    }
     val mainLayerBackdrop = rememberLayerBackdrop()
     val emptyBackdrop = remember { emptyBackdrop() }
     val drawerBackdrop = if (useLiquidGlassDrawer) mainLayerBackdrop else emptyBackdrop
+
+    // Finish the drawer motion before constructing a potentially expensive destination.
+    fun afterDrawerClosed(action: () -> Unit) {
+        drawerNavigation.navigate(
+            closeDrawer = { if (!useExpandedLayout) drawerState.close() },
+            action = action
+        )
+    }
 
     val drawerContent: @Composable () -> Unit = {
         AppDrawerContent(
             currentDestination = currentDestination,
             onDestinationSelected = { dest ->
-                if (dest == DrawerDestination.WIKI) {
+                afterDrawerClosed {
+                    if (dest == DrawerDestination.WIKI) {
+                        wikiEnteredFromHub = false
+                        showWikiLoginHintOnOpen = false
+                        if (currentDestination != DrawerDestination.WIKI) {
+                            previousDestination = currentDestination
+                        }
+                    }
+                    if (dest == DrawerDestination.WIKI_HUB) {
+                        openWikiHub(resetStack = shouldResetHubOnSelection(currentDestination, dest))
+                    } else {
+                        currentDestination = dest
+                    }
+                }
+            },
+            onLoginRequested = {
+                afterDrawerClosed {
                     wikiEnteredFromHub = false
-                    showWikiLoginHintOnOpen = false
                     if (currentDestination != DrawerDestination.WIKI) {
                         previousDestination = currentDestination
                     }
+                    currentDestination = DrawerDestination.WIKI
+                    showWikiLoginHintOnOpen = true
                 }
-                if (dest == DrawerDestination.WIKI_HUB) {
-                    openWikiHub()
-                } else {
-                    currentDestination = dest
-                }
-                if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
-            },
-            onLoginRequested = {
-                wikiEnteredFromHub = false
-                if (currentDestination != DrawerDestination.WIKI) {
-                    previousDestination = currentDestination
-                }
-                currentDestination = DrawerDestination.WIKI
-                showWikiLoginHintOnOpen = true
-                if (!useExpandedLayout) coroutineScope.launch { drawerState.close() }
             },
             backdrop = drawerBackdrop,
             liquidGlassEnabled = useLiquidGlassDrawer,
-            highReadabilityDrawer = highReadabilityDrawer
+            highReadabilityDrawer = highReadabilityDrawer,
+            onDrawerWidthChanged = { drawerWidthPx = it }
         )
     }
 
@@ -528,7 +576,7 @@ fun MainScreen(
                     PermanentNavigationDrawer(
                         drawerContent = drawerContent,
                         content = {
-                            Box(modifier = Modifier.fillMaxSize().then(if (liquidGlassEnabled) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
+                            Box(modifier = Modifier.fillMaxSize().then(if (recordDrawerBackdrop) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
                                 pageContent()
                             }
                         }
@@ -541,7 +589,7 @@ fun MainScreen(
                                 && hubWebViewUrl == null,
                         drawerContent = drawerContent,
                         content = {
-                            Box(modifier = Modifier.fillMaxSize().then(if (liquidGlassEnabled) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
+                            Box(modifier = Modifier.fillMaxSize().then(if (recordDrawerBackdrop) Modifier.layerBackdrop(mainLayerBackdrop) else Modifier)) {
                                 pageContent()
                             }
                         }
@@ -575,10 +623,12 @@ private fun AppDrawerContent(
     onLoginRequested: () -> Unit,
     backdrop: Backdrop = emptyBackdrop(),
     liquidGlassEnabled: Boolean = LocalLiquidGlassEnabled.current.value,
-    highReadabilityDrawer: Boolean = AppPrefs.highReadabilityDrawer
+    highReadabilityDrawer: Boolean = AppPrefs.highReadabilityDrawer,
+    onDrawerWidthChanged: (Int) -> Unit = {}
 ) {
     // ── Wiki 用户信息状态（提升到 ModalDrawerSheet 外，底部弹窗也能访问） ──
     val accountScope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val account = remember(accountScope) { WikiAccountState(accountScope) }
     val wikiUserInfo = account.userInfo
     val customProfile = account.profile
@@ -613,6 +663,7 @@ private fun AppDrawerContent(
         drawerContainerColor = if (liquidGlassEnabled) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier
             .width(300.dp)
+            .onSizeChanged { onDrawerWidthChanged(it.width) }
             .liquidGlass(
                 backdrop = backdrop,
                 shape = { drawerContentShape },
@@ -660,10 +711,12 @@ private fun AppDrawerContent(
         }
 
         // Cookie 变化驱动身份，而不是“已有用户信息便不再刷新”。
-        LaunchedEffect(account) {
-            while (true) {
-                account.syncAccount()
-                kotlinx.coroutines.delay(500.milliseconds)
+        LaunchedEffect(account, lifecycleOwner) {
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    account.syncAccount()
+                    kotlinx.coroutines.delay(500.milliseconds)
+                }
             }
         }
         LaunchedEffect(account.revision) {

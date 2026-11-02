@@ -105,9 +105,6 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
             ApiResult.Success(result)
         }
 
-    private fun encodeShareCode(cardIndexes: List<Int>, faction: String): String =
-        BioDeckShareCodecs.encodeShareCode(cardIndexes, faction)
-
     fun decodeShareCode(
         rawInput: String,
         expectedFaction: String,
@@ -130,30 +127,25 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                 if (options.isEmpty()) {
                     return@withContext ApiResult.Error("当前阵营卡牌数据为空", kind = ErrorKind.NOT_FOUND)
                 }
-                val byId = options.associateBy { it.cardId }
-
-                val selectedCards = payload.selectedCardIds
-                    .mapNotNull { byId[it] }
-                    .ifEmpty {
-                        return@withContext ApiResult.Error("至少需要选择 1 张卡牌", kind = ErrorKind.NOT_FOUND)
-                    }
-
-                val token = BioDeckShareRemoteSource.fetchCsrfToken(cookies)
-                    ?: return@withContext ApiResult.Error("获取 CSRF Token 失败", kind = ErrorKind.NETWORK)
+                val selectedCards = BioDeckShareParsers.resolveSelectedCards(payload.selectedCardIds, options)
 
                 val sortedCards = selectedCards.sortedWith(
                     compareByDescending<DeckCardOption> { rarityRank(it.normalizedQuality) }
                         .thenBy { if (it.index >= 0) it.index else Int.MAX_VALUE }
                 )
 
-                val shareCode = encodeShareCode(
-                    cardIndexes = sortedCards.mapNotNull { it.index.takeIf { idx -> idx >= 0 } },
-                    faction = payload.faction
+                val shareCode = BioDeckShareParsers.publicationShareCode(
+                    cards = sortedCards, faction = payload.faction,
+                    allowMissingShareCode = payload.allowMissingShareCode
                 )
+
+                val token = BioDeckShareRemoteSource.fetchCsrfToken(cookies)
+                    ?: return@withContext ApiResult.Error("获取 CSRF Token 失败", kind = ErrorKind.NETWORK)
 
                 val safeDeckName = sanitizeDeckName(payload.deckName)
                 val targetTitle = "$TARGET_BASE/$safeDeckName"
-                val shareCodeWidget = "{{#widget:晶源感染卡组分享码生成|cardIds=${sortedCards.map { it.cardId }.filter { it.isNotBlank() }.joinToString(",")}|faction=${payload.faction}}}"
+                val shareCodeWidget = if (shareCode.isBlank()) "" else
+                    "{{#widget:晶源感染卡组分享码生成|cardIds=${sortedCards.map { it.cardId }.filter { it.isNotBlank() }.joinToString(",")}|faction=${payload.faction}}}"
 
                 val cardTemplates = sortedCards.joinToString(" ") {
                     "{{晶源感染卡牌图标|cardName=${safeTemplateParam(it.name)}|cardID=${safeTemplateParam(it.cardId)}|quality=${safeTemplateParam(it.normalizedQuality)}}}"
@@ -172,7 +164,7 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                     appendLine("|卡组阵营=${safeTemplateParam(payload.faction)}")
                     appendLine("|卡牌列表=$cardTemplates}}")
                     appendLine("<noinclude>[[分类:${safeTemplateParam(payload.faction)}卡组分享]]</noinclude>")
-                    appendLine("<noinclude><!-- 分享码(调试): ${safeTemplateParam(shareCode)} --></noinclude>")
+                    if (shareCode.isNotBlank()) appendLine("<noinclude><!-- 分享码(调试): ${safeTemplateParam(shareCode)} --></noinclude>")
                 }
 
                 val formBody = formBodyOf(

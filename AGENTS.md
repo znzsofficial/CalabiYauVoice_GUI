@@ -68,6 +68,10 @@ Resource download changes: see `docs/resource-download-implementation.md`. Dialo
 
 Item catalogs were split in 2026-10: `功能道具图鉴PC端` and `功能道具图鉴移动端` (mobile-exclusive items only). `ItemCatalogPlatform` owns page names/cache keys; never fetch the retired combined page or reuse its `item_catalog` cache. `WikiRoute.Items` keeps old saved routes/shortcuts as PC; `MobileItems` is separate. Current card-only parser and tracked `fixtures/items/` replace retired table tests; live smoke validates both pages independently with 6.5s request spacing.
 
+Extraction mode (弦溯战线): battle modes show the introduction/settings; its three native catalogs belong in **外观与图鉴**, not the battle-mode card. `feature/wiki/extraction` owns page names and separate `extraction_*_v1` cache keys. Loot/attachment loading uses image-grid skeletons, drops a text-list skeleton. Keep source item rarity labels (1 优秀 / 5 臻藏), do not treat drop `data-tier` as rarity, and do not relabel pool weights as match drop probabilities. See `docs/extraction-mode-implementation.md`.
+
+Bio deck pools combine the official share index table with verified PC card IDs. Missing indices stay `-1`; never infer them from card order, cardId or Lua keys. “盗取” (20351047) has no share index in the 2026-11-02 source snapshot. Publishing a complete card list without a code requires explicit `allowMissingShareCode`; never emit a partial-code Widget. Empty/invalid share codes hide the copy UI. See `docs/rift-bio-pool-followup.md`. Weapon detailed performance may be explicitly AI-derived reference data: preserve its disclaimer and platform/mode boundaries. Full-page offline audits use `WEAPON_AUDIT_DIR`, `EXTRACTION_AUDIT_DIR`, and `MAP_BIO_AUDIT_DIR`; fresh clones skip them, tracked small fixtures still run.
+
 When adding/refactoring `androidApp/.../feature/wiki`, follow `docs/android-wiki-feature-guide.md`: split `model` / `source` / `parser` / `api` / `Screen`. BWiki HTML is not a stable API; keep parse failures diagnosable.
 
 ## Do not

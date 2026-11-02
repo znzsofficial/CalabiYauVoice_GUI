@@ -87,6 +87,7 @@ import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 import data.ApiResult
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.sync.Mutex
@@ -155,6 +156,7 @@ private enum class SearchEntryKind {
 }
 
 private val fallbackMapNames = listOf(
+    "维里昂裂隙",
     "欧拉港口",
     "88区",
     "404基地",
@@ -281,9 +283,24 @@ private val hubSearchEntries = listOf(
         "game_modes",
         "战斗模式",
         "查看所有战斗模式详情",
-        listOf("战斗模式", "模式", "玩法", "爆破", "推车", "团队", "娱乐模式"),
+        listOf("战斗模式", "模式", "玩法", "爆破", "推车", "团队", "娱乐模式", "弦溯战线", "搜打撤", "撤离"),
         Icons.Outlined.SportsEsports,
         WikiRoute.GameModes
+    ),
+    searchEntry(
+        "extraction_loot", "弦溯战线战利品", "搜打撤物品图鉴 · 材料、消耗品与收藏品",
+        listOf("弦溯战线", "搜打撤", "战利品", "搜打撤图鉴", "搜打撤物品", "弦溯战线物品图鉴"),
+        Icons.Outlined.Inventory2, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT)
+    ),
+    searchEntry(
+        "extraction_attachments", "弦溯战线配件", "搜打撤配件图鉴 · 槽位、实际效果与适用武器",
+        listOf("弦溯战线", "搜打撤", "配件图鉴", "搜打撤配件", "弦溯战线配件图鉴"),
+        Icons.Outlined.GpsFixed, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS)
+    ),
+    searchEntry(
+        "extraction_drops", "弦溯战线掉落", "晶源体、首领与场景容器的掉落资料",
+        listOf("弦溯战线", "搜打撤", "掉落图鉴", "搜打撤掉落", "弦溯战线掉落图鉴"),
+        Icons.Outlined.Inventory2, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.DROPS)
     ),
     searchEntry(
         "achievements",

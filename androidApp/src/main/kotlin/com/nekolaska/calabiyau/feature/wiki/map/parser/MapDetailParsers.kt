@@ -21,6 +21,16 @@ object MapDetailParsers {
         val terrainMapUrl = parseTerrainMapUrl(document)
         val galleryUrls = parseGalleryUrls(document)
         val updateHistory = parseUpdateHistoryFromHtml(document)
+        // {{背景|地图-...}} is also the detail overview image. Resolve it from the
+        // already-rendered background rule, not an extra per-map imageinfo request.
+        val backgroundFile = extractTemplate(wikitext, "背景")?.trim()?.trimStart('|')?.substringBefore('|')?.trim()
+        val overviewImageUrl = backgroundFile?.takeIf { it.isNotBlank() }?.let {
+            document.select("style").asSequence()
+                .flatMap { style -> Regex("""\bbody\s*\{[^}]*\bbackground(?:-image)?\s*:[^}]*}""", RegexOption.IGNORE_CASE).findAll(style.data()) }
+                .flatMap { rule -> Regex("""url\(\s*['"]?(https?://[^\s)'";]+)['"]?\s*\)""").findAll(rule.value) }
+                .map { match -> match.groupValues[1] }
+                .firstOrNull { url -> url.startsWith("https://patchwiki.biligame.com/images/") }
+        }
 
         return MapDetail(
             name = name,
@@ -29,14 +39,15 @@ object MapDetailParsers {
             platforms = params["上线平台"] ?: "",
             terrainMapUrl = terrainMapUrl,
             galleryUrls = galleryUrls,
-            updateHistory = updateHistory
+            updateHistory = updateHistory,
+            overviewImageUrl = overviewImageUrl
         )
     }
 
     private fun extractTemplate(wikitext: String, templateName: String): String? {
         val startMarker = "{{$templateName"
-        val startIdx = wikitext.indexOf(startMarker)
-        if (startIdx == -1) return null
+        // Exact template boundary: {{地图导航}} / {{地图音乐}} are not {{地图}}.
+        val startIdx = Regex("\\{\\{${Regex.escape(templateName)}(?=[|\\s}])").find(wikitext)?.range?.first ?: return null
 
         var depth = 0
         var i = startIdx

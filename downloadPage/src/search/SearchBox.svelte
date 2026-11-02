@@ -9,6 +9,7 @@
     modePrefix = $bindable(''),
     modeLabel = $bindable('内容'),
     voiceSubtitleActive = false,
+    suggestionScope = '',
     placeholder = '搜索角色、武器、地图、技能…',
     showSearchMode = false,
     disabled = false,
@@ -16,12 +17,13 @@
     onSubmit = (value: string) => {},
     onClear = () => {},
     onInputChange = (value: string) => {},
-    fetchSuggestions = async (_value: string, _modePrefix: string) => [] as Suggestion[],
+    fetchSuggestions = async (_value: string, _modePrefix: string, _signal?: AbortSignal) => [] as Suggestion[],
   }: {
     value?: string;
     modePrefix?: string;
     modeLabel?: string;
     voiceSubtitleActive?: boolean;
+    suggestionScope?: string;
     placeholder?: string;
     showSearchMode?: boolean;
     disabled?: boolean;
@@ -29,7 +31,7 @@
     onSubmit?: (value: string) => void;
     onClear?: () => void;
     onInputChange?: (value: string) => void;
-    fetchSuggestions?: (value: string, modePrefix: string) => Promise<Suggestion[]>;
+    fetchSuggestions?: (value: string, modePrefix: string, signal?: AbortSignal) => Promise<Suggestion[]>;
   } = $props();
 
   const DEBOUNCE_MS = 300;
@@ -44,6 +46,7 @@
   let savedValue = $state('');
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   let requestId = $state(0);
+  let suggestionController: AbortController | null = null;
 
   let showSuggestDropdown = $derived(!voiceSubtitleActive && suggestionsOpen && !!value.trim() && (suggestionsLoading || suggestionsReady || suggestions.length > 0));
 
@@ -51,9 +54,9 @@
     document.addEventListener('click', handleDocumentClick);
     return () => document.removeEventListener('click', handleDocumentClick);
   });
-  onDestroy(() => { clearTimeout(searchTimer); requestId++; });
+  onDestroy(() => { clearTimeout(searchTimer); requestId++; suggestionController?.abort(); });
   $effect(() => {
-    void voiceSubtitleActive; void showSearchMode;
+    void voiceSubtitleActive; void showSearchMode; void disabled; void suggestionScope;
     untrack(() => {
       requestId++;
       clearTimeout(searchTimer);
@@ -79,6 +82,7 @@
   function handleInput(): void {
     if (disabled) return;
     requestId++;
+    suggestionController?.abort();
     onInputChange(value);
     clearTimeout(searchTimer);
     if (voiceSubtitleActive) {
@@ -168,6 +172,11 @@
   }
 
   function closeSuggestions(): void {
+    clearTimeout(searchTimer);
+    suggestionController?.abort();
+    suggestionController = null;
+    requestId++;
+    suggestionsLoading = false;
     suggestions = [];
     suggestionsOpen = false;
     suggestIdx = -1;
@@ -186,12 +195,15 @@
   }
 
   async function loadSuggestions(): Promise<void> {
+    suggestionController?.abort();
+    const controller = new AbortController();
+    suggestionController = controller;
     const id = ++requestId;
     const requestValue = value;
     const requestModePrefix = modePrefix;
     suggestionsLoading = true;
     try {
-      const nextSuggestions = await fetchSuggestions(requestValue, requestModePrefix);
+      const nextSuggestions = await fetchSuggestions(requestValue, requestModePrefix, controller.signal);
       if (id !== requestId || requestValue !== value || requestModePrefix !== modePrefix) return;
       suggestions = nextSuggestions;
       suggestIdx = -1;
@@ -199,6 +211,7 @@
       if (id !== requestId || requestValue !== value || requestModePrefix !== modePrefix) return;
       suggestions = [];
     } finally {
+      if (suggestionController === controller) suggestionController = null;
       if (id === requestId) {
         suggestionsLoading = false;
         suggestionsReady = true;

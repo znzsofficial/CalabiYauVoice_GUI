@@ -45,11 +45,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +80,8 @@ import com.nekolaska.calabiyau.core.ui.SkeletonStatRow
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
+import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDamageCoefficients
+import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
 import util.wikiPathEncode
 
 // ════════════════════════════════════════════════════════
@@ -185,6 +189,21 @@ private fun WeaponDetailContent(
             }
         }
 
+        if (detail.itemEffect.isNotBlank()) {
+            item(key = "item_effect") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    WeaponDescriptionCard(detail.itemEffect, title = "道具效果")
+                }
+            }
+        }
+        if (detail.damageDescription.isNotBlank()) {
+            item(key = "damage_description") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    WeaponDescriptionCard(detail.damageDescription, title = "伤害说明")
+                }
+            }
+        }
+
         // ── 获取途径 ──
         if (detail.obtainMethod.isNotBlank()) {
             item(key = "obtain") {
@@ -195,6 +214,21 @@ private fun WeaponDetailContent(
         // ── 数据属性 (满级) ──
         item(key = "stats") {
             Box(Modifier.padding(horizontal = 16.dp)) { WeaponStatsCard(detail = detail) }
+        }
+
+        if (detail.mechanics.isNotEmpty()) {
+            item(key = "weapon_mechanics") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    WeaponSupplementaryCard(if (detail.itemEffect.isNotBlank()) "道具数据" else "武器机制", detail.mechanics)
+                }
+            }
+        }
+        if (detail.performanceData.isNotEmpty()) {
+            item(key = "performance_data") {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    WeaponSupplementaryCard("详细性能（Wiki 参考）", detail.performanceData)
+                }
+            }
         }
 
         // ── 伤害数据 ──
@@ -374,13 +408,13 @@ private fun WeaponHeaderCard(
 // ────────────────────────────────────────────
 
 @Composable
-private fun WeaponDescriptionCard(description: String) {
+private fun WeaponDescriptionCard(description: String, title: String = "武器介绍") {
     Card(
         shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(Icons.Outlined.Description, "武器介绍")
+            SectionTitle(Icons.Outlined.Description, title)
             Spacer(Modifier.height(10.dp))
             Text(description, style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -427,6 +461,7 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
         if (detail.maxAmmo.isNotBlank()) add("最大备弹数" to detail.maxAmmo)
         if (detail.secondaryAttack.isNotBlank()) add("辅助攻击" to detail.secondaryAttack)
         if (detail.magnification.isNotBlank()) add("放大倍率" to detail.magnification)
+        detail.extraStats.forEach { (label, value) -> add(label to value) }
     }
     if (stats.isEmpty()) return
 
@@ -461,24 +496,52 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
     }
 }
 
+@Composable
+private fun WeaponSupplementaryCard(
+    title: String,
+    sections: List<WeaponDataSection>
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    Card(shape = AppShapes.card, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionTitle(Icons.Outlined.Info, title)
+            // Keep the new technical detail opt-in so the existing damage data stays reachable.
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "收起" else "展开 ${sections.sumOf { it.values.size }} 项数据")
+            }
+            if (expanded) sections.forEach { section ->
+                Text(section.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                if (section.notice.isNotBlank()) {
+                    Text(section.notice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                section.values.forEach { stat ->
+                    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Text(stat.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stat.value, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ────────────────────────────────────────────
 //  伤害表卡片
 // ────────────────────────────────────────────
 
 @Composable
 private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDetailApi.DamageRow>) {
-    var selectedPlatform by remember { mutableStateOf("PC") }
+    var selectedPlatform by rememberSaveable(detail.name) { mutableStateOf("PC") }
     val groupedTables = remember(distanceRows) {
         distanceRows.groupBy { row ->
             if (row.distance.startsWith("移动端·")) "移动端" else "PC"
         }
     }
     val platforms = listOf("PC", "移动端").filter { groupedTables.containsKey(it) }
-    
-    // 如果只有移动端，默认选中移动端
-    if (selectedPlatform == "PC" && !groupedTables.containsKey("PC") && groupedTables.containsKey("移动端")) {
-        selectedPlatform = "移动端"
-    }
+    val effectivePlatform = selectedPlatform.takeIf { it in platforms } ?: platforms.firstOrNull() ?: "PC"
+    val coefficients = if (effectivePlatform == "移动端") detail.mobileDamageCoefficients else WeaponDamageCoefficients(
+        detail.baseDamage, detail.headMultiplier, detail.upperMultiplier, detail.lowerMultiplier
+    )
 
     Card(
         shape = AppShapes.card,
@@ -496,7 +559,7 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         platforms.forEach { platform ->
                             FilterChip(
-                                selected = selectedPlatform == platform,
+                                selected = effectivePlatform == platform,
                                 onClick = { selectedPlatform = platform },
                                 label = { Text(platform) },
                                 shape = smoothCornerShape(12.dp)
@@ -507,36 +570,36 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
             }
 
             // 倍率信息
-            if (detail.baseDamage.isNotBlank()) {
+            if (coefficients != null && coefficients.baseDamage.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (detail.baseDamage.isNotBlank()) {
-                        Text("基础伤害: ${detail.baseDamage}",
+                    if (coefficients.baseDamage.isNotBlank()) {
+                        Text("基础伤害: ${coefficients.baseDamage}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary)
                     }
-                    if (detail.headMultiplier.isNotBlank()) {
-                        Text("头部×${detail.headMultiplier}",
+                    if (coefficients.head.isNotBlank()) {
+                        Text("头部×${coefficients.head}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.error)
                     }
-                    if (detail.upperMultiplier.isNotBlank()) {
-                        Text("上肢×${detail.upperMultiplier}",
+                    if (coefficients.upper.isNotBlank()) {
+                        Text("上肢×${coefficients.upper}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.tertiary)
                     }
-                    if (detail.lowerMultiplier.isNotBlank()) {
-                        Text("下肢×${detail.lowerMultiplier}",
+                    if (coefficients.lower.isNotBlank()) {
+                        Text("下肢×${coefficients.lower}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
 
-            val rows = groupedTables[selectedPlatform].orEmpty()
+            val rows = groupedTables[effectivePlatform].orEmpty()
             val pelletOnly = rows.isNotEmpty() && rows.all { it.upper.isBlank() && it.lower.isBlank() }
             if (rows.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))

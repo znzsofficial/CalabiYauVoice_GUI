@@ -100,7 +100,7 @@ fun MapDetailScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // 图片 sharedElement 提到 ApiResourceContent 外，loading/content 切换不影响过渡
-            val imageUrl = mapImageUrl
+            val imageUrl = mapImageUrl ?: state.data?.overviewImageUrl ?: state.data?.terrainMapUrl
             Card(
                 onClick = {
                     if (imageUrl != null) previewImage = PreviewImage(imageUrl, mapName)
@@ -132,13 +132,18 @@ fun MapDetailScreen(
                             .aspectRatio(16f / 9f)
                             .clip(headerShape)
                     )
-                } else {
+                } else if (state.isLoading) {
                     ShimmerBox(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f),
                         shape = headerShape
                     )
+                } else {
+                    Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
+                        Text("暂无地图图片", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 

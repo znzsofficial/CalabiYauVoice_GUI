@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 
 @Composable
 internal fun WikiGameplayHubScreen(
@@ -200,10 +201,35 @@ internal fun WikiCatalogHubScreen(
                     backdrop = backdrop
                 )
             }
+            item(key = "extraction_heading") {
+                Text("弦溯战线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
+            catalogHubExtractionEntries.forEach { entry ->
+                item(key = "extraction_${entry.kind.name}") {
+                    ActionCard(
+                        title = entry.kind.title,
+                        subtitle = entry.subtitle,
+                        icon = Icons.Outlined.Inventory2,
+                        onClick = { onNavigateTo(entry.route) },
+                        backdrop = backdrop
+                    )
+                }
+            }
             item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
+
+/** Shared by the catalog hub and its navigation regression test, never by the mode page. */
+internal data class CatalogHubExtractionEntry(val kind: ExtractionCatalogKind, val subtitle: String) {
+    val route: WikiRoute get() = WikiRoute.ExtractionCatalog(kind)
+}
+
+internal val catalogHubExtractionEntries = listOf(
+    CatalogHubExtractionEntry(ExtractionCatalogKind.LOOT, "材料、消耗品与收藏品"),
+    CatalogHubExtractionEntry(ExtractionCatalogKind.ATTACHMENTS, "配件效果与适用武器"),
+    CatalogHubExtractionEntry(ExtractionCatalogKind.DROPS, "晶源体、首领与容器掉落")
+)
 
 @Composable
 internal fun WikiExtensionHubScreen(

@@ -1,5 +1,6 @@
 import { fetchVoicePageParsetree, type CategoryPage } from '../searchApi';
 import { toError } from '../utils';
+import { WikiBackoffError } from '../wikiRequestScheduler';
 import { parseVoiceSections } from './voiceParser';
 import type { VoiceIndexFailure, VoiceIndexSections } from './voiceIndexTypes';
 
@@ -19,6 +20,7 @@ export type VoiceIndexBuildOptions = {
   onlyTitles?: string[];
   /** When true with baseIndex, re-fetch every character in `chars`. */
   revalidateAll?: boolean;
+  /** Retained for callers; Wiki metadata work is always sequential. */
   concurrency?: number;
   signal?: AbortSignal;
   onProgress?: (progress: VoiceIndexBuildProgress) => void;
@@ -75,23 +77,20 @@ export async function buildVoiceSearchIndexMap(
     return { index: idx, failures };
   }
 
-  const concurrency = Math.max(1, Math.min(8, options.concurrency ?? 4));
   let done = 0;
   const total = targets.length;
 
-  for (let i = 0; i < targets.length; i += concurrency) {
+  for (const c of targets) {
     if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-    const batch = targets.slice(i, i + concurrency);
-    await Promise.all(batch.map(async c => {
-      if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
-      try {
-        const pt = await fetchVoicePageParsetree(`${c.title}/语音台词`, signal);
-        if (!pt) {
-          idx.set(c.title, []);
-          failureMap.delete(c.title);
-          return;
-        }
+    let blocked = false;
+    try {
+      const pt = await fetchVoicePageParsetree(`${c.title}/语音台词`, signal);
+      if (!pt) {
+        idx.set(c.title, []);
+        failureMap.delete(c.title);
+      } else {
         const groups = parseVoiceSections(pt);
+        if (!groups.some(group => group.lines.length > 0)) throw new Error('语音页未解析到台词结构');
         idx.set(c.title, groups.map(g => ({
           title: g.title,
           lines: g.lines.map(l => ({
@@ -102,26 +101,31 @@ export async function buildVoiceSearchIndexMap(
           })),
         })));
         failureMap.delete(c.title);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') throw err;
-        const prev = failureMap.get(c.title);
-        failureMap.set(c.title, {
-          title: c.title,
-          error: toError(err).message || '索引失败',
-          at: Date.now(),
-          attempts: (prev?.attempts || 0) + 1,
-        });
-        idx.delete(c.title);
-      } finally {
-        done += 1;
       }
-    }));
-    options.onProgress?.({
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') throw err;
+      const prev = failureMap.get(c.title);
+      failureMap.set(c.title, {
+        title: c.title,
+        error: toError(err).message || '索引失败',
+        at: Date.now(),
+        attempts: (prev?.attempts || 0) + 1,
+      });
+      // A failed refresh must not erase the last successful local index.
+      blocked = err instanceof WikiBackoffError;
+    } finally {
+      done += 1;
+    }
+    // Avoid cloning/publishing the entire growing map once per character.
+    if (done % 4 === 0 || done === total || blocked) options.onProgress?.({
       done,
       total,
       index: new Map(idx),
       failures: sortFailures([...failureMap.values()]),
     });
+    // Leave untouched characters pending rather than publishing a wall of
+    // synthetic failures while the shared metadata lane is cooling down.
+    if (blocked) break;
   }
 
   const failures = sortFailures([...failureMap.values()]);

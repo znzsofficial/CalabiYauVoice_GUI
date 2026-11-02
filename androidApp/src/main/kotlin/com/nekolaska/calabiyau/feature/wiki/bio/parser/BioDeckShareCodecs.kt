@@ -1,12 +1,19 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.parser
 
-import android.util.Base64
 import java.math.BigInteger
+import okio.ByteString.Companion.decodeBase64
+import okio.ByteString.Companion.encodeUtf8
 
 object BioDeckShareCodecs {
 
     private const val PREFIX_BASE = "000B"
     private const val HEX_LEN = 25
+    // Safety ceiling, not a fixed card-table size: leave room for future official cards.
+    private const val MAX_CARD_BITS = 4096
+    private const val MAX_HEX_LEN = MAX_CARD_BITS / 4
+    private const val MAX_BASE64_LEN = ((10 + MAX_HEX_LEN + 2) / 3) * 4
+    private val PAYLOAD = Regex("000B\\|(0002|0003)\\|[0-9A-Fa-f]{1,$MAX_HEX_LEN}")
+    private val BASE64_BODY = Regex("[A-Za-z0-9+/]+={0,2}")
 
     private val FACTION_CODE = mapOf(
         "超弦体" to "0002",
@@ -21,15 +28,16 @@ object BioDeckShareCodecs {
         if (cardIndexes.isEmpty()) {
             throw IllegalArgumentException("卡牌不能为空")
         }
+        require(cardIndexes.all { it in 0 until MAX_CARD_BITS }) { "卡牌索引无效或超出支持范围" }
 
         val mask = cardIndexes.fold(BigInteger.ZERO) { acc, idx ->
-            if (idx < 0) acc else acc.setBit(idx)
+            acc.setBit(idx)
         }
 
         val requiredLen = maxOf((mask.bitLength() + 3) / 4, HEX_LEN)
         val hex = mask.toString(16).uppercase().padStart(requiredLen, '0')
         val raw = "$PREFIX_BASE|$factionCode|$hex"
-        val base64 = Base64.encodeToString(raw.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        val base64 = raw.encodeUtf8().base64()
         return "$base64**"
     }
 
@@ -41,34 +49,47 @@ object BioDeckShareCodecs {
         expectedFaction: String,
         indexToCardId: Map<Int, String>
     ): Pair<List<String>, String> {
-        val code = extractActualShareCode(rawInput)
-        if (code.isBlank()) throw IllegalArgumentException("分享码为空")
-
-        val b64 = code.removeSuffix("**")
-        val decoded = String(Base64.decode(b64, Base64.DEFAULT), Charsets.UTF_8)
-        val parts = decoded.split("|")
-        if (parts.size < 3) throw IllegalArgumentException("分享码格式不正确")
-
-        val faction = CODE_FACTION[parts[1]]
-            ?: throw IllegalArgumentException("分享码阵营无效")
+        val parts = validatedPayload(rawInput).split('|')
+        val faction = CODE_FACTION.getValue(parts[1])
         if (faction != expectedFaction) {
             throw IllegalArgumentException("阵营不匹配：分享码是“$faction”，当前为“$expectedFaction”")
         }
 
-        val hex = parts[2].trim()
-        if (hex.isBlank()) return emptyList<String>() to faction
-
-        val mask = BigInteger(hex, 16)
+        val mask = BigInteger(parts[2], 16)
         val ids = buildList {
             var bit = 0
             while (bit < mask.bitLength()) {
                 if (mask.testBit(bit)) {
-                    indexToCardId[bit]?.let { add(it) }
+                    val id = indexToCardId[bit]
+                    require(!id.isNullOrBlank()) { "分享码包含未知卡牌索引：$bit，请刷新卡牌数据" }
+                    add(id)
                 }
                 bit++
             }
         }
         return ids to faction
+    }
+
+    /** Static display and import use the same protocol validation; never invent a code. */
+    fun normalizeShareCode(rawInput: String): String = runCatching {
+        val payload = validatedPayload(rawInput)
+        payload.encodeUtf8().base64() + "**"
+    }.getOrDefault("")
+
+    private fun validatedPayload(rawInput: String): String {
+        val code = extractActualShareCode(rawInput)
+        require(code.isNotBlank() && code.length <= MAX_BASE64_LEN) { "分享码为空或过长" }
+        // Okio works on API 25 and local JVM tests (java.util.Base64 needs API 26).
+        // Its decoder is permissive, so validate alphabet, padding and canonical bits here.
+        require(BASE64_BODY.matches(code)) { "分享码 Base64 字符无效" }
+        val bytes = requireNotNull(code.decodeBase64()) { "分享码 Base64 格式不正确" }
+        val canonical = bytes.base64()
+        require(code == canonical || code == canonical.trimEnd('=')) {
+            "分享码 Base64 格式不正确"
+        }
+        val payload = bytes.utf8()
+        require(PAYLOAD.matches(payload)) { "分享码版本、阵营或卡牌位图无效" }
+        return payload
     }
 
     fun extractDeckNameFromShareInput(rawInput: String): String? {

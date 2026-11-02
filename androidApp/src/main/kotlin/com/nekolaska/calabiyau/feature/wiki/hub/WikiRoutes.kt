@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
+
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
 sealed interface WikiRoute {
     data object Home : WikiRoute
@@ -16,6 +18,7 @@ sealed interface WikiRoute {
     data object Activities : WikiRoute
     data object Announcements : WikiRoute
     data object GameModes : WikiRoute
+    data class ExtractionCatalog(val kind: ExtractionCatalogKind) : WikiRoute
     data object BalanceData : WikiRoute
     data object Voting : WikiRoute
     data object BioCards : WikiRoute

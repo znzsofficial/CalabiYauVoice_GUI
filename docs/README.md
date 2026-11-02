@@ -4,6 +4,10 @@
 
 ## 开发与实现
 
+- [Android 导航与页面状态](android-navigation-followup.md)：主导航状态恢复、预取与玻璃开销、筛选草稿、渐变和网页请求限速。
+- [弦溯战线简介与图鉴](extraction-mode-implementation.md)：模式简介、外观与图鉴中的三个原生入口、专用骨架及完整快照回归。
+- [武器页面解析与巡检](weapon-parsing-audit.md)：42 页完整快照验证、10 个战术道具、武器机制和参考参数。
+- [维里昂裂隙与生化卡池补全](rift-bio-pool-followup.md)：原生搜打撤地图、双卡表补全和“盗取”分享码索引缺失边界。
 - [Android Wiki 功能约定](android-wiki-feature-guide.md)：model/source/parser/api/Screen 分层与缓存策略。
 - [资源下载实现](resource-download-implementation.md)：搜索和分类、弹窗请求隔离、原任务重试、取消与恢复、文件完整性。
 - [Android 基础设施与文件管理](android-core-file-manager.md)：缓存请求版本、载荷校验、网络监听、写请求重试限制和文件操作边界。
@@ -14,6 +18,7 @@
 
 ## 发布与维护
 
+- [2.1.24 发布记录](releases/2.1.24.md)：弦溯战线、武器解析、卡池补全和导航修复的本次交付与验证。
 - [2.1.23 发布记录](releases/2.1.23.md)：生化卡组同名卡图片、平衡数据筛选弹层、关于页网格渐变与发布验证。
 - [2.1.22 发布记录](releases/2.1.22.md)：私有下载记录、更新安装包清理、依赖升级与发布验证。
 - [2.1.21 发布记录](releases/2.1.21.md)：历史赛季与上一版发布验证。

@@ -44,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -55,6 +56,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,16 +79,17 @@ import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
 import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
 import data.ApiResult
+import com.nekolaska.calabiyau.feature.wiki.balance.BalanceSortOrder as SortOrder
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceMetric as SortField
 
 // ════════════════════════════════════════════════════════
 //  平衡数据页面 —— 官网角色胜率/选取率/KD/伤害/评分
 // ════════════════════════════════════════════════════════
 
-/** 排序方向 */
-private enum class SortOrder { ASC, DESC }
-
-
+private val BalanceFilterStateSaver = listSaver<BalanceFilterState, String>(
+    save = { it.savedValues() },
+    restore = { BalanceFilterState.restore(it) }
+)
 
 @Composable
 fun BalanceDataScreen(
@@ -104,20 +107,17 @@ fun BalanceDataScreen(
     var forceSettingsRefresh by remember { mutableStateOf(false) }
     var dataRetryTrigger by remember { mutableIntStateOf(0) }
 
-    // 筛选状态
-    var selectedMode by remember { mutableStateOf<FilterOption?>(null) }
-    var selectedMap by remember { mutableStateOf<FilterOption?>(null) }
-    var selectedSeason by remember { mutableStateOf<FilterOption?>(null) }
-    var selectedSeason2 by remember { mutableStateOf<FilterOption?>(null) }
-    var selectedRanks by remember { mutableStateOf<List<FilterOption>>(emptyList()) }
-
-    // 显示状态：进攻方 / 防守方
-    var showAttackers by remember { mutableStateOf(false) } // false = 防守方(side2), true = 进攻方(side1)
-    var showFilters by rememberSaveable { mutableStateOf(false) }
-
-    // 排序
-    var sortField by remember { mutableStateOf(SortField.WIN_RATE) }
-    var sortOrder by remember { mutableStateOf(SortOrder.DESC) }
+    var filterState by rememberSaveable(stateSaver = BalanceFilterStateSaver) {
+        mutableStateOf(BalanceFilterState())
+    }
+    val selectedMode = settings?.modes?.find { it.code == filterState.applied.mode }
+    val selectedMap = settings?.maps?.find { it.code == filterState.applied.map }
+    val selectedSeason = settings?.seasons?.find { it.code == filterState.applied.season }
+    val selectedSeason2 = settings?.seasons?.find { it.code == filterState.applied.compareSeason }
+    val selectedRanks = settings?.ranks?.filter { it.code in filterState.applied.ranks }.orEmpty()
+    val showAttackers = filterState.showAttackers
+    val sortField = filterState.sortField
+    val sortOrder = filterState.sortOrder
 
     // 角色元信息映射 (id → CharacterMeta)
     val characterMap = remember(settings) {
@@ -141,13 +141,9 @@ fun BalanceDataScreen(
         when (val result = BalanceDataApi.fetchSettings(forceRefresh)) {
             is ApiResult.Success -> {
                 val s = result.value
+                // Restore by code; refreshing labels/options must not reset valid filters.
+                filterState = filterState.reconcile(s)
                 settings = s
-                // 默认选中：排位爆破、全选地图、全选段位、最新赛季
-                selectedMode = s.modes.find { it.name == "排位爆破" } ?: s.modes.firstOrNull()
-                selectedMap = null // null 表示全选
-                selectedSeason = s.seasons.firstOrNull()
-                selectedSeason2 = null
-                selectedRanks = emptyList() // 空表示全选
                 dataRetryTrigger++
             }
             is ApiResult.Error -> settingsError = result
@@ -155,11 +151,10 @@ fun BalanceDataScreen(
         isLoadingSettings = false
     }
 
-    // 设置变化时自动刷新数据
-    LaunchedEffect(selectedMode, selectedMap, selectedSeason, selectedSeason2, selectedRanks, dataRetryTrigger) {
-        val mode = selectedMode
-        val season = selectedSeason
-        if (settings == null || mode == null || season == null) {
+    // Only an applied query or an explicit retry/refresh can trigger a POST, never draft/side/sort edits.
+    val query = if (settings != null) filterState.applied.queryOrNull() else null
+    LaunchedEffect(query, dataRetryTrigger) {
+        if (query == null) {
             isLoadingData = false
             balanceResult = null
             return@LaunchedEffect
@@ -167,17 +162,12 @@ fun BalanceDataScreen(
 
         isLoadingData = true
         dataError = null
-        if (sortField == SortField.SCORE && !data.BalanceSeasons.supportsScore(season.code)) {
-            sortField = SortField.WIN_RATE
-            sortOrder = SortOrder.DESC
-        }
-        val rankCodes = if (selectedRanks.isEmpty()) listOf("-255") else selectedRanks.map { it.code }
         when (val result = BalanceDataApi.fetchBalanceData(
-            modeCode = mode.code,
-            mapCode = selectedMap?.code ?: "-255",
-            rankCodes = rankCodes,
-            season1Code = season.code,
-            season2Code = selectedSeason2?.code ?: "0"
+            modeCode = query.mode,
+            mapCode = query.map,
+            rankCodes = query.ranks,
+            season1Code = query.season,
+            season2Code = query.compareSeason
         )) {
             is ApiResult.Success -> {
                 balanceResult = result.value
@@ -254,25 +244,16 @@ fun BalanceDataScreen(
                             map = selectedMap?.name,
                             rankNames = selectedRanks.map { it.name },
                             compareSeason = selectedSeason2?.name,
-                            onOpen = { showFilters = true }
+                            onOpen = { filterState = filterState.beginEditing(settings!!) }
                         )
-                        if (showFilters) {
+                        filterState.draft?.let { draft ->
                             BalanceFilterSheet(
                                 settings = settings!!,
-                                selectedMode = selectedMode,
-                                selectedMap = selectedMap,
-                                selectedSeason = selectedSeason,
-                                selectedSeason2 = selectedSeason2,
-                                selectedRanks = selectedRanks,
-                                onModeChange = { selectedMode = it },
-                                onMapChange = { selectedMap = it },
-                                onSeasonChange = {
-                                    selectedSeason = it
-                                    if (selectedSeason2?.code == it.code) selectedSeason2 = null
-                                },
-                                onSeason2Change = { selectedSeason2 = it },
-                                onRanksChange = { selectedRanks = it },
-                                onDismiss = { showFilters = false }
+                                draft = draft,
+                                onDraftChange = { filterState = filterState.changeDraft(it, settings!!) },
+                                onReset = { filterState = filterState.resetDraft(settings!!) },
+                                onApply = { filterState = filterState.applyDraft(settings!!) },
+                                onDismiss = { filterState = filterState.cancelDraft() }
                             )
                         }
 
@@ -284,15 +265,14 @@ fun BalanceDataScreen(
                             scoreAvailable = data.BalanceSeasons.supportsScore(selectedSeason?.code.orEmpty()),
                             onSideToggle = {
                                 if (showAttackers != it) {
-                                    showAttackers = it
+                                    filterState = filterState.copy(showAttackers = it)
                                 }
                             },
                             onSortChange = { field ->
                                 if (sortField == field) {
-                                    sortOrder = if (sortOrder == SortOrder.DESC) SortOrder.ASC else SortOrder.DESC
+                                    filterState = filterState.copy(sortOrder = if (sortOrder == SortOrder.DESC) SortOrder.ASC else SortOrder.DESC)
                                 } else {
-                                    sortField = field
-                                    sortOrder = SortOrder.DESC
+                                    filterState = filterState.copy(sortField = field, sortOrder = SortOrder.DESC)
                                 }
                             }
                         )
@@ -419,18 +399,15 @@ private fun FilterSummaryBar(
 @Composable
 private fun BalanceFilterSheet(
     settings: BalanceSettings,
-    selectedMode: FilterOption?,
-    selectedMap: FilterOption?,
-    selectedSeason: FilterOption?,
-    selectedSeason2: FilterOption?,
-    selectedRanks: List<FilterOption>,
-    onModeChange: (FilterOption) -> Unit,
-    onMapChange: (FilterOption?) -> Unit,
-    onSeasonChange: (FilterOption) -> Unit,
-    onSeason2Change: (FilterOption?) -> Unit,
-    onRanksChange: (List<FilterOption>) -> Unit,
+    draft: BalanceFilterCodes,
+    onDraftChange: (BalanceFilterCodes) -> Unit,
+    onReset: () -> Unit,
+    onApply: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val selectedMode = settings.modes.find { it.code == draft.mode }
+    val selectedSeason = settings.seasons.find { it.code == draft.season }
+    val selectedSeason2 = settings.seasons.find { it.code == draft.compareSeason }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(
@@ -448,52 +425,49 @@ private fun BalanceFilterSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = maxSheetHeight)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
             Text("筛选条件", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "修改后自动查询",
+                "点击“应用筛选”后查询；取消、关闭或返回将放弃修改。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
             )
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterDropdown(
-                        label = "模式",
-                        options = settings.modes,
-                        selected = selectedMode,
-                        onSelect = onModeChange,
-                        modifier = Modifier.weight(1f)
-                    )
-                    FilterDropdown(
-                        label = "赛季",
-                        options = settings.seasons,
-                        selected = selectedSeason,
-                        onSelect = onSeasonChange,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                FilterDropdown(
+                    label = "模式",
+                    options = settings.modes,
+                    selected = selectedMode,
+                    onSelect = { onDraftChange(draft.copy(mode = it.code)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                FilterDropdown(
+                    label = "赛季",
+                    options = settings.seasons,
+                    selected = selectedSeason,
+                    onSelect = { onDraftChange(draft.copy(season = it.code)) },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 FilterDropdown(
                     label = "对比赛季",
                     options = settings.seasons.filter { it.code != selectedSeason?.code },
                     selected = selectedSeason2,
-                    onSelect = onSeason2Change,
-                    onClearSelection = { onSeason2Change(null) },
+                    onSelect = { onDraftChange(draft.copy(compareSeason = it.code)) },
+                    onClearSelection = { onDraftChange(draft.copy(compareSeason = null)) },
                     clearLabel = "不对比",
                     placeholderText = "不对比",
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (selectedSeason2 != null) {
                     Text(
-                        "正在对比：${selectedSeason?.name.orEmpty()} → ${selectedSeason2.name}",
+                        "应用后对比：${selectedSeason?.name.orEmpty()} → ${selectedSeason2.name}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -501,33 +475,45 @@ private fun BalanceFilterSheet(
                 FilterChipGroup(
                     label = "地图",
                     options = settings.maps,
-                    isSelected = { selectedMap == it },
-                    onClick = { onMapChange(if (selectedMap == it) null else it) },
-                    allSelected = selectedMap == null,
-                    onSelectAll = { onMapChange(null) }
+                    isSelected = { draft.map == it.code },
+                    onClick = { onDraftChange(draft.copy(map = if (draft.map == it.code) null else it.code)) },
+                    allSelected = draft.map == null,
+                    onSelectAll = { onDraftChange(draft.copy(map = null)) }
                 )
                 FilterChipGroup(
                     label = "段位",
                     hint = "可多选",
                     options = settings.ranks,
-                    isSelected = { selectedRanks.contains(it) },
+                    isSelected = { it.code in draft.ranks },
                     onClick = { rank ->
-                        onRanksChange(
-                            if (selectedRanks.contains(rank)) selectedRanks - rank else selectedRanks + rank
+                        onDraftChange(
+                            draft.copy(ranks = if (rank.code in draft.ranks) draft.ranks - rank.code else draft.ranks + rank.code)
                         )
                     },
-                    allSelected = selectedRanks.isEmpty(),
-                    onSelectAll = { onRanksChange(emptyList()) }
+                    allSelected = draft.ranks.isEmpty(),
+                    onSelectAll = { onDraftChange(draft.copy(ranks = emptyList())) }
                 )
             }
+            TextButton(onClick = onReset, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text("重置为默认筛选")
+            }
+            Text(
+                "默认模式、最新赛季、全地图和全段位、不对比。重置仅修改草稿，应用后生效。",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             FilledTonalButton(
-                onClick = onDismiss,
+                onClick = onApply,
+                enabled = draft.mode != null && draft.season != null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
                 shape = smoothCornerShape(16.dp)
             ) {
-                Text("完成")
+                Text("应用筛选")
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("取消修改")
             }
         }
     }

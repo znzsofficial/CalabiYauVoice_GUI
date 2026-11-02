@@ -7,6 +7,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.model.MobileCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SharedDeck
 import com.nekolaska.calabiyau.core.wiki.HtmlText
+import com.nekolaska.calabiyau.feature.wiki.bio.imageCardId
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
@@ -43,7 +44,10 @@ object BioCardParsers {
                 imageUrl = item.selectFirst(".zombie-card__imagebox img")?.let { img ->
                     img.attr("data-src").ifBlank { img.attr("src") }
                 }.let { WikiImageUrls.originalFromThumbnail(it) },
-                refreshProbability = refreshProbabilityMap[name]
+                refreshProbability = refreshProbabilityMap[name],
+                cardId = item.selectFirst(".zombie-card__imagebox img")?.let { image ->
+                    imageCardId(image.attr("alt")) ?: imageCardId(image.attr("data-src")) ?: imageCardId(image.attr("src"))
+                }.orEmpty()
             )
         }
 
@@ -141,10 +145,9 @@ object BioCardParsers {
         val author = table.selectFirst("tr:has(th:contains(分享作者)) td")?.text()?.trim().orEmpty()
         val shareIdCell = table.selectFirst("tr:has(th:contains(分享ID)) td")
         val shareIdText = shareIdCell?.text().orEmpty()
-        val shareId = extractShareId(shareIdText).ifBlank {
+        val shareId = BioDeckShareCodecs.normalizeShareCode(shareIdText).ifBlank {
             val normalizedFaction = normalizeDeckFaction(faction)
-            val cardIndexMap = cardIndexMapByFaction[normalizedFaction].orEmpty()
-            extractShareIdFromDynamicScript(shareIdCell?.html().orEmpty(), normalizedFaction, cardIndexMap)
+            extractShareIdFromDynamicScript(shareIdCell?.html().orEmpty(), normalizedFaction, cardIndexMapByFaction)
         }
         val intro = table.selectFirst("tr:has(th:contains(介绍)) td")?.text()?.trim().orEmpty()
         val cardNames = table.select(".zombie-card-name, .zombie-card-item-name, .card-name")
@@ -163,22 +166,6 @@ object BioCardParsers {
         )
     }
 
-    private fun extractShareId(raw: String): String {
-        val tail = raw.substringAfterLast('｜', raw).substringAfterLast('|').trim()
-        val body = tail.removeSuffix("**").substringAfterLast(' ').trim()
-        val code = if (body.matches(SHARE_CODE_BODY)) body
-        else SHARE_CODE_BODY.find(raw)?.value.orEmpty()
-        // 游戏和 Wiki 按钮都带 "**"。去掉后粘贴进游戏会被当成不完整码。
-        return if (code.isBlank()) "" else code.padBase64() + "**"
-    }
-
-    private val SHARE_CODE_BODY = Regex("[A-Za-z0-9+/=_-]{12,}")
-
-    private fun String.padBase64(): String {
-        val pad = (4 - length % 4) % 4
-        return this + "=".repeat(pad)
-    }
-
     private fun normalizeDeckFaction(raw: String): String {
         return raw.removeSuffix("卡组").trim()
     }
@@ -186,39 +173,34 @@ object BioCardParsers {
     private fun extractShareIdFromDynamicScript(
         html: String,
         fallbackFaction: String,
-        cardIndexMap: Map<String, Int>
+        cardIndexMapByFaction: Map<String, Map<String, Int>>
     ): String {
-        if (html.isBlank() || cardIndexMap.isEmpty()) return ""
+        if (html.isBlank()) return ""
 
         // The share component is inline <script> content; use Jsoup's data() instead of
         // regexing the full HTML so nested quotes/markup can't break the match.
-        val scriptData = Jsoup.parse(html).select("script").joinToString("\n") { it.data() }
-        val cardIdsParam = Regex("""var\s+cardIdsParam\s*=\s*"([^"]*)"""")
-            .find(scriptData)
-            ?.groupValues
-            ?.getOrNull(1)
-            .orEmpty()
-        if (cardIdsParam.isBlank()) return ""
-
-        val factionFromScript = Regex("""var\s+factionParam\s*=\s*"([^"]*)"""")
-            .find(scriptData)
-            ?.groupValues
-            ?.getOrNull(1)
-            .orEmpty()
-            .trim()
-        val faction = factionFromScript.ifBlank { fallbackFaction }
-        if (faction.isBlank()) return ""
-
-        val cardIndexes = cardIdsParam
-            .split(',')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .mapNotNull { cardId -> cardIndexMap[cardId] }
-
-        if (cardIndexes.isEmpty()) return ""
-
-        return runCatching {
-            BioDeckShareCodecs.encodeShareCode(cardIndexes, faction)
-        }.getOrDefault("")
+        for (script in Jsoup.parse(html).select("script")) {
+            val scriptData = script.data()
+            val ids = scriptParameter(scriptData, "cardIdsParam") ?: continue
+            if (ids.isBlank()) continue
+            val faction = scriptParameter(scriptData, "factionParam")?.trim()
+                ?.takeIf { it.isNotBlank() } ?: fallbackFaction
+            val cardIndexMap = cardIndexMapByFaction[faction].orEmpty()
+            val cardIndexes = mutableListOf<Int>()
+            // Every explicitly supplied ID must be known; a partial deck is not this deck.
+            for (id in ids.split(',')) {
+                val index = cardIndexMap[id.trim()] ?: return ""
+                cardIndexes += index
+            }
+            if (ids.split(',').map { it.trim() }.distinct().size != cardIndexes.distinct().size) return ""
+            return runCatching {
+                BioDeckShareCodecs.encodeShareCode(cardIndexes, faction)
+            }.getOrDefault("")
+        }
+        return ""
     }
+
+    private fun scriptParameter(script: String, name: String): String? =
+        Regex("""(?:var|let|const)\s+$name\s*=\s*(["'])(.*?)\1""")
+            .find(script)?.groupValues?.getOrNull(2)
 }

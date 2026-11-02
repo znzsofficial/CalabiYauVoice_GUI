@@ -30,6 +30,7 @@
   let voiceDialogNavLine = $state(undefined) as number | undefined;
   let voiceDialogNavQuery = $state('');
   let indexAbortController: AbortController | null = null;
+  const charactersAbortController = new AbortController();
   let disposed = false;
   /** 首次构建是否已启动：用于区分「还没轮到」与「已取消/失败」 */
   let voiceIndexAttempted = $state(false);
@@ -101,6 +102,7 @@
 
   onDestroy(() => {
     disposed = true;
+    charactersAbortController.abort();
     indexAbortController?.abort();
     indexAbortController = null;
   });
@@ -117,13 +119,9 @@
   function publishIndex(
     idx: Map<string, VoiceIndexSections>,
     failures: VoiceIndexFailure[],
-    options: { openFailedList?: boolean } = {},
   ): void {
     voiceSearchIndex = new Map(idx);
     voiceIndexFailures = failures.map(item => ({ ...item }));
-    if (options.openFailedList && failures.length > 0 && failures.length <= 8) {
-      voiceFailedListOpen = true;
-    }
   }
 
   async function persistIndex(idx: Map<string, VoiceIndexSections>, failures: VoiceIndexFailure[], builtAt = Date.now()): Promise<void> {
@@ -166,14 +164,15 @@
     if (chars.length === 0) {
       voiceCharsLoading = true;
       try {
-        chars = await fetchAllCharacters();
+        chars = await fetchAllCharacters(charactersAbortController.signal);
         if (disposed) return;
         voiceCharacters = chars;
       } catch (err) {
+        if (disposed || charactersAbortController.signal.aborted) return;
         voiceCharsError = toError(err).message || '加载角色列表失败';
         return;
       } finally {
-        voiceCharsLoading = false;
+        if (!disposed) voiceCharsLoading = false;
       }
     }
 
@@ -236,7 +235,8 @@
         },
       });
       if (controller.signal.aborted || indexAbortController !== controller) return;
-      publishIndex(result.index, result.failures, { openFailedList: true });
+      // The builder's last progress event already published this exact result.
+      if (result.failures.length > 0 && result.failures.length <= 8) voiceFailedListOpen = true;
       voiceIndexReady = true;
       await persistIndex(result.index, result.failures);
       if (indexAbortController !== controller) return;

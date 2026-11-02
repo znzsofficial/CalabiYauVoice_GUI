@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 
 import android.net.Uri
 import androidx.compose.runtime.saveable.listSaver
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 
 private const val ROUTE_SEPARATOR = "|"
 
@@ -37,6 +38,7 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Activities -> "activities"
     WikiRoute.Announcements -> "announcements"
     WikiRoute.GameModes -> "gameModes"
+    is WikiRoute.ExtractionCatalog -> "extractionCatalog|${kind.name}"
     WikiRoute.BalanceData -> "balanceData"
     WikiRoute.Voting -> "voting"
     WikiRoute.BioCards -> "bioCards"
@@ -107,6 +109,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "activities" -> WikiRoute.Activities
         "announcements" -> WikiRoute.Announcements
         "gameModes" -> WikiRoute.GameModes
+        "extractionCatalog" -> ExtractionCatalogKind.entries.find { it.name == parts.getOrNull(1) }?.let { WikiRoute.ExtractionCatalog(it) }
         "balanceData" -> WikiRoute.BalanceData
         "voting" -> WikiRoute.Voting
         "bioCards" -> WikiRoute.BioCards

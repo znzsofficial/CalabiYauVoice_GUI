@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -96,6 +98,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -104,16 +107,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
+import com.nekolaska.calabiyau.core.wiki.portraitPrefetchIndices
 import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
@@ -132,6 +142,8 @@ import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
 import util.wikiPathEncode
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 // ────────────────────────────────────────────
 //  Wiki 主页
@@ -172,18 +184,39 @@ internal fun WikiHomePage(
 
     val wallpaperSeedColor = LocalWallpaperSeedColor.current
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val contentBounds = remember { mutableStateOf(Rect.Zero) }
+    val portraitBounds = remember { mutableStateOf(Rect.Zero) }
     LaunchedEffect(wallpaperUrl) {
         val color = WallpaperSeedColor.resolve(context, wallpaperUrl)
         if (color != 0) wallpaperSeedColor.intValue = color
     }
-    LaunchedEffect(factions, selectedHomeFaction) {
-        val urls = buildList {
-            factions.getOrNull(selectedHomeFaction)?.characters?.let(::addAll)
-            factions.forEachIndexed { index, faction ->
-                if (index != selectedHomeFaction) addAll(faction.characters)
+    LaunchedEffect(factions, selectedHomeFaction, listState, characterRowState, context, lifecycleOwner) {
+        val characters = factions.getOrNull(selectedHomeFaction.coerceIn(0, factions.lastIndex.coerceAtLeast(0)))
+            ?.characters.orEmpty()
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            snapshotFlow {
+                val sectionVisible = listState.layoutInfo.visibleItemsInfo.any { it.key == "characters" }
+                val rowVisible = sectionVisible && !portraitBounds.value.isEmpty &&
+                    portraitBounds.value.overlaps(contentBounds.value)
+                val layout = characterRowState.layoutInfo
+                val visible = layout.visibleItemsInfo.filter { item ->
+                    characters.getOrNull(item.index)?.name == item.key &&
+                        item.offset + item.size > layout.viewportStartOffset &&
+                        item.offset < layout.viewportEndOffset
+                }.map { it.index }
+                portraitPrefetchIndices(
+                    characters.size,
+                    visible,
+                    isVisible = rowVisible && !listState.isScrollInProgress && !characterRowState.isScrollInProgress
+                ).map { index -> characters[index].let { it.portraitUrl ?: it.imageUrl } }
+            }.collectLatest { urls ->
+                if (urls.isNotEmpty()) {
+                    delay(160)
+                    SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
+                }
             }
-        }.map { it.portraitUrl ?: it.imageUrl }
-        SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
+        }
     }
 
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -231,11 +264,13 @@ internal fun WikiHomePage(
     ) { innerPadding ->
         // LocalHasWallpaper 已由 Hub 层 provide，这里只关 overscroll
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
+            Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.TopCenter) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
+                        .widthIn(max = 960.dp)
                         .fillMaxSize()
-                        .padding(innerPadding),
+                        .onGloballyPositioned { contentBounds.value = it.boundsInWindow() },
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -251,12 +286,39 @@ internal fun WikiHomePage(
                         )
                     }
 
-                // ── 快捷入口 ──
+                    // ── 快捷入口 ──
                     item(key = "quick_access", contentType = "grid") {
-                        QuickAccessGrid(
-                            onNavigateTo = onNavigateTo,
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            HomeSectionTitle("快捷与常用")
+                            QuickAccessGrid(
+                                onNavigateTo = onNavigateTo,
+                                backdrop = backdrop
+                            )
+                        }
+                    }
+
+                    item(key = "balance_data", contentType = "action_card") {
+                        ActionCard(
+                            title = "平衡数据",
+                            subtitle = "角色胜率、选取率与 KD · 官网数据",
+                            icon = Icons.Outlined.BarChart,
+                            onClick = { onNavigateTo(WikiRoute.BalanceData) },
                             backdrop = backdrop
                         )
+                    }
+
+                    item(key = "weapons", contentType = "action_card") {
+                        ActionCard(
+                            title = "武器一览",
+                            subtitle = "查看全部武器数据",
+                            icon = Icons.Outlined.GpsFixed,
+                            onClick = { onNavigateTo(WikiRoute.Weapons) },
+                            backdrop = backdrop
+                        )
+                    }
+
+                    item(key = "preview_heading", contentType = "section_heading") {
+                        HomeSectionTitle("资料预览")
                     }
 
                     // ── 超弦体 & 晶源体 ──
@@ -270,19 +332,9 @@ internal fun WikiHomePage(
                             onOpenCharacterDetail = onOpenCharacterDetail,
                             onViewAll = { onNavigateTo(WikiRoute.Characters) },
                             backdrop = backdrop,
+                            onPortraitBoundsChanged = { portraitBounds.value = it },
                             sharedTransitionScope = sharedTransitionScope,
                             animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-
-                    // ── 武器 ──
-                    item(key = "weapons", contentType = "action_card") {
-                        ActionCard(
-                            title = "武器一览",
-                            subtitle = "查看全部武器数据",
-                            icon = Icons.Outlined.GpsFixed,
-                            onClick = { onNavigateTo(WikiRoute.Weapons) },
-                            backdrop = backdrop
                         )
                     }
 
@@ -302,20 +354,10 @@ internal fun WikiHomePage(
                         )
                     }
 
-                    // ── 平衡数据 ──
-                    item(key = "balance_data", contentType = "action_card") {
-                        ActionCard(
-                            title = "平衡数据",
-                            subtitle = "官网角色胜率/选取率/KD等数据",
-                            icon = Icons.Outlined.BarChart,
-                            onClick = { onNavigateTo(WikiRoute.BalanceData) },
-                            backdrop = backdrop
-                        )
-                    }
-
                     // ── 聚合入口（二级菜单页，2×2 网格与直连内容卡区分） ──
                     item(key = "hub_grid", contentType = "hub_grid") {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            HomeSectionTitle("更多资料", "玩法、图鉴与游戏内容分类")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Box(Modifier.weight(1f)) {
                                     HubCard(
@@ -408,11 +450,22 @@ internal fun WikiHomePage(
             }
         }
     }
+}
 
 // ────────────────────────────────────────────
 //  聚合入口卡（通向 WikiAggregateScreens 的二级菜单页）
 //  用浅色图标底 + 主色描边 + 竖排瓦片，与直连内容的行卡区分
 // ────────────────────────────────────────────
+
+@Composable
+private fun HomeSectionTitle(title: String, description: String? = null) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        if (!description.isNullOrBlank()) {
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 @Composable
 private fun HubCard(
@@ -531,28 +584,34 @@ private fun QuickAccessGrid(
     }
     val layout = AppPrefs.homeQuickEntryLayout
 
-    if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
-        QuickAccessButtonGrid(
-            quickEntries = quickEntries,
-            onNavigateTo = onNavigateTo,
-            backdrop = backdrop
-        )
-    } else {
-        QuickAccessGridCard(
-            quickEntries = quickEntries,
-            onNavigateTo = onNavigateTo,
-            backdrop = backdrop
-        )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = if (maxWidth >= 600.dp) 6 else 3
+        if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
+            QuickAccessButtonGrid(
+                quickEntries = quickEntries,
+                columns = columns,
+                onNavigateTo = onNavigateTo,
+                backdrop = backdrop
+            )
+        } else {
+            QuickAccessGridCard(
+                quickEntries = quickEntries,
+                columns = columns,
+                onNavigateTo = onNavigateTo,
+                backdrop = backdrop
+            )
+        }
     }
 }
 
 @Composable
 private fun QuickAccessGridCard(
     quickEntries: List<QuickEntry>,
+    columns: Int,
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
+    val quickEntryRows = remember(quickEntries, columns) { quickEntries.chunked(columns) }
 
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
@@ -585,7 +644,7 @@ private fun QuickAccessGridCard(
         Column(Modifier.padding(6.dp)) {
             quickEntryRows.forEachIndexed { rowIndex, row ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    repeat(3) { columnIndex ->
+                    repeat(columns) { columnIndex ->
                         val entry = row.getOrNull(columnIndex)
                         if (entry != null) {
                             QuickAccessCell(
@@ -602,7 +661,7 @@ private fun QuickAccessGridCard(
                                     .height(70.dp)
                             )
                         }
-                        if (columnIndex < 2) {
+                        if (columnIndex < columns - 1) {
                             VerticalDivider(
                                 modifier = Modifier.height(44.dp),
                                 color = dividerColor
@@ -624,10 +683,11 @@ private fun QuickAccessGridCard(
 @Composable
 private fun QuickAccessButtonGrid(
     quickEntries: List<QuickEntry>,
+    columns: Int,
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    val quickEntryRows = remember(quickEntries) { quickEntries.chunked(3) }
+    val quickEntryRows = remember(quickEntries, columns) { quickEntries.chunked(columns) }
     val liquidGlass = LocalLiquidGlassEnabled.current.value
     val hasWallpaper = LocalHasWallpaper.current
     val entryShape = smoothCornerShape(20.dp)
@@ -674,12 +734,14 @@ private fun QuickAccessButtonGrid(
                             Text(
                                 entry.label,
                                 style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -712,7 +774,9 @@ private fun QuickAccessCell(
         Text(
             entry.label,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -739,6 +803,7 @@ private fun CharacterPreviewSection(
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     onViewAll: () -> Unit,
     backdrop: Backdrop = emptyBackdrop(),
+    onPortraitBoundsChanged: (Rect) -> Unit = {},
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
@@ -843,6 +908,7 @@ private fun CharacterPreviewSection(
                     }
                     LazyRow(
                         state = rowState,
+                        modifier = Modifier.onGloballyPositioned { onPortraitBoundsChanged(it.boundsInWindow()) },
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(horizontal = 2.dp)
                     ) {

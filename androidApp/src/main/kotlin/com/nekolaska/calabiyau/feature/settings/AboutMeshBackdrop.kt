@@ -1,5 +1,8 @@
 package com.nekolaska.calabiyau.feature.settings
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -13,8 +16,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.Offset
@@ -24,7 +31,9 @@ import androidx.compose.ui.graphics.MeshGradientPainter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import kotlin.math.abs
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 private const val MESH_ROWS = 3
 private const val MESH_COLUMNS = 3
@@ -38,37 +47,51 @@ internal fun AboutMeshBackdrop(modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     val background = scheme.background
     val motionEnabled = rememberAnimatorEnabled()
-    // 绘制块会反复读取这些 State。不能先收成普通 Float，否则记住的 Painter 只会停在第一帧。
-    val transition = rememberInfiniteTransition(label = "aboutMesh")
-    val driftA by transition.animateFloat(
-        initialValue = if (motionEnabled) -0.07f else 0f,
-        targetValue = if (motionEnabled) 0.09f else 0f,
-        animationSpec = infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "driftA"
-    )
-    val driftB by transition.animateFloat(
-        initialValue = if (motionEnabled) 0.08f else 0f,
-        targetValue = if (motionEnabled) -0.06f else 0f,
-        animationSpec = infiniteRepeatable(tween(3900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "driftB"
-    )
-    val driftC by transition.animateFloat(
-        initialValue = if (motionEnabled) -0.05f else 0f,
-        targetValue = if (motionEnabled) 0.11f else 0f,
-        animationSpec = infiniteRepeatable(tween(4600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "driftC"
-    )
+    // 离开前台或关闭系统动画时移除 transition，而不是让无限动画反复计算 0 → 0。
+    val driftA: State<Float>
+    val driftB: State<Float>
+    val driftC: State<Float>
+    if (motionEnabled) {
+        val transition = rememberInfiniteTransition(label = "aboutMesh")
+        driftA = transition.animateFloat(
+            initialValue = -0.07f,
+            targetValue = 0.09f,
+            animationSpec = infiniteRepeatable(tween(2800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "driftA"
+        )
+        driftB = transition.animateFloat(
+            initialValue = 0.08f,
+            targetValue = -0.06f,
+            animationSpec = infiniteRepeatable(tween(3900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "driftB"
+        )
+        driftC = transition.animateFloat(
+            initialValue = -0.05f,
+            targetValue = 0.11f,
+            animationSpec = infiniteRepeatable(tween(4600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "driftC"
+        )
+    } else {
+        val still = remember { mutableFloatStateOf(0f) }
+        driftA = still
+        driftB = still
+        driftC = still
+    }
     val colors = remember(scheme.primary, scheme.secondary, scheme.tertiary, scheme.primaryContainer, scheme.background) {
         aboutMeshColors(scheme)
     }
-    val painter = remember(colors) {
+    val painter = remember(colors, driftA, driftB, driftC) {
         MeshGradientPainter(rows = MESH_ROWS, columns = MESH_COLUMNS, hasBicubicColor = true) {
+            // 仅在绘制阶段读取动画值，避免整页每帧重组；切换静态/动态也要更新捕获的 State。
+            val a = driftA.value
+            val b = driftB.value
+            val c = driftC.value
             for (row in 0..MESH_ROWS) {
                 for (column in 0..MESH_COLUMNS) {
                     setVertex(
                         row,
                         column,
-                        aboutMeshPoint(row, column, driftA, driftB, driftC),
+                        aboutMeshPoint(row, column, a, b, c),
                         colors[row * (MESH_COLUMNS + 1) + column]
                     )
                 }
@@ -99,11 +122,45 @@ internal fun AboutMeshBackdrop(modifier: Modifier = Modifier) {
 
 @Composable
 private fun rememberAnimatorEnabled(): Boolean {
-    val context = LocalContext.current
-    return remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+    val resolver = LocalContext.current.contentResolver
+    val owner = LocalLifecycleOwner.current
+    var enabled by remember(resolver, owner) { mutableStateOf(false) }
+    LifecycleResumeEffect(resolver, lifecycleOwner = owner) {
+        var observing = true
+        fun refresh() {
+            // unregister 不会撤销已经投递到主线程的回调。
+            if (!observing) return
+            val scale = try {
+                Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+            } catch (_: SecurityException) {
+                0f
+            }
+            enabled = aboutMeshMotionEnabled(scale, lifecycle.currentState)
+        }
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) = refresh()
+        }
+        val registered = try {
+            resolver.registerContentObserver(
+                Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer
+            )
+            true
+        } catch (_: SecurityException) {
+            false
+        }
+        // 先订阅再读取；从设置/后台返回时也重新读取，不能沿用离开前的开关。
+        if (registered) refresh()
+        onPauseOrDispose {
+            observing = false
+            enabled = false
+            if (registered) resolver.unregisterContentObserver(observer)
+        }
     }
+    return enabled
 }
+
+internal fun aboutMeshMotionEnabled(durationScale: Float, lifecycleState: Lifecycle.State): Boolean =
+    durationScale.isFinite() && durationScale > 0f && lifecycleState == Lifecycle.State.RESUMED
 
 internal fun aboutMeshColors(scheme: ColorScheme): List<Color> {
     val background = scheme.background
@@ -159,23 +216,4 @@ private fun driftFor(row: Int, column: Int, driftA: Float, driftB: Float, driftC
         else -> driftB * 0.6f
     }
     return Offset(x, y)
-}
-
-internal fun meshPointsStayOrdered(driftA: Float, driftB: Float, driftC: Float): Boolean {
-    val points = List(4) { row -> List(4) { column -> aboutMeshPoint(row, column, driftA, driftB, driftC) } }
-    for (row in 0..3) {
-        for (column in 0..2) {
-            if (points[row][column].x > points[row][column + 1].x) return false
-        }
-    }
-    for (column in 0..3) {
-        for (row in 0..2) {
-            if (points[row][column].y > points[row + 1][column].y) return false
-        }
-    }
-    return points[0][0] == Offset.Zero &&
-        points[0][3] == Offset(1f, 0f) &&
-        points[3][0] == Offset(0f, 1f) &&
-        points[3][3] == Offset(1f, 1f) &&
-        abs(driftA) < 1f
 }

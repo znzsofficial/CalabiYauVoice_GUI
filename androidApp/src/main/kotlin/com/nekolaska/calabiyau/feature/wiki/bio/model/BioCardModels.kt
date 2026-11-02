@@ -28,7 +28,8 @@ data class PcCard(
     val effect: String,
     val roles: List<String>,
     val imageUrl: String?,
-    val refreshProbability: CardRefreshProbability?
+    val refreshProbability: CardRefreshProbability?,
+    val cardId: String = ""
 )
 
 data class MobileCard(

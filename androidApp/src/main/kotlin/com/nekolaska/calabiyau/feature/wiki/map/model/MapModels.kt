@@ -19,7 +19,8 @@ data class MapDetail(
     val platforms: String,
     val terrainMapUrl: String?,
     val galleryUrls: List<String>,
-    val updateHistory: List<UpdateEntry>
+    val updateHistory: List<UpdateEntry>,
+    val overviewImageUrl: String? = null
 )
 
 data class UpdateEntry(
