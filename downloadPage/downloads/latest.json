@@ -1,18 +1,25 @@
 {
     "versionName": "2.1.25",
     "versionCode": 55,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.25.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.25.apk?build=f69a157c01a2d639",
+    "apkSize": 3708288,
     "releaseUrl": "/",
     "changelog": [
-        "修复莱布伦城、维里昂裂隙等地图详情打开时的正则报错",
-        "掉落图鉴适配 Wiki 最新的稀有度分组表格，补齐完整掉落池，并保留同名来源的不同掉落分布",
-        "掉落来源与完整掉落池分开浏览，支持按来源类别筛选、池内物品搜索和分组展开，兼容旧版离线数据",
-        "调整掉落图鉴骨架屏，对齐来源切换、搜索筛选和掉落卡片，并跟随系统字体大小",
-        "精简平衡数据页的筛选、赛季对比和空状态文案，保留必要的单位说明"
+        "\u4fee\u590d\u83b1\u5e03\u4f26\u57ce\u3001\u7ef4\u91cc\u6602\u88c2\u9699\u7b49\u5730\u56fe\u8be6\u60c5\u6253\u5f00\u65f6\u7684\u6b63\u5219\u62a5\u9519",
+        "\u6389\u843d\u56fe\u9274\u9002\u914d Wiki \u6700\u65b0\u7684\u7a00\u6709\u5ea6\u5206\u7ec4\u8868\u683c\uff0c\u8865\u9f50\u5b8c\u6574\u6389\u843d\u6c60\uff0c\u5e76\u4fdd\u7559\u540c\u540d\u6765\u6e90\u7684\u4e0d\u540c\u6389\u843d\u5206\u5e03",
+        "\u6389\u843d\u6765\u6e90\u4e0e\u5b8c\u6574\u6389\u843d\u6c60\u5206\u5f00\u6d4f\u89c8\uff0c\u652f\u6301\u6309\u6765\u6e90\u7c7b\u522b\u7b5b\u9009\u3001\u6c60\u5185\u7269\u54c1\u641c\u7d22\u548c\u5206\u7ec4\u5c55\u5f00\uff0c\u517c\u5bb9\u65e7\u7248\u79bb\u7ebf\u6570\u636e",
+        "\u8c03\u6574\u6389\u843d\u56fe\u9274\u9aa8\u67b6\u5c4f\uff0c\u5bf9\u9f50\u6765\u6e90\u5207\u6362\u3001\u641c\u7d22\u7b5b\u9009\u548c\u6389\u843d\u5361\u7247\uff0c\u5e76\u8ddf\u968f\u7cfb\u7edf\u5b57\u4f53\u5927\u5c0f",
+        "\u7cbe\u7b80\u5e73\u8861\u6570\u636e\u9875\u7684\u7b5b\u9009\u3001\u8d5b\u5b63\u5bf9\u6bd4\u548c\u7a7a\u72b6\u6001\u6587\u6848\uff0c\u4fdd\u7559\u5fc5\u8981\u7684\u5355\u4f4d\u8bf4\u660e"
     ],
     "publishedAt": "2026-11-03",
     "releases": [
+        {
+            "versionName": "2.1.25",
+            "versionCode": 55,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.25.apk?build=f69a157c01a2d639",
+            "apkSize": 3708288,
+            "publishedAt": "2026-11-03"
+        },
         {
             "versionName": "2.1.24",
             "versionCode": 54,
