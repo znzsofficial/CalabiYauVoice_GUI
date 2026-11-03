@@ -42,18 +42,22 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
     var valuableOnly by rememberSaveable(kind) { mutableStateOf(false) }
     var showFilters by rememberSaveable(kind) { mutableStateOf(false) }
     var selectedId by rememberSaveable(kind) { mutableStateOf<String?>(null) }
-    val categories = remember(entries) { entries.map { it.category }.distinct() }
+    var dropView by rememberSaveable(kind) { mutableStateOf(ExtractionDropView.SOURCES) }
+    val viewEntries = remember(entries, kind, dropView) {
+        if (kind == ExtractionCatalogKind.DROPS) extractionEntriesForView(entries, dropView) else entries
+    }
+    val categories = remember(viewEntries) { viewEntries.map { it.filterCategory }.distinct() }
     val qualities = remember(entries) { entries.mapNotNull { e -> e.quality?.let { it to e.qualityLabel } }.distinctBy { it.first }.sortedBy { it.first } }
     val sorts = remember(entries) { ExtractionSort.entries.filter { s -> s == ExtractionSort.DEFAULT || entries.any { s in it.numericValues } } }
-    LaunchedEffect(entries) {
+    LaunchedEffect(entries, dropView) {
         if (entries.isNotEmpty()) {
             if (category !in categories) category = null
             if (qualities.none { it.first == quality }) quality = null
             if (sort !in sorts) sort = ExtractionSort.DEFAULT
         }
     }
-    val filtered = remember(entries, query, category, quality, valuableOnly, sort, descending) {
-        filterExtractionEntries(entries, query, category, quality, valuableOnly, sort, descending)
+    val filtered = remember(viewEntries, query, category, quality, valuableOnly, sort, descending) {
+        filterExtractionEntries(viewEntries, query, category, quality, valuableOnly, sort, descending)
     }
     val wikiUrl = "https://wiki.biligame.com/klbq/${kind.pageName.wikiPathEncode()}"
     Scaffold(topBar = {
@@ -69,6 +73,17 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
             val header: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("弦溯战线专用图鉴", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (kind == ExtractionCatalogKind.DROPS) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ExtractionDropView.entries.forEach { view ->
+                                FilterChip(
+                                    selected = dropView == view,
+                                    onClick = { if (dropView != view) { dropView = view; category = null } },
+                                    label = { Text("${view.title} ${extractionEntriesForView(entries, view).size}") }
+                                )
+                            }
+                        }
+                    }
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                         isSearching = false, placeholder = if (kind == ExtractionCatalogKind.DROPS) "搜索晶源体、容器或掉落物…" else "搜索名称、描述或效果…")
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -78,14 +93,11 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                             Text("筛选与排序")
                         }
                         Spacer(Modifier.width(12.dp))
-                        Text("${filtered.size} / ${entries.size} 项", style = MaterialTheme.typography.labelMedium)
+                        Text("${filtered.size} / ${viewEntries.size} 项", style = MaterialTheme.typography.labelMedium)
                     }
                     Text(listOfNotNull(category, qualities.find { it.first == quality }?.second,
                         if (valuableOnly) "贵重" else null, sort.takeIf { it != ExtractionSort.DEFAULT }?.let { "${it.label} · ${if (descending) "降序" else "升序"}" })
                         .joinToString(" · ").ifBlank { "全部条目 · 默认顺序" },
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (kind == ExtractionCatalogKind.DROPS) Text(
-                        "“掉落池内最高权重”与“掉落件数”按 Wiki 原文分别展示，不等同于每局获得概率。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -97,10 +109,18 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                         Card(onClick = { selectedId = entry.id }, modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text((listOf(entry.category) + entry.tags).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                                (entry.fields.firstOrNull { it.label == "必掉物" }
-                                    ?: entry.fields.firstOrNull { it.label == "掉落池条目（完整）" })?.let {
-                                    Text(it.value, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+                                Text((listOf(if (entry.isDropPool) "完整掉落池" else entry.category) + entry.tags).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+                                entry.fields.firstOrNull { it.label in setOf("掉落件数", "件数概率") }?.let {
+                                    Text(it.value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                val preview = if (entry.dropPoolGroups.isNotEmpty()) {
+                                    entry.dropPoolGroups.joinToString(" · ") { it.label }
+                                } else {
+                                    (entry.fields.firstOrNull { it.label == "必掉物" }
+                                        ?: entry.fields.firstOrNull { it.label == "掉落池条目（完整）" })?.value
+                                }
+                                preview?.let {
+                                    Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
                                 }
                                 Text("查看掉落详情", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
@@ -127,7 +147,7 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
     if (showFilters) ExtractionFilterSheet(kind, categories, qualities, sorts, category, quality, valuableOnly, sort, descending,
         onCategory = { category = it }, onQuality = { quality = it }, onValuable = { valuableOnly = it }, onSort = { sort = it },
         onDescending = { descending = it }, onDismiss = { showFilters = false })
-    entries.firstOrNull { it.id == selectedId }?.let { entry -> ExtractionDetailSheet(entry) { selectedId = null } }
+    entries.firstOrNull { it.id == selectedId }?.let { entry -> ExtractionDetailSheet(entry, query) { selectedId = null } }
 }
 
 @Composable
@@ -174,7 +194,16 @@ private fun ExtractionFilterSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExtractionDetailSheet(entry: ExtractionEntry, onDismiss: () -> Unit) {
+private fun ExtractionDetailSheet(entry: ExtractionEntry, query: String, onDismiss: () -> Unit) {
+    var poolQuery by rememberSaveable(entry.id) {
+        mutableStateOf(query.takeIf { keyword ->
+            entry.dropPoolGroups.any { group -> group.items.any { it.contains(keyword.trim(), true) } }
+        }.orEmpty())
+    }
+    val poolGroups = remember(entry, poolQuery) { filterDropPoolGroups(entry.dropPoolGroups, poolQuery) }
+    val fields = remember(entry) {
+        if (entry.dropPoolGroups.isNotEmpty()) entry.fields.filterNot { it.label == "掉落池条目（完整）" } else entry.fields
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 680.dp), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -184,15 +213,28 @@ private fun ExtractionDetailSheet(entry: ExtractionEntry, onDismiss: () -> Unit)
             }
             item {
                 Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text((listOf(entry.category, entry.qualityLabel) + entry.tags).filter { it.isNotBlank() }.joinToString(" · "),
+                Text((listOf(if (entry.isDropPool) "完整掉落池" else entry.category, entry.qualityLabel) + entry.tags).filter { it.isNotBlank() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (entry.description.isNotBlank()) item { Text(entry.description, style = MaterialTheme.typography.bodyLarge) }
-            items(entry.fields.size, key = { index -> "field-$index" }) { index ->
-                val field = entry.fields[index]
+            items(fields.size, key = { index -> "field-$index" }) { index ->
+                val field = fields[index]
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(field.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     Text(field.value, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+            if (entry.dropPoolGroups.isNotEmpty()) {
+                item(key = "pool-search") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("完整掉落池", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it }, onSearch = {},
+                            onClear = { poolQuery = "" }, isSearching = false, placeholder = "在掉落池中搜索物品…")
+                    }
+                }
+                if (poolGroups.isEmpty()) item(key = "pool-empty") { Text("没有匹配的掉落物") }
+                items(poolGroups.size, key = { "pool-group-$it" }) { index ->
+                    ExtractionDropPoolSection(entryId = entry.id, group = poolGroups[index], query = poolQuery)
                 }
             }
             item { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("关闭") } }

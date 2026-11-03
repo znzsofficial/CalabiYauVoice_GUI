@@ -120,16 +120,56 @@ object ExtractionCatalogParsers {
     }
 
     private fun parseDropSummary(table: Element): List<ExtractionEntry> {
-        val rows = table.select("tr")
+        val rows = table.select("tr").filter { it.closest("table") === table }
         val headers = rows.firstOrNull()?.select("> th, > td")?.map { content(it) }.orEmpty()
-        if (headers.firstOrNull() != "名称" || "掉落池条目（完整）" !in headers) return emptyList()
-        return rows.drop(1).mapNotNull { row ->
-            val cells = row.select("> th, > td")
-            if (cells.size != headers.size) return@mapNotNull null
-            val values = cells.map { content(it) }
+        val poolIndex = headers.indexOfFirst { it == "掉落池条目（完整）" || it == "掉落池条目（按稀有度分行）" }
+        if (headers.firstOrNull() != "名称" || poolIndex < 0) return emptyList()
+        val groupedByRarity = headers[poolIndex] == "掉落池条目（按稀有度分行）"
+        val spans = arrayOfNulls<DropTableSpan>(headers.size)
+        val groups = mutableListOf<DropTableGroup>()
+        rows.drop(1).forEach { row ->
+            // Expand merged cells before reading column positions. Carry only for the
+            // declared rowspan, and group by the original name cell, not by name/tier:
+            // several different Boss cores deliberately share both of those values.
+            val expanded = MutableList<Element?>(headers.size) { index ->
+                spans[index]?.let { span ->
+                    if (--span.remaining == 0) spans[index] = null
+                    span.element
+                }
+            }
+            var column = 0
+            var invalid = false
+            row.select("> th, > td").forEach { cell ->
+                while (column < expanded.size && expanded[column] != null) column++
+                val width = cell.attr("colspan").toIntOrNull()?.coerceAtLeast(1) ?: 1
+                val height = cell.attr("rowspan").toIntOrNull()?.coerceIn(1, rows.size) ?: 1
+                if (column >= expanded.size || width > expanded.size - column ||
+                    (column until column + width).any { expanded[it] != null }) {
+                    invalid = true
+                } else {
+                    repeat(width) {
+                        expanded[column] = cell
+                        if (height > 1) spans[column] = DropTableSpan(cell, height - 1)
+                        column++
+                    }
+                }
+            }
+            if (invalid || expanded.any { it == null }) return@forEach
+            val nameCell = expanded.first()!!
+            val pool = content(expanded[poolIndex])
+            val previous = groups.lastOrNull()
+            if (previous != null && previous.nameCell === nameCell) {
+                previous.poolRows += pool
+            } else {
+                groups += DropTableGroup(nameCell, expanded.map { content(it) }, mutableListOf(pool))
+            }
+        }
+        return groups.mapNotNull { group ->
+            val values = group.values.toMutableList().apply { this[poolIndex] = group.poolRows.joinToString("\n") }
             val name = values.first()
             if (name.isBlank()) return@mapNotNull null
-            val fields = headers.zip(values).drop(1).mapNotNull { (label, value) ->
+            val fields = headers.zip(values).drop(1).mapIndexedNotNull { index, (header, value) ->
+                val label = if (index + 1 == poolIndex) "掉落池条目（完整）" else header
                 value.takeIf { it.isNotBlank() }?.let { ExtractionField(label, it) }
             }
             val type = values.getOrNull(headers.indexOf("来源类别")).orEmpty()
@@ -137,8 +177,30 @@ object ExtractionCatalogParsers {
             val tier = values.getOrNull(headers.indexOf("掉落档次")).orEmpty()
             ExtractionEntry(id = "summary:$name:$type:$subtype:$tier", name = name,
                 category = "总览表 · 完整掉落池", fields = fields,
-                tags = listOf(type, subtype, tier.takeIf { it.isNotBlank() }?.let { "档次 $it" }.orEmpty()).filter { it.isNotBlank() })
+                tags = listOf(type, subtype, tier.takeIf { it.isNotBlank() }?.let { "档次 $it" }.orEmpty()).filter { it.isNotBlank() },
+                dropPoolGroups = if (groupedByRarity) group.poolRows.mapNotNull(::parseDropPoolGroup)
+                    else parseLegacyDropPool(values[poolIndex]))
         }
+    }
+
+    private class DropTableSpan(val element: Element, var remaining: Int)
+    private class DropTableGroup(val nameCell: Element, val values: List<String>, val poolRows: MutableList<String>)
+
+    private fun parseDropPoolGroup(value: String): ExtractionDropPoolGroup? {
+        if (value.isBlank() || value in listOf("—", "—：—", "—:—")) return null
+        val separator = value.indexOfFirst { it == '：' || it == ':' }
+        val label = value.takeIf { separator > 0 }?.substring(0, separator)?.trim().orEmpty()
+        val code = Regex("""^Q(\d+)(?:\s+.*)?$""").matchEntire(label)?.groupValues?.get(1)?.toIntOrNull()
+        if (code == null) return ExtractionDropPoolGroup("掉落池", listOf(value))
+        val items = value.substring(separator + 1).split('、').map { it.trim() }.filter { it.isNotBlank() }
+        return ExtractionDropPoolGroup(label, items, code)
+    }
+
+    private fun parseLegacyDropPool(value: String): List<ExtractionDropPoolGroup> {
+        val items = Regex("""^\d+\s*项[：:](.*)$""", RegexOption.DOT_MATCHES_ALL).matchEntire(value.trim())
+            ?.groupValues?.get(1)?.split('、')?.map { it.trim() }?.filter { it.isNotBlank() }.orEmpty()
+        // Legacy full pools have no per-item rarity; retain their order and duplicates.
+        return if (items.isEmpty()) emptyList() else listOf(ExtractionDropPoolGroup("全部掉落物", items))
     }
 
     private fun content(element: Element?, remove: String? = null): String {

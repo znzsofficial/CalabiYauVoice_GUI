@@ -35,18 +35,49 @@ class ExtractionRealPageTest {
                     assertTrue(rows.any { e -> e.fields.any { it.label == "适用" && it.value.contains("弹药") } })
                 }
                 if (kind == ExtractionCatalogKind.DROPS) {
-                    // The live page currently repeats all 53 cards. Exact copies are not
-                    // distinct encounters; the summary table is a separate complete-pool view.
-                    val cardRows = rows.filterNot { it.category.startsWith("总览表") }
+                    // Older snapshots repeat source cards. The current complete-pool
+                    // table uses one rowspan group per source and one row per rarity.
+                    val cardRows = extractionEntriesForView(rows, ExtractionDropView.SOURCES)
                     assertEquals(raw.map { it.selectFirst(".sec-drop-card__title")?.text().orEmpty() + ":" + it.selectFirst(".sec-drop-card__sub")?.text().orEmpty() }.distinct().size,
                         cardRows.size)
                     assertTrue(rows.any { e -> e.fields.any { it.label == "掉落池条目（完整）" } })
                     assertTrue(rows.any { it.name == "莉莉丝" })
                     assertTrue(rows.all { it.quality == null })
                     assertTrue(rows.any { e -> e.fields.any { it.label == "掉落件数" } })
+                    val poolRows = extractionEntriesForView(rows, ExtractionDropView.POOLS)
+                    val table = Jsoup.parse(html).select("table.klbqtable").first {
+                        it.select("tr").first()!!.text().contains("掉落池条目")
+                    }
+                    val tableRows = table.select("tr").drop(1)
+                    val poolStarts = tableRows.filter { it.select("> td").size == 7 }
+                    assertEquals(poolStarts.size, poolRows.size, "Every complete pool must survive, including identical-name Boss variants")
+                    if (table.select("tr").first()!!.text().contains("按稀有度分行")) {
+                        val qualityRows = tableRows.mapNotNull { it.select("> td").last()?.text() }
+                            .filter { Regex("""^Q\d+[\s：:].*""").matches(it) }
+                        assertEquals(qualityRows.size, poolRows.sumOf { it.dropPoolGroups.size })
+                        assertTrue(poolRows.any { pool -> pool.dropPoolGroups.any { it.label == "Q8" } })
+                        qualityRows.forEach { text ->
+                            val contents = text.substringAfter('：')
+                            contents.split('、').map { it.trim() }.filter { it.isNotEmpty() }.forEach { item ->
+                                assertTrue(poolRows.any { pool -> pool.dropPoolGroups.any { item in it.items } }, "Missing full-pool item: $item")
+                            }
+                        }
+                        poolStarts.zip(poolRows).forEach { (start, pool) ->
+                            val cells = start.select("> td")
+                            assertEquals(cells.first()!!.text(), pool.name)
+                            val height = cells.first()!!.attr("rowspan").toIntOrNull() ?: 1
+                            val offset = tableRows.indexOf(start)
+                            val expected = tableRows.drop(offset).take(height).map { it.select("> td").last()!!.text() }
+                            assertEquals(expected.joinToString("\n"), pool.fields.single { it.label == "掉落池条目（完整）" }.value,
+                                "Pool rows leaked between sources: ${pool.name}")
+                            assertEquals(cells[4].text(), pool.fields.single { it.label == "件数概率" }.value)
+                        }
+                    }
                 }
                 putJsonObject(kind.name) {
                     put("count", rows.size)
+                    put("completePools", rows.count { it.isDropPool })
+                    put("rarityGroups", rows.sumOf { it.dropPoolGroups.size })
                     putJsonArray("categories") { rows.map { it.category }.distinct().forEach { add(it) } }
                     putJsonArray("names") { rows.forEach { add(it.name) } }
                 }

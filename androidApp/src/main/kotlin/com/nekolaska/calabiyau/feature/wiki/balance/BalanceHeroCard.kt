@@ -148,7 +148,7 @@ private fun BalanceCardMetric(
             color = if (isHighlight) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
         )
         if (hasCompare) {
-            Text("原 ${field.format(baseline)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("对比 ${field.format(baseline)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (difference != null) {
                 Text(
                     difference, style = MaterialTheme.typography.labelSmall,

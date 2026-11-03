@@ -26,7 +26,9 @@ object MapDetailParsers {
         val backgroundFile = extractTemplate(wikitext, "背景")?.trim()?.trimStart('|')?.substringBefore('|')?.trim()
         val overviewImageUrl = backgroundFile?.takeIf { it.isNotBlank() }?.let {
             document.select("style").asSequence()
-                .flatMap { style -> Regex("""\bbody\s*\{[^}]*\bbackground(?:-image)?\s*:[^}]*}""", RegexOption.IGNORE_CASE).findAll(style.data()) }
+                // Android's ICU requires a literal closing brace to be escaped;
+                // the desktop JVM accepts bare '}', masking this in JVM tests.
+                .flatMap { style -> Regex("""\bbody\s*\{[^}]*\bbackground(?:-image)?\s*:[^}]*\}""", RegexOption.IGNORE_CASE).findAll(style.data()) }
                 .flatMap { rule -> Regex("""url\(\s*['"]?(https?://[^\s)'";]+)['"]?\s*\)""").findAll(rule.value) }
                 .map { match -> match.groupValues[1] }
                 .firstOrNull { url -> url.startsWith("https://patchwiki.biligame.com/images/") }

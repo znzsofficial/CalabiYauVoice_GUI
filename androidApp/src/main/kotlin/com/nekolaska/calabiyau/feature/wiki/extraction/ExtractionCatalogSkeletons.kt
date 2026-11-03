@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.extraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,17 +23,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 
-/** The catalog filters live in a sheet: loading must not invent dropdown/chip rows inline. */
+/** Mirror the catalog header and cards; category/rarity filters remain in their sheet. */
 @Composable
 internal fun ExtractionCatalogSkeleton(kind: ExtractionCatalogKind, modifier: Modifier = Modifier) {
     val loading = modifier.clearAndSetSemantics {
@@ -94,6 +100,10 @@ private fun ExtractionItemGridSkeleton(modifier: Modifier) {
 @Composable
 private fun ExtractionDropsSkeleton(modifier: Modifier) {
     // Drop sources have no hero art or item rarity: mirror the text-card list instead.
+    val titleHeight = skeletonTextHeight(MaterialTheme.typography.titleMedium)
+    val metadataHeight = skeletonTextHeight(MaterialTheme.typography.bodySmall)
+    val previewHeight = skeletonTextHeight(MaterialTheme.typography.bodyMedium)
+    val actionHeight = skeletonTextHeight(MaterialTheme.typography.labelMedium)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -104,11 +114,14 @@ private fun ExtractionDropsSkeleton(modifier: Modifier) {
         items(6, key = { "extraction-drop-skeleton-$it" }) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SkeletonTextLine(widthFraction = 0.36f, height = 22.dp)
-                    SkeletonTextLine(widthFraction = 0.6f, height = 16.dp)
-                    SkeletonTextLine(widthFraction = 0.92f, height = 20.dp)
-                    SkeletonTextLine(widthFraction = 0.72f, height = 20.dp)
-                    SkeletonTextLine(widthFraction = 0.25f, height = 16.dp)
+                    SkeletonTextLine(widthFraction = 0.36f, height = titleHeight)
+                    SkeletonTextLine(widthFraction = 0.6f, height = metadataHeight)
+                    SkeletonTextLine(widthFraction = 0.55f, height = metadataHeight)
+                    Column {
+                        SkeletonTextLine(widthFraction = 0.92f, height = previewHeight)
+                        SkeletonTextLine(widthFraction = 0.72f, height = previewHeight)
+                    }
+                    SkeletonTextLine(widthFraction = 0.25f, height = actionHeight)
                 }
             }
         }
@@ -117,21 +130,38 @@ private fun ExtractionDropsSkeleton(modifier: Modifier) {
 
 @Composable
 private fun ExtractionControlsSkeleton(drops: Boolean) {
+    val labelHeight = skeletonTextHeight(MaterialTheme.typography.labelMedium)
+    val summaryHeight = skeletonTextHeight(MaterialTheme.typography.bodySmall)
+    val chipHeight = maxOf(32.dp, skeletonTextHeight(MaterialTheme.typography.labelLarge))
+    val buttonHeight = maxOf(40.dp, skeletonTextHeight(MaterialTheme.typography.labelLarge) + 16.dp)
+    val fontScale = LocalDensity.current.fontScale
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SkeletonTextLine(widthFraction = 0.36f, height = 16.dp)
-        ShimmerBox(Modifier.fillMaxWidth().height(56.dp), shape = smoothCornerShape(28.dp))
-        Row {
-            ShimmerBox(Modifier.width(130.dp).height(40.dp), shape = smoothCornerShape(20.dp))
-            Spacer(Modifier.width(12.dp))
-            ShimmerBox(Modifier.padding(top = 12.dp).width(64.dp).height(16.dp))
-        }
-        SkeletonTextLine(widthFraction = 0.52f, height = 16.dp)
+        SkeletonTextLine(widthFraction = 0.36f, height = labelHeight)
         if (drops) {
-            Column {
-                SkeletonTextLine(widthFraction = 0.96f, height = 16.dp)
-                Spacer(Modifier.height(4.dp))
-                SkeletonTextLine(widthFraction = 0.7f, height = 16.dp)
+            // These are the two real view chips, not inline catalog filters. FlowRow
+            // and font-scaled widths also mirror wrapping on narrow/large-text screens.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(128.dp, 144.dp).forEach { width ->
+                    Box(Modifier.width(width * fontScale).height(maxOf(48.dp, chipHeight)), contentAlignment = Alignment.Center) {
+                        ShimmerBox(Modifier.fillMaxWidth().height(chipHeight), shape = MaterialTheme.shapes.small)
+                    }
+                }
             }
         }
+        ShimmerBox(
+            Modifier.fillMaxWidth().height(maxOf(AppSizes.searchMinHeight, skeletonTextHeight(MaterialTheme.typography.bodyLarge) + 32.dp)),
+            shape = smoothCornerShape(AppShapes.sheetRadius)
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(130.dp * fontScale).height(maxOf(48.dp, buttonHeight)), contentAlignment = Alignment.Center) {
+                ShimmerBox(Modifier.fillMaxWidth().height(buttonHeight), shape = smoothCornerShape(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            ShimmerBox(Modifier.weight(1f).height(labelHeight))
+        }
+        SkeletonTextLine(widthFraction = 0.52f, height = summaryHeight)
     }
 }
+
+@Composable
+private fun skeletonTextHeight(style: TextStyle): Dp = with(LocalDensity.current) { style.lineHeight.toDp() }

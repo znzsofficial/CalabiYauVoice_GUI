@@ -297,7 +297,7 @@ fun BalanceDataScreen(
                                 )
                             } else if (sortedList.isEmpty() && !isLoadingData) {
                                 Text(
-                                    "当前赛季、筛选条件及攻防方暂无有效数据，请切换赛季或筛选条件。",
+                                    "暂无数据，试试其他赛季或筛选条件。",
                                     Modifier.align(Alignment.Center),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -429,12 +429,11 @@ private fun BalanceFilterSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)
         ) {
-            Text("筛选条件", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "点击“应用筛选”后查询；取消、关闭或返回将放弃修改。",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                "筛选条件",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
             Column(
                 modifier = Modifier
@@ -465,13 +464,6 @@ private fun BalanceFilterSheet(
                     placeholderText = "不对比",
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (selectedSeason2 != null) {
-                    Text(
-                        "应用后对比：${selectedSeason?.name.orEmpty()} → ${selectedSeason2.name}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
                 FilterChipGroup(
                     label = "地图",
                     options = settings.maps,
@@ -495,13 +487,8 @@ private fun BalanceFilterSheet(
                 )
             }
             TextButton(onClick = onReset, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text("重置为默认筛选")
+                Text("重置筛选")
             }
-            Text(
-                "默认模式、最新赛季、全地图和全段位、不对比。重置仅修改草稿，应用后生效。",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             FilledTonalButton(
                 onClick = onApply,
                 enabled = draft.mode != null && draft.season != null,
@@ -513,7 +500,7 @@ private fun BalanceFilterSheet(
                 Text("应用筛选")
             }
             TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("取消修改")
+                Text("取消")
             }
         }
     }
@@ -544,7 +531,7 @@ private fun FilterChipGroup(
                 selected = allSelected,
                 onClick = onSelectAll,
                 shape = smoothCornerShape(12.dp),
-                label = { Text("全选", maxLines = 1) }
+                label = { Text("全部", maxLines = 1) }
             )
             options.forEach { option ->
                 FilterChip(
@@ -717,7 +704,7 @@ private fun HeroBalanceList(
                 if (compareSeasonName != null) {
                     item(key = "comparison-legend") {
                         Text(
-                            "当前值在上 · 原值来自 $compareSeasonName\npp 表示百分点；数值变化不代表角色强弱。",
+                            "对比 $compareSeasonName · pp 表示百分点",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -726,7 +713,7 @@ private fun HeroBalanceList(
                 if (!scoreAvailable || (compareSeasonName != null && !compareScoreAvailable)) {
                     item(key = "score-availability") {
                         Text(
-                            "S8 以前无表现分，以 — 标示。",
+                            "表现分从 S8 赛季开始提供。",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

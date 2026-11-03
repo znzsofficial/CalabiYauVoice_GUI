@@ -30,6 +30,7 @@ class ExtractionIntegrationTest {
         assertFalse(ExtractionCatalogRemoteSource.isValidPayload(payload("<p>建设中</p>"), ExtractionCatalogKind.DROPS))
         assertFalse(ExtractionCatalogRemoteSource.isValidPayload("<html>WAF</html>", ExtractionCatalogKind.LOOT))
         assertFalse(ExtractionCatalogRemoteSource.isValidPayload("""{"error":{"code":"missingtitle"}}""", ExtractionCatalogKind.LOOT))
+        assertTrue(ExtractionCatalogRemoteSource.isValidPayload(payload(fixture("drop_summary_20261103.html")), ExtractionCatalogKind.DROPS))
     }
 
     @Test fun modeOverviewReadsActualTeachingCaptionsWithoutCatalogNavigation() {

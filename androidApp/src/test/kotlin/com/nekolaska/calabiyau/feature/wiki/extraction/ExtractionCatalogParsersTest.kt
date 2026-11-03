@@ -22,12 +22,91 @@ class ExtractionCatalogParsersTest {
         assertEquals(2, rows.size)
         assertTrue(rows.single { it.name == "标准医疗格" }.matches("测试B"))
         assertNull(rows.single { it.name == "标准医疗格" }.quality)
+        val group = rows.single { it.name == "标准医疗格" }.dropPoolGroups.single()
+        assertEquals("全部掉落物", group.label)
+        assertNull(group.qualityCode)
+        assertEquals(listOf("弦-5针剂", "标准护甲充能球", "测试A", "测试B"), group.items)
     }
 
     @Test fun sameIdentityWithChangedLootIsNotSilentlyOverwritten() {
         val rows = ExtractionCatalogParsers.parse(fixture("drops") + fixture("drops").replace("33.9%", "40%"), ExtractionCatalogKind.DROPS)
         assertEquals(2, rows.size)
         assertEquals(2, rows.map { it.id }.distinct().size)
+    }
+
+    @Test fun currentRarityRowsKeepEveryFullPoolIncludingMergedContinuationCells() {
+        val rows = ExtractionCatalogParsers.parse(fixture("drop_summary_20261103"), ExtractionCatalogKind.DROPS)
+        assertEquals(3, rows.size)
+        val medical = rows.single { it.name == "标准医疗格" }
+        val pool = medical.fields.single { it.label == "掉落池条目（完整）" }.value
+        assertTrue(pool.contains("Q5 臻藏：「银河」"))
+        assertTrue(pool.contains("Q2 精致：标准护甲充能球、弦-25针剂"))
+        assertTrue(pool.contains("Q1 优秀：基础护甲充能球、弦-5针剂"))
+        assertEquals("0 件 20%、1 件 60%、2 件 20%", medical.fields.single { it.label == "件数概率" }.value)
+        assertTrue(medical.matches("弦-5针剂"))
+        assertTrue(rows.single { it.name == "弹药仓" }.matches("狙击弹药"))
+        assertTrue(rows.any { it.name == "空投" })
+        assertTrue(rows.all { it.quality == null })
+        assertEquals(listOf("Q5 臻藏", "Q2 精致", "Q1 优秀"), medical.dropPoolGroups.map { it.label })
+        assertEquals(listOf(5, 2, 1), medical.dropPoolGroups.map { it.qualityCode })
+        assertEquals(listOf("基础护甲充能球", "弦-5针剂"), medical.dropPoolGroups.last().items)
+        assertTrue(rows.single { it.name == "空投" }.dropPoolGroups.isEmpty())
+        assertEquals("0", rows.single { it.name == "空投" }.fields.single { it.label == "掉落档次" }.value)
+    }
+
+    @Test fun repeatedNamesAndTiersDoNotMergeDistinctBossCoreDistributions() {
+        val source = fixture("drop_summary_20261103")
+        val first = source.replace("标准医疗格", "晶骸核心")
+        val second = first.replace("0 件 20%、1 件 60%、2 件 20%", "3 件 80%、4 件 15%、5 件 5%")
+        val rows = ExtractionCatalogParsers.parse(first + second, ExtractionCatalogKind.DROPS)
+        val cores = rows.filter { it.name == "晶骸核心" }
+        assertEquals(2, cores.size)
+        assertEquals(2, cores.map { it.id }.distinct().size)
+        assertTrue(cores.all { it.dropPoolGroups.size == 3 })
+        assertEquals(4, rows.size) // Unchanged ammo/airdrop records still deduplicate.
+    }
+
+    @Test fun unknownQualityCodesAndUnexpectedPoolTextArePreservedWithoutInventingRarities() {
+        val source = fixture("drop_summary_20261103")
+            .replace("Q5 臻藏：「银河」、「心海」、「火力大喵」、「科斯迷特」", "Q8：硬化超弦装甲、适应性超弦装甲")
+            .replace("Q2 精致：标准护甲充能球、弦-25针剂", "新增分组：测试物品")
+        val medical = ExtractionCatalogParsers.parse(source, ExtractionCatalogKind.DROPS).single { it.name == "标准医疗格" }
+        assertEquals("Q8", medical.dropPoolGroups.first().label)
+        assertEquals(8, medical.dropPoolGroups.first().qualityCode)
+        assertEquals(listOf("硬化超弦装甲", "适应性超弦装甲"), medical.dropPoolGroups.first().items)
+        assertEquals(listOf("新增分组：测试物品"), medical.dropPoolGroups[1].items)
+        assertNull(medical.quality)
+        assertTrue(medical.matches("测试物品"))
+    }
+
+    @Test fun rowspanEndsAtItsDeclaredBoundaryAndIncompleteRowsCannotLeakIntoTheNextPool() {
+        val source = fixture("drop_summary_20261103").replace(
+            "<tr>\n <td rowspan=\"1\">空投</td>",
+            "<tr><td>Q4 完美：无归属条目</td></tr><tr>\n <td rowspan=\"1\">空投</td>"
+        )
+        val rows = ExtractionCatalogParsers.parse(source, ExtractionCatalogKind.DROPS)
+        assertEquals(3, rows.size)
+        assertTrue(rows.none { it.matches("无归属条目") })
+        assertTrue(rows.single { it.name == "空投" }.dropPoolGroups.isEmpty())
+    }
+
+    @Test fun fullPoolViewsAndItemSearchStaySeparateFromSourceCardsAndTheirWeights() {
+        val entries = ExtractionCatalogParsers.parse(fixture("drops") + fixture("drop_summary_20261103"), ExtractionCatalogKind.DROPS)
+        val sources = extractionEntriesForView(entries, ExtractionDropView.SOURCES)
+        val pools = extractionEntriesForView(entries, ExtractionDropView.POOLS)
+        assertEquals(listOf("刺针"), sources.map { it.name })
+        assertEquals(3, pools.size)
+        assertEquals(listOf("标准医疗格"), filterExtractionEntries(pools, "弦-5针剂", "地图场景容器", null,
+            false, ExtractionSort.DEFAULT, true).map { it.name })
+        assertTrue(filterExtractionEntries(pools, "弦-5针剂", "空投箱", null, false, ExtractionSort.DEFAULT, true).isEmpty())
+        val medical = pools.single { it.name == "标准医疗格" }
+        val matches = filterDropPoolGroups(medical.dropPoolGroups, " 弦-5针剂 ")
+        assertEquals(1, matches.size)
+        assertEquals(listOf("弦-5针剂"), matches.single().items)
+        assertEquals(3, medical.dropPoolGroups.size) // Filtering never changes the complete source.
+        assertEquals(listOf("Q5 臻藏"), filterDropPoolGroups(medical.dropPoolGroups, "臻藏").map { it.label })
+        assertEquals(medical.dropPoolGroups, filterDropPoolGroups(medical.dropPoolGroups, ""))
+        assertTrue(filterDropPoolGroups(medical.dropPoolGroups, "不存在的物品").isEmpty())
     }
 
     @Test fun lazyImagesFallBackFromAnInvalidPlaceholderWithoutExtraImageQueries() {

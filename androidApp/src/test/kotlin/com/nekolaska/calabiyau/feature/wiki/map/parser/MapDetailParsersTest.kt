@@ -77,4 +77,50 @@ class MapDetailParsersTest {
         assertNull(detail.terrainMapUrl)
         assertTrue(detail.galleryUrls.isEmpty())
     }
+
+    @Test
+    fun backgroundTemplatesOnBothReportedMapsKeepTheOverviewAndDetailContent() {
+        // Same background-template path as 莱布伦城 / 维里昂裂隙. These are
+        // synthetic inputs; the captured rift fixture is covered separately.
+        for (name in listOf("莱布伦城", "维里昂裂隙")) {
+            for (property in listOf("background", "background-image")) {
+                val overview = "https://patchwiki.biligame.com/images/klbq/a/af/overview.png"
+                val terrain = "https://patchwiki.biligame.com/images/klbq/b/bb/terrain.png"
+                val detail = MapDetailParsers.parseMapWikitext(
+                    name = name,
+                    wikitext = "{{背景|地图-$name.png}}{{地图|简介=$name 的简介|支持模式=测试模式|上线平台=PC端}}",
+                    html = """
+                        <style>
+                          .navbox { background: url(https://example.test/navigation.png); }
+                          body { $property: url('$overview'); }
+                          .footer { background: url(https://example.test/footer.png); }
+                        </style>
+                        <h2><span class="mw-headline">地形图</span></h2>
+                        <p><img src="$terrain" /></p>
+                    """.trimIndent()
+                )!!
+
+                assertEquals(name, detail.name)
+                assertEquals("$name 的简介", detail.description)
+                assertEquals("测试模式", detail.supportedModes)
+                assertEquals("PC端", detail.platforms)
+                assertEquals(overview, detail.overviewImageUrl)
+                assertEquals(terrain, detail.terrainMapUrl)
+            }
+        }
+    }
+
+    @Test
+    fun backgroundTemplateWithMissingOrIncompleteCssKeepsTheMapDetails() {
+        for (html in listOf("", "<style>body { background: url(</style>")) {
+            val detail = MapDetailParsers.parseMapWikitext(
+                name = "莱布伦城",
+                wikitext = "{{背景|地图-莱布伦城.png}}{{地图|简介=简介}}",
+                html = html
+            )!!
+
+            assertEquals("简介", detail.description)
+            assertNull(detail.overviewImageUrl)
+        }
+    }
 }
