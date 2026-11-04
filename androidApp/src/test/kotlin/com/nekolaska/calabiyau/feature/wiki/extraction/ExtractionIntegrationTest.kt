@@ -108,4 +108,14 @@ class ExtractionIntegrationTest {
         assertFailsWith<CancellationException> { api.fetch() }
         Unit
     }
+
+    @Test fun survivingCardsCannotReplaceCompleteMemoryCacheAfterTableDamage() = runBlocking {
+        val good = fixture("drops.html") + fixture("drop_summary_20261103.html")
+        var html = good
+        val api = Catalog(ExtractionCatalogKind.DROPS, cache = { null }, network = { _, _ -> WikiHtmlPageSourceResult(html, false, 0) })
+        val first = assertIs<ApiResult.Success<List<ExtractionEntry>>>(api.fetch())
+        html = good.replace("掉落池条目（按稀有度分行）", "掉落池条目（未知表头）")
+        assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(api.fetch(forceRefresh = true)).kind)
+        assertEquals(first.value, assertIs<ApiResult.Success<List<ExtractionEntry>>>(api.fetch()).value)
+    }
 }

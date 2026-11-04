@@ -1,7 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.item
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,35 +10,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Category
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +38,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,6 +54,9 @@ import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.catalogQualityColor
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
+import com.nekolaska.calabiyau.core.ui.SelectionOptionRow
+import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.feature.wiki.item.api.ItemCatalogApi
 import com.nekolaska.calabiyau.feature.wiki.item.model.ItemInfo
 import com.nekolaska.calabiyau.feature.wiki.item.model.ItemCatalogPlatform
@@ -80,6 +72,10 @@ fun ItemCatalogScreen(platform: ItemCatalogPlatform, onBack: () -> Unit) {
         fetch = { force -> ItemCatalogApi.fetch(platform, forceRefresh = force, allowMemoryCache = false) }
     )
     val allItems = state.data
+    val itemKeys = remember(allItems) {
+        val keys = com.nekolaska.calabiyau.core.ui.catalogKeys(allItems) { "${it.category}:${it.name}:${it.qualityName}" }
+        allItems.zip(keys).toMap()
+    }
     var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedQualityLevel by rememberSaveable { mutableStateOf<Int?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -155,18 +151,14 @@ fun ItemCatalogScreen(platform: ItemCatalogPlatform, onBack: () -> Unit) {
 
                 if (filteredItems.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            Modifier.fillMaxWidth().height(300.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("没有匹配的道具", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        CatalogEmptyResults(message = "没有匹配的道具", onClear = {
+                            searchQuery = ""; selectedCategory = null; selectedQualityLevel = null
+                        })
                     }
                 } else {
                     itemsIndexed(
                         filteredItems,
-                        // data class hashCode 覆盖全字段：同名同图但描述/品质不同的行也不会撞 key
-                        key = { _, item -> item.hashCode().toString() }
+                        key = { _, item -> checkNotNull(itemKeys[item]) }
                     ) { _, item ->
                         ItemCard(item = item, onClick = { selectedItem = item })
                     }
@@ -291,104 +283,15 @@ private fun ItemCategorySelector(
             categories.filter { keyword.isBlank() || it.contains(keyword, ignoreCase = true) }
         }
 
-        ModalBottomSheet(
-            onDismissRequest = { showSheet = false },
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-            ),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = smoothCornerShape(28.dp),
-            tonalElevation = 0.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Text("选择分类", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = smoothCornerShape(20.dp),
-                    placeholder = { Text("搜索分类") },
-                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedIndicatorColor = MaterialTheme.colorScheme.outline,
-                        unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant
-                    )
-                )
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 8.dp)
-                ) {
-                    item(key = "__all") {
-                        ItemCategoryRow(
-                            label = "全部分类",
-                            selected = selectedCategory == null,
-                            onClick = {
-                                onSelectedCategoryChange(null)
-                                showSheet = false
-                            }
-                        )
-                    }
-                    lazyItems(filteredCategories, key = { it }) { category ->
-                        ItemCategoryRow(
-                            label = category,
-                            selected = selectedCategory == category,
-                            onClick = {
-                                onSelectedCategoryChange(category)
-                                showSheet = false
-                            }
-                        )
-                    }
-                }
+        WikiSelectionSheet(title = "选择分类", onDismiss = { showSheet = false }, query = query,
+            onQueryChange = { query = it }, searchPlaceholder = "搜索分类") {
+            item(key = "all") {
+                SelectionOptionRow(label = "全部分类", selected = selectedCategory == null,
+                    onClick = { onSelectedCategoryChange(null); showSheet = false })
             }
-        }
-    }
-}
-
-@Composable
-private fun ItemCategoryRow(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clip(smoothCornerShape(16.dp)).clickable(onClick = onClick),
-        shape = smoothCornerShape(16.dp),
-        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-        border = BorderStroke(
-            1.dp,
-            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.65f)
-            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            if (selected) {
-                Icon(
-                    Icons.Outlined.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+            lazyItems(filteredCategories, key = { "category:$it" }) { category ->
+                SelectionOptionRow(label = category, selected = selectedCategory == category,
+                    onClick = { onSelectedCategoryChange(category); showSheet = false })
             }
         }
     }

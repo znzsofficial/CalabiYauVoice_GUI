@@ -17,9 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.extraction.api.ExtractionCatalogApi
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
@@ -43,6 +41,9 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
     var showFilters by rememberSaveable(kind) { mutableStateOf(false) }
     var selectedId by rememberSaveable(kind) { mutableStateOf<String?>(null) }
     var dropView by rememberSaveable(kind) { mutableStateOf(ExtractionDropView.SOURCES) }
+    val dropViews = remember(entries) {
+        ExtractionDropView.entries.filter { it != ExtractionDropView.STAGES || entries.any { e -> e.type == ExtractionEntryType.DROP_STAGE } }
+    }
     val viewEntries = remember(entries, kind, dropView) {
         if (kind == ExtractionCatalogKind.DROPS) extractionEntriesForView(entries, dropView) else entries
     }
@@ -51,6 +52,7 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
     val sorts = remember(entries) { ExtractionSort.entries.filter { s -> s == ExtractionSort.DEFAULT || entries.any { s in it.numericValues } } }
     LaunchedEffect(entries, dropView) {
         if (entries.isNotEmpty()) {
+            if (dropView !in dropViews) dropView = ExtractionDropView.SOURCES
             if (category !in categories) category = null
             if (qualities.none { it.first == quality }) quality = null
             if (sort !in sorts) sort = ExtractionSort.DEFAULT
@@ -75,7 +77,7 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                     Text("弦溯战线专用图鉴", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (kind == ExtractionCatalogKind.DROPS) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ExtractionDropView.entries.forEach { view ->
+                            dropViews.forEach { view ->
                                 FilterChip(
                                     selected = dropView == view,
                                     onClick = { if (dropView != view) { dropView = view; category = null } },
@@ -85,15 +87,20 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                         }
                     }
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
-                        isSearching = false, placeholder = if (kind == ExtractionCatalogKind.DROPS) "搜索晶源体、容器或掉落物…" else "搜索名称、描述或效果…")
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        isSearching = false, placeholder = when {
+                            kind != ExtractionCatalogKind.DROPS -> "搜索名称、描述或效果…"
+                            dropView == ExtractionDropView.STAGES -> "搜索阶段、阈值或池构成…"
+                            else -> "搜索晶源体、容器或掉落物…"
+                        })
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilledTonalButton(onClick = { showFilters = true }) {
                             Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("筛选与排序")
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Text("${filtered.size} / ${viewEntries.size} 项", style = MaterialTheme.typography.labelMedium)
+                        Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
+                            Text("${filtered.size} / ${viewEntries.size} 项", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                     Text(listOfNotNull(category, qualities.find { it.first == quality }?.second,
                         if (valuableOnly) "贵重" else null, sort.takeIf { it != ExtractionSort.DEFAULT }?.let { "${it.label} · ${if (descending) "降序" else "升序"}" })
@@ -105,26 +112,8 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item(key = "controls") { header() }
                     if (filtered.isEmpty()) item(key = "empty") { EmptyCatalogResults { query = ""; category = null; quality = null; valuableOnly = false } }
-                    items(filtered, key = { it.id }) { entry ->
-                        Card(onClick = { selectedId = entry.id }, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                                Text((listOf(if (entry.isDropPool) "完整掉落池" else entry.category) + entry.tags).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                                entry.fields.firstOrNull { it.label in setOf("掉落件数", "件数概率") }?.let {
-                                    Text(it.value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                val preview = if (entry.dropPoolGroups.isNotEmpty()) {
-                                    entry.dropPoolGroups.joinToString(" · ") { it.label }
-                                } else {
-                                    (entry.fields.firstOrNull { it.label == "必掉物" }
-                                        ?: entry.fields.firstOrNull { it.label == "掉落池条目（完整）" })?.value
-                                }
-                                preview?.let {
-                                    Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Text("查看掉落详情", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
+                    items(filtered, key = { it.id }, contentType = { it.type }) { entry ->
+                        ExtractionDropCard(entry = entry, onClick = { selectedId = entry.id })
                     }
                 }
             } else {
@@ -152,92 +141,5 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
 
 @Composable
 private fun EmptyCatalogResults(onClear: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("没有匹配的条目")
-        TextButton(onClick = onClear) { Text("清除搜索与筛选") }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ExtractionFilterSheet(
-    kind: ExtractionCatalogKind, categories: List<String>, qualities: List<Pair<Int, String>>, sorts: List<ExtractionSort>,
-    category: String?, quality: Int?, valuable: Boolean, sort: ExtractionSort, descending: Boolean,
-    onCategory: (String?) -> Unit, onQuality: (Int?) -> Unit, onValuable: (Boolean) -> Unit,
-    onSort: (ExtractionSort) -> Unit, onDescending: (Boolean) -> Unit, onDismiss: () -> Unit
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberBottomSheetState(
-        initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))) {
-        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 620.dp), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { Text("筛选与排序", style = MaterialTheme.typography.headlineSmall) }
-            item {
-                SimpleDropdownSelector(label = if (kind == ExtractionCatalogKind.ATTACHMENTS) "槽位" else "分类",
-                    options = listOf("全部") + categories, selected = category ?: "全部", onSelected = { onCategory(it.takeUnless { it == "全部" }) })
-            }
-            if (qualities.isNotEmpty()) item {
-                SimpleDropdownSelector(label = "稀有度", options = listOf("全部") + qualities.map { it.second },
-                    selected = qualities.find { it.first == quality }?.second ?: "全部",
-                    onSelected = { label -> onQuality(qualities.find { it.second == label }?.first) })
-            }
-            if (kind == ExtractionCatalogKind.LOOT) item {
-                FilterChip(selected = valuable, onClick = { onValuable(!valuable) }, label = { Text("仅贵重物品") })
-            }
-            if (sorts.size > 1) item {
-                SimpleDropdownSelector(label = "排序", options = sorts.map { it.label }, selected = sort.label,
-                    onSelected = { label -> sorts.find { it.label == label }?.let(onSort) })
-                if (sort != ExtractionSort.DEFAULT) FilterChip(selected = descending, onClick = { onDescending(!descending) }, label = { Text(if (descending) "降序" else "升序") })
-            }
-            item { FilledTonalButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("完成") } }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ExtractionDetailSheet(entry: ExtractionEntry, query: String, onDismiss: () -> Unit) {
-    var poolQuery by rememberSaveable(entry.id) {
-        mutableStateOf(query.takeIf { keyword ->
-            entry.dropPoolGroups.any { group -> group.items.any { it.contains(keyword.trim(), true) } }
-        }.orEmpty())
-    }
-    val poolGroups = remember(entry, poolQuery) { filterDropPoolGroups(entry.dropPoolGroups, poolQuery) }
-    val fields = remember(entry) {
-        if (entry.dropPoolGroups.isNotEmpty()) entry.fields.filterNot { it.label == "掉落池条目（完整）" } else entry.fields
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberBottomSheetState(
-        initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded))) {
-        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 680.dp), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (entry.imageUrl != null) item {
-                AsyncImage(model = entry.imageUrl, contentDescription = entry.name, contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth().height(180.dp))
-            }
-            item {
-                Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text((listOf(if (entry.isDropPool) "完整掉落池" else entry.category, entry.qualityLabel) + entry.tags).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (entry.description.isNotBlank()) item { Text(entry.description, style = MaterialTheme.typography.bodyLarge) }
-            items(fields.size, key = { index -> "field-$index" }) { index ->
-                val field = fields[index]
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(field.label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    Text(field.value, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            if (entry.dropPoolGroups.isNotEmpty()) {
-                item(key = "pool-search") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("完整掉落池", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it }, onSearch = {},
-                            onClear = { poolQuery = "" }, isSearching = false, placeholder = "在掉落池中搜索物品…")
-                    }
-                }
-                if (poolGroups.isEmpty()) item(key = "pool-empty") { Text("没有匹配的掉落物") }
-                items(poolGroups.size, key = { "pool-group-$it" }) { index ->
-                    ExtractionDropPoolSection(entryId = entry.id, group = poolGroups[index], query = poolQuery)
-                }
-            }
-            item { TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("关闭") } }
-        }
-    }
+    CatalogEmptyResults(onClear = onClear)
 }

@@ -1,31 +1,31 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionDropPoolGroup
 
-@Composable
-internal fun ExtractionDropPoolSection(entryId: String, group: ExtractionDropPoolGroup, query: String) {
-    var expanded by rememberSaveable(entryId, group.label, query) { mutableStateOf(false) }
-    val visibleItems = if (expanded) group.items else group.items.take(8)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+/** Each visible item is independently lazy, including after expanding a 300+ item pool. */
+internal fun LazyListScope.extractionDropPoolSection(
+    group: ExtractionDropPoolGroup, expanded: Boolean, onToggle: () -> Unit
+) {
+    item(key = "pool-heading:${group.key}", contentType = "pool-heading") {
         Text("${group.label} · ${group.items.size} 项", style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-        Text(visibleItems.joinToString("\n") { "• $it" }, style = MaterialTheme.typography.bodyMedium)
-        if (group.items.size > 8) {
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "收起" else "展开全部 ${group.items.size} 项")
-            }
-        }
+    }
+    val occurrences = mutableMapOf<String, Int>()
+    val visible = if (expanded) group.items else group.items.take(8)
+    val keys = visible.map { text ->
+        val occurrence = occurrences.getOrDefault(text, 0)
+        occurrences[text] = occurrence + 1
+        "${group.key}:$text:$occurrence"
+    }
+    items(count = visible.size, key = { "pool-item:${keys[it]}" }, contentType = { "pool-item" }) { index ->
+        Text("• ${visible[index]}", style = MaterialTheme.typography.bodyMedium)
+    }
+    if (group.items.size > 8) item(key = "pool-toggle:${group.key}", contentType = "pool-toggle") {
+        TextButton(onClick = onToggle) { Text(if (expanded) "收起" else "展开全部 ${group.items.size} 项") }
     }
 }

@@ -1,5 +1,14 @@
 package com.nekolaska.calabiyau.feature.wiki.stringer
 
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.nekolaska.calabiyau.core.ui.WikiScrollableSheet
+import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
+import com.nekolaska.calabiyau.core.ui.catalogKeys
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +35,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -89,17 +97,21 @@ fun StringerPushCardScreen(
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { StringerPushCardApi.fetch(cacheOnly = true) }
     ) { force ->
-        StringerPushCardApi.fetch(force)
+        StringerPushCardApi.fetch(forceRefresh = force, allowMemoryCache = false)
     }
 
-    var keyword by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("全部分类") }
-    var role by remember { mutableStateOf("全部角色") }
-    var rarity by remember { mutableIntStateOf(0) }
-    var sortOption by remember { mutableStateOf(PushCardSortOption.RARITY_DESC) }
+    var keyword by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("全部分类") }
+    var role by rememberSaveable { mutableStateOf("全部角色") }
+    var rarity by rememberSaveable { mutableIntStateOf(0) }
+    var sortOption by rememberSaveable { mutableStateOf(PushCardSortOption.RARITY_DESC) }
     var selectedCard by remember { mutableStateOf<ModeCard?>(null) }
 
     val page = state.data
+    val cardKeys = remember(page.cards) {
+        val cards = page.cards.distinct()
+        cards.zip(catalogKeys(cards) { "${it.category}:${it.name}:${it.rarity}" }).toMap()
+    }
     val categories = remember(page.cards) {
         listOf("全部分类") + page.cards.map { it.category }.filter { it.isNotBlank() }.distinct()
     }
@@ -108,7 +120,7 @@ fun StringerPushCardScreen(
     }
     val roleOptions = rememberCharacterSelectorOptions(roles)
     val filteredCards = remember(page.cards, keyword, category, role, rarity, sortOption) {
-        val filtered = page.cards.filter {
+        val filtered = page.cards.distinct().filter {
             (keyword.isBlank() || it.name.contains(keyword, true) || it.effect.contains(keyword, true) || it.roles.any { role -> role.contains(keyword, true) }) &&
                 (category == "全部分类" || it.category == category) &&
                 (role == "全部角色" || it.roles.contains(role)) &&
@@ -142,13 +154,15 @@ fun StringerPushCardScreen(
             enablePullToRefresh = false,
             loading = { mod -> StringerPushCardSkeleton(mod) }
         ) {
-            LazyColumn(
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(168.dp),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (page.summary.isNotBlank()) {
-                    item {
+                    item(key = "summary", span = { GridItemSpan(maxLineSpan) }) {
                         Card(
                             shape = smoothCornerShape(24.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
@@ -163,7 +177,7 @@ fun StringerPushCardScreen(
                     }
                 }
 
-                item {
+                item(key = "search", span = { GridItemSpan(maxLineSpan) }) {
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
@@ -174,7 +188,7 @@ fun StringerPushCardScreen(
                     )
                 }
 
-                item {
+                item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
                     Card(
                         shape = smoothCornerShape(24.dp),
                         modifier = Modifier.fillMaxWidth(),
@@ -223,43 +237,24 @@ fun StringerPushCardScreen(
                 }
 
                 if (filteredCards.isEmpty()) {
-                    item {
-                        Text(
-                            "没有匹配的卡牌",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
+                    item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                        CatalogEmptyResults(message = "没有匹配的卡牌", onClear = {
+                            keyword = ""; category = "全部分类"; role = "全部角色"; rarity = 0
+                        })
                     }
                 } else {
-                    item {
-                        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                            val cardMinWidth = 168.dp
-                            val columns = (maxWidth / cardMinWidth).toInt().coerceAtLeast(1)
-                            val cardWidth = (maxWidth - (12.dp * (columns - 1))) / columns
-
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                                maxItemsInEachRow = columns
-                            ) {
-                                filteredCards.forEach { card ->
-                                    Box(modifier = Modifier.width(cardWidth)) {
-                                        ModeCardGridItem(card = card, onClick = { selectedCard = card })
-                                    }
-                                }
-                            }
-                        }
+                    gridItems(filteredCards, key = { checkNotNull(cardKeys[it]) }, contentType = { "push-card" }) { card ->
+                        ModeCardGridItem(card = card, onClick = { selectedCard = card })
                     }
                 }
 
-                item { Spacer(Modifier.height(16.dp)) }
+                item(key = "bottom", span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
             }
         }
     }
 
     selectedCard?.let { card ->
-        ModalBottomSheet(onDismissRequest = { selectedCard = null }) {
+        WikiScrollableSheet(onDismiss = { selectedCard = null }) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

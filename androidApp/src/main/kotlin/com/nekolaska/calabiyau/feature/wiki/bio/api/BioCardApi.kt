@@ -1,88 +1,74 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.api
 
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
-import com.nekolaska.calabiyau.feature.wiki.bio.model.CardPageData
+import com.nekolaska.calabiyau.feature.wiki.bio.model.*
 import com.nekolaska.calabiyau.feature.wiki.bio.parser.BioCardParsers
+import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardPageSourceResult
 import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardRemoteSource
 import data.ApiResult
 import data.ErrorKind
-import data.toErrorKind
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.withContext
+import data.ioApiCall
 
-/**
- * 晶源感染卡牌整合页 API。
- *
- * 聚合以下三个 Wiki 页面：
- * - 战斗模式/晶源感染/PC端卡牌筛选
- * - 战斗模式/晶源感染/移动端卡牌筛选
- * - 晶源感染卡组分享
- */
-object BioCardApi : CachedWikiApi<CardPageData>("BioCardApi") {
+object BioCardApi {
+    private val loader = BioTabLoader(loadPc = { force -> fetchTab(BioCatalogTab.PC, force) })
+    private val catalogs = BioCatalogTab.entries.associateWith { tab -> BioTabCatalog(tab, loader) }
 
-    private const val PC_PAGE = "战斗模式/晶源感染/PC端卡牌筛选"
-    private const val MOBILE_PAGE = "战斗模式/晶源感染/移动端卡牌筛选"
-    private const val DECK_PAGE = "晶源感染卡组分享"
-    private const val MODE_PAGE = "战斗模式/晶源感染"
+    suspend fun fetchTab(tab: BioCatalogTab, forceRefresh: Boolean = false): ApiResult<CardPageData> =
+        catalogs.getValue(tab).fetchPage(forceRefresh)
 
-    suspend fun fetchAll(forceRefresh: Boolean = false): ApiResult<CardPageData> =
-        fetch(forceRefresh = forceRefresh)
+    internal fun invalidateDeck() = catalogs.getValue(BioCatalogTab.DECK).invalidate()
+}
 
-    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<CardPageData> =
-        withContext(Dispatchers.IO) {
-            try {
-                val results = awaitAll(
-                    async { BioCardRemoteSource.fetchPageHtml(PC_PAGE, "bio_cards_pc", forceRefresh) },
-                    async { BioCardRemoteSource.fetchPageHtml(MOBILE_PAGE, "bio_cards_mobile", forceRefresh) },
-                    async { BioCardRemoteSource.fetchPageHtml(DECK_PAGE, "bio_cards_decks", forceRefresh) },
-                    async { BioCardRemoteSource.fetchPageHtml(MODE_PAGE, "bio_cards_mode", forceRefresh) }
-                )
+private class BioTabCatalog(private val tab: BioCatalogTab, private val loader: BioTabLoader) : CachedWikiApi<CardPageData>("BioCard.$tab") {
+    fun invalidate() = updateCache(null)
+    suspend fun fetchPage(force: Boolean): ApiResult<CardPageData> = fetch(forceRefresh = force,
+        allowMemoryCache = getCachedValue()?.deckEditorError == null)
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean) = loader.load(tab, forceRefresh)
+}
 
-                val pc = results[0] ?: return@withContext ApiResult.Error("无法获取 PC 卡牌数据", kind = ErrorKind.NETWORK)
-                val mobile = results[1] ?: return@withContext ApiResult.Error("无法获取移动端卡牌数据", kind = ErrorKind.NETWORK)
-                val decks = results[2] ?: return@withContext ApiResult.Error("无法获取卡组分享数据", kind = ErrorKind.NETWORK)
-                // 刷新概率是详情弹窗的装饰性数据：失败降级为空表，不拖垮整页
-                val mode = results[3]
-
-                val cardIndexMapByFaction = when (val deckCardMapResult = BioDeckShareApi.fetchDeckCardMap(forceRefresh)) {
-                    is ApiResult.Success -> deckCardMapResult.value.mapValues { (_, options) ->
-                        options.mapNotNull { option ->
-                            val cardId = option.cardId.trim()
-                            val index = option.index
-                            if (cardId.isBlank() || index < 0) null else cardId to index
-                        }.toMap()
-                    }
-                    is ApiResult.Error -> emptyMap()
-                }
-
-                val refreshProbabilityMap =
-                    if (mode != null) BioCardParsers.parseRefreshProbabilities(mode.html) else emptyMap()
-
-                val data = CardPageData(
-                    pcCards = BioCardParsers.parsePcCards(pc.html, refreshProbabilityMap),
-                    mobileCards = BioCardParsers.parseMobileCards(mobile.html),
-                    decks = BioCardParsers.parseDecks(decks.html, cardIndexMapByFaction),
-                    pcWikiUrl = BioCardRemoteSource.pageUrl(PC_PAGE),
-                    mobileWikiUrl = BioCardRemoteSource.pageUrl(MOBILE_PAGE),
-                    deckWikiUrl = BioCardRemoteSource.pageUrl(DECK_PAGE)
-                )
-
-                if (data.pcCards.isEmpty() && data.mobileCards.isEmpty() && data.decks.isEmpty()) {
-                    ApiResult.Error("未找到卡牌数据", kind = ErrorKind.NOT_FOUND)
-                } else {
-                    ApiResult.Success(
-                        data,
-                        isOffline = listOfNotNull(pc, mobile, decks, mode).any { it.isFromCache },
-                        cacheAgeMs = listOfNotNull(pc, mobile, decks, mode).maxOfOrNull { it.ageMs } ?: 0L
-                    )
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                ApiResult.Error("获取卡牌数据失败: ${e.message}", kind = e.toErrorKind())
+/** Independent tab dependencies. A broken mobile page cannot take down PC cards or deck browsing. */
+internal class BioTabLoader(
+    private val source: suspend (String, String, Boolean) -> BioCardPageSourceResult? = BioCardRemoteSource::fetchPageHtml,
+    private val cardMap: suspend (Boolean) -> ApiResult<Map<String, List<DeckCardOption>>> = BioDeckShareApi::fetchDeckCardMap,
+    private val loadPc: (suspend (Boolean) -> ApiResult<CardPageData>)? = null
+) {
+    suspend fun load(tab: BioCatalogTab, force: Boolean): ApiResult<CardPageData> = ioApiCall("获取卡牌数据失败") {
+        val pcPage = "战斗模式/晶源感染/PC端卡牌筛选"
+        val mobilePage = "战斗模式/晶源感染/移动端卡牌筛选"
+        val deckPage = "晶源感染卡组分享"
+        val page = when (tab) { BioCatalogTab.PC -> pcPage; BioCatalogTab.MOBILE -> mobilePage; BioCatalogTab.DECK -> deckPage }
+        val key = when (tab) { BioCatalogTab.PC -> "bio_cards_pc"; BioCatalogTab.MOBILE -> "bio_cards_mobile"; BioCatalogTab.DECK -> "bio_cards_decks" }
+        val raw = source(page, key, force) ?: return@ioApiCall ApiResult.Error("无法获取当前卡牌页面", kind = ErrorKind.NETWORK)
+        val empty = CardPageData(emptyList(), emptyList(), emptyList(), BioCardRemoteSource.pageUrl(pcPage),
+            BioCardRemoteSource.pageUrl(mobilePage), BioCardRemoteSource.pageUrl(deckPage), loadedTab = tab)
+        when (tab) {
+            BioCatalogTab.PC -> {
+                val mode = source("战斗模式/晶源感染", "bio_cards_mode", force)
+                val cards = BioCardParsers.parsePcCards(raw.html, mode?.let { BioCardParsers.parseRefreshProbabilities(it.html) }.orEmpty())
+                if (cards.isEmpty()) ApiResult.Error("未找到 PC 卡牌数据", kind = ErrorKind.PARSE)
+                else ApiResult.Success(empty.copy(pcCards = cards), isOffline = raw.isFromCache || mode?.isFromCache == true,
+                    cacheAgeMs = maxOf(raw.ageMs, mode?.ageMs ?: 0L))
+            }
+            BioCatalogTab.MOBILE -> {
+                val cards = BioCardParsers.parseMobileCards(raw.html)
+                if (cards.isEmpty()) ApiResult.Error("未找到移动端卡牌数据", kind = ErrorKind.PARSE)
+                else ApiResult.Success(empty.copy(mobileCards = cards), isOffline = raw.isFromCache, cacheAgeMs = raw.ageMs)
+            }
+            BioCatalogTab.DECK -> {
+                // Official indexes are needed only by decks; verified PC cards complete the editor pool.
+                val mapResult = cardMap(force)
+                val official = (mapResult as? ApiResult.Success)?.value.orEmpty()
+                val pcResult = loadPc?.invoke(force) ?: load(BioCatalogTab.PC, force)
+                val pc = (pcResult as? ApiResult.Success)?.value?.pcCards.orEmpty()
+                val indexes = official.mapValues { (_, cards) -> cards.filter { it.cardId.isNotBlank() && it.index >= 0 }.associate { it.cardId to it.index } }
+                val decks = BioCardParsers.parseDecks(raw.html, indexes)
+                if (decks.isEmpty()) return@ioApiCall ApiResult.Error("未找到卡组分享数据", kind = ErrorKind.PARSE)
+                val editorError = (mapResult as? ApiResult.Error)?.message ?: (pcResult as? ApiResult.Error)?.message
+                // Deck browsing remains available if editor-only dependencies fail; refresh retries them explicitly.
+                ApiResult.Success(empty.copy(pcCards = pc, decks = decks, deckCardMap = official, deckEditorError = editorError),
+                    isOffline = raw.isFromCache || (pcResult as? ApiResult.Success)?.isOffline == true,
+                    cacheAgeMs = maxOf(raw.ageMs, (pcResult as? ApiResult.Success)?.cacheAgeMs ?: 0L))
             }
         }
+    }
 }

@@ -34,11 +34,8 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -144,32 +141,7 @@ fun WeaponCategorySelector(
     }
 
     if (showSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showSheet = false },
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-            ),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = smoothCornerShape(28.dp),
-            tonalElevation = 0.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Text(label, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 460.dp),
-                    contentPadding = PaddingValues(bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+        com.nekolaska.calabiyau.core.ui.WikiSelectionSheet(title = label, onDismiss = { showSheet = false }) {
                     item(key = "__all") {
                         WeaponCategoryRow(
                             option = null,
@@ -209,8 +181,6 @@ fun WeaponCategorySelector(
                             }
                         }
                     }
-                }
-            }
         }
     }
 }
@@ -447,16 +417,7 @@ fun WeaponSelector(
     }
 
     if (showSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showSheet = false },
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-            ),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = smoothCornerShape(28.dp),
-            tonalElevation = 0.dp
-        ) {
+        com.nekolaska.calabiyau.core.ui.WikiSheetFrame(onDismiss = { showSheet = false }) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

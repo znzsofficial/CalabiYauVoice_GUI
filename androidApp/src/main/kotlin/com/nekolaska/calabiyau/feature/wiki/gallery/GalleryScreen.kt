@@ -1,13 +1,11 @@
 package com.nekolaska.calabiyau.feature.wiki.gallery
 
-import android.webkit.URLUtil
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,10 +13,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -28,25 +24,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,20 +54,20 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
-import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.core.util.enqueueDownload
+import com.nekolaska.calabiyau.core.ui.ConfirmImageSaveDialog
+import com.nekolaska.calabiyau.core.ui.rememberSectionSelection
+import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.feature.wiki.gallery.api.GalleryApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GallerySection
-import java.io.File
 
 // ════════════════════════════════════════════════════════
 //  画廊页 —— 壁纸 / 表情包 / 四格漫画 通用
@@ -89,25 +79,24 @@ fun GalleryScreen(
     pageName: String,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
-    val showSnack = rememberSnackbarLauncher()
-
+    val showMessage = rememberSnackbarLauncher()
     val state = rememberLoadState(
         initial = emptyList<GallerySection>(),
         key = pageName,
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { GalleryApi.fetchGallery(pageName, cacheOnly = true) }
     ) { force ->
-        GalleryApi.fetchGallery(pageName = pageName, forceRefresh = force)
+        GalleryApi.fetchGallery(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
     }
-    var selectedSectionIndex by remember { mutableIntStateOf(0) }
+    val sectionKeys = remember(state.data) { com.nekolaska.calabiyau.core.ui.catalogKeys(state.data) { it.title } }
+    val sectionSelection = rememberSectionSelection(pageName, sectionKeys)
+    val selectedSectionIndex = sectionKeys.indexOf(sectionSelection.selectedKey).coerceAtLeast(0)
 
     // 全屏预览
     var previewImage by remember { mutableStateOf<GalleryImage?>(null) }
     // 长按保存
     var saveTargetImage by remember { mutableStateOf<GalleryImage?>(null) }
 
-    LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
     Scaffold(
         topBar = {
@@ -130,17 +119,14 @@ fun GalleryScreen(
             loading = { mod -> GallerySkeleton(mod) }
         ) { sections ->
             Column(Modifier.fillMaxSize()) {
-                val safeSelectedSectionIndex = selectedSectionIndex.coerceIn(0, sections.lastIndex)
-                if (safeSelectedSectionIndex != selectedSectionIndex) {
-                    LaunchedEffect(safeSelectedSectionIndex) { selectedSectionIndex = safeSelectedSectionIndex }
-                }
+                val safeSelectedSectionIndex = selectedSectionIndex.coerceIn(0, sections.lastIndex.coerceAtLeast(0))
 
                 // ── Section 选择器 ──
                 if (sections.size > 1) {
                     GallerySectionSelector(
                         sections = sections,
                         selectedIndex = safeSelectedSectionIndex,
-                        onSelectedIndexChange = { selectedSectionIndex = it },
+                        onSelectedIndexChange = { index -> sectionKeys.getOrNull(index)?.let(sectionSelection::select) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
@@ -234,42 +220,8 @@ fun GalleryScreen(
 
     // ── 保存图片确认对话框 ──
     saveTargetImage?.let { image ->
-        AlertDialog(
-            onDismissRequest = { saveTargetImage = null },
-            title = { Text("保存图片") },
-            text = {
-                Text(
-                    image.fileName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            shape = smoothCornerShape(28.dp),
-            confirmButton = {
-                FilledTonalButton(onClick = {
-                    val url = image.imageUrl
-                    saveTargetImage = null
-                    try {
-                        val fileName = URLUtil.guessFileName(url, null, null)
-                        val dir = File(AppPrefs.savePath)
-                        context.enqueueDownload(
-                            url = url,
-                            dir = dir,
-                            fileName = fileName,
-                            description = "正在保存图片..."
-                        )
-                        showSnack("已保存: $fileName")
-                    } catch (e: Exception) {
-                        showSnack("保存失败: ${e.message}")
-                    }
-                }) { Text("保存") }
-            },
-            dismissButton = {
-                TextButton(onClick = { saveTargetImage = null }) { Text("取消") }
-            }
-        )
+        ConfirmImageSaveDialog(url = image.imageUrl, label = image.fileName,
+            onDismiss = { saveTargetImage = null }, showMessage = showMessage)
     }
 }
 
@@ -343,59 +295,10 @@ private fun GallerySectionSelector(
 
     // ── ModalBottomSheet ──
     if (showSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showSheet = false },
-            sheetState = rememberBottomSheetState(
-                initialValue = SheetValue.Hidden,
-                enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-            ),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = smoothCornerShape(28.dp),
-            tonalElevation = 0.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Text(
-                    "选择分区",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 460.dp),
-                    contentPadding = PaddingValues(bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item(key = "__options_grid") {
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                            maxItemsInEachRow = 2
-                        ) {
-                            sections.forEachIndexed { index, section ->
-                                GallerySectionGridItem(
-                                    modifier = Modifier.weight(1f),
-                                    section = section,
-                                    index = index,
-                                    totalCount = sections.size,
-                                    selected = index == selectedIndex,
-                                    onClick = {
-                                        onSelectedIndexChange(index)
-                                        showSheet = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+        WikiSelectionSheet(title = "选择分区", onDismiss = { showSheet = false }) {
+            items(sections.size, key = { "section:$it:${sections[it].title}" }, contentType = { "section" }) { index ->
+                GallerySectionGridItem(section = sections[index], index = index, totalCount = sections.size,
+                    selected = index == selectedIndex, onClick = { onSelectedIndexChange(index); showSheet = false })
             }
         }
     }

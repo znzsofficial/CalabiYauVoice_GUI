@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration
 
-import android.webkit.URLUtil
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -22,21 +21,16 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
@@ -61,14 +54,14 @@ import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
-import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.core.util.enqueueDownload
+import com.nekolaska.calabiyau.core.ui.ConfirmImageSaveDialog
+import com.nekolaska.calabiyau.core.ui.rememberSectionSelection
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.feature.wiki.decoration.api.PlayerDecorationApi
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationItem
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
-import java.io.File
 
 // ════════════════════════════════════════════════════════
 //  通用玩家装饰页 —— 封装/聊天气泡/头套/超弦体动作/头像框
@@ -96,23 +89,22 @@ fun PlayerDecorationScreen(
     pageName: String = title,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
-    val showSnack = rememberSnackbarLauncher()
-
+    val showMessage = rememberSnackbarLauncher()
     val state = rememberLoadState(
         initial = emptyList<DecorationSection>(),
         key = pageName,
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { PlayerDecorationApi.fetchDecoration(pageName, cacheOnly = true) }
     ) { force ->
-        PlayerDecorationApi.fetchDecoration(pageName = pageName, forceRefresh = force)
+        PlayerDecorationApi.fetchDecoration(pageName = pageName, forceRefresh = force, allowMemoryCache = false)
     }
     val sections = state.data
-    var selectedSectionIndex by remember { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { com.nekolaska.calabiyau.core.ui.catalogKeys(sections) { it.title } }
+    val sectionSelection = rememberSectionSelection(pageName, sectionKeys)
+    val selectedSectionIndex = sectionKeys.indexOf(sectionSelection.selectedKey).coerceAtLeast(0)
     var previewItem by remember { mutableStateOf<DecorationItem?>(null) }
     var saveTargetItem by remember { mutableStateOf<DecorationItem?>(null) }
 
-    LaunchedEffect(state.data) { selectedSectionIndex = 0 }
 
     Scaffold(
         topBar = {
@@ -141,7 +133,7 @@ fun PlayerDecorationScreen(
                         items = sections.indices.toList(),
                         selected = selectedSectionIndex,
                         label = { index -> sections[index].title },
-                        onSelected = { selectedSectionIndex = it },
+                        onSelected = { index -> sectionKeys.getOrNull(index)?.let(sectionSelection::select) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                         showCheckIcon = true
                     )
@@ -289,37 +281,8 @@ fun PlayerDecorationScreen(
 
     // ── 保存确认 ──
     saveTargetItem?.let { item ->
-        AlertDialog(
-            onDismissRequest = { saveTargetItem = null },
-            title = { Text("保存图片") },
-            text = {
-                Text(item.name, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            shape = smoothCornerShape(28.dp),
-            confirmButton = {
-                FilledTonalButton(onClick = {
-                    val url = item.imageUrl.ifEmpty { item.iconUrl }
-                    saveTargetItem = null
-                    try {
-                        val fileName = URLUtil.guessFileName(url, null, null)
-                        val dir = File(AppPrefs.savePath)
-                        context.enqueueDownload(
-                            url = url,
-                            dir = dir,
-                            fileName = fileName,
-                            description = "正在保存图片..."
-                        )
-                        showSnack("已保存: $fileName")
-                    } catch (e: Exception) {
-                        showSnack("保存失败: ${e.message}")
-                    }
-                }) { Text("保存") }
-            },
-            dismissButton = {
-                TextButton(onClick = { saveTargetItem = null }) { Text("取消") }
-            }
-        )
+        ConfirmImageSaveDialog(url = item.imageUrl.ifEmpty { item.iconUrl }, label = item.name,
+            onDismiss = { saveTargetItem = null }, showMessage = showMessage)
     }
 }
 

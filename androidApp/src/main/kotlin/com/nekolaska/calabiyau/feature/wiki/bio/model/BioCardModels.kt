@@ -1,12 +1,17 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.model
 
+enum class BioCatalogTab { PC, MOBILE, DECK }
+
 data class CardPageData(
     val pcCards: List<PcCard>,
     val mobileCards: List<MobileCard>,
     val decks: List<SharedDeck>,
     val pcWikiUrl: String,
     val mobileWikiUrl: String,
-    val deckWikiUrl: String
+    val deckWikiUrl: String,
+    val deckCardMap: Map<String, List<DeckCardOption>> = emptyMap(),
+    val deckEditorError: String? = null,
+    val loadedTab: BioCatalogTab? = null
 )
 
 data class CardRefreshProbability(

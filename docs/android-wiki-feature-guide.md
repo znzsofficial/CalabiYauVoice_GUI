@@ -171,6 +171,14 @@ The `cacheOnly` path must not perform network requests, including secondary requ
 
 ## Standardization Opportunities
 
+Before creating another sheet, save dialog or selection state, check the implemented primitives in
+[`android-wiki-ui-architecture.md`](android-wiki-ui-architecture.md): `WikiScrollableSheet` for short
+details, `WikiContentSheet` for lazy long content, `WikiSelectionSheet` / `SelectionOptionRow`,
+`DetailField`, `CatalogEmptyResults`, `ConfirmImageSaveDialog`, and `rememberSectionSelection`.
+Keep quality meanings, filtering/grouping and mutation retry policy in the owning feature.
+Complex read/write orchestration can use a small injectable feature state holder; do not put it in
+a generic UI component or route every screen through a large configurable base page.
+
 These are good candidates for future cleanup:
 
 - A shared `WikiPageSourceResult` for simple HTML-only page sources.

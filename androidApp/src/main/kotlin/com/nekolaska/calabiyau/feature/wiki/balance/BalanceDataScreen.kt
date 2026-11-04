@@ -71,14 +71,11 @@ import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.feature.wiki.balance.api.BalanceDataApi
-import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceResult
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceSettings
 import com.nekolaska.calabiyau.feature.wiki.balance.model.CharacterMeta
 import com.nekolaska.calabiyau.feature.wiki.balance.model.FilterOption
 import com.nekolaska.calabiyau.feature.wiki.balance.model.HeroBalanceData
 import com.nekolaska.calabiyau.feature.wiki.balance.model.PositionMeta
-import data.ApiResult
 import com.nekolaska.calabiyau.feature.wiki.balance.BalanceSortOrder as SortOrder
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceMetric as SortField
 
@@ -96,13 +93,13 @@ fun BalanceDataScreen(
     onBack: () -> Unit
 ) {
 
-    // ViewModel-like state
-    var settings by remember { mutableStateOf<BalanceSettings?>(null) }
-    var balanceResult by remember { mutableStateOf<BalanceResult?>(null) }
-    var isLoadingSettings by remember { mutableStateOf(true) }
-    var isLoadingData by remember { mutableStateOf(false) }
-    var settingsError by remember { mutableStateOf<ApiResult.Error?>(null) }
-    var dataError by remember { mutableStateOf<ApiResult.Error?>(null) }
+    val requests = remember { BalanceScreenState() }
+    val settings = requests.settings
+    val balanceResult = requests.result
+    val isLoadingSettings = requests.isLoadingSettings
+    val isLoadingData = requests.isLoadingData
+    val settingsError = requests.settingsError
+    val dataError = requests.dataError
     var settingsRetryTrigger by remember { mutableIntStateOf(0) }
     var forceSettingsRefresh by remember { mutableStateOf(false) }
     var dataRetryTrigger by remember { mutableIntStateOf(0) }
@@ -136,49 +133,16 @@ fun BalanceDataScreen(
     LaunchedEffect(settingsRetryTrigger) {
         val forceRefresh = forceSettingsRefresh
         forceSettingsRefresh = false
-        isLoadingSettings = true
-        settingsError = null
-        when (val result = BalanceDataApi.fetchSettings(forceRefresh)) {
-            is ApiResult.Success -> {
-                val s = result.value
-                // Restore by code; refreshing labels/options must not reset valid filters.
-                filterState = filterState.reconcile(s)
-                settings = s
-                dataRetryTrigger++
-            }
-            is ApiResult.Error -> settingsError = result
+        requests.loadSettings(forceRefresh)?.let { fresh ->
+            filterState = filterState.reconcile(fresh)
+            dataRetryTrigger++
         }
-        isLoadingSettings = false
     }
 
     // Only an applied query or an explicit retry/refresh can trigger a POST, never draft/side/sort edits.
     val query = if (settings != null) filterState.applied.queryOrNull() else null
     LaunchedEffect(query, dataRetryTrigger) {
-        if (query == null) {
-            isLoadingData = false
-            balanceResult = null
-            return@LaunchedEffect
-        }
-
-        isLoadingData = true
-        dataError = null
-        when (val result = BalanceDataApi.fetchBalanceData(
-            modeCode = query.mode,
-            mapCode = query.map,
-            rankCodes = query.ranks,
-            season1Code = query.season,
-            season2Code = query.compareSeason
-        )) {
-            is ApiResult.Success -> {
-                balanceResult = result.value
-                settingsError = null
-            }
-            is ApiResult.Error -> {
-                balanceResult = null
-                dataError = result
-            }
-        }
-        isLoadingData = false
+        requests.loadData(query)
     }
 
     // 排序后的列表
@@ -221,8 +185,8 @@ fun BalanceDataScreen(
             }
             settingsError != null && settings == null -> {
                 ErrorState(
-                    message = settingsError!!.message,
-                    kind = settingsError!!.kind,
+                    message = settingsError.message,
+                    kind = settingsError.kind,
                     onRetry = { loadSettings(forceRefresh = true) },
                     modifier = Modifier.padding(padding)
                 )
@@ -244,15 +208,15 @@ fun BalanceDataScreen(
                             map = selectedMap?.name,
                             rankNames = selectedRanks.map { it.name },
                             compareSeason = selectedSeason2?.name,
-                            onOpen = { filterState = filterState.beginEditing(settings!!) }
+                            onOpen = { filterState = filterState.beginEditing(settings) }
                         )
                         filterState.draft?.let { draft ->
                             BalanceFilterSheet(
-                                settings = settings!!,
+                                settings = settings,
                                 draft = draft,
-                                onDraftChange = { filterState = filterState.changeDraft(it, settings!!) },
-                                onReset = { filterState = filterState.resetDraft(settings!!) },
-                                onApply = { filterState = filterState.applyDraft(settings!!) },
+                                onDraftChange = { filterState = filterState.changeDraft(it, settings) },
+                                onReset = { filterState = filterState.resetDraft(settings) },
+                                onApply = { filterState = filterState.applyDraft(settings) },
                                 onDismiss = { filterState = filterState.cancelDraft() }
                             )
                         }
@@ -283,15 +247,15 @@ fun BalanceDataScreen(
                                 CircularProgressIndicator(Modifier.align(Alignment.Center))
                             } else if (dataError != null && balanceResult == null) {
                                 ErrorState(
-                                    message = dataError!!.message,
-                                    kind = dataError!!.kind,
+                                    message = dataError.message,
+                                    kind = dataError.kind,
                                     onRetry = { dataRetryTrigger++ },
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else if (settingsError != null && balanceResult == null) {
                                 ErrorState(
-                                    message = settingsError!!.message,
-                                    kind = settingsError!!.kind,
+                                    message = settingsError.message,
+                                    kind = settingsError.kind,
                                     onRetry = { loadSettings(forceRefresh = true) },
                                     modifier = Modifier.fillMaxSize()
                                 )

@@ -12,6 +12,35 @@ import org.junit.Assume.assumeTrue
 import kotlin.test.*
 
 class ExtractionRealPageTest {
+    @Test fun parsesModernSharedPoolsAndStageTableWhenCaptureIsProvided() {
+        val file = System.getenv("EXTRACTION_DROPS_AUDIT_FILE")?.let(::File)
+        assumeTrue("Set EXTRACTION_DROPS_AUDIT_FILE to a local parse response", file?.isFile == true)
+        val html = SharedJson.parseToJsonElement(file!!.readText(Charsets.UTF_8)).jsonObject
+            .getValue("parse").jsonObject.getValue("text").jsonObject.getValue("*").jsonPrimitive.content
+        val document = Jsoup.parse(html)
+        val result = ExtractionCatalogParsers.parseResult(html, ExtractionCatalogKind.DROPS)
+        assertEquals(emptyList(), result.issues)
+        assertTrue(result.canCache)
+        val pools = extractionEntriesForView(result.entries, ExtractionDropView.POOLS)
+        val rawPools = document.select(".sec-drop-pool")
+        assertTrue(rawPools.isNotEmpty())
+        assertEquals(rawPools.size, pools.size)
+        rawPools.forEach { raw ->
+            val entry = pools.single { it.id == "pool:${raw.id()}" }
+            assertEquals(raw.select(".sec-drop-chip").map { it.text() }, entry.dropPoolGroups.flatMap { it.items }, raw.id())
+            assertEquals(raw.select(".sec-drop-pool__tag").map { it.text() }, entry.dropPoolGroups.map { it.label }, raw.id())
+        }
+        assertEquals(document.select(".sec-drop-card").size, extractionEntriesForView(result.entries, ExtractionDropView.SOURCES).size)
+        val stages = extractionEntriesForView(result.entries, ExtractionDropView.STAGES)
+        assertEquals(6, stages.size)
+        assertEquals("—", stages.last().fields.single { it.label == "候选池" }.value)
+        assertTrue(pools.any { e -> e.dropPoolGroups.any { it.label == "Q8 装备" } })
+        val boss = result.entries.single { it.type == ExtractionEntryType.DROP_SOURCE && it.name == "阶段 1" }
+        assertTrue(boss.fields.any { it.label == "掉落材料（按权重抽）" })
+        assertFalse(boss.fields.any { it.label == "必掉物" })
+        println("Modern drops: sources=${result.entries.count { it.type == ExtractionEntryType.DROP_SOURCE }}, pools=${pools.size}, groups=${pools.sumOf { it.dropPoolGroups.size }}, stages=${stages.size}")
+    }
+
     @Test fun parsesCompleteLocalCapturesWhenProvidedWithoutFetchingAnything() {
         val directory = System.getenv("EXTRACTION_AUDIT_DIR")?.let(::File)
         assumeTrue("Set EXTRACTION_AUDIT_DIR to full local parse responses", directory?.isDirectory == true)
@@ -26,7 +55,9 @@ class ExtractionRealPageTest {
                     ExtractionCatalogKind.DROPS -> ".sec-drop-card"
                 }
                 val raw = Jsoup.parse(html).select(selector)
-                val rows = ExtractionCatalogParsers.parse(html, kind)
+                val parsed = ExtractionCatalogParsers.parseResult(html, kind)
+                assertEquals(emptyList(), parsed.issues)
+                val rows = parsed.entries
                 assertTrue(rows.isNotEmpty())
                 if (kind != ExtractionCatalogKind.DROPS) assertEquals(raw.size, rows.size, "$kind skipped/merged a source card")
                 assertEquals(rows.size, rows.map { it.id }.distinct().size)

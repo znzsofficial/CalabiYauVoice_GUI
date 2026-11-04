@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.core.ui
 
 import android.content.Context
 import android.net.Uri
-import android.webkit.URLUtil
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -26,8 +25,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
-import com.nekolaska.calabiyau.core.util.enqueueDownload
-import java.io.File
 
 // ════════════════════════════════════════════════════════
 //  Shared image preview and save helpers
@@ -60,7 +57,7 @@ fun ImagePreviewDialog(
     val context = LocalContext.current
     val showSnack = rememberSnackbarLauncher()
     val saveImage = remember(context, model, contentDescription, onSave, showSnack) {
-        onSave ?: { savePreviewImage(context, model, contentDescription, showSnack) }
+        onSave ?: { savePreviewImage(context, model, showSnack) }
     }
     Dialog(
         onDismissRequest = onDismiss,
@@ -105,7 +102,6 @@ fun ImagePreviewDialog(
 private fun savePreviewImage(
     context: Context,
     model: Any?,
-    contentDescription: String?,
     showSnack: (String) -> Unit
 ) {
     val uri = when (model) {
@@ -117,20 +113,5 @@ private fun savePreviewImage(
         return
     }
 
-    try {
-        val fileName = URLUtil.guessFileName(uri.toString(), null, null)
-            .takeIf { it.isNotBlank() }
-            ?: contentDescription?.takeIf { it.isNotBlank() }
-            ?: "image"
-        val dir = File(AppPrefs.savePath)
-        context.enqueueDownload(
-            url = uri.toString(),
-            dir = dir,
-            fileName = fileName,
-            description = "正在保存图片..."
-        )
-        showSnack("已保存: $fileName")
-    } catch (e: Exception) {
-        showSnack("保存失败: ${e.message}")
-    }
+    enqueueImageSave(context, uri.toString(), showSnack)
 }

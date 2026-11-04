@@ -16,20 +16,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -47,13 +42,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -62,20 +55,18 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -103,21 +94,21 @@ import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.bio.api.BioCardApi
-import com.nekolaska.calabiyau.feature.wiki.bio.api.BioDeckShareApi
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardPageData
+import com.nekolaska.calabiyau.feature.wiki.bio.model.BioCatalogTab as BioCardTab
+import com.nekolaska.calabiyau.core.ui.WikiScrollableSheet
+import com.nekolaska.calabiyau.core.ui.DetailField
+import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.feature.wiki.bio.model.CardRefreshProbability
 import com.nekolaska.calabiyau.feature.wiki.bio.model.DeckCardOption
 import com.nekolaska.calabiyau.feature.wiki.bio.model.MobileCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.PcCard
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SharedDeck
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckPayload
-import com.nekolaska.calabiyau.feature.wiki.bio.model.normalizeDeckQuality
 import com.nekolaska.calabiyau.feature.wiki.bio.parser.BioDeckShareParsers
 import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import data.ApiResult
 import kotlinx.coroutines.launch
-
-private enum class BioCardTab { PC, MOBILE, DECK }
 
 @Composable
 fun BioCardScreen(
@@ -127,7 +118,10 @@ fun BioCardScreen(
 ) {
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-    val state = rememberLoadState(
+    var selectedTab by rememberSaveable(initialTab) {
+        mutableStateOf(when (initialTab) { 1 -> BioCardTab.MOBILE; 2 -> BioCardTab.DECK; else -> BioCardTab.PC })
+    }
+    val state = key(selectedTab) { rememberLoadState(
         initial = CardPageData(
             pcCards = emptyList(),
             mobileCards = emptyList(),
@@ -135,23 +129,20 @@ fun BioCardScreen(
             pcWikiUrl = "",
             mobileWikiUrl = "",
             deckWikiUrl = ""
-        )
+        ), key = selectedTab
     ) { force ->
-        BioCardApi.fetchAll(force)
-    }
+        BioCardApi.fetchTab(selectedTab, force)
+    } }
     val showSnack = rememberSnackbarLauncher()
     val copyText = rememberPlainTextClipboardCopier { showSnack("已复制分享码") }
     var isWikiLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
-    var isSubmittingDeck by remember { mutableStateOf(false) }
-    var selectedTab by rememberSaveable(initialTab) {
-        mutableStateOf(
-            when (initialTab) {
-                1 -> BioCardTab.MOBILE
-                2 -> BioCardTab.DECK
-                else -> BioCardTab.PC
-            }
-        )
-    }
+    val submission = remember { BioDeckSubmissionState() }
+    // Own the draft outside lazy/conditional content: tabs, loading and errors may remove that subtree.
+    val deckEditor = rememberSaveable(saver = BioDeckEditorState.Saver) { BioDeckEditorState() }
+    val refreshPublishedDeck by rememberUpdatedState(newValue = {
+        if (selectedTab == BioCardTab.DECK) state.reload(forceRefresh = true)
+    })
+    val isSubmittingDeck = submission.isSubmitting
     var keyword by rememberSaveable { mutableStateOf("") }
     var pcFaction by rememberSaveable { mutableStateOf("全部阵营") }
     var pcCategory by rememberSaveable { mutableStateOf("全部分类") }
@@ -164,17 +155,21 @@ fun BioCardScreen(
     var selectedMobileCard by remember { mutableStateOf<MobileCard?>(null) }
     var selectedDeck by remember { mutableStateOf<SharedDeck?>(null) }
 
-    // 卡表仅在 DECK 页签才需要：避免进页即 5 个并发 BWiki 请求触发 EdgeOne 封锁
-    val deckShareCardState = rememberLoadState(
-        initial = emptyMap<String, List<DeckCardOption>>(),
-        enabled = selectedTab == BioCardTab.DECK
-    ) { force ->
-        BioDeckShareApi.fetchDeckCardMap(force)
-    }
-
     val data = state.data
-    val completeDeckCardMap = remember(deckShareCardState.data, data.pcCards) {
-        BioDeckShareParsers.completeFromPcCatalog(deckShareCardState.data, data.pcCards)
+    val pcKeys = remember(data.pcCards) {
+        val cards = data.pcCards.distinct()
+        cards.zip(com.nekolaska.calabiyau.core.ui.catalogKeys(cards) { "${it.cardId}:${it.faction}:${it.category}:${it.name}" }).toMap()
+    }
+    val mobileKeys = remember(data.mobileCards) {
+        val cards = data.mobileCards.distinct()
+        cards.zip(com.nekolaska.calabiyau.core.ui.catalogKeys(cards) { "${it.faction}:${it.category}:${it.name}" }).toMap()
+    }
+    val deckKeys = remember(data.decks) {
+        val decks = data.decks.distinct()
+        decks.zip(com.nekolaska.calabiyau.core.ui.catalogKeys(decks) { "${it.faction}:${it.title}:${it.author}" }).toMap()
+    }
+    val completeDeckCardMap = remember(data.deckCardMap, data.pcCards) {
+        BioDeckShareParsers.completeFromPcCatalog(data.deckCardMap, data.pcCards)
     }
     val pcFactions = remember(data.pcCards) { listOf("全部阵营") + data.pcCards.map { it.faction }.filter { it.isNotBlank() }.distinct() }
     val pcCategories = remember(data.pcCards) { listOf("全部分类") + data.pcCards.map { it.category }.filter { it.isNotBlank() }.distinct() }
@@ -183,7 +178,7 @@ fun BioCardScreen(
     val deckFactions = remember(data.decks) { listOf("全部卡组") + data.decks.map { it.faction }.filter { it.isNotBlank() }.distinct() }
 
     val filteredPc = remember(data.pcCards, keyword, pcFaction, pcCategory, pcRarity) {
-        data.pcCards.filter {
+        data.pcCards.distinct().filter {
             (keyword.isBlank() || it.name.contains(keyword, true) || it.roles.any { role -> role.contains(keyword, true) }) &&
                 (pcFaction == "全部阵营" || it.faction == pcFaction) &&
                 (pcCategory == "全部分类" || it.category == pcCategory) &&
@@ -191,7 +186,7 @@ fun BioCardScreen(
         }
     }
     val filteredMobile = remember(data.mobileCards, keyword, mobileFaction, mobileCategory, mobileRarity) {
-        data.mobileCards.filter {
+        data.mobileCards.distinct().filter {
             (keyword.isBlank() || it.name.contains(keyword, true) || it.effect.contains(keyword, true)) &&
                 (mobileFaction == "全部阵营" || it.faction == mobileFaction) &&
                 (mobileCategory == "全部分类" || it.category == mobileCategory) &&
@@ -199,7 +194,7 @@ fun BioCardScreen(
         }
     }
     val filteredDecks = remember(data.decks, keyword, deckFaction) {
-        data.decks.filter {
+        data.decks.distinct().filter {
             (keyword.isBlank() || it.title.contains(keyword, true) || it.author.contains(keyword, true) || it.cardNames.any { card -> card.contains(keyword, true) }) &&
                 (deckFaction == "全部卡组" || it.faction == deckFaction)
         }
@@ -226,7 +221,6 @@ fun BioCardScreen(
                 actions = {
                     RefreshActionButton(onClick = {
                         state.reload(forceRefresh = true)
-                        if (selectedTab == BioCardTab.DECK) deckShareCardState.reload(forceRefresh = true)
                     })
                     OpenWikiActionButton(
                         wikiUrl = when (selectedTab) {
@@ -240,10 +234,21 @@ fun BioCardScreen(
             )
         }
     ) { innerPadding ->
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            BioTabBar(selectedTab) { tab ->
+                selectedPcCard = null
+                selectedMobileCard = null
+                selectedDeck = null
+                selectedTab = tab
+            }
         ApiResourceContent(
             state = state,
-            modifier = Modifier.padding(innerPadding),
-            isDataEmpty = { it.pcCards.isEmpty() && it.mobileCards.isEmpty() && it.decks.isEmpty() },
+            modifier = Modifier.weight(1f),
+            isDataEmpty = { it.loadedTab != selectedTab || when (selectedTab) {
+                BioCardTab.PC -> it.pcCards.isEmpty()
+                BioCardTab.MOBILE -> it.mobileCards.isEmpty()
+                BioCardTab.DECK -> it.deckWikiUrl.isBlank()
+            } },
             enablePullToRefresh = false,
             loading = { mod -> BioCardSkeleton(mod) }
         ) {
@@ -252,32 +257,7 @@ fun BioCardScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
-                    PrimaryTabRow(selectedTabIndex = selectedTab.ordinal) {
-                        listOf(
-                            BioCardTab.PC to "PC 卡牌",
-                            BioCardTab.MOBILE to "移动端卡牌",
-                            BioCardTab.DECK to "卡组分享"
-                        ).forEach { (tab, label) ->
-                            Tab(
-                                selected = selectedTab == tab,
-                                onClick = { selectedTab = tab },
-                                text = { Text(label) },
-                                icon = {
-                                    Icon(
-                                        when (tab) {
-                                            BioCardTab.PC -> Icons.Outlined.ViewInAr
-                                            BioCardTab.MOBILE -> Icons.Outlined.PhoneAndroid
-                                            BioCardTab.DECK -> Icons.Outlined.Tab
-                                        },
-                                        contentDescription = null
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-                item {
+                item(key = "search", contentType = "search") {
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
@@ -291,9 +271,9 @@ fun BioCardScreen(
                         }
                     )
                 }
-                item {
+                item(key = "filters", contentType = "filters") {
                     when (selectedTab) {
-                        BioCardTab.PC -> PcFilterBar(
+                        BioCardTab.PC -> BioCardFilterBar(
                             factions = pcFactions,
                             categories = pcCategories,
                             selectedFaction = pcFaction,
@@ -304,7 +284,7 @@ fun BioCardScreen(
                             onRarityChange = { pcRarity = it }
                         )
 
-                        BioCardTab.MOBILE -> MobileFilterBar(
+                        BioCardTab.MOBILE -> BioCardFilterBar(
                             factions = mobileFactions,
                             categories = mobileCategories,
                             selectedFaction = mobileFaction,
@@ -323,18 +303,18 @@ fun BioCardScreen(
                     }
                 }
                 if (selectedTab == BioCardTab.DECK) {
-                    item {
+                    item(key = "deck-composer", contentType = "deck-composer") {
                         DeckShareComposerCard(
+                            editor = deckEditor,
                             isLoggedIn = isWikiLoggedIn,
                             isSubmitting = isSubmittingDeck,
                             cardMap = completeDeckCardMap,
                             pcCards = data.pcCards,
                             mobileCards = data.mobileCards,
-                            isLoadingCardMap = deckShareCardState.isLoading,
-                            cardMapError = deckShareCardState.error?.message,
+                            isLoadingCardMap = state.isLoading,
+                            cardMapError = data.deckEditorError,
                             onReloadCardMap = {
                                 state.reload(forceRefresh = true)
-                                deckShareCardState.reload(forceRefresh = true)
                             },
                             onOpenLogin = {
                                 onOpenWikiUrl("https://wiki.biligame.com/wiki/Special:UserLogin?returnto=%E6%99%B6%E6%BA%90%E6%84%9F%E6%9F%93%E5%8D%A1%E7%BB%84%E5%88%86%E4%BA%AB")
@@ -343,8 +323,7 @@ fun BioCardScreen(
                             onShowMessage = showSnack,
                             onSubmit = { payload ->
                                 scope.launch {
-                                    isSubmittingDeck = true
-                                    when (val result = BioDeckShareApi.submitDeck(payload, completeDeckCardMap)) {
+                                    when (val result = submission.publish(payload, completeDeckCardMap)) {
                                         is ApiResult.Success -> {
                                             showSnack(
                                                 if (result.value.isPending) {
@@ -353,16 +332,15 @@ fun BioCardScreen(
                                                     "发布成功"
                                                 }
                                             )
-                                            state.reload(forceRefresh = true)
-                                            deckShareCardState.reload(forceRefresh = true)
+                                            refreshPublishedDeck()
                                         }
 
                                         is ApiResult.Error -> {
                                             showSnack(result.message)
                                         }
+                                        null -> Unit
                                     }
                                     isWikiLoggedIn = hasWikiLoginCookie()
-                                    isSubmittingDeck = false
                                 }
                             }
                         )
@@ -375,7 +353,7 @@ fun BioCardScreen(
                         } else {
                             itemsIndexed(
                                 filteredPc,
-                                key = { index, card -> "pc-${card.name}-${card.faction}-${card.category}-$index" }
+                                key = { _, card -> "pc:${checkNotNull(pcKeys[card])}" }
                             ) { _, card ->
                                 val isTalent = card.category.contains("天赋")
                                 val accentColor = if (isTalent) talentColor(card.faction) else rarityColor(card.rarity)
@@ -400,7 +378,7 @@ fun BioCardScreen(
                         } else {
                             itemsIndexed(
                                 filteredMobile,
-                                key = { index, card -> "mobile-${card.name}-${card.faction}-${card.category}-$index" }
+                                key = { _, card -> "mobile:${checkNotNull(mobileKeys[card])}" }
                             ) { _, card ->
                                 val isTalent = card.category.contains("天赋")
                                 val accentColor = if (isTalent) talentColor(card.faction) else rarityColor(card.rarity)
@@ -425,7 +403,7 @@ fun BioCardScreen(
                         } else {
                             itemsIndexed(
                                 filteredDecks,
-                                key = { index, deck -> "deck-${deck.faction}-${deck.title}-${deck.shareId}-$index" }
+                                key = { _, deck -> "deck:${checkNotNull(deckKeys[deck])}" }
                             ) { _, deck ->
                                 BioInfoCard(
                                     imageUrl = null,
@@ -459,6 +437,16 @@ fun BioCardScreen(
                 )
             }
         }
+        }
+    }
+}
+
+@Composable
+private fun BioTabBar(selected: BioCardTab, onSelect: (BioCardTab) -> Unit) {
+    PrimaryTabRow(selectedTabIndex = selected.ordinal) {
+        listOf(BioCardTab.PC to "PC 卡牌", BioCardTab.MOBILE to "移动端卡牌", BioCardTab.DECK to "卡组分享").forEach { (tab, label) ->
+            Tab(selected = selected == tab, onClick = { onSelect(tab) }, text = { Text(label) })
+        }
     }
 }
 
@@ -469,20 +457,6 @@ private fun BioCardSkeleton(modifier: Modifier = Modifier) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // 图标 + 文字页签统一为 72dp，选中项不应改变占位尺寸。
-                repeat(BioCardTab.entries.size) {
-                    ShimmerBox(
-                        modifier = Modifier.weight(1f).height(72.dp),
-                        shape = smoothCornerShape(18.dp)
-                    )
-                }
-            }
-        }
         item {
             ShimmerBox(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -546,88 +520,6 @@ private fun BioInfoCardSkeleton() {
 }
 
 @Composable
-private fun PcFilterBar(
-    factions: List<String>,
-    categories: List<String>,
-    selectedFaction: String,
-    selectedCategory: String,
-    selectedRarity: Int,
-    onFactionChange: (String) -> Unit,
-    onCategoryChange: (String) -> Unit,
-    onRarityChange: (Int) -> Unit
-) {
-    FilterCard {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) { SimpleDropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
-            Box(Modifier.weight(1f)) { SimpleDropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
-        }
-        RarityChips(selectedRarity, onRarityChange)
-    }
-}
-
-@Composable
-private fun MobileFilterBar(
-    factions: List<String>,
-    categories: List<String>,
-    selectedFaction: String,
-    selectedCategory: String,
-    selectedRarity: Int,
-    onFactionChange: (String) -> Unit,
-    onCategoryChange: (String) -> Unit,
-    onRarityChange: (Int) -> Unit
-) {
-    FilterCard {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.weight(1f)) { SimpleDropdownSelector("阵营", factions, selectedFaction, onFactionChange) }
-            Box(Modifier.weight(1f)) { SimpleDropdownSelector("分类", categories, selectedCategory, onCategoryChange) }
-        }
-        RarityChips(selectedRarity, onRarityChange)
-    }
-}
-
-@Composable
-private fun DeckFilterBar(
-    factions: List<String>,
-    selectedFaction: String,
-    onFactionChange: (String) -> Unit
-) {
-    FilterCard {
-        SimpleDropdownSelector("卡组", factions, selectedFaction, onFactionChange)
-    }
-}
-
-@Composable
-private fun FilterCard(content: @Composable () -> Unit) {
-    Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.FilterAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.size(8.dp))
-                Text("筛选", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            content()
-        }
-    }
-}
-
-@Composable
-private fun RarityChips(selectedRarity: Int, onRarityChange: (Int) -> Unit) {
-    QualityFilterChips(
-        selectedLevel = selectedRarity.takeIf { it != 0 },
-        levels = listOf(2 to "精致", 3 to "卓越", 4 to "完美"),
-        onSelectedLevelChange = { onRarityChange(it ?: 0) },
-        colorForLevel = ::rarityColor
-    )
-}
-
-@Composable
 private fun BioInfoCard(
     imageUrl: String?,
     title: String,
@@ -679,15 +571,10 @@ private fun BioInfoCard(
     }
 }
 
-private const val MAX_PER_RARITY = 20
-private val DECK_RARITY_THRESHOLDS = mapOf(
-    "超弦体" to mapOf("完美" to 10, "卓越" to 15, "精致" to 15),
-    "晶源体" to mapOf("完美" to 8, "卓越" to 11, "精致" to 11)
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DeckShareComposerCard(
+    editor: BioDeckEditorState,
     isLoggedIn: Boolean,
     isSubmitting: Boolean,
     cardMap: Map<String, List<DeckCardOption>>,
@@ -704,69 +591,38 @@ private fun DeckShareComposerCard(
     var isExpanded by rememberSaveable { mutableStateOf(false) }
     var showCardSelector by remember { mutableStateOf(false) }
 
-    var deckName by rememberSaveable { mutableStateOf("") }
-    var author by rememberSaveable { mutableStateOf("") }
-    var intro by rememberSaveable { mutableStateOf("") }
-    var shareCodeInput by rememberSaveable { mutableStateOf("") }
-    var statusText by remember { mutableStateOf("") }
-
+    with(editor) {
     val factionOptions = remember(cardMap) {
         listOf("超弦体", "晶源体")
             .filter { cardMap[it]?.isNotEmpty() == true }
             .ifEmpty { cardMap.keys.sorted() }
     }
-    var selectedFaction by remember(factionOptions) { mutableStateOf(factionOptions.firstOrNull().orEmpty()) }
-
-    // 已选卡牌跨旋转/进程恢复保留（40 张的挑选成本高）
-    val selectableIds = rememberSaveable(saver = listSaver(save = { it.toList() }, restore = { it.toMutableStateList() })) {
-        mutableStateListOf<String>()
-    }
+    LaunchedEffect(factionOptions) { reconcileFactions(factionOptions) }
     val cards = remember(cardMap, selectedFaction) { cardMap[selectedFaction].orEmpty() }
     val defaultCards = remember(cards) { cards.filter { it.isDefault } }
     val userSelectableCards = remember(cards) { cards.filter { !it.isDefault } }
     val cardById = remember(cards) { cards.filter { it.cardId.isNotBlank() }.associateBy { it.cardId } }
-    val indexToCardId = remember(cards) { cards.filter { it.cardId.isNotBlank() && it.index >= 0 }.associate { it.index to it.cardId } }
 
     val imageIndex = remember(pcCards, mobileCards) { BioDeckCardImageIndex(pcCards, mobileCards) }
     val cardImages = remember(cards, imageIndex, selectedFaction) {
         cards.associate { it.cardId to imageIndex.imageUrl(it, selectedFaction) }
     }
 
-    LaunchedEffect(selectedFaction) {
-        selectableIds.clear()
-        statusText = ""
-    }
-
-    val mergedSelectedIds = (selectableIds + defaultCards.map { it.cardId }).filter { it.isNotBlank() }.distinct()
+    val mergedSelectedIds = editor.selection(cards)
     val unindexedCards = mergedSelectedIds.mapNotNull { cardById[it] }.filter { it.index < 0 }
     var allowCardListOnly by rememberSaveable(selectedFaction, mergedSelectedIds) { mutableStateOf(false) }
 
     val rarityCounts = remember(mergedSelectedIds, cardById) {
-        mutableMapOf("完美" to 0, "卓越" to 0, "精致" to 0).apply {
-            mergedSelectedIds.forEach { id ->
-                when (normalizeDeckQuality(cardById[id]?.quality.orEmpty())) {
-                    "完美" -> this["完美"] = (this["完美"] ?: 0) + 1
-                    "卓越" -> this["卓越"] = (this["卓越"] ?: 0) + 1
-                    "精致" -> this["精致"] = (this["精致"] ?: 0) + 1
-                }
-            }
-        }
+        editor.rarityCounts(cards)
     }
 
     val threshold = remember(selectedFaction) { DECK_RARITY_THRESHOLDS[selectedFaction].orEmpty() }
-    val canSubmitByRarity = remember(rarityCounts, threshold) {
-        listOf("完美", "卓越", "精致").all { key ->
-            val count = rarityCounts[key] ?: 0
-            count >= (threshold[key] ?: 0) && count <= MAX_PER_RARITY
-        }
-    }
 
     Card(
         shape = smoothCornerShape(24.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(smoothCornerShape(24.dp))
-            .clickable { isExpanded = !isExpanded },
+            .clip(smoothCornerShape(24.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(
@@ -775,7 +631,7 @@ private fun DeckShareComposerCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded }
             ) {
                 Icon(Icons.Outlined.Publish, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
@@ -845,7 +701,7 @@ private fun DeckShareComposerCard(
                         label = "阵营",
                         options = factionOptions.ifEmpty { listOf("") },
                         selected = selectedFaction,
-                        onSelected = { selectedFaction = it }
+                        onSelected = { selectFaction(it) }
                     )
 
                     OutlinedTextField(
@@ -869,21 +725,8 @@ private fun DeckShareComposerCard(
                         )
                         FilledTonalButton(
                             onClick = {
-                                if (selectedFaction.isBlank()) {
-                                    statusText = "请先选择阵营"
-                                    return@FilledTonalButton
-                                }
                                 runCatching {
-                                    val parsedName = BioDeckShareApi.extractDeckNameFromShareInput(shareCodeInput)
-                                    val (ids, _) = BioDeckShareApi.decodeShareCode(
-                                        rawInput = shareCodeInput,
-                                        expectedFaction = selectedFaction,
-                                        indexToCardId = indexToCardId
-                                    )
-                                    selectableIds.clear()
-                                    selectableIds.addAll(ids.filter { id -> cardById[id]?.isDefault == false }.distinct())
-                                    if (deckName.isBlank() && !parsedName.isNullOrBlank()) deckName = parsedName
-                                    statusText = "已导入 ${selectableIds.size} 张卡牌"
+                                    importCode(cards)
                                 }.onFailure {
                                     statusText = it.message ?: "导入失败"
                                 }
@@ -944,36 +787,8 @@ private fun DeckShareComposerCard(
 
                     FilledTonalButton(
                         onClick = {
-                            if (!isLoggedIn) {
-                                statusText = "请先登录 Wiki"
-                                return@FilledTonalButton
-                            }
-                            if (deckName.isBlank() || selectedFaction.isBlank()) {
-                                statusText = "请填写卡组名称并选择阵营"
-                                return@FilledTonalButton
-                            }
-                            if (!canSubmitByRarity) {
-                                statusText = "稀有度条件不满足，无法发布"
-                                return@FilledTonalButton
-                            }
-                            if (mergedSelectedIds.isEmpty()) {
-                                statusText = "至少需要选择 1 张卡牌"
-                                return@FilledTonalButton
-                            }
-                            if (unindexedCards.isNotEmpty() && !allowCardListOnly) {
-                                statusText = "请确认仅发布卡牌列表，或等待 Wiki 补充分享码索引"
-                                return@FilledTonalButton
-                            }
-                            onSubmit(
-                                SubmitDeckPayload(
-                                    deckName = deckName.trim(),
-                                    author = author.trim(),
-                                    intro = intro.trim(),
-                                    faction = selectedFaction,
-                                    selectedCardIds = mergedSelectedIds,
-                                    allowMissingShareCode = allowCardListOnly
-                                )
-                            )
+                            runCatching { payload(cards, isLoggedIn, allowCardListOnly) }
+                                .onSuccess(onSubmit).onFailure { statusText = it.message ?: "无法发布卡组" }
                         },
                         enabled = !isSubmitting && !isLoadingCardMap && cardMapError.isNullOrBlank() &&
                             (unindexedCards.isEmpty() || allowCardListOnly),
@@ -994,112 +809,11 @@ private fun DeckShareComposerCard(
     }
 
     if (showCardSelector) {
-        val sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        )
-        ModalBottomSheet(
-            onDismissRequest = { showCardSelector = false },
-            sheetState = sheetState,
-            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    text = "选择卡牌",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                if (userSelectableCards.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("当前阵营无可选卡牌", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(userSelectableCards, key = { "${it.cardId}#${it.index}" }) { card ->
-                            val selected = card.cardId in selectableIds
-                            val q = normalizeDeckQuality(card.quality)
-                            val imgUrl = cardImages[card.cardId]
-
-                            val rarityColor = when (q) {
-                                "完美" -> Color(0xFFD4AF37) // Gold-ish
-                                "卓越" -> Color(0xFF9C27B0) // Purple
-                                "精致" -> Color(0xFF2196F3) // Blue
-                                else -> MaterialTheme.colorScheme.onSurface
-                            }
-
-                            Card(
-                                onClick = {
-                                    if (selected) {
-                                        selectableIds.remove(card.cardId)
-                                    } else {
-                                        val nextCount = (rarityCounts[q] ?: 0) + 1
-                                        if (q in listOf("完美", "卓越", "精致") && nextCount > MAX_PER_RARITY) {
-                                            // 弹层保持打开：statusText 渲染在弹层后面看不见
-                                            onShowMessage("$q 已达到上限（$MAX_PER_RARITY）")
-                                        } else {
-                                            selectableIds.add(card.cardId)
-                                        }
-                                    }
-                                },
-                                shape = smoothCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                ),
-                                border = if (selected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AsyncImage(
-                                        model = imgUrl,
-                                        contentDescription = card.name,
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(smoothCornerShape(8.dp))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(card.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                                        if (q.isNotBlank()) {
-                                            Text(q, style = MaterialTheme.typography.bodySmall, color = rarityColor)
-                                        }
-                                        if (card.index < 0) {
-                                            Text("可加入卡组，暂不能生成分享码", style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
-                                    if (selected) {
-                                        Icon(
-                                            Icons.Outlined.Check,
-                                            contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        item {
-                            Spacer(Modifier.height(80.dp))
-                        }
-                    }
-                }
-            }
-        }
+        BioDeckCardSelectorSheet(cards = userSelectableCards, selectedIds = selectableIds.toList(), images = cardImages,
+            onDismiss = { showCardSelector = false }, onToggle = { card ->
+                if (!isSubmitting) toggle(card, cards)?.let(onShowMessage)
+            })
+    }
     }
 }
 
@@ -1291,16 +1005,7 @@ private fun CardDetailSheet(
 ) {
     val hasHero = !imageUrl.isNullOrBlank() || heroIcon != null
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = smoothCornerShape(28.dp),
-        tonalElevation = 0.dp
-    ) {
+    WikiScrollableSheet(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1383,8 +1088,6 @@ private fun CardDetailSheet(
             ) {
                 Column(
                     modifier = Modifier
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState())
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     content = content
@@ -1413,11 +1116,7 @@ private fun DetailBadge(text: String, color: Color, modifier: Modifier = Modifie
 
 @Composable
 private fun DetailLine(label: String, value: String) {
-    if (value.isBlank()) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-    }
+    DetailField(label = label, value = value)
 }
 
 @Composable
@@ -1452,15 +1151,7 @@ private fun ChipSection(title: String, items: List<String>) {
 
 @Composable
 private fun EmptyBioCardState(text: String) {
-    Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Box(modifier = Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) {
-            Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
+    CatalogEmptyResults(message = text)
 }
 
 private fun rarityLabel(rarity: Int): String = when (rarity) {
@@ -1478,9 +1169,4 @@ private fun talentColor(faction: String): Color = when {
 }
 
 @Composable
-private fun rarityColor(rarity: Int): Color = when (rarity) {
-    4 -> Color(0xFFF59E0B)
-    3 -> Color(0xFFAB47BC)
-    2 -> Color(0xFF42A5F5)
-    else -> MaterialTheme.colorScheme.primary
-}
+private fun rarityColor(rarity: Int): Color = bioRarityColor(rarity)

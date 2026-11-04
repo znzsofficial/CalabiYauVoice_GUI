@@ -353,8 +353,13 @@ fun DetailInfoRow(
     imageUrl: String? = null,
     fallbackImageUrl: String? = null,
     valueColor: Color = MaterialTheme.colorScheme.onSurface,
-    labelWidth: Dp? = null
+    labelWidth: Dp? = null,
+    stacked: Boolean = false
 ) {
+    if (stacked) {
+        DetailField(modifier = modifier, label = label, value = value)
+        return
+    }
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
         if (icon != null || imageUrl != null || fallbackImageUrl != null) {
             WikiIconBox(

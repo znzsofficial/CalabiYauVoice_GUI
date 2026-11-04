@@ -26,11 +26,8 @@ import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.feature.wiki.voting.api.VotingApi
-import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
 import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteState
-import data.ApiResult
 import kotlinx.coroutines.launch
 
 @Composable
@@ -38,51 +35,20 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 状态
-    var isLoadingConfig by remember { mutableStateOf(true) }
-    var isLoadingData by remember { mutableStateOf(false) }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var pollConfig by remember { mutableStateOf<PollConfig?>(null) }
-    var voteState by remember { mutableStateOf<VoteState?>(null) }
-    var selectedNames by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var isLoggedIn by remember { mutableStateOf(hasWikiLoginCookie()) }
+    val state = remember { VotingScreenState() }
+    val isLoadingConfig = state.isLoadingConfig
+    val isLoadingData = state.isLoadingData
+    val isSubmitting = state.isSubmitting
+    val errorMessage = state.errorMessage
+    val pollConfig = state.config
+    val voteState = state.votes
+    val selectedNames = state.selectedNames
+    val isLoggedIn = state.isLoggedIn
     var retryTrigger by remember { mutableIntStateOf(0) }
 
     // 加载投票页面配置
     LaunchedEffect(retryTrigger) {
-        isLoadingConfig = true
-        isLoggedIn = hasWikiLoginCookie()
-        errorMessage = null
-        pollConfig = null
-        voteState = null
-        selectedNames = emptySet()
-        when (val result = VotingApi.fetchPollConfig()) {
-            is ApiResult.Success -> {
-                pollConfig = result.value
-                // 继续加载投票数据
-                if (isLoggedIn) {
-                    isLoadingData = true
-                    when (val dataResult = VotingApi.fetchVoteData(result.value)) {
-                        is ApiResult.Success -> {
-                            voteState = dataResult.value
-                            // 恢复用户之前的投票选择
-                            selectedNames = dataResult.value.pollDataMap
-                                .filter { it.value.userVoted }
-                                .keys
-                        }
-                        is ApiResult.Error -> {
-                            errorMessage = dataResult.message
-                        }
-                    }
-                    isLoadingData = false
-                }
-            }
-            is ApiResult.Error -> {
-                errorMessage = result.message
-            }
-        }
-        isLoadingConfig = false
+        state.load()
     }
 
     Scaffold(
@@ -130,54 +96,8 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                     hasChanges = hasVoteChanges(voteState, selectedNames),
                     isSubmitting = isSubmitting,
                     onSubmit = {
-                        val state = voteState ?: return@VotingBottomBar
-                        val submittedNames = selectedNames
-                        isSubmitting = true
                         scope.launch {
-                            var resultMessage: String? = null
-                            try {
-                                when (val result = VotingApi.submitVotes(state, submittedNames)) {
-                                    is ApiResult.Success -> {
-                                        voteState = state.withSelectedNames(submittedNames)
-                                        // 刷新数据
-                                        isLoadingData = true
-                                        val refreshMessage = when (val refreshResult = VotingApi.fetchVoteData(state.config)) {
-                                            is ApiResult.Success -> {
-                                                voteState = refreshResult.value
-                                                selectedNames = refreshResult.value.pollDataMap
-                                                    .filter { it.value.userVoted }
-                                                    .keys
-                                                "投票提交成功！"
-                                            }
-                                            is ApiResult.Error -> {
-                                                "投票已提交，但状态刷新失败：${refreshResult.message}"
-                                            }
-                                        }
-                                        resultMessage = refreshMessage
-                                    }
-                                    is ApiResult.Error -> {
-                                        isLoadingData = true
-                                        val refreshResult = VotingApi.fetchVoteData(state.config)
-                                        val message = when (refreshResult) {
-                                            is ApiResult.Success -> {
-                                                voteState = refreshResult.value
-                                                selectedNames = refreshResult.value.pollDataMap
-                                                    .filter { it.value.userVoted }
-                                                    .keys
-                                                "提交未完全成功，已同步服务器状态：${result.message}"
-                                            }
-                                            is ApiResult.Error -> {
-                                                "提交失败且状态刷新失败：${result.message}；${refreshResult.message}"
-                                            }
-                                        }
-                                        resultMessage = message
-                                    }
-                                }
-                            } finally {
-                                isLoadingData = false
-                                isSubmitting = false
-                            }
-                            snackbarHostState.showSnackbar(resultMessage)
+                            state.submit()?.let { snackbarHostState.showSnackbar(it) }
                         }
                     }
                 )
@@ -204,31 +124,25 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
                 }
                 errorMessage != null && pollConfig == null -> {
                     ErrorState(
-                        message = errorMessage!!,
+                        message = errorMessage,
                         onRetry = { retryTrigger++ }
                     )
                 }
                 errorMessage != null && voteState == null && isLoggedIn && !isLoadingData -> {
                     ErrorState(
-                        message = errorMessage!!,
+                        message = errorMessage,
                         onRetry = { retryTrigger++ }
                     )
                 }
                 pollConfig != null -> {
                     VotingContent(
-                        config = pollConfig!!,
+                        config = pollConfig,
                         voteState = voteState,
                         selectedNames = selectedNames,
                         isLoadingData = isLoadingData,
                         isSubmitting = isSubmitting,
                         isLoggedIn = isLoggedIn,
-                        onToggleCandidate = { name ->
-                            selectedNames = if (name in selectedNames) {
-                                selectedNames - name
-                            } else {
-                                selectedNames + name
-                            }
-                        }
+                        onToggleCandidate = state::toggle
                     )
                 }
             }
@@ -649,48 +563,4 @@ private fun VotingBottomBar(
             }
         }
     }
-}
-
-// ─────────────────────── 工具函数 ───────────────────────
-
-/** 检查用户投票选择是否有变更 */
-private fun hasVoteChanges(
-    voteState: VoteState?,
-    selectedNames: Set<String>
-): Boolean {
-    if (voteState == null) return false
-    for ((name) in voteState.config.candidates) {
-        val wasVoted = voteState.pollDataMap[name]?.userVoted ?: false
-        val isSelected = name in selectedNames
-        if (wasVoted != isSelected) return true
-    }
-    return false
-}
-
-internal fun VoteState.withSelectedNames(selectedNames: Set<String>): VoteState {
-    val updatedPollData = pollDataMap.mapValues { (name, data) ->
-        val selected = name in selectedNames
-        val voteDelta = when {
-            selected && !data.userVoted -> 1
-            !selected && data.userVoted -> -1
-            else -> 0
-        }
-        data.copy(
-            votes = (data.votes + voteDelta).coerceAtLeast(0),
-            userVoted = selected
-        )
-    }
-    if (totalPollId.isEmpty()) return copy(pollDataMap = updatedPollData)
-
-    val selectedAny = selectedNames.isNotEmpty()
-    val participantDelta = when {
-        selectedAny && !userVotedTotal -> 1
-        !selectedAny && userVotedTotal -> -1
-        else -> 0
-    }
-    return copy(
-        totalParticipants = (totalParticipants + participantDelta).coerceAtLeast(0),
-        userVotedTotal = selectedAny,
-        pollDataMap = updatedPollData
-    )
 }

@@ -14,11 +14,16 @@ enum class ExtractionCatalogKind(val title: String, val pageSuffix: String) {
 data class ExtractionField(val label: String, val value: String)
 
 /** The source may use codes beyond Q1–Q5; keep its label rather than inventing a rarity name. */
-data class ExtractionDropPoolGroup(val label: String, val items: List<String>, val qualityCode: Int? = null)
+data class ExtractionDropPoolGroup(
+    val label: String, val items: List<String>, val qualityCode: Int? = null,
+    val key: String = label
+)
 
 enum class ExtractionDropView(val title: String) {
-    SOURCES("掉落来源"), POOLS("完整掉落池")
+    SOURCES("掉落来源"), POOLS("完整掉落池"), STAGES("阶段对照")
 }
+
+enum class ExtractionEntryType { ITEM, DROP_SOURCE, DROP_POOL, DROP_STAGE }
 
 data class ExtractionEntry(
     val id: String,
@@ -31,19 +36,24 @@ data class ExtractionEntry(
     val fields: List<ExtractionField> = emptyList(),
     val tags: List<String> = emptyList(),
     val numericValues: Map<ExtractionSort, Double> = emptyMap(),
-    val dropPoolGroups: List<ExtractionDropPoolGroup> = emptyList()
+    val dropPoolGroups: List<ExtractionDropPoolGroup> = emptyList(),
+    val type: ExtractionEntryType = ExtractionEntryType.ITEM,
+    val sourceCategory: String? = null
 ) {
-    val isDropPool: Boolean get() = fields.any { it.label == "掉落池条目（完整）" }
-    val filterCategory: String get() = if (isDropPool) {
-        fields.firstOrNull { it.label == "来源类别" }?.value?.takeIf { it.isNotBlank() } ?: category
-    } else category
+    val isDropPool: Boolean get() = type == ExtractionEntryType.DROP_POOL
+    val filterCategory: String get() = sourceCategory?.takeIf { it.isNotBlank() } ?: category
 
     fun matches(query: String): Boolean = query.isBlank() ||
-        (listOf(name, category, description) + tags + fields.map { it.value }).any { it.contains(query.trim(), true) }
+        (listOf(name, category, description) + tags + fields.map { it.value } +
+            dropPoolGroups.flatMap { listOf(it.label) + it.items }).any { it.contains(query.trim(), true) }
 }
 
 internal fun extractionEntriesForView(entries: List<ExtractionEntry>, view: ExtractionDropView): List<ExtractionEntry> =
-    entries.filter { it.isDropPool == (view == ExtractionDropView.POOLS) }
+    entries.filter { it.type == when (view) {
+        ExtractionDropView.SOURCES -> ExtractionEntryType.DROP_SOURCE
+        ExtractionDropView.POOLS -> ExtractionEntryType.DROP_POOL
+        ExtractionDropView.STAGES -> ExtractionEntryType.DROP_STAGE
+    } }
 
 internal fun filterDropPoolGroups(groups: List<ExtractionDropPoolGroup>, query: String): List<ExtractionDropPoolGroup> {
     val keyword = query.trim()

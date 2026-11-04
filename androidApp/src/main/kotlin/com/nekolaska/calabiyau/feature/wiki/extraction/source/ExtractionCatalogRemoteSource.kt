@@ -26,7 +26,7 @@ object ExtractionCatalogRemoteSource {
 
     internal fun isValidPayload(payload: String, kind: ExtractionCatalogKind): Boolean = runCatching {
         val html = htmlFromPayload(payload) ?: return@runCatching false
-        ExtractionCatalogParsers.parse(html, kind).isNotEmpty()
+        ExtractionCatalogParsers.parseResult(html, kind).canCache
     }.getOrDefault(false)
 
     private fun htmlFromPayload(payload: String): String? {

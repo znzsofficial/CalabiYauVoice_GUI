@@ -32,11 +32,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -281,22 +278,13 @@ fun CatalogDetailSheet(
     details: @Composable () -> Unit
 ) {
     val selectedImage = remember(images) { mutableStateOf(images.firstOrNull()) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberBottomSheetState(
-            initialValue = SheetValue.Hidden,
-            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
-        ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = AppShapes.sheet,
-        tonalElevation = 0.dp
-    ) {
+    WikiScrollableSheet(onDismiss = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 32.dp)
         ) {
-            Box(
+            if (imageContent != null || images.isNotEmpty()) Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(heroHeight)
@@ -334,7 +322,7 @@ fun CatalogDetailSheet(
                     compact = false
                 )
             }
-            Column(Modifier.padding(horizontal = 20.dp)) {
+            Column(Modifier.padding(horizontal = 20.dp).padding(top = if (imageContent == null && images.isEmpty()) 12.dp else 0.dp)) {
                 Text(
                     title,
                     style = MaterialTheme.typography.headlineSmall,
@@ -349,7 +337,7 @@ fun CatalogDetailSheet(
                 extraHeader()
                 if (images.size > 1) {
                     Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         images.forEach { image ->
                             FilterChip(
                                 selected = selectedImage.value?.label == image.label,
@@ -453,7 +441,7 @@ fun ExpandableCatalogDescription(
     expandedMaxHeight: Dp = 240.dp
 ) {
     if (text.isBlank()) return
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember(text) { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -463,7 +451,7 @@ fun ExpandableCatalogDescription(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(if (expanded) Modifier.verticalScroll(scrollState) else Modifier)
+                .then(if (expanded) Modifier.heightIn(max = expandedMaxHeight).verticalScroll(scrollState) else Modifier)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -477,9 +465,7 @@ fun ExpandableCatalogDescription(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = if (expanded) expandedMaxHeight else Dp.Unspecified)
+                modifier = Modifier.fillMaxWidth()
             )
             Text(
                 if (expanded) "收起" else "展开",

@@ -138,10 +138,10 @@ private fun ExtractionControlsSkeleton(drops: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SkeletonTextLine(widthFraction = 0.36f, height = labelHeight)
         if (drops) {
-            // These are the two real view chips, not inline catalog filters. FlowRow
+            // View chips (including the modern stage comparison), not inline filters. FlowRow
             // and font-scaled widths also mirror wrapping on narrow/large-text screens.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(128.dp, 144.dp).forEach { width ->
+                listOf(128.dp, 144.dp, 112.dp).forEach { width ->
                     Box(Modifier.width(width * fontScale).height(maxOf(48.dp, chipHeight)), contentAlignment = Alignment.Center) {
                         ShimmerBox(Modifier.fillMaxWidth().height(chipHeight), shape = MaterialTheme.shapes.small)
                     }
