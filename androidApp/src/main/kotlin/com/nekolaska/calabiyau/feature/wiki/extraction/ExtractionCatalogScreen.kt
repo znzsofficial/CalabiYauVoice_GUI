@@ -1,8 +1,6 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -25,6 +23,10 @@ import util.wikiPathEncode
 
 @Composable
 fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
+    if (kind == ExtractionCatalogKind.DROPS) {
+        ExtractionDropsScreen(onBack, onOpenWikiUrl)
+        return
+    }
     val state = rememberLoadState(
         initial = emptyList<ExtractionEntry>(), key = kind,
         cachedFetch = { ExtractionCatalogApi.fetch(kind, cacheOnly = true) },
@@ -40,26 +42,18 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
     var valuableOnly by rememberSaveable(kind) { mutableStateOf(false) }
     var showFilters by rememberSaveable(kind) { mutableStateOf(false) }
     var selectedId by rememberSaveable(kind) { mutableStateOf<String?>(null) }
-    var dropView by rememberSaveable(kind) { mutableStateOf(ExtractionDropView.SOURCES) }
-    val dropViews = remember(entries) {
-        ExtractionDropView.entries.filter { it != ExtractionDropView.STAGES || entries.any { e -> e.type == ExtractionEntryType.DROP_STAGE } }
-    }
-    val viewEntries = remember(entries, kind, dropView) {
-        if (kind == ExtractionCatalogKind.DROPS) extractionEntriesForView(entries, dropView) else entries
-    }
-    val categories = remember(viewEntries) { viewEntries.map { it.filterCategory }.distinct() }
+    val categories = remember(entries) { entries.map { it.filterCategory }.distinct() }
     val qualities = remember(entries) { entries.mapNotNull { e -> e.quality?.let { it to e.qualityLabel } }.distinctBy { it.first }.sortedBy { it.first } }
     val sorts = remember(entries) { ExtractionSort.entries.filter { s -> s == ExtractionSort.DEFAULT || entries.any { s in it.numericValues } } }
-    LaunchedEffect(entries, dropView) {
+    LaunchedEffect(entries) {
         if (entries.isNotEmpty()) {
-            if (dropView !in dropViews) dropView = ExtractionDropView.SOURCES
             if (category !in categories) category = null
             if (qualities.none { it.first == quality }) quality = null
             if (sort !in sorts) sort = ExtractionSort.DEFAULT
         }
     }
-    val filtered = remember(viewEntries, query, category, quality, valuableOnly, sort, descending) {
-        filterExtractionEntries(viewEntries, query, category, quality, valuableOnly, sort, descending)
+    val filtered = remember(entries, query, category, quality, valuableOnly, sort, descending) {
+        filterExtractionEntries(entries, query, category, quality, valuableOnly, sort, descending)
     }
     val wikiUrl = "https://wiki.biligame.com/klbq/${kind.pageName.wikiPathEncode()}"
     Scaffold(topBar = {
@@ -75,23 +69,8 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
             val header: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("弦溯战线专用图鉴", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (kind == ExtractionCatalogKind.DROPS) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            dropViews.forEach { view ->
-                                FilterChip(
-                                    selected = dropView == view,
-                                    onClick = { if (dropView != view) { dropView = view; category = null } },
-                                    label = { Text("${view.title} ${extractionEntriesForView(entries, view).size}") }
-                                )
-                            }
-                        }
-                    }
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
-                        isSearching = false, placeholder = when {
-                            kind != ExtractionCatalogKind.DROPS -> "搜索名称、描述或效果…"
-                            dropView == ExtractionDropView.STAGES -> "搜索阶段、阈值或池构成…"
-                            else -> "搜索晶源体、容器或掉落物…"
-                        })
+                        isSearching = false, placeholder = "搜索名称、描述或效果…")
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilledTonalButton(onClick = { showFilters = true }) {
                             Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
@@ -99,7 +78,7 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                             Text("筛选与排序")
                         }
                         Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
-                            Text("${filtered.size} / ${viewEntries.size} 项", style = MaterialTheme.typography.labelMedium)
+                            Text("${filtered.size} / ${entries.size} 项", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                     Text(listOfNotNull(category, qualities.find { it.first == quality }?.second,
@@ -108,16 +87,7 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (kind == ExtractionCatalogKind.DROPS) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    item(key = "controls") { header() }
-                    if (filtered.isEmpty()) item(key = "empty") { EmptyCatalogResults { query = ""; category = null; quality = null; valuableOnly = false } }
-                    items(filtered, key = { it.id }, contentType = { it.type }) { entry ->
-                        ExtractionDropCard(entry = entry, onClick = { selectedId = entry.id })
-                    }
-                }
-            } else {
-                LazyVerticalGrid(columns = GridCells.Adaptive(120.dp), modifier = Modifier.fillMaxSize(),
+            LazyVerticalGrid(columns = GridCells.Adaptive(120.dp), modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item(key = "controls", span = { GridItemSpan(maxLineSpan) }) { header() }
                     if (filtered.isEmpty()) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -129,7 +99,6 @@ fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onO
                             fallbackIcon = Icons.Outlined.Inventory2, contentScale = ContentScale.Fit, imagePadding = 8.dp,
                             onClick = { selectedId = entry.id })
                     }
-                }
             }
         }
     }

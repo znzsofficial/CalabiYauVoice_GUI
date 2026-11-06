@@ -3,7 +3,6 @@ package com.nekolaska.calabiyau.feature.wiki.extraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -132,22 +131,12 @@ private fun ExtractionDropsSkeleton(modifier: Modifier) {
 private fun ExtractionControlsSkeleton(drops: Boolean) {
     val labelHeight = skeletonTextHeight(MaterialTheme.typography.labelMedium)
     val summaryHeight = skeletonTextHeight(MaterialTheme.typography.bodySmall)
-    val chipHeight = maxOf(32.dp, skeletonTextHeight(MaterialTheme.typography.labelLarge))
     val buttonHeight = maxOf(40.dp, skeletonTextHeight(MaterialTheme.typography.labelLarge) + 16.dp)
     val fontScale = LocalDensity.current.fontScale
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SkeletonTextLine(widthFraction = 0.36f, height = labelHeight)
-        if (drops) {
-            // View chips (including the modern stage comparison), not inline filters. FlowRow
-            // and font-scaled widths also mirror wrapping on narrow/large-text screens.
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(128.dp, 144.dp, 112.dp).forEach { width ->
-                    Box(Modifier.width(width * fontScale).height(maxOf(48.dp, chipHeight)), contentAlignment = Alignment.Center) {
-                        ShimmerBox(Modifier.fillMaxWidth().height(chipHeight), shape = MaterialTheme.shapes.small)
-                    }
-                }
-            }
-        }
+        // Drop navigation stays interactive above this skeleton, including on errors.
+        if (drops) SkeletonTextLine(widthFraction = 0.55f, height = skeletonTextHeight(MaterialTheme.typography.titleLarge))
         ShimmerBox(
             Modifier.fillMaxWidth().height(maxOf(AppSizes.searchMinHeight, skeletonTextHeight(MaterialTheme.typography.bodyLarge) + 32.dp)),
             shape = smoothCornerShape(AppShapes.sheetRadius)

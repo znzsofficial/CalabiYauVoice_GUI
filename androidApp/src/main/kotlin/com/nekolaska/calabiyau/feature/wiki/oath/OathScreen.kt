@@ -98,6 +98,10 @@ fun OathScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                ),
                 title = { Text("誓约", fontWeight = FontWeight.Bold) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 actions = {
@@ -120,7 +124,7 @@ fun OathScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
-                    PrimaryTabRow(selectedTabIndex = selectedTab.ordinal) {
+                    PrimaryTabRow(selectedTabIndex = selectedTab.ordinal, containerColor = MaterialTheme.colorScheme.surface) {
                         OathTab.entries.forEach { tab ->
                             Tab(
                                 selected = selectedTab == tab,

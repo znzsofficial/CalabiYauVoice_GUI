@@ -160,7 +160,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val settingsScrollState = rememberScrollState()
 
     val animDuration = 300
-    val transition = rememberTransition(transitionState, label = "SettingsAboutTransition")
+    val transition = rememberTransition(transitionState.state, label = "SettingsAboutTransition")
     transition.AnimatedContent(
         modifier = Modifier.background(MaterialTheme.colorScheme.background),
         transitionSpec = {
@@ -560,9 +560,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.26"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.27"
                     } catch (_: Exception) {
-                        "2.1.26"
+                        "2.1.27"
                     }
                 }
                 val currentVersionCode = remember {

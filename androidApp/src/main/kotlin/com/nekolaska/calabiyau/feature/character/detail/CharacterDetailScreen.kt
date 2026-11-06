@@ -5,11 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -18,6 +17,7 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -30,6 +30,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +50,6 @@ import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SkeletonCard
 import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
-import com.nekolaska.calabiyau.core.ui.SkeletonStatRow
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -89,12 +90,12 @@ fun CharacterDetailScreen(
         "https://wiki.biligame.com/klbq/${characterName.wikiPathEncode()}"
     }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         characterName,
@@ -163,7 +164,10 @@ private fun CharacterDetailContent(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    val listState = rememberLazyListState()
+    var expandedSkill by rememberSaveable(detail.name) { mutableStateOf<String?>(null) }
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -183,6 +187,31 @@ private fun CharacterDetailContent(
         if (detail.quote.isNotBlank()) {
             item(key = "quote") {
                 Box(Modifier.padding(horizontal = 16.dp)) { QuoteCard(quote = detail.quote) }
+            }
+        }
+
+        // Combat information is reachable before the longer biography; each skill is lazy.
+        if (detail.skills.isNotEmpty()) {
+            item(key = "skills_heading", contentType = "section-heading") {
+                Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    SectionTitle(icon = Icons.Outlined.AutoAwesome, title = "角色技能")
+                }
+            }
+            items(count = detail.skills.size, key = { "skill:$it" }, contentType = { "skill" }) { index ->
+                val skill = detail.skills[index]
+                val skillKey = "${skill.slot}:${skill.name}"
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    shape = smoothCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                ) {
+                    Box(Modifier.padding(16.dp)) {
+                        SkillItem(
+                            skill = skill, expanded = expandedSkill == skillKey,
+                            onToggle = { expandedSkill = if (expandedSkill == skillKey) null else skillKey }
+                        )
+                    }
+                }
             }
         }
 
@@ -271,13 +300,6 @@ private fun CharacterDetailContent(
             }
         }
 
-        // ── 角色技能 ──
-        if (detail.skills.isNotEmpty()) {
-            item(key = "skills") {
-                Box(Modifier.padding(horizontal = 16.dp)) { SkillsCard(skills = detail.skills) }
-            }
-        }
-
         // ── 超弦体特性 / 兴趣爱好 / 饮食习惯 ──
         val personalItems = buildList {
             if (detail.traits.isNotBlank()) add("超弦体特性" to detail.traits)
@@ -343,6 +365,63 @@ private fun CharacterDetailContent(
 //  头部区域：头像 + 名称 + 阵营/定位标签
 // ────────────────────────────────────────────
 
+/** Original full-bleed portrait framing, shared by loaded and loading content. */
+@Composable
+private fun CharacterPortraitStage(
+    imageUrl: String?,
+    name: String,
+    hasPortrait: Boolean,
+    sharedElementKey: String,
+    sharedTransitionScope: SharedTransitionScope?,
+    animatedVisibilityScope: AnimatedVisibilityScope?,
+    loading: Boolean = false
+) {
+    val context = LocalContext.current
+    val request = remember(context, imageUrl, loading) { wikiPortraitRequest(context, imageUrl, crossfade = !loading) }
+    var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    Box(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(if (hasPortrait) CharacterHeaderPortraitHeight else CharacterHeaderAvatarHeight)) {
+            if (imageUrl != null && !imageFailed) {
+                AsyncImage(
+                    model = request,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    alignment = if (hasPortrait) BiasAlignment(0f, -0.85f) else Alignment.Center,
+                    onError = { imageFailed = true },
+                    modifier = Modifier.fillMaxSize().then(
+                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = sharedElementKey),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
+                    )
+                )
+            } else if (loading) {
+                ShimmerBox(Modifier.fillMaxSize(), shape = RectangleShape)
+            } else {
+                Surface(
+                    modifier = Modifier.align(Alignment.Center).size(96.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Person, contentDescription = "暂无角色图片", modifier = Modifier.size(40.dp))
+                    }
+                }
+            }
+            if (!loading) Box(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(60.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background)))
+            )
+        }
+    }
+}
+
 @Composable
 private fun HeaderSection(
     detail: CharacterDetail,
@@ -353,56 +432,15 @@ private fun HeaderSection(
 ) {
     val headerImage = detail.portraitUrl ?: portraitUrl ?: detail.avatarUrl
     val hasPortrait = detail.portraitUrl != null || portraitUrl != null
-    val context = LocalContext.current
-    val headerRequest = remember(context, headerImage, hasPortrait) {
-        wikiPortraitRequest(context, headerImage)
-    }
-    
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // 立绘/头像满宽展示
-        if (headerImage != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(if (hasPortrait) CharacterHeaderPortraitHeight else CharacterHeaderAvatarHeight)
-                    .then(
-                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = sharedElementKey),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    boundsTransform = { _, _ -> tween(500) }
-                                )
-                            }
-                        } else Modifier
-                    )
-            ) {
-                AsyncImage(
-                    model = headerRequest,
-                    contentDescription = detail.name,
-                    contentScale = ContentScale.Crop,
-                    alignment = if (hasPortrait) BiasAlignment(0f, -0.85f) else Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                )
-                // 底部轻微渐变衔接背景色
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(60.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    MaterialTheme.colorScheme.background
-                                )
-                            )
-                        )
-                )
-            }
-        }
+        if (headerImage != null) CharacterPortraitStage(
+            imageUrl = headerImage, name = detail.name, hasPortrait = hasPortrait,
+            sharedElementKey = sharedElementKey,
+            sharedTransitionScope = sharedTransitionScope, animatedVisibilityScope = animatedVisibilityScope
+        )
 
         Column(
             modifier = Modifier.padding(
@@ -547,12 +585,8 @@ private fun QuoteCard(quote: String) {
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Icon(
-                Icons.Outlined.FormatQuote,
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Icon(Icons.Outlined.FormatQuote, contentDescription = null,
+                modifier = Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(12.dp))
             Text(
                 quote,
@@ -1046,39 +1080,6 @@ private fun SubPagesCard(
 // ────────────────────────────────────────────
 
 @Composable
-private fun SkillsCard(skills: List<CharacterDetailApi.SkillInfo>) {
-    var expandedSlot by remember { mutableStateOf<String?>(null) }
-    Card(
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            SectionTitle(
-                icon = Icons.Outlined.AutoAwesome,
-                title = "角色技能"
-            )
-            Spacer(Modifier.height(12.dp))
-
-            skills.forEachIndexed { index, skill ->
-                if (index > 0) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 10.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                }
-                SkillItem(
-                    skill = skill,
-                    expanded = expandedSlot == skill.slot,
-                    onToggle = {
-                        expandedSlot = if (expandedSlot == skill.slot) null else skill.slot
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun SkillItem(
     skill: CharacterDetailApi.SkillInfo,
     expanded: Boolean,
@@ -1091,7 +1092,9 @@ private fun SkillItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(min = 56.dp)
                 .clip(smoothCornerShape(12.dp))
+                .semantics { stateDescription = if (expanded) "已展开" else "已折叠" }
                 .clickable(onClick = onToggle)
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1100,9 +1103,9 @@ private fun SkillItem(
             if (skill.iconUrl != null) {
                 AsyncImage(
                     model = skill.iconUrl,
-                    contentDescription = skill.name,
+                    contentDescription = null,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(44.dp)
                         .clip(smoothCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -1110,7 +1113,7 @@ private fun SkillItem(
                 Surface(
                     shape = smoothCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
@@ -1123,12 +1126,10 @@ private fun SkillItem(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            Text(
-                skill.name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f)
-            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(skill.slot, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(skill.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            }
             Icon(
                 if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                 contentDescription = null,
@@ -1144,12 +1145,12 @@ private fun SkillItem(
             exit = fadeOut() + shrinkVertically()
         ) {
             Column(
-                modifier = Modifier.padding(start = 48.dp, top = 6.dp, end = 4.dp),
+                modifier = Modifier.padding(top = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     skill.description,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (skill.videoUrl != null) {
@@ -1173,7 +1174,7 @@ private fun SkillItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 48.dp, top = 4.dp, end = 4.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
@@ -1553,49 +1554,21 @@ private fun CharacterDetailSkeleton(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+    val skeletonListState = rememberLazyListState()
+    LazyColumn(
+        state = skeletonListState,
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 头部骨架：立绘 + 基本信息
+        item {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(CharacterHeaderPortraitHeight)
-                    .then(
-                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(key = sharedElementKey),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                    boundsTransform = { _, _ -> tween(500) }
-                                )
-                            }
-                        } else Modifier
-                    )
-            ) {
-                if (portraitUrl != null) {
-                    val context = LocalContext.current
-                    val skeletonRequest = remember(context, portraitUrl) {
-                        wikiPortraitRequest(context, portraitUrl, crossfade = false)
-                    }
-                    AsyncImage(
-                        model = skeletonRequest,
-                        contentDescription = characterName,
-                        contentScale = ContentScale.Crop,
-                        alignment = BiasAlignment(0f, -0.85f),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    ShimmerBox(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = RectangleShape
-                    )
-                }
-            }
+            CharacterPortraitStage(
+                imageUrl = portraitUrl, name = characterName, hasPortrait = true,
+                sharedElementKey = sharedElementKey,
+                sharedTransitionScope = sharedTransitionScope, animatedVisibilityScope = animatedVisibilityScope,
+                loading = true
+            )
             Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)) {
                 ShimmerBox(Modifier.width(120.dp).height(32.dp))
                 Spacer(Modifier.height(8.dp))
@@ -1604,7 +1577,9 @@ private fun CharacterDetailSkeleton(
                 SkeletonChipRow(count = 3)
             }
         }
+        }
         // 语录卡片骨架
+        item {
         Box(Modifier.padding(horizontal = 16.dp)) {
             SkeletonCard {
                 Row(Modifier.padding(20.dp)) {
@@ -1621,18 +1596,30 @@ private fun CharacterDetailSkeleton(
                 }
             }
         }
-        // 属性卡片骨架
+        }
+        item {
+            Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { SkeletonSectionTitle() }
+        }
+        items(3) {
         Box(Modifier.padding(horizontal = 16.dp)) {
             SkeletonCard {
-                Column(Modifier.padding(20.dp)) {
-                    SkeletonSectionTitle()
-                    Spacer(Modifier.height(12.dp))
-                    repeat(3) { row ->
-                        if (row > 0) Spacer(Modifier.height(12.dp))
-                        SkeletonStatRow()
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShimmerBox(Modifier.size(44.dp), shape = smoothCornerShape(8.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            SkeletonTextLine(widthFraction = 0.2f)
+                            Spacer(Modifier.height(4.dp))
+                            SkeletonTextLine(widthFraction = 0.6f)
+                        }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    SkeletonTextLine()
+                    Spacer(Modifier.height(4.dp))
+                    SkeletonTextLine(widthFraction = 0.75f)
                 }
             }
+        }
         }
     }
 }

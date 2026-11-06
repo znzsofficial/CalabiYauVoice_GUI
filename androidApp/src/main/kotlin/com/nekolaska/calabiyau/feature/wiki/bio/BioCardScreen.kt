@@ -73,7 +73,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -117,7 +116,6 @@ fun BioCardScreen(
     initialTab: Int = 0
 ) {
     val scope = rememberCoroutineScope()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     var selectedTab by rememberSaveable(initialTab) {
         mutableStateOf(when (initialTab) { 1 -> BioCardTab.MOBILE; 2 -> BioCardTab.DECK; else -> BioCardTab.PC })
     }
@@ -201,10 +199,16 @@ fun BioCardScreen(
     }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = Color.Transparent,
         topBar = {
+            // One shared backing layer: no opaque scaffold or stacked tints masking the Wiki wallpaper.
+            Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.86f)) {
+            Column {
             TopAppBar(
-                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent
+                ),
                 title = {
                     Text(
                         when (selectedTab) {
@@ -232,15 +236,17 @@ fun BioCardScreen(
                     )
                 }
             )
-        }
-    ) { innerPadding ->
-        Column(Modifier.fillMaxSize().padding(innerPadding)) {
             BioTabBar(selectedTab) { tab ->
                 selectedPcCard = null
                 selectedMobileCard = null
                 selectedDeck = null
                 selectedTab = tab
             }
+            }
+            }
+        }
+    ) { innerPadding ->
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
         ApiResourceContent(
             state = state,
             modifier = Modifier.weight(1f),
@@ -443,7 +449,7 @@ fun BioCardScreen(
 
 @Composable
 private fun BioTabBar(selected: BioCardTab, onSelect: (BioCardTab) -> Unit) {
-    PrimaryTabRow(selectedTabIndex = selected.ordinal) {
+    PrimaryTabRow(selectedTabIndex = selected.ordinal, containerColor = Color.Transparent) {
         listOf(BioCardTab.PC to "PC 卡牌", BioCardTab.MOBILE to "移动端卡牌", BioCardTab.DECK to "卡组分享").forEach { (tab, label) ->
             Tab(selected = selected == tab, onClick = { onSelect(tab) }, text = { Text(label) })
         }

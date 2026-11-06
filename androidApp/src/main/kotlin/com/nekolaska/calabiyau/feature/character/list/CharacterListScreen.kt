@@ -126,7 +126,10 @@ fun CharacterListScreen(
                         containerColor = translucentSurface,
                         scrolledContainerColor = translucentSurface
                     )
-                } else TopAppBarDefaults.topAppBarColors()
+                } else TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { innerPadding ->

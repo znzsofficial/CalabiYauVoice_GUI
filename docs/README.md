@@ -4,6 +4,9 @@
 
 ## 开发与实现
 
+- [Hub 快速导航转场修复](hub-transition-stability.md)：单一动画所有权、手势票据及栈深度方向。
+- [超弦体详情展示](character-detail-presentation.md)：技能阅读顺序与最终立绘／语录样式。
+- [工具回退与 Tab 背景巡检](tools-mesh-tab-surfaces.md)：工具视觉回退、生化壁纸遮挡与页签底色。
 - [Android Wiki 页面与复用组件](android-wiki-ui-architecture.md)：统一弹层、选择／保存／分区状态、推进懒网格及生化／投票／平衡业务编排。
 - [Android 导航与页面状态](android-navigation-followup.md)：主导航状态恢复、预取与玻璃开销、筛选草稿、渐变和网页请求限速。
 - [弦溯战线简介与图鉴](extraction-mode-implementation.md)：模式简介、外观与图鉴中的三个原生入口、专用骨架及完整快照回归。
@@ -19,6 +22,7 @@
 
 ## 发布与维护
 
+- [2.1.27 发布记录](releases/2.1.27.md)：掉落物品反查、角色技能排版、背景衔接与快速返回转场修复。
 - [2.1.26 发布记录](releases/2.1.26.md)：新版共用掉落池、阶段对照、页面组件与状态重构，以及发布前复审修复。
 - [2.1.25 发布记录](releases/2.1.25.md)：地图详情修复、平衡页文案、掉落池新表兼容与骨架屏对齐。
 - [2.1.24 发布记录](releases/2.1.24.md)：弦溯战线、武器解析、卡池补全和导航修复的本次交付与验证。

@@ -140,7 +140,7 @@ fun ToolsHomeScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        val transition = rememberTransition(transitionState, label = "ToolsSectionTransition")
+        val transition = rememberTransition(transitionState.state, label = "ToolsSectionTransition")
         transition.AnimatedContent(
             transitionSpec = {
                 if (targetState != null) {

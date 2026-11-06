@@ -342,21 +342,19 @@ fun WikiHubScreen(
     }
     val hasWallpaper = !wallpaperUrl.isNullOrBlank()
 
-    var isNavigatingBack by remember { mutableStateOf(false) }
-    val transitionState = rememberPredictiveBackTransition(currentRoute, resetKey)
+    val navigationTarget = HubTransitionTarget(currentRoute, backStack.lastIndex)
+    val transitionState = rememberPredictiveBackTransition(navigationTarget, resetKey)
     val routeStates = key(resetKey) { rememberSaveableStateHolder() }
     val retainedRoutes by rememberUpdatedState(backStack)
 
-    fun popBackStack() {
+    fun popRoute() {
         if (backStack.size > 1) {
-            isNavigatingBack = true
             backStack = backStack.dropLast(1)
         }
     }
 
-    fun navigateTo(route: WikiRoute) {
+    fun pushRoute(route: WikiRoute) {
         if (backStack.lastOrNull() == route) return
-        isNavigatingBack = false
         backStack = backStack + route
     }
 
@@ -368,26 +366,27 @@ fun WikiHubScreen(
 
     SeekablePredictiveBackHandler(
         enabled = canPredictivePop,
-        currentState = currentRoute,
-        targetState = previousRoute ?: currentRoute,
+        currentState = navigationTarget,
+        targetState = previousRoute?.let { HubTransitionTarget(it, backStack.lastIndex - 1) } ?: navigationTarget,
         transitionState = transitionState,
-        onStart = { isNavigatingBack = true },
-        onCommit = { popBackStack() },
-        onCancel = { isNavigatingBack = false },
-        resolveTarget = { backStack.getOrNull(backStack.lastIndex - 1) }
+        onCommit = {
+            // A toolbar click can mutate the stack before the next composition invalidates the ticket.
+            if (backStack.lastIndex == navigationTarget.depth && backStack.lastOrNull() == navigationTarget.route) popRoute()
+        },
+        resolveTarget = { backStack.getOrNull(backStack.lastIndex - 1)?.let { HubTransitionTarget(it, backStack.lastIndex - 1) } }
     )
 
     BackHandler(enabled = backStack.size > 1 && !isOverlaid && !canPredictivePop) {
-        popBackStack()
+        popRoute()
     }
 
-    fun navigateToMapDetail(name: String, imageUrl: String?, source: String = "list") {
+    fun openMapDetail(name: String, imageUrl: String?, source: String = "list") {
         val resolvedImageUrl = imageUrl ?: gameModes
             .asSequence()
             .flatMap { it.maps.asSequence() }
             .firstOrNull { it.name == name }
             ?.imageUrl
-        navigateTo(WikiRoute.MapDetail(name, resolvedImageUrl, source))
+        pushRoute(WikiRoute.MapDetail(name, resolvedImageUrl, source))
     }
 
     // 采用 MD3 约定的 Shared Axis (X轴) 过渡：轻量位移配合快速淡入淡出，比大范围拉扯更具现代感
@@ -403,15 +402,16 @@ fun WikiHubScreen(
             LocalLiquidGlassEnabled provides effectiveGlass
         ) {
             SharedTransitionLayout {
-            val transition = rememberTransition(transitionState, label = "WikiHubPageTransition")
+            val transition = rememberTransition(transitionState.state, label = "WikiHubPageTransition")
             transition.AnimatedContent(
                 modifier = Modifier.fillMaxSize(),
+                contentKey = { it.route },
                 transitionSpec = {
-                    val isDetailTransition = targetState.isDetailRoute || initialState.isDetailRoute
+                    val isDetailTransition = targetState.route.isDetailRoute || initialState.route.isDetailRoute
                     val duration = if (isDetailTransition) 400 else 220
                     if (isDetailTransition) {
                         fadeIn(tween(duration)) togetherWith fadeOut(tween(duration / 2))
-                    } else if (isNavigatingBack) {
+                    } else if (targetState.isPopFrom(initialState)) {
                         (slideInHorizontally(tween(duration, easing = LinearOutSlowInEasing)) { -it / 8 } +
                                 fadeIn(tween(duration, easing = LinearOutSlowInEasing)))
                             .togetherWith(
@@ -427,7 +427,15 @@ fun WikiHubScreen(
                             )
                     }
                 }
-            ) { route ->
+            ) { page ->
+            val route = page.route
+            // AnimatedContent retains outgoing pages. Their callbacks must not mutate the new stack.
+            fun isCurrentPage() = backStack.lastIndex == page.depth && backStack.lastOrNull() == route
+            fun popBackStack() { if (isCurrentPage()) popRoute() }
+            fun navigateTo(next: WikiRoute) { if (isCurrentPage()) pushRoute(next) }
+            fun navigateToMapDetail(name: String, imageUrl: String?, source: String = "list") {
+                if (isCurrentPage()) openMapDetail(name, imageUrl, source)
+            }
             val routeKey = route.encode()
             routeStates.SaveableStateProvider(routeKey) {
             DisposableEffect(routeKey) {

@@ -38,7 +38,10 @@ data class ExtractionEntry(
     val numericValues: Map<ExtractionSort, Double> = emptyMap(),
     val dropPoolGroups: List<ExtractionDropPoolGroup> = emptyList(),
     val type: ExtractionEntryType = ExtractionEntryType.ITEM,
-    val sourceCategory: String? = null
+    val sourceCategory: String? = null,
+    /** Only an explicit container/core ID, never a converted drop-group ID. */
+    val containerId: String? = null,
+    val dropCountState: DropCountState = DropCountState.UNKNOWN
 ) {
     val isDropPool: Boolean get() = type == ExtractionEntryType.DROP_POOL
     val filterCategory: String get() = sourceCategory?.takeIf { it.isNotBlank() } ?: category

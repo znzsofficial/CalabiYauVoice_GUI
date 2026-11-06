@@ -57,7 +57,10 @@ internal object ExtractionDropParser {
         return ExtractionEntry(
             id = "$section:$name:$badge:$subtitle", name = name, category = section,
             fields = fields, tags = listOf(badge, content(card.selectFirst(".sec-drop-card__grade"))).filter { it.isNotBlank() },
-            type = ExtractionEntryType.DROP_SOURCE
+            type = ExtractionEntryType.DROP_SOURCE,
+            containerId = Regex("""晶骸(?:容器|核心)\s+(\d+)""")
+                .findAll(content(card.selectFirst(".sec-drop-card__foot"))).map { it.groupValues[1] }
+                .distinct().toList().singleOrNull()
         )
     }
 
