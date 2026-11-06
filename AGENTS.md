@@ -24,6 +24,8 @@ APKs are **not** git-tracked (`*.apk` in `.gitignore`). Production files live in
 
 Do not delete `2.1.6` from `releases`. Full checklist: `docs/release-version-checklist.md`.
 
+Release verification is lightweight by user preference (2026-11-06): run change-scoped checks, reuse passing unchanged-code results, let webDist/webPush perform their required builds, then confirm primary-domain metadata and download availability. Do not routinely force all tasks, rerun unaffected platform/web suites, re-download APKs from every domain/R2 alias, or sweep historical releases. Expand only for relevant signing/upload/download/routing changes, failures, or explicit requests. Documentation-only closeout needs diff review, not another build/deploy. Past exhaustive release reports are not future mandatory checklists.
+
 ## downloadPage Worker
 
 `downloadPage/src/api/proxy.js`, `src/api/auth.js`, and `downloadPage/vite.config.ts` share upstream constants; change both production and development paths.

@@ -22,6 +22,6 @@
 
 ## 验证边界
 
-与掉落查询改动合并验证：`compileDebugKotlin`、`testDebugUnitTest`、`lintDebug` 通过。Android 共 423 项，11 项可选测试跳过，0 failures/errors；关于页既有 Mesh 顶点、颜色、动效开关与文字对比度回归仍通过。新旧掉落及容器完整本地快照审计实际执行。本轮没有配置武器与地图卡池外部快照，跳过不计为通过。Lint 0 errors / 5 个既有 warnings（4 UseKtx、1 ModifierParameter）；`git diff --check` 通过。
+实现阶段与掉落查询合并验证：Android 423 项，11 项可选跳过，0 failures/errors，关于页既有 Mesh 回归通过；当时未配置武器与地图卡池外部快照。最终 2.1.27 发布检查已包含这些快照：Android 433 项／9 可选跳过／0 失败，Lint 0 errors／5 个既有 warnings。完整结果以 [发布记录](releases/2.1.27.md) 为准，阶段数量不代表当前总数。
 
 当前 `adb devices` 没有设备，尚未进行真机截图、大字体、共享过渡或帧耗时验收。
