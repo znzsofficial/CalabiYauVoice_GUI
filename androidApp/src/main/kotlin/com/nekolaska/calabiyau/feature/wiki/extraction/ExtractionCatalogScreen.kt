@@ -22,9 +22,12 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 import util.wikiPathEncode
 
 @Composable
-fun ExtractionCatalogScreen(kind: ExtractionCatalogKind, onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
+fun ExtractionCatalogScreen(
+    kind: ExtractionCatalogKind, onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit,
+    isActive: () -> Boolean = { true }
+) {
     if (kind == ExtractionCatalogKind.DROPS) {
-        ExtractionDropsScreen(onBack, onOpenWikiUrl)
+        ExtractionDropsScreen(onBack, onOpenWikiUrl, isActive = isActive)
         return
     }
     val state = rememberLoadState(

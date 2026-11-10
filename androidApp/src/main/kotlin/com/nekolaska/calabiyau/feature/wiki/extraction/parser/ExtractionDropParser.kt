@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction.parser
 
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
+import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import org.jsoup.nodes.Element
 
 /** Adapters for source cards, modern shared pools, and historical summary tables. */
@@ -60,7 +61,9 @@ internal object ExtractionDropParser {
             type = ExtractionEntryType.DROP_SOURCE,
             containerId = Regex("""晶骸(?:容器|核心)\s+(\d+)""")
                 .findAll(content(card.selectFirst(".sec-drop-card__foot"))).map { it.groupValues[1] }
-                .distinct().toList().singleOrNull()
+                .distinct().toList().singleOrNull(),
+            dropImages = card.select(".sec-drop-card__list li, .sec-drop-card__must li")
+                .mapNotNull(::parseWeightedItemImage).distinct()
         )
     }
 
@@ -73,6 +76,7 @@ internal object ExtractionDropParser {
         }
         val name = if (title == "本档共用掉落池") "$section · 共用掉落池" else title
         val groups = mutableListOf<ExtractionDropPoolGroup>()
+        val images = mutableListOf<ExtractionDropImage>()
         var label: String? = null
         var expectedCount: Int? = null
         // Includes collapsed descendants: the server HTML already contains their chips.
@@ -90,6 +94,12 @@ internal object ExtractionDropParser {
                         issues += "shared-pool $name: group count mismatch"
                     }
                     groups += ExtractionDropPoolGroup(label, items, qualityCode(label))
+                    element.select(".sec-drop-chip").forEach { chip ->
+                        val itemName = content(chip)
+                        if (itemName.isNotBlank()) itemImageUrl(chip)?.let {
+                            images += ExtractionDropImage(itemName, label, it)
+                        }
+                    }
                 }
                 label = null
                 expectedCount = null
@@ -108,9 +118,39 @@ internal object ExtractionDropParser {
         return ExtractionEntry(
             id = "pool:${pool.id().ifBlank { "$section:$title" }}", name = name,
             category = section, fields = fields, dropPoolGroups = groups,
-            type = ExtractionEntryType.DROP_POOL, sourceCategory = section
+            type = ExtractionEntryType.DROP_POOL, sourceCategory = section, dropImages = images.distinct()
         )
     }
 
     private fun count(value: String): Int? = Regex("""^(\d+)\s*项$""").matchEntire(value)?.groupValues?.get(1)?.toIntOrNull()
+
+    /** The snapshot binds each icon to a single weighted list row; alt is a filename, not an item name. */
+    private fun parseWeightedItemImage(row: Element): ExtractionDropImage? {
+        if (row.select("li").any { it !== row }) return null
+        val url = itemImageUrl(row) ?: return null
+        val text = row.text().trim()
+        val weighted = Regex("""^(.+?)\s*·\s*\d+(?:\.\d+)?%$""").matchEntire(text) ?: return null
+        val rawName = weighted.groupValues[1].trim()
+        val quality = Regex("""^(.+?)（([★]{1,5})\s*(优秀|精致|卓越|完美|臻藏)）$""").matchEntire(rawName)
+        val name = quality?.groupValues?.get(1)?.trim() ?: rawName
+        // Unknown annotations or multiple inline items are not a reliable name binding.
+        if (name.isBlank() || name.any { it in "（）×｜" }) return null
+        val qualityLabel = quality?.let {
+            val code = it.groupValues[2].length
+            val label = it.groupValues[3]
+            if (listOf("优秀", "精致", "卓越", "完美", "臻藏")[code - 1] != label) return null
+            "Q$code $label"
+        }
+        return ExtractionDropImage(name, qualityLabel, url)
+    }
+
+    private fun itemImageUrl(element: Element): String? {
+        val image = element.select("img").singleOrNull() ?: return null
+        return listOf(image.attr("data-src"), image.attr("src"), image.attr("srcset").substringBefore(',').trim().substringBefore(' '))
+            .firstNotNullOfOrNull { raw ->
+                raw.takeIf { it.isNotBlank() && !it.startsWith("data:") }
+                    ?.let(WikiImageUrls::originalFromThumbnail)
+                    ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+            }
+    }
 }

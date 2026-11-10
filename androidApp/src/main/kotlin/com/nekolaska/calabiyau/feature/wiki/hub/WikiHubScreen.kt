@@ -623,7 +623,8 @@ fun WikiHubScreen(
             }
 
             is WikiRoute.ExtractionCatalog -> ExtractionCatalogScreen(
-                kind = route.kind, onBack = { popBackStack() }, onOpenWikiUrl = onOpenWikiUrl
+                kind = route.kind, onBack = { popBackStack() }, onOpenWikiUrl = onOpenWikiUrl,
+                isActive = { isCurrentPage() && !isOverlaid }
             )
 
             is WikiRoute.Voting -> {

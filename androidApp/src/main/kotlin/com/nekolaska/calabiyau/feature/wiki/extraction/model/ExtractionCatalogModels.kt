@@ -19,6 +19,7 @@ data class ExtractionDropPoolGroup(
     val key: String = label
 )
 
+@kotlinx.serialization.Serializable
 enum class ExtractionDropView(val title: String) {
     SOURCES("掉落来源"), POOLS("完整掉落池"), STAGES("阶段对照")
 }
@@ -41,7 +42,8 @@ data class ExtractionEntry(
     val sourceCategory: String? = null,
     /** Only an explicit container/core ID, never a converted drop-group ID. */
     val containerId: String? = null,
-    val dropCountState: DropCountState = DropCountState.UNKNOWN
+    val dropCountState: DropCountState = DropCountState.UNKNOWN,
+    val dropImages: List<ExtractionDropImage> = emptyList()
 ) {
     val isDropPool: Boolean get() = type == ExtractionEntryType.DROP_POOL
     val filterCategory: String get() = sourceCategory?.takeIf { it.isNotBlank() } ?: category
