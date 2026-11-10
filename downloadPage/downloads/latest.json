@@ -1,18 +1,25 @@
 {
     "versionName": "2.1.28",
     "versionCode": 58,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.28.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.28.apk?build=2dba1285987ad291",
+    "apkSize": 3773824,
     "releaseUrl": "/",
     "changelog": [
-        "掉落图鉴重整为“找物品”和“查来源”，常用查询更直观，共用掉落池与阶段对照移入辅助资料",
-        "新增物品缩略图与品质色标识，可靠匹配图片逐步补齐，缺图或同名歧义使用占位",
-        "搜索结果展示匹配物品或说明，详情优先展示物品，支持一键清除筛选查看全部",
-        "完善物品与来源之间的逐层返回，保留各查询路径的筛选、滚动和展开状态，避免旧页面干扰返回",
-        "核心掉落资料优先加载，图片缓存先显示、缺图随后补齐，改善部分加载、离线浏览和失败重试体验"
+        "\u6389\u843d\u56fe\u9274\u91cd\u6574\u4e3a\u201c\u627e\u7269\u54c1\u201d\u548c\u201c\u67e5\u6765\u6e90\u201d\uff0c\u5e38\u7528\u67e5\u8be2\u66f4\u76f4\u89c2\uff0c\u5171\u7528\u6389\u843d\u6c60\u4e0e\u9636\u6bb5\u5bf9\u7167\u79fb\u5165\u8f85\u52a9\u8d44\u6599",
+        "\u65b0\u589e\u7269\u54c1\u7f29\u7565\u56fe\u4e0e\u54c1\u8d28\u8272\u6807\u8bc6\uff0c\u53ef\u9760\u5339\u914d\u56fe\u7247\u9010\u6b65\u8865\u9f50\uff0c\u7f3a\u56fe\u6216\u540c\u540d\u6b67\u4e49\u4f7f\u7528\u5360\u4f4d",
+        "\u641c\u7d22\u7ed3\u679c\u5c55\u793a\u5339\u914d\u7269\u54c1\u6216\u8bf4\u660e\uff0c\u8be6\u60c5\u4f18\u5148\u5c55\u793a\u7269\u54c1\uff0c\u652f\u6301\u4e00\u952e\u6e05\u9664\u7b5b\u9009\u67e5\u770b\u5168\u90e8",
+        "\u5b8c\u5584\u7269\u54c1\u4e0e\u6765\u6e90\u4e4b\u95f4\u7684\u9010\u5c42\u8fd4\u56de\uff0c\u4fdd\u7559\u5404\u67e5\u8be2\u8def\u5f84\u7684\u7b5b\u9009\u3001\u6eda\u52a8\u548c\u5c55\u5f00\u72b6\u6001\uff0c\u907f\u514d\u65e7\u9875\u9762\u5e72\u6270\u8fd4\u56de",
+        "\u6838\u5fc3\u6389\u843d\u8d44\u6599\u4f18\u5148\u52a0\u8f7d\uff0c\u56fe\u7247\u7f13\u5b58\u5148\u663e\u793a\u3001\u7f3a\u56fe\u968f\u540e\u8865\u9f50\uff0c\u6539\u5584\u90e8\u5206\u52a0\u8f7d\u3001\u79bb\u7ebf\u6d4f\u89c8\u548c\u5931\u8d25\u91cd\u8bd5\u4f53\u9a8c"
     ],
     "publishedAt": "2026-11-10",
     "releases": [
+        {
+            "versionName": "2.1.28",
+            "versionCode": 58,
+            "apkUrl": "/downloads/CalabiYauVoice-2.1.28.apk?build=2dba1285987ad291",
+            "apkSize": 3773824,
+            "publishedAt": "2026-11-10"
+        },
         {
             "versionName": "2.1.27",
             "versionCode": 57,
