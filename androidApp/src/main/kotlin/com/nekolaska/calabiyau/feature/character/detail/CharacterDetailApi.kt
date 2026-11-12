@@ -2,9 +2,9 @@ package com.nekolaska.calabiyau.feature.character.detail
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.VersionedMemoryCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
-import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import data.ApiResult
 import data.ErrorKind
 import data.SharedJson
@@ -21,7 +21,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import com.nekolaska.calabiyau.core.wiki.HtmlText
 import org.jsoup.Jsoup
 import java.net.URLDecoder
-import java.util.concurrent.ConcurrentHashMap
 import util.buildParseUrl
 import util.buildWikiUrl
 import util.wikiPathEncode
@@ -36,17 +35,13 @@ object CharacterDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com"
-    private const val SETTING_PAGE = "超弦体设定"
-
-    private val detailCache = ConcurrentHashMap<String, CharacterDetail>()
-
-    @Volatile
-    private var cachedExtras: Map<String, CharacterExtraInfo>? = null
+    private data class CachedDetail(val detail: CharacterDetail, val settings: Map<String, CharacterSettingInfo>)
+    private val detailCache = VersionedMemoryCache<String, CachedDetail>()
+    private val settingsApi = CharacterSettingsApi()
 
     init {
         MemoryCacheRegistry.register("CharacterDetailApi") {
             detailCache.clear()
-            cachedExtras = null
         }
     }
 
@@ -88,27 +83,13 @@ object CharacterDetailApi {
         val settingObserverQuote: String = "",
         val lifeInfo: List<InfoPair> = emptyList(),
         val relations: List<InfoPair> = emptyList(),
-        val updateHistory: List<UpdateEntry> = emptyList()
+        val updateHistory: List<UpdateEntry> = emptyList(),
+        val settingLoadError: String? = null
     )
 
     data class InfoPair(
         val label: String,
         val value: String
-    )
-
-    private data class CharacterExtraInfo(
-        val positionName: String = "",
-        val positionDuty: String = "",
-        val settingSummary: String = "",
-        val settingObserverQuote: String = "",
-        val lifeInfo: List<InfoPair> = emptyList(),
-        val relations: List<InfoPair> = emptyList()
-    )
-
-    private data class AggregatePageSourceResult(
-        val html: String,
-        val isFromCache: Boolean,
-        val ageMs: Long
     )
 
     /** 更新改动历史条目 */
@@ -170,8 +151,10 @@ object CharacterDetailApi {
         withContext(Dispatchers.IO) {
             try {
                 if (!forceRefresh) {
-                    detailCache[characterName]?.let { return@withContext ApiResult.Success(it) }
+                    detailCache.get(characterName)?.takeIf { it.settings === settingsApi.currentSnapshot() }
+                        ?.let { return@withContext ApiResult.Success(it.detail) }
                 }
+                val ticket = detailCache.begin(characterName)
 
                 val url = buildParseUrl(API, characterName, "wikitext|text")
 
@@ -206,10 +189,9 @@ object CharacterDetailApi {
                         kind = ErrorKind.NOT_FOUND
                     )
 
-                val extras = fetchCharacterExtras(forceRefresh)
-                val extraInfo = extras[normalizeCharacterName(characterName)]
-                    ?: extras[characterName]
-                    ?: CharacterExtraInfo()
+                val extras = settingsApi.fetch(forceRefresh = forceRefresh)
+                val settingResult = extras as? ApiResult.Success
+                val extraInfo = settingResult?.value?.get(CharacterSettingsParser.identity(characterName)) ?: CharacterSettingInfo()
 
                 // 从渲染 HTML 解析改动历史
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
@@ -217,13 +199,15 @@ object CharacterDetailApi {
                     portraitUrl = html?.let { parseFirstCostumePortraitUrl(characterName, it) }
                 )
 
-                val finalDetail = mergeExtraInfo(detail, extraInfo).copy(updateHistory = history)
-                detailCache[characterName] = finalDetail
+                val finalDetail = mergeExtraInfo(detail, extraInfo).copy(updateHistory = history,
+                    settingLoadError = (extras as? ApiResult.Error)?.message)
+                val offline = result.isFromCache || settingResult?.isOffline == true
+                if (!offline && settingResult != null) detailCache.publish(characterName, ticket, CachedDetail(finalDetail, settingResult.value))
 
                 ApiResult.Success(
                     finalDetail,
-                    isOffline = result.isFromCache,
-                    cacheAgeMs = result.ageMs
+                    isOffline = offline,
+                    cacheAgeMs = maxOf(result.ageMs, settingResult?.cacheAgeMs ?: 0L)
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -354,9 +338,9 @@ object CharacterDetailApi {
         )
     }
 
-    private fun mergeExtraInfo(
+    internal fun mergeExtraInfo(
         detail: CharacterDetail,
-        extraInfo: CharacterExtraInfo
+        extraInfo: CharacterSettingInfo
     ): CharacterDetail {
         val mergedLifeInfo = extraInfo.lifeInfo.filterNot { extra ->
             val normalizedValue = normalizeText(extra.value)
@@ -374,51 +358,11 @@ object CharacterDetailApi {
         }
 
         return detail.copy(
-            positionName = extraInfo.positionName.ifBlank { detail.role },
-            positionDuty = extraInfo.positionDuty,
+            positionName = detail.role,
             settingSummary = extraInfo.settingSummary.takeUnless { normalizeText(it) == normalizeText(detail.summary) || normalizeText(it) == normalizeText(detail.description) }.orEmpty(),
             settingObserverQuote = extraInfo.settingObserverQuote.takeUnless { normalizeText(it) == normalizeText(detail.observerQuote) }.orEmpty(),
             lifeInfo = mergedLifeInfo,
             relations = extraInfo.relations
-        )
-    }
-
-    private suspend fun fetchCharacterExtras(forceRefresh: Boolean): Map<String, CharacterExtraInfo> {
-        if (!forceRefresh) {
-            cachedExtras?.let { return it }
-        }
-
-        val settingHtml = fetchAggregatePageHtml(SETTING_PAGE, "character_setting", forceRefresh)?.html.orEmpty()
-
-        val merged = mutableMapOf<String, CharacterExtraInfo>()
-        parseSettingExtras(settingHtml).forEach { (name, info) ->
-            merged[name] = merged[name].merge(info)
-        }
-
-        cachedExtras = merged
-        return merged
-    }
-
-    private suspend fun fetchAggregatePageHtml(
-        pageName: String,
-        cacheKey: String,
-        forceRefresh: Boolean
-    ): AggregatePageSourceResult? {
-        val url = buildParseUrl(API, pageName, "text")
-        val result = OfflineCache.fetchWithCache(
-            type = OfflineCache.Type.CHARACTER_DETAIL,
-            key = cacheKey,
-            forceRefresh = forceRefresh
-        ) { WikiEngine.safeGet(url) } ?: return null
-
-        val root = SharedJson.parseToJsonElement(result.payload).jsonObject
-        val html = root["parse"]?.jsonObject?.get("text")
-            ?.jsonObject?.get("*")?.jsonPrimitive?.content
-            ?: return null
-        return AggregatePageSourceResult(
-            html = html,
-            isFromCache = result.isFromCache,
-            ageMs = result.ageMs
         )
     }
 
@@ -429,83 +373,6 @@ object CharacterDetailApi {
         }
         if (extractTemplate(wikitext, "晶源体") != null) return "晶源体"
         return null
-    }
-
-    private fun parseSettingExtras(html: String): Map<String, CharacterExtraInfo> {
-        if (html.isBlank()) return emptyMap()
-
-        val document = Jsoup.parse(html)
-        val result = document.select(".klbq-role-info")
-            .mapNotNull { block -> parseSingleSettingBlock(block) }
-            .toMap()
-
-        return WikiParseLogger.finishMap("CharacterDetailApi.parseSettingExtras", result, html)
-    }
-
-    private fun parseSingleSettingBlock(block: org.jsoup.nodes.Element): Pair<String, CharacterExtraInfo>? {
-        val nameElement = block.selectFirst(".name")
-        val rawName = nameElement?.ownText()?.trim().orEmpty()
-        val fallbackName = nameElement?.text()?.trim().orEmpty().substringBefore(' ')
-        val name = rawName.ifBlank { fallbackName }
-        if (name.isBlank()) return null
-
-        val relations = block.select(".data p span")
-            .flatMap { span ->
-                HtmlText.clean(span.html())
-                    .lineSequence()
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                    .toList()
-            }
-            .mapNotNull { line ->
-                val separatorIndex = line.indexOf('：')
-                if (separatorIndex <= 0) return@mapNotNull null
-                val label = line.substring(0, separatorIndex).trim()
-                val value = line.substring(separatorIndex + 1).trim().trim('、', '，', ',', ' ')
-                if (label.isBlank() || value.isBlank() || label == "中文CV" || label == "日文CV") null
-                else InfoPair(label, value)
-            }
-
-        val infoMap = linkedMapOf<String, String>()
-        block.select("dl > div").forEach { item ->
-            val label = item.selectFirst("dt")?.text()?.removeSuffix("：")?.trim().orEmpty()
-            val value = item.selectFirst("dd")?.let { HtmlText.clean(it.html()) }.orEmpty()
-            if (label.isNotBlank() && value.isNotBlank()) {
-                infoMap[label] = value
-            }
-        }
-
-        val summary = infoMap.remove("简介").orEmpty()
-        val observerQuote = infoMap.remove("观测语录").orEmpty()
-        infoMap.remove("萌点")
-
-        val lifeInfo = infoMap.map { (label, value) -> InfoPair(label, value) }
-        return normalizeCharacterName(name) to CharacterExtraInfo(
-            settingSummary = summary,
-            settingObserverQuote = observerQuote,
-            lifeInfo = lifeInfo,
-            relations = relations
-        )
-    }
-
-    private fun CharacterExtraInfo?.merge(other: CharacterExtraInfo): CharacterExtraInfo {
-        val base = this ?: CharacterExtraInfo()
-        return CharacterExtraInfo(
-            positionName = other.positionName.ifBlank { base.positionName },
-            positionDuty = other.positionDuty.ifBlank { base.positionDuty },
-            settingSummary = other.settingSummary.ifBlank { base.settingSummary },
-            settingObserverQuote = other.settingObserverQuote.ifBlank { base.settingObserverQuote },
-            lifeInfo = other.lifeInfo.ifEmpty { base.lifeInfo },
-            relations = other.relations.ifEmpty { base.relations }
-        )
-    }
-
-    private fun normalizeCharacterName(name: String): String {
-        return name
-            .replace("·", "")
-            .replace("・", "")
-            .replace(" ", "")
-            .trim()
     }
 
     private fun normalizeText(text: String): String {

@@ -7,25 +7,31 @@ import org.jsoup.nodes.Element
 /** Adapters for source cards, modern shared pools, and historical summary tables. */
 internal object ExtractionDropParser {
     fun parse(root: Element, issues: MutableList<String>): List<ExtractionEntry> {
-        val entries = mutableListOf<ExtractionEntry>()
+        val records = mutableListOf<DropParsedRecord>()
+        var scope = 0
         var section = "掉落"
         var note = ""
         root.select("h2, .sec-drop-note, .sec-drop-card, .sec-drop-pool, table").forEach { element ->
             when {
                 element.tagName() == "h2" -> {
+                    scope++
                     section = content(element.selectFirst(".mw-headline") ?: element).ifBlank { "掉落" }
                     note = ""
                 }
                 element.hasClass("sec-drop-note") -> note = content(element)
                 element.hasClass("sec-drop-card") -> {
                     val card = parseCard(element, section, note)
-                    if (card == null) issues += "drop-card: missing name" else entries += card
+                    if (card == null) issues += "drop-card: missing name" else records += DropParsedRecord(element, card, scope)
                 }
-                element.hasClass("sec-drop-pool") -> parsePool(element, section, note, issues)?.let { entries += it }
-                element.tagName() == "table" -> entries += ExtractionDropTableParser.parse(element, issues)
+                element.hasClass("sec-drop-pool") -> parsePool(element, section, note, issues)?.let {
+                    records += DropParsedRecord(element, it, scope)
+                }
+                element.tagName() == "table" -> ExtractionDropTableParser.parse(element, issues).forEach {
+                    records += DropParsedRecord(element, it, scope)
+                }
             }
         }
-        return entries
+        return linkDropSharedPools(records)
     }
 
     private fun parseCard(card: Element, section: String, note: String): ExtractionEntry? {
@@ -59,6 +65,7 @@ internal object ExtractionDropParser {
             id = "$section:$name:$badge:$subtitle", name = name, category = section,
             fields = fields, tags = listOf(badge, content(card.selectFirst(".sec-drop-card__grade"))).filter { it.isNotBlank() },
             type = ExtractionEntryType.DROP_SOURCE,
+            dropCountState = dropCountState(fields.singleOrNull { it.label == "掉落件数" }?.value.orEmpty()),
             containerId = Regex("""晶骸(?:容器|核心)\s+(\d+)""")
                 .findAll(content(card.selectFirst(".sec-drop-card__foot"))).map { it.groupValues[1] }
                 .distinct().toList().singleOrNull(),

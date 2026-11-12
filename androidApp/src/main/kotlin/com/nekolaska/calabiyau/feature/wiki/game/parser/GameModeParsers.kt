@@ -22,37 +22,7 @@ object GameModeParsers {
     private val EMPTY_MAP_LINE_REGEX = Regex("""^[•\s]*模式地图：\s*$""")
     private val MARKUP_PREFIXES = charArrayOf('=', '_', '<', '*', ':', ';', '|')
 
-    fun parseModeMapMapping(wikitext: String): Map<String, List<String>> {
-        val mapping = mutableMapOf<String, List<String>>()
-        val groups = mutableMapOf<String, String>()
-        val lists = mutableMapOf<String, String>()
-        val groupRegex = Regex("""\|group(\d+)\s*=""")
-        val listRegex = Regex("""\|list(\d+)\s*=""")
-
-        for (line in wikitext.lineSequence()) {
-            groupRegex.find(line)?.let { match ->
-                groups[match.groupValues[1]] = line.substring(match.range.last + 1).trim()
-            }
-            listRegex.find(line)?.let { match ->
-                lists[match.groupValues[1]] = line.substring(match.range.last + 1).trim()
-            }
-        }
-
-        for ((num, groupRaw) in groups) {
-            val listRaw = lists[num] ?: continue
-            val maps = Regex("""\[\[([^\]|]+)]]""").findAll(listRaw)
-                .map { it.groupValues[1] }
-                .toList()
-            val modeNames = Regex("""\[\[[^\]]*\|([^\]]+)]]""").findAll(groupRaw)
-                .map { it.groupValues[1].trim() }
-                .toList()
-            for (modeName in modeNames) {
-                mapping[modeName] = maps
-            }
-        }
-
-        return mapping
-    }
+    fun parseModeMapMapping(wikitext: String): Map<String, List<String>> = ModeMapMappingParser.parse(wikitext)
 
     fun parseModeWikitext(mode: ModeEntry, wikitext: String, maps: List<String>): GameModeDetail {
         val body = stripWikiTemplates(

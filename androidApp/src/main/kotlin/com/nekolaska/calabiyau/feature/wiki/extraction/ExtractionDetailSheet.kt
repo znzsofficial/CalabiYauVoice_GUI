@@ -44,14 +44,15 @@ internal fun ExtractionDetailSheet(
     }
     var expandedGroups by rememberSaveable(entry.id) { mutableStateOf(emptyList<String>()) }
     var selectedQuality by rememberSaveable(entry.id) { mutableStateOf(initialPoolQuality) }
+    val effectiveQuality = resolveDropQualityLabel(selectedQuality, entry.dropPoolGroups.map { it.label })
     var referenceExpanded by rememberSaveable(entry.id) { mutableStateOf(false) }
     val isDropDetail = containerDetails || entry.type != ExtractionEntryType.ITEM
     // These entries are the reference itself, not extra rules behind an item list.
     // Legacy pool text also remains readable when it has no structured item groups.
     val referenceIsMainContent = entry.type == ExtractionEntryType.DROP_STAGE ||
         (entry.isDropPool && !containerDetails && entry.dropPoolGroups.isEmpty())
-    val poolGroups = remember(entry.dropPoolGroups, poolQuery, selectedQuality) {
-        filterDropPoolGroups(entry.dropPoolGroups, poolQuery).filter { selectedQuality == null || it.label == selectedQuality }
+    val poolGroups = remember(entry.dropPoolGroups, poolQuery, effectiveQuality) {
+        filterDropPoolGroups(entry.dropPoolGroups, poolQuery).filter { effectiveQuality == null || it.label == effectiveQuality }
     }
     val fields = remember(entry) {
         if (entry.dropPoolGroups.isNotEmpty()) entry.fields.filterNot { it.label == "掉落池条目（完整）" } else entry.fields
@@ -60,9 +61,9 @@ internal fun ExtractionDetailSheet(
         if (isDropDetail) extractionDropMatchEvidence(entry, query) else null
     }
     LaunchedEffect(entry.dropPoolGroups) {
-        if (entry.dropPoolGroups.isNotEmpty() && entry.dropPoolGroups.none { it.label == selectedQuality }) selectedQuality = null
+        if (entry.dropPoolGroups.isNotEmpty()) selectedQuality = effectiveQuality
     }
-    val isFiltered = poolQuery.isNotBlank() || selectedQuality != null
+    val isFiltered = poolQuery.isNotBlank() || effectiveQuality != null
     val totalItems = entry.dropPoolGroups.sumOf { it.items.size }
     val matchingItems = poolGroups.sumOf { it.items.size }
     val clearFilters: () -> Unit = { poolQuery = ""; selectedQuality = null }
@@ -93,15 +94,15 @@ internal fun ExtractionDetailSheet(
             Text("这个来源不会掉落物品（件数恒为 0）。下方即使列有候选物品，也不会从这里获得。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
-        if (containerDetails && (offlineAgeMs != null || poolError != null ||
-                entry.dropCountState == DropCountState.UNKNOWN || totalItems == 0)) item(key = "pool-status", contentType = "pool-status") {
+        if (offlineAgeMs != null || poolError != null || (containerDetails &&
+                (entry.dropCountState == DropCountState.UNKNOWN || totalItems == 0))) item(key = "pool-status", contentType = "pool-status") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 offlineAgeMs?.let { OfflineBanner(ageMs = it) }
                 poolError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                if (entry.dropCountState == DropCountState.UNKNOWN) Text(
+                if (containerDetails && entry.dropCountState == DropCountState.UNKNOWN) Text(
                     "掉落件数尚不明确；池内有某件物品，不代表一定能从这里获得。",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (totalItems == 0) Text(
+                if (containerDetails && totalItems == 0) Text(
                     if (entry.containerId == null) "完整物品池尚未公布。" else "完整物品池已公布，目前为 0 件物品。",
                     style = MaterialTheme.typography.bodyMedium)
             }
@@ -124,17 +125,18 @@ internal fun ExtractionDetailSheet(
                     imageUrl = image.imageUrl, onClick = null)
             }
             // Only gameplay-facing summaries are promoted; every original field remains below.
-            val summaryFields = fields.filter { it.label in setOf("必掉物", "掉落材料（按权重抽）", "掉落池构成", "掉落池内最高权重") }
+            val summaryFields = fields.filter { it.label in setOf("必掉物", "掉落材料（按权重抽）", "掉落材料（按概率抽）",
+                "限定池", "掉落池构成", "掉落池内最高权重", "抽中率最高", "掉落件数") }
             items(summaryFields.size, key = { "source-summary-field-$it" }, contentType = { "field" }) { index ->
                 DetailField(label = summaryFields[index].label, value = summaryFields[index].value)
             }
             item(key = "source-pool-link", contentType = "source-pool-link") {
-                if (entry.containerId != null && onViewCompletePool != null) {
+                if (onViewCompletePool != null) {
                     FilledTonalButton(onClick = onViewCompletePool, modifier = Modifier.fillMaxWidth()) {
-                        Text("查看这个来源的完整物品池")
+                        Text(if (entry.containerId == null) "查看共用物品池" else "查看这个来源的完整物品池")
                     }
                 } else if (entry.containerId == null) {
-                    Text("暂时无法对应完整物品池。", style = MaterialTheme.typography.bodyMedium)
+                    Text("暂无可关联的完整物品池，请以已公布的掉落说明为准。", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -149,7 +151,7 @@ internal fun ExtractionDetailSheet(
                                 Text("正在显示筛选结果 · $matchingItems / $totalItems 件", style = MaterialTheme.typography.labelLarge)
                                 Text(buildList {
                                     if (poolQuery.isNotBlank()) add("名称或品质包含「${poolQuery.trim()}」")
-                                    selectedQuality?.let { add("品质：$it") }
+                                    effectiveQuality?.let { add("品质：$it") }
                                 }.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
                                 TextButton(onClick = showAllItems) { Text("查看全部 $totalItems 件物品") }
                             }
@@ -159,7 +161,7 @@ internal fun ExtractionDetailSheet(
                     SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it }, onSearch = {},
                         onClear = { poolQuery = "" }, isSearching = false, placeholder = "搜索池内物品…")
                     ExtractionPoolQualityMenu(labels = entry.dropPoolGroups.map { it.label }.distinct(),
-                        selectedQuality = selectedQuality, onSelect = { selectedQuality = it })
+                        selectedQuality = effectiveQuality, onSelect = { selectedQuality = it })
                     if (onFindItem != null) Text("点击物品查找来源", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

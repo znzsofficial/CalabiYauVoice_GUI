@@ -159,29 +159,39 @@ internal fun ExtractionDropsScreen(
     val source = catalog.data.firstOrNull { it.id == location.sourceId }
     val container = if (location.linkedPool && source != null) linkedDropContainer(source, containers.data)
         else containers.data.firstOrNull { it.id == location.containerId }
+    val sharedPool = if (location.linkedPool && source != null && source.containerId == null)
+        linkedDropSharedPool(source, catalog.data) else null
     val detailKey = SharedJson.encodeToString(navigation.history)
     // Even the unresolved/loading sheet belongs to one visit. Never reuse its modal/callback
     // instance for the next hop while an earlier dismiss animation is completing.
     if (isActive()) key(detailKey) {
         when {
-            location.linkedPool && container == null -> WikiContentSheet(onDismiss = ::goBack) {
+            location.linkedPool && container == null && sharedPool == null -> WikiContentSheet(onDismiss = ::goBack) {
                 item("title") { Text(source?.name ?: "来源物品", style = MaterialTheme.typography.headlineSmall) }
                 when {
-                    containersPending || (source == null && catalogPending) -> {
+                    (source?.containerId != null && containersPending) || catalogPending -> {
                         items(4) { SkeletonTextLine(widthFraction = 0.8f) }
                         item("loading") { Text("正在读取该来源的物品…") }
                     }
-                    containers.error != null -> item("error") {
+                    source?.containerId != null && containers.error != null -> item("error") {
                         Text("物品列表加载失败，请重试。", color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试") }
                     }
-                    source == null && catalog.error != null -> item("error") {
+                    catalog.error != null -> item("error") {
                         Text("来源说明加载失败，暂时无法恢复关联。", color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { catalog.reload(forceRefresh = true) }) { Text("重试来源说明") }
                     }
                     else -> item("unlinked") { Text("现有资料没有唯一对应的物品列表。原来源说明仍可查看。") }
                 }
                 item("back") { TextButton(onClick = ::goBack) { Text("返回来源说明") } }
+            }
+            sharedPool != null -> detailState.SaveableStateProvider(detailKey) {
+                ExtractionDetailSheet(sharedPool.copy(dropCountState = source!!.dropCountState), location.query,
+                    artwork = artwork, onFindItem = { item -> navigate { it.openItem(item) } },
+                    offlineAgeMs = catalog.cacheAgeMs.takeIf { catalog.isOffline && !catalog.isShowingCachedPrefetch },
+                    poolError = catalog.error?.message, poolIsLoading = catalogPending,
+                    onRefreshPool = { catalog.reload(forceRefresh = true) },
+                    dismissLabel = "返回来源说明", onDismiss = ::goBack)
             }
             container != null -> detailState.SaveableStateProvider(detailKey) {
                 val notes = sourceRecords.singleOrNull { it.isContainer && it.entry.id == container.id }?.sourceNotes
@@ -197,7 +207,8 @@ internal fun ExtractionDropsScreen(
             source != null -> detailState.SaveableStateProvider(detailKey) {
                 ExtractionDetailSheet(source, location.query, artwork = artwork,
                     onFindItem = { item -> navigate { it.openItem(item) } },
-                    onViewCompletePool = if (source.type == ExtractionEntryType.DROP_SOURCE && source.containerId != null)
+                    onViewCompletePool = if (source.type == ExtractionEntryType.DROP_SOURCE &&
+                        (source.containerId != null || linkedDropSharedPool(source, catalog.data) != null))
                         ({ navigate { it.openLinkedPool() } }) else null,
                     dismissLabel = "返回上一页", onDismiss = ::goBack)
             }

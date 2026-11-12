@@ -23,6 +23,8 @@ import kotlinx.coroutines.sync.withPermit
  */
 object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
 
+    override fun shouldCache(value: List<GameModeData>): Boolean = value.all { it.loadError == null }
+
     val GAME_MODES: List<Pair<String, String>> = listOf(
         "爆破/团队乱斗" to "一般爆破",
         "排位爆破" to "排位爆破",
@@ -89,7 +91,7 @@ object MapListApi : CachedWikiApi<List<GameModeData>>("MapListApi") {
                     is ApiResult.Success -> result.value
                     is ApiResult.Error -> {
                         val (display, template) = GAME_MODES[index]
-                        GameModeData(display, template, emptyList())
+                        GameModeData(display, template, emptyList(), loadError = result.message)
                     }
                 }
             }

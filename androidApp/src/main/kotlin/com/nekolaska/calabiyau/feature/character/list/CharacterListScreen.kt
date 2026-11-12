@@ -69,6 +69,7 @@ import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadState
+import com.nekolaska.calabiyau.core.ui.WikiListGroupError
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -169,6 +170,9 @@ fun CharacterListScreen(
 
             // 角色网格
             val currentFaction = factions.getOrNull(safeSelectedTab)
+            currentFaction?.loadError?.let { message ->
+                WikiListGroupError(message, state.isLoading) { state.reload(forceRefresh = true) }
+            }
             if (currentFaction != null) {
                 CharacterGrid(
                     characters = currentFaction.characters,

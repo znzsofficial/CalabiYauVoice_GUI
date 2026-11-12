@@ -1,17 +1,17 @@
 {
-    "versionName": "2.1.28",
-    "versionCode": 58,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.28.apk?build=2dba1285987ad291",
-    "apkSize": 3773824,
+    "versionName": "2.1.29",
+    "versionCode": 59,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.29.apk",
+    "apkSize": 0,
     "releaseUrl": "/",
     "changelog": [
-        "\u6389\u843d\u56fe\u9274\u91cd\u6574\u4e3a\u201c\u627e\u7269\u54c1\u201d\u548c\u201c\u67e5\u6765\u6e90\u201d\uff0c\u5e38\u7528\u67e5\u8be2\u66f4\u76f4\u89c2\uff0c\u5171\u7528\u6389\u843d\u6c60\u4e0e\u9636\u6bb5\u5bf9\u7167\u79fb\u5165\u8f85\u52a9\u8d44\u6599",
-        "\u65b0\u589e\u7269\u54c1\u7f29\u7565\u56fe\u4e0e\u54c1\u8d28\u8272\u6807\u8bc6\uff0c\u53ef\u9760\u5339\u914d\u56fe\u7247\u9010\u6b65\u8865\u9f50\uff0c\u7f3a\u56fe\u6216\u540c\u540d\u6b67\u4e49\u4f7f\u7528\u5360\u4f4d",
-        "\u641c\u7d22\u7ed3\u679c\u5c55\u793a\u5339\u914d\u7269\u54c1\u6216\u8bf4\u660e\uff0c\u8be6\u60c5\u4f18\u5148\u5c55\u793a\u7269\u54c1\uff0c\u652f\u6301\u4e00\u952e\u6e05\u9664\u7b5b\u9009\u67e5\u770b\u5168\u90e8",
-        "\u5b8c\u5584\u7269\u54c1\u4e0e\u6765\u6e90\u4e4b\u95f4\u7684\u9010\u5c42\u8fd4\u56de\uff0c\u4fdd\u7559\u5404\u67e5\u8be2\u8def\u5f84\u7684\u7b5b\u9009\u3001\u6eda\u52a8\u548c\u5c55\u5f00\u72b6\u6001\uff0c\u907f\u514d\u65e7\u9875\u9762\u5e72\u6270\u8fd4\u56de",
-        "\u6838\u5fc3\u6389\u843d\u8d44\u6599\u4f18\u5148\u52a0\u8f7d\uff0c\u56fe\u7247\u7f13\u5b58\u5148\u663e\u793a\u3001\u7f3a\u56fe\u968f\u540e\u8865\u9f50\uff0c\u6539\u5584\u90e8\u5206\u52a0\u8f7d\u3001\u79bb\u7ebf\u6d4f\u89c8\u548c\u5931\u8d25\u91cd\u8bd5\u4f53\u9a8c"
+        "适配新版弦溯战线掉落资料，来源卡可进入明确关联的共用物品池，兼容据点箱、空投及首领阶段说明",
+        "兼容 Q8 品质标签更新，保留已保存的物品查询和品质筛选",
+        "完善地图、武器与角色列表：缺图不再漏项，部分分类加载失败可重试，武器支持完整分页",
+        "补全角色设定中的萌点与人物关系，改善姓名匹配、换行及重复字段处理",
+        "修复失败或离线数据长期停留在内存的问题，刷新设定后同步更新角色详情，异常响应保留有效缓存"
     ],
-    "publishedAt": "2026-11-10",
+    "publishedAt": "2026-11-12",
     "releases": [
         {
             "versionName": "2.1.28",

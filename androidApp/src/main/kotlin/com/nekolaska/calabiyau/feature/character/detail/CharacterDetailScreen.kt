@@ -245,7 +245,7 @@ private fun CharacterDetailContent(
         }
 
         if (
-            detail.settingSummary.isNotBlank() ||
+            detail.settingLoadError != null || detail.settingSummary.isNotBlank() ||
             detail.settingObserverQuote.isNotBlank() ||
             detail.relations.isNotEmpty() ||
             detail.lifeInfo.isNotEmpty()
@@ -863,6 +863,14 @@ private fun SettingExtraCard(detail: CharacterDetail) {
                 icon = Icons.AutoMirrored.Outlined.Article,
                 title = "设定补充"
             )
+            detail.settingLoadError?.let {
+                Spacer(Modifier.height(12.dp))
+                Text("$it，可通过顶部刷新重试。", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error)
+            }
+            Spacer(Modifier.height(8.dp))
+            Text("来源：Wiki「超弦体设定」", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             if (detail.settingSummary.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))

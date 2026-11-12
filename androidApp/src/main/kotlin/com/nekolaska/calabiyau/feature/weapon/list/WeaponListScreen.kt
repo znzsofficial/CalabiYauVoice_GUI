@@ -27,6 +27,7 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LoadState
+import com.nekolaska.calabiyau.core.ui.WikiListGroupError
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
@@ -90,15 +91,16 @@ fun WeaponListScreen(
         ) { categories ->
     // 数据缩水（分类数变少）时回退选中 Tab，避免 TabRow 越界与内容空白
     LaunchedEffect(categories) {
-        if (selectedTab > categories.lastIndex) selectedTab = categories.lastIndex.coerceAtLeast(0)
+         if (selectedTab > categories.lastIndex) selectedTab = categories.lastIndex.coerceAtLeast(0)
     }
+            val safeSelectedTab = selectedTab.coerceIn(0, categories.lastIndex.coerceAtLeast(0))
             // 分类 Tab
             if (categories.size > 1) {
                 Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
-                    PrimaryTabRow(selectedTabIndex = selectedTab, containerColor = Color.Transparent) {
+                    PrimaryTabRow(selectedTabIndex = safeSelectedTab, containerColor = Color.Transparent) {
                         categories.forEachIndexed { index, cat ->
                             Tab(
-                                selected = selectedTab == index,
+                                selected = safeSelectedTab == index,
                                 onClick = {
                                     selectedTab = index
                                     onTabChanged?.invoke(index)
@@ -117,7 +119,10 @@ fun WeaponListScreen(
             }
 
             // 武器网格
-            val currentCategory = categories.getOrNull(selectedTab)
+            val currentCategory = categories.getOrNull(safeSelectedTab)
+            currentCategory?.loadError?.let { message ->
+                WikiListGroupError(message, state.isLoading) { state.reload(forceRefresh = true) }
+            }
             if (currentCategory != null) {
                 WeaponGrid(
                     weapons = currentCategory.weapons,

@@ -25,6 +25,8 @@ import util.wikiPathEncode
  */
 object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<WeaponListApi.WeaponCategoryData>>("WeaponListApi") {
 
+    override fun shouldCache(value: List<WeaponCategoryData>): Boolean = value.all { it.loadError == null }
+
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
 
@@ -58,7 +60,8 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
     /** 分类武器数据 */
     data class WeaponCategoryData(
         val category: WeaponCategory,
-        val weapons: List<WeaponInfo>
+        val weapons: List<WeaponInfo>,
+        val loadError: String? = null
     )
 
     data class WeaponListKey(val includeImages: Boolean)
@@ -106,7 +109,9 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
                     ApiResult.Error("没有武器列表缓存", kind = ErrorKind.NETWORK)
                 } else {
                     ApiResult.Success(
-                        data.map { it.data },
+                        WeaponCategory.entries.mapIndexed { index, category ->
+                            results[index]?.data ?: WeaponCategoryData(category, emptyList(), "该分类暂无可用缓存")
+                        },
                         isOffline = true,
                         cacheAgeMs = data.maxOfOrNull { it.ageMs } ?: 0L
                     )
@@ -136,7 +141,9 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
                     val isOffline = data.any { it.isFromCache }
                     val maxAge = data.maxOfOrNull { it.ageMs } ?: 0L
                     ApiResult.Success(
-                        data.map { it.data },
+                        WeaponCategory.entries.mapIndexed { index, category ->
+                            results[index]?.data ?: WeaponCategoryData(category, emptyList(), "该分类加载失败，请重试")
+                        },
                         isOffline = isOffline,
                         cacheAgeMs = maxAge
                     )
@@ -158,20 +165,26 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
     ): CategoryResult? {
         return try {
             // 统一查询所有属性
-            val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100"
-            val url = buildWikiUrl(API, "action" to "ask", "query" to query, "format" to "json")
             val cacheResult = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_LIST,
                 key = "category_${category.name}",
-                forceRefresh = forceRefresh
-            ) { WikiEngine.safeGet(url) } ?: return null
+                forceRefresh = forceRefresh,
+                validatePayload = WeaponListSource::isValidPayload
+            ) {
+                WeaponListSource.fetchAll { offset ->
+                    val query = "[[分类:${category.smwCategory}]]|?使用者|?类型|?武器介绍|limit=100|offset=$offset"
+                    WikiEngine.safeGet(buildWikiUrl(API, "action" to "ask", "query" to query, "format" to "json"))
+                }
+            } ?: return null
             val body = cacheResult.payload
 
             val weapons = parseWeapons(body)
             if (weapons.isEmpty()) return null
 
             val weaponsWithImages = if (includeImages) {
-                val imageUrls = fetchWeaponImages(weapons, category, forceRefresh)
+                val imageUrls = try { fetchWeaponImages(weapons, category, forceRefresh) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { emptyMap() }
                 weapons.map { weapon -> weapon.copy(imageUrl = imageUrls[weapon.name]) }
             } else {
                 weapons
@@ -201,10 +214,13 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
                 type = OfflineCache.Type.WEAPON_LIST,
                 key = "category_${category.name}"
             ) ?: return null
+            if (!WeaponListSource.isValidPayload(entry.content)) return null
             val weapons = parseWeapons(entry.content)
             if (weapons.isEmpty()) return null
             val weaponsWithImages = if (includeImages) {
-                val imageUrls = loadCachedWeaponImages(category)
+                val imageUrls = try { loadCachedWeaponImages(category) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { emptyMap() }
                 weapons.map { weapon -> weapon.copy(imageUrl = imageUrls[weapon.name]) }
             } else {
                 weapons
@@ -245,10 +261,11 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
                 ?.filter { it.isNotBlank() }
                 ?.distinct()
                 .orEmpty()
-            val type = printouts?.get("类型")?.jsonArray
-                ?.firstOrNull()?.jsonPrimitive?.content ?: ""
-            val desc = printouts?.get("武器介绍")?.jsonArray
-                ?.firstOrNull()?.jsonPrimitive?.content?.let(::cleanDescription) ?: ""
+            fun valueText(key: String): String = (printouts?.get(key) as? JsonArray)?.firstOrNull()?.let {
+                (it as? JsonPrimitive)?.contentOrNull ?: (it as? JsonObject)?.get("fulltext")?.jsonPrimitive?.contentOrNull
+            }.orEmpty()
+            val type = valueText("类型")
+            val desc = cleanDescription(valueText("武器介绍"))
             val fullUrl = obj["fullurl"]?.jsonPrimitive?.content
                 ?: "$WIKI_BASE${weaponName.wikiPathEncode()}"
 
@@ -303,7 +320,12 @@ object WeaponListApi : KeyedCachedWikiApi<WeaponListApi.WeaponListKey, List<Weap
         val cacheResult = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.WEAPON_LIST,
             key = imageCacheKey(category),
-            forceRefresh = forceRefresh
+            forceRefresh = forceRefresh,
+            validatePayload = { payload -> runCatching {
+                SharedJson.parseToJsonElement(payload).jsonObject.values.let { values ->
+                    values.isNotEmpty() && values.all { (it as? JsonPrimitive)?.contentOrNull?.startsWith("http") == true }
+                }
+            }.getOrDefault(false) }
         ) {
             val urlMap = WikiEngine.fetchImageUrls(titleMap.keys.toList())
             buildJsonObject {

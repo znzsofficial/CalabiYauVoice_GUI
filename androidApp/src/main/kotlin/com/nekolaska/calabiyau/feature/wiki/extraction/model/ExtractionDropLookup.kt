@@ -42,3 +42,14 @@ internal fun buildDropLookup(containers: List<ExtractionEntry>): Map<ExtractionD
 /** Fail closed on ambiguous IDs. No names, row offsets, or numerical transformations participate. */
 internal fun linkedDropContainer(source: ExtractionEntry, containers: List<ExtractionEntry>): ExtractionEntry? =
     source.containerId?.let { id -> containers.singleOrNull { it.containerId == id } }
+
+/** A shared list does not supply source-specific weights, counts, or a container ID. */
+internal fun linkedDropSharedPool(source: ExtractionEntry, catalog: List<ExtractionEntry>): ExtractionEntry? =
+    source.sharedPoolId?.let { id -> catalog.singleOrNull { it.type == ExtractionEntryType.DROP_POOL && it.id == id } }
+
+/** Known upstream Q8 label change only; preserve displayed labels and fail closed on ambiguity. */
+internal fun resolveDropQualityLabel(saved: String?, labels: Collection<String>): String? {
+    if (saved == null || saved in labels) return saved
+    val q8Labels = setOf("Q8", "Q8 装备", "Q8 特殊")
+    return if (saved in q8Labels) labels.distinct().filter { it in q8Labels }.singleOrNull() else null
+}

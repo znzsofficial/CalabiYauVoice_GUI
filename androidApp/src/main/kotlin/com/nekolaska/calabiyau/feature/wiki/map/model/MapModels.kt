@@ -9,7 +9,8 @@ data class MapInfo(
 data class GameModeData(
     val displayName: String,
     val templateName: String,
-    val maps: List<MapInfo>
+    val maps: List<MapInfo>,
+    val loadError: String? = null
 )
 
 data class MapDetail(

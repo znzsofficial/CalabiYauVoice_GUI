@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.map.source
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
+import com.nekolaska.calabiyau.feature.wiki.map.parser.MapListParsers
 import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -32,7 +33,8 @@ object MapRemoteSource {
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.MAP_LIST,
             key = "mode_card_$templateName",
-            forceRefresh = forceRefresh
+            forceRefresh = forceRefresh,
+            validatePayload = MapListParsers::isValidPayload
         ) { WikiEngine.safeGet(url) } ?: return null
 
         val json = SharedJson.parseToJsonElement(result.payload).jsonObject
@@ -54,6 +56,7 @@ object MapRemoteSource {
             key = "mode_card_$templateName"
         ) ?: return null
 
+        if (!MapListParsers.isValidPayload(entry.content)) return null
         val json = SharedJson.parseToJsonElement(entry.content).jsonObject
         val html = json["parse"]
             ?.jsonObject?.get("text")

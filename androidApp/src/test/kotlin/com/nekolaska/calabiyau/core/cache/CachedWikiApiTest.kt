@@ -10,6 +10,26 @@ import kotlinx.coroutines.runBlocking
 
 class CachedWikiApiTest {
 
+    @Test fun incompleteResponseRemainsRetryableAndDoesNotReplaceLastCompleteMemory() = runBlocking {
+        var calls = 0
+        var complete = false
+        val api = object : CachedWikiApi<String>("partial-list") {
+            override fun shouldCache(value: String) = value == "complete"
+            override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<String> {
+                calls++
+                return ApiResult.Success(if (complete) "complete" else "partial")
+            }
+        }
+        repeat(2) { assertEquals("partial", (api.fetch() as ApiResult.Success).value) }
+        assertEquals(2, calls)
+        complete = true
+        api.fetch()
+        complete = false
+        assertEquals("partial", (api.fetch(forceRefresh = true) as ApiResult.Success).value)
+        assertEquals("complete", (api.fetch() as ApiResult.Success).value)
+        assertEquals(4, calls)
+    }
+
     @Test
     fun cacheOnlyDoesNotReadMemory() = runBlocking {
         val api = TestCachedWikiApi()

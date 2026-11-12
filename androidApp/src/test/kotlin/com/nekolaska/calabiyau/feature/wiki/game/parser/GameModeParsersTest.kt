@@ -7,6 +7,26 @@ import kotlin.test.assertTrue
 
 class GameModeParsersTest {
 
+    @Test fun multilineAliasesAndNestedNavboxesDoNotMixGroups() {
+        val mapping = GameModeParsers.parseModeMapMapping("""
+            {{Navbox|group1=地图|list1={{Navbox
+            |group1=[[战斗模式/一般爆破|爆破]]
+            |list1=[[404基地|基地]]、
+              [[88区#地形|八八区]]、[[404基地]]
+            |group2=[[战斗模式/晶源感染]]|list2=[[洛希街区]]
+            }}|group2=角色|list2=[[米雪儿·李]]}}
+            <!-- |group3=[[战斗模式/错误]]|list3=[[错误地图]] -->
+        """)
+        assertEquals(mapOf("一般爆破" to listOf("404基地", "88区"), "晶源感染" to listOf("洛希街区")), mapping)
+    }
+
+    @Test fun conflictingModeDefinitionsDoNotSilentlyOverrideEachOther() {
+        assertTrue(GameModeParsers.parseModeMapMapping("""
+            {{Navbox|group1=[[战斗模式/一般爆破]]|list1=[[甲]]}}
+            {{Navbox|group1=[[战斗模式/一般爆破]]|list1=[[乙]]}}
+        """).isEmpty())
+    }
+
     @Test
     fun mapsModesFromGroupedLists() {
         val mapping = GameModeParsers.parseModeMapMapping(

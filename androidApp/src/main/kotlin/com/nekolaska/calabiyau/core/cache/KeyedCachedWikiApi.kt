@@ -46,7 +46,7 @@ abstract class KeyedCachedWikiApi<K, T>(private val name: String) {
         }
         val token = if (cacheOnly) null else cache.begin(key)
         val result = if (cacheOnly) fetchFromCache(key) else fetchFromNetwork(key, forceRefresh)
-        if (token != null && result is ApiResult.Success && !result.isOffline) {
+        if (token != null && result is ApiResult.Success && !result.isOffline && shouldCache(result.value)) {
             cache.publish(key, token, CachedValue(result.value, false, 0L))
         }
         return result
@@ -56,4 +56,6 @@ abstract class KeyedCachedWikiApi<K, T>(private val name: String) {
         ApiResult.Error("$name 不支持 cacheOnly")
 
     protected abstract suspend fun fetchFromNetwork(key: K, forceRefresh: Boolean): ApiResult<T>
+
+    protected open fun shouldCache(value: T): Boolean = true
 }

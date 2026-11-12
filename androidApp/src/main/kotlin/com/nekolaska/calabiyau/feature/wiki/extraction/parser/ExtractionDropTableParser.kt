@@ -12,11 +12,11 @@ internal object ExtractionDropTableParser {
             ownRows.take(4).flatMap { row -> row.children().filter { it.tagName() == "td" } }
         val texts = headingCells.map { headerKey(content(it, "table")) }
         val isPool = texts.any { it.startsWith("掉落池条目") }
-        val isStage = listOf("阶段", "阈值", "候选池").all { it in texts }
+        val isStage = listOf("阶段", "阈值").all { it in texts }
         if (!isPool && !isStage) return emptyList()
         val rows = extractionTableRows(table)
         val nameHeader = if (isPool) "名称" else "阶段"
-        val valueHeaders = if (isPool) poolHeaders else setOf("候选池")
+        val valueHeaders = if (isPool) poolHeaders else setOf("候选池", "通用掉落")
         val headerIndex = rows.indexOfFirst { row ->
             val keys = row.cells.map { headerKey(content(it)) }
             nameHeader in keys && keys.any { it in valueHeaders } &&
@@ -75,8 +75,9 @@ internal object ExtractionDropTableParser {
             }
             fun field(key: String) = values.getOrNull(keys.indexOf(key)).orEmpty()
             if (!isPool) ExtractionEntry(
-                id = "stage:${values[nameIndex]}:${field("阈值")}", name = "阶段 ${values[nameIndex]} · 候选池",
-                category = "Boss 阶段候选池", fields = fields, type = ExtractionEntryType.DROP_STAGE,
+                id = "stage:${values[nameIndex]}:${field("阈值")}", name = "阶段 ${values[nameIndex]} · ${headers[poolIndex]}",
+                category = if (keys[poolIndex] == "通用掉落") "首领阶段通用掉落" else "Boss 阶段候选池",
+                fields = fields, type = ExtractionEntryType.DROP_STAGE,
                 description = table.parent()?.previousElementSibling()?.takeIf { it.tagName() == "p" }?.let { content(it) }.orEmpty()
             ) else ExtractionEntry(
                 id = "summary:${values[nameIndex]}:${field("来源类别")}:${field("子类")}:${field("掉落档次")}",

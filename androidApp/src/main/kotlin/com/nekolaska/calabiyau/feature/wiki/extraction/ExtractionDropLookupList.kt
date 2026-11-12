@@ -34,17 +34,20 @@ internal fun ExtractionDropLookupList(
     var showFilters by rememberSaveable { mutableStateOf(false) }
     val itemListState = rememberLazyListState()
     val sourceListState = key(selectedName, selectedQuality) { rememberLazyListState() }
-    val selected = lookup.keys.firstOrNull { it.name == selectedName && it.qualityLabel == selectedQuality }
+    val currentSelectedQuality = resolveDropQualityLabel(selectedQuality,
+        lookup.keys.filter { it.name == selectedName }.map { it.qualityLabel })
+    val selected = lookup.keys.singleOrNull { it.name == selectedName && it.qualityLabel == currentSelectedQuality }
     val qualities = remember(lookup) { lookup.keys.distinctBy { it.qualityLabel } }
-    val results = remember(lookup, query, quality) {
-        lookup.keys.filter { it.name.contains(query.trim(), true) && (quality == null || it.qualityLabel == quality) }
+    val currentQuality = resolveDropQualityLabel(quality, qualities.map { it.qualityLabel })
+    val results = remember(lookup, query, currentQuality) {
+        lookup.keys.filter { it.name.contains(query.trim(), true) && (currentQuality == null || it.qualityLabel == currentQuality) }
     }
     val hits = selected?.let { lookup[it] }.orEmpty()
     val categories = hits.map { it.source.filterCategory }.distinct()
     // Empty prefetches are not authoritative: retain the user's filters until data arrives.
     LaunchedEffect(lookup, selectedName, selectedQuality, filtersAuthoritative) {
         if (filtersAuthoritative && lookup.isNotEmpty()) {
-            if (quality != null && lookup.keys.none { it.qualityLabel == quality }) quality = null
+            quality = currentQuality
             if (selectedName != null && sourceCategory != null && sourceCategory !in categories) sourceCategory = null
         }
     }
@@ -82,7 +85,7 @@ internal fun ExtractionDropLookupList(
                     Text("这件物品，去哪找？", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索物品名，如切割器…")
-                    DropLookupFilterEntry(summary = "${quality ?: "全部品质"} · ${results.size} 项", onClick = { showFilters = true })
+                    DropLookupFilterEntry(summary = "${currentQuality ?: "全部品质"} · ${results.size} 项", onClick = { showFilters = true })
                     Text("同名不同品质分别收录 · 来源数排除不出货来源", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -148,10 +151,10 @@ internal fun ExtractionDropLookupList(
         WikiSelectionSheet(title = if (selectedName == null) "筛选物品品质" else "筛选来源", onDismiss = { showFilters = false }) {
             if (selectedName == null) {
                 item("all-quality") {
-                    SelectionOptionRow(label = "全部品质", selected = quality == null, onClick = { quality = null; showFilters = false })
+                    SelectionOptionRow(label = "全部品质", selected = currentQuality == null, onClick = { quality = null; showFilters = false })
                 }
                 items(qualities, key = { "quality:${it.qualityLabel}" }) { item ->
-                    SelectionOptionRow(label = item.qualityLabel, selected = quality == item.qualityLabel,
+                    SelectionOptionRow(label = item.qualityLabel, selected = currentQuality == item.qualityLabel,
                         onClick = { quality = item.qualityLabel; showFilters = false })
                 }
             } else {

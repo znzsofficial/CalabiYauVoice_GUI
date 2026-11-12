@@ -21,7 +21,7 @@ class MapListParsersTest {
 
         assertEquals(1, maps.size)
         assertEquals("404基地", maps.single().name)
-        assertEquals("https://wiki.biligame.com/klbq/404基地", maps.single().wikiUrl)
+        assertTrue(maps.single().wikiUrl.endsWith("404%E5%9F%BA%E5%9C%B0"))
         assertEquals(
             "https://patchwiki.biligame.com/images/klbq/b/b7/hash.png",
             maps.single().imageUrl
@@ -48,7 +48,7 @@ class MapListParsersTest {
     }
 
     @Test
-    fun deduplicatesByNameAndSkipsCardsWithoutImage() {
+    fun deduplicatesByNameAndRetainsCardsWithoutImage() {
         val maps = MapListParsers.parseMapsFromHtml(
             """
             <div class="hvr-bounce-out">
@@ -67,8 +67,9 @@ class MapListParsersTest {
             """.trimIndent()
         )
 
-        assertEquals(listOf("88区"), maps.map { it.name })
-        assertEquals("https://patchwiki.biligame.com/images/klbq/2/28/first.png", maps.single().imageUrl)
+        assertEquals(listOf("88区", "欧拉港口"), maps.map { it.name })
+        assertEquals("https://patchwiki.biligame.com/images/klbq/2/28/first.png", maps.first().imageUrl)
+        assertEquals("", maps.last().imageUrl)
     }
 
     @Test
@@ -96,10 +97,10 @@ class MapListParsersTest {
             """.trimIndent()
         )
 
-        assertEquals(1, maps.size)
-        assertEquals("莱布伦城", maps.single().name)
-        assertEquals("https://wiki.biligame.com/klbq/莱布伦城", maps.single().wikiUrl)
-        assertEquals("https://patchwiki.biligame.com/images/klbq/e/e3/hash.png", maps.single().imageUrl)
+        assertEquals(2, maps.size)
+        assertEquals("莱布伦城", maps.first().name)
+        assertTrue(maps.first().wikiUrl.endsWith("%E8%8E%B1%E5%B8%83%E4%BC%A6%E5%9F%8E"))
+        assertEquals("https://patchwiki.biligame.com/images/klbq/e/e3/hash.png", maps.first().imageUrl)
     }
 
     @Test

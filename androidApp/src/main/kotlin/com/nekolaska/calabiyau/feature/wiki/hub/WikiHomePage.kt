@@ -1158,7 +1158,8 @@ private fun MapPreviewSection(
                             .height(80.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("暂无地图数据", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(currentMode.loadError?.let { "该模式加载失败，可进入地图一览重试" } ?: "暂无地图数据",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else if (isLoading) {
@@ -1563,6 +1564,8 @@ internal fun MapListFullScreen(
                                 Spacer(Modifier.height(16.dp))
                             }
                         }
+                    } else if (currentMode?.loadError != null) {
+                        com.nekolaska.calabiyau.core.ui.WikiListGroupError(currentMode.loadError, isLoading, onRetry)
                     } else {
                         Box(
                             Modifier.fillMaxSize(),

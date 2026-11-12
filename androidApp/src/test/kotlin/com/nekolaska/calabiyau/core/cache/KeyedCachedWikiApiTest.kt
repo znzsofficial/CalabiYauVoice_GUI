@@ -9,6 +9,19 @@ import kotlinx.coroutines.runBlocking
 
 class KeyedCachedWikiApiTest {
 
+    @Test fun incompleteKeyIsRetriedWithoutEvictingAnotherCompleteKey() = runBlocking {
+        val calls = mutableListOf<String>()
+        val api = object : KeyedCachedWikiApi<String, String>("partial-keyed-list") {
+            override fun shouldCache(value: String) = value == "complete"
+            override suspend fun fetchFromNetwork(key: String, forceRefresh: Boolean): ApiResult<String> {
+                calls += key
+                return ApiResult.Success(if (key == "a") "complete" else "partial")
+            }
+        }
+        repeat(2) { api.fetch("a"); api.fetch("b") }
+        assertEquals(listOf("a", "b", "b"), calls)
+    }
+
     @Test
     fun cacheOnlyDoesNotReadMemory() = runBlocking {
         val api = TestKeyedCachedWikiApi()

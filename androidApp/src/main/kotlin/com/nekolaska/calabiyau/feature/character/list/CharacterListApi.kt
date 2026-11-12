@@ -4,7 +4,6 @@ import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
-import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
 import com.nekolaska.calabiyau.core.wiki.fetchBatchImageUrls
 import data.ApiResult
 import data.ErrorKind
@@ -32,8 +31,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("CharacterListApi") {
 
+    override fun shouldCache(value: List<FactionData>): Boolean = value.all { it.loadError == null }
+
     private const val API = "https://wiki.biligame.com/klbq/api.php"
-    private const val WIKI_BASE = "https://wiki.biligame.com"
     private val portraitSemaphore = Semaphore(3)
 
     private suspend fun cachedPortraits(faction: String): Map<String, String> =
@@ -53,7 +53,8 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
 
     data class FactionData(
         val faction: String,
-        val characters: List<CharacterInfo>
+        val characters: List<CharacterInfo>,
+        val loadError: String? = null
     )
 
     /**
@@ -90,7 +91,7 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
                 val factions = results.mapIndexed { index, result ->
                     when (result) {
                         is ApiResult.Success -> result.value
-                        is ApiResult.Error -> FactionData(FACTIONS[index], emptyList())
+                        is ApiResult.Error -> FactionData(FACTIONS[index], emptyList(), result.message)
                     }
                 }
                 ApiResult.Success(factions, isOffline = true, cacheAgeMs = maxAge)
@@ -122,7 +123,7 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             val factions = results.mapIndexed { index, result ->
                 when (result) {
                     is ApiResult.Success -> result.value
-                    is ApiResult.Error -> FactionData(FACTIONS[index], emptyList())
+                    is ApiResult.Error -> FactionData(FACTIONS[index], emptyList(), result.message)
                 }
             }
             ApiResult.Success(factions, isOffline = isOffline, cacheAgeMs = maxAge)
@@ -144,7 +145,8 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.CHARACTER_LIST,
                 key = "faction_$faction",
-                forceRefresh = forceRefresh
+                forceRefresh = forceRefresh,
+                validatePayload = CharacterListParser::isValidPayload
             ) { WikiEngine.safeGet(url) }
                 ?: return ApiResult.Error(
                     "请求 $faction 失败，且无离线缓存",
@@ -165,9 +167,10 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
             // 立绘始终补抓：批量 imageinfo 请求成本低，缓存路径也执行，
             // 避免首次抓取被限流后缓存里的立绘永远缺失。
             val savedPortraits = cachedPortraits(faction)
-            val withPortraits = fetchPortraits(characters.map {
-                it.copy(portraitUrl = savedPortraits[it.name])
-            })
+            val cachedCharacters = characters.map { it.copy(portraitUrl = savedPortraits[it.name]) }
+            val withPortraits = try { fetchPortraits(cachedCharacters) }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { cachedCharacters }
             val resolved = withPortraits.mapNotNull { char -> char.portraitUrl?.let { char.name to it } }.toMap()
             if (resolved.isNotEmpty()) OfflineCache.put(OfflineCache.Type.CHARACTER_LIST,
                 "portraits_$faction", SharedJson.encodeToString(savedPortraits + resolved))
@@ -190,6 +193,8 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
                 key = "faction_$faction"
             ) ?: return ApiResult.Error("没有 $faction 缓存", kind = ErrorKind.NETWORK)
 
+            if (!CharacterListParser.isValidPayload(entry.content))
+                return ApiResult.Error("$faction 缓存结构不完整，请联网刷新", kind = ErrorKind.PARSE)
             val json = SharedJson.parseToJsonElement(entry.content).jsonObject
             val html = json["parse"]
                 ?.jsonObject?.get("text")
@@ -226,29 +231,7 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
      * </div>
      * ```
      */
-    private fun parseCharactersFromHtml(html: String): List<CharacterInfo> {
-        val results = mutableListOf<CharacterInfo>()
-        val seen = mutableSetOf<String>()
-        val document = Jsoup.parse(html)
-
-        document.select("div.hvr-bounce-out").forEach { card ->
-            val imageLink = card.selectFirst("a[href^=/klbq/]:has(img)") ?: return@forEach
-            val path = imageLink.attr("href")
-            val name = imageLink.attr("title").trim()
-            val imageUrl = WikiImageUrls.originalFromThumbnail(
-                imageLink.selectFirst("img")?.attr("src")
-            ).orEmpty()
-            if (name.isNotBlank() && name !in seen) {
-                seen += name
-                results += CharacterInfo(
-                    name = name,
-                    wikiUrl = "$WIKI_BASE$path",
-                    imageUrl = imageUrl
-                )
-            }
-        }
-        return WikiParseLogger.finishList("CharacterListApi.parseCharactersFromHtml", results, html)
-    }
+    private fun parseCharactersFromHtml(html: String): List<CharacterInfo> = CharacterListParser.parse(html)
 
     /**
      * 批量获取角色立绘 URL。

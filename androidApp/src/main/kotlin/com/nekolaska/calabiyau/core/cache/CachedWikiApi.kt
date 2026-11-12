@@ -48,7 +48,7 @@ abstract class CachedWikiApi<T>(private val name: String) {
         }
         val token = if (cacheOnly) null else cache.begin(Unit)
         val result = if (cacheOnly) fetchFromCache() else fetchFromNetwork(forceRefresh)
-        if (token != null && result is ApiResult.Success && !result.isOffline) {
+        if (token != null && result is ApiResult.Success && !result.isOffline && shouldCache(result.value)) {
             cache.publish(Unit, token, CachedValue(result.value, false, 0L))
         }
         return result
@@ -62,4 +62,7 @@ abstract class CachedWikiApi<T>(private val name: String) {
         ApiResult.Error("$name 不支持 cacheOnly")
 
     protected abstract suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<T>
+
+    /** Incomplete grouped responses may be displayed but must remain retryable. */
+    protected open fun shouldCache(value: T): Boolean = true
 }
