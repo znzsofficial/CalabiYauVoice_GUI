@@ -197,7 +197,7 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "刷新未成功，保留上次资料。${state.error?.message.orEmpty()}",
+                                        "更新失败，正在显示上次资料。${state.error?.message.orEmpty()}",
                                         Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onErrorContainer
                                     )

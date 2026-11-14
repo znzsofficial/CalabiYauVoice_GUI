@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
@@ -103,8 +102,9 @@ fun SubmissionScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.entries.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载投稿作品…") }
+            loading = { mod -> SubmissionSkeleton(mod) }
         ) { data ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

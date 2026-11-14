@@ -5,29 +5,39 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
@@ -44,7 +56,87 @@ import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+
+/** No weighted body: even the title and actions remain reachable on a short dialog window. */
+@Composable
+internal fun SettingsDialog(
+    onDismissRequest: () -> Unit,
+    title: @Composable () -> Unit,
+    text: @Composable () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    icon: (@Composable () -> Unit)? = null,
+    shape: Shape = AppShapes.dialog
+) {
+    BasicAlertDialog(onDismissRequest = onDismissRequest) {
+        Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(AppSpacing.dialogContent),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.sectionGap)
+            ) {
+                icon?.let {
+                    Box(Modifier.align(Alignment.CenterHorizontally)) { it() }
+                }
+                ProvideTextStyle(AppTextStyles.dialogTitle, content = title)
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurfaceVariant) {
+                    ProvideTextStyle(MaterialTheme.typography.bodyMedium, content = text)
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
+                ) {
+                    dismissButton?.invoke()
+                    confirmButton()
+                }
+            }
+        }
+    }
+}
+
+/** Choices apply immediately; the title, choices and close action share one scroll owner. */
+@Composable
+internal fun SettingsSingleChoiceDialog(
+    title: String,
+    options: List<Pair<Int, String>>,
+    selectedValue: Int,
+    onSelect: (Int) -> Unit,
+    onDismissRequest: () -> Unit
+) {
+    SettingsDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(title, style = AppTextStyles.dialogTitle) },
+        text = {
+            Column(Modifier.selectableGroup()) {
+                options.forEach { (value, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(AppShapes.compactCard)
+                            .selectable(
+                                selected = selectedValue == value,
+                                role = Role.RadioButton,
+                                onClick = { onSelect(value) }
+                            )
+                            .minimumInteractiveComponentSize()
+                            .padding(horizontal = AppSpacing.large, vertical = AppSpacing.large),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.iconGap)
+                    ) {
+                        RadioButton(selected = selectedValue == value, onClick = null)
+                        Text(label, style = AppTextStyles.settingsItemTitle)
+                    }
+                }
+            }
+        },
+        shape = AppShapes.dialog,
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) { Text("关闭") }
+        }
+    )
+}
 
 @Composable
 internal fun SettingsGroupHeader(title: String) {
@@ -67,7 +159,7 @@ internal fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(smoothCornerShape(AppSpacing.xLarge))
+            .clip(AppShapes.compactCard)
             .clickable(onClick = onClick)
             .padding(horizontal = AppSpacing.cardContent, vertical = AppSpacing.sectionGap),
         verticalAlignment = Alignment.CenterVertically
@@ -120,7 +212,7 @@ internal fun SettingsToggleItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(smoothCornerShape(AppSpacing.xLarge))
+            .clip(AppShapes.compactCard)
             .clickable { onCheckedChange(!checked) }
             .padding(horizontal = AppSpacing.cardContent, vertical = AppSpacing.sectionGap),
         verticalAlignment = Alignment.CenterVertically
@@ -139,15 +231,15 @@ internal fun SettingsToggleItem(
                 )
             }
         }
-        Spacer(Modifier.width(AppSpacing.xLarge))
+        Spacer(Modifier.width(AppSpacing.sectionGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge
+                style = AppTextStyles.settingsItemTitle
             )
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
+                style = AppTextStyles.settingsItemSubtitle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -178,14 +270,14 @@ internal fun SettingsDebugItem(
     if (!showDebugMenu) return
 
     var showCrashConfirm by remember { mutableStateOf(false) }
-    AlertDialog(
+    SettingsDialog(
         onDismissRequest = { showDebugMenu = false },
         icon = { Icon(Icons.Outlined.BugReport, null) },
         title = { Text("调试菜单") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
                 Surface(
-                    shape = smoothCornerShape(AppShapes.chipRadius),
+                    shape = AppShapes.chip,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -239,7 +331,7 @@ internal fun SettingsDebugItem(
     )
 
     if (showCrashConfirm) {
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { showCrashConfirm = false },
             icon = {
                 Icon(

@@ -8,19 +8,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Cached
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -29,21 +28,20 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,9 +61,11 @@ import coil3.SingletonImageLoader
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
+import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,14 +97,14 @@ private data class StorageSegment(
 enum class CacheCategory(
     val title: String,
     val subtitle: String,
-    val icon: ImageVector,
-    val color: Long
+    val icon: ImageVector
 ) {
-    OFFLINE("离线数据", "Wiki 页面 JSON 缓存", Icons.Outlined.Cached, 0xFF4F8CFF),
-    IMAGE("图片缓存", "Coil 磁盘缓存", Icons.Outlined.Image, 0xFF22C55E),
-    WEBVIEW("网页缓存", "WebView 页面与脚本缓存", Icons.Outlined.Language, 0xFFF59E0B),
+    OFFLINE("离线数据", "Wiki 页面 JSON 缓存", Icons.Outlined.Cached),
+    IMAGE("图片缓存", "Coil 磁盘缓存", Icons.Outlined.Image),
+    WEBVIEW("网页缓存", "WebView 页面与脚本缓存", Icons.Outlined.Language),
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StorageSettingsScreen(
     snapshot: StorageSnapshot?,
@@ -122,29 +122,13 @@ internal fun StorageSettingsScreen(
 
     Scaffold(
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledTonalIconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    )
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(AppSpacing.iconGap))
-                Text(
-                    "存储空间",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
+            TopAppBar(
+                title = { Text("存储空间", style = AppTextStyles.topBarTitle) },
+                navigationIcon = { BackNavButton(onClick = onBack) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
                 )
-            }
+            )
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
@@ -152,6 +136,7 @@ internal fun StorageSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = AppSpacing.xxxLarge)
         ) {
@@ -175,11 +160,11 @@ internal fun StorageSettingsScreen(
                                     Icons.Outlined.Storage,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(AppSizes.iconLarge)
                                 )
                             }
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(AppSpacing.sectionGap))
                         Column(Modifier.weight(1f)) {
                             Text("已用空间", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                             Text(
@@ -193,7 +178,7 @@ internal fun StorageSettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (isCalculating) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                        if (isCalculating) CircularProgressIndicator(Modifier.size(AppSizes.iconLarge), strokeWidth = 2.dp)
                     }
 
                     val current = snapshot
@@ -272,7 +257,7 @@ internal fun StorageSettingsScreen(
                         ) {
                             if (isClearingAll) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
+                                    modifier = Modifier.size(AppSizes.iconXSmall),
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
@@ -287,7 +272,7 @@ internal fun StorageSettingsScreen(
     }
 
     if (showClearAllConfirm) {
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { if (!isClearingAll) showClearAllConfirm = false },
             icon = { Icon(Icons.Outlined.DeleteSweep, contentDescription = null) },
             title = { Text("清除所有缓存？") },
@@ -315,7 +300,7 @@ internal fun StorageSettingsScreen(
                 ) {
                     if (isClearingAll) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
+                            modifier = Modifier.size(AppSizes.iconXSmall),
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
@@ -347,18 +332,19 @@ private fun StorageUsageChart(segments: List<StorageSegment>) {
     }
     val total = visibleSegments.sumOf { it.size }.coerceAtLeast(1L)
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.large)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(18.dp)
-                .clip(smoothCornerShape(9.dp))
+                .clip(AppShapes.capsule)
         ) {
             visibleSegments.forEach { segment ->
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .weight((segment.size.toFloat() / total).coerceAtLeast(0.02f))
+                        // Do not inflate small categories: the legend keeps them discoverable.
+                        .weight(segment.size.toFloat() / total)
                         .background(segment.color)
                 )
             }
@@ -374,18 +360,14 @@ private fun StorageUsageChart(segments: List<StorageSegment>) {
                         .background(segment.color)
                 )
                 Spacer(Modifier.width(AppSpacing.itemGap))
-                Text(
-                    segment.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "${formatFileSize(segment.size)} · ${String.format(Locale.ROOT, "%.1f", percent)}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(segment.label, style = AppTextStyles.listItemMeta)
+                    Text(
+                        "${formatFileSize(segment.size)} · ${String.format(Locale.ROOT, "%.1f", percent)}%",
+                        style = AppTextStyles.listItemMeta,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -395,9 +377,9 @@ private fun StorageUsageChart(segments: List<StorageSegment>) {
 private fun buildStorageSegments(snapshot: StorageSnapshot): List<StorageSegment> {
     return listOf(
         StorageSegment("下载目录", snapshot.downloadTotalSize, MaterialTheme.colorScheme.primary),
-        StorageSegment(CacheCategory.OFFLINE.title, snapshot.cacheSizes[CacheCategory.OFFLINE] ?: 0L, Color(CacheCategory.OFFLINE.color)),
-        StorageSegment(CacheCategory.IMAGE.title, snapshot.cacheSizes[CacheCategory.IMAGE] ?: 0L, Color(CacheCategory.IMAGE.color)),
-        StorageSegment(CacheCategory.WEBVIEW.title, snapshot.cacheSizes[CacheCategory.WEBVIEW] ?: 0L, Color(CacheCategory.WEBVIEW.color))
+        StorageSegment(CacheCategory.OFFLINE.title, snapshot.cacheSizes[CacheCategory.OFFLINE] ?: 0L, MaterialTheme.colorScheme.secondary),
+        StorageSegment(CacheCategory.IMAGE.title, snapshot.cacheSizes[CacheCategory.IMAGE] ?: 0L, MaterialTheme.colorScheme.tertiary),
+        StorageSegment(CacheCategory.WEBVIEW.title, snapshot.cacheSizes[CacheCategory.WEBVIEW] ?: 0L, MaterialTheme.colorScheme.outline)
     )
 }
 
@@ -413,14 +395,14 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
             modifier = Modifier.fillMaxWidth()
         ) {
             Surface(
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(AppSizes.iconButton),
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Outlined.Storage, null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(AppSizes.iconMedium),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -447,7 +429,7 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
                 }
             }
             if (isCalculating) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(AppSizes.iconMedium), strokeWidth = 2.dp)
             }
         }
 
@@ -463,13 +445,13 @@ private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boo
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(vertical = AppSpacing.xSmall),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         Icons.Outlined.Folder,
                         null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(AppSizes.iconXSmall),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                     Spacer(Modifier.width(AppSpacing.itemGap))
@@ -510,7 +492,7 @@ private fun CacheCategoryRow(
         Icon(
             category.icon,
             null,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(AppSizes.iconMedium),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.width(AppSpacing.iconGap))
@@ -528,17 +510,16 @@ private fun CacheCategoryRow(
             )
         }
         if (isClearing) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            CircularProgressIndicator(Modifier.size(AppSizes.iconSmall), strokeWidth = 2.dp)
         } else {
             IconButton(
                 onClick = onClear,
-                enabled = enabled && size > 0,
-                modifier = Modifier.size(32.dp)
+                enabled = enabled && size > 0
             ) {
                 Icon(
                     Icons.Outlined.Delete,
                     contentDescription = "清除${category.title}",
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(AppSizes.iconSmall),
                     tint = MaterialTheme.colorScheme.error.copy(
                         alpha = if (enabled && size > 0) 1f else 0.3f
                     )

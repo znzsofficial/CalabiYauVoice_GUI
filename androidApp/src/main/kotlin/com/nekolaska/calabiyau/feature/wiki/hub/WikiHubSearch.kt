@@ -687,7 +687,9 @@ internal fun HubSearchPanel(
         Column {
             TextField(
                 state = textFieldState,
-                placeholder = { Text("搜索入口、角色、武器、地图") },
+                placeholder = {
+                    Text("搜索入口、角色、武器、地图", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 trailingIcon = if (query.isNotBlank()) {
                     {

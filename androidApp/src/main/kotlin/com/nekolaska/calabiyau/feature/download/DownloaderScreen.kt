@@ -29,13 +29,19 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.capsule.ContinuousCapsule
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
-import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.DownloadStatusBar
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
+import com.nekolaska.calabiyau.core.ui.LocalSnackbarHostState
 import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import data.SearchMode
 import kotlinx.coroutines.launch
+
+private val DownloadToolbarHeight = 64.dp
+private val DownloadToolbarBottomGap = AppSpacing.screen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,8 +50,31 @@ internal fun DownloaderScreen(
     downloadVM: DownloadViewModel,
     portraitVM: PortraitViewModel,
     onOpenDrawer: () -> Unit,
+    showDrawerButton: Boolean = true,
     onOpenFileManager: () -> Unit = {},
     onOpenDownloadHistory: () -> Unit = {}
+) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    // Descendant launchers use the page host; full-screen image previews own their window host.
+    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
+        DownloaderContent(
+            searchVM, downloadVM, portraitVM, snackbarHostState,
+            onOpenDrawer, showDrawerButton, onOpenFileManager, onOpenDownloadHistory
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DownloaderContent(
+    searchVM: SearchViewModel,
+    downloadVM: DownloadViewModel,
+    portraitVM: PortraitViewModel,
+    snackbarHostState: SnackbarHostState,
+    onOpenDrawer: () -> Unit,
+    showDrawerButton: Boolean,
+    onOpenFileManager: () -> Unit,
+    onOpenDownloadHistory: () -> Unit
 ) {
     // ── SearchViewModel 状态 ──
     val searchKeyword by searchVM.searchKeyword.collectAsState()
@@ -129,9 +158,14 @@ internal fun DownloaderScreen(
     }
 
     val focusManager = LocalFocusManager.current
-    val snackbarHostState = remember { SnackbarHostState() }
     val bottomBarStyle by remember { mutableIntStateOf(AppPrefs.bottomBarStyle) }
     val useDockedToolbar = bottomBarStyle == AppPrefs.BAR_STYLE_DOCKED_TOOLBAR
+    // Keep this footprint while scrolling hides the toolbar; changing it would move the last row.
+    // The measured Scaffold bottomBar already accounts for progress, selection and system insets.
+    val toolbarClearance = if (useDockedToolbar) DownloadToolbarHeight + DownloadToolbarBottomGap else 0.dp
+    val listBottomPadding = AppSpacing.screen + toolbarClearance
+    val showFileDownloadBar = searchMode == SearchMode.FILE_SEARCH &&
+        fileSearchResults.isNotEmpty() && fileSearchSelectedUrls.isNotEmpty()
     // 搜索历史
     var searchHistoryList by remember { mutableStateOf(AppPrefs.searchHistory) }
     // 每次搜索关键词变化时刷新历史
@@ -140,8 +174,8 @@ internal fun DownloaderScreen(
     }
 
     // 收集错误事件并显示 Snackbar
-    LaunchedEffect(Unit) {
-        // 合并两个 VM 的错误事件
+    LaunchedEffect(searchVM, downloadVM, snackbarHostState) {
+        // SharedFlow broadcasts: only this screen subscribes to search errors.
         launch {
             searchVM.errorEvent.collect { message ->
                 snackbarHostState.currentSnackbarData?.dismiss()
@@ -178,6 +212,7 @@ internal fun DownloaderScreen(
                 isSearching = isSearching,
                 searchHistoryList = searchHistoryList,
                 onOpenDrawer = onOpenDrawer,
+                showDrawerButton = showDrawerButton,
                 onOpenDownloadHistory = onOpenDownloadHistory,
                 onKeywordChange = { searchVM.onSearchKeywordChange(it) },
                 onSearch = {
@@ -196,7 +231,25 @@ internal fun DownloaderScreen(
             )
         },
         bottomBar = {
-            Column {
+            Column(
+                // BottomAppBar handles these itself in classic mode. In floating mode this
+                // bottomBar owns them, including while there is no active download/selection.
+                modifier = if (useDockedToolbar) Modifier.windowInsetsPadding(BottomAppBarDefaults.windowInsets)
+                    else Modifier
+            ) {
+                AnimatedVisibility(
+                    visible = showFileDownloadBar,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    FileSearchDownloadBar(
+                        selectedCount = fileSearchSelectedUrls.size,
+                        enabled = !isDownloading && showFileDownloadBar,
+                        onDownload = {
+                            if (showFileDownloadBar) buildDownloadTask()?.let { downloadVM.startDownload(it) }
+                        }
+                    )
+                }
                 // 下载进度条
                 AnimatedVisibility(
                     visible = isDownloading,
@@ -248,13 +301,12 @@ internal fun DownloaderScreen(
             }
         },
         snackbarHost = {
-            SnackbarHost(snackbarHostState) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    shape = smoothCornerShape(12.dp),
-                    containerColor = MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                    actionColor = MaterialTheme.colorScheme.inversePrimary
+            // A modal sheet is a separate window. Move the same host to the topmost sheet,
+            // where its measured height precedes content instead of covering confirmation actions.
+            if (!showFileDialog && selectedGroup == null && selectedPortraitCharacter == null) {
+                DownloadSnackbarHost(
+                    snackbarHostState,
+                    modifier = Modifier.padding(bottom = toolbarClearance)
                 )
             }
         },
@@ -267,7 +319,7 @@ internal fun DownloaderScreen(
             drawContent()
         } else null
 
-        Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+        Box(modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -279,13 +331,10 @@ internal fun DownloaderScreen(
                 // 无网络横幅
                 NetworkBanner(isNetworkAvailable)
                 recoverableRequest?.takeIf { !isDownloading }?.let { request ->
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text("有未完成的下载任务；继续时会核验并跳过已完成文件。", style = MaterialTheme.typography.bodySmall)
-                        Row {
-                            TextButton(onClick = { downloadVM.retryDownload(request) }) { Text("继续原任务") }
-                            TextButton(onClick = downloadVM::discardRecoverableDownload) { Text("放弃任务（保留文件）") }
-                        }
-                    }
+                    RecoverableDownloadBanner(
+                        onResume = { downloadVM.retryDownload(request) },
+                        onDiscard = downloadVM::discardRecoverableDownload
+                    )
                 }
                 // 搜索失败提示横幅
                 SearchErrorBanner(
@@ -301,20 +350,20 @@ internal fun DownloaderScreen(
                                 results = fileSearchResults,
                                 selectedUrls = fileSearchSelectedUrls,
                                 hasSearched = hasSearched,
-                                isDownloading = isDownloading,
+                                bottomContentPadding = listBottomPadding,
                                 searchError = searchError,
                                 onRetry = { searchVM.performSearch() },
                                 onToggle = { searchVM.toggleFileSearchSelection(it) },
                                 onSelectAll = { searchVM.selectAllFileSearchResults() },
                                 onClearSelection = { searchVM.clearFileSearchSelection() },
-                                onInvertSelection = { searchVM.invertFileSearchSelection() },
-                                onDownload = { buildDownloadTask()?.let { downloadVM.startDownload(it) } }
+                                onInvertSelection = { searchVM.invertFileSearchSelection() }
                             )
                         }
 
                         SearchMode.PORTRAIT -> {
                             PortraitGrid(
                                 characters = portraitCharacters,
+                                bottomContentPadding = listBottomPadding,
                                 characterAvatars = characterAvatars,
                                 hasSearched = hasSearched,
                                 favorites = favorites,
@@ -328,6 +377,7 @@ internal fun DownloaderScreen(
                         else -> {
                             CategoryGroupList(
                                 characterGroups = characterGroups,
+                                bottomContentPadding = listBottomPadding,
                                 characterAvatars = characterAvatars,
                                 hasSearched = hasSearched,
                                 favorites = favorites,
@@ -351,7 +401,7 @@ internal fun DownloaderScreen(
                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .offset(y = (-16).dp)
+                        .offset(y = -DownloadToolbarBottomGap)
                         .zIndex(1f)
                 ) {
                     Row(
@@ -363,7 +413,7 @@ internal fun DownloaderScreen(
                             // 液态玻璃模式：用 Row + drawBackdrop 替代 HorizontalFloatingToolbar
                             Row(
                                 modifier = Modifier
-                                    .height(64.dp)
+                                    .height(DownloadToolbarHeight)
                                     .drawBackdrop(
                                         backdrop = dlBackdrop,
                                         shape = { ContinuousCapsule },
@@ -415,7 +465,7 @@ internal fun DownloaderScreen(
                                 shape = ContinuousCapsule,
                                 color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
                                 contentColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.height(64.dp)
+                                modifier = Modifier.height(DownloadToolbarHeight)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxHeight().padding(horizontal = 16.dp),
@@ -520,6 +570,7 @@ internal fun DownloaderScreen(
             shape = smoothCornerShape(28.dp),
             tonalElevation = 0.dp
         ) {
+            if (!showFileDialog && selectedGroup == null) DownloadSnackbarHost(snackbarHostState)
             PortraitDetailContent(
                 characterName = selectedPortraitCharacter!!,
                 catalog = portraitCatalog,
@@ -543,6 +594,7 @@ internal fun DownloaderScreen(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             shape = smoothCornerShape(28.dp)
         ) {
+            if (!showFileDialog) DownloadSnackbarHost(snackbarHostState)
             CategoryDetailContent(
                 group = selectedGroup!!,
                 subCategories = subCategories,
@@ -573,7 +625,8 @@ internal fun DownloaderScreen(
             onConfirm = { searchVM.confirmFileDialog() },
             onDismiss = { searchVM.closeFileDialog() },
             error = dialogError,
-            onRetry = searchVM::retryFileDialog
+            onRetry = searchVM::retryFileDialog,
+            snackbarHost = { DownloadSnackbarHost(snackbarHostState) }
         )
     }
 }
@@ -586,6 +639,7 @@ private fun DownloaderTopBar(
     isSearching: Boolean,
     searchHistoryList: List<String>,
     onOpenDrawer: () -> Unit,
+    showDrawerButton: Boolean,
     onOpenDownloadHistory: () -> Unit,
     onKeywordChange: (String) -> Unit,
     onSearch: () -> Unit,
@@ -606,7 +660,19 @@ private fun DownloaderTopBar(
                     .padding(start = 0.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BackNavButton(onClick = onOpenDrawer)
+                if (showDrawerButton) {
+                    FilledTonalIconButton(
+                        onClick = onOpenDrawer,
+                        modifier = Modifier.padding(horizontal = AppSpacing.medium).size(AppSizes.iconButton),
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
+                        Icon(Icons.Outlined.Menu, contentDescription = "菜单", modifier = Modifier.size(AppSizes.iconMedium))
+                    }
+                } else {
+                    Spacer(Modifier.width(AppSpacing.screen))
+                }
                 Text(
                     text = "资源下载",
                     style = MaterialTheme.typography.headlineMedium,
@@ -672,6 +738,37 @@ private fun DownloaderTopBar(
 // ─────────────────────── 横幅 ───────────────────────
 
 @Composable
+private fun RecoverableDownloadBanner(onResume: () -> Unit, onDiscard: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen, vertical = AppSpacing.itemGap),
+        shape = AppShapes.compactCard,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    ) {
+        Column(
+            modifier = Modifier.padding(AppSpacing.screen),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.iconGap)
+            ) {
+                Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(AppSizes.iconMedium))
+                Text("有未完成的下载任务", style = MaterialTheme.typography.titleSmall)
+            }
+            Text("继续时会核验并跳过已完成文件。", style = MaterialTheme.typography.bodySmall)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
+            ) {
+                FilledTonalButton(onClick = onResume) { Text("继续原任务") }
+                TextButton(onClick = onDiscard) { Text("放弃任务（保留文件）") }
+            }
+        }
+    }
+}
+
+@Composable
 private fun NetworkBanner(isNetworkAvailable: Boolean) {
     AnimatedVisibility(
         visible = !isNetworkAvailable,
@@ -680,10 +777,11 @@ private fun NetworkBanner(isNetworkAvailable: Boolean) {
     ) {
         Surface(
             color = MaterialTheme.colorScheme.errorContainer,
-            modifier = Modifier.fillMaxWidth()
+            shape = AppShapes.compactCard,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen, vertical = AppSpacing.itemGap)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = AppSpacing.screen, vertical = AppSpacing.itemGap),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -716,11 +814,12 @@ private fun SearchErrorBanner(
         exit = shrinkVertically() + fadeOut()
     ) {
         Surface(
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
-            modifier = Modifier.fillMaxWidth()
+            color = MaterialTheme.colorScheme.errorContainer,
+            shape = AppShapes.compactCard,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen, vertical = AppSpacing.itemGap)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = AppSpacing.screen, vertical = AppSpacing.small),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {

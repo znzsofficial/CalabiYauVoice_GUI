@@ -47,7 +47,6 @@ import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.HorizontalFilterChips
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
@@ -108,8 +107,9 @@ fun MemeScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.officialIssues.isEmpty() && it.editorEntries.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载梗百科…") }
+            loading = { mod -> MemeSkeleton(mod) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

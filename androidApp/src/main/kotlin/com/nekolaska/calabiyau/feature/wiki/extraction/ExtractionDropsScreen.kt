@@ -180,7 +180,7 @@ internal fun ExtractionDropsScreen(
                                                 label = { Text(if (view == ExtractionDropView.POOLS) "共用掉落池" else "Boss 阶段对照") })
                                         }
                                     }
-                                    Text("保留 Wiki 的分组与说明；物品查询请使用“找物品”。", style = MaterialTheme.typography.bodySmall)
+                                    Text("共用物品池与 Boss 阶段资料", style = MaterialTheme.typography.bodySmall)
                                     status()
                                 }, onSelect = { record, query -> navigate { it.openSource(record.entry.id, query) } })
                         }
@@ -220,10 +220,10 @@ internal fun ExtractionDropsScreen(
                         TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试") }
                     }
                     catalog.error != null -> item("error") {
-                        Text("来源说明加载失败，暂时无法恢复关联。", color = MaterialTheme.colorScheme.error)
+                        Text("来源说明加载失败，暂时无法显示物品列表。", color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { catalog.reload(forceRefresh = true) }) { Text("重试来源说明") }
                     }
-                    else -> item("unlinked") { Text("现有资料没有唯一对应的物品列表。原来源说明仍可查看。") }
+                    else -> item("unlinked") { Text("暂未找到对应的物品列表，来源说明仍可查看。") }
                 }
                 item("back") { TextButton(onClick = ::goBack) { Text("返回来源说明") } }
             }
@@ -258,7 +258,7 @@ internal fun ExtractionDropsScreen(
                 item("missing") {
                     val pending = if (location.sourceId != null) catalogPending else containersPending
                     val resource = if (location.sourceId != null) catalog else containers
-                    Text(if (pending) "正在恢复来源详情…" else "这条记录暂不可用，请返回列表重新选择。")
+                    Text(if (pending) "正在加载来源详情…" else "该来源暂不可用")
                     resource.error?.let { error ->
                         Text(error.message, color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { resource.reload(forceRefresh = true) }) { Text("重试") }

@@ -360,6 +360,7 @@ fun MainScreen(
                     downloadVM = downloadVM,
                     portraitVM = portraitVM,
                     onOpenDrawer = openDrawer,
+                    showDrawerButton = !useExpandedLayout,
                     onOpenFileManager = { currentDestination = DrawerDestination.FILE_MANAGER },
                     onOpenDownloadHistory = { currentDestination = DrawerDestination.DOWNLOAD_HISTORY }
                 )
@@ -377,6 +378,7 @@ fun MainScreen(
                 Box {
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
+                        showDrawerButton = !useExpandedLayout,
                         isOverlaid = hubWebViewUrl != null || currentDestination != DrawerDestination.WIKI_HUB,
                         initialPage = hubStartPage,
                         resetKey = hubResetToken,
@@ -496,13 +498,8 @@ fun MainScreen(
     }
     val pageContent = remember { movableContentOf { latestPageContent() } }
 
-    // ── 全局 Snackbar 宿主，替代 Toast + 接收 SearchViewModel.errorEvent ──
+    // 通用页面/侧栏提示；下载页自行消费 SharedFlow 错误并提供带底栏避让的宿主。
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(searchVM) {
-        searchVM.errorEvent.collect { msg ->
-            snackbarHostState.showSnackbar(msg)
-        }
-    }
 
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
     val highReadabilityDrawer = LocalHighReadabilityDrawer.current.value

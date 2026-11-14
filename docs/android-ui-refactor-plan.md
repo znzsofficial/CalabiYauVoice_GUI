@@ -2,6 +2,39 @@
 
 制定日期：2026-11-14。基于 **2.1.30（60）** 发布后及工作区已完成的多页 UI 改版现状梳理，用于指导后续分批实施与验收。
 
+执行基线：现有修改已提交为 `07cedec`，后续重构与该基线分开记录。以下方案以代码复核为准：固定视觉留白不等于缺少系统安全区，两个事件消费者也不一定意味着广播叠弹；实施时必须核实默认 Insets、事件流类型与实际布局。
+
+## 本轮实施结果（2026-11-14）
+
+四组并行实施完成，主代理集成检查通过。重构代码仍在工作区，未提交、推送或发布；`07cedec` 是重构前基线。
+
+- **导航与下载**：展开侧栏时隐藏首页/下载菜单，下载页使用菜单图标。确认 `searchVM.errorEvent` 为 SharedFlow 后移除 MainScreen 重复消费；下载页及最上层 Sheet 共享一个下载提示宿主，图片预览窗口另有保存提示宿主。文件搜索确认栏交给 Scaffold 底栏测量，列表、悬浮栏与 Snackbar 均避开确认栏/进度栏；浮动模式保留稳定 96dp 列表底距，经典模式保留普通间距。恢复任务提示采用主题卡片及可换行操作。
+- **文件管理与素材工具**：普通/多选顶栏规范化；目录加载用 7 行文件骨架；音频行滚离视口后仍能通过底部播放条停止。文件操作 Sheet 可整体滚动，图片画廊显式拥有边到边安全区。工具首页改紧凑顶栏与进入箭头，ToolCard 只有标题控制折叠；共用工具滚动布局消费 IME 和剩余底部安全区，文本操作及图片裁切操作可换行。
+- **Wiki 页面**：10 个页面采用模块内专用骨架，按真实首屏而非原计划的推测结构绘制；Story/Meow/Tips/History/Activity 改紧凑顶栏。BGM/Submission/Collaboration/Meme 的包装数据类补充 `isDataEmpty`，使首载骨架及无数据错误槽真正生效；已有数据刷新仍展示内容。
+- **设置与公共组件**：设置/存储顶栏统一；Scaffold 内容应用并消费 innerPadding；公共 Wiki Sheet 沿用 Material3 默认 Insets，仅调整视觉留白。设置弹窗标题、正文、操作整体可滚动，单选仍点选即生效并有关闭按钮。存储图表采用 primary/secondary/tertiary/outline，并取消最小 2% 权重，保持真实占比。BackNavButton 增加默认启用的 `enabled` 参数，留言板复用且保留忙碌禁用。
+
+### 验证记录
+
+- `:androidApp:compileDebugKotlin` 成功。
+- 范围单测 **73 项，0 失败 / 0 错误 / 0 跳过**：core.navigation、core.ui、feature.download、feature.tools、feature.settings、HubTransitionTargetTest。
+- 首次合并命令在 300 秒限制处结束，编译/单测已完成；随后单独执行 `:androidApp:lintDebug` 成功，**0 errors / 5 个既有 warnings**，无新增 suppression。
+- `git diff --check` 作为最终文档/代码收尾检查。
+- `adb devices` 无连接设备；宽屏切换、短屏/大字号、三键导航、键盘、弹层提示及音频停止条仍需设备验收。上述单测不代表视觉、触控或性能实测。
+
+API 核实来源：Context7 当前不可用，子代理读取本机 Material3 1.5.0-rc01 与 Compose UI 1.12.1 的官方 sources.jar，确认 Scaffold、ModalBottomSheet 与 Dialog 的 Insets 所有权。
+
+### 后续细节巡检
+
+- 搜索框的 `singleLine` 不代替 placeholder 内 Text 的行数约束。公共搜索框及首页搜索、文件选择搜索、平衡筛选、卡组分享码、访客昵称的单行提示均显式限制行数并省略超长内容；生化搜索提示同时缩短。正文/留言等多行输入保持原有用途。
+- 玩家装饰列表仍为标题预留两行以保持网格高度，品质圆点只对齐第一行；详情长标题采用同一对齐方式。PC 设置正文列表圆点按实际 22sp 行高居中，替代固定 8dp 顶距，使字号放大时也跟随文字。
+- 文件搜索结果数量与全选/反选操作可换行，按钮从固定 32dp 改为最小高度；文件选择弹层的全选、反选和语言选项也可换行，避免窄屏挤压。
+- 本轮编译与 Lint 通过，仍为 5 个既有警告；仅显示约束修改，沿用之前业务测试结果。视觉及大字号行为待设备确认。
+- 本次 Context7 已恢复可用，查询官方 Compose Text 行数/溢出说明后实施；不改变上文历史核实来源记录。
+
+### 界面文案打磨
+
+掉落页将实现说明和重复操作指令改为简短的标题、状态与动作：例如“实际不出货 · 件数恒为 0”改为“无物品掉落 · 0 件”，“暂时无法恢复关联”改为“暂时无法显示物品列表”；辅助资料页不再提示用户切换到另一个 Tab。候选名单、零掉落、未知件数、逐件权重和缺失概率的事实含义仍保留，原 Wiki 字段与描述不改写。同步精简 PC 设置参考提示、装饰/设置更新失败状态和素材工具输出目录提示。用户要求的产品文案风格已记录到 AGENTS.md。
+
 ## 范围与边界
 
 ### 纳入范围
@@ -22,7 +55,7 @@
 
 ## 现状基线（已覆盖 vs 待改进）
 
-工作区已完成并验证通过的近期 UI 改版（未提交）：
+已纳入 `07cedec` 基线的近期 UI 改版（沿用此前变更范围内的验证记录）：
 
 - 关于页（`AboutScreen.kt`）、更新弹窗（`UpdateAvailableDialog.kt`）、留言板（`MessageBoardScreen.kt`）。
 - 首页（`WikiHomePage.kt`）、角色详情（`CharacterDetailScreen.kt`）、武器详情（`WeaponDetailScreen.kt`）、生化卡牌（`BioCardScreen.kt`）。
@@ -72,7 +105,7 @@
 1. **文件管理（`feature/tools/FileManagerScreen.kt`）**：
    - **顶栏规范化**：普通模式与多选模式当前使用手写 `Row + statusBarsPadding()`，建议统一对齐 `TopAppBar` 高度/内边距规范（普通模式左按钮使用 `BackNavButton` 风格或保持多选模式 `Close` 一致）。
    - **加载态骨架**：`isLoading` 当前为全屏居中 `CircularProgressIndicator()`，可替换为 6–8 行对齐 `FileListItem`（左侧文件图标块 + 两行文本条）的轻量化骨架。
-   - **安全区与弹层留白**：文件操作 `ModalBottomSheet` 底部目前硬编码 `AppSpacing.xxxLarge`，图片画廊 `Dialog` 未加 `systemBarsPadding()`；需统一补齐 `navigationBarsPadding()`。
+   - **安全区与弹层留白**：文件操作 `ModalBottomSheet` 沿用默认上下安全区与 IME，内容需可滚动；图片画廊若使用边到边窗口，由其内容单独处理 `safeDrawing`，不能混用平台窗口避让和重复 padding。
    - **音频播放迷你条**：在列表内直接点击播放音频时，目前仅靠列表行底色高亮提示，滚动离开后无法快捷停止；可在列表顶部或底部增加一条轻量“正在播放 + 停止”控制条（复用 `AudioPlayerManager` 状态，不改播放链路）。
 
 2. **素材工具（`feature/tools/ToolsHomeScreen.kt` 及 4 个子页）**：
@@ -99,14 +132,14 @@
     2. 普通二级子页：统一使用紧凑 `TopAppBar` + `BackNavButton`（或明确规范 `BackNavButton` 为全应用二级页标准返回控件），去除无 `scrollBehavior` 的静态 `LargeTopAppBar`。
     3. 逐步将 `ToolsHomeScreen`、`ActivityScreen`、`StoryScreen`、`MeowLanguageScreen`、`GameTipsScreen`、`GameHistoryScreen` 统一为 `TopAppBar`，并将 `SettingsScreen`、`StorageSettingsScreen` 的手写 `Row` 顶栏替换为标准 `TopAppBar`（保留 `headlineMedium` / `titleLarge` 视觉重心或与二级页一致的 `title` 规范）。
 
-### 2.2 公共弹层与设置滚动页补齐底部安全区
+### 2.2 公共弹层与设置滚动页核实底部安全区
 
 - **现状**：
-  - `core/ui/WikiSheetComponents.kt` 中的 `WikiContentSheet` 与 `WikiScrollableSheet` 仅使用硬编码 `bottom = 32.dp`。
-  - `SettingsScreen.kt` 与 `StorageSettingsScreen.kt` 的垂直滚动区域底部也仅放置了 `32.dp` 间距，未叠加 `WindowInsets.navigationBars`。
+   - `core/ui/WikiSheetComponents.kt` 中的 `WikiContentSheet` 与 `WikiScrollableSheet` 有 `bottom = 32.dp` 视觉留白，其系统避让还取决于外层 `ModalBottomSheet` 的默认 Insets。
+   - `SettingsScreen.kt` 与 `StorageSettingsScreen.kt` 已应用 `Scaffold` 的 `innerPadding`，底部另有 `32.dp` 间距；不能仅因没有显式 `navigationBarsPadding()` 判定遮挡。
 - **方案**：
-  - 为 `WikiContentSheet`、`WikiScrollableSheet` 内容容器补充 `navigationBarsPadding()`（叠加适度视觉留白如 `16.dp`–`24.dp`），确保手势条与三键导航栏设备均不被裁切或紧贴边缘。
-  - 为 `SettingsScreen.kt`、`StorageSettingsScreen.kt` 及其余仍使用固定底部留白的滚动页统一加上 `navigationBarsPadding()`（或由 `Scaffold` `innerPadding` 正确传导底部 inset，避免外层 `Scaffold` 吞掉而内层未消费）。
+   - 优先沿用 `ModalBottomSheet` 默认 Insets，明确唯一安全区所有者；仅在确认缺失时增加避让，保留适度视觉留白。
+   - `Scaffold` 内容应用 `innerPadding` 后正确消费 Insets，让嵌套 IME/底栏避让只处理剩余部分；不机械叠加 `navigationBarsPadding()`。普通页面、弹层和全屏 Dialog 分别核实窗口配置。
 
 ---
 
@@ -122,14 +155,14 @@
 | --- | --- | --- | --- |
 | `feature/wiki/game/GameModeScreen.kt` | 战斗模式 | 纵向可折叠模式大卡片列表（左图标 + 标题 + 副标题） | 4–5 张与 `GameModeCard` 同尺寸圆角骨架卡 |
 | `feature/wiki/bgm/BgmScreen.kt` | 游戏原声 / BGM | 搜索框 + 2 排筛选/分组胶囊 + 分组曲目卡片 | 搜索框占位 + 胶囊行 + 带封面缩略图的行骨架 |
-| `feature/wiki/story/StoryScreen.kt` | 剧情故事 | 分区卡片（标题 + 16:9 封面/条目芯片列表） | 分区标题 + 横向/网格章节骨架卡 |
-| `feature/wiki/meow/MeowLanguageScreen.kt` | 喵言喵语 | 分区卡片 / 语音条目列表 | `WikiListSkeleton` 或带播放按钮占位的条目骨架 |
-| `feature/wiki/tips/GameTipsScreen.kt` | 游戏 Tips | 分类提示卡片列表 | 标题 + 多行正文骨架卡 |
-| `feature/wiki/history/GameHistoryScreen.kt` | 游戏历史 / 版本沿革 | 时间线 / 版本事件卡片列表 | 左侧时间点指示 + 标题与正文块骨架 |
+| `feature/wiki/story/StoryScreen.kt` | 剧情故事 | 分区卡片、双列 1.5:1 图片及链接芯片 | 分区标题 + 双列图片/芯片骨架 |
+| `feature/wiki/meow/MeowLanguageScreen.kt` | 喵言喵语 | 随机文案、分区说明与文本组 | 随机卡 + 分区标题/说明/文本骨架 |
+| `feature/wiki/tips/GameTipsScreen.kt` | 游戏 Tips | 随机提示与分类正文卡片 | 随机卡 + 标题/多行正文骨架 |
+| `feature/wiki/history/GameHistoryScreen.kt` | 游戏历史 | 分区图片与链接目录 | 分区标题 + 图片/链接骨架，不虚构时间轴 |
 | `feature/wiki/navigation/NavigationMenuScreen.kt` | Wiki 导航 | 可折叠分区卡片（图标 + 标题 + 条目数） | 6 张折叠态分区骨架卡 |
-| `feature/wiki/submission/SubmissionScreen.kt` | 玩家投稿 | 筛选条 + 投稿作品网格/卡片 | `CatalogGridSkeleton` 或卡片骨架列表 |
-| `feature/wiki/collaboration/CollaborationScreen.kt` | 联动数据 | 联动专题大卡（大图 + 标题 + 描述） | 横幅图占位 + 标题行 + 摘要行骨架 |
-| `feature/wiki/meme/MemeScreen.kt` | 梗百科 | 搜索栏 + 词条卡片列表 | `WikiListSkeleton(chipRows = 0)` 或词条卡片骨架 |
+| `feature/wiki/submission/SubmissionScreen.kt` | 玩家投稿 | 投稿说明、搜索/筛选、文字作品与元信息 | 说明卡 + 搜索/筛选 + 文字卡骨架 |
+| `feature/wiki/collaboration/CollaborationScreen.kt` | 联动数据 | 默认首屏先展示年份及日期记录 | 搜索/筛选 + 年份/日期记录骨架 |
+| `feature/wiki/meme/MemeScreen.kt` | 梗百科 | 搜索/筛选、官方分区及图片期刊 | 搜索/筛选 + 分区/16:9 图片期刊骨架 |
 
 ### 实施原则
 
@@ -168,7 +201,7 @@
 
 1. **前置收尾（建议优先处理）**：先确认并提交或分批整理工作区现有已验证的未提交改动，避免新重构与旧改版混杂在同一个大 diff 中。
 2. **第一批（Phase 1）**：导航菜单按钮、下载页双重 Snackbar、悬浮工具栏避让与恢复任务卡片化。完成后单独跑 `:androidApp:compileDebugKotlin`、`:androidApp:testDebugUnitTest`、`:androidApp:lintDebug`。
-3. **第二批（Phase 2）**：顶栏规范收敛（先处理 `ToolsHomeScreen`、`SettingsScreen`、`StorageSettingsScreen` 及各二级页 `TopAppBar`）与公共弹层/滚动页 `navigationBarsPadding()`。
+3. **第二批（Phase 2）**：顶栏规范收敛（先处理 `ToolsHomeScreen`、`SettingsScreen`、`StorageSettingsScreen` 及各二级页 `TopAppBar`）与公共弹层/滚动页安全区所有权核实。
 4. **第三批（Phase 3）**：按模块分批补齐 10 个遗留页面的骨架屏（先做高频的 `GameModeScreen`、`BgmScreen`、`StoryScreen`、`NavigationMenuScreen`，再补其余 6 页）。
 5. **第四批（Phase 4）**：`StorageSettingsScreen` 主题色图表、`SettingsScreen` 间距与单选交互，以及触达文件内的 Token 对齐。
 

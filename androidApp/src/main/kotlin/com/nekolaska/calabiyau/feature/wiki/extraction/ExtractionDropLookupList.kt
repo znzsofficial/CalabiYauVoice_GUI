@@ -88,21 +88,21 @@ internal fun ExtractionDropLookupList(
                     }
                     DropFilterBar(
                         summary = if (loading && lookup.isEmpty()) "正在读取物品来源…"
-                        else "${shownHits.size} 个来源 · ${if (includeZero) "含不出货来源" else "排除不出货来源"}",
+                        else "${shownHits.size} 个来源 · ${if (includeZero) "含零掉落来源" else "已隐藏零掉落来源"}",
                         label = sourceCategory ?: "筛选来源",
                         onClick = { showFilters = true },
                         enabled = selected != null,
                         activeFilter = sourceCategory != null || includeZero,
                         onReset = if (sourceCategory != null || includeZero) ({ sourceCategory = null; includeZero = false }) else null
                     )
-                    Text("候选不等于掉率；已收录不代表必出。", style = MaterialTheme.typography.bodySmall,
+                    Text("可能来源 · 非必掉，具体掉率暂无数据", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (selected == null && !loading && !loadFailed) {
-                        Text("当前数据未收录所选物品／品质", style = MaterialTheme.typography.bodyMedium)
+                        Text("暂无该品质物品的来源资料", style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { onChooseItem(null) }) { Text(backLabel) }
                     }
                 } else {
-                    Text("这件物品，去哪找？", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("物品来源", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索物品名，如切割器…")
                     DropFilterBar(
@@ -113,7 +113,7 @@ internal fun ExtractionDropLookupList(
                         activeFilter = currentQuality != null,
                         onReset = if (currentQuality != null) ({ quality = null }) else null
                     )
-                    Text("同名不同品质分别收录 · 来源数排除不出货来源", style = MaterialTheme.typography.bodySmall,
+                    Text("按品质区分物品 · 来源数不含零掉落来源", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 status()
@@ -127,7 +127,7 @@ internal fun ExtractionDropLookupList(
             if (shownHits.isEmpty()) item("no-source") {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     CatalogEmptyResults(message = if (!includeZero && hiddenZeroCount > 0)
-                        "当前仅有 $hiddenZeroCount 个不出货来源，可在筛选中查看" else "没有符合当前筛选的已收录来源",
+                        "仅找到 $hiddenZeroCount 个零掉落来源，已被筛选隐藏" else "没有符合筛选条件的来源",
                         onClear = if (sourceCategory != null) ({ sourceCategory = null }) else null)
                 }
             }
@@ -164,9 +164,9 @@ internal fun ExtractionDropLookupList(
                             ) {
                                 Text(
                                     when (hit.source.dropCountState) {
-                                        DropCountState.ZERO -> "实际不出货 · 件数恒为 0"
-                                        DropCountState.UNKNOWN -> "已收录 · 件数规则待确认"
-                                        DropCountState.POSITIVE -> "已收录 · 逐项掉率未披露"
+                                        DropCountState.ZERO -> "无物品掉落 · 0 件"
+                                        DropCountState.UNKNOWN -> "掉落数量待确认"
+                                        DropCountState.POSITIVE -> "具体物品掉率暂无数据"
                                     },
                                     Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                     style = MaterialTheme.typography.labelSmall,
@@ -210,7 +210,7 @@ internal fun ExtractionDropLookupList(
                             Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             ExtractionDropQualityBadge(item.qualityLabel, item.qualityCode ?: 0)
                             Text(
-                                "${lookup.getValue(item).count { it.source.dropCountState != DropCountState.ZERO }} 个已收录来源",
+                                "${lookup.getValue(item).count { it.source.dropCountState != DropCountState.ZERO }} 个来源",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -247,12 +247,12 @@ internal fun ExtractionDropLookupList(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("显示不出货的来源", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                                Text("件数恒为 0，仅保留候选池记录", style = MaterialTheme.typography.bodySmall,
+                                Text("显示零掉落来源", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                                Text("有候选物品，但掉落数量为 0", style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Switch(checked = includeZero, onCheckedChange = { includeZero = it },
-                                modifier = Modifier.semantics { contentDescription = "显示不出货的来源" })
+                                modifier = Modifier.semantics { contentDescription = "显示零掉落来源" })
                         }
                     }
                 }

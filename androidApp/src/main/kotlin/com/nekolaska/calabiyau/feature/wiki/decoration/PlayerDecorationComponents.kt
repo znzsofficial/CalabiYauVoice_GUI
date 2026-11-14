@@ -104,9 +104,17 @@ internal fun DecorationCatalogCard(item: DecorationItem, modifier: Modifier = Mo
             imagePadding = 6.dp
         )
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
                 if (qualityAccent != null) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(qualityAccent))
+                    // Reserve two title lines for grid rhythm, but align the dot to the first line.
+                    Box(
+                        modifier = Modifier.width(8.dp).height(
+                            with(LocalDensity.current) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
+                        ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(qualityAccent))
+                    }
                 }
                 Text(
                     item.name,
@@ -137,11 +145,18 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
         item("title") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (qualityAccent != null) {
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(qualityAccent))
+                        Box(
+                            modifier = Modifier.width(10.dp).height(
+                                with(LocalDensity.current) { MaterialTheme.typography.headlineSmall.lineHeight.toDp() }
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(Modifier.size(10.dp).clip(CircleShape).background(qualityAccent))
+                        }
                     }
                     Text(
                         item.name,

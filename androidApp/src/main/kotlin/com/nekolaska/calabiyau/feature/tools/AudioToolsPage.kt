@@ -44,6 +44,8 @@ import com.nekolaska.calabiyau.core.media.AudioPlayerManager
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -359,16 +361,16 @@ internal fun AudioToolsPage(
 
     ToolPageColumn {
         Surface(
-            shape = smoothCornerShape(28.dp),
+            shape = AppShapes.card,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(AppSpacing.cardContent),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.sectionGap)
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
+                    Surface(shape = AppShapes.chip, color = MaterialTheme.colorScheme.tertiaryContainer) {
                         Icon(
                             Icons.Outlined.AudioFile,
                             contentDescription = null,
@@ -380,7 +382,7 @@ internal fun AudioToolsPage(
                         Text("音频预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("导入音频文件预览波形与频谱", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Surface(shape = smoothCornerShape(999.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
+                    Surface(shape = AppShapes.capsule, color = MaterialTheme.colorScheme.surfaceContainerHighest) {
                         Text(
                             text = if (audio == null) "未导入" else "已导入",
                             style = MaterialTheme.typography.bodySmall,
@@ -900,10 +902,10 @@ internal fun ColumnScope.AudioActionButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
-        shape = smoothCornerShape(24.dp)
+        shape = AppShapes.card
     ) {
         Icon(icon, contentDescription = null)
-        Spacer(Modifier.size(8.dp))
+        Spacer(Modifier.size(AppSpacing.itemGap))
         Text(text)
     }
 }

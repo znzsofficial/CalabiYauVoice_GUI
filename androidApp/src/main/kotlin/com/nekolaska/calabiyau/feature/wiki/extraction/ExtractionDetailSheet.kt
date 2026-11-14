@@ -163,7 +163,7 @@ internal fun ExtractionDetailSheet(
                         tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
-                        "这个来源不会掉落物品（件数恒为 0）。下方即使列有候选物品，也不会从这里获得。",
+                        "掉落数量为 0，下列候选物品不会从此来源掉落。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -193,7 +193,7 @@ internal fun ExtractionDetailSheet(
                         ) {
                             Icon(Icons.Outlined.Info, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                             Text(
-                                "掉落件数尚不明确；池内有某件物品，不代表一定能从这里获得。",
+                                "掉落数量待确认，物品名单仅供参考。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -203,7 +203,7 @@ internal fun ExtractionDetailSheet(
                 if (containerDetails && totalItems == 0) {
                     Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
                         Text(
-                            if (entry.containerId == null) "完整物品池尚未公布。" else "完整物品池已公布，目前为 0 件物品。",
+                            if (entry.containerId == null) "完整物品池尚未公布" else "已公布的物品池为空",
                             Modifier.fillMaxWidth().padding(12.dp),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -215,8 +215,8 @@ internal fun ExtractionDetailSheet(
             item(key = "source-summary", contentType = "source-summary") {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("掉落概览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(if (entry.dropImages.isNotEmpty()) "来源卡中的物品配图，不代表完整物品池；是否必掉以原始说明为准。"
-                        else "来源卡展示已公布的掉落摘要，完整物品名单以对应的物品池为准。",
+                    Text(if (entry.dropImages.isNotEmpty()) "部分物品配图 · 掉落方式见下方说明"
+                        else "掉落摘要 · 完整名单见物品池",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -243,17 +243,17 @@ internal fun ExtractionDetailSheet(
             item(key = "source-pool-link", contentType = "source-pool-link") {
                 if (onViewCompletePool != null) {
                     FilledTonalButton(onClick = onViewCompletePool, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (entry.containerId == null) "查看共用物品池" else "查看这个来源的完整物品池")
+                        Text(if (entry.containerId == null) "查看共用物品池" else "查看完整物品池")
                     }
                 } else if (entry.containerId == null) {
-                    Text("暂无可关联的完整物品池，请以已公布的掉落说明为准。", style = MaterialTheme.typography.bodyMedium)
+                    Text("暂无对应物品池，已知掉落见上方说明。", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
         if (entry.dropPoolGroups.isNotEmpty()) {
             item(key = "pool-search", contentType = "pool-search") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (entry.dropCountState == DropCountState.ZERO) "配置中的候选物品" else "池内物品",
+                    Text(if (entry.dropCountState == DropCountState.ZERO) "候选物品（无实际掉落）" else "池内物品",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it }, onSearch = {},
                         onClear = { poolQuery = "" }, isSearching = false, placeholder = "搜索池内物品…")
@@ -261,7 +261,7 @@ internal fun ExtractionDetailSheet(
                         selectedQuality = effectiveQuality, onSelect = { selectedQuality = it },
                         summary = if (isFiltered) "$matchingItems / $totalItems 件物品" else "共 $totalItems 件物品",
                         onReset = showAllItems.takeIf { isFiltered })
-                    Text(if (onFindItem != null) "点击物品查来源 · 入池不代表必掉" else "入池不代表必掉", style = MaterialTheme.typography.bodySmall,
+                    Text(if (entry.dropCountState == DropCountState.ZERO) "候选名单 · 实际掉落 0 件" else "候选名单 · 非必掉清单", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -291,7 +291,7 @@ internal fun ExtractionDetailSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            if (referenceExpanded) "收起规则与图鉴资料" else "规则与图鉴资料",
+                            "掉落规则与资料",
                             Modifier.weight(1f),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
@@ -314,7 +314,7 @@ internal fun ExtractionDetailSheet(
                 }
                 if (containerDetails) item(key = "pool-rules", contentType = "description") {
                     Text(
-                        "先决定掉落件数，再逐件按权重抽取。池内名单不提供单件物品概率，也不能据此判断整箱至少获得一件的概率。",
+                        "掉落数量确定后，每件物品按权重抽取。单件掉率及整箱获得概率暂无数据。",
                         modifier = Modifier.dropItemMotion(this),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

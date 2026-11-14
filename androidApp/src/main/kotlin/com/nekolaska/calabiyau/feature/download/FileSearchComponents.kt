@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.feature.download
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,10 +19,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.media.AudioPlayButton
 import com.nekolaska.calabiyau.core.ui.EmptyState
-import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 
 @Composable
@@ -31,25 +32,26 @@ fun FileSearchList(
     results: List<Pair<String, String>>,
     selectedUrls: Set<String>,
     hasSearched: Boolean,
-    isDownloading: Boolean,
+    bottomContentPadding: Dp = AppSpacing.screen,
     searchError: String? = null,
     onRetry: (() -> Unit)? = null,
     onToggle: (String) -> Unit,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
-    onInvertSelection: () -> Unit,
-    onDownload: () -> Unit
+    onInvertSelection: () -> Unit
 ) {
     // 图片预览弹窗状态
     var previewImage by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     if (results.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.FindInPage,
-            message = if (hasSearched) "未找到文件" else "按关键词搜索 Wiki 文件",
-            errorMessage = if (hasSearched) searchError else null,
-            onRetry = onRetry
-        )
+        Box(Modifier.padding(bottom = bottomContentPadding)) {
+            EmptyState(
+                icon = Icons.Outlined.FindInPage,
+                message = if (hasSearched) "未找到文件" else "按关键词搜索 Wiki 文件",
+                errorMessage = if (hasSearched) searchError else null,
+                onRetry = onRetry
+            )
+        }
         return
     }
 
@@ -62,25 +64,26 @@ fun FileSearchList(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Row(
+            FlowRow(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
             ) {
                 Text(
                     "找到 ${results.size} 个文件",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
                     val allSelected = selectedUrls.size == results.size
                     FilledTonalButton(
                         onClick = { if (allSelected) onClearSelection() else onSelectAll() },
                         shape = smoothCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.heightIn(min = 40.dp)
                     ) {
                         Text(if (allSelected) "取消全选" else "全选", style = MaterialTheme.typography.labelMedium)
                     }
@@ -88,7 +91,7 @@ fun FileSearchList(
                         onClick = onInvertSelection,
                         shape = smoothCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.heightIn(min = 40.dp)
                     ) {
                         Text("反选", style = MaterialTheme.typography.labelMedium)
                     }
@@ -98,7 +101,10 @@ fun FileSearchList(
 
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(
+                start = AppSpacing.screen, end = AppSpacing.screen,
+                top = AppSpacing.itemGap, bottom = bottomContentPadding
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(results, key = { it.second }) { (name, url) ->
@@ -111,42 +117,36 @@ fun FileSearchList(
                 )
             }
         }
-
-        // Download FAB bar
-        AnimatedVisibility(
-            visible = selectedUrls.isNotEmpty(),
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = onDownload,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .height(56.dp),
-                    enabled = !isDownloading,
-                    shape = smoothCornerShape(28.dp)
-                ) {
-                    Icon(Icons.Default.Download, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("下载选中文件 (${selectedUrls.size})", style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
     }
 
     // 图片预览弹窗
     previewImage?.let { (name, url) ->
-        ImagePreviewDialog(
+        DownloadImagePreview(
             model = url,
-            contentDescription = name,
+            name = name,
             onDismiss = { previewImage = null }
         )
+    }
+}
+
+/** Owned by the screen's bottomBar so content, toolbar and Snackbar share its measured height. */
+@Composable
+internal fun FileSearchDownloadBar(selectedCount: Int, enabled: Boolean, onDownload: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Button(
+            onClick = onDownload,
+            modifier = Modifier.fillMaxWidth().padding(AppSpacing.screen).heightIn(min = 56.dp),
+            enabled = enabled,
+            shape = AppShapes.capsule
+        ) {
+            Icon(Icons.Default.Download, null)
+            Spacer(Modifier.width(AppSpacing.itemGap))
+            Text("下载选中文件 ($selectedCount)", style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
@@ -262,7 +262,8 @@ fun FileSelectionSheet(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     error: String? = null,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    snackbarHost: @Composable () -> Unit = {}
 ) {
     var previewImage by remember { mutableStateOf<Pair<String, String>?>(null) }
     var searchKeyword by remember { mutableStateOf("") }
@@ -282,6 +283,7 @@ fun FileSelectionSheet(
         shape = smoothCornerShape(28.dp),
         tonalElevation = 0.dp
     ) {
+        snackbarHost()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -348,7 +350,7 @@ fun FileSelectionSheet(
                     focusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent
                 ),
-                placeholder = { Text("搜索文件名…") },
+                placeholder = { Text("搜索文件名…", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                 trailingIcon = {
                     if (searchKeyword.isNotEmpty()) {
@@ -361,12 +363,12 @@ fun FileSelectionSheet(
             )
 
             // ── 操作栏：全选/清空 + 语言筛选 ──
-            Row(
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
             ) {
                 // 全选/清空合并为一个 FilterChip
                 val allSelected = files.isNotEmpty() && selectedUrls.size == files.size
@@ -392,8 +394,6 @@ fun FileSelectionSheet(
                     },
                     shape = smoothCornerShape(12.dp)
                 )
-
-                Spacer(Modifier.weight(1f))
 
                 // 语言快捷筛选
                 listOf("CN" to "中", "JP" to "日", "EN" to "英").forEach { (lang, label) ->
@@ -498,9 +498,9 @@ fun FileSelectionSheet(
 
     // 图片预览弹窗
     previewImage?.let { (name, url) ->
-        ImagePreviewDialog(
+        DownloadImagePreview(
             model = url,
-            contentDescription = name,
+            name = name,
             onDismiss = { previewImage = null }
         )
     }

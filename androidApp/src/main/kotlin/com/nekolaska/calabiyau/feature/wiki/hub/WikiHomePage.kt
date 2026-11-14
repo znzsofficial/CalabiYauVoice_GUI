@@ -165,6 +165,7 @@ internal val LocalHasWallpaper = staticCompositionLocalOf { false }
 @Composable
 internal fun WikiHomePage(
     onOpenDrawer: () -> Unit,
+    showDrawerButton: Boolean = true,
     onOpenWikiUrl: (String) -> Unit,
     listState: LazyListState,
     characterRowState: LazyListState,
@@ -253,8 +254,10 @@ internal fun WikiHomePage(
             LargeTopAppBar(
                 title = { Text("卡拉彼丘 Wiki") },
                 navigationIcon = {
-                    IconButton(onClick = onOpenDrawer) {
-                        Icon(Icons.Outlined.Menu, contentDescription = "菜单")
+                    if (showDrawerButton) {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Outlined.Menu, contentDescription = "菜单")
+                        }
                     }
                 },
                 scrollBehavior = scrollBehavior,

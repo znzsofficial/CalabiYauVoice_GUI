@@ -22,8 +22,10 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.EmptyState
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import data.CharacterGroup
 
@@ -32,6 +34,7 @@ fun CategoryGroupList(
     characterGroups: List<CharacterGroup>,
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
+    bottomContentPadding: Dp = AppSpacing.screen,
     favorites: Set<String> = emptySet(),
     searchError: String? = null,
     onRetry: (() -> Unit)? = null,
@@ -39,12 +42,14 @@ fun CategoryGroupList(
     onSelectGroup: (CharacterGroup) -> Unit
 ) {
     if (characterGroups.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.RecordVoiceOver,
-            message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色语音",
-            errorMessage = if (hasSearched) searchError else null,
-            onRetry = onRetry
-        )
+        Box(Modifier.padding(bottom = bottomContentPadding)) {
+            EmptyState(
+                icon = Icons.Outlined.RecordVoiceOver,
+                message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色语音",
+                errorMessage = if (hasSearched) searchError else null,
+                onRetry = onRetry
+            )
+        }
         return
     }
 
@@ -54,7 +59,10 @@ fun CategoryGroupList(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = AppSpacing.screen, end = AppSpacing.screen,
+            top = AppSpacing.screen, bottom = bottomContentPadding
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(sorted, key = { it.rootCategory }) { group ->

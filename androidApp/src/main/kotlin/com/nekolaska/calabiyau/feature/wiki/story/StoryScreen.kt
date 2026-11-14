@@ -24,17 +24,15 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
@@ -58,7 +55,6 @@ fun StoryScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
 ) {
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val state = rememberLoadState(
         initial = emptyList<StorySection>(),
         cachedPrefetchDelayMs = 300L,
@@ -67,9 +63,8 @@ fun StoryScreen(
     )
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = { Text("剧情故事", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
@@ -77,15 +72,14 @@ fun StoryScreen(
                 actions = {
                     RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
                     OpenWikiActionButton(wikiUrl = STORY_PAGE_URL, onOpenWikiUrl = onOpenWikiUrl)
-                },
-                scrollBehavior = scrollBehavior
+                }
             )
         }
     ) { innerPadding ->
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState(mod, "正在加载剧情故事…") }
+            loading = { mod -> StorySkeleton(mod) }
         ) { sections ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

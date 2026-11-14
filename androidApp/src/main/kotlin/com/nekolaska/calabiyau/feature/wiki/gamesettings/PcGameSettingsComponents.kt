@@ -99,9 +99,9 @@ internal fun PcSettingsListHeader(view: PcSettingsView, category: String, countL
                 )
                 Text(
                     when (view) {
-                        PcSettingsView.SETTINGS -> "默认值来自 Wiki · 点按条目查看完整选项与说明"
-                        PcSettingsView.RECOMMENDATIONS -> "Wiki 画质建议 · 请结合设备性能与游玩习惯调整"
-                        PcSettingsView.KNOWLEDGE -> "技术背景与渲染比例参考 · 以原文说明为准"
+                        PcSettingsView.SETTINGS -> "设置选项与默认值 · 来自 Wiki"
+                        PcSettingsView.RECOMMENDATIONS -> "Wiki 画质建议 · 实际效果因设备而异"
+                        PcSettingsView.KNOWLEDGE -> "技术说明与渲染比例参考"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -332,9 +332,11 @@ private fun PcSettingsParagraph(modifier: Modifier = Modifier, block: PcSettings
                 verticalAlignment = Alignment.Top
             ) {
                 Box(
-                    Modifier.padding(top = 8.dp).size(6.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.78f), CircleShape)
-                )
+                    Modifier.width(6.dp).height(with(LocalDensity.current) { 22.sp.toDp() }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(6.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.78f), CircleShape))
+                }
                 Text(
                     text = block.text,
                     modifier = Modifier.weight(1f),
@@ -461,7 +463,7 @@ internal fun PcSettingsDetailSheet(setting: PcSettingsBlock.Setting, section: Pc
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        "Wiki 建议，请按设备性能与个人习惯调整。",
+                        "Wiki 参考建议，适合的设置因设备和个人习惯而异。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

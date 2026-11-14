@@ -30,8 +30,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.EmptyState
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.ZoomableImage
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -44,6 +46,7 @@ fun PortraitGrid(
     characters: List<String>,
     characterAvatars: Map<String, String>,
     hasSearched: Boolean,
+    bottomContentPadding: Dp = AppSpacing.screen,
     favorites: Set<String> = emptySet(),
     searchError: String? = null,
     onRetry: (() -> Unit)? = null,
@@ -51,12 +54,14 @@ fun PortraitGrid(
     onSelectCharacter: (String) -> Unit
 ) {
     if (characters.isEmpty()) {
-        EmptyState(
-            icon = Icons.Outlined.Image,
-            message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色立绘",
-            errorMessage = if (hasSearched) searchError else null,
-            onRetry = onRetry
-        )
+        Box(Modifier.padding(bottom = bottomContentPadding)) {
+            EmptyState(
+                icon = Icons.Outlined.Image,
+                message = if (hasSearched) "未找到相关角色" else "输入关键词搜索角色立绘",
+                errorMessage = if (hasSearched) searchError else null,
+                onRetry = onRetry
+            )
+        }
         return
     }
 
@@ -66,7 +71,10 @@ fun PortraitGrid(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = AppSpacing.screen, end = AppSpacing.screen,
+            top = AppSpacing.screen, bottom = bottomContentPadding
+        ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

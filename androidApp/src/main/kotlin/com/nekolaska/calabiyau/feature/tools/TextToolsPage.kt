@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
@@ -282,26 +284,19 @@ internal fun TextToolsPage(
         uri?.let { importFromInput(PickedInput(uri = it)) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .imePadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    ToolPageColumn {
         Card(
-            shape = smoothCornerShape(24.dp),
+            shape = AppShapes.card,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.padding(AppSpacing.screen),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
             ) {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.small)
                 ) {
                     FilledTonalButton(
                         onClick = {
@@ -316,12 +311,11 @@ internal fun TextToolsPage(
                             }
                         },
                         enabled = !isBusy,
-                        shape = smoothCornerShape(20.dp),
-                        modifier = Modifier.weight(1f)
+                        shape = AppShapes.capsule
                     ) {
                         Icon(Icons.Outlined.FileOpen, contentDescription = null)
                         Spacer(Modifier.size(6.dp))
-                        Text("导入", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("导入")
                     }
 
                     FilledTonalButton(
@@ -346,7 +340,7 @@ internal fun TextToolsPage(
                     ) { Text("整理") }
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap), verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
                     Text("导出格式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Box {
                         FilterChip(
@@ -371,7 +365,6 @@ internal fun TextToolsPage(
                             }
                         }
                     }
-                    Spacer(Modifier.weight(1f))
                     FilledTonalButton(onClick = { showExportDialog = true }, enabled = !isBusy, shape = smoothCornerShape(20.dp)) {
                         Icon(Icons.Outlined.SaveAlt, contentDescription = null)
                         Spacer(Modifier.size(6.dp))
@@ -382,7 +375,7 @@ internal fun TextToolsPage(
         }
 
         Card(
-            shape = smoothCornerShape(24.dp),
+            shape = AppShapes.card,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
         ) {
             Column(
@@ -416,7 +409,7 @@ internal fun TextToolsPage(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap), verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
                     Text("吸附(ms)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     listOf(1, 10, 50, 100).forEach { step ->
                         val selected = snapMs == step
@@ -458,7 +451,7 @@ internal fun TextToolsPage(
 
         selectedClip()?.let { clip ->
             Card(
-                shape = smoothCornerShape(24.dp),
+                shape = AppShapes.card,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
                 Column(
@@ -470,7 +463,7 @@ internal fun TextToolsPage(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("编辑片段", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("编辑片段", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row {
                             IconButton(
                                 onClick = { undo() },

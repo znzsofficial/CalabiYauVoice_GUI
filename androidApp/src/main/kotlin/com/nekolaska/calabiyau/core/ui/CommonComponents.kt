@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
@@ -69,10 +70,12 @@ import coil3.compose.AsyncImage
 fun BackNavButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
-    contentDescription: String = "返回"
+    contentDescription: String = "返回",
+    enabled: Boolean = true
 ) {
     FilledTonalIconButton(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier
             .padding(start = AppSpacing.medium, end = AppSpacing.medium)
             .size(AppSizes.iconButton),
@@ -116,7 +119,13 @@ fun SearchBar(
             disabledIndicatorColor = Color.Transparent
         ),
         placeholder = {
-            Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                placeholder,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         },
         leadingIcon = {
             if (isSearching) {

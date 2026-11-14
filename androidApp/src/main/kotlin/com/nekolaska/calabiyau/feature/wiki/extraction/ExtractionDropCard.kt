@@ -55,7 +55,7 @@ internal fun ExtractionDropCard(
             if (entry.dropCountState == DropCountState.ZERO) {
                 Surface(shape = AppShapes.chip, color = MaterialTheme.colorScheme.errorContainer) {
                     Text(
-                        "实际不出货 · 件数恒为 0",
+                        "无物品掉落 · 0 件",
                         Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onErrorContainer,

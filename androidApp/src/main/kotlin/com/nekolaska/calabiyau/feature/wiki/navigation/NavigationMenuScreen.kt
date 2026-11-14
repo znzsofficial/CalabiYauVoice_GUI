@@ -31,7 +31,6 @@ import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavItem
 import com.nekolaska.calabiyau.feature.wiki.navigation.model.NavSection
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -99,7 +98,7 @@ fun NavigationMenuScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState(mod, "正在加载 Wiki 导航…") }
+            loading = { mod -> NavigationMenuSkeleton(mod) }
         ) {
             if (sections.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

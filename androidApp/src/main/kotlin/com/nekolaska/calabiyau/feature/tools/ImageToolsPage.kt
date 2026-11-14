@@ -68,6 +68,9 @@ import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1205,10 +1208,10 @@ internal fun ImageToolsPage(
             subtitle = "按比例裁切图片并导出",
             icon = Icons.Outlined.ContentCut
         ) {
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
             ) {
                 Text("裁切比例：$cropPreset", style = MaterialTheme.typography.bodyMedium)
                 FilledTonalButton(
@@ -1218,11 +1221,13 @@ internal fun ImageToolsPage(
                         cropRatioHText = oldWidth
                         updateCropPresetFromText(cropRatioWText, cropRatioHText)
                     },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
+                    enabled = !isBusy,
+                    shape = AppShapes.capsule,
+                    contentPadding = PaddingValues(horizontal = AppSpacing.large, vertical = AppSpacing.medium),
+                    modifier = Modifier.heightIn(min = 48.dp)
                 ) {
-                    Icon(Icons.Outlined.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(4.dp))
+                    Icon(Icons.Outlined.SwapHoriz, contentDescription = null, modifier = Modifier.size(AppSizes.iconSmall))
+                    Spacer(Modifier.size(AppSpacing.xSmall))
                     Text("交换横纵比", style = MaterialTheme.typography.bodySmall)
                 }
             }

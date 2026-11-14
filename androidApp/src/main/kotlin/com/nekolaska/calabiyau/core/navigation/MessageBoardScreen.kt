@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberPlainTextClipboardCopier
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
@@ -111,9 +111,7 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = back, enabled = !busy) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
+                    BackNavButton(onClick = back, enabled = !busy)
                 },
                 actions = {
                     if (state.userInfo != null) IconButton(onClick = {
@@ -915,7 +913,7 @@ private fun BoardNicknameField(state: MessageBoardState) {
         state.nickname,
         state::updateNickname,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("访客昵称（可选）") },
+        placeholder = { Text("访客昵称（可选）", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
         singleLine = true,
         enabled = !state.posting,
         shape = smoothCornerShape(14.dp),

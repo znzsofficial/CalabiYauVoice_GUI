@@ -14,22 +14,17 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Edit
@@ -41,22 +36,19 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.ViewDay
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,21 +58,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
+import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.SeekablePredictiveBackHandler
 import com.nekolaska.calabiyau.core.ui.rememberPredictiveBackTransition
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import com.nekolaska.calabiyau.feature.tools.getWritablePathFromTreeUri
 import com.nekolaska.calabiyau.feature.wiki.hub.defaultQuickEntryIds
@@ -188,29 +177,13 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
         Scaffold(
             topBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalIconButton(
-                        onClick = onBack,
-                        modifier = Modifier.size(40.dp),
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                        )
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(AppSpacing.iconGap))
-                    Text(
-                        "设置",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold
+                TopAppBar(
+                    title = { Text("设置", style = AppTextStyles.topBarTitle) },
+                    navigationIcon = { BackNavButton(onClick = onBack) },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
                     )
-                }
+                )
             },
             containerColor = MaterialTheme.colorScheme.background
         ) { innerPadding ->
@@ -218,6 +191,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding)
                     .verticalScroll(settingsScrollState)
             ) {
                 Spacer(Modifier.height(AppSpacing.xSmall))
@@ -253,43 +227,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                             onClick = { showQuickLayoutDialog = true }
                         )
                         if (showQuickLayoutDialog) {
-                            AlertDialog(
+                            SettingsSingleChoiceDialog(
                                 onDismissRequest = { showQuickLayoutDialog = false },
-                                title = { Text("快捷入口") },
-                                text = {
-                                    Column {
-                                        listOf(
-                                            AppPrefs.HOME_QUICK_LAYOUT_GRID to "网格",
-                                            AppPrefs.HOME_QUICK_LAYOUT_BUTTONS to "按钮"
-                                        ).forEach { (layout, label) ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(smoothCornerShape(12.dp))
-                                                    .clickable {
-                                                        homeQuickEntryLayout = layout
-                                                        AppPrefs.homeQuickEntryLayout = layout
-                                                        showQuickLayoutDialog = false
-                                                    }
-                                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = homeQuickEntryLayout == layout,
-                                                    onClick = {
-                                                        homeQuickEntryLayout = layout
-                                                        AppPrefs.homeQuickEntryLayout = layout
-                                                        showQuickLayoutDialog = false
-                                                    }
-                                                )
-                                                Spacer(Modifier.width(12.dp))
-                                                Text(label, style = MaterialTheme.typography.bodyLarge)
-                                            }
-                                        }
-                                    }
-                                },
-                                shape = AppShapes.dialog,
-                                confirmButton = {}
+                                title = "快捷入口",
+                                options = listOf(
+                                    AppPrefs.HOME_QUICK_LAYOUT_GRID to "网格",
+                                    AppPrefs.HOME_QUICK_LAYOUT_BUTTONS to "按钮"
+                                ),
+                                selectedValue = homeQuickEntryLayout,
+                                onSelect = { layout ->
+                                    homeQuickEntryLayout = layout
+                                    AppPrefs.homeQuickEntryLayout = layout
+                                    showQuickLayoutDialog = false
+                                }
                             )
                         }
 
@@ -338,7 +288,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         )
                         if (showPathDialog) {
                             var tempPath by remember { mutableStateOf(savePath) }
-                            AlertDialog(
+                            SettingsDialog(
                                 onDismissRequest = { showPathDialog = false },
                                 title = { Text("设置保存路径") },
                                 text = {
@@ -349,7 +299,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         modifier = Modifier.fillMaxWidth(),
                                         singleLine = false,
                                         maxLines = 3,
-                                        shape = smoothCornerShape(16.dp)
+                                        shape = AppShapes.compactCard
                                     )
                                 },
                                 shape = AppShapes.dialog,
@@ -376,7 +326,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         )
                         if (showConcurrencyDialog) {
                             var tempConcurrency by remember { mutableStateOf(maxConcurrency) }
-                            AlertDialog(
+                            SettingsDialog(
                                 onDismissRequest = { showConcurrencyDialog = false },
                                 title = { Text("同时下载") },
                                 text = {
@@ -394,7 +344,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                             modifier = Modifier.fillMaxWidth(),
                                             singleLine = true,
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            shape = smoothCornerShape(16.dp)
+                                            shape = AppShapes.compactCard
                                         )
                                     }
                                 },
@@ -426,43 +376,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                             onClick = { showBarStyleDialog = true }
                         )
                         if (showBarStyleDialog) {
-                            AlertDialog(
+                            SettingsSingleChoiceDialog(
                                 onDismissRequest = { showBarStyleDialog = false },
-                                title = { Text("底栏样式") },
-                                text = {
-                                    Column {
-                                        listOf(
-                                            AppPrefs.BAR_STYLE_DOCKED_TOOLBAR to "悬浮工具栏",
-                                            AppPrefs.BAR_STYLE_BOTTOM_APP_BAR to "经典导航栏"
-                                        ).forEach { (style, label) ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(smoothCornerShape(16.dp))
-                                                    .clickable {
-                                                        bottomBarStyle = style
-                                                        AppPrefs.bottomBarStyle = style
-                                                        showBarStyleDialog = false
-                                                    }
-                                                    .padding(vertical = 12.dp, horizontal = 12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = bottomBarStyle == style,
-                                                    onClick = {
-                                                        bottomBarStyle = style
-                                                        AppPrefs.bottomBarStyle = style
-                                                        showBarStyleDialog = false
-                                                    }
-                                                )
-                                                Spacer(Modifier.width(12.dp))
-                                                Text(label, style = MaterialTheme.typography.bodyLarge)
-                                            }
-                                        }
-                                    }
-                                },
-                                shape = AppShapes.dialog,
-                                confirmButton = {}
+                                title = "底栏样式",
+                                options = listOf(
+                                    AppPrefs.BAR_STYLE_DOCKED_TOOLBAR to "悬浮工具栏",
+                                    AppPrefs.BAR_STYLE_BOTTOM_APP_BAR to "经典导航栏"
+                                ),
+                                selectedValue = bottomBarStyle,
+                                onSelect = { style ->
+                                    bottomBarStyle = style
+                                    AppPrefs.bottomBarStyle = style
+                                    showBarStyleDialog = false
+                                }
                             )
                         }
                     }
@@ -505,7 +431,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             onClick = { showClearCookieDialog = true }
                         )
                         if (showClearCookieDialog) {
-                            AlertDialog(
+                            SettingsDialog(
                                 onDismissRequest = { showClearCookieDialog = false },
                                 title = { Text("退出登录") },
                                 text = { Text("将清除 Wiki 登录信息。之后需要重新登录才能使用投票等功能。") },
@@ -548,7 +474,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.height(AppSpacing.sectionGap))
+                Spacer(Modifier.height(AppSpacing.itemGap))
 
                 // 关于分组
                 SettingsGroupHeader("关于")
@@ -560,9 +486,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.30"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.0"
                     } catch (_: Exception) {
-                        "2.1.30"
+                        "2.2.0"
                     }
                 }
                 val currentVersionCode = remember {

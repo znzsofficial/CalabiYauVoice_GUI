@@ -21,7 +21,6 @@ import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
 import com.nekolaska.calabiyau.feature.wiki.game.model.GameModeDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -66,7 +65,7 @@ fun GameModeScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> LoadingState(mod, "正在加载模式信息…") }
+            loading = { mod -> GameModeSkeleton(mod) }
         ) { modes ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

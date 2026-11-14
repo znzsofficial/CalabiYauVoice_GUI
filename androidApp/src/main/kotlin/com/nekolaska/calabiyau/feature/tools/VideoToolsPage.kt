@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -188,7 +190,7 @@ internal fun VideoToolsPage(
             icon = Icons.Outlined.Image,
             expandedByDefault = true
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.large)) {
                 VideoPickedFilePanel(label = "源文件", name = frameName ?: "未选择视频文件")
                 AudioActionButton(
                     text = frameName?.let { "重新选择视频" } ?: "选择视频文件",
@@ -252,7 +254,7 @@ internal fun VideoToolsPage(
                         onClick = { runFrameExport() },
                         enabled = !isBusy,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = smoothCornerShape(24.dp)
+                        shape = AppShapes.card
                     ) {
                         Icon(Icons.Outlined.Image, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
@@ -399,15 +401,15 @@ private fun formatVideoFrameTime(durationMs: Long): String {
 @Composable
 private fun VideoPickedFilePanel(label: String, name: String) {
     Surface(
-        shape = smoothCornerShape(14.dp),
+        shape = AppShapes.sectionIcon,
         color = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = AppSpacing.large, vertical = AppSpacing.medium)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 name,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
         }

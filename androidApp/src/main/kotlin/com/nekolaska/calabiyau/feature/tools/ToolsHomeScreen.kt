@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
@@ -22,11 +23,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.SeekablePredictiveBackHandler
 import com.nekolaska.calabiyau.core.ui.rememberPredictiveBackTransition
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
@@ -130,7 +138,7 @@ fun ToolsHomeScreen(
                     {
                         openInFileManagerIfAvailable(
                             resolveSectionOutputDirectory(outputPath, activeSection).absolutePath,
-                            "仅支持在应用保存目录内跳转文件管理"
+                            "此目录不在应用保存目录内，可用其他应用打开"
                         )
                     }
                 } else {
@@ -161,12 +169,12 @@ fun ToolsHomeScreen(
                     onPickDirectoryInFileManager = {
                         onPickDirectoryFromFileManager(
                             outputPath,
-                            "为素材工具选择输出目录",
-                            "进入文件管理的目录选择模式后，浏览到目标目录并直接确认。"
+                            "输出目录",
+                            "处理后的文件将保存到所选目录。"
                         ) { pickedPath ->
                             outputPath = pickedPath
                             AppPrefs.toolsOutputPath = pickedPath
-                            showSnack("已通过文件管理更新输出目录")
+                            showSnack("输出目录已更新")
                         }
                     },
                     onOpenDirectory = {
@@ -175,7 +183,7 @@ fun ToolsHomeScreen(
                     onOpenInFileManager = {
                         openInFileManagerIfAvailable(
                             File(outputPath).absolutePath,
-                            "仅支持在应用保存目录内跳转文件管理"
+                            "此目录不在应用保存目录内，可用其他应用打开"
                         )
                     },
                     onSelectSection = { currentSection = it },
@@ -185,7 +193,7 @@ fun ToolsHomeScreen(
                     onOpenResultInFileManager = { output ->
                         openInFileManagerIfAvailable(
                             output.directory?.absolutePath ?: output.files.firstOrNull()?.parent,
-                            "结果不在文件管理根目录内"
+                            "结果位于应用保存目录外，可用其他应用打开"
                         )
                     },
                     onShareResult = { output ->
@@ -227,15 +235,15 @@ private fun ToolsTopBar(
     onOpenOutputDirectory: (() -> Unit)?
 ) {
     if (sectionTitle == null) {
-        LargeTopAppBar(
-            title = { Text("素材工具") },
+        TopAppBar(
+            title = { Text("素材工具", style = AppTextStyles.topBarTitle) },
             navigationIcon = {
                 BackNavButton(onClick = onBack)
             }
         )
     } else {
         TopAppBar(
-            title = { Text(sectionTitle) },
+            title = { Text(sectionTitle, style = AppTextStyles.topBarTitle) },
             navigationIcon = {
                 BackNavButton(onClick = onBackToHome)
             },
@@ -278,9 +286,16 @@ private fun ToolsHomeContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(top = innerPadding.calculateTopPadding())
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .consumeWindowInsets(innerPadding),
+        contentPadding = PaddingValues(
+            start = AppSpacing.screen,
+            end = AppSpacing.screen,
+            top = AppSpacing.large,
+            bottom = AppSpacing.large + innerPadding.calculateBottomPadding()
+        ),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
     ) {
         item {
             ToolsOutputDirectoryCard(
@@ -349,7 +364,9 @@ private fun ToolsSectionContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
+            .padding(top = innerPadding.calculateTopPadding())
+            .consumeWindowInsets(PaddingValues(top = innerPadding.calculateTopPadding()))
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
     ) {
         when (section) {
             ToolsSection.IMAGE -> ImageToolsPage(
@@ -387,16 +404,16 @@ private fun ToolsSectionContent(
             Surface(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .padding(24.dp),
-                shape = smoothCornerShape(24.dp),
+                    .padding(AppSpacing.screen),
+                shape = AppShapes.card,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    modifier = Modifier.padding(horizontal = AppSpacing.cardContent, vertical = AppSpacing.screen),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.large)
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(AppSizes.iconMedium), strokeWidth = 2.dp)
                     Text("处理中…", style = MaterialTheme.typography.bodyMedium)
                 }
             }
@@ -416,14 +433,14 @@ private fun ToolsOutputDirectoryCard(
     var openMenuExpanded by remember { mutableStateOf(false) }
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(AppSpacing.cardContent),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Surface(
@@ -526,18 +543,18 @@ private fun ToolsOutputDirectoryCard(
 private fun ToolsSectionCard(section: ToolsSection, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(AppSpacing.cardContent),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.sectionGap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                shape = smoothCornerShape(12.dp),
+                shape = AppShapes.chip,
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Icon(
@@ -555,7 +572,7 @@ private fun ToolsSectionCard(section: ToolsSection, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Icon(Icons.Outlined.BuildCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -565,9 +582,12 @@ internal fun ToolPageColumn(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // IME resizes the viewport; the remaining system inset scrolls with the content.
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+            .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.large),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.large),
         content = content
     )
 }
@@ -583,19 +603,21 @@ internal fun ToolCard(
     var expanded by rememberSaveable { mutableStateOf(expandedByDefault) }
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = Modifier.animateContentSize()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = smoothCornerShape(12.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { stateDescription = if (expanded) "已展开" else "已收起" }
+                    .clickable(role = Role.Button, onClickLabel = if (expanded) "收起" else "展开") { expanded = !expanded }
+                    .padding(AppSpacing.cardContent),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.large),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(shape = AppShapes.chip, color = MaterialTheme.colorScheme.tertiaryContainer) {
                     Icon(
                         icon,
                         contentDescription = null,
@@ -609,13 +631,18 @@ internal fun ToolCard(
                 }
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription = if (expanded) "收起" else "展开",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (expanded) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                content()
+                Column(
+                    modifier = Modifier.padding(start = AppSpacing.cardContent, end = AppSpacing.cardContent, bottom = AppSpacing.cardContent),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
+                ) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    content()
+                }
             }
         }
     }
@@ -629,14 +656,14 @@ private fun ToolResultCard(
     onShare: () -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = AppShapes.card,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(AppSpacing.cardContent),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.large)
         ) {
             Text(output.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(output.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

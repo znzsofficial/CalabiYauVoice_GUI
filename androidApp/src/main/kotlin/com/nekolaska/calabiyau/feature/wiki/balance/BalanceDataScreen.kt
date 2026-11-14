@@ -545,8 +545,8 @@ private fun FilterDropdown(
             value = selected?.name ?: "",
             onValueChange = {},
             readOnly = true,
-            label = { Text(label) },
-            placeholder = placeholderText?.let { { Text(it) } },
+            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            placeholder = placeholderText?.let { { Text(it, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) } },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)

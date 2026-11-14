@@ -385,9 +385,9 @@ fun BioCardScreen(
                         onClear = { updateKeyword("") },
                         isSearching = false,
                         placeholder = when (selectedTab) {
-                            BioCardTab.PC -> "搜索卡牌名 / 效果 / 适用角色"
-                            BioCardTab.MOBILE -> "搜索卡牌名 / 效果"
-                            BioCardTab.DECK -> "搜索卡组名 / 作者 / 卡牌"
+                            BioCardTab.PC -> "搜索卡牌、效果或角色"
+                            BioCardTab.MOBILE -> "搜索卡牌或效果"
+                            BioCardTab.DECK -> "搜索卡组、作者或卡牌"
                         }
                     )
                     FilledTonalIconButton(
@@ -1267,8 +1267,8 @@ private fun DeckShareComposerCard(
                             OutlinedTextField(
                                 value = shareCodeInput,
                                 onValueChange = { shareCodeInput = it },
-                                label = { Text("导入分享码") },
-                                placeholder = { Text("粘贴后点击导入") },
+                                label = { Text("导入分享码", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                placeholder = { Text("粘贴分享码", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis) },
                                 singleLine = true,
                                 shape = AppShapes.compactCard,
                                 modifier = Modifier.weight(1f)

@@ -9,9 +9,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.*
@@ -36,9 +37,12 @@ import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.media.AudioPlayButton
 import com.nekolaska.calabiyau.core.media.AudioPlayerManager
 import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextColors
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
+import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.ZoomableImage
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -229,111 +233,94 @@ fun FileManagerScreen(
 
     Scaffold(
         topBar = {
-            Surface(
-                color = if (isSelectionMode) MaterialTheme.colorScheme.surfaceContainerHigh
-                        else MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column {
-                    if (isSelectionMode) {
-                        // ── 多选模式顶栏 ──
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding()
-                                .padding(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = {
-                                clearSelection()
-                            }) {
-                                Icon(Icons.Default.Close, "退出多选")
-                            }
-                            Text(
-                                text = "已选 ${selectedFiles.size} 项",
-                                style = AppTextStyles.topBarTitle,
-                                modifier = Modifier.weight(1f)
-                            )
-                            // 全选 / 取消全选
-                            val allSelected = selectedFiles.size == eligibleFiles.size && eligibleFiles.isNotEmpty()
-                            IconButton(onClick = {
-                                toggleAllSelection()
-                            }) {
-                                Icon(
-                                    if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
-                                    if (allSelected) "取消全选" else "全选"
-                                )
-                            }
-                            if (!isPickerMode) {
-                                val shareableFiles = entries
-                                    .filter { !it.directory && it.file.absolutePath in selectedFiles }.map { it.file }
-                                IconButton(
-                                    onClick = { shareFiles(context, shareableFiles, showSnack) },
-                                    enabled = shareableFiles.isNotEmpty() && !isMutating
-                                ) {
-                                    Icon(Icons.Outlined.Share, "批量分享")
-                                }
-                                IconButton(
-                                    onClick = { showBatchDeleteDialog = true },
-                                    enabled = selectedFiles.isNotEmpty() && !isMutating
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Delete, "批量删除",
-                                        tint = if (selectedFiles.isNotEmpty()) MaterialTheme.colorScheme.error
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                    )
-                                }
-                            }
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = {
+                        Text("已选 ${selectedFiles.size} 项", style = AppTextStyles.topBarTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    },
+                    navigationIcon = {
+                        FilledTonalIconButton(onClick = { clearSelection() }) {
+                            Icon(Icons.Default.Close, "退出多选")
                         }
-                    } else {
-                        // ── 普通模式顶栏 ──
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding()
-                                .padding(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
-                            verticalAlignment = Alignment.CenterVertically
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                    actions = {
+                        val allSelected = selectedFiles.size == eligibleFiles.size && eligibleFiles.isNotEmpty()
+                        IconButton(
+                            onClick = { toggleAllSelection() },
+                            enabled = !isLoading && !isMutating && eligibleFiles.isNotEmpty()
                         ) {
-                            IconButton(onClick = {
-                                if (!isAtRoot) {
-                                    currentDir = currentDir.parentFile ?: currentDir
-                                } else {
-                                    onBack()
-                                }
-                            }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                            Icon(
+                                if (allSelected) Icons.Default.Deselect else Icons.Default.SelectAll,
+                                if (allSelected) "取消全选" else "全选"
+                            )
+                        }
+                        if (!isPickerMode) {
+                            val shareableFiles = entries
+                                .filter { !it.directory && it.file.absolutePath in selectedFiles }.map { it.file }
+                            IconButton(
+                                onClick = { shareFiles(context, shareableFiles, showSnack) },
+                                enabled = shareableFiles.isNotEmpty() && !isMutating
+                            ) {
+                                Icon(Icons.Outlined.Share, "批量分享")
                             }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = when {
-                                        pickerConfig != null && isAtRoot -> pickerConfig.title
-                                        isAtRoot -> "文件管理"
-                                        else -> currentDir.name
-                                    },
-                                    style = AppTextStyles.topBarTitle,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                            IconButton(
+                                onClick = { showBatchDeleteDialog = true },
+                                enabled = selectedFiles.isNotEmpty() && !isMutating
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Delete, "批量删除",
+                                    tint = if (selectedFiles.isNotEmpty() && !isMutating) MaterialTheme.colorScheme.error
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 )
-                                Text(
-                                    text = (when {
-                                        loadError != null -> "读取失败"
-                                        isLoading || loadedDirectory != currentDir -> "读取中…"
-                                        else -> "${files.size} 项"
-                                    }) + if (!isAtRoot) " · ${
-                                        currentDir.relativePathWithin(rootDir).orEmpty()
-                                    }" else "",
-                                    style = AppTextStyles.topBarSubtitle,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            IconButton(onClick = { refreshCounter++ }, enabled = !isLoading && !isMutating) {
-                                Icon(Icons.Default.Refresh, "刷新文件列表")
                             }
                         }
                     }
-                }
+                )
+            } else {
+                TopAppBar(
+                    navigationIcon = {
+                        BackNavButton(onClick = {
+                            if (!isAtRoot) {
+                                currentDir = currentDir.parentFile ?: currentDir
+                            } else {
+                                onBack()
+                            }
+                        })
+                    },
+                    title = {
+                        Column {
+                            Text(
+                                text = when {
+                                    pickerConfig != null && isAtRoot -> pickerConfig.title
+                                    isAtRoot -> "文件管理"
+                                    else -> currentDir.name
+                                },
+                                style = AppTextStyles.topBarTitle,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = (when {
+                                    loadError != null -> "读取失败"
+                                    isLoading || loadedDirectory != currentDir -> "读取中…"
+                                    else -> "${files.size} 项"
+                                }) + if (!isAtRoot) " · ${
+                                    currentDir.relativePathWithin(rootDir).orEmpty()
+                                }" else "",
+                                style = AppTextStyles.topBarSubtitle,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { refreshCounter++ }, enabled = !isLoading && !isMutating) {
+                            Icon(Icons.Default.Refresh, "刷新文件列表")
+                        }
+                    }
+                )
             }
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -342,6 +329,7 @@ fun FileManagerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
             if (isMutating) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (isPickerMode) {
@@ -373,9 +361,7 @@ fun FileManagerScreen(
             Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 isLoading || loadedDirectory != currentDir && loadError == null -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                    FileListSkeleton()
                 }
                 loadError != null -> {
                     Column(Modifier.fillMaxSize().padding(AppSpacing.screen),
@@ -412,7 +398,7 @@ fun FileManagerScreen(
                 }
                 else -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
                         verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
                     ) {
                         items(entries, key = { it.file.absolutePath }) { entry ->
@@ -485,6 +471,7 @@ fun FileManagerScreen(
                 }
             }
             }
+            LocalAudioMiniBar()
         }
     }
 
@@ -500,8 +487,11 @@ fun FileManagerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // ModalBottomSheet already consumes its default bottom safe inset.
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium)
-                    .padding(bottom = AppSpacing.xxxLarge)
+                    .padding(bottom = AppSpacing.screen)
             ) {
                 // 文件信息头
                 Row(
@@ -768,16 +758,18 @@ fun FileManagerScreen(
 
         Dialog(
             onDismissRequest = { showGallery = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            // This full-screen dialog owns its insets instead of combining platform fitting with padding.
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(AppSpacing.dialogMargin),
+                    .safeDrawingPadding()
+                    .padding(AppSpacing.medium),
                 shape = AppShapes.dialog,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
             ) {
-                Column(Modifier.padding(AppSpacing.screen)) {
+                Column(Modifier.padding(AppSpacing.large)) {
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -800,11 +792,11 @@ fun FileManagerScreen(
                         Row {
                             if (currentFile != null) {
                                 IconButton(onClick = { shareFile(context, currentFile, showSnack) }) {
-                                    Icon(Icons.Outlined.Share, "分享", modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Outlined.Share, "分享", modifier = Modifier.size(AppSizes.iconMedium))
                                 }
                             }
                             IconButton(onClick = { showGallery = false }) {
-                                Icon(Icons.Default.Close, "关闭", modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.Close, "关闭", modifier = Modifier.size(AppSizes.iconMedium))
                             }
                         }
                     }
@@ -814,7 +806,7 @@ fun FileManagerScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
-                        pageSpacing = 16.dp
+                        pageSpacing = AppSpacing.sectionGap
                     ) { page ->
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -826,7 +818,7 @@ fun FileManagerScreen(
                                 loadOriginalSize = true,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(smoothCornerShape(16.dp))
+                                    .clip(AppShapes.compactCard)
                             )
                         }
                     }
@@ -961,6 +953,62 @@ private fun DirectoryPickerBanner(
 // ─────────────────────── 子组件 ───────────────────────
 
 @Composable
+private fun LocalAudioMiniBar() {
+    val source by AudioPlayerManager.playingSource
+    val isPlaying by AudioPlayerManager.isPlaying
+    val localFile = source?.let(::File)?.takeIf { it.isAbsolute } ?: return
+
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen, vertical = AppSpacing.xSmall),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.iconGap)
+        ) {
+            Icon(Icons.Outlined.AudioFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (isPlaying) "正在播放" else "本地音频",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(localFile.name, style = AppTextStyles.listItemTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            TextButton(onClick = { AudioPlayerManager.stop() }) {
+                Icon(Icons.Filled.Stop, contentDescription = null, modifier = Modifier.size(AppSizes.iconSmall))
+                Spacer(Modifier.width(AppSpacing.xSmall))
+                Text("停止")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileListSkeleton() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = false,
+        contentPadding = PaddingValues(horizontal = AppSpacing.medium, vertical = AppSpacing.xSmall),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
+    ) {
+        items(7) { index ->
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp)
+                    .padding(horizontal = AppSpacing.large, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShimmerBox(Modifier.size(44.dp), shape = AppShapes.chip)
+                Spacer(Modifier.width(AppSpacing.iconGap))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
+                    ShimmerBox(Modifier.fillMaxWidth(if (index % 2 == 0) 0.72f else 0.55f).height(AppSizes.iconXSmall))
+                    ShimmerBox(Modifier.fillMaxWidth(0.4f).height(AppSpacing.large))
+                }
+                Spacer(Modifier.width(48.dp))
+            }
+        }
+    }
+}
+
+@Composable
 private fun FileListItem(
     file: File,
     directory: Boolean,
@@ -989,7 +1037,7 @@ private fun FileListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(smoothCornerShape(12.dp))
+            .clip(AppShapes.chip)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -1001,7 +1049,7 @@ private fun FileListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 多选模式显示勾选框
-                                    if (isSelectionMode) {
+            if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,
                     onCheckedChange = { onClick() },
@@ -1033,10 +1081,10 @@ private fun FileListItem(
             }
             // 多选模式下隐藏更多操作按钮
             if (!isSelectionMode && showMore) {
-                IconButton(onClick = onMoreClick, modifier = Modifier.size(36.dp)) {
+                IconButton(onClick = onMoreClick) {
                     Icon(
                         Icons.Default.MoreVert, "操作",
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(AppSizes.iconSmall),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

@@ -251,6 +251,7 @@ private fun WikiHubWallpaperBackground(
 fun WikiHubScreen(
     onOpenDrawer: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
+    showDrawerButton: Boolean = true,
     isOverlaid: Boolean = false,
     initialPage: WikiRoute = WikiRoute.Home,
     resetKey: Int = 0
@@ -451,6 +452,7 @@ fun WikiHubScreen(
             is WikiRoute.Home -> {
                 WikiHomePage(
                     onOpenDrawer = onOpenDrawer,
+                    showDrawerButton = showDrawerButton,
                     onOpenWikiUrl = onOpenWikiUrl,
                     listState = homeListState,
                     characterRowState = homeCharacterRowState,

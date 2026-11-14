@@ -20,6 +20,8 @@ import androidx.compose.ui.semantics.selected
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiSheetFrame(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    // Material3's default modalWindowInsets already pads AND consumes safeDrawing
+    // (top/bottom, including IME). Child spacing is visual breathing room, not system insets.
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden,
@@ -35,18 +37,24 @@ fun WikiContentSheet(onDismiss: () -> Unit, content: LazyListScope.() -> Unit) {
     WikiSheetFrame(onDismiss) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth().heightIn(max = 680.dp),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp), content = content
+            contentPadding = PaddingValues(
+                start = AppSpacing.cardContent, end = AppSpacing.cardContent,
+                top = AppSpacing.itemGap, bottom = AppSpacing.cardContent
+            ),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.large), content = content
         )
     }
 }
 
 /** Short, non-virtualized detail content; the whole header and body scroll together. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WikiScrollableSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     WikiSheetFrame(onDismiss) {
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 32.dp), content = content)
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(bottom = AppSpacing.cardContent),
+            content = content
+        )
     }
 }
 
@@ -60,7 +68,7 @@ fun WikiSelectionSheet(
 ) {
     WikiContentSheet(onDismiss) {
         item(key = "selection-header", contentType = "selection-header") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.large)) {
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 if (query != null) SearchBar(keyword = query, onKeywordChange = onQueryChange,
                     onSearch = {}, onClear = { onQueryChange("") }, isSearching = false, placeholder = searchPlaceholder)
@@ -79,7 +87,7 @@ fun SelectionOptionRow(
     Surface(onClick = onClick, modifier = modifier.fillMaxWidth().semantics { this.selected = selected }, shape = AppShapes.card,
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.large)) {
             leading?.invoke()
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
@@ -91,7 +99,7 @@ fun SelectionOptionRow(
 @Composable
 fun DetailField(modifier: Modifier = Modifier, label: String, value: String) {
     if (value.isBlank()) return
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
         Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold)
         Text(value, style = MaterialTheme.typography.bodyMedium)

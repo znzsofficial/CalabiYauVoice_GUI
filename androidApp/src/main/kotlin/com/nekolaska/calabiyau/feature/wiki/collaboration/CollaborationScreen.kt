@@ -77,8 +77,9 @@ fun CollaborationScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.timelineYears.isEmpty() && it.events.isEmpty() },
             enablePullToRefresh = false,
-            loading = { mod -> LoadingState(mod, "正在加载联动数据…") }
+            loading = { mod -> CollaborationSkeleton(mod) }
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
