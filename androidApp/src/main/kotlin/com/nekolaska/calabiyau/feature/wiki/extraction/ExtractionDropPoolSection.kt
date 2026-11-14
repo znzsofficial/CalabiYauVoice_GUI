@@ -1,8 +1,9 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
-import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropArtworkIndex
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionDropPoolGroup
 
@@ -30,20 +32,38 @@ internal fun LazyListScope.extractionDropPoolSection(
     item(key = "pool-heading:${group.key}", contentType = "pool-heading") {
         val canExpand = group.items.size > 8
         val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(180), label = "drop-pool-arrow")
-        Row(Modifier.dropItemMotion(this).fillMaxWidth()
-            .then(if (canExpand) Modifier.clickable(role = Role.Button, onClickLabel = if (expanded) "收起物品" else "展开全部物品",
-                onClick = onToggle).semantics { stateDescription = if (expanded) "已展开" else "显示前 8 件" } else Modifier)
-            .heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Surface(
+            modifier = Modifier.dropItemMotion(this).fillMaxWidth()
+                .then(if (canExpand) Modifier.clickable(
+                    role = Role.Button,
+                    onClickLabel = if (expanded) "收起物品" else "展开全部物品",
+                    onClick = onToggle
+                ).semantics { stateDescription = if (expanded) "已展开" else "显示前 8 件" } else Modifier),
+            shape = AppShapes.compactCard,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        ) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 ExtractionDropQualityBadge(label = group.label, code = group.qualityCode ?: -1)
-                Text("${group.items.size} 件物品", style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold)
-            }
-            if (canExpand) {
-                Text(if (expanded) "收起" else "展开全部", style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary)
-                Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.primary)
+                Text(
+                    "${group.items.size} 件物品",
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (canExpand) {
+                    Text(
+                        if (expanded) "收起" else "展开全部",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.primary)
+                }
             }
         }
     }
@@ -56,8 +76,14 @@ internal fun LazyListScope.extractionDropPoolSection(
     }
     items(count = visible.size, key = { "pool-item:${keys[it]}" }, contentType = { "pool-item" }) { index ->
         val name = visible[index]
-        ExtractionDetailItemRow(modifier = Modifier.dropItemMotion(this), name = name, qualityLabel = group.label, qualityCode = group.qualityCode ?: -1,
-            imageUrl = artwork.imageFor(name, group.label), onClick = onItemClick?.let { { it(name) } })
+        ExtractionDetailItemRow(
+            modifier = Modifier.dropItemMotion(this),
+            name = name,
+            qualityLabel = group.label,
+            qualityCode = group.qualityCode ?: -1,
+            imageUrl = artwork.imageFor(name, group.label),
+            onClick = onItemClick?.let { { it(name) } }
+        )
     }
 }
 
@@ -66,23 +92,44 @@ internal fun ExtractionDetailItemRow(
     name: String, qualityLabel: String, qualityCode: Int, imageUrl: String?, onClick: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
-    val action = if (onClick == null) Modifier else Modifier.clickable(
-        role = Role.Button, onClickLabel = "查找$name 的掉落来源", onClick = onClick
-    )
-    Row(
-        modifier = modifier.fillMaxWidth().then(action).heightIn(min = 64.dp).padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    Surface(
+        modifier = modifier.fillMaxWidth()
+            .then(if (onClick == null) Modifier else Modifier.clickable(
+                role = Role.Button, onClickLabel = "查找$name 的掉落来源", onClick = onClick
+            )),
+        shape = AppShapes.compactCard,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
     ) {
-        ExtractionDropThumbnail(name = name, qualityLabel = qualityLabel, qualityCode = qualityCode,
-            imageUrl = imageUrl, modifier = Modifier.size(48.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-            if (qualityLabel.isNotBlank()) ExtractionDropQualityBadge(label = qualityLabel, code = qualityCode)
-            if (onClick != null) Text("查来源", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary)
+        Row(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ExtractionDropThumbnail(
+                name = name, qualityLabel = qualityLabel, qualityCode = qualityCode,
+                imageUrl = imageUrl, modifier = Modifier.size(48.dp)
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (qualityLabel.isNotBlank()) ExtractionDropQualityBadge(label = qualityLabel, code = qualityCode)
+                    if (onClick != null) Text(
+                        "查来源",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            if (onClick != null) Icon(
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        if (onClick != null) Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-            contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

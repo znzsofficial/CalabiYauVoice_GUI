@@ -101,4 +101,24 @@ class PcGameSettingsParserTest {
         val result = PcGameSettingsParser.parse(document.html())
         assertTrue(result.issues.any { it.contains("画面/显示：章节表头字段不完整") })
     }
+
+    @Test fun expandedTechnologyHeadingAndReferenceTableStayInKnowledgeNotSettings() {
+        val html = checkNotNull(javaClass.getResource("/fixtures/gamesettings/upscaling_reference.html")).readText(Charsets.UTF_8)
+        val result = PcGameSettingsParser.parse(html)
+        val section = result.page.sections.single()
+        assertEquals(PcSettingsView.KNOWLEDGE, section.view)
+        assertEquals("DLSS、FSR、XESS是什么", section.title)
+        assertTrue(result.page.settings.isEmpty())
+        val rows = section.blocks.filterIsInstance<PcSettingsBlock.Reference>()
+        assertEquals(4, rows.size)
+        assertEquals("质量档位 (命名)", rows.first().nameLabel)
+        assertEquals("DLAA / 超高质量", rows.first().name)
+        assertEquals(listOf("100% (DLAA)", "~77%"), rows.first().fields.map { it.value })
+        assertTrue(result.issues.none { "DLSS / XeSS 科普" in it || "语义表头" in it || "没有设置名" in it })
+        assertEquals(rows.last().id, result.page.filteredSections(PcSettingsView.KNOWLEDGE, query = "43.5%")
+            .single().blocks.single().id)
+        assertTrue(section.blocks.filterIsInstance<PcSettingsBlock.Text>().any { "目前仅支持" in it.text })
+        val broken = Jsoup.parse(html).apply { select("tr").last()!!.children().last()!!.remove() }.html()
+        assertTrue(PcGameSettingsParser.parse(broken).issues.any { "字段缺失" in it })
+    }
 }

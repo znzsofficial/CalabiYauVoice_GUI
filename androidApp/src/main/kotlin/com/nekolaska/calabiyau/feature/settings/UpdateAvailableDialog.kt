@@ -31,10 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,23 +72,47 @@ internal fun UpdateAvailableDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var ui by remember { mutableStateOf(ApkDownloadUi.Idle) }
-    var progress by remember { mutableFloatStateOf(0f) }
-    var progressText by remember { mutableStateOf("") }
-    var errorText by remember { mutableStateOf<String?>(null) }
-    var pausedReason by remember { mutableStateOf<String?>(null) }
-    var download by remember { mutableStateOf<UpdateApi.ApkDownload?>(null) }
-    var apkFile by remember { mutableStateOf<File?>(null) }
+    val dialogKey = "${info.versionCode}:${info.versionName}"
+    var ui by rememberSaveable(
+        dialogKey,
+        stateSaver = Saver<ApkDownloadUi, Int>(
+            save = { it.ordinal },
+            restore = { ApkDownloadUi.entries.getOrElse(it) { ApkDownloadUi.Idle } }
+        )
+    ) { mutableStateOf(ApkDownloadUi.Idle) }
+    var progress by rememberSaveable(dialogKey) { mutableFloatStateOf(0f) }
+    var progressText by rememberSaveable(dialogKey) { mutableStateOf("") }
+    var errorText by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
+    var pausedReason by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
+    var downloadId by rememberSaveable(dialogKey) { mutableLongStateOf(-1L) }
+    var downloadFilePath by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
+    var apkFilePath by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(download?.id) {
-        val current = download ?: return@LaunchedEffect
+    fun cancelActiveDownload() {
+        val currentId = downloadId
+        if (currentId >= 0L) {
+            context.getSystemService(DownloadManager::class.java)?.remove(currentId)
+        }
+        downloadId = -1L
+        downloadFilePath = null
+        apkFilePath = null
+        progress = 0f
+        progressText = ""
+        errorText = null
+        pausedReason = null
+        ui = ApkDownloadUi.Idle
+    }
+
+    LaunchedEffect(downloadId, downloadFilePath) {
+        if (downloadId < 0L) return@LaunchedEffect
+        val fallbackFile = downloadFilePath?.let(::File) ?: return@LaunchedEffect
         val dm = context.getSystemService(DownloadManager::class.java)
         if (dm == null) {
             ui = ApkDownloadUi.Failed
             errorText = "下载服务不可用"
             return@LaunchedEffect
         }
-        val query = DownloadManager.Query().setFilterById(current.id)
+        val query = DownloadManager.Query().setFilterById(downloadId)
         while (isActive) {
             val snapshot = withContext(Dispatchers.IO) {
                 dm.query(query)?.use { cursor ->
@@ -109,8 +135,9 @@ internal fun UpdateAvailableDialog(
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     progress = 1f
                     progressText = "下载完成"
-                    apkFile = resolveDownloadedFile(current.file, snapshot.localUri)
-                    ui = if (apkFile?.exists() == true) ApkDownloadUi.Ready else {
+                    val resolved = resolveDownloadedFile(fallbackFile, snapshot.localUri)
+                    apkFilePath = resolved.absolutePath
+                    ui = if (resolved.exists()) ApkDownloadUi.Ready else {
                         errorText = "安装包未找到"
                         ApkDownloadUi.Failed
                     }
@@ -131,7 +158,8 @@ internal fun UpdateAvailableDialog(
                     ui = ApkDownloadUi.Downloading
                     if (snapshot.total > 0) {
                         progress = (snapshot.soFar.toFloat() / snapshot.total.toFloat()).coerceIn(0f, 1f)
-                        progressText = "${formatBytes(snapshot.soFar)} / ${formatBytes(snapshot.total)}"
+                        val percent = (progress * 100).toInt()
+                        progressText = "${formatBytes(snapshot.soFar)} / ${formatBytes(snapshot.total)} ($percent%)"
                     } else {
                         progress = 0f
                         progressText = if (snapshot.soFar > 0) formatBytes(snapshot.soFar) else "正在连接…"
@@ -155,7 +183,9 @@ internal fun UpdateAvailableDialog(
             tonalElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 Row(
@@ -238,7 +268,7 @@ internal fun UpdateAvailableDialog(
                         ApkDownloadUi.Ready -> {
                             FilledTonalButton(
                                 onClick = {
-                                    val file = apkFile
+                                    val file = apkFilePath?.let(::File)
                                     if (file != null && file.exists()) {
                                         scope.launch {
                                             val persisted = withContext(Dispatchers.IO) {
@@ -285,15 +315,18 @@ internal fun UpdateAvailableDialog(
                                 onClick = {
                                     try {
                                         // 移除旧任务，避免重复通知/双倍流量/写同一文件的竞争
-                                        download?.id?.let { oldId ->
-                                            context.getSystemService(DownloadManager::class.java)?.remove(oldId)
+                                        if (downloadId >= 0L) {
+                                            context.getSystemService(DownloadManager::class.java)?.remove(downloadId)
                                         }
                                         errorText = null
                                         pausedReason = null
+                                        apkFilePath = null
                                         progress = 0f
                                         progressText = "正在开始…"
                                         ui = ApkDownloadUi.Downloading
-                                        download = UpdateApi.enqueueApkDownload(context, info)
+                                        val started = UpdateApi.enqueueApkDownload(context, info)
+                                        downloadFilePath = started.file.absolutePath
+                                        downloadId = started.id
                                     } catch (e: Exception) {
                                         ui = ApkDownloadUi.Failed
                                         errorText = e.message ?: e.javaClass.simpleName
@@ -326,12 +359,14 @@ internal fun UpdateAvailableDialog(
                             Text("浏览器")
                         }
                         TextButton(
-                            onClick = onDismiss,
+                            onClick = {
+                                if (ui == ApkDownloadUi.Downloading) cancelActiveDownload()
+                                else onDismiss()
+                            },
                             modifier = Modifier.weight(1f),
-                            enabled = ui != ApkDownloadUi.Downloading,
                             shape = smoothCornerShape(16.dp)
                         ) {
-                            Text(if (ui == ApkDownloadUi.Downloading) "下载中" else "稍后")
+                            Text(if (ui == ApkDownloadUi.Downloading) "取消下载" else "稍后")
                         }
                     }
                 }
@@ -455,6 +490,5 @@ private fun updateLines(body: String): List<String> {
         .filter { it.isNotBlank() }
         .map { line -> line.removePrefix("•").removePrefix("-").trim() }
         .filter { it.isNotBlank() }
-        .take(8)
         .toList()
 }

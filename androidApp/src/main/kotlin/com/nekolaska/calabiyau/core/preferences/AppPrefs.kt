@@ -43,6 +43,8 @@ object AppPrefs {
     private lateinit var prefs: SharedPreferences
     private lateinit var appContext: Context
     private lateinit var wallpaperPreference: ObservablePreference<String?>
+    private lateinit var homeQuickEntryIdsPreference: ObservablePreference<List<String>>
+    private lateinit var homeQuickEntryLayoutPreference: ObservablePreference<Int>
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -50,7 +52,31 @@ object AppPrefs {
         wallpaperPreference = ObservablePreference(prefs.getString("wallpaperUrl", null)) { value ->
             prefs.edit { putString("wallpaperUrl", value) }
         }
+        homeQuickEntryIdsPreference = ObservablePreference(readHomeQuickEntryIds()) { value ->
+            prefs.edit { putString("homeQuickEntryIds", value.take(6).joinToString("|||")) }
+        }
+        homeQuickEntryLayoutPreference = ObservablePreference(readHomeQuickEntryLayout()) { value ->
+            val normalized = if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID
+            prefs.edit { putInt("homeQuickEntryLayout", normalized) }
+        }
     }
+
+    private fun readHomeQuickEntryIds(): List<String> =
+        if (!::prefs.isInitialized) emptyList()
+        else prefs.getString("homeQuickEntryIds", null)
+            ?.split("|||")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.take(6)
+            ?: emptyList()
+
+    private fun readHomeQuickEntryLayout(): Int =
+        if (!::prefs.isInitialized) HOME_QUICK_LAYOUT_GRID
+        else if (prefs.getInt("homeQuickEntryLayout", HOME_QUICK_LAYOUT_GRID) == HOME_QUICK_LAYOUT_BUTTONS) {
+            HOME_QUICK_LAYOUT_BUTTONS
+        } else {
+            HOME_QUICK_LAYOUT_GRID
+        }
 
     private fun intPref(def: Int = 0) = object : ReadWriteProperty<Any?, Int> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getInt(property.name, def)
@@ -189,21 +215,28 @@ object AppPrefs {
     fun flushMessageBoardDrafts(): Boolean = prefs.edit().putString("messageBoardDraftsJson", messageBoardDraftsJson).commit()
     var lastUpdateCheck by longPref(0L)
 
+    val homeQuickEntryIdsState get() = homeQuickEntryIdsPreference.state
     var homeQuickEntryIds: List<String>
-        get() = prefs.getString("homeQuickEntryIds", null)
-            ?.split("|||")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.take(6)
-            ?: emptyList()
-        set(value) = prefs.edit {
-            putString("homeQuickEntryIds", value.take(6).joinToString("|||"))
+        get() = if (::homeQuickEntryIdsPreference.isInitialized) homeQuickEntryIdsPreference.value else readHomeQuickEntryIds()
+        set(value) {
+            val normalized = value.map { it.trim() }.filter { it.isNotEmpty() }.take(6)
+            if (::homeQuickEntryIdsPreference.isInitialized) {
+                homeQuickEntryIdsPreference.value = normalized
+            } else if (::prefs.isInitialized) {
+                prefs.edit { putString("homeQuickEntryIds", normalized.joinToString("|||")) }
+            }
         }
 
+    val homeQuickEntryLayoutState get() = homeQuickEntryLayoutPreference.state
     var homeQuickEntryLayout: Int
-        get() = prefs.getInt("homeQuickEntryLayout", HOME_QUICK_LAYOUT_GRID)
-        set(value) = prefs.edit {
-            putInt("homeQuickEntryLayout", if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID)
+        get() = if (::homeQuickEntryLayoutPreference.isInitialized) homeQuickEntryLayoutPreference.value else readHomeQuickEntryLayout()
+        set(value) {
+            val normalized = if (value == HOME_QUICK_LAYOUT_BUTTONS) HOME_QUICK_LAYOUT_BUTTONS else HOME_QUICK_LAYOUT_GRID
+            if (::homeQuickEntryLayoutPreference.isInitialized) {
+                homeQuickEntryLayoutPreference.value = normalized
+            } else if (::prefs.isInitialized) {
+                prefs.edit { putInt("homeQuickEntryLayout", normalized) }
+            }
         }
 
     var toolsOutputPath: String

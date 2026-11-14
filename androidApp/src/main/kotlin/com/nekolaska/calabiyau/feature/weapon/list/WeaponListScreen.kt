@@ -3,7 +3,9 @@ package com.nekolaska.calabiyau.feature.weapon.list
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -66,6 +68,7 @@ fun WeaponListScreen(
 
     Scaffold(
         containerColor = if (hasWallpaper) Color.Transparent else MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             TopAppBar(
                 title = { Text("武器一览", fontWeight = FontWeight.Bold) },
@@ -87,7 +90,7 @@ fun WeaponListScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
-            loading = { mod -> WeaponListSkeleton(mod) }
+            loading = { mod -> WeaponListSkeleton(modifier = mod, selectedTab = selectedTab.coerceIn(0, 3)) }
         ) { categories ->
     // 数据缩水（分类数变少）时回退选中 Tab，避免 TabRow 越界与内容空白
     LaunchedEffect(categories) {
@@ -162,7 +165,7 @@ private fun WeaponGrid(
 
         // 底部留白
         item(span = { GridItemSpan(maxLineSpan) }) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.navigationBarsPadding().height(16.dp))
         }
     }
 }
@@ -294,76 +297,102 @@ private fun WeaponCard(
 }
 
 @Composable
-private fun WeaponListSkeleton(modifier: Modifier = Modifier) {
+private fun WeaponListSkeleton(modifier: Modifier = Modifier, selectedTab: Int = 0) {
     val hasWallpaper = LocalHasWallpaper.current
+    val tabWeights = listOf(0.42f, 0.42f, 0.56f, 0.56f)
     Column(modifier = modifier.fillMaxSize()) {
-        // 顶部分类 Tab 占位：通栏 Surface + 等宽文本占位，与真实 PrimaryTabRow 形态一致
+        // 顶部分类 Tab 占位：对齐 PrimaryTabRow（48dp 高度 + 选中指示条 + 底部分割线）
         Surface(
             color = MaterialTheme.colorScheme.surface.copy(alpha = if (hasWallpaper) 0.86f else 1f)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                repeat(4) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 18.dp)
-                            .height(14.dp),
-                        shape = smoothCornerShape(7.dp)
-                    )
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(47.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabWeights.forEachIndexed { index, widthFraction ->
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .fillMaxWidth(widthFraction)
+                                    .height(14.dp),
+                                shape = smoothCornerShape(7.dp)
+                            )
+                            if (index == selectedTab) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .width(28.dp)
+                                        .height(3.dp)
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                            RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)
+                                        )
+                                )
+                            }
+                        }
+                    }
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 140.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.weight(1f).fillMaxWidth(),
-        userScrollEnabled = false
-    ) {
-        items(6) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = smoothCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
-                ),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-            ) {
-                Column {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 10f),
-                        shape = smoothCornerShape(16.dp)
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 140.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            userScrollEnabled = false
+        ) {
+            items(6) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = smoothCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
-                    Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-                        ShimmerBox(
-                            Modifier.fillMaxWidth(0.7f).height(14.dp)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        ShimmerBox(
-                            Modifier.fillMaxWidth(0.55f).height(10.dp)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        ShimmerBox(
-                            Modifier.fillMaxWidth(0.4f).height(10.dp)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        ShimmerBox(
-                            Modifier.width(48.dp).height(18.dp),
-                            shape = smoothCapsuleShape()
-                        )
+                ) {
+                    Column {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 10f)
+                                .padding(8.dp)
+                        ) {
+                            ShimmerBox(
+                                modifier = Modifier.fillMaxSize(),
+                                shape = smoothCornerShape(12.dp)
+                            )
+                        }
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                            // 武器名称（titleSmall ≈ 16dp 高）
+                            ShimmerBox(Modifier.fillMaxWidth(0.68f).height(16.dp))
+                            Spacer(Modifier.height(4.dp))
+                            if (selectedTab == 0) {
+                                // 主武器：使用者 + 武器类型胶囊
+                                ShimmerBox(Modifier.fillMaxWidth(0.48f).height(13.dp))
+                                Spacer(Modifier.height(4.dp))
+                                ShimmerBox(
+                                    Modifier.width(56.dp).height(20.dp),
+                                    shape = smoothCapsuleShape()
+                                )
+                            } else {
+                                // 副武器 / 近战 / 战术道具：最多两行简介
+                                ShimmerBox(Modifier.fillMaxWidth(0.92f).height(13.dp))
+                                Spacer(Modifier.height(4.dp))
+                                ShimmerBox(Modifier.fillMaxWidth(0.62f).height(13.dp))
+                            }
+                        }
                     }
                 }
             }
-        }
         }
     }
 }

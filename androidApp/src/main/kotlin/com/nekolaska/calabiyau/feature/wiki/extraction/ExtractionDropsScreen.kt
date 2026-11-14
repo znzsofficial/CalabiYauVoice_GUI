@@ -4,10 +4,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -17,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -138,14 +141,16 @@ internal fun ExtractionDropsScreen(
                                 Text("来源说明使用离线记录", style = MaterialTheme.typography.labelMedium)
                                 OfflineBanner(ageMs = catalog.cacheAgeMs)
                             }
-                             if ((containersPending || catalogPending) && sourceRecords.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
+                            if ((containersPending || catalogPending) && sourceRecords.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                             containers.error?.let { error ->
-                                Text("物品列表更新失败：${error.message}", color = MaterialTheme.colorScheme.error)
-                                TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试物品列表") }
+                                DropErrorBanner("物品列表更新失败：${error.message}", "重试物品列表") {
+                                    containers.reload(forceRefresh = true)
+                                }
                             }
                             catalog.error?.let { error ->
-                                Text("部分来源说明未能更新：${error.message}", color = MaterialTheme.colorScheme.error)
-                                TextButton(onClick = { catalog.reload(forceRefresh = true) }) { Text("重试来源说明") }
+                                DropErrorBanner("部分来源说明未能更新：${error.message}", "重试来源说明") {
+                                    catalog.reload(forceRefresh = true)
+                                }
                             }
                         }, onSelect = { record, query ->
                             navigate { if (record.isContainer) it.openContainer(record.entry.id, query)
@@ -156,9 +161,8 @@ internal fun ExtractionDropsScreen(
                     val status: @Composable () -> Unit = {
                         if (active.isOffline && !active.isShowingCachedPrefetch) OfflineBanner(ageMs = active.cacheAgeMs)
                         active.error?.let { error ->
-                            Column {
-                                Text(error.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                TextButton(onClick = { active.reload(forceRefresh = true) }) { Text("重新加载") }
+                            DropErrorBanner(error.message, "重新加载") {
+                                active.reload(forceRefresh = true)
                             }
                         }
                     }
@@ -291,6 +295,7 @@ private fun ExtractionDropBrowser(
                 DropFilterBar(summary = if (loading && records.isEmpty()) "正在读取${if (reference) "资料" else "来源"}…"
                     else "${filtered.size} 条${if (reference) "资料" else "来源记录"}",
                     label = category ?: "筛选分类", onClick = { filters = true }, enabled = records.isNotEmpty(),
+                    activeFilter = category != null,
                     onReset = if (category != null) ({ category = null }) else null)
                 status()
             }
@@ -309,6 +314,35 @@ private fun ExtractionDropBrowser(
         item("all") { SelectionOptionRow(label = "全部来源", selected = category == null, onClick = { category = null; filters = false }) }
         items(categories, key = { it }) { value ->
             SelectionOptionRow(label = value, selected = category == value, onClick = { category = value; filters = false })
+        }
+    }
+}
+
+@Composable
+private fun DropErrorBanner(message: String, retryLabel: String, onRetry: () -> Unit) {
+    Surface(
+        shape = AppShapes.compactCard,
+        color = MaterialTheme.colorScheme.errorContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                message,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            TextButton(onClick = onRetry) { Text(retryLabel) }
         }
     }
 }

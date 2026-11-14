@@ -1,11 +1,15 @@
 package com.nekolaska.calabiyau.feature.wiki.gamesettings
 
 import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
+import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.cache.fetchValidatedCachePayload
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.api.PcGameSettingsApi
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsBlock
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.parser.PcGameSettingsParser
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.source.PcGameSettingsRemoteSource
 import data.ApiResult
+import data.ErrorKind
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -19,6 +23,45 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class PcGameSettingsFullPageAuditTest {
+    @Test fun currentParseApiResponseLoadsThroughValidationCacheAndApi() = runBlocking {
+        val file = System.getenv("PC_GAME_SETTINGS_API_AUDIT_FILE")?.let(::File)
+        assumeTrue("Set PC_GAME_SETTINGS_API_AUDIT_FILE to the actual action=parse response", file?.isFile == true)
+        val response = file!!.readText(Charsets.UTF_8)
+        val html = checkNotNull(PcGameSettingsRemoteSource.htmlFromPayload(response))
+        val parsed = PcGameSettingsParser.parse(html)
+        assertTrue(parsed.canCache, parsed.issues.joinToString("\n"))
+        assertEquals(34, parsed.tableCount)
+        assertEquals(323, parsed.page.settings.size)
+        assertEquals(31, parsed.page.settings.count { it.isQuickReference })
+        assertEquals(4, parsed.page.sections.flatMap { it.blocks }.filterIsInstance<PcSettingsBlock.Reference>().size)
+        var disk: String? = null
+        val loaded = PcGameSettingsApi.loadSource {
+            PcGameSettingsRemoteSource.fetchValidated { validate ->
+                fetchValidatedCachePayload(true, { response }, { null }, { disk = it }, validate)
+            }
+        }
+        assertIs<ApiResult.Success<*>>(loaded)
+        assertFalse(loaded.isOffline)
+        assertEquals(response, disk)
+        val broken = payload(Jsoup.parse(html).apply { select("table.klbqtable").last()!!.remove() }.html())
+        val offline = PcGameSettingsApi.loadSource {
+            PcGameSettingsRemoteSource.fetchValidated { validate ->
+                fetchValidatedCachePayload(true, { broken }, { OfflineCache.CacheResult(disk!!, true, 456L) },
+                    { disk = it }, validate)
+            }
+        }
+        assertIs<ApiResult.Success<*>>(offline)
+        assertTrue(offline.isOffline)
+        assertEquals(456L, offline.cacheAgeMs)
+        assertEquals(response, disk)
+        val noCache = PcGameSettingsApi.loadSource {
+            PcGameSettingsRemoteSource.fetchValidated { validate ->
+                fetchValidatedCachePayload(true, { broken }, { null }, { error("Bad page published") }, validate)
+            }
+        }
+        assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(noCache).kind)
+    }
+
     @Test fun revision120159PreservesAllRowsAndRejectsStructuralTruncation() {
         val file = System.getenv("PC_GAME_SETTINGS_AUDIT_FILE")?.let(::File)
         assumeTrue("Set PC_GAME_SETTINGS_AUDIT_FILE to the local revision 120159 full HTML capture", file?.isFile == true)

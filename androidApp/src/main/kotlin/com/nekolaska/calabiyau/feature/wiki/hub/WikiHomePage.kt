@@ -21,18 +21,26 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -129,10 +137,12 @@ import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.WallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.liquidGlassLight
@@ -238,6 +248,7 @@ internal fun WikiHomePage(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             LargeTopAppBar(
                 title = { Text("卡拉彼丘 Wiki") },
@@ -401,51 +412,64 @@ internal fun WikiHomePage(
                         }
                     }
 
-                    // ── 卡牌 ──
-                    item(key = "bio_cards", contentType = "action_card") {
-                        ActionCard(
-                            title = "卡牌",
-                            subtitle = "生化卡牌与卡组分享",
-                            icon = Icons.Outlined.Style,
-                            onClick = { onNavigateTo(WikiRoute.BioCards) },
-                            backdrop = backdrop
-                        )
+                    // ── 直连功能 2×2 紧凑网格（卡牌 / 活动 / 公告资讯 / 完整导航） ──
+                    item(key = "direct_entries_grid", contentType = "direct_grid") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(Modifier.weight(1f).fillMaxHeight()) {
+                                    DirectEntryTile(
+                                        title = "生化卡牌",
+                                        subtitle = "图鉴与卡组",
+                                        icon = Icons.Outlined.Style,
+                                        onClick = { onNavigateTo(WikiRoute.BioCards) },
+                                        backdrop = backdrop,
+                                        modifier = Modifier.fillMaxHeight()
+                                    )
+                                }
+                                Box(Modifier.weight(1f).fillMaxHeight()) {
+                                    DirectEntryTile(
+                                        title = "活动",
+                                        subtitle = "当前与历史",
+                                        icon = Icons.Outlined.Event,
+                                        onClick = { onNavigateTo(WikiRoute.Activities) },
+                                        backdrop = backdrop,
+                                        modifier = Modifier.fillMaxHeight()
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(Modifier.weight(1f).fillMaxHeight()) {
+                                    DirectEntryTile(
+                                        title = "公告资讯",
+                                        subtitle = "公告与更新",
+                                        icon = Icons.Outlined.Campaign,
+                                        onClick = { onNavigateTo(WikiRoute.Announcements) },
+                                        backdrop = backdrop,
+                                        modifier = Modifier.fillMaxHeight()
+                                    )
+                                }
+                                Box(Modifier.weight(1f).fillMaxHeight()) {
+                                    DirectEntryTile(
+                                        title = "完整导航",
+                                        subtitle = "Wiki 目录",
+                                        icon = Icons.Outlined.AccountTree,
+                                        onClick = { onNavigateTo(WikiRoute.Navigation) },
+                                        backdrop = backdrop,
+                                        modifier = Modifier.fillMaxHeight()
+                                    )
+                                }
+                            }
+                        }
                     }
 
-                    // ── 活动页 ──
-                    item(key = "activities", contentType = "action_card") {
-                        ActionCard(
-                            title = "活动",
-                            subtitle = "浏览当前与历史活动时间和内容简介",
-                            icon = Icons.Outlined.Event,
-                            onClick = { onNavigateTo(WikiRoute.Activities) },
-                            backdrop = backdrop
-                        )
-                    }
-
-                    item(key = "announcements", contentType = "action_card") {
-                        ActionCard(
-                            title = "公告资讯",
-                            subtitle = "查看最新游戏公告和更新信息",
-                            icon = Icons.Outlined.Campaign,
-                            onClick = { onNavigateTo(WikiRoute.Announcements) },
-                            backdrop = backdrop
-                        )
-                    }
-
-                    // ── Wiki 导航 ──
-                    item(key = "navigation", contentType = "action_card") {
-                        ActionCard(
-                            title = "完整导航",
-                            subtitle = "浏览 Wiki 全部分类目录",
-                            icon = Icons.Outlined.AccountTree,
-                            onClick = { onNavigateTo(WikiRoute.Navigation) },
-                            backdrop = backdrop
-                        )
-                    }
-
-                    // 底部留白
-                    item { Spacer(Modifier.height(24.dp)) }
+                    // 底部留白（适配手势导航安全区）
+                    item { Spacer(Modifier.navigationBarsPadding().height(AppSpacing.xxLarge)) }
                 }
             }
         }
@@ -574,15 +598,91 @@ private val mapGradient = Brush.verticalGradient(
 )
 
 @Composable
+private fun DirectEntryTile(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    backdrop: Backdrop = emptyBackdrop()
+) {
+    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val hasWallpaper = LocalHasWallpaper.current
+    val tileShape = AppShapes.card
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val accent = MaterialTheme.colorScheme.primary
+    Card(
+        onClick = onClick,
+        shape = tileShape,
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                liquidGlass -> Color.Transparent
+                hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
+                else -> MaterialTheme.colorScheme.surfaceContainerLow
+            },
+            contentColor = contentColor
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .liquidGlass(
+                backdrop = backdrop,
+                shape = { tileShape },
+                surfaceAlpha = 0.25f
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = accent.copy(alpha = 0.12f),
+                modifier = Modifier.size(38.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = contentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun QuickAccessGrid(
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop = emptyBackdrop()
 ) {
-    val configuredIds = remember { AppPrefs.homeQuickEntryIds }
+    val configuredIds by AppPrefs.homeQuickEntryIdsState.collectAsState()
     val quickEntries = remember(configuredIds) {
         configuredIds.resolveQuickEntries()
     }
-    val layout = AppPrefs.homeQuickEntryLayout
+    val layout by AppPrefs.homeQuickEntryLayoutState.collectAsState()
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = if (maxWidth >= 600.dp) 6 else 3
@@ -924,13 +1024,26 @@ private fun CharacterPreviewSection(
                     }
                 }
             } else if (isLoading) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(180.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                // 骨架与阵营分段栏 + 5:12 立绘行比例对齐，加载完成后不跳高度，且不溢出窄屏
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ShimmerBox(
+                        modifier = Modifier.fillMaxWidth().height(40.dp),
+                        shape = AppShapes.capsule
+                    )
+                    LazyRow(
+                        userScrollEnabled = false,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 2.dp)
+                    ) {
+                        items(4) {
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .width(90.dp)
+                                    .aspectRatio(5f / 12f),
+                                shape = AppShapes.compactCard
+                            )
+                        }
+                    }
                 }
             } else {
                 Box(
@@ -1163,13 +1276,33 @@ private fun MapPreviewSection(
                     }
                 }
             } else if (isLoading) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(140.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                // 骨架与模式筛选栏 + 16:9 地图横滑卡片比例对齐，且不溢出窄屏
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LazyRow(
+                        userScrollEnabled = false,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(4) {
+                            ShimmerBox(
+                                modifier = Modifier.width(68.dp).height(32.dp),
+                                shape = AppShapes.chip
+                            )
+                        }
+                    }
+                    LazyRow(
+                        userScrollEnabled = false,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 2.dp)
+                    ) {
+                        items(2) {
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .width(220.dp)
+                                    .aspectRatio(16f / 9f),
+                                shape = AppShapes.compactCard
+                            )
+                        }
+                    }
                 }
             } else {
                 Box(
@@ -1214,15 +1347,34 @@ private fun MapCard(
             ),
         colors = cardColors
     ) {
+        var imageFailed by remember(map.imageUrl) { mutableStateOf(false) }
         Box {
-            AsyncImage(
-                model = map.imageUrl,
-                contentDescription = map.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-            )
+            if (!map.imageUrl.isNullOrBlank() && !imageFailed) {
+                AsyncImage(
+                    model = map.imageUrl,
+                    contentDescription = map.name,
+                    contentScale = ContentScale.Crop,
+                    onError = { imageFailed = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.Map,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
 
             // 底部渐变 + 地图名
             Box(
@@ -1610,15 +1762,34 @@ private fun MapGridCard(
             ),
         colors = cardColors
     ) {
+        var imageFailed by remember(map.imageUrl) { mutableStateOf(false) }
         Box {
-            AsyncImage(
-                model = map.imageUrl,
-                contentDescription = map.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-            )
+            if (!map.imageUrl.isNullOrBlank() && !imageFailed) {
+                AsyncImage(
+                    model = map.imageUrl,
+                    contentDescription = map.name,
+                    contentScale = ContentScale.Crop,
+                    onError = { imageFailed = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Outlined.Map,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

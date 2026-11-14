@@ -1,10 +1,14 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +37,7 @@ fun PlayerDecorationScreen(title: String, pageName: String = title, onBack: () -
     key(pageName) { DecorationCatalogScreen(title, pageName, onBack, isActive) }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () -> Unit, isActive: () -> Boolean) {
     val state = rememberLoadState(
@@ -94,45 +99,134 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
                 scope.launch { gridState.scrollToItem(0) }
             }
             Column(Modifier.fillMaxSize().padding(padding)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SearchBar(modifier = Modifier.weight(1f), keyword = query, onKeywordChange = ::updateQuery,
                         onSearch = { keyboard?.hide() }, onClear = { updateQuery("") }, isSearching = false,
                         placeholder = "搜索名称或获取方式…")
-                    if (hasCategories) FilledTonalIconButton(onClick = { keyboard?.hide(); showCategories = true }, enabled = groups.size > 1) {
+                    if (hasCategories) FilledTonalIconButton(
+                        onClick = { keyboard?.hide(); showCategories = true },
+                        enabled = groups.size > 1,
+                        modifier = Modifier.size(48.dp),
+                        shape = AppShapes.compactCard,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (effectiveCategory != null)
+                                MaterialTheme.colorScheme.secondaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHigh
+                        )
+                    ) {
                         BadgedBox(badge = { if (effectiveCategory != null) Badge() }) {
                             Icon(Icons.Outlined.Tune, "筛选分类，当前$categoryLabel")
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (state.isLoading && groups.isEmpty()) "正在读取图鉴…"
-                        else "$categoryLabel · ${filtered.sumOf { it.entries.size }} 条记录",
-                        Modifier.weight(1f), style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = AppShapes.chip,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Text(
+                            if (state.isLoading && groups.isEmpty()) "正在读取图鉴…"
+                            else "$categoryLabel · ${filtered.sumOf { it.entries.size }} 条记录",
+                            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
                     if (query.isNotBlank() || effectiveCategory != null) TextButton(onClick = {
                         updateQuery(""); category = null
                     }) { Text("重置") }
                 }
                 ApiResourceContent(state, modifier = Modifier.weight(1f), loading = { DecorationCatalogSkeleton(it, hasCategories) }) {
                     LazyVerticalGrid(columns = GridCells.Adaptive(150.dp), state = gridState,
-                        modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 12.dp, 12.dp, 24.dp),
+                        modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (state.error != null) item("error", span = { GridItemSpan(maxLineSpan) }) {
-                            Text("更新未成功，保留上次资料。${state.error?.message.orEmpty()}",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            Surface(
+                                shape = AppShapes.compactCard,
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.ErrorOutline, contentDescription = null,
+                                        modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "更新未成功，保留上次资料。${state.error?.message.orEmpty()}",
+                                        Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    TextButton(onClick = { state.reload(forceRefresh = true) }) { Text("重试") }
+                                }
+                            }
                         }
                         if (notices.isNotEmpty()) item("notice", span = { GridItemSpan(maxLineSpan) }) {
-                            Text(notices.joinToString("\n"), style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Surface(
+                                shape = AppShapes.compactCard,
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            ) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Info, contentDescription = null,
+                                        modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        notices.joinToString("\n"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                         if (filtered.isEmpty()) item("empty", span = { GridItemSpan(maxLineSpan) }) {
                             CatalogEmptyResults(message = "没有匹配的装饰", onClear = { updateQuery(""); category = null })
                         }
                         filtered.forEach { group ->
                             if (groups.size > 1) item("heading:${group.key}", span = { GridItemSpan(maxLineSpan) }, contentType = "heading") {
-                                Text(group.title, Modifier.padding(horizontal = 4.dp, vertical = 8.dp).semantics { heading() },
-                                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp).semantics { heading() },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        Modifier.width(4.dp).height(16.dp)
+                                            .background(MaterialTheme.colorScheme.primary, smoothCornerShape(2.dp))
+                                    )
+                                    Text(
+                                        group.title,
+                                        Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Surface(
+                                        shape = AppShapes.chip,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        Text(
+                                            "${group.entries.size}",
+                                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
                             }
                             items(group.entries, key = { it.key }, contentType = { "decoration" }) { entry ->
                                 DecorationCatalogCard(entry.item, modifier = Modifier.animateItem(

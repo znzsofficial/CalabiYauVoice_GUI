@@ -1,272 +1,383 @@
 package com.nekolaska.calabiyau.feature.settings
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.*
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.R
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+
+private data class AboutVersionInfo(
+    val name: String,
+    val code: Long
+) {
+    val label: String
+        get() = if (code > 0L) "Version $name ($code)" else "Version $name"
+}
 
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val versionName = remember(context) {
+    val versionInfo = remember(context) {
         try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.1.30"
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            @Suppress("DEPRECATION")
+            val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                info.versionCode.toLong()
+            }
+            AboutVersionInfo(
+                name = info.versionName?.takeIf { it.isNotBlank() } ?: "2.1.30",
+                code = code
+            )
         } catch (_: Exception) {
-            "2.1.30"
+            AboutVersionInfo(name = "2.1.30", code = 0L)
         }
     }
 
     val pageBackground = MaterialTheme.colorScheme.background
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(pageBackground)
-    ) {
-        AboutMeshBackdrop(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.72f)
-        )
-        AboutScaffold(onBack, versionName, pageBackground)
-    }
+    AboutScaffold(onBack = onBack, versionLabel = versionInfo.label, pageBackground = pageBackground)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackground: Color) {
+private fun AboutScaffold(onBack: () -> Unit, versionLabel: String, pageBackground: Color) {
     val context = LocalContext.current
+    val showSnack = rememberSnackbarLauncher()
     val scheme = MaterialTheme.colorScheme
-    val textProtection = aboutTextProtection(scheme.surface, scheme.onSurface)
+    val topBarProtection = aboutTextProtection(pageBackground, scheme.onSurface)
+    val backBtnProtection = aboutTextProtection(scheme.surfaceContainerHigh, scheme.onSurface)
     val cardProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurface)
+    val subtitleProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurfaceVariant)
     val versionProtection = aboutTextProtection(scheme.secondaryContainer, scheme.onSecondaryContainer)
+    val tagProtection = aboutTextProtection(scheme.surfaceContainerHigh, scheme.onSurfaceVariant)
+    val iconProtection = aboutTextProtection(scheme.primary, Color.White)
+    val sectionHeaderProtection = aboutTextProtection(pageBackground, scheme.primary)
+    val footerProtection = aboutTextProtection(pageBackground, scheme.onSurfaceVariant)
+
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 FilledTonalIconButton(
                     onClick = onBack,
-                    modifier = Modifier.size(40.dp),
+                    modifier = Modifier.size(AppSizes.iconButton),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = textProtection.background,
-                        contentColor = textProtection.foreground
+                        containerColor = backBtnProtection.background,
+                        contentColor = backBtnProtection.foreground
                     )
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", modifier = Modifier.size(AppSizes.iconMedium))
                 }
-                Spacer(Modifier.width(12.dp))
-                Surface(
-                    shape = smoothCornerShape(16.dp),
-                    color = textProtection.background
-                ) {
-                    Text(
-                        "关于",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = textProtection.foreground,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
+                Spacer(Modifier.width(AppSpacing.iconGap))
+                Text(
+                    "关于",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = topBarProtection.foreground
+                )
             }
         },
-        containerColor = Color.Transparent
+        containerColor = pageBackground
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = AppSpacing.screen)
+                .padding(top = AppSpacing.small, bottom = AppSpacing.xxxLarge),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(24.dp))
-
-            Surface(
-                modifier = Modifier.size(108.dp),
-                shape = CircleShape,
-                color = pageBackground.copy(alpha = 0.72f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 600.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Surface(
-                        modifier = Modifier.size(88.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary
+                // Hero 卡片：网格渐变仅烘托顶部图标区并平滑淡入卡片底色，正文与标题无需零碎底框。
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = AppShapes.sheet,
+                    color = cardProtection.background
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Image(
-                            painter = painterResource(R.drawable.ic_launcher_foreground),
-                            contentDescription = "应用图标",
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .padding(8.dp)
+                                .fillMaxWidth()
+                                .height(168.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AboutMeshBackdrop(
+                                modifier = Modifier.fillMaxSize(),
+                                fadeColor = cardProtection.background
+                            )
+                            Surface(
+                                modifier = Modifier.size(104.dp),
+                                shape = CircleShape,
+                                color = cardProtection.background.copy(alpha = 0.74f),
+                                border = BorderStroke(1.dp, scheme.surface.copy(alpha = 0.9f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Surface(
+                                        modifier = Modifier.size(84.dp),
+                                        shape = CircleShape,
+                                        color = iconProtection.background
+                                    ) {
+                                        Image(
+                                            painter = painterResource(R.drawable.ic_launcher_foreground),
+                                            contentDescription = "应用图标",
+                                            colorFilter = ColorFilter.tint(iconProtection.foreground),
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(8.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = AppSpacing.cardContent,
+                                    end = AppSpacing.cardContent,
+                                    bottom = AppSpacing.cardContent
+                                ),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "卡拉彼丘 Wiki 助手",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = cardProtection.foreground,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(Modifier.height(AppSpacing.medium))
+                            Surface(
+                                shape = AppShapes.capsule,
+                                color = versionProtection.background
+                            ) {
+                                Text(
+                                    text = versionLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = versionProtection.foreground,
+                                    modifier = Modifier.padding(
+                                        horizontal = AppSpacing.chipHorizontal,
+                                        vertical = AppSpacing.xSmall
+                                    )
+                                )
+                            }
+                            Spacer(Modifier.height(AppSpacing.xLarge))
+                            Text(
+                                text = "面向《卡拉彼丘》玩家的开源社区工具，整合 Wiki 浏览、角色武器、弦溯掉落、设置装饰图鉴与语音资源下载。",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = subtitleProtection.foreground,
+                                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(AppSpacing.large))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium),
+                                verticalArrangement = Arrangement.spacedBy(AppSpacing.small)
+                            ) {
+                                TechTag(label = "Kotlin Multiplatform", protection = tagProtection)
+                                TechTag(label = "Material 3", protection = tagProtection)
+                                TechTag(label = "Apache-2.0", protection = tagProtection)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(AppSpacing.sectionGap))
+
+                Text(
+                    text = "相关链接",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = sectionHeaderProtection.foreground,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = AppSpacing.large, bottom = AppSpacing.medium)
+                )
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = AppShapes.card,
+                    color = cardProtection.background
+                ) {
+                    val dividerColor = scheme.outlineVariant.copy(alpha = 0.5f)
+                    Column {
+                        LinkItem(
+                            title = "发布页",
+                            subtitle = "wiki.nekolaska.vip · 历史版本与安装说明",
+                            icon = Icons.Outlined.Language,
+                            onClick = {
+                                openExternalUri(
+                                    context = context,
+                                    uri = "https://wiki.nekolaska.vip/".toUri(),
+                                    onError = { showSnack("未找到可用的浏览器") }
+                                )
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = AppSpacing.cardContent),
+                            color = dividerColor
+                        )
+                        LinkItem(
+                            title = "开源仓库",
+                            subtitle = "github.com/znzsofficial/CalabiYauVoice_GUI",
+                            icon = Icons.Outlined.Code,
+                            onClick = {
+                                openExternalUri(
+                                    context = context,
+                                    uri = "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri(),
+                                    onError = { showSnack("未找到可用的浏览器") }
+                                )
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = AppSpacing.cardContent),
+                            color = dividerColor
+                        )
+                        LinkItem(
+                            title = "问题反馈",
+                            subtitle = "GitHub Issues",
+                            icon = Icons.Outlined.BugReport,
+                            onClick = {
+                                openExternalUri(
+                                    context = context,
+                                    uri = "https://github.com/znzsofficial/CalabiYauVoice_GUI/issues".toUri(),
+                                    onError = { showSnack("未找到可用的浏览器") }
+                                )
+                            }
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = AppSpacing.cardContent),
+                            color = dividerColor
+                        )
+                        LinkItem(
+                            title = "作者 B 站",
+                            subtitle = "NekoLaska",
+                            icon = Icons.Outlined.Person,
+                            onClick = {
+                                // 优先尝试 bilibili 客户端 URI，打不开再用网页
+                                val openedClient = openExternalUri(
+                                    context = context,
+                                    uri = "bilibili://space/15544900".toUri(),
+                                    newTask = true
+                                )
+                                if (!openedClient) {
+                                    openExternalUri(
+                                        context = context,
+                                        uri = "https://space.bilibili.com/15544900".toUri(),
+                                        onError = { showSnack("未找到可用的浏览器") }
+                                    )
+                                }
+                            }
                         )
                     }
                 }
-            }
 
-            Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(AppSpacing.xxLarge))
 
-            // 文字拥有不透明的主题底层；网格即使经过 90% primary 节点也不会改变对比度。
-            Surface(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                shape = smoothCornerShape(16.dp),
-                color = textProtection.background
-            ) {
                 Text(
-                    text = "卡拉彼丘 Wiki 助手",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = textProtection.foreground,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                )
-            }
-
-            Spacer(Modifier.height(6.dp))
-
-            Surface(
-                shape = smoothCornerShape(12.dp),
-                color = versionProtection.background
-            ) {
-                Text(
-                    text = "Version $versionName",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = versionProtection.foreground,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // 软件介绍
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = smoothCornerShape(24.dp),
-                color = cardProtection.background
-            ) {
-                Text(
-                    text = "一款基于 Kotlin Multiplatform 开发的现代化工具，" +
-                            "Android 端采用 Material Design 3 设计风格。" +
-                            "集 Wiki 资源浏览、角色图鉴、画廊预览与资源下载于一体，" +
-                            "为卡拉彼丘玩家提供便捷、流畅的一站式 Wiki 体验。",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                    color = cardProtection.foreground,
-                    lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
-                    modifier = Modifier.padding(24.dp)
-                )
-            }
-
-            Spacer(Modifier.height(28.dp))
-
-            // 链接卡片
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = smoothCornerShape(24.dp),
-                color = cardProtection.background
-            ) {
-                Column {
-                    Text(
-                        text = "相关链接",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = aboutTextProtection(cardProtection.background, scheme.primary).foreground,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
-                    )
-                    LinkItem(
-                        title = "发布页",
-                        subtitle = "wiki.nekolaska.vip",
-                        icon = Icons.Outlined.Language,
-                        onClick = {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, "https://wiki.nekolaska.vip/".toUri())
-                            )
-                        }
-                    )
-
-                    LinkItem(
-                        title = "开源仓库",
-                        subtitle = "CalabiYauVoice_GUI",
-                        icon = Icons.Outlined.Code,
-                        onClick = {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, "https://github.com/znzsofficial/CalabiYauVoice_GUI".toUri())
-                            )
-                        }
-                    )
-
-                    LinkItem(
-                        title = "作者B站",
-                        subtitle = "NekoLaska",
-                        icon = Icons.Outlined.Person,
-                        onClick = {
-                            // 优先尝试 bilibili 客户端 URI，打不开再用网页
-                            try {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, "bilibili://space/15544900".toUri()).apply {
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                )
-                            } catch (_: Exception) {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, "https://space.bilibili.com/15544900".toUri())
-                                )
-                            }
-                        }
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(32.dp))
-
-            // 版权声明
-            Surface(
-                modifier = Modifier.padding(horizontal = 20.dp),
-                shape = smoothCornerShape(12.dp),
-                color = textProtection.background
-            ) {
-                Text(
-                    text = "© 2025 Developed by NekoLaska",
+                    text = "非官方玩家社区工具 · 资料源自 BWiki\n© 2026 Developed by NekoLaska · Apache-2.0",
                     style = MaterialTheme.typography.bodySmall,
-                    color = aboutTextProtection(textProtection.background, scheme.onSurfaceVariant).foreground,
+                    color = footerProtection.foreground,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
+                    modifier = Modifier.padding(horizontal = AppSpacing.medium)
                 )
             }
-
-            Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+@Composable
+private fun TechTag(label: String, protection: AboutTextProtection) {
+    Surface(
+        shape = AppShapes.chip,
+        color = protection.background
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            color = protection.foreground,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
     }
 }
 
@@ -274,26 +385,25 @@ private fun AboutScaffold(onBack: () -> Unit, versionName: String, pageBackgroun
 private fun LinkItem(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     onClick: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val titleProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.primary)
+    val titleProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurface)
     val subtitleProtection = aboutTextProtection(scheme.surfaceContainerLow, scheme.onSurfaceVariant)
     val iconProtection = aboutTextProtection(scheme.surfaceContainerHigh, scheme.onSurfaceVariant)
     Surface(
         onClick = onClick,
-        color = titleProtection.background,
-        shape = smoothCornerShape(16.dp)
+        color = titleProtection.background
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
+                .padding(horizontal = AppSpacing.cardContent, vertical = AppSpacing.xLarge),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(40.dp),
+                modifier = Modifier.size(AppSizes.iconButton),
                 shape = CircleShape,
                 color = iconProtection.background
             ) {
@@ -302,32 +412,51 @@ private fun LinkItem(
                         imageVector = icon,
                         contentDescription = null,
                         tint = iconProtection.foreground,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(AppSizes.iconMedium)
                     )
                 }
             }
-            Spacer(Modifier.width(16.dp))
+            Spacer(Modifier.width(AppSpacing.sectionGap))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+                    style = AppTextStyles.settingsItemTitle,
                     color = titleProtection.foreground
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = subtitleProtection.foreground
+                    style = AppTextStyles.settingsItemSubtitle,
+                    color = subtitleProtection.foreground,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+            Spacer(Modifier.width(AppSpacing.medium))
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                 contentDescription = null,
                 tint = subtitleProtection.foreground,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(AppSizes.iconSmall)
             )
         }
     }
+}
+
+private fun openExternalUri(
+    context: Context,
+    uri: Uri,
+    newTask: Boolean = false,
+    onError: (() -> Unit)? = null
+): Boolean = try {
+    context.startActivity(
+        Intent(Intent.ACTION_VIEW, uri).apply {
+            if (newTask) flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+    )
+    true
+} catch (_: Exception) {
+    onError?.invoke()
+    false
 }
 
 internal data class AboutTextProtection(val background: Color, val foreground: Color)

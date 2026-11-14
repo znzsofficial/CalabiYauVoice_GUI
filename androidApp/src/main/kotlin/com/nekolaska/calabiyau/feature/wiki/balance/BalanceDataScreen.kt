@@ -4,18 +4,26 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -36,6 +44,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -68,8 +77,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ErrorState
-import com.nekolaska.calabiyau.core.ui.LoadingState
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
+import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.balance.model.BalanceSettings
 import com.nekolaska.calabiyau.feature.wiki.balance.model.CharacterMeta
@@ -164,6 +173,7 @@ fun BalanceDataScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             TopAppBar(
                 title = { Text("平衡数据", fontWeight = FontWeight.Bold) },
@@ -181,7 +191,7 @@ fun BalanceDataScreen(
     ) { padding ->
         when {
             isLoadingSettings && settings == null -> {
-                LoadingState(Modifier.padding(padding), "正在加载平衡数据…")
+                BalanceDataPageSkeleton(Modifier.padding(padding))
             }
             settingsError != null && settings == null -> {
                 ErrorState(
@@ -244,7 +254,7 @@ fun BalanceDataScreen(
                         // ── 数据列表 ──
                         Box(Modifier.fillMaxSize()) {
                             if (isLoadingData) {
-                                CircularProgressIndicator(Modifier.align(Alignment.Center))
+                                BalanceHeroListSkeleton(Modifier.fillMaxSize())
                             } else if (dataError != null && balanceResult == null) {
                                 ErrorState(
                                     message = dataError.message,
@@ -700,6 +710,9 @@ private fun HeroBalanceList(
                         compareScoreAvailable = compareScoreAvailable
                     )
                 }
+                item(key = "bottom-nav-spacer") {
+                    Spacer(Modifier.navigationBarsPadding())
+                }
             }
 
             // 保留筛选刷新时的加载反馈。
@@ -709,6 +722,134 @@ private fun HeroBalanceList(
                         .align(Alignment.TopCenter)
                         .padding(top = 16.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BalanceDataPageSkeleton(modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxSize()) {
+        // 对齐 FilterSummaryBar
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            shape = smoothCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShimmerBox(Modifier.size(40.dp), shape = smoothCornerShape(14.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ShimmerBox(Modifier.width(36.dp).height(12.dp))
+                    ShimmerBox(Modifier.fillMaxWidth(0.72f).height(16.dp))
+                }
+                Spacer(Modifier.width(8.dp))
+                ShimmerBox(Modifier.size(20.dp), shape = smoothCornerShape(6.dp))
+            }
+        }
+
+        // 对齐 SideAndSortBar
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ShimmerBox(Modifier.width(84.dp).height(32.dp), shape = smoothCornerShape(12.dp))
+            ShimmerBox(Modifier.width(84.dp).height(32.dp), shape = smoothCornerShape(12.dp))
+        }
+        LazyRow(
+            userScrollEnabled = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item { ShimmerBox(Modifier.width(28.dp).height(14.dp)) }
+            items(5) {
+                ShimmerBox(Modifier.width(68.dp).height(32.dp), shape = smoothCornerShape(8.dp))
+            }
+        }
+
+        BalanceHeroListSkeleton(Modifier.weight(1f).fillMaxWidth())
+    }
+}
+
+@Composable
+private fun BalanceHeroListSkeleton(modifier: Modifier = Modifier) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        userScrollEnabled = false,
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(5) {
+            BalanceHeroCardSkeleton()
+        }
+        item { Spacer(Modifier.navigationBarsPadding()) }
+    }
+}
+
+@Composable
+private fun BalanceHeroCardSkeleton() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = smoothCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        BoxWithConstraints(Modifier.padding(16.dp)) {
+            val compact = maxWidth < (280 * LocalDensity.current.fontScale).dp
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (compact) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ShimmerBox(Modifier.size(48.dp), shape = smoothCornerShape(12.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ShimmerBox(Modifier.width(88.dp).height(16.dp))
+                            ShimmerBox(Modifier.width(68.dp).height(12.dp))
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        ShimmerBox(Modifier.width(36.dp).height(12.dp))
+                        ShimmerBox(Modifier.width(72.dp).height(24.dp))
+                    }
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        ShimmerBox(Modifier.size(48.dp), shape = smoothCornerShape(12.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ShimmerBox(Modifier.width(96.dp).height(16.dp))
+                            ShimmerBox(Modifier.width(72.dp).height(12.dp))
+                        }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            ShimmerBox(Modifier.width(36.dp).height(12.dp))
+                            ShimmerBox(Modifier.width(68.dp).height(24.dp))
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                val columns = if (compact) 2 else 4
+                repeat(if (compact) 2 else 1) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(columns) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                ShimmerBox(Modifier.width(42.dp).height(12.dp))
+                                ShimmerBox(Modifier.width(50.dp).height(16.dp))
+                            }
+                        }
+                    }
+                }
             }
         }
     }

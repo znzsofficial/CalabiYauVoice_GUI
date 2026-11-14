@@ -43,9 +43,12 @@ private const val MESH_COLUMNS = 3
  * 底部淡进页面背景，避免介绍卡片压在高饱和色上。
  */
 @Composable
-internal fun ThemeMeshBackdrop(modifier: Modifier = Modifier, animate: Boolean = true) {
+internal fun ThemeMeshBackdrop(
+    modifier: Modifier = Modifier,
+    animate: Boolean = true,
+    fadeColor: Color = MaterialTheme.colorScheme.background
+) {
     val scheme = MaterialTheme.colorScheme
-    val background = scheme.background
     val motionEnabled = animate && rememberAnimatorEnabled()
     // 离开前台或关闭系统动画时移除 transition，而不是让无限动画反复计算 0 → 0。
     val driftA: State<Float>
@@ -111,9 +114,9 @@ internal fun ThemeMeshBackdrop(modifier: Modifier = Modifier, animate: Boolean =
                 .background(
                     Brush.verticalGradient(
                         0f to Color.Transparent,
-                        0.42f to Color.Transparent,
-                        0.78f to background.copy(alpha = 0.72f),
-                        1f to background
+                        0.36f to Color.Transparent,
+                        0.76f to fadeColor.copy(alpha = 0.78f),
+                        1f to fadeColor
                     )
                 )
         )

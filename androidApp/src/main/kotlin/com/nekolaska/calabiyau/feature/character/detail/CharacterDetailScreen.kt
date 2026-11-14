@@ -41,9 +41,13 @@ import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailApi.CharacterDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.InfoChip
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
@@ -52,6 +56,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import util.wikiPathEncode
@@ -94,6 +99,7 @@ fun CharacterDetailScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
             TopAppBar(
                 title = {
@@ -108,7 +114,10 @@ fun CharacterDetailScreen(
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    RefreshActionButton(
+                        onClick = { state.reload(forceRefresh = true) },
+                        enabled = !state.isLoading
+                    )
                     OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                 },
                 scrollBehavior = scrollBehavior
@@ -166,6 +175,8 @@ private fun CharacterDetailContent(
 ) {
     val listState = rememberLazyListState()
     var expandedSkill by rememberSaveable(detail.name) { mutableStateOf<String?>(null) }
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
+    val showSnack = rememberSnackbarLauncher()
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -178,6 +189,7 @@ private fun CharacterDetailContent(
                 detail = detail,
                 portraitUrl = portraitUrl,
                 sharedElementKey = sharedElementKey,
+                onPreviewImage = { previewImage = it },
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope
             )
@@ -207,8 +219,10 @@ private fun CharacterDetailContent(
                 ) {
                     Box(Modifier.padding(16.dp)) {
                         SkillItem(
-                            skill = skill, expanded = expandedSkill == skillKey,
-                            onToggle = { expandedSkill = if (expandedSkill == skillKey) null else skillKey }
+                            skill = skill,
+                            expanded = expandedSkill == skillKey,
+                            onToggle = { expandedSkill = if (expandedSkill == skillKey) null else skillKey },
+                            onOpenVideoError = { showSnack("无法打开视频链接") }
                         )
                     }
                 }
@@ -261,6 +275,7 @@ private fun CharacterDetailContent(
                 Box(Modifier.padding(horizontal = 16.dp)) {
                     WeaponInfoCard(
                         detail = detail,
+                        onPreviewImage = { previewImage = it },
                         onClick = if (onOpenWeaponDetail != null) {
                             { onOpenWeaponDetail(detail.weaponName) }
                         } else null
@@ -270,26 +285,29 @@ private fun CharacterDetailContent(
         }
 
         // ── 外观跳转 ──
-        if (onOpenCostumes != null || onOpenWeaponSkins != null) {
+        val showCostumes = onOpenCostumes != null
+        val showWeaponSkins = onOpenWeaponSkins != null && detail.weaponName.isNotBlank()
+        if (showCostumes || showWeaponSkins) {
             item(key = "skin_nav") {
+                val bothShown = showCostumes && showWeaponSkins
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (onOpenCostumes != null) {
+                    if (showCostumes) {
                         FilledTonalButton(
-                            onClick = { onOpenCostumes(detail.name) },
-                            modifier = Modifier.weight(1f)
+                            onClick = { onOpenCostumes.invoke(detail.name) },
+                            modifier = if (bothShown) Modifier.weight(1f) else Modifier
                         ) {
                             Icon(Icons.Outlined.Checkroom, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("角色时装")
                         }
                     }
-                    if (onOpenWeaponSkins != null && detail.weaponName.isNotBlank()) {
+                    if (showWeaponSkins) {
                         FilledTonalButton(
-                            onClick = { onOpenWeaponSkins(detail.weaponName) },
-                            modifier = Modifier.weight(1f)
+                            onClick = { onOpenWeaponSkins.invoke(detail.weaponName) },
+                            modifier = if (bothShown) Modifier.weight(1f) else Modifier
                         ) {
                             Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
@@ -358,6 +376,18 @@ private fun CharacterDetailContent(
                 }
             }
         }
+
+        item(key = "bottom_nav_spacer") {
+            Spacer(Modifier.navigationBarsPadding())
+        }
+    }
+
+    previewImage?.let { preview ->
+        ImagePreviewDialog(
+            model = preview.url,
+            contentDescription = preview.title,
+            onDismiss = { previewImage = null }
+        )
     }
 }
 
@@ -374,13 +404,23 @@ private fun CharacterPortraitStage(
     sharedElementKey: String,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?,
-    loading: Boolean = false
+    loading: Boolean = false,
+    onPreviewImage: ((PreviewImage) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val request = remember(context, imageUrl, loading) { wikiPortraitRequest(context, imageUrl, crossfade = !loading) }
     var imageFailed by remember(imageUrl) { mutableStateOf(false) }
+    val canPreview = !loading && imageUrl != null && !imageFailed && onPreviewImage != null
     Box(Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(if (hasPortrait) CharacterHeaderPortraitHeight else CharacterHeaderAvatarHeight)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(if (hasPortrait) CharacterHeaderPortraitHeight else CharacterHeaderAvatarHeight)
+                .let { mod ->
+                    if (canPreview) mod.clickable(onClickLabel = "查看大图") { onPreviewImage.invoke(PreviewImage(imageUrl, name)) }
+                    else mod
+                }
+        ) {
             if (imageUrl != null && !imageFailed) {
                 AsyncImage(
                     model = request,
@@ -418,6 +458,33 @@ private fun CharacterPortraitStage(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(60.dp)
                     .background(Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background)))
             )
+            if (canPreview) {
+                Surface(
+                    shape = smoothCapsuleShape(),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.ZoomIn,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "查看大图",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -427,6 +494,7 @@ private fun HeaderSection(
     detail: CharacterDetail,
     portraitUrl: String? = null,
     sharedElementKey: String = "char-image-${detail.name}",
+    onPreviewImage: ((PreviewImage) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
@@ -439,7 +507,8 @@ private fun HeaderSection(
         if (headerImage != null) CharacterPortraitStage(
             imageUrl = headerImage, name = detail.name, hasPortrait = hasPortrait,
             sharedElementKey = sharedElementKey,
-            sharedTransitionScope = sharedTransitionScope, animatedVisibilityScope = animatedVisibilityScope
+            sharedTransitionScope = sharedTransitionScope, animatedVisibilityScope = animatedVisibilityScope,
+            onPreviewImage = onPreviewImage
         )
 
         Column(
@@ -717,7 +786,11 @@ private fun AttributesCard(detail: CharacterDetail) {
 // ────────────────────────────────────────────
 
 @Composable
-private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = null) {
+private fun WeaponInfoCard(
+    detail: CharacterDetail,
+    onPreviewImage: ((PreviewImage) -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
     // 主武器立绘：文件名规律 "<武器名>-weapon.png"，旧页面可能用 "<角色名>-weapon.png"。
     // 一次批量 imageinfo 查两个候选，加载失败时回退到占位图标，不阻塞卡片其余内容。
     val primaryWeaponFile = "${detail.weaponName}-weapon.png"
@@ -736,49 +809,90 @@ private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = nul
         weaponImageUrl = result?.payload
     }
 
-    Card(
-        onClick = { onClick?.invoke() },
-        shape = smoothCornerShape(24.dp),
-        modifier = Modifier.fillMaxWidth(),
-        enabled = onClick != null
-    ) {
+    val cardContent: @Composable () -> Unit = {
         Column(Modifier.padding(20.dp)) {
-            SectionTitle(
-                icon = Icons.Outlined.GpsFixed,
-                title = "专属武器"
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.weight(1f)) {
+                    SectionTitle(
+                        icon = Icons.Outlined.GpsFixed,
+                        title = "专属武器"
+                    )
+                }
+                if (onClick != null) {
+                    Text(
+                        text = "查看详情",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
             Spacer(Modifier.height(12.dp))
 
             // 武器立绘 + 名称 + 类型
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
-                if (weaponImageUrl != null && !imageFailed) {
-                    AsyncImage(
-                        model = weaponImageUrl,
-                        contentDescription = detail.weaponName,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.size(64.dp),
-                        onError = { imageFailed = true }
-                    )
-                } else {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Outlined.GpsFixed,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(22.dp)
-                            )
+                val thumbUrl = weaponImageUrl?.takeIf { !imageFailed }
+                Box(
+                    Modifier
+                        .size(64.dp)
+                        .clip(AppShapes.chip)
+                        .let { mod ->
+                            if (thumbUrl != null && onPreviewImage != null) {
+                                mod.clickable(onClickLabel = "查看大图") {
+                                    onPreviewImage(PreviewImage(thumbUrl, detail.weaponName))
+                                }
+                            } else mod
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (thumbUrl != null) {
+                        AsyncImage(
+                            model = thumbUrl,
+                            contentDescription = detail.weaponName,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(64.dp),
+                            onError = { imageFailed = true }
+                        )
+                        if (onPreviewImage != null) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(2.dp)
+                                    .size(18.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Outlined.ZoomIn,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(11.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Outlined.GpsFixed,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
-                }
                 Spacer(Modifier.width(14.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(
                         detail.weaponName,
                         style = MaterialTheme.typography.titleMedium,
@@ -791,6 +905,13 @@ private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = nul
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+                if (onClick != null) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                    )
                 }
             }
 
@@ -808,6 +929,19 @@ private fun WeaponInfoCard(detail: CharacterDetail, onClick: (() -> Unit)? = nul
                 )
             }
         }
+    }
+
+    if (onClick != null) {
+        Card(
+            onClick = onClick,
+            shape = smoothCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) { cardContent() }
+    } else {
+        Card(
+            shape = smoothCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) { cardContent() }
     }
 }
 
@@ -1087,11 +1221,13 @@ private fun SubPagesCard(
 //  角色技能卡片
 // ────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SkillItem(
     skill: CharacterDetailApi.SkillInfo,
     expanded: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    onOpenVideoError: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
 
@@ -1135,7 +1271,23 @@ private fun SkillItem(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(skill.slot, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        skill.slot,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(Alignment.CenterVertically)
+                    )
+                    if (!expanded && skill.valueGroups.isNotEmpty()) {
+                        SkillHintTag("含数值")
+                    }
+                    if (!expanded && skill.videoUrl != null) {
+                        SkillHintTag("含视频")
+                    }
+                }
                 Text(skill.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             Icon(
@@ -1162,7 +1314,10 @@ private fun SkillItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (skill.videoUrl != null) {
-                    FilledTonalButton(onClick = { uriHandler.openUri(skill.videoUrl) }) {
+                    FilledTonalButton(onClick = {
+                        runCatching { uriHandler.openUri(skill.videoUrl) }
+                            .onFailure { onOpenVideoError() }
+                    }) {
                         Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("技能视频")
@@ -1185,6 +1340,21 @@ private fun SkillItem(
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
+    }
+}
+
+@Composable
+private fun SkillHintTag(label: String) {
+    Surface(
+        shape = AppShapes.chip,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+        )
     }
 }
 

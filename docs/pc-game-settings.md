@@ -76,3 +76,21 @@ Tracked 小 fixture：`androidApp/src/test/resources/fixtures/gamesettings/pc_se
 - `:androidApp:compileDebugKotlin`、`:androidApp:lintDebug` 通过，Lint 0 errors / 5 个既有 warnings（1 ModifierParameter、4 UseKtx）。
 - `*.feature.wiki.gamesettings.*` 与 `*.feature.wiki.hub.*` 共 **32 项，0 failures/errors/skips**；已配置全页快照，33 表／323 行／31 推荐及破坏载荷检查实际执行。
 - 界面调整已纳入上述编译与检查；暂无连接设备，窄屏、大字体、筛选／切换状态、关闭系统动画和实际视觉观感尚未设备验收。提交与发布见2.1.30记录。
+
+## 2.1.30 发布后：PC 设置页“无法连接网络”修复（待发布）
+
+用户报告首次打开失败。按生产同参数请求 `action=parse&page=游戏设置PC端&prop=text&format=json`，实际收到HTTP200与有效JSON（131980字节），不是网络断开。响应相较之前网页快照新增了“DLSS、FSR、XESS是什么”标题及4行超分辨率渲染比例表；原有33张设置表、323个设置行和31个推荐项均保留。
+
+### 根因
+
+- 原实现只识别精确的“DLSS、XESS是什么”科普标题，并把所有 `klbqtable` 都按带“设置项”列的设置表校验。新科普表只有“质量档位 (命名)／DLSS渲染比例／XeSS 渲染比例”，因此整个有效响应被拒绝缓存。
+- 拒绝校验后无可用磁盘缓存，`OfflineCache` 返回null，API将它一律归为NETWORK，导致界面误报“无法连接网络”。
+- 初版全页测试只使用较早的完整网页HTML，没有覆盖应用实际调用的当前parse响应，未暴露此次差异。
+
+### 修复与验证
+
+- 科普章节按DLSS与XeSS语义识别，保留源标题（含FSR）。知识表进入独立的 `PcSettingsBlock.Reference`，按表头保存比例与名称、逐行展示和搜索，不伪装成游戏默认值／推荐设置。普通设置表的列、行、跨行及完整性校验继续保留。
+- Source在请求内保留载荷拒绝原因；有有效旧缓存仍返回离线成功，无有效缓存时明确返回PARSE。只有没有响应且没有可用缓存才归NETWORK，不改变公共缓存层行为。
+- 小fixture `upscaling_reference.html` 覆盖真实新标题和比例表。`PC_GAME_SETTINGS_API_AUDIT_FILE` 指向真实JSON响应，验证完整取数→校验→缓存提交→API链路，核对 **34表／323设置／31推荐／4参考行**；另验证坏新响应保留好缓存、无缓存时报告PARSE。
+- 同时配置旧 `PC_GAME_SETTINGS_AUDIT_FILE` 网页快照及新API快照，PC设置／Hub专项 **35项，0 failures/errors/skips**，Android编译和Lint通过（0 errors / 5既有warnings）。构建使用排查时工作区已有的AGP9.5.1／serialization1.13.0升级；首次离线构建缺AAPT2，下载依赖后的完整检查通过。
+- 本机证据：`C:/Users/NekoLaska/AppData/Local/Temp/opencode/pc-settings-load-fix/response.json`、`api.html`。本轮只读取一次Wiki接口，回归均离线读取捕获。修复尚未发布，线上2.1.30安装包未被替换。

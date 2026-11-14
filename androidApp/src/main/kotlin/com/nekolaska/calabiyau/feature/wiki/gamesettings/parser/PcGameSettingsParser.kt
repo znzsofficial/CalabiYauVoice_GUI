@@ -43,6 +43,8 @@ object PcGameSettingsParser {
     private val audioHeaders = standardHeaders + "推荐"
     private val recommendationHeaders = setOf("分类", "设置项", "推荐", "说明")
     private val supportedHeaders = setOf(bindingHeaders, standardHeaders, graphicsHeaders, audioHeaders, recommendationHeaders)
+    private fun isUpscalingSection(title: String): Boolean =
+        title.contains("DLSS", ignoreCase = true) && title.contains("XeSS", ignoreCase = true)
 
     private fun expectedHeaders(section: String): Set<String>? = when (section) {
         "操作设置", "手柄" -> bindingHeaders
@@ -84,9 +86,9 @@ object PcGameSettingsParser {
                 "h2" -> {
                     val title = element.selectFirst(".mw-headline")?.text() ?: element.text()
                     if (title.isNotBlank()) {
-                        val view = when (title) {
-                            "推荐画质设置速查" -> PcSettingsView.RECOMMENDATIONS
-                            "启动模式", "DLSS、XESS是什么" -> PcSettingsView.KNOWLEDGE
+                        val view = when {
+                            title == "推荐画质设置速查" -> PcSettingsView.RECOMMENDATIONS
+                            title == "启动模式" || isUpscalingSection(title) -> PcSettingsView.KNOWLEDGE
                             else -> PcSettingsView.SETTINGS
                         }
                         current = SectionBuilder(identity("section", title), title, view).also(sections::add)
@@ -102,8 +104,20 @@ object PcGameSettingsParser {
                     tableCount++
                     val section = current
                     if (section == null) { issues += "设置表格缺少所属章节"; return }
-                    val table = parseTable(element)
+                    val reference = section.view == PcSettingsView.KNOWLEDGE
+                    val table = parseTable(element, reference)
                     issues += table.issues.map { "${section.title}/$subsection：$it" }
+                    if (reference) {
+                        table.rows.forEach { row ->
+                            val nameField = row.entries.first()
+                            section.blocks += PcSettingsBlock.Reference(
+                                identity(section.id, subsection, "reference", nameField.value), subsection,
+                                nameField.key, nameField.value,
+                                row.entries.drop(1).map { PcSettingField(it.key, it.value) }
+                            )
+                        }
+                        return
+                    }
                     if (expectedHeaders(section.title)?.let { it != table.headers } == true) {
                         issues += "${section.title}/$subsection：章节表头字段不完整或发生变化"
                     }
@@ -143,8 +157,8 @@ object PcGameSettingsParser {
                 }
             }
         }
-        for ((title, minimumBlocks) in mapOf("启动模式" to 8, "DLSS、XESS是什么" to 5)) {
-            val matching = sections.filter { it.title == title }
+        for ((title, minimumBlocks) in mapOf("启动模式" to 8, "DLSS / XeSS 科普" to 5)) {
+            val matching = sections.filter { if (title == "启动模式") it.title == title else isUpscalingSection(it.title) }
             if (matching.size != 1 || (matching.singleOrNull()?.blocks?.filterIsInstance<PcSettingsBlock.Text>()?.size ?: 0) < minimumBlocks) {
                 issues += "缺少完整科普章节：$title"
             }
@@ -168,7 +182,7 @@ object PcGameSettingsParser {
     private data class Span(val text: String, val remaining: Int)
 
     /** Expands bounded row/column spans first; fields are then mapped by semantic header, never a page-wide index. */
-    private fun parseTable(table: Element): TableResult {
+    private fun parseTable(table: Element, reference: Boolean = false): TableResult {
         val issues = mutableListOf<String>()
         val rows = mutableListOf<Map<String, String>>()
         val carry = mutableMapOf<Int, Span>()
@@ -209,14 +223,19 @@ object PcGameSettingsParser {
                         else -> header
                     }
                 }
-                if (headers.size != headers.distinct().size || headers.toSet() !in supportedHeaders ||
+                val recognized = if (reference) headers.size in 2..12 && headers.all { it.isNotBlank() }
+                    else headers.toSet() in supportedHeaders
+                if (headers.size != headers.distinct().size || !recognized ||
                     carry.isNotEmpty()) issues += "无法识别的语义表头：$headers"
             } else {
                 if (grid.size != headers.size || headers.indices.any { !grid.containsKey(it) }) {
                     issues += "第 ${rowIndex + 1} 行字段缺失或多出"
                 } else {
                     val values = headers.mapIndexed { index, header -> header to grid.getValue(index) }.toMap()
-                    if (values["设置项"].isNullOrBlank()) issues += "第 ${rowIndex + 1} 行没有设置名"
+                    if (reference) {
+                        if (values.values.firstOrNull().isNullOrBlank()) issues += "第 ${rowIndex + 1} 行没有参考条目名称"
+                        else rows += values
+                    } else if (values["设置项"].isNullOrBlank()) issues += "第 ${rowIndex + 1} 行没有设置名"
                     else {
                         if ("分类" in headers && values["分类"].isNullOrBlank()) issues += "第 ${rowIndex + 1} 行缺少推荐分类"
                         rows += values

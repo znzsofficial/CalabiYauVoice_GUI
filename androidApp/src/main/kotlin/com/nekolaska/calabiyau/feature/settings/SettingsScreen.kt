@@ -640,7 +640,11 @@ fun SettingsScreen(onBack: () -> Unit) {
                         currentVersion = currentVersion,
                         onDismiss = { updateResult = null },
                         onOpenBrowser = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, UpdateApi.resolveApkUrl(info).toUri()))
+                            try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, UpdateApi.resolveApkUrl(info).toUri()))
+                            } catch (_: Exception) {
+                                showSnack("未找到可用的浏览器")
+                            }
                         }
                     )
                 }

@@ -1,8 +1,16 @@
 package com.nekolaska.calabiyau.feature.weapon.detail
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,19 +19,27 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.Info
@@ -34,18 +50,18 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +71,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
@@ -65,11 +83,14 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextColors
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.InfoChip
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
+import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
@@ -78,6 +99,7 @@ import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.SkeletonStatRow
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDamageCoefficients
@@ -88,6 +110,7 @@ import util.wikiPathEncode
 //  武器详情页 —— 原生客户端版 (MD3 Expressive)
 // ════════════════════════════════════════════════════════
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeaponDetailScreen(
     weaponName: String,
@@ -95,6 +118,8 @@ fun WeaponDetailScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit,
     onOpenWeaponSkins: ((String) -> Unit)? = null,
+    onOpenCharacter: ((String) -> Unit)? = null,
+    canOpenCharacter: (String) -> Boolean = { false },
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
@@ -108,21 +133,29 @@ fun WeaponDetailScreen(
         "https://wiki.biligame.com/klbq/${weaponName.wikiPathEncode()}"
     }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
-                    Text(weaponName, fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        weaponName,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
                 },
                 actions = {
-                    RefreshActionButton(onClick = { state.reload(forceRefresh = true) })
+                    RefreshActionButton(
+                        onClick = { state.reload(forceRefresh = true) },
+                        enabled = !state.isLoading
+                    )
                     OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "在浏览器中打开")
                 },
                 scrollBehavior = scrollBehavior
@@ -149,6 +182,8 @@ fun WeaponDetailScreen(
                     detail = detail ?: return@ApiResourceContent,
                     onOpenWikiUrl = onOpenWikiUrl,
                     onOpenSkins = onOpenWeaponSkins,
+                    onOpenCharacter = onOpenCharacter,
+                    canOpenCharacter = canOpenCharacter,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -163,19 +198,23 @@ private fun WeaponDetailContent(
     onOpenWikiUrl: (String) -> Unit,
     onOpenSkins: ((String) -> Unit)? = null,
     onOpenCharacter: ((String) -> Unit)? = null,
+    canOpenCharacter: (String) -> Boolean = { false },
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
+    var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ── 头部：武器图片 + 名称 + 类型 ──
+        // ── 头部：武器图片 + 关键属性标签 ──
         item(key = "header") {
             Box(Modifier.padding(horizontal = 16.dp)) {
                 WeaponHeaderCard(
                     detail = detail,
+                    onPreviewImage = { previewImage = it },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -265,18 +304,21 @@ private fun WeaponDetailContent(
         }
 
         // ── 外观与角色快捷入口 ──
-        if (onOpenSkins != null || onOpenCharacter != null) {
+        val showSkins = onOpenSkins != null
+        val showCharacter = onOpenCharacter != null && detail.user.isNotBlank() && canOpenCharacter(detail.user)
+        if (showSkins || showCharacter) {
             item(key = "shortcuts") {
+                val bothShown = showSkins && showCharacter
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (onOpenSkins != null) {
+                    if (showSkins) {
                         FilledTonalButton(
-                            onClick = { onOpenSkins(detail.name) },
-                            modifier = Modifier.weight(1f)
+                            onClick = { onOpenSkins.invoke(detail.name) },
+                            modifier = if (bothShown) Modifier.weight(1f) else Modifier
                         ) {
                             Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
@@ -284,14 +326,18 @@ private fun WeaponDetailContent(
                         }
                     }
 
-                    if (onOpenCharacter != null) {
+                    if (showCharacter) {
                         FilledTonalButton(
-                            onClick = { onOpenCharacter(detail.name) },
-                            modifier = Modifier.weight(1f)
+                            onClick = { onOpenCharacter.invoke(detail.user) },
+                            modifier = if (bothShown) Modifier.weight(1f) else Modifier
                         ) {
                             Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text("查看角色信息")
+                            Text(
+                                "查看角色 · ${detail.user}",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -305,7 +351,17 @@ private fun WeaponDetailContent(
             }
         }
 
-        item { Spacer(Modifier.height(24.dp)) }
+        item(key = "bottom_nav_spacer") {
+            Spacer(Modifier.navigationBarsPadding().height(AppSpacing.xLarge))
+        }
+    }
+
+    previewImage?.let { preview ->
+        ImagePreviewDialog(
+            model = preview.url,
+            contentDescription = preview.title,
+            onDismiss = { previewImage = null }
+        )
     }
 }
 
@@ -313,58 +369,102 @@ private fun WeaponDetailContent(
 //  头部卡片
 // ────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WeaponHeaderCard(
     detail: WeaponDetail,
+    onPreviewImage: ((PreviewImage) -> Unit)? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
+    var imageFailed by remember(detail.imageUrl) { mutableStateOf(false) }
+    val showImage = detail.imageUrl != null && !imageFailed
     Card(
         shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
-            // 武器图片
+            // 武器图片（支持点击放大预览与失败占位；sharedElement 仅附着在图片上，避免拉伸缩放提示徽标）
             if (detail.imageUrl != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp)
-                        .then(
-                            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                with(sharedTransitionScope) {
-                                    Modifier.sharedElement(
-                                        sharedContentState = rememberSharedContentState(key = "weapon-image-${detail.name}"),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = { _, _ -> tween(500) }
-                                    )
+                        .height(168.dp)
+                        .clip(AppShapes.compactCard)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f))
+                        .let { mod ->
+                            if (showImage && onPreviewImage != null) {
+                                mod.clickable(onClickLabel = "查看大图") {
+                                    onPreviewImage(PreviewImage(detail.imageUrl, detail.name))
                                 }
-                            } else Modifier
-                        ),
+                            } else mod
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = detail.imageUrl,
-                        contentDescription = detail.name,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().padding(8.dp)
-                    )
+                    if (showImage) {
+                        AsyncImage(
+                            model = detail.imageUrl,
+                            contentDescription = detail.name,
+                            contentScale = ContentScale.Fit,
+                            onError = { imageFailed = true },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
+                                .then(
+                                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                        with(sharedTransitionScope) {
+                                            Modifier.sharedElement(
+                                                sharedContentState = rememberSharedContentState(key = "weapon-image-${detail.name}"),
+                                                animatedVisibilityScope = animatedVisibilityScope,
+                                                boundsTransform = { _, _ -> tween(500) }
+                                            )
+                                        }
+                                    } else Modifier
+                                )
+                        )
+                        if (onPreviewImage != null) {
+                            Surface(
+                                shape = smoothCapsuleShape(),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.ZoomIn,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        "查看大图",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Icon(
+                            Icons.Outlined.GpsFixed,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
                 }
-                Spacer(Modifier.height(12.dp))
             }
 
-            // 武器名
-            Text(
-                detail.name,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            // 标签行
+            // 标签行（顶栏已展示武器名称，此处直接展示使用者/类型/模式等核心标签）
             val hasChips = detail.user.isNotBlank() || detail.type.isNotBlank()
                     || detail.fireMode.isNotBlank() || detail.obtainMethod.isNotBlank()
             if (hasChips) {
-                Spacer(Modifier.height(8.dp))
+                if (detail.imageUrl != null) Spacer(Modifier.height(14.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -502,22 +602,72 @@ private fun WeaponSupplementaryCard(
     sections: List<WeaponDataSection>
 ) {
     var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    val itemCount = sections.sumOf { it.values.size }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "weaponSuppChevron"
+    )
     Card(shape = AppShapes.card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionTitle(Icons.Outlined.Info, title)
-            // Keep the new technical detail opt-in so the existing damage data stays reachable.
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "收起" else "展开 ${sections.sumOf { it.values.size }} 项数据")
-            }
-            if (expanded) sections.forEach { section ->
-                Text(section.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                if (section.notice.isNotBlank()) {
-                    Text(section.notice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // 整行可点击折叠头 + 条数胶囊，替代孤立文本按钮
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(AppShapes.chip)
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(Modifier.weight(1f)) {
+                    SectionTitle(Icons.Outlined.Info, title)
                 }
-                section.values.forEach { stat ->
-                    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Text(stat.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(stat.value, style = MaterialTheme.typography.bodyMedium)
+                Surface(
+                    shape = AppShapes.chip,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Text(
+                        text = "$itemCount 项",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(chevronRotation)
+                )
+            }
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(tween(180)) + expandVertically(tween(220, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(140)) + shrinkVertically(tween(180, easing = FastOutSlowInEasing))
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    sections.forEach { section ->
+                        Text(section.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        if (section.notice.isNotBlank()) {
+                            Surface(
+                                shape = AppShapes.chip,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                Text(
+                                    section.notice,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                        section.values.forEach { stat ->
+                            Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                Text(stat.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(stat.value, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
                     }
                 }
             }
@@ -529,6 +679,7 @@ private fun WeaponSupplementaryCard(
 //  伤害表卡片
 // ────────────────────────────────────────────
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDetailApi.DamageRow>) {
     var selectedPlatform by rememberSaveable(detail.name) { mutableStateOf("PC") }
@@ -550,18 +701,20 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
         Column(Modifier.padding(20.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SectionTitle(Icons.Outlined.GpsFixed, "武器伤害")
-                
+                Box(Modifier.weight(1f)) {
+                    SectionTitle(Icons.Outlined.GpsFixed, "武器伤害")
+                }
+
                 if (platforms.size > 1) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         platforms.forEach { platform ->
                             FilterChip(
                                 selected = effectivePlatform == platform,
                                 onClick = { selectedPlatform = platform },
-                                label = { Text(platform) },
+                                label = { Text(platform, maxLines = 1) },
                                 shape = smoothCornerShape(12.dp)
                             )
                         }
@@ -569,32 +722,40 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                 }
             }
 
-            // 倍率信息
+            // 倍率信息胶囊
             if (coefficients != null && coefficients.baseDamage.isNotBlank()) {
                 Spacer(Modifier.height(12.dp))
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (coefficients.baseDamage.isNotBlank()) {
-                        Text("基础伤害: ${coefficients.baseDamage}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                        DamageMultiplierBadge(
+                            text = "基础 ${coefficients.baseDamage}",
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                     if (coefficients.head.isNotBlank()) {
-                        Text("头部×${coefficients.head}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.error)
+                        DamageMultiplierBadge(
+                            text = "头部 ×${coefficients.head}",
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                     if (coefficients.upper.isNotBlank()) {
-                        Text("上肢×${coefficients.upper}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.tertiary)
+                        DamageMultiplierBadge(
+                            text = "上肢 ×${coefficients.upper}",
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
                     }
                     if (coefficients.lower.isNotBlank()) {
-                        Text("下肢×${coefficients.lower}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        DamageMultiplierBadge(
+                            text = "下肢 ×${coefficients.lower}",
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -610,7 +771,7 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        Text("距离", Modifier.weight(1f),
+                        Text("距离", Modifier.weight(1.35f),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold)
                         if (pelletOnly) {
@@ -652,26 +813,30 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                                 if (isChargeRow) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f)
                                 else Color.Transparent
                             )
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        FlowRow(
+                            Modifier.weight(1.35f),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
                                 normalizeDistanceLabel(row.distance).substringBefore("·蓄力"),
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.align(Alignment.CenterVertically)
                             )
                             if (isChargeRow) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    shape = smoothCornerShape(6.dp)
+                                    shape = smoothCornerShape(6.dp),
+                                    modifier = Modifier.align(Alignment.CenterVertically)
                                 ) {
                                     Text(
                                         "蓄力",
                                         style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
                                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                                     )
@@ -699,6 +864,26 @@ private fun WeaponDamageCard(detail: WeaponDetail, distanceRows: List<WeaponDeta
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DamageMultiplierBadge(
+    text: String,
+    containerColor: Color,
+    contentColor: Color
+) {
+    Surface(
+        shape = AppShapes.chip,
+        color = containerColor
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
 
@@ -961,47 +1146,50 @@ private fun WeaponDetailSkeleton(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(bottom = 24.dp),
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 头部卡片骨架
+        // 头部卡片骨架（对齐紧凑顶栏后的图片 + 标签布局）
         Box(Modifier.padding(horizontal = 16.dp)) {
             SkeletonCard {
                 Column(Modifier.padding(20.dp)) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
-                            .then(
-                                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                    with(sharedTransitionScope) {
-                                        Modifier.sharedElement(
-                                            sharedContentState = rememberSharedContentState(key = "weapon-image-$weaponName"),
-                                            animatedVisibilityScope = animatedVisibilityScope,
-                                            boundsTransform = { _, _ -> tween(500) }
-                                        )
-                                    }
-                                } else Modifier
-                            ),
+                            .height(168.dp)
+                            .clip(AppShapes.compactCard)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.45f)),
                         contentAlignment = Alignment.Center
                     ) {
+                        val sharedMod = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    sharedContentState = rememberSharedContentState(key = "weapon-image-$weaponName"),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                    boundsTransform = { _, _ -> tween(500) }
+                                )
+                            }
+                        } else Modifier
                         if (imageUrl != null) {
                             AsyncImage(
                                 model = imageUrl,
                                 contentDescription = weaponName,
                                 contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize().padding(8.dp)
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp)
+                                    .then(sharedMod)
                             )
                         } else {
                             ShimmerBox(
-                                modifier = Modifier.fillMaxSize(),
-                                shape = smoothCornerShape(12.dp)
+                                modifier = Modifier.fillMaxSize().then(sharedMod),
+                                shape = AppShapes.compactCard
                             )
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    ShimmerBox(Modifier.width(140.dp).height(36.dp))
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(14.dp))
                     SkeletonChipRow(count = 3)
                 }
             }

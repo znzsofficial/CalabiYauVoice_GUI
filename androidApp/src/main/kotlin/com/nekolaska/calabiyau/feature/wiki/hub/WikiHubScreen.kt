@@ -285,7 +285,9 @@ fun WikiHubScreen(
     val restoredWeapons = HubListDataSnapshot.weaponCategories
     // 角色列表 state 提升到 Hub：从角色详情返回时数据仍非空，
     // 列表直接渲染真实卡片，共享元素动画不被骨架屏抢占
-    val shouldLoadCharacterList = backStack.any { it is WikiRoute.Characters || it is WikiRoute.Home }
+    val shouldLoadCharacterList = backStack.any {
+        it is WikiRoute.Characters || it is WikiRoute.Home || it is WikiRoute.WeaponDetail
+    }
     val characterState = rememberLoadState(
         initial = restoredFactions ?: emptyList<CharacterListApi.FactionData>(),
         enabled = shouldLoadCharacterList,
@@ -529,6 +531,11 @@ fun WikiHubScreen(
             }
 
             is WikiRoute.WeaponDetail -> {
+                val characterByName = remember(factions) {
+                    factions.asSequence()
+                        .flatMap { it.characters.asSequence() }
+                        .associateBy { it.name }
+                }
                 WeaponDetailScreen(
                     weaponName = route.name,
                     imageUrl = route.imageUrl,
@@ -536,6 +543,19 @@ fun WikiHubScreen(
                     onOpenWikiUrl = onOpenWikiUrl,
                     onOpenWeaponSkins = { weaponName ->
                         navigateTo(WikiRoute.WeaponSkins(weaponName))
+                    },
+                    canOpenCharacter = { userName ->
+                        userName in characterByName || backStack.any { it is WikiRoute.CharDetail && it.name == userName }
+                    },
+                    onOpenCharacter = { userName ->
+                        val existingCharIndex = backStack.indexOfLast { it is WikiRoute.CharDetail && it.name == userName }
+                        if (existingCharIndex >= 0) {
+                            backStack = backStack.take(existingCharIndex + 1)
+                        } else {
+                            characterByName[userName]?.let { character ->
+                                navigateTo(WikiRoute.CharDetail(character.name, character.portraitUrl ?: character.imageUrl))
+                            }
+                        }
                     },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent

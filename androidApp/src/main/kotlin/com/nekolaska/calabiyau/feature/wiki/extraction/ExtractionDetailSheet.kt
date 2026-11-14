@@ -1,13 +1,17 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
-import androidx.compose.foundation.layout.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
@@ -16,6 +20,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.core.ui.DetailField
 import com.nekolaska.calabiyau.core.ui.OfflineBanner
@@ -79,53 +84,140 @@ internal fun ExtractionDetailSheet(
     WikiContentSheet(onDismiss = onDismiss) {
         // Ordinary loot/attachment details keep their full artwork and fields.
         if (!isDropDetail && entry.imageUrl != null) item(key = "image", contentType = "image") {
-            AsyncImage(model = entry.imageUrl, contentDescription = entry.name, contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth().height(180.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = AppShapes.card,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            ) {
+                AsyncImage(
+                    model = entry.imageUrl,
+                    contentDescription = entry.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().height(180.dp).padding(16.dp)
+                )
+            }
         }
         item(key = "title", contentType = "title") {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 val subtitle = (listOf(entry.category, entry.qualityLabel) + entry.tags).filter { it.isNotBlank() }
-                if (subtitle.isNotEmpty()) Text(subtitle.joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (subtitle.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        subtitle.forEach { tag ->
+                            Surface(
+                                shape = AppShapes.chip,
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh
+                            ) {
+                                Text(
+                                    tag,
+                                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
                 evidence?.let {
-                    Text("${it.label}：${it.snippet}", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary)
+                    Surface(
+                        shape = AppShapes.compactCard,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                    ) {
+                        Text(
+                            "${it.label}：${it.snippet}",
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
         if (isDropDetail && (onViewSourceNotes != null || onRefreshPool != null)) item(key = "detail-actions") {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (onViewSourceNotes != null) TextButton(onClick = onViewSourceNotes) { Text("来源说明") }
-                if (onRefreshPool != null) TextButton(onClick = onRefreshPool, enabled = !poolIsLoading) {
+                if (onViewSourceNotes != null) FilledTonalButton(onClick = onViewSourceNotes) { Text("来源说明") }
+                if (onRefreshPool != null) OutlinedButton(onClick = onRefreshPool, enabled = !poolIsLoading) {
                     Text(if (poolIsLoading) "正在刷新…" else "刷新物品池")
                 }
             }
         }
         if (isDropDetail && entry.dropCountState == DropCountState.ZERO) item(key = "zero-warning") {
-            Text("这个来源不会掉落物品（件数恒为 0）。下方即使列有候选物品，也不会从这里获得。",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            Surface(
+                shape = AppShapes.compactCard,
+                color = MaterialTheme.colorScheme.errorContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        "这个来源不会掉落物品（件数恒为 0）。下方即使列有候选物品，也不会从这里获得。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
         }
         if (offlineAgeMs != null || poolError != null || (containerDetails &&
                 (entry.dropCountState == DropCountState.UNKNOWN || totalItems == 0))) item(key = "pool-status", contentType = "pool-status") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 offlineAgeMs?.let { OfflineBanner(ageMs = it) }
-                poolError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                if (containerDetails && entry.dropCountState == DropCountState.UNKNOWN) Text(
-                    "掉落件数尚不明确；池内有某件物品，不代表一定能从这里获得。",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (containerDetails && totalItems == 0) Text(
-                    if (entry.containerId == null) "完整物品池尚未公布。" else "完整物品池已公布，目前为 0 件物品。",
-                    style = MaterialTheme.typography.bodyMedium)
+                poolError?.let {
+                    Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.errorContainer) {
+                        Text(
+                            it,
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+                if (containerDetails && entry.dropCountState == DropCountState.UNKNOWN) {
+                    Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(Icons.Outlined.Info, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "掉落件数尚不明确；池内有某件物品，不代表一定能从这里获得。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                if (containerDetails && totalItems == 0) {
+                    Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                        Text(
+                            if (entry.containerId == null) "完整物品池尚未公布。" else "完整物品池已公布，目前为 0 件物品。",
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
             }
         }
         if (isDropDetail && entry.type == ExtractionEntryType.DROP_SOURCE) {
             item(key = "source-summary", contentType = "source-summary") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("掉落概览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(if (entry.dropImages.isNotEmpty()) "来源卡中的物品配图，不代表完整物品池；是否必掉以原始说明为准。"
                         else "来源卡展示已公布的掉落摘要，完整物品名单以对应的物品池为准。",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             items(entry.dropImages.size, key = { "source-image-$it" }, contentType = { "pool-item" }) { index ->
@@ -140,7 +232,13 @@ internal fun ExtractionDetailSheet(
             val summaryFields = fields.filter { it.label in setOf("必掉物", "掉落材料（按权重抽）", "掉落材料（按概率抽）",
                 "限定池", "掉落池构成", "掉落池内最高权重", "抽中率最高", "掉落件数") }
             items(summaryFields.size, key = { "source-summary-field-$it" }, contentType = { "field" }) { index ->
-                DetailField(label = summaryFields[index].label, value = summaryFields[index].value)
+                Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                    DetailField(
+                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                        label = summaryFields[index].label,
+                        value = summaryFields[index].value
+                    )
+                }
             }
             item(key = "source-pool-link", contentType = "source-pool-link") {
                 if (onViewCompletePool != null) {
@@ -181,33 +279,66 @@ internal fun ExtractionDetailSheet(
         }
         if (isDropDetail && !referenceIsMainContent) {
             item(key = "reference-toggle", contentType = "reference-toggle") {
-                TextButton(onClick = { referenceExpanded = !referenceExpanded }, modifier = Modifier.dropItemMotion(this).fillMaxWidth()) {
-                    Text(if (referenceExpanded) "收起规则与图鉴资料" else "规则与图鉴资料", modifier = Modifier.weight(1f))
-                    Icon(Icons.Outlined.ExpandMore, modifier = Modifier.rotate(referenceRotation),
-                        contentDescription = if (referenceExpanded) "收起" else "展开")
+                Surface(
+                    onClick = { referenceExpanded = !referenceExpanded },
+                    modifier = Modifier.dropItemMotion(this).fillMaxWidth(),
+                    shape = AppShapes.compactCard,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            if (referenceExpanded) "收起规则与图鉴资料" else "规则与图鉴资料",
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Icon(
+                            Icons.Outlined.ExpandMore,
+                            modifier = Modifier.rotate(referenceRotation),
+                            contentDescription = if (referenceExpanded) "收起" else "展开",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
             if (referenceExpanded) {
                 if (entry.containerId != null) item(key = "container-id", contentType = "field") {
-                    Box(Modifier.dropItemMotion(this)) { DetailField(label = "容器编号", value = entry.containerId) }
+                    Surface(Modifier.dropItemMotion(this), shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                        DetailField(Modifier.fillMaxWidth().padding(14.dp), label = "容器编号", value = entry.containerId)
+                    }
                 }
                 if (containerDetails) item(key = "pool-rules", contentType = "description") {
-                    Text("先决定掉落件数，再逐件按权重抽取。池内名单不提供单件物品概率，也不能据此判断整箱至少获得一件的概率。", modifier = Modifier.dropItemMotion(this),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "先决定掉落件数，再逐件按权重抽取。池内名单不提供单件物品概率，也不能据此判断整箱至少获得一件的概率。",
+                        modifier = Modifier.dropItemMotion(this),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 if (entry.description.isNotBlank()) item(key = "description", contentType = "description") {
-                    Text(entry.description, modifier = Modifier.dropItemMotion(this), style = MaterialTheme.typography.bodyLarge)
+                    Text(entry.description, modifier = Modifier.dropItemMotion(this), style = MaterialTheme.typography.bodyMedium)
                 }
                 items(fields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
-                    Box(Modifier.dropItemMotion(this)) { DetailField(label = fields[index].label, value = fields[index].value) }
+                    Surface(Modifier.dropItemMotion(this), shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                        DetailField(Modifier.fillMaxWidth().padding(14.dp), label = fields[index].label, value = fields[index].value)
+                    }
                 }
             }
         } else {
             if (entry.description.isNotBlank()) item(key = "description", contentType = "description") {
-                Text(entry.description, style = MaterialTheme.typography.bodyLarge)
+                Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                    Text(entry.description, Modifier.fillMaxWidth().padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                }
             }
             items(fields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
-                DetailField(label = fields[index].label, value = fields[index].value)
+                Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
+                    DetailField(Modifier.fillMaxWidth().padding(14.dp), label = fields[index].label, value = fields[index].value)
+                }
             }
         }
         item(key = "close", contentType = "close") {
@@ -221,8 +352,13 @@ private fun ExtractionPoolQualityMenu(labels: List<String>, selectedQuality: Str
     summary: String, onReset: (() -> Unit)?) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        DropFilterBar(summary = summary, label = selectedQuality ?: "筛选品质",
-            onClick = { expanded = true }, onReset = onReset)
+        DropFilterBar(
+            summary = summary,
+            label = selectedQuality ?: "筛选品质",
+            onClick = { expanded = true },
+            activeFilter = selectedQuality != null,
+            onReset = onReset
+        )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("全部品质") }, modifier = Modifier.semantics { selected = selectedQuality == null },
                 onClick = { onSelect(null); expanded = false })

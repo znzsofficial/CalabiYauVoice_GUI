@@ -74,14 +74,33 @@ fun ExtractionCatalogScreen(
                     Text("弦溯战线专用图鉴", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索名称、描述或效果…")
-                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        FilledTonalButton(onClick = { showFilters = true }) {
+                    val hasActiveFilters = category != null || quality != null || valuableOnly || sort != ExtractionSort.DEFAULT
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilledTonalButton(
+                            onClick = { showFilters = true },
+                            colors = if (hasActiveFilters) ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) else ButtonDefaults.filledTonalButtonColors()
+                        ) {
                             Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("筛选与排序")
                         }
-                        Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.CenterStart) {
-                            Text("${filtered.size} / ${entries.size} 项", style = MaterialTheme.typography.labelMedium)
+                        Box(Modifier.weight(1f).heightIn(min = 40.dp), contentAlignment = Alignment.CenterStart) {
+                            Surface(shape = AppShapes.chip, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                                Text(
+                                    "${filtered.size} / ${entries.size} 项",
+                                    Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        if (hasActiveFilters || query.isNotBlank()) {
+                            TextButton(onClick = {
+                                query = ""; category = null; quality = null; valuableOnly = false; sort = ExtractionSort.DEFAULT; descending = true
+                            }) { Text("重置") }
                         }
                     }
                     Text(listOfNotNull(category, qualities.find { it.first == quality }?.second,

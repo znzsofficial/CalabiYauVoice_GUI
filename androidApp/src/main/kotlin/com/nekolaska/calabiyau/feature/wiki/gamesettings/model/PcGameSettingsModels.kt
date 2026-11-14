@@ -30,6 +30,15 @@ sealed interface PcSettingsBlock {
     ) : PcSettingsBlock {
         fun field(label: String): String? = fields.firstOrNull { it.label == label }?.value
     }
+
+    /** Explanatory table rows are reference data, not configurable settings or recommendations. */
+    data class Reference(
+        override val id: String,
+        override val subsection: String,
+        val nameLabel: String,
+        val name: String,
+        val fields: List<PcSettingField>
+    ) : PcSettingsBlock
 }
 
 data class PcSettingsSection(
@@ -59,6 +68,10 @@ fun PcGameSettingsPage.filteredSections(
                     is PcSettingsBlock.Text -> block.text
                     is PcSettingsBlock.Setting -> buildString {
                         append(block.name).append(' ').append(block.recommendationCategory)
+                        block.fields.forEach { append(' ').append(it.label).append(' ').append(it.value) }
+                    }
+                    is PcSettingsBlock.Reference -> buildString {
+                        append(block.nameLabel).append(' ').append(block.name)
                         block.fields.forEach { append(' ').append(it.label).append(' ').append(it.value) }
                     }
                 }

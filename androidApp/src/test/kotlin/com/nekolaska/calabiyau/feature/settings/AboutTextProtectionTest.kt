@@ -81,13 +81,18 @@ class AboutTextProtectionTest {
     }
 
     private fun textRoles(scheme: ColorScheme): List<Pair<Color, Color>> = listOf(
+        scheme.background to scheme.onSurface,
+        scheme.background to scheme.primary,
+        scheme.background to scheme.onSurfaceVariant,
         scheme.surface to scheme.onSurface,
         scheme.surface to scheme.onSurfaceVariant,
         scheme.surfaceContainerLow to scheme.onSurface,
         scheme.surfaceContainerLow to scheme.primary,
         scheme.surfaceContainerLow to scheme.onSurfaceVariant,
+        scheme.surfaceContainerHigh to scheme.onSurface,
         scheme.surfaceContainerHigh to scheme.onSurfaceVariant,
-        scheme.secondaryContainer to scheme.onSecondaryContainer
+        scheme.secondaryContainer to scheme.onSecondaryContainer,
+        scheme.primary to Color.White
     )
 
     private fun contrast(background: Color, foreground: Color): Float {

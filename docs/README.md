@@ -18,6 +18,7 @@
 - [武器页面解析与巡检](weapon-parsing-audit.md)：42 页完整快照验证、10 个战术道具、武器机制和参考参数。
 - [维里昂裂隙与生化卡池补全](rift-bio-pool-followup.md)：原生搜打撤地图、双卡表补全和“盗取”分享码索引缺失边界。
 - [Android Wiki 功能约定](android-wiki-feature-guide.md)：model/source/parser/api/Screen 分层与缓存策略。
+- [Android 整体 UI 优化与重构计划](android-ui-refactor-plan.md)：导航与 Snackbar 一致性、下载页悬浮栏避让、顶栏与安全区收敛、遗留骨架屏及 Token 对齐计划。
 - [资源下载实现](resource-download-implementation.md)：搜索和分类、弹窗请求隔离、原任务重试、取消与恢复、文件完整性。
 - [Android 基础设施与文件管理](android-core-file-manager.md)：缓存请求版本、载荷校验、网络监听、写请求重试限制和文件操作边界。
 - [Android WebView 与登录链路](android-webview-auth.md)：Cookie 票据、统一导航规则、文件选择结果归属和临时窗口回收。
