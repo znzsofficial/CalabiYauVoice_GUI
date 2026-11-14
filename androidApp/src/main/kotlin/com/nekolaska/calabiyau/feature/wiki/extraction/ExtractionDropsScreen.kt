@@ -1,18 +1,24 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.*
@@ -76,19 +82,35 @@ internal fun ExtractionDropsScreen(
     val sourceRecords = remember(containers.data, catalog.data) { dropSourceRecords(containers.data, catalog.data) }
     val contentKey = if (location.reference == null && location.task == DropTask.ITEMS && location.itemName != null)
         SharedJson.encodeToString(navigation.contentStatePath) else location.contentKey
+    var moreActions by remember(location.task, location.reference) { mutableStateOf(false) }
+    // Animate the single active subtree: outgoing pages never retain sheets or duplicate saved-state owners.
+    val entrance = remember { Animatable(1f) }
+    LaunchedEffect(contentKey) {
+        entrance.snapTo(0f)
+        entrance.animateTo(1f, tween(200, easing = FastOutSlowInEasing))
+    }
 
     Scaffold(topBar = {
         TopAppBar(title = { Text(if (location.reference != null) "规则与原始资料" else "掉落图鉴", fontWeight = FontWeight.Bold) },
             navigationIcon = { BackNavButton(onClick = ::goBack) },
             actions = {
-                if (location.reference == null) IconButton(onClick = { navigate { it.openReference() } }) {
-                    Icon(Icons.Outlined.Info, contentDescription = "规则与原始资料")
-                }
                 RefreshActionButton(onClick = {
                     active.reload(forceRefresh = true)
                     if (location.task == DropTask.SOURCES && location.reference == null) catalog.reload(forceRefresh = true)
                 }, enabled = !active.isLoading)
-                OpenWikiActionButton(wikiUrl = "https://wiki.biligame.com/klbq/${page.wikiPathEncode()}", onOpenWikiUrl = onOpenWikiUrl)
+                Box {
+                    IconButton(onClick = { moreActions = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }
+                    DropdownMenu(expanded = moreActions && isActive(), onDismissRequest = { moreActions = false }) {
+                        if (location.reference == null) DropdownMenuItem(text = { Text("规则与原始资料") },
+                            leadingIcon = { Icon(Icons.Outlined.Info, null) },
+                            onClick = { moreActions = false; navigate { it.openReference() } })
+                        DropdownMenuItem(text = { Text("查看 Wiki 原页") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
+                            onClick = {
+                                moreActions = false
+                                onOpenWikiUrl("https://wiki.biligame.com/klbq/${page.wikiPathEncode()}")
+                            })
+                    }
+                }
             })
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -99,11 +121,16 @@ internal fun ExtractionDropsScreen(
                     }, text = { Text(task.title) })
                 }
             }
-            uiState.SaveableStateProvider(contentKey) {
+            Box(Modifier.weight(1f).graphicsLayer {
+                alpha = entrance.value
+                translationY = (1f - entrance.value) * 8.dp.toPx()
+            }) {
+                uiState.SaveableStateProvider(contentKey) {
                 if (location.reference == null && location.task == DropTask.SOURCES) {
-                    ExtractionDropBrowser(sourceRecords, artwork, modifier = Modifier.weight(1f),
+                    ExtractionDropBrowser(sourceRecords, artwork,
                         isActive = isActive(),
-                        loading = containersPending || catalogPending,
+                         loading = containersPending || catalogPending,
+                         loadFailed = containers.error != null || catalog.error != null,
                         filtersAuthoritative = !containersPending && !catalogPending && containers.error == null && catalog.error == null,
                         status = {
                             if (containers.isOffline && !containers.isShowingCachedPrefetch) OfflineBanner(ageMs = containers.cacheAgeMs)
@@ -111,7 +138,7 @@ internal fun ExtractionDropsScreen(
                                 Text("来源说明使用离线记录", style = MaterialTheme.typography.labelMedium)
                                 OfflineBanner(ageMs = catalog.cacheAgeMs)
                             }
-                            if (containersPending || catalogPending) LinearProgressIndicator(Modifier.fillMaxWidth())
+                             if ((containersPending || catalogPending) && sourceRecords.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                             containers.error?.let { error ->
                                 Text("物品列表更新失败：${error.message}", color = MaterialTheme.colorScheme.error)
                                 TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试物品列表") }
@@ -124,9 +151,17 @@ internal fun ExtractionDropsScreen(
                             navigate { if (record.isContainer) it.openContainer(record.entry.id, query)
                                 else it.openSource(record.entry.id, query) }
                         })
-                } else ApiResourceContent(active, modifier = Modifier.weight(1f), loading = {
-                    DropBrowserSkeleton(it, withImages = location.task == DropTask.ITEMS && location.reference == null)
-                }) {
+                } else PullToRefreshBox(isRefreshing = active.isLoading && active.data.isNotEmpty(),
+                    onRefresh = { active.reload(forceRefresh = true) }, modifier = Modifier.fillMaxSize()) {
+                    val status: @Composable () -> Unit = {
+                        if (active.isOffline && !active.isShowingCachedPrefetch) OfflineBanner(ageMs = active.cacheAgeMs)
+                        active.error?.let { error ->
+                            Column {
+                                Text(error.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                TextButton(onClick = { active.reload(forceRefresh = true) }) { Text("重新加载") }
+                            }
+                        }
+                    }
                     when {
                         location.reference != null -> {
                             val reference = location.reference
@@ -134,7 +169,7 @@ internal fun ExtractionDropsScreen(
                             ExtractionDropBrowser(entries.map { DropSourceRecord(it, false) }, artwork,
                                 isActive = isActive(),
                                 filtersAuthoritative = !catalogPending && catalog.error == null,
-                                reference = true, status = {
+                                 reference = true, loading = catalogPending, loadFailed = catalog.error != null, status = {
                                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         listOf(ExtractionDropView.POOLS, ExtractionDropView.STAGES).forEach { view ->
                                             FilterChip(selected = reference == view, onClick = { navigate { it.selectReference(view) } },
@@ -142,15 +177,18 @@ internal fun ExtractionDropsScreen(
                                         }
                                     }
                                     Text("保留 Wiki 的分组与说明；物品查询请使用“找物品”。", style = MaterialTheme.typography.bodySmall)
+                                    status()
                                 }, onSelect = { record, query -> navigate { it.openSource(record.entry.id, query) } })
                         }
                         else -> ExtractionDropLookupList(lookup, location.itemName, location.itemQuality,
                             onChooseItem = { item -> if (item == null) goBack() else navigate { it.openItem(item) } },
                             onSource = { source -> navigate { it.openContainer(source.id, location.itemName.orEmpty(), location.itemQuality) } },
-                            errorMessage = active.error?.message, artwork = artwork, isActive = isActive(),
+                             artwork = artwork, isActive = isActive(),
+                             loading = containersPending, loadFailed = containers.error != null, status = status,
                             filtersAuthoritative = !containersPending && containers.error == null,
                             backLabel = if (navigation.history.dropLast(1).lastOrNull()?.hasDetail == true) "返回来源详情" else "返回物品列表")
                     }
+                }
                 }
             }
         }
@@ -232,7 +270,7 @@ internal fun ExtractionDropsScreen(
 private fun ExtractionDropBrowser(
     records: List<DropSourceRecord>, artwork: DropArtworkIndex,
     modifier: Modifier = Modifier, reference: Boolean = false,
-    loading: Boolean = false, filtersAuthoritative: Boolean = true, isActive: Boolean = true,
+    loading: Boolean = false, loadFailed: Boolean = false, filtersAuthoritative: Boolean = true, isActive: Boolean = true,
     status: @Composable () -> Unit = {}, onSelect: (DropSourceRecord, String) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -248,50 +286,29 @@ private fun ExtractionDropBrowser(
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item("controls") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                status()
                 SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                     isSearching = false, placeholder = if (reference) "搜索资料名称或内容…" else "搜索箱子、Boss 或物品…")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FilledTonalButton(onClick = { filters = true }) {
-                        Icon(Icons.Outlined.Tune, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(category ?: "来源分类")
-                    }
-                    if (category != null) TextButton(onClick = { category = null }) { Text("清除分类") }
-                }
-                Text("${filtered.size} 条${if (reference) "资料" else "来源记录"}", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                DropFilterBar(summary = if (loading && records.isEmpty()) "正在读取${if (reference) "资料" else "来源"}…"
+                    else "${filtered.size} 条${if (reference) "资料" else "来源记录"}",
+                    label = category ?: "筛选分类", onClick = { filters = true }, enabled = records.isNotEmpty(),
+                    onReset = if (category != null) ({ category = null }) else null)
+                status()
             }
         }
         if (filtered.isEmpty()) {
-            if (loading && records.isEmpty()) items(4) { SkeletonTextLine(widthFraction = 0.8f) }
-            else item("empty") { CatalogEmptyResults(onClear = { query = ""; category = null }) }
+            if (loading && records.isEmpty()) items(4, key = { "source-skeleton:$it" }, contentType = { "skeleton" }) {
+                DropSourceCardSkeleton(Modifier.dropItemMotion(this))
+            }
+            else if (!(loadFailed && records.isEmpty())) item("empty") { CatalogEmptyResults(onClear = { query = ""; category = null }) }
         }
         items(filtered, key = { "${it.isContainer}:${it.entry.id}" }, contentType = { it.entry.type }) { record ->
-            ExtractionDropCard(entry = record.entry, query = query, artwork = artwork, onClick = { onSelect(record, query) })
+            ExtractionDropCard(modifier = Modifier.dropItemMotion(this), entry = record.entry, query = query, artwork = artwork, onClick = { onSelect(record, query) })
         }
     }
     if (filters && isActive) WikiSelectionSheet(title = "来源分类", onDismiss = { filters = false }) {
         item("all") { SelectionOptionRow(label = "全部来源", selected = category == null, onClick = { category = null; filters = false }) }
         items(categories, key = { it }) { value ->
             SelectionOptionRow(label = value, selected = category == value, onClick = { category = value; filters = false })
-        }
-    }
-}
-
-@Composable
-private fun DropBrowserSkeleton(modifier: Modifier = Modifier, withImages: Boolean) {
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { SkeletonTextLine(widthFraction = 1f, height = 48.dp) }
-        items(6) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (withImages) Surface(Modifier.size(56.dp), shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh) {}
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SkeletonTextLine(widthFraction = 0.65f)
-                    SkeletonTextLine(widthFraction = 0.4f)
-                }
-            }
         }
     }
 }

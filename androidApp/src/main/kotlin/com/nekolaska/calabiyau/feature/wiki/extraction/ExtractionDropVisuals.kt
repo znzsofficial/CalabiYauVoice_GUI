@@ -1,6 +1,8 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
@@ -65,6 +68,7 @@ internal fun ExtractionDropThumbnail(
     val shape = smoothCornerShape(10.dp)
     val color = extractionDropQualityColor(qualityCode)
     var loaded by remember(imageUrl) { mutableStateOf(false) }
+    val imageAlpha by animateFloatAsState(if (loaded) 1f else 0f, tween(180), label = "drop-artwork")
     Box(modifier.size(56.dp).clip(shape)
         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         .border(1.dp, color.copy(alpha = 0.45f), shape)
@@ -74,7 +78,7 @@ internal fun ExtractionDropThumbnail(
             tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
         if (!imageUrl.isNullOrBlank()) AsyncImage(
             model = imageUrl, contentDescription = null, contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize().padding(5.dp),
+            modifier = Modifier.fillMaxSize().padding(5.dp).graphicsLayer { alpha = imageAlpha },
             onLoading = { loaded = false }, onSuccess = { loaded = true }, onError = { loaded = false }
         )
     }

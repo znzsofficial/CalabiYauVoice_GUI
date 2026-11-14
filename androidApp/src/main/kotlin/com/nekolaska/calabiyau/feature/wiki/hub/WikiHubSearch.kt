@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.HorizontalDivider
@@ -179,7 +180,7 @@ private val hubSearchEntries = listOf(
         "characters",
         "角色",
         "超弦体与晶源体资料",
-        listOf("角色", "超弦体", "晶源体", "人物", "角色详情", "角色列表"),
+        listOf("角色", "超弦体", "晶源体", "人物", "角色详情", "角色列表", "角色筛选", "超弦体设定"),
         Icons.Outlined.People,
         WikiRoute.Characters
     ),
@@ -187,7 +188,7 @@ private val hubSearchEntries = listOf(
         "weapons",
         "武器一览",
         "查看全部武器数据",
-        listOf("武器", "枪械", "枪", "枪械数据", "武器详情", "武器列表"),
+        listOf("武器", "枪械", "枪", "枪械数据", "武器详情", "武器列表", "武器筛选"),
         Icons.Outlined.GpsFixed,
         WikiRoute.Weapons
     ),
@@ -203,7 +204,7 @@ private val hubSearchEntries = listOf(
         "items",
         "PC 道具图鉴",
         "PC 端及双端共有道具、货币与礼包",
-        listOf("图鉴", "道具", "物品", "目录", "货币", "礼盒", "礼包", "道具图鉴", "PC道具"),
+        listOf("图鉴", "道具", "物品", "目录", "货币", "礼盒", "礼包", "道具图鉴", "PC道具", "功能道具图鉴PC端"),
         Icons.Outlined.Inventory2,
         WikiRoute.Items
     ),
@@ -211,7 +212,7 @@ private val hubSearchEntries = listOf(
         "mobile_items",
         "移动端道具图鉴",
         "移动端独有道具、货币与礼包",
-        listOf("图鉴", "道具", "手机道具", "移动端道具", "手游道具", "道具图鉴"),
+        listOf("图鉴", "道具", "手机道具", "移动端道具", "手游道具", "道具图鉴", "功能道具图鉴移动端"),
         Icons.Outlined.Inventory2,
         WikiRoute.MobileItems
     ),
@@ -219,7 +220,7 @@ private val hubSearchEntries = listOf(
         "voting",
         "投票",
         "查看并参与当前 Wiki 投票",
-        listOf("投票", "时装投票", "票选", "投票页"),
+        listOf("投票", "时装投票", "角色时装投票", "票选", "投票页"),
         Icons.Outlined.HowToVote,
         WikiRoute.Voting
     ),
@@ -227,7 +228,7 @@ private val hubSearchEntries = listOf(
         "costumes",
         "角色时装",
         "浏览全部角色时装与外观",
-        listOf("时装", "皮肤", "角色外观", "服装", "衣服", "角色皮肤", "时装筛选"),
+        listOf("时装", "皮肤", "角色外观", "服装", "衣服", "角色皮肤", "时装筛选", "角色时装筛选"),
         Icons.Outlined.Checkroom,
         WikiRoute.Costumes()
     ),
@@ -235,7 +236,7 @@ private val hubSearchEntries = listOf(
         "weapon_skins",
         "武器外观",
         "浏览全部武器外观与皮肤",
-        listOf("枪皮", "武器皮肤", "武器外观", "外观", "皮肤", "枪械皮肤"),
+        listOf("枪皮", "武器皮肤", "武器外观", "外观", "皮肤", "枪械皮肤", "武器外观筛选"),
         Icons.Outlined.Palette,
         WikiRoute.WeaponSkins()
     ),
@@ -243,15 +244,23 @@ private val hubSearchEntries = listOf(
         "bio_cards",
         "卡牌",
         "生化卡牌与卡组分享",
-        listOf("卡牌", "生化", "卡组", "卡组分享", "PC卡牌", "移动端卡牌", "生化卡牌"),
+        listOf("卡牌", "生化", "晶源感染", "卡组", "卡组分享", "晶源感染卡组分享", "PC卡牌", "PC端晶源感染卡牌", "PC端卡牌筛选", "生化卡牌"),
         Icons.Outlined.Style,
         WikiRoute.BioCards
+    ),
+    searchEntry(
+        "bio_mobile_cards",
+        "移动端晶源感染卡牌",
+        "直接浏览移动端生化卡牌",
+        listOf("移动端卡牌", "移动端晶源感染卡牌", "移动端卡牌筛选", "手游卡牌", "移动端生化卡牌", "晶源感染", "生化", "卡牌"),
+        Icons.Outlined.Style,
+        WikiRoute.BioMobileCards
     ),
     searchEntry(
         "activities",
         "活动",
         "当前与历史活动",
-        listOf("活动", "活动页", "限时", "历史活动", "当前活动"),
+        listOf("活动", "活动页", "限时", "历史活动", "当前活动", "往期活动"),
         Icons.Outlined.Event,
         WikiRoute.Activities
     ),
@@ -259,7 +268,7 @@ private val hubSearchEntries = listOf(
         "announcements",
         "公告资讯",
         "游戏公告和更新信息",
-        listOf("公告", "资讯", "更新", "新闻", "公告资讯", "维护公告"),
+        listOf("公告", "资讯", "更新", "新闻", "公告资讯", "维护公告", "往期公告"),
         Icons.Outlined.Campaign,
         WikiRoute.Announcements
     ),
@@ -267,7 +276,7 @@ private val hubSearchEntries = listOf(
         "balance_data",
         "平衡数据",
         "胜率、选取率、KD 与评分",
-        listOf("平衡", "胜率", "选取率", "KD", "伤害", "评分", "场均伤害", "场均得分", "数据"),
+        listOf("平衡", "胜率", "选取率", "KD", "伤害", "评分", "场均伤害", "场均得分", "数据", "角色平衡数据"),
         Icons.Outlined.BarChart,
         WikiRoute.BalanceData
     ),
@@ -283,7 +292,7 @@ private val hubSearchEntries = listOf(
         "game_modes",
         "战斗模式",
         "查看所有战斗模式详情",
-        listOf("战斗模式", "模式", "玩法", "爆破", "推车", "团队", "娱乐模式", "弦溯战线", "搜打撤", "撤离"),
+        listOf("战斗模式", "模式", "玩法", "爆破", "推车", "团队", "娱乐模式", "超弦推进模式", "弦溯战线", "搜打撤", "撤离"),
         Icons.Outlined.SportsEsports,
         WikiRoute.GameModes
     ),
@@ -391,6 +400,14 @@ private val hubSearchEntries = listOf(
         WikiRoute.Encasings
     ),
     searchEntry(
+        "personal_cards",
+        "个性名片",
+        "名片外观与获取方式",
+        listOf("个性名片", "名片", "玩家装饰", "身份展示"),
+        Icons.Outlined.MilitaryTech,
+        WikiRoute.PersonalCards
+    ),
+    searchEntry(
         "medals",
         "勋章",
         "勋章与荣誉展示",
@@ -450,15 +467,23 @@ private val hubSearchEntries = listOf(
         "vehicle_skins",
         "载具外观",
         "极限推进模式载具外观",
-        listOf("载具", "载具外观", "车皮", "极限推进", "移动端"),
+        listOf("载具", "载具外观", "极限推进模式载具外观", "车皮", "极限推进", "移动端"),
         Icons.Outlined.Extension,
         WikiRoute.VehicleSkins
     ),
     searchEntry(
+        "lounge_figures",
+        "休息室手办",
+        "休息室手办图鉴与获取方式",
+        listOf("休息室手办", "休息室", "手办", "人偶", "玩家装饰", "外观扩展"),
+        Icons.Outlined.Extension,
+        WikiRoute.LoungeFigures
+    ),
+    searchEntry(
         "extension_hub",
         "游戏延伸",
-        "剧情、历史、BGM、投票与百科内容",
-        listOf("延伸", "资料", "世界观", "剧情", "历史", "BGM", "音乐", "百科"),
+        "实用指南、剧情、历史与影音资料",
+        listOf("延伸", "资料", "实用指南", "世界观", "剧情", "历史", "BGM", "音乐", "百科"),
         Icons.Outlined.MoreHoriz,
         WikiRoute.ExtensionHub
     ),
@@ -517,6 +542,14 @@ private val hubSearchEntries = listOf(
         listOf("小贴士", "提示", "技巧", "tips", "游戏Tips", "游戏提示"),
         Icons.Outlined.AutoAwesome,
         WikiRoute.GameTips
+    ),
+    searchEntry(
+        "pc_game_settings",
+        "游戏设置（PC）",
+        "设置说明、默认值与 Wiki 画质推荐",
+        listOf("游戏设置", "游戏设置PC端", "PC", "画质", "帧率", "灵敏度", "准星", "按键", "手柄", "DLSS", "XeSS", "实用指南"),
+        Icons.Outlined.Tune,
+        WikiRoute.PcGameSettings
     ),
     searchEntry(
         "wallpapers",

@@ -35,7 +35,9 @@ sealed interface WikiRoute {
     data object Comics : WikiRoute
     data object MeowLanguage : WikiRoute
     data object GameTips : WikiRoute
+    data object PcGameSettings : WikiRoute
     data object Baseplates : WikiRoute
+    data object PersonalCards : WikiRoute
     data object Encasings : WikiRoute
     data object Medals : WikiRoute
     data object Sprays : WikiRoute
@@ -46,6 +48,7 @@ sealed interface WikiRoute {
     data object StringerPushCards : WikiRoute
     data object AvatarFrames : WikiRoute
     data object RoomAppearances : WikiRoute
+    data object LoungeFigures : WikiRoute
     data object VehicleSkins : WikiRoute
     data object Oath : WikiRoute
     data object Imprints : WikiRoute

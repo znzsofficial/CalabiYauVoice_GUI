@@ -2,6 +2,9 @@ package com.nekolaska.calabiyau.feature.wiki.bio.parser
 
 import com.nekolaska.calabiyau.feature.wiki.bio.BioDeckCardImageIndex
 import com.nekolaska.calabiyau.feature.wiki.bio.model.*
+import data.SharedJson
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.*
 
 class BioDeckPoolCompletionTest {
@@ -28,6 +31,23 @@ class BioDeckPoolCompletionTest {
         val map = mapOf("晶源体" to listOf(known, official))
         assertEquals(map, BioDeckShareParsers.completeFromPcCatalog(map, listOf(pc, pc)))
         assertEquals(2, BioDeckShareParsers.completeFromPcCatalog(pool(), listOf(pc, pc)).getValue("晶源体").size)
+    }
+
+    @Test fun publishedStealIndex221ReplacesUnknownCompletionAndEncodesTheOfficialBit() {
+        // Reduced MediaWiki:ZombieCardList.json revision 119471, published 2026-11-04T05:02:50Z.
+        val json = SharedJson.parseToJsonElement(checkNotNull(javaClass.getResource(
+            "/fixtures/bio/steal_share_20261104.json")).readText(Charsets.UTF_8)).jsonObject
+        val official = mapOf("晶源体" to BioDeckShareParsers.parseFactionCards(json.getValue("晶源体").jsonArray))
+        val completed = BioDeckShareParsers.completeFromPcCatalog(official, listOf(steal(), steal()))
+        val card = completed.getValue("晶源体").single()
+        assertEquals("20351047", card.cardId)
+        assertEquals(221, card.index)
+        val selected = BioDeckShareParsers.resolveSelectedCards(listOf(card.cardId), completed.getValue("晶源体"))
+        val code = BioDeckShareParsers.publicationShareCode(selected, "晶源体", allowMissingShareCode = false)
+        val raw = String(java.util.Base64.getDecoder().decode(code.removeSuffix("**")), Charsets.UTF_8)
+        assertEquals("000B|0003|2" + "0".repeat(55), raw)
+        assertEquals(listOf("20351047") to "晶源体",
+            BioDeckShareCodecs.decodeShareCode(code, "晶源体", mapOf(221 to "20351047")))
     }
 
     @Test fun talentsMissingIdsAndOtherFactionIdsCannotBeClaimed() {

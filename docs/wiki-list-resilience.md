@@ -25,3 +25,13 @@
 - `WIKI_FACTION_AUDIT_FILE` 指向本机 `wiki-changes-20261112/factions-latest.html`，真实页面验证 29 名角色及全部图片，且通过入缓存校验；这是已有全阵营代表快照，不等同四个单阵营在线调用验收。
 - 本轮补抓模板及单阵营时首个请求 HTTP 567，已停止。联网复验待限流解除；没有把抓取失败记为通过。
 - 仍兼容原有缓存 key；本轮作为新版本 2.1.29 发布，不覆盖旧版安装包。
+
+## 2026-11-14 串行补抓与全响应审计
+
+- 本地证据目录：`C:/Users/NekoLaska/AppData/Local/Temp/opencode/wiki-list-20261114/`。`requests.jsonl` 保存请求 URL、UTC 起止时间、状态和响应 SHA-256；脚本每次请求结束（包括异常）后等待 6.5 秒，日志最小请求间隔为 6.500739 秒。副武器第一次请求被远端重置连接（WinError 10054，无 HTTP 状态）；离线检查后仅补试该中断请求及尚未请求的战术道具，均成功。本轮没有 HTTP 567。
+- `navigation.json`：`模板:卡拉彼丘` revision **119887**，明确声明 **11 个模式、53 个模式—地图关联**。一般爆破/团队乱斗各 9 图，弦溯战线明确对应维里昂裂隙。排位爆破、个人乱斗、超弦推进、炸弹派对在此导航快照中没有映射；不按相似模式猜补，不等同这些模式的地图模板为空。
+- 四个 `faction-<阵营>.json`：欧泊 **8**、剪刀手 **9**、乌尔比诺 **7**、晶源体 **5**，共 29 个唯一角色身份；单阵营响应已齐，区别于上轮只验证全阵营快照。
+- 三个代表 `map-<模式>.json`：一般爆破 **9**、个人乱斗 **5**、弦溯战线 **1**。个人乱斗虽不在导航映射中，其独立地图模板确实返回 5 图。其余 11 个地图模板没有在本轮重新联网抓取。
+- 四类 `weapon-<分类>-0.json`：主武器 **25**、近战武器 **3**、副武器 **4**、战术道具 **10**。生产 `limit=100` 查询均没有 `query-continue-offset`，因此四条真实响应链均为单页终止；不宣称现场产生过多页响应。主武器的介绍 printout 全为空，静风使用者为 19 名；副武器类型/使用者为空而介绍非空，这些是源数据边界。
+- 新增 `com.nekolaska.calabiyau.core.wiki.WikiListsRealPageAuditTest`：设置 `WIKI_LIST_AUDIT_DIR` 为上述目录后，直接调用 `GameModeParsers.parseModeMapMapping`、`CharacterListParser`、`MapListParsers`、`WeaponListSource.fetchAll` / `isValidPayload` 和 `WeaponListApi.parseWeapons`，核对完整名称集合、顺序、身份链接、原图 URL、缓存入库校验及武器字段。未设置环境变量时跳过；设置了但目录或文件不完整则失败，防止部分快照冒充验收。已有 `WeaponListSourceTest` 继续覆盖合成多页与失败尾页。
+- **父会话验证完成**：配置 `WIKI_LIST_AUDIT_DIR` 后，上述4项完整快照审计已通过，直接执行生产解析器、分页组装及校验代码；不是仅凭HTTP200或Python选择器作判断。与装饰／缓存／Hub及分享索引回归同次运行共 **102项，0失败／0跳过**；Android编译与Lint通过（0 errors / 5个既有warnings）。本次未发现需要修改列表生产代码的问题，已关闭该实时补验待办。真实多页现场响应仍未出现，其边界由已有合成分页测试覆盖。

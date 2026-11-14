@@ -1,17 +1,18 @@
 {
-    "versionName": "2.1.29",
-    "versionCode": 59,
-    "apkUrl": "/downloads/CalabiYauVoice-2.1.29.apk?build=922d8c81d515b8b3",
-    "apkSize": 3806584,
+    "versionName": "2.1.30",
+    "versionCode": 60,
+    "apkUrl": "/downloads/CalabiYauVoice-2.1.30.apk",
+    "apkSize": 0,
     "releaseUrl": "/",
     "changelog": [
-        "\u9002\u914d\u65b0\u7248\u5f26\u6eaf\u6218\u7ebf\u6389\u843d\u8d44\u6599\uff0c\u6765\u6e90\u5361\u53ef\u8fdb\u5165\u660e\u786e\u5173\u8054\u7684\u5171\u7528\u7269\u54c1\u6c60\uff0c\u517c\u5bb9\u636e\u70b9\u7bb1\u3001\u7a7a\u6295\u53ca\u9996\u9886\u9636\u6bb5\u8bf4\u660e",
-        "\u517c\u5bb9 Q8 \u54c1\u8d28\u6807\u7b7e\u66f4\u65b0\uff0c\u4fdd\u7559\u5df2\u4fdd\u5b58\u7684\u7269\u54c1\u67e5\u8be2\u548c\u54c1\u8d28\u7b5b\u9009",
-        "\u5b8c\u5584\u5730\u56fe\u3001\u6b66\u5668\u4e0e\u89d2\u8272\u5217\u8868\uff1a\u7f3a\u56fe\u4e0d\u518d\u6f0f\u9879\uff0c\u90e8\u5206\u5206\u7c7b\u52a0\u8f7d\u5931\u8d25\u53ef\u91cd\u8bd5\uff0c\u6b66\u5668\u652f\u6301\u5b8c\u6574\u5206\u9875",
-        "\u8865\u5168\u89d2\u8272\u8bbe\u5b9a\u4e2d\u7684\u840c\u70b9\u4e0e\u4eba\u7269\u5173\u7cfb\uff0c\u6539\u5584\u59d3\u540d\u5339\u914d\u3001\u6362\u884c\u53ca\u91cd\u590d\u5b57\u6bb5\u5904\u7406",
-        "\u4fee\u590d\u5931\u8d25\u6216\u79bb\u7ebf\u6570\u636e\u957f\u671f\u505c\u7559\u5728\u5185\u5b58\u7684\u95ee\u9898\uff0c\u5237\u65b0\u8bbe\u5b9a\u540e\u540c\u6b65\u66f4\u65b0\u89d2\u8272\u8be6\u60c5\uff0c\u5f02\u5e38\u54cd\u5e94\u4fdd\u7559\u6709\u6548\u7f13\u5b58"
+        "新增游戏设置（PC）原生资料页，支持分类搜索、设置详解、推荐速查与原理科普",
+        "玩家装饰补齐个性名片与休息室手办，支持名称和获取方式搜索、分类浏览与完整资料详情",
+        "恢复房间附属界面预览，完善动作预览与图片放大保存，修复载具效果和获取方式混杂",
+        "优化装饰数据读取与离线回退，避免旧资料覆盖新缓存、异常页面覆盖好数据，缺图仍保留条目",
+        "对齐掉落图鉴骨架屏与实际内容，集中筛选和辅助操作，补充切换、展开及图片淡入动画",
+        "修正移动端晶源感染卡牌入口，补齐常用 Wiki 页面原名搜索，查找资料更直接"
     ],
-    "publishedAt": "2026-11-12",
+    "publishedAt": "2026-11-14",
     "releases": [
         {
             "versionName": "2.1.29",

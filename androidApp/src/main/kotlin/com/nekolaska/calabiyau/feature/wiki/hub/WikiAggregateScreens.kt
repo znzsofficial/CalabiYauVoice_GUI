@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Pets
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -130,6 +131,7 @@ internal fun WikiGameplayHubScreen(
                     items = listOf(
                         "超弦体天赋" to "超弦体天赋",
                         "超弦推进卡牌" to "战斗模式/超弦推进",
+                        "晶源感染卡牌" to "战斗模式/晶源感染/移动端卡牌筛选",
                         "载具外观" to "极限推进模式载具外观",
                         "头像框" to "头像框"
                     ),
@@ -137,6 +139,7 @@ internal fun WikiGameplayHubScreen(
                     nativePages = mapOf(
                         "超弦体天赋" to { onNavigateTo(WikiRoute.StringerTalents) },
                         "超弦推进卡牌" to { onNavigateTo(WikiRoute.StringerPushCards) },
+                        "晶源感染卡牌" to { onNavigateTo(WikiRoute.BioMobileCards) },
                         "载具外观" to { onNavigateTo(WikiRoute.VehicleSkins) },
                         "头像框" to { onNavigateTo(WikiRoute.AvatarFrames) }
                     ),
@@ -258,6 +261,22 @@ internal fun WikiExtensionHubScreen(
                     backdrop = backdrop
                 )
             }
+            item("practical-guides") {
+                ContentBlockCard(
+                    title = "实用指南",
+                    icon = Icons.Outlined.Tune,
+                    items = listOf(
+                        "游戏设置（PC）" to "游戏设置PC端",
+                        "游戏Tips" to "游戏Tips"
+                    ),
+                    onOpenWikiUrl = onOpenWikiUrl,
+                    nativePages = mapOf(
+                        "游戏设置（PC）" to { onNavigateTo(WikiRoute.PcGameSettings) },
+                        "游戏Tips" to { onNavigateTo(WikiRoute.GameTips) }
+                    ),
+                    backdrop = backdrop
+                )
+            }
             item {
                 ContentBlockCard(
                     title = "资料与世界观",
@@ -267,8 +286,7 @@ internal fun WikiExtensionHubScreen(
                         "游戏历史" to "游戏历史",
                         "四格漫画" to "官方四格漫画",
                         "联动" to "联动",
-                        "梗百科" to "梗百科",
-                        "游戏Tips" to "游戏Tips"
+                        "梗百科" to "梗百科"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
@@ -276,8 +294,7 @@ internal fun WikiExtensionHubScreen(
                         "游戏历史" to { onNavigateTo(WikiRoute.GameHistory) },
                         "四格漫画" to { onNavigateTo(WikiRoute.Comics) },
                         "联动" to { onNavigateTo(WikiRoute.Collaborations) },
-                        "梗百科" to { onNavigateTo(WikiRoute.Memes) },
-                        "游戏Tips" to { onNavigateTo(WikiRoute.GameTips) }
+                        "梗百科" to { onNavigateTo(WikiRoute.Memes) }
                     ),
                     backdrop = backdrop
                 )
@@ -356,6 +373,7 @@ internal fun WikiDecorationHubScreen(
                     icon = Icons.Outlined.MilitaryTech,
                     items = listOf(
                         "基板" to "基板",
+                        "个性名片" to "个性名片",
                         "封装" to "封装",
                         "勋章" to "勋章",
                         "头像框" to "头像框"
@@ -363,6 +381,7 @@ internal fun WikiDecorationHubScreen(
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
                         "基板" to { onNavigateTo(WikiRoute.Baseplates) },
+                        "个性名片" to { onNavigateTo(WikiRoute.PersonalCards) },
                         "封装" to { onNavigateTo(WikiRoute.Encasings) },
                         "勋章" to { onNavigateTo(WikiRoute.Medals) },
                         "头像框" to { onNavigateTo(WikiRoute.AvatarFrames) }
@@ -396,11 +415,13 @@ internal fun WikiDecorationHubScreen(
                     icon = Icons.Outlined.Extension,
                     items = listOf(
                         "房间外观" to "房间外观",
+                        "休息室手办" to "休息室手办",
                         "载具外观" to "极限推进模式载具外观"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
                         "房间外观" to { onNavigateTo(WikiRoute.RoomAppearances) },
+                        "休息室手办" to { onNavigateTo(WikiRoute.LoungeFigures) },
                         "载具外观" to { onNavigateTo(WikiRoute.VehicleSkins) }
                     ),
                     backdrop = backdrop

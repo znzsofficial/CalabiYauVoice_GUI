@@ -88,6 +88,7 @@ import com.nekolaska.calabiyau.feature.wiki.submission.SubmissionScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerPushCardScreen
 import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
 import com.nekolaska.calabiyau.feature.wiki.tips.GameTipsScreen
+import com.nekolaska.calabiyau.feature.wiki.gamesettings.PcGameSettingsScreen
 import com.nekolaska.calabiyau.feature.wiki.voting.VotingScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -640,7 +641,7 @@ fun WikiHubScreen(
             }
 
             is WikiRoute.BioMobileCards -> {
-                // 兼容保留路由：当前无首页直达入口，仅用于未来深链或外部跳转扩展
+                // 首页搜索与玩法聚合页的移动端入口，直接打开对应平台标签。
                 BioCardScreen(
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl,
@@ -735,6 +736,13 @@ fun WikiHubScreen(
                 )
             }
 
+            is WikiRoute.PcGameSettings -> {
+                PcGameSettingsScreen(
+                    onBack = { popBackStack() },
+                    onOpenWikiUrl = onOpenWikiUrl
+                )
+            }
+
             is WikiRoute.BalanceData -> {
                 BalanceDataScreen(
                     onBack = { popBackStack() }
@@ -744,6 +752,15 @@ fun WikiHubScreen(
             is WikiRoute.Baseplates -> {
                 PlayerDecorationScreen(
                     title = "基板",
+                    isActive = { isCurrentPage() && !isOverlaid },
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.PersonalCards -> {
+                PlayerDecorationScreen(
+                    title = "个性名片",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -751,6 +768,7 @@ fun WikiHubScreen(
             is WikiRoute.Encasings -> {
                 PlayerDecorationScreen(
                     title = "封装",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -758,6 +776,7 @@ fun WikiHubScreen(
             is WikiRoute.ChatBubbles -> {
                 PlayerDecorationScreen(
                     title = "聊天气泡",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -765,6 +784,7 @@ fun WikiHubScreen(
             is WikiRoute.Headgear -> {
                 PlayerDecorationScreen(
                     title = "头套",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -772,6 +792,7 @@ fun WikiHubScreen(
             is WikiRoute.StringerActions -> {
                 PlayerDecorationScreen(
                     title = "超弦体动作",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -793,6 +814,7 @@ fun WikiHubScreen(
             is WikiRoute.Medals -> {
                 PlayerDecorationScreen(
                     title = "勋章",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -800,6 +822,7 @@ fun WikiHubScreen(
             is WikiRoute.Sprays -> {
                 PlayerDecorationScreen(
                     title = "喷漆",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -807,6 +830,7 @@ fun WikiHubScreen(
             is WikiRoute.AvatarFrames -> {
                 PlayerDecorationScreen(
                     title = "头像框",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -814,6 +838,15 @@ fun WikiHubScreen(
             is WikiRoute.RoomAppearances -> {
                 PlayerDecorationScreen(
                     title = "房间外观",
+                    isActive = { isCurrentPage() && !isOverlaid },
+                    onBack = { popBackStack() }
+                )
+            }
+
+            is WikiRoute.LoungeFigures -> {
+                PlayerDecorationScreen(
+                    title = "休息室手办",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }
@@ -821,6 +854,7 @@ fun WikiHubScreen(
             is WikiRoute.VehicleSkins -> {
                 PlayerDecorationScreen(
                     title = "极限推进模式载具外观",
+                    isActive = { isCurrentPage() && !isOverlaid },
                     onBack = { popBackStack() }
                 )
             }

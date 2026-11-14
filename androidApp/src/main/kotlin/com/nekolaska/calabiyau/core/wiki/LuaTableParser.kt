@@ -26,8 +26,21 @@ internal object LuaTableParser {
         return (Parser(input).parseReturnValue() as? LuaValue.LuaArray)?.values ?: emptyList()
     }
 
-    private class Parser(private val input: String) {
+    /** Strict data-table entry point: no execution, conflicting keys, mixed tables or trailing code. */
+    fun parseReturnTable(input: String): LuaValue = Parser(input, strictTables = true).parseCompleteTable()
+
+    private class Parser(private val input: String, private val strictTables: Boolean = false) {
         private var index = 0
+
+        fun parseCompleteTable(): LuaValue {
+            val value = parseReturnValue()
+            require(value is LuaValue.LuaArray || value is LuaValue.LuaObject) { "Expected a returned data table" }
+            skipWhitespace()
+            if (input.getOrNull(index) == ';') index++
+            skipWhitespace()
+            require(index == input.length) { "Unexpected code after returned table at $index" }
+            return value
+        }
 
         fun parseReturnValue(): LuaValue {
             skipWhitespace()
@@ -54,6 +67,13 @@ internal object LuaTableParser {
             val fields = linkedMapOf<String, LuaValue>()
             var hasObjectEntries = false
 
+            fun merge(entry: LuaValue.LuaObject) {
+                entry.fields.forEach { (key, value) ->
+                    require(!strictTables || key !in fields || fields[key] == value) { "Conflicting Lua key: $key" }
+                    fields[key] = value
+                }
+            }
+
             while (true) {
                 skipWhitespace()
                 if (peek() == '}') {
@@ -64,12 +84,12 @@ internal object LuaTableParser {
                 when {
                     peek() == '[' && !startsLongString() -> {
                     val entry = parseObjectEntry()
-                    fields.putAll(entry.fields)
+                    merge(entry)
                     hasObjectEntries = true
                     }
                     isIdentifierStart(peek()) && looksLikeBareKeyEntry() -> {
                         val entry = parseBareObjectEntry()
-                        fields.putAll(entry.fields)
+                        merge(entry)
                         hasObjectEntries = true
                     }
                     else -> values += parseValue()
@@ -81,6 +101,7 @@ internal object LuaTableParser {
                 }
             }
 
+            require(!strictTables || !hasObjectEntries || values.isEmpty()) { "Mixed array/object data table" }
             return if (hasObjectEntries) {
                 LuaValue.LuaObject(fields)
             } else {

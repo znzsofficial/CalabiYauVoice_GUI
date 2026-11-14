@@ -5,11 +5,14 @@
 ## 开发与实现
 
 - [地图、武器、角色列表健壮性](wiki-list-resilience.md)：数据源边界、卡片完整性、分组失败重试、武器分页与导航模板解析。
+- [Wiki 导航覆盖审计](wiki-navigation-coverage.md)：公共导航与原生入口、网页入口、搜索别名及 PC／移动端边界。
 
 - [Hub 快速导航转场修复](hub-transition-stability.md)：单一动画所有权、手势票据及栈深度方向。
 - [超弦体详情展示](character-detail-presentation.md)：技能阅读顺序与最终立绘／语录样式。
 - [工具回退与 Tab 背景巡检](tools-mesh-tab-surfaces.md)：工具视觉回退、生化壁纸遮挡与页签底色。
 - [Android Wiki 页面与复用组件](android-wiki-ui-architecture.md)：统一弹层、选择／保存／分区状态、推进懒网格及生化／投票／平衡业务编排。
+- [PC 游戏设置资料](pc-game-settings.md)：游戏延伸中的实用指南、设置表解析、推荐与默认值边界。
+- [玩家装饰图鉴](player-decoration-catalogs.md)：休息室手办与个性名片的原生解析、图片及获取方式。
 - [Android 导航与页面状态](android-navigation-followup.md)：主导航状态恢复、预取与玻璃开销、筛选草稿、渐变和网页请求限速。
 - [弦溯战线简介与图鉴](extraction-mode-implementation.md)：模式简介、外观与图鉴中的三个原生入口、专用骨架及完整快照回归。
 - [武器页面解析与巡检](weapon-parsing-audit.md)：42 页完整快照验证、10 个战术道具、武器机制和参考参数。
@@ -24,6 +27,7 @@
 
 ## 发布与维护
 
+- [2.1.30 发布记录](releases/2.1.30.md)：PC 设置原生页、玩家装饰主源与展示重构、掉落交互及导航维护。
 - [2.1.29 发布记录](releases/2.1.29.md)：搜打撤新版适配、列表健壮性与角色补充设定完善。
 - [2.1.28 发布记录](releases/2.1.28.md)：掉落查询交互重组、物品图片与品质色、返回状态及加载调度修复。
 - [2.1.27 发布记录](releases/2.1.27.md)：掉落物品反查、角色技能排版、背景衔接与快速返回转场修复。

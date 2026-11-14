@@ -53,4 +53,20 @@ class LuaTableParserTest {
     fun nonArrayReturnYieldsEmptyList() {
         assertTrue(LuaTableParser.parseReturnArray("return 1").isEmpty())
     }
+
+    @Test
+    fun strictTableReadsNumericKeysWithoutExecutingLua() {
+        val table = LuaTableParser.parseReturnTable("return { [93001] = {'默认'}, [93002] = {get={'商城'}, remark='备注'} }; -- end") as LuaValue.LuaObject
+        assertEquals(setOf("93001", "93002"), table.fields.keys)
+        assertTrue(table.fields["93002"] is LuaValue.LuaObject)
+    }
+
+    @Test
+    fun strictTablesRejectConflictsMixedEntriesAndTrailingExecutableCode() {
+        for (text in listOf("return {[1]='甲',[1]='乙'}", "return {[1]='甲','乙'}", "return {} os.execute('bad')")) {
+            assertFailsWith<IllegalArgumentException> { LuaTableParser.parseReturnTable(text) }
+        }
+        // The existing permissive array API used by other features keeps its prior behavior.
+        assertEquals(1, LuaTableParser.parseReturnArray("return { {id=1} } trailing").size)
+    }
 }

@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,10 +21,13 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 @Composable
 internal fun ExtractionDropLookupList(
     lookup: Map<ExtractionDropItem, List<ExtractionDropHit>>, selectedName: String?, selectedQuality: String?,
-    onChooseItem: (ExtractionDropItem?) -> Unit, onSource: (ExtractionEntry) -> Unit, errorMessage: String?,
+    onChooseItem: (ExtractionDropItem?) -> Unit, onSource: (ExtractionEntry) -> Unit,
     artwork: DropArtworkIndex = DropArtworkIndex.Empty,
     filtersAuthoritative: Boolean = true, isActive: Boolean = true,
-    backLabel: String = "返回物品列表"
+    backLabel: String = "返回物品列表",
+    loading: Boolean = false,
+    loadFailed: Boolean = false,
+    status: @Composable () -> Unit = {}
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var quality by rememberSaveable { mutableStateOf<String?>(null) }
@@ -59,51 +61,56 @@ internal fun ExtractionDropLookupList(
         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item("lookup-header") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (selected != null) {
-                    TextButton(onClick = { onChooseItem(null) }) { Text(backLabel) }
+                if (selectedName != null) {
+                    val label = selected?.qualityLabel ?: selectedQuality.orEmpty()
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ExtractionDropThumbnail(selected.name, selected.qualityLabel, selected.qualityCode ?: 0,
-                            artwork.imageFor(selected.name, selected.qualityLabel), Modifier.size(72.dp))
+                        ExtractionDropThumbnail(selectedName, label, selected?.qualityCode ?: 0,
+                            artwork.imageFor(selectedName, label), Modifier.size(72.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(selected.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                            ExtractionDropQualityBadge(selected.qualityLabel, selected.qualityCode ?: 0)
+                            Text(selectedName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                            ExtractionDropQualityBadge(label, selected?.qualityCode ?: 0)
                         }
                     }
-                    Text("去哪找 · ${shownHits.size} 个已收录来源", style = MaterialTheme.typography.titleMedium)
-                    DropLookupFilterEntry(
-                        summary = "${sourceCategory ?: "全部来源"} · ${if (includeZero) "显示不出货的来源" else "排除不出货的来源"}",
-                        onClick = { showFilters = true }
+                    DropFilterBar(
+                        summary = if (loading && lookup.isEmpty()) "正在读取物品来源…"
+                            else "${shownHits.size} 个来源 · ${if (includeZero) "含不出货来源" else "排除不出货来源"}",
+                        label = sourceCategory ?: "筛选来源", onClick = { showFilters = true },
+                        enabled = selected != null,
+                        onReset = if (sourceCategory != null || includeZero) ({ sourceCategory = null; includeZero = false }) else null
                     )
                     Text("候选不等于掉率；已收录不代表必出。", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else if (selectedName != null) {
-                    Text(selectedName, style = MaterialTheme.typography.titleLarge)
-                    Text(if (lookup.isEmpty()) "来源数据尚未就绪" else "当前数据未收录所选物品／品质",
-                        style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = { onChooseItem(null) }) { Text(backLabel) }
+                    if (selected == null && !loading && !loadFailed) {
+                        Text("当前数据未收录所选物品／品质", style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { onChooseItem(null) }) { Text(backLabel) }
+                    }
                 } else {
                     Text("这件物品，去哪找？", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索物品名，如切割器…")
-                    DropLookupFilterEntry(summary = "${currentQuality ?: "全部品质"} · ${results.size} 项", onClick = { showFilters = true })
+                    DropFilterBar(summary = if (loading && lookup.isEmpty()) "正在读取物品…" else "${results.size} 件物品",
+                        label = currentQuality ?: "筛选品质", onClick = { showFilters = true }, enabled = lookup.isNotEmpty(),
+                        onReset = if (currentQuality != null) ({ quality = null }) else null)
                     Text("同名不同品质分别收录 · 来源数排除不出货来源", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                status()
             }
         }
-        if (selected != null) {
+        if (loading && lookup.isEmpty()) {
+            items(6, key = { "lookup-skeleton:$it" }, contentType = { "skeleton" }) {
+                DropLookupRowSkeleton(Modifier.dropItemMotion(this), source = selectedName != null)
+            }
+        } else if (selected != null) {
             if (shownHits.isEmpty()) item("no-source") {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CatalogEmptyResults(message = "没有符合当前筛选的已收录来源")
-                    if (sourceCategory != null) TextButton(onClick = { sourceCategory = null }) { Text("查看全部来源类别") }
-                    if (!includeZero && hiddenZeroCount > 0) TextButton(onClick = { includeZero = true }) {
-                        Text("显示不出货的来源（$hiddenZeroCount）")
-                    }
+                    CatalogEmptyResults(message = if (!includeZero && hiddenZeroCount > 0)
+                        "当前仅有 $hiddenZeroCount 个不出货来源，可在筛选中查看" else "没有符合当前筛选的已收录来源",
+                        onClear = if (sourceCategory != null) ({ sourceCategory = null }) else null)
                 }
             }
             items(shownHits, key = { it.source.id }, contentType = { "hit" }) { hit ->
-                Surface(onClick = { onSource(hit.source) }, shape = MaterialTheme.shapes.medium,
+                Surface(onClick = { onSource(hit.source) }, modifier = Modifier.dropItemMotion(this), shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -126,9 +133,11 @@ internal fun ExtractionDropLookupList(
                 }
             }
         } else if (selectedName == null) {
-            if (results.isEmpty()) item("empty") { CatalogEmptyResults(onClear = { query = ""; quality = null }) }
+            if (results.isEmpty() && !(loadFailed && lookup.isEmpty())) item("empty") {
+                CatalogEmptyResults(onClear = { query = ""; quality = null })
+            }
             items(results, key = { it.key }, contentType = { "lookup-item" }) { item ->
-                Surface(onClick = { onChooseItem(item) }, color = MaterialTheme.colorScheme.surfaceContainerLow,
+                Surface(onClick = { onChooseItem(item) }, modifier = Modifier.dropItemMotion(this), color = MaterialTheme.colorScheme.surfaceContainerLow,
                     shape = MaterialTheme.shapes.medium) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -180,19 +189,5 @@ internal fun ExtractionDropLookupList(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun DropLookupFilterEntry(summary: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onClick) {
-            Icon(Icons.Outlined.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("筛选")
-        }
-        Text(summary, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

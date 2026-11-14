@@ -55,7 +55,9 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.Comics -> "comics"
     WikiRoute.MeowLanguage -> "meowLanguage"
     WikiRoute.GameTips -> "gameTips"
+    WikiRoute.PcGameSettings -> "pcGameSettings"
     WikiRoute.Baseplates -> "baseplates"
+    WikiRoute.PersonalCards -> "personalCards"
     WikiRoute.Encasings -> "encasings"
     WikiRoute.Medals -> "medals"
     WikiRoute.Sprays -> "sprays"
@@ -66,6 +68,7 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.StringerPushCards -> "stringerPushCards"
     WikiRoute.AvatarFrames -> "avatarFrames"
     WikiRoute.RoomAppearances -> "roomAppearances"
+    WikiRoute.LoungeFigures -> "loungeFigures"
     WikiRoute.VehicleSkins -> "vehicleSkins"
     WikiRoute.Oath -> "oath"
     WikiRoute.Imprints -> "imprints"
@@ -126,7 +129,9 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "comics" -> WikiRoute.Comics
         "meowLanguage" -> WikiRoute.MeowLanguage
         "gameTips" -> WikiRoute.GameTips
+        "pcGameSettings" -> WikiRoute.PcGameSettings
         "baseplates" -> WikiRoute.Baseplates
+        "personalCards" -> WikiRoute.PersonalCards
         "encasings" -> WikiRoute.Encasings
         "medals" -> WikiRoute.Medals
         "sprays" -> WikiRoute.Sprays
@@ -137,6 +142,7 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "stringerPushCards" -> WikiRoute.StringerPushCards
         "avatarFrames" -> WikiRoute.AvatarFrames
         "roomAppearances" -> WikiRoute.RoomAppearances
+        "loungeFigures" -> WikiRoute.LoungeFigures
         "vehicleSkins" -> WikiRoute.VehicleSkins
         "oath" -> WikiRoute.Oath
         "imprints" -> WikiRoute.Imprints

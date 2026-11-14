@@ -1,13 +1,15 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -71,6 +73,8 @@ internal fun ExtractionDetailSheet(
         clearFilters()
         expandedGroups = entry.dropPoolGroups.map { it.key }
     }
+    val referenceRotation by animateFloatAsState(if (referenceExpanded) 180f else 0f,
+        animationSpec = tween(180), label = "drop-reference-arrow")
 
     WikiContentSheet(onDismiss = onDismiss) {
         // Ordinary loot/attachment details keep their full artwork and fields.
@@ -87,6 +91,14 @@ internal fun ExtractionDetailSheet(
                 evidence?.let {
                     Text("${it.label}：${it.snippet}", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        if (isDropDetail && (onViewSourceNotes != null || onRefreshPool != null)) item(key = "detail-actions") {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onViewSourceNotes != null) TextButton(onClick = onViewSourceNotes) { Text("来源说明") }
+                if (onRefreshPool != null) TextButton(onClick = onRefreshPool, enabled = !poolIsLoading) {
+                    Text(if (poolIsLoading) "正在刷新…" else "刷新物品池")
                 }
             }
         }
@@ -145,24 +157,13 @@ internal fun ExtractionDetailSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (entry.dropCountState == DropCountState.ZERO) "配置中的候选物品" else "池内物品",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    if (isFiltered) {
-                        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
-                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("正在显示筛选结果 · $matchingItems / $totalItems 件", style = MaterialTheme.typography.labelLarge)
-                                Text(buildList {
-                                    if (poolQuery.isNotBlank()) add("名称或品质包含「${poolQuery.trim()}」")
-                                    effectiveQuality?.let { add("品质：$it") }
-                                }.joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
-                                TextButton(onClick = showAllItems) { Text("查看全部 $totalItems 件物品") }
-                            }
-                        }
-                    } else Text("共 $totalItems 件物品 · 入池不代表必掉", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it }, onSearch = {},
                         onClear = { poolQuery = "" }, isSearching = false, placeholder = "搜索池内物品…")
                     ExtractionPoolQualityMenu(labels = entry.dropPoolGroups.map { it.label }.distinct(),
-                        selectedQuality = effectiveQuality, onSelect = { selectedQuality = it })
-                    if (onFindItem != null) Text("点击物品查找来源", style = MaterialTheme.typography.bodySmall,
+                        selectedQuality = effectiveQuality, onSelect = { selectedQuality = it },
+                        summary = if (isFiltered) "$matchingItems / $totalItems 件物品" else "共 $totalItems 件物品",
+                        onReset = showAllItems.takeIf { isFiltered })
+                    Text(if (onFindItem != null) "点击物品查来源 · 入池不代表必掉" else "入池不代表必掉", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -179,34 +180,26 @@ internal fun ExtractionDetailSheet(
             }
         }
         if (isDropDetail && !referenceIsMainContent) {
-            if (onRefreshPool != null) item(key = "pool-refresh", contentType = "pool-refresh") {
-                TextButton(onClick = onRefreshPool, enabled = !poolIsLoading) {
-                    Text(if (poolIsLoading) "正在刷新…" else "刷新物品池")
-                }
-            }
-            if (onViewSourceNotes != null) item(key = "source-notes", contentType = "source-notes") {
-                TextButton(onClick = onViewSourceNotes) { Text("查看来源说明") }
-            }
             item(key = "reference-toggle", contentType = "reference-toggle") {
-                TextButton(onClick = { referenceExpanded = !referenceExpanded }, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { referenceExpanded = !referenceExpanded }, modifier = Modifier.dropItemMotion(this).fillMaxWidth()) {
                     Text(if (referenceExpanded) "收起规则与图鉴资料" else "规则与图鉴资料", modifier = Modifier.weight(1f))
-                    Icon(if (referenceExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    Icon(Icons.Outlined.ExpandMore, modifier = Modifier.rotate(referenceRotation),
                         contentDescription = if (referenceExpanded) "收起" else "展开")
                 }
             }
             if (referenceExpanded) {
                 if (entry.containerId != null) item(key = "container-id", contentType = "field") {
-                    DetailField(label = "容器编号", value = entry.containerId)
+                    Box(Modifier.dropItemMotion(this)) { DetailField(label = "容器编号", value = entry.containerId) }
                 }
                 if (containerDetails) item(key = "pool-rules", contentType = "description") {
-                    Text("先决定掉落件数，再逐件按权重抽取。池内名单不提供单件物品概率，也不能据此判断整箱至少获得一件的概率。",
+                    Text("先决定掉落件数，再逐件按权重抽取。池内名单不提供单件物品概率，也不能据此判断整箱至少获得一件的概率。", modifier = Modifier.dropItemMotion(this),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (entry.description.isNotBlank()) item(key = "description", contentType = "description") {
-                    Text(entry.description, style = MaterialTheme.typography.bodyLarge)
+                    Text(entry.description, modifier = Modifier.dropItemMotion(this), style = MaterialTheme.typography.bodyLarge)
                 }
                 items(fields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
-                    DetailField(label = fields[index].label, value = fields[index].value)
+                    Box(Modifier.dropItemMotion(this)) { DetailField(label = fields[index].label, value = fields[index].value) }
                 }
             }
         } else {
@@ -218,19 +211,18 @@ internal fun ExtractionDetailSheet(
             }
         }
         item(key = "close", contentType = "close") {
-            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(dismissLabel) }
+            TextButton(onClick = onDismiss, modifier = Modifier.dropItemMotion(this).fillMaxWidth()) { Text(dismissLabel) }
         }
     }
 }
 
 @Composable
-private fun ExtractionPoolQualityMenu(labels: List<String>, selectedQuality: String?, onSelect: (String?) -> Unit) {
+private fun ExtractionPoolQualityMenu(labels: List<String>, selectedQuality: String?, onSelect: (String?) -> Unit,
+    summary: String, onReset: (() -> Unit)?) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }) {
-            Text("品质：${selectedQuality ?: "全部"}")
-            Icon(Icons.Outlined.ExpandMore, contentDescription = null)
-        }
+        DropFilterBar(summary = summary, label = selectedQuality ?: "筛选品质",
+            onClick = { expanded = true }, onReset = onReset)
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("全部品质") }, modifier = Modifier.semantics { selected = selectedQuality == null },
                 onClick = { onSelect(null); expanded = false })

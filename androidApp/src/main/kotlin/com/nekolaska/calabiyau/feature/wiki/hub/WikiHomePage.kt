@@ -391,7 +391,7 @@ internal fun WikiHomePage(
                                 Box(Modifier.weight(1f)) {
                                     HubCard(
                                         title = "游戏延伸",
-                                        subtitle = "剧情、历史、BGM、投票与百科内容",
+                                        subtitle = "实用指南、剧情、历史与影音资料",
                                         icon = Icons.Outlined.MoreHoriz,
                                         onClick = { onNavigateTo(WikiRoute.ExtensionHub) },
                                         backdrop = backdrop

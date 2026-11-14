@@ -1,9 +1,17 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration.api
 
-import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
+import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.wiki.WikiParseLogger
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationCatalogPolicy
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationCatalogSource
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationCatalogs
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationLuaSnapshot
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationSection
-import com.nekolaska.calabiyau.feature.wiki.decoration.parser.PlayerDecorationParsers
+import com.nekolaska.calabiyau.feature.wiki.decoration.model.RawDecorationSection
+import com.nekolaska.calabiyau.feature.wiki.decoration.parser.DecorationHtmlParser
+import com.nekolaska.calabiyau.feature.wiki.decoration.parser.DecorationLuaCatalogParser
+import com.nekolaska.calabiyau.feature.wiki.decoration.source.DecorationSource
 import com.nekolaska.calabiyau.feature.wiki.decoration.source.PlayerDecorationRemoteSource
 import data.ApiResult
 import data.ErrorKind
@@ -12,176 +20,94 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * 玩家装饰通用 API（Android）。
- *
- * 解析 Wiki 玩家装饰页面（基板/封装/聊天气泡/头套/超弦体动作/头像框）的渲染 HTML，
- * 提取每个条目的图片文件名和名称，按页面 section 标题分组，
- * 然后通过 MediaWiki imageinfo API 批量解析图片真实 URL。
- *
- * 所有页面共享相同的 gallerygrid HTML 结构。
- */
-object PlayerDecorationApi : KeyedCachedWikiApi<String, List<DecorationSection>>("PlayerDecorationApi") {
+object PlayerDecorationApi {
+    private val catalogs = DecorationCatalogApi(PlayerDecorationRemoteSource)
+    suspend fun fetchDecoration(pageName: String, forceRefresh: Boolean = false, cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true): ApiResult<List<DecorationSection>> =
+        catalogs.fetchDecoration(pageName, forceRefresh, cacheOnly, allowMemoryCache)
+}
 
-    /**
-     * 玩家装饰页可选的模块真值配置。
-     *
-     * 注意：这里的模块数据只用于“按 id 覆盖条目文本真值”，
-     * 不能替代页面 HTML 的 section 分组和图片结构来源。
-     *
-     * 也就是说，即使 enabled=true，当前实现依然会：
-     * 1. 先从 HTML 解析分组、顺序、图片文件名
-     * 2. 再用模块里的 name/quality/desc/get/spdesc 覆盖文本字段
-     *
-     * 这样做的原因是大多数 Lua 数据表不包含分类信息，
-     * 如果直接只渲染模块表，很容易丢失页面原本的分类结构。
-     */
-    private data class DecorationModuleConfig(
-        val modulePage: String,
-        val enabled: Boolean = false
-    )
+internal data class LoadedDecorationPage(val sections: List<DecorationSection>, val canCache: Boolean)
 
-    /**
-     * 页面名 -> 模块数据页 的映射表。
-     *
-     * 查看哪些页面已经启用模块真值，直接看每项是否设置了 enabled = true 即可：
-     * - enabled = true: 已启用“模块真值覆盖 HTML 文本”
-     * - 未显式开启: 仍然只使用 HTML 解析结果
-     *
-     * 当前策略是“逐页开启”，避免一次性切换后把某些页面的结构细节或分类关系弄丢。
-     *
-     * 什么时候可以开启 enabled = true：
-     * 1. 已确认对应模块确实是该页面的真值数据源
-     * 2. 模块里的 id 能和 HTML 条目稳定对上
-     * 3. 已确认页面分类仍由 HTML 提供，不会因为覆盖文本而打乱 section
-     * 4. 已确认模块字段命名与当前解析器兼容（如 id/name/quality/get/desc/spdesc）
-     *
-     * 什么时候先不要开启：
-     * 1. 还没确认模块和页面是否一一对应
-     * 2. HTML 条目 id 无法稳定提取
-     * 3. 页面高度依赖 HTML 中的结构化说明，而模块只给了残缺字段
-     * 4. 模块字段格式和现有页面差异过大，需要单独适配
-     *
-     * 新增页面时建议检查清单：
-     * 1. 先抓真实 HTML，确认页面是否仍是 gallerygrid / roomgrid 结构
-     * 2. 再抓模块源码，确认是否存在可用真值字段
-     * 3. 确认 id 提取规则是否适用
-     * 4. 先把映射登记到这里
-     * 5. 如无把握，先 enabled=false，只保留映射
-     * 6. 确认展示正常后再开启 enabled=true
-     */
-    private val moduleConfigByPage = mapOf(
-        "基板" to DecorationModuleConfig("模块:玩家装饰/IDCardData"),
-        "封装" to DecorationModuleConfig("模块:玩家装饰/FrameData"),
-        "聊天气泡" to DecorationModuleConfig("模块:玩家装饰/ChatBubblesData"),
-        "喷漆" to DecorationModuleConfig("模块:玩家装饰/DecalData"),
-        "头套" to DecorationModuleConfig("模块:玩家装饰/MascotHeadData", enabled = true),
-        "超弦体动作" to DecorationModuleConfig("模块:玩家装饰/RoleActionData", enabled = true),
-        "房间外观" to DecorationModuleConfig("模块:玩家装饰/ChangeBgData", enabled = true),
-        "头像框" to DecorationModuleConfig("模块:玩家装饰移动端/HeadFrameData", enabled = true),
-        "极限推进模式载具外观" to DecorationModuleConfig("模块:玩家装饰移动端/VehicleSkinData", enabled = true),
-        "勋章" to DecorationModuleConfig("模块:玩家装饰/BadgeData"),
-        "登场特效" to DecorationModuleConfig("模块:玩家装饰/LoginFXData")
-    )
-
-    /**
-     * 获取装饰数据（带缓存）。
-     * @param pageName Wiki 页面名，如 "基板"、"封装"、"聊天气泡"、"头套"、"超弦体动作"、"头像框"
-     */
-    suspend fun fetchDecoration(
-        pageName: String,
-        forceRefresh: Boolean = false,
-        cacheOnly: Boolean = false,
-        allowMemoryCache: Boolean = true
-    ): ApiResult<List<DecorationSection>> = super.fetch(pageName, forceRefresh, cacheOnly, allowMemoryCache)
-
-    override suspend fun fetchFromCache(key: String): ApiResult<List<DecorationSection>> = fetchFromSource(
-        pageName = key,
-        forceRefresh = false,
-        cacheOnly = true,
-        loadSource = { PlayerDecorationRemoteSource.loadCachedPageHtml(key) },
-        networkErrorMessage = "无离线缓存"
-    )
-
-    override suspend fun fetchFromNetwork(
-        key: String,
-        forceRefresh: Boolean
-    ): ApiResult<List<DecorationSection>> = fetchFromSource(
-        pageName = key,
-        forceRefresh = forceRefresh,
-        cacheOnly = false,
-        loadSource = { PlayerDecorationRemoteSource.fetchPageHtml(key, forceRefresh) },
-        networkErrorMessage = "获取页面失败，且无离线缓存"
-    )
-
-    private suspend fun fetchFromSource(
-        pageName: String,
-        forceRefresh: Boolean,
-        cacheOnly: Boolean,
-        loadSource: suspend () -> WikiHtmlPageSourceResult?,
-        networkErrorMessage: String
-    ): ApiResult<List<DecorationSection>> = withContext(Dispatchers.IO) {
-        try {
-            val sourceResult = loadSource()
-                ?: return@withContext ApiResult.Error(
-                    networkErrorMessage,
-                    kind = ErrorKind.NETWORK
-                )
-
-            val rawSections = PlayerDecorationParsers.parseHtml(sourceResult.html)
-            if (rawSections.isEmpty()) {
-                return@withContext ApiResult.Error(
-                    "未找到${pageName}数据",
-                    kind = ErrorKind.NOT_FOUND
-                )
-            }
-
-            val moduleDataMap = fetchModuleData(pageName, forceRefresh, cacheOnly)
-            val fileNames = PlayerDecorationParsers.extractFileNames(rawSections)
-            val urlMap = PlayerDecorationRemoteSource.fetchImageUrls(fileNames.toList(), forceRefresh, cacheOnly)
-
-            val sections = PlayerDecorationParsers.mapSections(
-                rawSections = rawSections,
-                urlMap = urlMap,
-                moduleDataMap = moduleDataMap,
-                mapper = { title, items -> DecorationSection(title, items) }
-            )
-
-            return@withContext if (sections.isEmpty()) {
-                ApiResult.Error("未找到${pageName}内容", kind = ErrorKind.NOT_FOUND)
-            } else {
-                ApiResult.Success(
-                    sections,
-                    isOffline = sourceResult.isFromCache,
-                    cacheAgeMs = sourceResult.ageMs
-                )
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            ApiResult.Error("网络异常: ${e.message}", kind = e.toErrorKind())
+internal class DecorationCatalogApi(
+    private val source: DecorationSource,
+    cacheName: String = "PlayerDecorationApi",
+    private val policyForPage: (String) -> DecorationCatalogPolicy = DecorationCatalogs::forPage
+) : KeyedCachedWikiApi<String, LoadedDecorationPage>(cacheName) {
+    suspend fun fetchDecoration(pageName: String, forceRefresh: Boolean = false, cacheOnly: Boolean = false,
+        allowMemoryCache: Boolean = true): ApiResult<List<DecorationSection>> =
+        when (val result = fetch(pageName, forceRefresh, cacheOnly, allowMemoryCache)) {
+            is ApiResult.Success -> ApiResult.Success(result.value.sections, result.isOffline, result.cacheAgeMs)
+            is ApiResult.Error -> result
         }
+
+    override fun shouldCache(value: LoadedDecorationPage) = value.canCache
+    override suspend fun fetchFromCache(key: String) = load(key, false, true)
+    override suspend fun fetchFromNetwork(key: String, forceRefresh: Boolean) = load(key, forceRefresh, false)
+
+    private suspend fun load(pageName: String, force: Boolean, cacheOnly: Boolean): ApiResult<LoadedDecorationPage> =
+        withContext(Dispatchers.IO) {
+            try {
+                val policy = policyForPage(pageName)
+                val lua = policy.source as? DecorationCatalogSource.Lua
+                var fallbackReason: String? = null
+                var pair: DecorationLuaSnapshot? = null
+                var luaSections: List<RawDecorationSection>? = null
+                if (lua != null) {
+                    pair = optionalRead { if (cacheOnly) source.loadCachedLuaCatalog(policy) else source.fetchLuaCatalog(policy, force) }
+                    if (pair != null) {
+                        val parsed = DecorationLuaCatalogParser.parse(lua, pair.itemsText, pair.waysText)
+                        if (parsed.isComplete && pair.ageMs <= OfflineCache.Type.DECORATIONS.maxAgeMs) luaSections = parsed.sections
+                        else {
+                            fallbackReason = if (pair.ageMs > OfflineCache.Type.DECORATIONS.maxAgeMs) "结构化资料缓存已过期" else "结构化资料不完整"
+                            if (parsed.issues.isNotEmpty()) WikiParseLogger.warnMalformed(
+                                "DecorationLua:$pageName", parsed.issues.joinToString("; "), pair.itemsText)
+                        }
+                    } else fallbackReason = "结构化资料暂不可用"
+                    if (luaSections != null && !cacheOnly && pair?.isFromCache == false) {
+                        return@withContext finish(luaSections, policy, force, cacheOnly, pair.isFromCache,
+                            pair.ageMs, canCache = true, notice = null)
+                    }
+                    if (luaSections != null) fallbackReason = if (cacheOnly) "当前读取离线资料" else "结构化资料更新失败"
+                }
+
+                val html = optionalRead { if (cacheOnly) source.loadCachedPageHtml(pageName) else source.fetchPageHtml(pageName, force) }
+                val htmlParsed = html?.html?.let(DecorationHtmlParser::parseResult)
+                val htmlSections = htmlParsed?.takeIf { it.isComplete }?.sections.orEmpty()
+                // Compare the same complete snapshots for prefetch and normal offline reads.
+                // Fresh network HTML wins over cached Lua; tied cached snapshots prefer Lua.
+                val useLuaCache = luaSections != null && (htmlSections.isEmpty() ||
+                    ((cacheOnly || html?.isFromCache == true) && (pair?.ageMs ?: 0L) <= (html?.ageMs ?: 0L)))
+                if (useLuaCache) return@withContext finish(luaSections, policy, force, cacheOnly, true,
+                    pair?.ageMs ?: 0L, canCache = false,
+                    notice = if (cacheOnly) "当前使用完整结构化缓存。" else "更新失败，当前使用完整结构化缓存；下次刷新将重试。")
+                if (htmlSections.isNotEmpty()) {
+                    return@withContext finish(htmlSections, policy, force, cacheOnly, html!!.isFromCache, html.ageMs,
+                        canCache = lua == null,
+                        notice = fallbackReason?.let { "$it，当前使用 Wiki 页面兼容资料；下次刷新将重试。" })
+                }
+                ApiResult.Error(if (html == null) "获取${pageName}失败，且无可用离线资料"
+                    else "${pageName}目录不完整：${htmlParsed?.issues?.take(2)?.joinToString("；").orEmpty()}",
+                    kind = if (html == null) ErrorKind.NETWORK else ErrorKind.PARSE)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ApiResult.Error("获取${pageName}失败: ${e.message}", kind = e.toErrorKind())
+            }
+        }
+
+    private suspend fun finish(raw: List<RawDecorationSection>, policy: DecorationCatalogPolicy, force: Boolean,
+        cacheOnly: Boolean, offline: Boolean, age: Long, canCache: Boolean, notice: String?): ApiResult<LoadedDecorationPage> {
+        val files = DecorationAssembler.unresolvedImageFiles(raw)
+        val urls = if (files.isEmpty()) emptyMap() else optionalRead {
+            if (cacheOnly) source.loadCachedImageUrls(files.toList()) else source.fetchImageUrls(files.toList(), force)
+        }.orEmpty()
+        val sections = DecorationAssembler.assemble(raw, policy, urls, notice)
+        val completeImages = files.all { !urls[it].isNullOrBlank() || !urls[it.replace('_', ' ')].isNullOrBlank() }
+        return ApiResult.Success(LoadedDecorationPage(sections, canCache && completeImages), cacheOnly || offline, age)
     }
 
-    private suspend fun fetchModuleData(
-        pageName: String,
-        forceRefresh: Boolean,
-        cacheOnly: Boolean
-    ): Map<Int, PlayerDecorationParsers.DecorationModuleData> {
-        val config = moduleConfigByPage[pageName]?.takeIf { it.enabled } ?: return emptyMap()
-
-        return try {
-            val wikitext = if (cacheOnly) {
-                PlayerDecorationRemoteSource.loadCachedModuleWikitext(config.modulePage)
-            } else {
-                PlayerDecorationRemoteSource.fetchModuleWikitext(config.modulePage, forceRefresh)
-            }
-                ?: return emptyMap()
-            PlayerDecorationParsers.parseModuleData(wikitext)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            emptyMap()
-        }
-    }
+    private suspend fun <T> optionalRead(read: suspend () -> T): T? = try { read() }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { null }
 }

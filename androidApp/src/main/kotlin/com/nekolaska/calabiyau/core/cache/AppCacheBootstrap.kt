@@ -4,6 +4,7 @@ import com.nekolaska.calabiyau.feature.wiki.achievement.api.AchievementApi
 import com.nekolaska.calabiyau.feature.wiki.bgm.api.BgmApi
 import com.nekolaska.calabiyau.feature.wiki.collaboration.api.CollaborationApi
 import com.nekolaska.calabiyau.feature.wiki.history.api.GameHistoryApi
+import com.nekolaska.calabiyau.feature.wiki.gamesettings.api.PcGameSettingsApi
 import com.nekolaska.calabiyau.feature.wiki.tips.api.GameTipsApi
 import com.nekolaska.calabiyau.feature.wiki.imprint.api.ImprintApi
 import com.nekolaska.calabiyau.feature.wiki.announcement.api.AnnouncementApi
@@ -47,6 +48,7 @@ object AppCacheBootstrap {
             CollaborationApi,
             GameHistoryApi,
             GameTipsApi,
+            PcGameSettingsApi,
             ImprintApi,
             ItemCatalogApi,
             MemeApi,
