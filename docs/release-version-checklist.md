@@ -56,6 +56,14 @@ Adjust the old values to match the release you are replacing.
 
 ## Change-scoped checks
 
+### Readable JSON metadata
+
+`WebDistTask.toPrettyJson` uses `JsonOutput.prettyPrint(JsonOutput.toJson(value), true)` and writes UTF-8. The second argument disables Unicode escaping during formatting, so Chinese changelog entries remain readable. Keep JSON escapes for quotes, backslashes and control characters; never globally replace `\\uXXXX` sequences, which can corrupt literal text. `JsonBuilder.toPrettyString()` defaults to escaped Unicode and must not replace this formatter.
+
+For formatting-only metadata changes, compare the parsed JSON with the committed version: all values, artifact URLs/fingerprints, sizes and archive entries must match. Do not run `webDist` to verify formatting: it rebuilds/uploads the release. Already deployed escaped JSON is semantically identical and can wait until the next normal site deployment.
+
+### Validation scope
+
 - Android code: relevant regression tests and compile/Lint as appropriate. `webDist` includes the final signed `assembleRelease`; a separate pre-release APK build and repeated compile are not mandatory.
 - Shared or Desktop behavior/build changes: run the affected platform checks. A Desktop packageVersion-only bump does not require the entire Desktop suite or packaging.
 - Website or Worker changes: run the relevant typecheck/tests. Android-only releases do not require search, balance and Worker suites merely because release metadata changes. `webPush` already builds the site and bundled Worker.

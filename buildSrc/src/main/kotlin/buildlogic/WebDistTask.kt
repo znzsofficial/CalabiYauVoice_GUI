@@ -84,7 +84,7 @@ abstract class WebDistTask : DefaultTask() {
             "publishedAt" to publishedAt,
             "releases" to mergeReleases(previous, versionName, versionCode, apkUrl, stagedApk.length(), publishedAt),
         )
-        latestJson.writeText(toPrettyJson(next))
+        latestJson.writeText(toPrettyJson(next), Charsets.UTF_8)
 
         val bucket = r2Bucket.get()
         uploadToR2(bucket, "android/$versionedName", stagedApk, versionedName, immutable = true)
@@ -159,7 +159,8 @@ abstract class WebDistTask : DefaultTask() {
     }
 
     private fun toPrettyJson(value: Any?): String {
-        return groovy.json.JsonBuilder(value).toPrettyString() + "\n"
+        // The formatter otherwise re-escapes non-ASCII text, even with a custom generator.
+        return groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(value), true) + "\n"
     }
 
     private fun sha256(file: File): String {

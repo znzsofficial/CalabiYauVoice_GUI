@@ -20,6 +20,8 @@ Keep these in the same change: `androidApp/build.gradle.kts` (`versionName`, `ve
 
 `webDist` **reuses the current `changelog` in `latest.json`**. Edit changelog for the new version **before** `webDeploy`, or the site ships the previous notes.
 
+Release JSON stays readable UTF-8: `WebDistTask.toPrettyJson` uses `JsonOutput.prettyPrint(JsonOutput.toJson(value), true)` to avoid re-escaping Chinese. Preserve required JSON escaping (including literal backslash-u text). Formatting-only changes must keep parsed metadata identical and must not trigger `webDist` or replace published APKs; see `docs/release-version-checklist.md`.
+
 APKs are **not** git-tracked (`*.apk` in `.gitignore`). Production files live in R2 bucket `calabiyau-releases` as `android/CalabiYauVoice-<version>.apk` plus `android/CalabiYauVoice-latest.apk`. The Pages Worker streams `/downloads/CalabiYauVoice-(latest|x.y.z).apk` from that bucket. `apkUrl` in JSON stays a same-origin path (`/downloads/CalabiYauVoice-2.1.7.apk`). Android `UpdateApi` already resolves that; do not switch it to an in-app WebView.
 
 Do not delete `2.1.6` from `releases`. Full checklist: `docs/release-version-checklist.md`.
