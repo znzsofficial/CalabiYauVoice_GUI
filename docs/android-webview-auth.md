@@ -1,5 +1,12 @@
 # Android WebView、Cookie 与文件选择
 
+本文保留已验证的身份/导航约束，并纳入2.2.1宿主生命周期变化。历史回归数字仅对应各阶段；当前发布结果见[2.2.1](releases/2.2.1.md)，设备验证见[清单](device-acceptance.md)。
+
+## 登录入口与原生导航
+
+- Wiki登录通过网页右上角的**通知按钮**进入，界面指引必须保留这个具体控件名。
+- Hub完整导航可把已支持的文章转到原生路由，但不改WebView内部策略。原文按钮、带锚点/编辑/旧版本的URL、未知页面继续原地址；见[导航分流](native-mechanics-pages.md#完整导航的原生分流)。
+
 ## 修复范围（2026-10-20）
 
 本轮处理 WebView/登录链路审查的 8 项：旧 Cookie 回写、opaque intent 崩溃、导航规则旁路、
@@ -43,6 +50,9 @@ userinfo 临时错误不恢复、文件选择串回调、临时 WebView 生命�
 
 ## 实例与弹窗所有权
 
+- 2.2.1中，`WikiWebViewLifetime`将宿主RESUMED状态同步到主实例及弹窗；后台新建的窗口也立即取得正确暂停状态。宿主恢复后调用各实例onResume，观察器在退出时移除。
+- 不在任意单页使用全局pauseTimers，避免影响其它窗口；onPause并不保证JavaScript全部暂停。后台耗电、网页视频和登录表现须设备验证。
+
 - `WikiWebViewLifetime` 管理当前主实例和临时窗口，拒绝旧实例的导航、标题、进度、下载与渲染恢复回调。
   AndroidView.onRelease 与页面销毁均释放所有权，释放操作幂等。
 - 临时 WebView 最多 4 个，每个有 30 秒超时；导航接管、window.close、渲染退出、父实例释放或页面退出都会回收。
@@ -73,6 +83,6 @@ userinfo 临时错误不恢复、文件选择串回调、临时 WebView 生命�
 没有线上 Wiki 请求，也没有连接的真机。设备回归至少覆盖登录/切号/退出交错、选择器打开时渲染退出、
 外站表单和 intent fallback、弹窗关闭/超时，以及缩放后渲染恢复。
 
-最终验证：Android 237 项（9 项可选测试跳过）、shared JVM 42 项、Desktop 28 项，均无失败或错误。
+2026-10-20阶段验证：Android 237 项（9 项可选测试跳过）、shared JVM 42 项、Desktop 28 项，均无失败或错误。
 新增的 26 项正式回归及 3 项临时实际 HTTP 链路回归通过；assembleDebug 成功，lintDebug 0 errors / 20 warnings。
 复审补齐了同实例换页取消、恢复墓碑、fallback 必须解析后再加载、非法 fallback 失败关闭，以及未 attach 弹窗的 Handler 超时清理。

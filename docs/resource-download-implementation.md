@@ -4,6 +4,7 @@
 
 - Android `feature/download/DownloaderScreen.kt` 组合搜索、分类、文件选择与立绘状态；
   `SearchViewModel` 管理搜索，`CategoryFileSelectionState` 单独管理一个弹窗请求。
+- 2.2.1起，SearchViewModel构造不再触发搜索；下载页首次进入调用`ensureLoaded()`，同一实例重复进入不会重复初始化。通用Wiki文本读取使用可取消的完整body入口，下载文件流仍走原子资源下载路径。
 - 文件弹窗每次打开、关闭、切换模式/分类都会取消旧 Job 并更新代数。即使底层迟到响应不可取消，
   也不能覆盖新弹窗。失败与空结果分开；加载中/失败时禁止确认，避免误写空的手动选择。
 - 共享 `WikiEngineCore.groupCategories` 将同一官方角色的搜索家族合并，保留全部分类种子；
@@ -51,6 +52,8 @@
 
 ## UI 与媒体扫描
 
+- 下载搜索错误由下载页消费一次，在当前模态窗口对应的提示宿主显示；选择/进度栏由Scaffold测量，浮动工具栏隐藏时仍保持底部避让。UI细节见[实施记录](android-ui-refactor-plan.md)。
+
 - 日志允许重复文案，不以文案作为 LazyColumn 唯一 key；并发追加使用原子更新，最多保留 1000 行。
   资源下载页已移除运行日志入口，不再订阅整个日志列表触发重组；进度、失败重试和下载历史仍保留。
 - 媒体扫描只处理本批结果列表，在 IO dispatcher 分批通知系统，不再在主线程遍历整个历史目录。
@@ -70,6 +73,7 @@
 
 运行 `:androidApp:testDebugUnitTest :shared:jvmTest :desktopApp:test`，不用线上 Wiki 请求。
 真机的后台限制、通知权限和系统媒体库显示效果仍需设备回归。
+这些设备项已统一归入[设备验收清单](device-acceptance.md)；发布完成不等于后台行为已实测。
 
 ### 设备回归清单
 

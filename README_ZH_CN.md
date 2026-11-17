@@ -56,12 +56,14 @@
 
 ### 📱 Android 端增强
 
-- **🏠 Wiki Hub** — 原生 Wiki 客户端，可浏览角色图鉴、武器百科、地图一览、时装筛选、玩法模式、公告资讯、时装投票等，无需 WebView。
+- **🏠 Wiki Hub** — 原生浏览角色、武器、地图、时装、玩家装饰、弦溯战线图鉴和投票等。公告、活动和剧情目录为原生界面，完整文章通过内置 Wiki 浏览器打开。
+- **📖 实用指南与玩法资料** — PC 游戏设置、新人入坑指南、弦化、超弦体定位和弦能增幅网络原生阅读，支持章节切换与离线资料。
 - **🖼️ 画廊** — 原生浏览壁纸、表情包、四格漫画，支持分区筛选与全屏预览。
 - **🌐 内置 Wiki 浏览器** — 嵌入式 WebView，支持 Cookie 持久化、自动检测登录状态、用户信息展示、文件下载/上传与页面导航。
 - **👤 自定义用户档案** — 登录 Wiki 账号后可设置自定义昵称、头像（自动压缩为 WebP）、称号与签名，展示在侧栏与用户信息弹窗中，未设置时回退官方信息。
 - **🖼️ 立绘查看器** — 多时装切换，每套时装支持横向滑动浏览全部图片，显示图片类型标签与页码指示器。
 - **📁 文件管理器** — 浏览已下载文件，支持多选模式（长按进入）、批量删除/分享、图片画廊预览与音频播放。
+- **🧰 素材工具** — 图片转换、裁切、拼图和 GIF 处理，以及音频、字幕和视频工具。图片导出使用唯一文件名和临时文件发布，大图处理带内存预算限制。
 - **📊 下载历史** — 记录历史下载，显示状态与文件数。
 - **⭐ 收藏功能** — 收藏常用角色，方便快速访问。
 - **💾 离线缓存** — Wiki 资源磁盘缓存，支持优先缓存模式、过期清理与手动清空缓存。
@@ -78,11 +80,12 @@
 
 | 组件    | 技术                           |
 |-------|------------------------------|
-| 语言    | Kotlin 2.4.10                |
-| 异步    | Kotlin Coroutines 1.11       |
-| 网络    | OkHttp 5.4                   |
-| 序列化   | kotlinx.serialization 1.11   |
-| UI 基础 | Compose Multiplatform 1.11.1 |
+| 语言    | Kotlin                       |
+| 异步    | Kotlin Coroutines            |
+| 网络    | OkHttp + Okio                |
+| 序列化   | kotlinx.serialization JSON   |
+
+具体版本以 [`gradle/libs.versions.toml`](gradle/libs.versions.toml) 为准。`shared` 共享 JVM/Android 业务与媒体代码，不依赖 Compose UI，也不代表已有 iOS/JS 实现；界面依赖由各应用模块持有。
 
 ### 桌面端
 
@@ -98,10 +101,10 @@
 | 组件    | 技术                           |
 |-------|------------------------------|
 | UI 框架 | Jetpack Compose + Material 3 |
-| 图片加载  | Coil 3.5（异步加载 + GIF 支持）      |
+| 图片加载  | Coil（异步加载 + GIF 支持）      |
 | 网页    | Android WebView              |
 | 音频    | Android MediaPlayer          |
-| 架构    | AndroidViewModel + StateFlow |
+| 架构    | 下载使用 ViewModel/StateFlow；Wiki 使用 LoadState 和功能状态类 |
 | 最低系统  | Android 7.1（API 25）         |
 
 ### 下载页 / 网页工具站（`downloadPage/`）
@@ -162,7 +165,6 @@
 │       │   ├── portrait/               #   立绘解析与组织
 │       │   ├── util/                   #   共享工具
 │       │   └── com/nekolaska/calabiyau/ #   共享媒体 / 偏好设置
-│       ├── commonMain/composeResources/
 │       ├── commonTest/
 │       ├── jvmTest/
 │       └── androidHostTest/
@@ -205,6 +207,8 @@
 ```
 
 ## 🚀 构建与运行
+
+开发文档：[文档索引](docs/README.md)、[Android 当前架构](docs/android-architecture.md)、[版本发布流程](docs/release-version-checklist.md)。线上版本信息见 [`latest.json`](downloadPage/downloads/latest.json)，APK 存储在 R2，不纳入 Git。
 
 ### 环境要求
 

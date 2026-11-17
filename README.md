@@ -56,12 +56,14 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 ### 📱 Android Extras
 
-- **🏠 Wiki Hub** — Native client for browsing characters, weapons, maps, costumes, game modes, announcements, voting, and more — no WebView needed.
+- **🏠 Wiki Hub** — Native character, weapon, map, costume, decoration, extraction catalog, and voting pages. Announcement, activity, and story directories are native; their full articles open in the built-in Wiki browser.
+- **📖 Guides** — Native PC game settings, beginner guide, Stringification, character roles, and augmentation network pages with section navigation and offline reading.
 - **🖼️ Gallery** — Browse wallpapers, stickers, and comics in a native image gallery with section filtering and fullscreen preview.
 - **🌐 Built-in Wiki Browser** — Embedded WebView with cookie persistence, auto-login detection, user info display, and file download/upload support.
 - **👤 Custom User Profile** — Sign in with your Wiki account to set a custom nickname, avatar (auto-compressed to WebP), badge, and bio; displayed on the sidebar and user sheet, with official info as fallback.
 - **🖼️ Portrait Viewer** — Swipeable multi-image preview per costume with image type labels and page indicators.
 - **📁 File Manager** — Browse downloaded files with multi-select mode (long-press), batch delete/share, image gallery preview, and audio playback.
+- **🧰 Asset Tools** — Image conversion, cropping, stitching and GIF tools; audio, subtitle and video utilities. Image exports use unique filenames and temporary-file publication, with size limits for memory-heavy work.
 - **📊 Download History** — Track past downloads with status and file count.
 - **⭐ Favorites** — Bookmark characters for quick access.
 - **💾 Offline Cache** — Disk cache for Wiki resources with offline-first mode, cache pruning, and manual cache clearing.
@@ -78,11 +80,12 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 
 | Component     | Technology                   |
 |---------------|------------------------------|
-| Language      | Kotlin 2.4.10                |
-| Async         | Kotlin Coroutines 1.11       |
-| Network       | OkHttp 5.4                   |
-| Serialization | kotlinx.serialization 1.11   |
-| UI Foundation | Compose Multiplatform 1.11.1 |
+| Language      | Kotlin                       |
+| Async         | Kotlin Coroutines            |
+| Network       | OkHttp + Okio                |
+| Serialization | kotlinx.serialization JSON   |
+
+Exact versions are maintained in [`gradle/libs.versions.toml`](gradle/libs.versions.toml). `shared` contains JVM/Android business and media code, without Compose UI dependencies; it is not an iOS/JS implementation. Compose UI belongs to the platform application modules.
 
 ### Desktop
 
@@ -98,10 +101,10 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 | Component     | Technology                   |
 |---------------|------------------------------|
 | UI            | Jetpack Compose + Material 3 |
-| Image Loading | Coil 3.5 (async + GIF)       |
+| Image Loading | Coil (async + GIF)           |
 | Web           | Android WebView              |
 | Audio         | Android MediaPlayer          |
-| Architecture  | AndroidViewModel + StateFlow |
+| Architecture  | ViewModel/StateFlow for downloads; LoadState and feature state holders for Wiki pages |
 | Min SDK       | Android 7.1 (API 25)         |
 
 ### Download Page (`downloadPage/`)
@@ -162,7 +165,6 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 │       │   ├── portrait/               #   Portrait parsing and organization
 │       │   ├── util/                   #   Shared helpers
 │       │   └── com/nekolaska/calabiyau/ #   Shared media / preferences utilities
-│       ├── commonMain/composeResources/
 │       ├── commonTest/
 │       ├── jvmTest/
 │       └── androidHostTest/
@@ -205,6 +207,8 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 ```
 
 ## 🚀 Build and Run
+
+Developer documentation: [documentation index](docs/README.md), [Android architecture](docs/android-architecture.md), [release procedure](docs/release-version-checklist.md). Published metadata is in [`latest.json`](downloadPage/downloads/latest.json); APKs are stored in R2, not Git.
 
 ### Requirements
 

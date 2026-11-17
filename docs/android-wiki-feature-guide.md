@@ -57,6 +57,7 @@ For simple HTML-only parse pages, use `fetchWikiHtmlPage(...)` instead of repeat
 
 - Converts raw HTML/wikitext into model objects.
 - Must not perform network requests.
+- Resolve images and other dependencies in API/source after parsing. Character detail follows this rule as of 2.2.1; offline parser audits must never trigger network calls.
 - Should tolerate missing optional fields.
 - Should not throw for normal content drift; return partial data when possible.
 - Use parser diagnostics for list-like pages where missing content is likely.
@@ -170,12 +171,6 @@ Keep quality meanings, filtering/grouping and mutation retry policy in the ownin
 Complex read/write orchestration can use a small injectable feature state holder; do not put it in
 a generic UI component or route every screen through a large configurable base page.
 
-These are good candidates for future cleanup:
+Already implemented: `WikiHtmlPageSourceResult` / `fetchWikiHtmlPage`, `CachedWikiApi` / `KeyedCachedWikiApi`, page-specific parser fixtures, explicit `isDataEmpty`, and small shared rich-text parsing/rendering for beginner/mechanics pages. Reuse these instead of treating them as future work.
 
-- A shared `WikiPageSourceResult` for simple HTML-only page sources.
-- A helper for `ApiResult` memory-cache orchestration to reduce repeated `fetch` / `fetchFromNetwork` boilerplate.
-- Parser fixture tests for gallery, achievements, player levels, oath, imprints, BGM, and map details.
-- A small diagnostics model for parser counts, such as section count, item count, and image count.
-- A page model convention for `isEmpty()` so screens can pass `isDataEmpty = Page::isEmpty` consistently.
-
-Do not introduce these abstractions before they remove real duplication. Prefer documenting the pattern first, then extracting after two or three features need the same behavior.
+Potential follow-up: reuse a parsed document within one validated request if profiling demonstrates useful savings. Preserve both publication/read validation and per-page contracts; do not introduce a global DOM cache or a universal configurable page framework. Broader module extraction is optional, not an unfinished release task. See [current architecture](android-architecture.md) and [device acceptance](device-acceptance.md).

@@ -1,6 +1,6 @@
 # PC 游戏设置：原生实用指南
 
-纳入 [2.1.30（60）](releases/2.1.30.md)，最终交付状态与产物以发布记录为准。
+首次纳入 [2.1.30（60）](releases/2.1.30.md)，新版页面兼容与PARSE错误分类修复已随 [2.2.0（61）](releases/2.2.0.md) 发布。2.2.1中实用指南旁新增[新人入坑指南](beginner-guide.md)，本页数据职责不变。
 
 ## 入口与分层
 
@@ -77,7 +77,7 @@ Tracked 小 fixture：`androidApp/src/test/resources/fixtures/gamesettings/pc_se
 - `*.feature.wiki.gamesettings.*` 与 `*.feature.wiki.hub.*` 共 **32 项，0 failures/errors/skips**；已配置全页快照，33 表／323 行／31 推荐及破坏载荷检查实际执行。
 - 界面调整已纳入上述编译与检查；暂无连接设备，窄屏、大字体、筛选／切换状态、关闭系统动画和实际视觉观感尚未设备验收。提交与发布见2.1.30记录。
 
-## 2.1.30 发布后：PC 设置页“无法连接网络”修复（待发布）
+## 2.2.0：PC 设置页“无法连接网络”修复（已发布）
 
 用户报告首次打开失败。按生产同参数请求 `action=parse&page=游戏设置PC端&prop=text&format=json`，实际收到HTTP200与有效JSON（131980字节），不是网络断开。响应相较之前网页快照新增了“DLSS、FSR、XESS是什么”标题及4行超分辨率渲染比例表；原有33张设置表、323个设置行和31个推荐项均保留。
 

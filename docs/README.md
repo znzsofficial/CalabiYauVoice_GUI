@@ -1,49 +1,70 @@
-# 项目文档索引
+# 项目文档
 
-按问题查阅专题文档；可复用约束集中在根目录 [`AGENTS.md`](../AGENTS.md)，不要把临时调查日志当作长期规范。
+## 从这里开始
 
-## 开发与实现
+- 使用与构建：[中文 README](../README_ZH_CN.md) / [English README](../README.md)
+- 当前发布：[2.2.1（62）](releases/2.2.1.md)，2026-11-17；机器可读元数据以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+- 理解客户端：[Android 当前架构](android-architecture.md)
+- 开发 Wiki 功能：[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)
+- 发版：[版本发布清单](release-version-checklist.md)
+- 未完成的设备验证：[设备验收清单](device-acceptance.md)
 
-- [地图、武器、角色列表健壮性](wiki-list-resilience.md)：数据源边界、卡片完整性、分组失败重试、武器分页与导航模板解析。
-- [Wiki 导航覆盖审计](wiki-navigation-coverage.md)：公共导航与原生入口、网页入口、搜索别名及 PC／移动端边界。
+## 架构与基础设施
 
-- [Hub 快速导航转场修复](hub-transition-stability.md)：单一动画所有权、手势票据及栈深度方向。
-- [超弦体详情展示](character-detail-presentation.md)：技能阅读顺序与最终立绘／语录样式。
-- [工具回退与 Tab 背景巡检](tools-mesh-tab-surfaces.md)：工具视觉回退、生化壁纸遮挡与页签底色。
-- [Android Wiki 页面与复用组件](android-wiki-ui-architecture.md)：统一弹层、选择／保存／分区状态、推进懒网格及生化／投票／平衡业务编排。
-- [PC 游戏设置资料](pc-game-settings.md)：游戏延伸中的实用指南、设置表解析、推荐与默认值边界。
-- [新人入坑指南](beginner-guide.md)：原生章节、版本/配置资料、下载链接与完整性校验。
-- [玩法系统原生页与完整导航](native-mechanics-pages.md)：弦化、角色定位、增幅网络及明确文章链接的原生分流。
-- [Android 架构审查修复](android-architecture-fixes.md)：请求取消、快照失效、图片输出/GIF收尾、内存预算及生命周期。
-- [玩家装饰图鉴](player-decoration-catalogs.md)：休息室手办与个性名片的原生解析、图片及获取方式。
-- [Android 导航与页面状态](android-navigation-followup.md)：主导航状态恢复、预取与玻璃开销、筛选草稿、渐变和网页请求限速。
-- [弦溯战线简介与图鉴](extraction-mode-implementation.md)：模式简介、外观与图鉴中的三个原生入口、专用骨架及完整快照回归。
-- [武器页面解析与巡检](weapon-parsing-audit.md)：42 页完整快照验证、10 个战术道具、武器机制和参考参数。
-- [维里昂裂隙与生化卡池补全](rift-bio-pool-followup.md)：原生搜打撤地图、双卡表补全和“盗取”分享码索引缺失边界。
-- [Android Wiki 功能约定](android-wiki-feature-guide.md)：model/source/parser/api/Screen 分层与缓存策略。
-- [Android 整体 UI 优化与重构计划](android-ui-refactor-plan.md)：导航与 Snackbar 一致性、下载页悬浮栏避让、顶栏与安全区收敛、遗留骨架屏及 Token 对齐计划。
-- [资源下载实现](resource-download-implementation.md)：搜索和分类、弹窗请求隔离、原任务重试、取消与恢复、文件完整性。
-- [Android 基础设施与文件管理](android-core-file-manager.md)：缓存请求版本、载荷校验、网络监听、写请求重试限制和文件操作边界。
-- [Android WebView 与登录链路](android-webview-auth.md)：Cookie 票据、统一导航规则、文件选择结果归属和临时窗口回收。
-- [桌面端实现指南](desktop-implementation-guide.md)：Windows 窗口、业务状态、媒体管线和桌面分发；下载公共语义以资源下载专题为准。
-- [用户系统后端](user-system-backend.md)：身份、档案、头像、留言/回复、通知、管理接口、D1 迁移与部署顺序。
-- [Wiki 联网测试](live-wiki-tests.md)：真实页面巡检、独立 PC/移动端图鉴、快照和 EdgeOne 请求间隔。
+- [Android 导航与页面状态](android-navigation-followup.md)：页面恢复、Hub 快照、图片预取和搜索边界。
+- [Hub 转场](hub-transition-stability.md)：共享元素、预测返回和迟到回调保护。
+- [缓存、网络与文件管理](android-core-file-manager.md)：取消、清理代数、文件路径边界和安装包清理。
+- [资源下载](resource-download-implementation.md)：按需搜索、任务恢复、完整性清单及原子下载。
+- [WebView 与登录](android-webview-auth.md)：Cookie 票据、导航规则、宿主生命周期、弹窗和文件选择。
+- [2.2.1 架构修复记录](android-architecture-fixes.md)：审查发现、修复范围、验证证据及未采用的重构建议。
+- [桌面端指南](desktop-implementation-guide.md)：Windows 窗口、媒体处理及分发。
+- [用户系统后端](user-system-backend.md)：账号、留言/通知、管理 API 和 D1 迁移。
 
-## 发布与维护
+## Wiki 功能专题
 
-- [2.2.1 发布记录](releases/2.2.1.md)：四个原生资料页、架构审查修复和全局文案优化。
-- [2.2.0 发布记录](releases/2.2.0.md)：Android UI 与三个工具页打磨、Wiki 骨架补齐、PC 设置加载修复及文案优化。
-- [2.1.30 发布记录](releases/2.1.30.md)：PC 设置原生页、玩家装饰主源与展示重构、掉落交互及导航维护。
-- [2.1.29 发布记录](releases/2.1.29.md)：搜打撤新版适配、列表健壮性与角色补充设定完善。
-- [2.1.28 发布记录](releases/2.1.28.md)：掉落查询交互重组、物品图片与品质色、返回状态及加载调度修复。
-- [2.1.27 发布记录](releases/2.1.27.md)：掉落物品反查、角色技能排版、背景衔接与快速返回转场修复。
-- [2.1.26 发布记录](releases/2.1.26.md)：新版共用掉落池、阶段对照、页面组件与状态重构，以及发布前复审修复。
-- [2.1.25 发布记录](releases/2.1.25.md)：地图详情修复、平衡页文案、掉落池新表兼容与骨架屏对齐。
-- [2.1.24 发布记录](releases/2.1.24.md)：弦溯战线、武器解析、卡池补全和导航修复的本次交付与验证。
-- [2.1.23 发布记录](releases/2.1.23.md)：生化卡组同名卡图片、平衡数据筛选弹层、关于页网格渐变与发布验证。
-- [2.1.22 发布记录](releases/2.1.22.md)：私有下载记录、更新安装包清理、依赖升级与发布验证。
-- [2.1.21 发布记录](releases/2.1.21.md)：历史赛季与上一版发布验证。
+### 指南与玩法
 
-- [版本发布清单](release-version-checklist.md)：版本字段、更新日志、APK/R2/Pages 发布流程。
-- [Compose Web 归档说明](../webApp/README.md)：不维护的演示原型；默认不参与构建，正式网页功能在 `downloadPage/`。
-- [会话交接快照](session-handoff.md)：**2026-10-20 的一次性状态**，供压缩续接；不是实时任务看板，后续以 Git 与重新执行的测试为准。
+- [新人入坑指南](beginner-guide.md)：原生章节、版本/配置表、下载链接。
+- [PC 游戏设置](pc-game-settings.md)：设置、推荐和参考表的语义边界。
+- [弦化、角色定位与增幅网络](native-mechanics-pages.md)：三页原生阅读和完整导航分流。
+- [弦溯战线](extraction-mode-implementation.md)：物品、配件、掉落查询及历次上游结构兼容。
+- [裂隙与生化卡池](rift-bio-pool-followup.md)：地图、双卡表、正式分享索引。
+
+### 图鉴与资料
+
+- [角色详情](character-detail-presentation.md)：技能、设定、关系和呈现规则。
+- [武器解析](weapon-parsing-audit.md)：武器结构、战术道具和参数审计。
+- [玩家装饰](player-decoration-catalogs.md)：Lua 双表/HTML 主源、获取方式、缺图和预览。
+- [列表健壮性](wiki-list-resilience.md)：角色、武器、地图的身份与完整性。
+- [导航覆盖审计](wiki-navigation-coverage.md)：历史菜单矩阵和2.2.1增量，非实时全站清单。
+- [联网与本地快照测试](live-wiki-tests.md)：完整快照环境变量索引、主动联网开关、证据来源和请求节流。
+
+## UI 与设计记录
+
+- [UI 优化实施记录](android-ui-refactor-plan.md)：2.2.0已完成改动、2.2.1文案更新，以及明确标注的历史计划。
+- [工具视觉回退](tools-mesh-tab-surfaces.md)：保留已确认的视觉选择，避免后续重新引入被否决设计。
+
+## 发布记录
+
+发布记录保存**当次**版本、产物指纹、部署和检查结果，不作为每次发版必须重跑的测试清单。
+
+- [2.2.1](releases/2.2.1.md)：四个原生资料页、架构修复、全局文案。
+- [2.2.0](releases/2.2.0.md)：UI统一、骨架、工具交互、PC设置修复。
+- [2.1.30](releases/2.1.30.md)：PC设置和装饰主源。
+- [2.1.29](releases/2.1.29.md)：上游适配、列表和角色设定。
+- [2.1.28](releases/2.1.28.md)：掉落玩家任务与图片。
+- [2.1.27](releases/2.1.27.md)：掉落反查与转场。
+- [2.1.26](releases/2.1.26.md)：掉落池/阶段和公共UI。
+- [2.1.25](releases/2.1.25.md)：地图、平衡、掉落表。
+- [2.1.24](releases/2.1.24.md)：解析和导航修复。
+- [2.1.23](releases/2.1.23.md)：生化、平衡和关于页。
+- [2.1.22](releases/2.1.22.md)：下载清单与安装包清理。
+- [2.1.21](releases/2.1.21.md)：早期基础设施与发布记录。
+
+## 归档与维护口径
+
+- [旧会话交接](session-handoff.md)仅用于追溯，里面的“待提交/待发布”不代表当前任务状态。
+- [`webApp`](../webApp/README.md)是归档的Compose演示；生产网页在 `downloadPage/`。
+- 当前行为写入对应专题；实施经过和测试数量写入发布/修复记录。不要在每个专题复制一份“最新版本”和全量测试总数。
+- 上游快照的数量、修订号和外部文件路径保留其日期；不能把历史捕获描述成实时Wiki结果。
+- 修改基础契约时同步对应专题与 [`AGENTS.md`](../AGENTS.md)。文档整理只做链接/内容/diff检查，不触发构建、上传或重新部署。

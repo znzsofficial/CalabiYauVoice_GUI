@@ -54,3 +54,7 @@
 - 已获取 2026-11-12 真实网页，保存于本机 `character-settings-20261112/settings.html`；`CHARACTER_SETTINGS_AUDIT_FILE` 指向该文件时，逐角色逐字段验证 24 × 12 项，含当前萌点内容。普通网页抓取成功不代表此前被 567 拦截的其它 API 已恢复。
 - 小型 fixture：`androidApp/src/test/resources/fixtures/character/settings.html`；8 项设定解析／缓存测试加既有缓存回归，共 **29 项，0 失败／0 跳过**。没有在测试中逐角色联网。
 - Android 编译、Lint 通过（0 errors / 7 warnings：2 AGP 版本提示、1 ModifierParameter、4 UseKtx）。提交与发版见 2.1.29 发布记录；尚无本轮真机视觉验收证据。
+
+## 2.2.1：解析与补图边界
+
+`parseCharacterWikitext`及技能/剧情解析已保持纯解析，不再读取网络。头像、技能图和故事封面在`fetchCharacterDetail`组装阶段异步读取；`WikiEngine.safeGet`改为suspend并透传取消。现有图片重定向映射、设定快照和离线元数据规则保留。该变化随[2.2.1](releases/2.2.1.md)交付，设备项见[验收清单](device-acceptance.md)。

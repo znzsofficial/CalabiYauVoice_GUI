@@ -1,15 +1,20 @@
 # Android 基础设施与文件管理约束
 
+当前契约包含2.2.1修复。总体职责见[当前架构](android-architecture.md)，历史测试数量保留在下方带日期的回归记录；发布状态见[2.2.1](releases/2.2.1.md)。
+
 ## 缓存与网络
 
 - `CachedWikiApi` / `KeyedCachedWikiApi` 使用 `VersionedMemoryCache`：最新启动的请求拥有写入权；
   清缓存会同时废止进行中的写入，不能仅把值设为 null 后任由旧请求回填。
 - 离线回退结果照常返回，但不进入永久内存缓存。网络恢复后普通读取必须有机会重新联网。
+- Hub跨页面快照也只保留完整在线列表，绑定清理代数及同类请求序号；搜索没有独立永久列表缓存。离线/不完整内容可显示，但不能阻止重入验证。
 - `OfflineCache` 强刷更新写入代数、使用独立 inflight，但**不先删除旧磁盘副本**。
   网络错误或有效载荷校验失败时，仍可回退旧的有效副本；显式 invalidate/clear 才删除文件。
+- `ReadSingleFlight`负责读请求去重：owner取消时，仍active的follower最多接管一次；当前读者取消直接退出，连续接管失败给出可重试错误。`LoadState`按请求版本执行finally，旧请求不能关掉新请求的加载状态。
 - `WikiParseSource` 在发布缓存前验证 `parse`、所需 text/wikitext 字符串字段和 MediaWiki `error`。
   联网与离线读取共用校验规则；无效 JSON/错误 JSON/缺字段响应不得覆盖已有可用缓存。
   `WikiEngine.safeGet` 也拒绝无效 JSON 和 MediaWiki error，不只是检查首字符。
+- `safeGet`为suspend，使用shared `awaitGetString`，取消一直绑定到body读取和Response关闭。仅切换到IO不代表阻塞网络已可取消。纯Parser不能发请求，补图由API/Source承担。
 - `SafeReadRetryInterceptor` 只自动重试 GET/HEAD；POST/PUT/DELETE 等写请求不自动重放。
   共用客户端关闭透明连接重试，写入 body 标记 one-shot，防止 OkHttp 自身的 503 Retry-After: 0 等 follow-up 再发请求。
   退避每 100ms 检查 Call 的取消状态。业务写入若要重试，必须由业务端保证幂等性。
@@ -48,6 +53,8 @@
 
 ## 回归与复审（2026-10-20）
 
+本节数字是2026-10-20阶段结果，不是当前测试总数或Lint警告数。2.2.1的新增测试与结果见[架构修复记录](android-architecture-fixes.md#验证与边界)。
+
 - `CacheConsistencyTest`：迟到刷新、清缓存、按键隔离、离线恢复、错误载荷保留有效副本。
 - `NetworkInfrastructureTest`：默认网络交接、未验证网络、写请求不重放、GET 有界重试和取消。
 - `AtomicResourceDownloadTest` + shared 的整链用例：损坏/零字节替换、失败保留、取消清理、有效文件跳过。
@@ -68,4 +75,6 @@
 
 ## 2026-11-17 架构审查后续
 
-共享读取的取消所有权、Hub快照失效、Wiki文本HTTP取消，以及图片输出事务/GIF收尾和大图预算见 [架构修复记录](android-architecture-fixes.md)。本节为增量实施记录，具体历史验证结果保持原样。
+图片工具的`ToolOutputTransaction`与资源下载适配器用途不同：图片工具占用唯一新名称，临时写出后使用`Os.rename`发布，返回实际新路径；资源下载可根据清单替换已知损坏文件。不可互换两者的覆盖策略。
+
+GIF只有成功finish才发布，自有流失败/abort仍关闭；预览和导出均绑定取消检查。图片解码/输出有像素预算，拼图逐张绘制，极端宽高比GIF不创建巨型缩放中间图。细节见[架构修复记录](android-architecture-fixes.md)。设备验证统一见[清单](device-acceptance.md)。

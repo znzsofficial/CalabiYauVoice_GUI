@@ -1,5 +1,26 @@
 # Wiki 实际 HTML 联网测试
 
+## 选择验证方式
+
+优先使用跟踪fixture和已有本地快照。只有明确需要核验当前上游时才启用联网测试；下面的强制重跑命令是**主动抓取**入口，不是普通发布步骤。当前验证结果以[发布记录](README.md#发布记录)为准，设备行为见[设备验收](device-acceptance.md)。
+
+### 本地完整快照入口
+
+这些环境变量只指定已有文件/目录，不自动抓取；未配置时对应的可选审计跳过，其余跟踪fixture仍可运行。文件格式与目录命名须遵照对应专题，不能混用完整网页、parse JSON及wikitext。
+
+| 环境变量 | 资料范围 | 格式与说明 |
+| --- | --- | --- |
+| `BEGINNER_GUIDE_AUDIT_FILE` | 新人指南 | 完整parse HTML；[专题](beginner-guide.md) |
+| `MECHANICS_AUDIT_DIR` | 弦化、定位、增幅网络 | `stringify.html`、`roles.html`、`augmentation.html`；[专题](native-mechanics-pages.md) |
+| `PC_GAME_SETTINGS_AUDIT_FILE` / `PC_GAME_SETTINGS_API_AUDIT_FILE` | PC设置 | 旧网页与实际parse JSON两种审计；[专题](pc-game-settings.md) |
+| `DECORATION_SOURCE_AUDIT_DIR` / `PLAYER_DECORATION_AUDIT_DIR` | 装饰Lua/HTML及名片手办 | [主源与文件说明](player-decoration-catalogs.md) |
+| `CHARACTER_SETTINGS_AUDIT_FILE` | 超弦体补充设定 | [设定审计](character-detail-presentation.md) |
+| `WIKI_LIST_AUDIT_DIR` | 角色、武器、地图列表 | [列表审计](wiki-list-resilience.md) |
+| `EXTRACTION_AUDIT_DIR`、`EXTRACTION_DROPS_AUDIT_FILE`、`EXTRACTION_CONTAINERS_AUDIT_DIR`、`EXTRACTION_UPDATED_AUDIT_DIR` | 多代弦溯结构 | 各自对应不同上游结构，不相互替代；[专题](extraction-mode-implementation.md) |
+| `WEAPON_AUDIT_DIR` / `MAP_BIO_AUDIT_DIR` | 武器、地图、生化 | [武器](weapon-parsing-audit.md)、[地图与卡池](rift-bio-pool-followup.md) |
+
+## 主动联网抓取
+
 在项目根目录运行（PowerShell）：
 
 ```powershell
