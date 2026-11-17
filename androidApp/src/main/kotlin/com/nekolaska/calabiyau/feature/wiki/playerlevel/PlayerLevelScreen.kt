@@ -293,7 +293,7 @@ private fun LevelSegmentCard(
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("等级 ${segment.startLevel} - ${segment.endLevel}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("点击查看每级升级所需经验", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("各等级升级经验", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

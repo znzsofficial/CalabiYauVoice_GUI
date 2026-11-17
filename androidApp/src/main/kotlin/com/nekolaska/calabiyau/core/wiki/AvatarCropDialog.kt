@@ -161,7 +161,7 @@ internal fun AvatarCropDialog(
                 }
             }
             Text(
-                text = "拖动或双指缩放，把头像调整进方框内",
+                text = "拖动调整位置，双指缩放",
                 color = Color.White.copy(alpha = 0.75f),
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 modifier = Modifier

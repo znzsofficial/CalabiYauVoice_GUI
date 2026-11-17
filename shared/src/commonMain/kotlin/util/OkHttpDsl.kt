@@ -28,6 +28,25 @@ suspend fun OkHttpClient.awaitGet(url: String): Response = suspendCancellableCor
     awaitCall(Request.Builder().url(url).build(), continuation)
 }
 
+/** Cancellation stays attached through response-body consumption, not merely response headers. */
+suspend fun OkHttpClient.awaitGetString(url: String): String? = suspendCancellableCoroutine { continuation ->
+    val call = newCall(Request.Builder().url(url).build())
+    continuation.invokeOnCancellation { call.cancel() }
+    call.enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            if (continuation.isActive) continuation.resumeWithException(e)
+        }
+        override fun onResponse(call: Call, response: Response) {
+            try {
+                val text = response.use { if (it.isSuccessful) it.body.string() else null }
+                if (continuation.isActive) continuation.resume(text)
+            } catch (e: Exception) {
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+        }
+    })
+}
+
 suspend fun OkHttpClient.awaitRequest(
     url: String,
     block: Request.Builder.() -> Unit

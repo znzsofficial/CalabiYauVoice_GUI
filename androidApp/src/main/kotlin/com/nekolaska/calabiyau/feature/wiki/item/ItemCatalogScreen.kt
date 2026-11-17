@@ -189,7 +189,7 @@ private fun ItemCatalogSkeleton(platform: ItemCatalogPlatform, modifier: Modifie
 private fun ItemCatalogNotice(platform: ItemCatalogPlatform) {
     if (platform == ItemCatalogPlatform.MOBILE) {
         Text(
-            "仅收录移动端独有道具；双端共有道具请查看 PC 道具图鉴。",
+            "移动端独有道具，双端共有道具收录于 PC 图鉴",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)

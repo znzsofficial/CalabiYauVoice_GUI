@@ -89,6 +89,7 @@ import com.nekolaska.calabiyau.feature.weapon.list.WeaponListApi
 import com.nekolaska.calabiyau.feature.wiki.map.api.MapListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
+import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 import data.ApiResult
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.sync.Mutex
@@ -115,22 +116,17 @@ private data class GroupedSearchResults(
 }
 
 private object HubWeaponSearchIndex {
-    @Volatile
-    private var cachedCategories: List<WeaponListApi.WeaponCategoryData>? = null
-
     private val mutex = Mutex()
 
-    fun cached(): List<WeaponListApi.WeaponCategoryData> = cachedCategories.orEmpty()
+    fun cached(): List<WeaponListApi.WeaponCategoryData> = HubListDataSnapshot.weaponCategories.orEmpty()
 
     suspend fun load(): List<WeaponListApi.WeaponCategoryData> = mutex.withLock {
-        cachedCategories?.takeIf { it.isNotEmpty() }?.let { return@withLock it }
         // 用户进过武器页时快照已是完整数据：直接复用，零请求
         HubListDataSnapshot.weaponCategories?.takeIf { it.isNotEmpty() }?.let {
-            cachedCategories = it
             return@withLock it
         }
         val lightweight = when (val result =
-            WeaponListApi.fetchAllCategories(forceRefresh = false, includeImages = false)) {
+            WeaponListApi.fetchAllCategories(forceRefresh = false, includeImages = false, allowMemoryCache = false)) {
             is ApiResult.Success -> result.value
             is ApiResult.Error -> emptyList()
         }
@@ -140,9 +136,6 @@ private object HubWeaponSearchIndex {
                 is ApiResult.Success -> result.value
                 is ApiResult.Error -> emptyList()
             }
-        }
-        if (loaded.isNotEmpty()) {
-            cachedCategories = loaded
         }
         loaded
     }
@@ -552,6 +545,23 @@ private val hubSearchEntries = listOf(
         WikiRoute.PcGameSettings
     ),
     searchEntry(
+        "beginner_guide",
+        "新人入坑指南",
+        "版本选择、下载安装与配置需求",
+        listOf("新人", "新手", "入坑", "指南", "配置需求", "最低配置", "推荐配置", "下载游戏", "腾讯服", "创梦服", "国际服", "Steam", "实用指南"),
+        Icons.Outlined.SportsEsports,
+        WikiRoute.BeginnerGuide
+    ),
+    searchEntry("stringify", "弦化", "形态转换、减伤与操作教学",
+        listOf("弦化", "纸片人", "爬墙", "飘飞", "减伤"), Icons.Outlined.SportsEsports,
+        WikiRoute.Mechanics(MechanicsKind.STRINGIFY)),
+    searchEntry("character_roles", "超弦体定位", "定位职责与角色名单",
+        listOf("定位", "职能", "突击", "决斗", "守护", "支援", "先锋", "控场"), Icons.Outlined.People,
+        WikiRoute.Mechanics(MechanicsKind.ROLES)),
+    searchEntry("augmentation", "弦能增幅网络", "升级规则与模式能量点",
+        listOf("弦能增幅网络", "加点", "能量点", "升级", "觉醒"), Icons.Outlined.AccountTree,
+        WikiRoute.Mechanics(MechanicsKind.AUGMENTATION)),
+    searchEntry(
         "wallpapers",
         "壁纸",
         "官方壁纸与视觉图",
@@ -618,7 +628,6 @@ internal fun HubSearchPanel(
     var searchActive by remember { mutableStateOf(false) }
     var weaponCategories by remember { mutableStateOf(HubWeaponSearchIndex.cached()) }
     var isLoadingWeapons by remember { mutableStateOf(false) }
-    var hasLoadedWeapons by remember { mutableStateOf(weaponCategories.isNotEmpty()) }
 
     // 字段是唯一事实源，经 snapshotFlow 单向流出；不回写（快速输入时滞后镜像会覆写字段丢字）
     LaunchedEffect(textFieldState) {
@@ -641,14 +650,16 @@ internal fun HubSearchPanel(
 
     BackHandler(enabled = searchActive) { collapseSearch() }
 
-    LaunchedEffect(searchActive, hasLoadedWeapons) {
-        if (!searchActive || hasLoadedWeapons || isLoadingWeapons) return@LaunchedEffect
+    val weaponSnapshot = HubListDataSnapshot.weaponCategories
+    val snapshotGeneration = HubListDataSnapshot.generation
+    LaunchedEffect(searchActive, snapshotGeneration, weaponSnapshot) {
+        weaponCategories = HubWeaponSearchIndex.cached()
+        if (!searchActive) return@LaunchedEffect
         isLoadingWeapons = true
         try {
             val loadedCategories = HubWeaponSearchIndex.load()
             if (loadedCategories.isNotEmpty()) {
                 weaponCategories = loadedCategories
-                hasLoadedWeapons = true
             }
         } finally {
             isLoadingWeapons = false

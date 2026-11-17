@@ -889,7 +889,7 @@ private fun AppDrawerContent(
             onDismissRequest = { showLoginConfirmDialog = false },
             icon = { Icon(Icons.AutoMirrored.Outlined.Login, contentDescription = null) },
             title = { Text("登录 Wiki") },
-            text = { Text("将打开 Wiki 首页，请点击网页右上角登录按钮完成登录。") },
+            text = { Text("登录将在 Wiki 网页中完成，点击右上角的通知按钮即可登录。") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -1001,7 +1001,7 @@ private fun WikiLoginPromptCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "点击登录 Wiki 账号",
+                    text = "登录 Wiki 账号",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

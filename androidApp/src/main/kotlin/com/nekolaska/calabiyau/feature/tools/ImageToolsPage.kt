@@ -463,10 +463,10 @@ private fun CompressRealtimePreview(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val previewData by produceState<CompressPreviewData?>(initialValue = null, item, quality, format) {
-        value = null
+    val previewResult by produceState<ToolPreview<CompressPreviewData>>(initialValue = ToolPreview(), item, quality, format) {
+        value = ToolPreview()
         delay(120.milliseconds)
-        value = withContext(Dispatchers.IO) {
+        value = loadToolPreview {
             buildCompressPreviewData(context, item, format, quality)
         }
     }
@@ -476,10 +476,11 @@ private fun CompressRealtimePreview(
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         modifier = modifier
     ) {
-        when (val data = previewData) {
+        when (val data = previewResult.data) {
             null -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(strokeWidth = 2.dp)
+                    if (previewResult.error != null) Text(previewResult.error!!, Modifier.padding(16.dp))
+                    else CircularProgressIndicator(strokeWidth = 2.dp)
                 }
             }
             else -> {
@@ -910,6 +911,8 @@ internal fun ImageToolsPage(
 
     fun runBatchConvert(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
+        val batchConvertFormat = batchConvertFormat
+        val batchConvertQuality = batchConvertQuality
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "批量格式转换失败",
@@ -932,6 +935,8 @@ internal fun ImageToolsPage(
 
     fun runNineGrid(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
+        val exportFormat = exportFormat
+        val imageQuality = imageQuality
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "九宫格切图失败",
@@ -947,6 +952,10 @@ internal fun ImageToolsPage(
 
     fun runCrop(inputs: List<PickedInput>, cropPreviewStateMap: Map<Int, CropPreviewState> = emptyMap()) {
         if (inputs.isEmpty()) return
+        val cropPreset = cropPreset
+        val exportFormat = exportFormat
+        val imageQuality = imageQuality
+        val cropPreviewStateMap = cropPreviewStateMap.toMap()
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "比例裁切失败",
@@ -963,6 +972,10 @@ internal fun ImageToolsPage(
 
     fun runUpscale(inputs: List<PickedInput>) {
         if (inputs.isEmpty()) return
+        val upscaleFactor = upscaleFactor
+        val upscaleAlgorithm = upscaleAlgorithm
+        val upscaleHardEdgeMix = upscaleHardEdgeMix
+        val upscaleSharpenAmount = upscaleSharpenAmount
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "插值放大失败",
@@ -980,7 +993,9 @@ internal fun ImageToolsPage(
     }
 
     fun runStitch(inputs: List<PickedInput>) {
-        if (inputs.size < 2) { showSnack("请至少选择 2 张图片"); return }
+        if (inputs.size < 2) { showSnack("拼图至少需要 2 张图片"); return }
+        val stitchDirection = stitchDirection
+        val stitchUpscaleSmall = stitchUpscaleSmall
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "拼图失败",
@@ -994,7 +1009,13 @@ internal fun ImageToolsPage(
     }
 
     fun runGifCompose(inputs: List<PickedInput>) {
-        if (inputs.isEmpty()) { showSnack("请先选择要合成的图片"); return }
+        if (inputs.isEmpty()) { showSnack("尚未选择图片"); return }
+        val inputs = inputs.toList()
+        val gifFps = gifFps
+        val gifLoopCount = gifLoopCount
+        val gifQuantizeSample = gifQuantizeSample
+        val gifDitherEnabled = gifDitherEnabled
+        val gifComposeScaleMode = gifComposeScaleMode
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "GIF 合成失败",
@@ -1040,7 +1061,7 @@ internal fun ImageToolsPage(
     }
 
     fun runGifDecompose(inputs: List<PickedInput>) {
-        if (inputs.isEmpty()) { showSnack("请先选择 GIF 文件"); return }
+        if (inputs.isEmpty()) { showSnack("尚未选择 GIF 文件"); return }
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "GIF 分解失败",
@@ -1106,7 +1127,7 @@ internal fun ImageToolsPage(
     ToolPageColumn {
         ToolCard(
             title = "批量格式转换",
-            subtitle = "多选图片并批量导出为指定格式",
+            subtitle = "批量转换图片格式",
             icon = Icons.Outlined.Transform
         ) {
             Text("输出格式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1165,7 +1186,7 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "压缩图片",
-            subtitle = "调整格式与质量后导出图片",
+            subtitle = "图片格式与压缩质量",
             icon = Icons.Outlined.Compress
         ) {
             FilledTonalButton(
@@ -1173,7 +1194,7 @@ internal fun ImageToolsPage(
                     onPickFilesFromFileManager(
                         AppPrefs.savePath,
                         "选择要压缩的图片",
-                        "可在文件管理中多选图片，也可以使用系统选择器。",
+                        "图片多选",
                         true,
                         { pickImagesForCompress.launch("image/*") }
                     ) { paths ->
@@ -1205,7 +1226,7 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "按比例裁切",
-            subtitle = "按比例裁切图片并导出",
+            subtitle = "固定比例裁切",
             icon = Icons.Outlined.ContentCut
         ) {
             FlowRow(
@@ -1270,7 +1291,7 @@ internal fun ImageToolsPage(
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择要裁切的图片",
-                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    "图片多选",
                     true,
                     { pickImagesForCrop.launch("image/*") }
                 ) { paths ->
@@ -1309,14 +1330,14 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "插值放大",
-            subtitle = "放大图片并搭配锐化增强",
+            subtitle = "插值放大与锐化",
             icon = Icons.Outlined.AutoFixHigh
         ) {
             FilledTonalButton(onClick = {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择要放大的图片",
-                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    "图片多选",
                     true,
                     { pickImagesForUpscale.launch("image/*") }
                 ) { paths ->
@@ -1341,14 +1362,14 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "图片拼图",
-            subtitle = "多图横向/纵向拼接并导出",
+            subtitle = "横向或纵向拼接",
             icon = Icons.Outlined.ViewAgenda
         ) {
             FilledTonalButton(onClick = {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择要拼图的图片",
-                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    "图片多选",
                     true,
                     { pickImagesForStitch.launch("image/*") }
                 ) { paths ->
@@ -1381,14 +1402,14 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "九宫格切图",
-            subtitle = "按 3×3 规则切图并导出",
+            subtitle = "3 × 3 图片切分",
             icon = Icons.Outlined.ImageSearch
         ) {
             FilledTonalButton(onClick = {
                 onPickFilesFromFileManager(
                     AppPrefs.savePath,
                     "选择要切图的图片",
-                    "可在文件管理中多选图片，也可以使用系统选择器。",
+                    "图片多选",
                     true,
                     { pickImagesForNineGrid.launch("image/*") }
                 ) { paths ->
@@ -1419,7 +1440,7 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "GIF 合成",
-            subtitle = "将多张图片按顺序合成为 GIF",
+            subtitle = "序列图片合成 GIF",
             icon = Icons.Outlined.Animation
         ) {
             FilledTonalButton(onClick = {
@@ -1460,7 +1481,7 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "GIF 分解",
-            subtitle = "将 GIF 拆分为逐帧图片（${exportFormat.label}）",
+            subtitle = "逐帧导出为 ${exportFormat.label}",
             icon = Icons.Outlined.GifBox
         ) {
             FilledTonalButton(onClick = {
@@ -1496,7 +1517,7 @@ internal fun ImageToolsPage(
 
         ToolCard(
             title = "EXIF 隐私字段清理",
-            subtitle = "清理图片隐私信息并另存副本",
+            subtitle = "清除图片隐私信息，另存副本",
             icon = Icons.Outlined.NoPhotography
         ) {
             FilledTonalButton(
@@ -1635,11 +1656,11 @@ private fun UpscaleBottomSheet(
     )
     var currentIndex by remember(items) { mutableIntStateOf(0) }
     val currentItem = items.getOrNull(currentIndex)
-    val preview by produceState<UpscalePreviewData?>(initialValue = null, currentItem, factor, algorithm, hardEdgeMix, sharpenAmount) {
-        value = null
+    val previewResult by produceState<ToolPreview<UpscalePreviewData>>(initialValue = ToolPreview(), currentItem, factor, algorithm, hardEdgeMix, sharpenAmount) {
+        value = ToolPreview()
         delay(180.milliseconds)
-        value = currentItem?.let { item ->
-            withContext(Dispatchers.IO) {
+        value = loadToolPreview {
+            currentItem?.let { item ->
                 buildUpscalePreviewData(
                     context = context,
                     input = item,
@@ -1651,6 +1672,7 @@ private fun UpscaleBottomSheet(
             }
         }
     }
+    val preview = previewResult.data
 
     ModalBottomSheet(
         sheetState = sheetState,
@@ -1690,7 +1712,10 @@ private fun UpscaleBottomSheet(
                 modifier = Modifier.fillMaxWidth().height(320.dp)
             ) {
                 when (val data = preview) {
-                    null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(strokeWidth = 2.dp) }
+                    null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (previewResult.error != null) Text(previewResult.error!!, Modifier.padding(16.dp))
+                        else CircularProgressIndicator(strokeWidth = 2.dp)
+                    }
                     else -> AsyncImage(
                         model = data.previewBytes,
                         contentDescription = "放大预览",
@@ -2038,6 +2063,9 @@ private fun GifComposeBottomSheet(
 
 
 private fun openBitmap(context: Context, input: PickedInput): Bitmap? {
+    checkToolCancellation()
+    val size = readImageSize(context, input) ?: return null
+    requireImageBudget(size.width, size.height)
     input.file?.let { return BitmapFactory.decodeFile(it.absolutePath) }
     return input.uri?.let { uri ->
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
@@ -2085,7 +2113,6 @@ private fun compressOrConvertImage(
     val bitmap = openBitmap(context, input) ?: return null
     return try {
         writeBitmapToFile(bitmap, target, format, quality.coerceIn(1, 100))
-        target
     } finally {
         bitmap.recycle()
     }
@@ -2101,12 +2128,13 @@ private fun upscaleImage(
     sharpenAmount: Float
 ): File? {
     val source = openBitmap(context, input) ?: return null
-    val scaled = upscaleBitmap(source, factor, algorithm, hardEdgeMix, sharpenAmount)
+    var scaled: Bitmap? = null
     return try {
+        requireImageBudget(upscaleTargetSize(source.width, factor), upscaleTargetSize(source.height, factor))
+        scaled = upscaleBitmap(source, factor, algorithm, hardEdgeMix, sharpenAmount)
         writeBitmapToFile(scaled, target, ExportFormat.PNG, 100)
-        target
     } finally {
-        scaled.recycle()
+        scaled?.takeIf { it !== source }?.recycle()
         source.recycle()
     }
 }
@@ -2120,24 +2148,29 @@ private fun buildUpscalePreviewData(
     sharpenAmount: Float
 ): UpscalePreviewData? {
     val source = openBitmap(context, input) ?: return null
+    var previewSource = source
+    var output: Bitmap? = null
+    try {
     val safeFactor = factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)
     val maxPreviewSide = max(1, (MaxUpscalePreviewOutputSide / safeFactor).roundToInt())
     val sourceMaxSide = max(source.width, source.height)
-    val previewSource = if (sourceMaxSide > maxPreviewSide) {
+    previewSource = if (sourceMaxSide > maxPreviewSide) {
         val scale = maxPreviewSide.toFloat() / sourceMaxSide.toFloat()
         source.scale(max(1, (source.width * scale).roundToInt()), max(1, (source.height * scale).roundToInt()))
     } else source
-    val output = upscaleBitmap(previewSource, safeFactor, algorithm, hardEdgeMix, sharpenAmount)
+    output = upscaleBitmap(previewSource, safeFactor, algorithm, hardEdgeMix, sharpenAmount)
     val bytes = ByteArrayOutputStream().use { stream ->
         output.compress(Bitmap.CompressFormat.PNG, 100, stream)
         stream.toByteArray()
     }
     val outputWidth = upscaleTargetSize(source.width, factor)
     val outputHeight = upscaleTargetSize(source.height, factor)
-    output.recycle()
-    if (previewSource !== source) previewSource.recycle()
-    source.recycle()
     return UpscalePreviewData(bytes, outputWidth, outputHeight)
+    } finally {
+        output?.takeIf { it !== source && it !== previewSource }?.recycle()
+        if (previewSource !== source) previewSource.recycle()
+        source.recycle()
+    }
 }
 
 private fun upscaleBitmap(
@@ -2150,12 +2183,20 @@ private fun upscaleBitmap(
     val safeFactor = factor.coerceIn(MinUpscaleFactor, MaxUpscaleFactor)
     val targetWidth = upscaleTargetSize(source.width, safeFactor)
     val targetHeight = upscaleTargetSize(source.height, safeFactor)
+    requireImageBudget(targetWidth, targetHeight)
+    checkToolCancellation()
     val scaled = scaleBitmap(source, targetWidth, targetHeight, algorithm)
-    val mixed = if (hardEdgeMix > 0f) blendWithHardEdge(source, scaled, safeFactor, hardEdgeMix) else scaled
-    val output = if (sharpenAmount > 0f) sharpenBitmap(mixed, sharpenAmount) else mixed
-    if (output !== mixed) mixed.recycle()
-    if (mixed !== scaled) scaled.recycle()
-    return output
+    var mixed = scaled
+    var output: Bitmap? = null
+    try {
+        mixed = if (hardEdgeMix > 0f) blendWithHardEdge(source, scaled, safeFactor, hardEdgeMix) else scaled
+        checkToolCancellation()
+        output = if (sharpenAmount > 0f) sharpenBitmap(mixed, sharpenAmount) else mixed
+        return output
+    } finally {
+        if (mixed !== output && mixed !== source) mixed.recycle()
+        if (scaled !== output && scaled !== mixed && scaled !== source) scaled.recycle()
+    }
 }
 
 private fun scaleBitmap(source: Bitmap, targetWidth: Int, targetHeight: Int, algorithm: UpscaleAlgorithm): Bitmap {
@@ -2297,6 +2338,7 @@ private fun bicubicScale(source: Bitmap, targetWidth: Int, targetHeight: Int): B
     }
 
     for (y in 0 until outHeight) {
+        checkToolCancellation()
         val srcY = (y + 0.5f) * srcHeight / outHeight - 0.5f
         val yBase = floor(srcY).toInt()
         val yT = srcY - yBase
@@ -2358,6 +2400,7 @@ private fun lanczosScale(source: Bitmap, targetWidth: Int, targetHeight: Int): B
 
     val radius = 3
     for (y in 0 until outHeight) {
+        checkToolCancellation()
         val srcY = (y + 0.5f) * srcHeight / outHeight - 0.5f
         val yStart = floor(srcY).toInt() - radius + 1
         for (x in 0 until outWidth) {
@@ -2421,6 +2464,7 @@ private fun blendWithHardEdge(source: Bitmap, base: Bitmap, factor: Float, amoun
     val width = base.width
     val height = base.height
     val hard = source.scale(width, height, filter = false)
+    try {
     val hardPixels = IntArray(width * height)
     val basePixels = IntArray(width * height)
     val output = IntArray(width * height)
@@ -2453,6 +2497,7 @@ private fun blendWithHardEdge(source: Bitmap, base: Bitmap, factor: Float, amoun
     val safeAmount = amount.coerceIn(0f, 1f)
 
     for (y in 0 until height) {
+        checkToolCancellation()
         for (x in 0 until width) {
             if (x % safeFactor != 0 || y % safeFactor != 0) continue
             val index = y * width + x
@@ -2482,10 +2527,11 @@ private fun blendWithHardEdge(source: Bitmap, base: Bitmap, factor: Float, amoun
         }
     }
 
-    hard.recycle()
     val result = createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    result.setPixels(output, 0, width, 0, 0, width, height)
+    try { result.setPixels(output, 0, width, 0, 0, width, height) }
+    catch (e: Throwable) { result.recycle(); throw e }
     return result
+    } finally { if (hard !== source) hard.recycle() }
 }
 
 private fun localStdDev(
@@ -2533,12 +2579,12 @@ private fun mixColor(c1: Int, c2: Int, t: Float): Int {
 private fun sharpenBitmap(source: Bitmap, amount: Float): Bitmap {
     val width = source.width
     val height = source.height
-    val out = createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val srcPixels = IntArray(width * height)
     val outPixels = IntArray(width * height)
     source.getPixels(srcPixels, 0, width, 0, 0, width, height)
     val safeAmount = amount.coerceIn(0f, 1f)
     for (y in 0 until height) {
+        checkToolCancellation()
         for (x in 0 until width) {
             val center = srcPixels[y * width + x]
             if (x == 0 || y == 0 || x == width - 1 || y == height - 1) {
@@ -2562,7 +2608,9 @@ private fun sharpenBitmap(source: Bitmap, amount: Float): Bitmap {
             )
         }
     }
-    out.setPixels(outPixels, 0, width, 0, 0, width, height)
+    val out = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    try { out.setPixels(outPixels, 0, width, 0, 0, width, height) }
+    catch (e: Throwable) { out.recycle(); throw e }
     return out
 }
 
@@ -2588,6 +2636,7 @@ private fun buildCompressPreviewData(
     quality: Float
 ): CompressPreviewData? {
     val bitmap = openBitmap(context, input) ?: return null
+    try {
     val output = ByteArrayOutputStream()
     bitmap.compress(resolveCompressFormat(format), (quality * 100).toInt().coerceIn(1, 100), output)
     val previewBytes = output.toByteArray()
@@ -2601,12 +2650,12 @@ private fun buildCompressPreviewData(
         }.getOrNull()
         else -> null
     }
-    bitmap.recycle()
     return CompressPreviewData(
         previewBytes = previewBytes,
         originalSizeBytes = originalSize,
         compressedSizeBytes = previewBytes.size
     )
+    } finally { bitmap.recycle() }
 }
 
 private fun splitToNineGrid(
@@ -2629,13 +2678,15 @@ private fun splitToNineGrid(
                 val piece = Bitmap.createBitmap(bitmap, x, y, min(cellWidth, bitmap.width - x), min(cellHeight, bitmap.height - y))
                 try {
                     val target = File(outputDir, "${baseName}_${row + 1}_${col + 1}.${format.extension}")
-                    writeBitmapToFile(piece, target, format, quality)
-                    outputs += target
+                    outputs += writeBitmapToFile(piece, target, format, quality)
                 } finally {
                     piece.recycle()
                 }
             }
         }
+    } catch (error: Throwable) {
+        outputs.forEach { it.delete() }
+        throw error
     } finally {
         bitmap.recycle()
     }
@@ -2649,74 +2700,70 @@ private fun stitchImages(
     direction: StitchDirection,
     upscaleSmall: Boolean
 ): File? {
-    val bitmaps = inputs.mapNotNull { openBitmap(context, it) }
-    if (bitmaps.size < 2) {
-        bitmaps.forEach { it.recycle() }
-        return null
-    }
+    checkToolCancellation()
+    val sizes = inputs.map { readImageSize(context, it) ?: throw IllegalArgumentException("图片读取失败") }
+    if (sizes.size < 2) return null
 
     val targetCross = when (direction) {
         StitchDirection.HORIZONTAL -> {
-            val values = bitmaps.map { it.height }
+            val values = sizes.map { it.height }
             if (upscaleSmall) values.maxOrNull() ?: 0 else values.minOrNull() ?: 0
         }
         StitchDirection.VERTICAL -> {
-            val values = bitmaps.map { it.width }
+            val values = sizes.map { it.width }
             if (upscaleSmall) values.maxOrNull() ?: 0 else values.minOrNull() ?: 0
         }
     }.coerceAtLeast(1)
 
-    val scaledBitmaps = bitmaps.map { bitmap ->
+    val scaledSizes = sizes.map { bitmap ->
         when (direction) {
             StitchDirection.HORIZONTAL -> {
                 val scale = targetCross.toFloat() / bitmap.height.toFloat()
                 val targetW = max(1, (bitmap.width * scale).roundToInt())
                 val targetH = targetCross
-                if (bitmap.width == targetW && bitmap.height == targetH) bitmap
-                else bitmap.scale(targetW, targetH)
+                IntSize(targetW, targetH)
             }
             StitchDirection.VERTICAL -> {
                 val scale = targetCross.toFloat() / bitmap.width.toFloat()
                 val targetW = targetCross
                 val targetH = max(1, (bitmap.height * scale).roundToInt())
-                if (bitmap.width == targetW && bitmap.height == targetH) bitmap
-                else bitmap.scale(targetW, targetH)
+                IntSize(targetW, targetH)
             }
         }
     }
 
     val (outputWidth, outputHeight) = when (direction) {
-        StitchDirection.HORIZONTAL -> scaledBitmaps.sumOf { it.width } to targetCross
-        StitchDirection.VERTICAL -> targetCross to scaledBitmaps.sumOf { it.height }
+        StitchDirection.HORIZONTAL -> scaledSizes.sumOf { it.width.toLong() }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt() to targetCross
+        StitchDirection.VERTICAL -> targetCross to scaledSizes.sumOf { it.height.toLong() }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
-
+    requireImageBudget(outputWidth, outputHeight)
     val merged = createBitmap(outputWidth, outputHeight)
+    try {
     val canvas = Canvas(merged)
     val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     var cursor = 0f
-    scaledBitmaps.forEach { bmp ->
+    inputs.forEachIndexed { index, input ->
+        checkToolCancellation()
+        val bmp = openBitmap(context, input) ?: throw IllegalArgumentException("图片读取失败")
+        val size = scaledSizes[index]
+        try {
         when (direction) {
             StitchDirection.HORIZONTAL -> {
-                canvas.drawBitmap(bmp, cursor, 0f, paint)
-                cursor += bmp.width
+                canvas.drawBitmap(bmp, null, android.graphics.RectF(cursor, 0f, cursor + size.width, size.height.toFloat()), paint)
+                cursor += size.width
             }
             StitchDirection.VERTICAL -> {
-                canvas.drawBitmap(bmp, 0f, cursor, paint)
-                cursor += bmp.height
+                canvas.drawBitmap(bmp, null, android.graphics.RectF(0f, cursor, size.width.toFloat(), cursor + size.height), paint)
+                cursor += size.height
             }
         }
+        } finally { bmp.recycle() }
     }
 
     outputDir.mkdirs()
     val target = File(outputDir, "拼图_${direction.label}_${System.currentTimeMillis()}.jpg")
-    writeBitmapToFile(merged, target, ExportFormat.JPG, 94)
-
-    merged.recycle()
-    scaledBitmaps.forEachIndexed { index, scaled ->
-        if (scaled !== bitmaps[index]) scaled.recycle()
-    }
-    bitmaps.forEach { it.recycle() }
-    return target
+    return writeBitmapToFile(merged, target, ExportFormat.JPG, 94)
+    } finally { merged.recycle() }
 }
 
 private data class GifComposeResult(
@@ -2738,30 +2785,37 @@ private fun composeGifFromImages(
     if (inputs.isEmpty()) return null
     outputDir.mkdirs()
     val target = buildUniqueFile(outputDir, "gif_compose_${System.currentTimeMillis()}", "gif")
-    val encoder = AnimatedGifEncoder()
-    return runCatching {
+    val encoder = AnimatedGifEncoder(::checkToolCancellation)
+    return try {
         var writtenFrames = 0
         var skippedFrames = 0
+        val published = publishToolOutput(target) { temporary ->
         val firstBitmap = openBitmap(context, inputs.first()) ?: throw IllegalStateException("首帧读取失败")
+        try {
         val baseWidth = firstBitmap.width.coerceAtLeast(1)
         val baseHeight = firstBitmap.height.coerceAtLeast(1)
         encoder.setSize(baseWidth, baseHeight)
-        val started = encoder.start(target.absolutePath)
+        val started = encoder.start(temporary.absolutePath)
         if (!started) throw IllegalStateException("GIF 编码器启动失败")
         encoder.setFrameRate(fps.coerceIn(1, 60).toFloat())
         encoder.setRepeat(loopCount.coerceAtLeast(0))
         encoder.setQuality(quantizeSample.coerceIn(1, 30))
 
         fun writeFrame(bitmap: Bitmap) {
+            checkToolCancellation()
             val normalized = normalizeGifFrame(bitmap, baseWidth, baseHeight, scaleMode)
-            val prepared = if (ditherEnabled) applyOrderedDither(normalized) else normalized
+            var prepared = normalized
+            try {
+            prepared = if (ditherEnabled) applyOrderedDither(normalized) else normalized
             val framePixels = IntArray(prepared.width * prepared.height)
             prepared.getPixels(framePixels, 0, prepared.width, 0, 0, prepared.width, prepared.height)
             val ok = encoder.addFrame(framePixels, prepared.width, prepared.height)
-            if (prepared !== normalized && !prepared.isRecycled) prepared.recycle()
-            if (normalized !== bitmap && !normalized.isRecycled) normalized.recycle()
             if (!ok) throw IllegalStateException("写入帧失败")
             writtenFrames++
+            } finally {
+                if (prepared !== normalized && !prepared.isRecycled) prepared.recycle()
+                if (normalized !== bitmap && !normalized.isRecycled) normalized.recycle()
+            }
         }
 
         try {
@@ -2785,8 +2839,13 @@ private fun composeGifFromImages(
 
         if (writtenFrames <= 0) throw IllegalStateException("未写入任何帧")
         if (!encoder.finish()) throw IllegalStateException("GIF 结束写入失败")
-        GifComposeResult(target, writtenFrames, skippedFrames)
-    }.getOrNull()
+        } finally {
+            if (!firstBitmap.isRecycled) firstBitmap.recycle()
+            encoder.close()
+        }
+        }
+        GifComposeResult(published, writtenFrames, skippedFrames)
+    } finally { encoder.close() }
 }
 
 private fun inferImageExtension(context: Context, input: PickedInput, sourceName: String): String {
@@ -2815,7 +2874,6 @@ private fun inferImageExtension(context: Context, input: PickedInput, sourceName
 private fun applyOrderedDither(source: Bitmap): Bitmap {
     val width = source.width
     val height = source.height
-    val out = createBitmap(width, height)
     val matrix = arrayOf(
         intArrayOf(0, 8, 2, 10),
         intArrayOf(12, 4, 14, 6),
@@ -2826,6 +2884,7 @@ private fun applyOrderedDither(source: Bitmap): Bitmap {
     val outPixels = IntArray(width * height)
     source.getPixels(srcPixels, 0, width, 0, 0, width, height)
     for (y in 0 until height) {
+        checkToolCancellation()
         for (x in 0 until width) {
             val index = y * width + x
             val color = srcPixels[index]
@@ -2840,7 +2899,10 @@ private fun applyOrderedDither(source: Bitmap): Bitmap {
             outPixels[index] = android.graphics.Color.argb(a, nr, ng, nb)
         }
     }
-    out.setPixels(outPixels, 0, width, 0, 0, width, height)
+    val out = createBitmap(width, height)
+    try {
+        out.setPixels(outPixels, 0, width, 0, 0, width, height)
+    } catch (e: Throwable) { out.recycle(); throw e }
     return out
 }
 
@@ -2851,40 +2913,23 @@ private fun normalizeGifFrame(
     mode: GifComposeScaleMode
 ): Bitmap {
     if (source.width == targetWidth && source.height == targetHeight) return source
-    return when (mode) {
-        GifComposeScaleMode.STRETCH -> source.scale(targetWidth, targetHeight)
-        GifComposeScaleMode.FIT_LETTERBOX -> {
-            val scale = min(
-                targetWidth.toFloat() / source.width.toFloat(),
-                targetHeight.toFloat() / source.height.toFloat()
-            )
-            val drawW = max(1, (source.width * scale).roundToInt())
-            val drawH = max(1, (source.height * scale).roundToInt())
-            val scaled = source.scale(drawW, drawH)
-            val out = createBitmap(targetWidth, targetHeight)
-            val canvas = Canvas(out)
-            canvas.drawColor(android.graphics.Color.BLACK)
-            val left = ((targetWidth - drawW) / 2f)
-            val top = ((targetHeight - drawH) / 2f)
-            canvas.drawBitmap(scaled, left, top, Paint(Paint.FILTER_BITMAP_FLAG))
-            if (scaled !== source && !scaled.isRecycled) scaled.recycle()
-            out
-        }
-        GifComposeScaleMode.CENTER_CROP -> {
-            val scale = max(
-                targetWidth.toFloat() / source.width.toFloat(),
-                targetHeight.toFloat() / source.height.toFloat()
-            )
-            val drawW = max(1, (source.width * scale).roundToInt())
-            val drawH = max(1, (source.height * scale).roundToInt())
-            val scaled = source.scale(drawW, drawH)
-            val x = ((drawW - targetWidth) / 2).coerceAtLeast(0)
-            val y = ((drawH - targetHeight) / 2).coerceAtLeast(0)
-            val out = Bitmap.createBitmap(scaled, x, y, targetWidth.coerceAtMost(scaled.width), targetHeight.coerceAtMost(scaled.height))
-            if (scaled !== source && !scaled.isRecycled) scaled.recycle()
-            out
-        }
-    }
+    checkToolCancellation()
+    requireImageBudget(targetWidth, targetHeight)
+    val out = createBitmap(targetWidth, targetHeight)
+    try {
+        val canvas = Canvas(out)
+        val scaleX = targetWidth.toFloat() / source.width
+        val scaleY = targetHeight.toFloat() / source.height
+        val scale = if (mode == GifComposeScaleMode.CENTER_CROP) max(scaleX, scaleY) else min(scaleX, scaleY)
+        val drawW = if (mode == GifComposeScaleMode.STRETCH) targetWidth.toFloat() else source.width * scale
+        val drawH = if (mode == GifComposeScaleMode.STRETCH) targetHeight.toFloat() else source.height * scale
+        if (mode == GifComposeScaleMode.FIT_LETTERBOX) canvas.drawColor(android.graphics.Color.BLACK)
+        val left = (targetWidth - drawW) / 2f
+        val top = (targetHeight - drawH) / 2f
+        // Canvas clips to the target: no huge intermediate bitmap for extreme aspect ratios.
+        canvas.drawBitmap(source, null, android.graphics.RectF(left, top, left + drawW, top + drawH), Paint(Paint.FILTER_BITMAP_FLAG))
+        return out
+    } catch (e: Throwable) { out.recycle(); throw e }
 }
 
 private fun <T> List<T>.move(fromIndex: Int, toIndex: Int): List<T> {
@@ -3047,35 +3092,39 @@ private fun decomposeGifToFrames(
     format: ExportFormat,
     quality: Int
 ): List<File> {
+    checkToolCancellation()
+    readImageSize(context, input)?.let { requireImageBudget(it.width, it.height) }
     val bytes = readBytesFromInput(context, input) ?: return emptyList()
     val decoder = StandardGifDecoder(DefaultGifBitmapProvider)
-    return runCatching {
+    val outputs = mutableListOf<File>()
+    try {
         val status = decoder.read(bytes)
         if (status != GifDecoder.STATUS_OK && status != GifDecoder.STATUS_PARTIAL_DECODE) {
-            return@runCatching emptyList()
+            return emptyList()
         }
         val frameCount = decoder.frameCount
-        if (frameCount <= 0) return@runCatching emptyList()
+        if (frameCount <= 0) return emptyList()
 
         val baseName = sanitizeFileName(
             inputDisplayName(context, input)?.substringBeforeLast('.') ?: "gif"
         )
         val frameDir = File(outputDir, "${baseName}_frames_${System.currentTimeMillis()}").apply { mkdirs() }
-        buildList {
             for (index in 0 until frameCount) {
+                checkToolCancellation()
                 decoder.advance()
                 val frame = decoder.nextFrame ?: continue
                 try {
                     val file = File(frameDir, "${baseName}_${(index + 1).toString().padStart(3, '0')}.${format.extension}")
-                    writeBitmapToFile(frame, file, format, quality)
-                    add(file)
+                    outputs += writeBitmapToFile(frame, file, format, quality)
                 } finally {
                     frame.recycle()
                 }
             }
-        }
-    }.getOrElse { emptyList() }
-        .also { decoder.clear() }
+        return outputs
+    } catch (e: Throwable) {
+        outputs.forEach { it.delete() }
+        throw e
+    } finally { decoder.clear() }
 }
 
 private fun cropImageWithPreset(
@@ -3104,8 +3153,7 @@ private fun cropImageWithPreset(
             val baseName = sanitizeFileName(inputDisplayName(context, input)?.substringBeforeLast('.') ?: "crop")
             val target = File(outputDir, "${baseName}_${preset.replace(':', 'x')}.${format.extension}")
             try {
-                writeBitmapToFile(cropped, target, format, quality)
-                return target
+                return writeBitmapToFile(cropped, target, format, quality)
             } finally {
                 cropped.recycle()
                 bitmap.recycle()
@@ -3130,23 +3178,22 @@ private fun cropImageWithPreset(
     val baseName = sanitizeFileName(inputDisplayName(context, input)?.substringBeforeLast('.') ?: "crop")
     val target = File(outputDir, "${baseName}_${preset.replace(':', 'x')}.${format.extension}")
     try {
-        writeBitmapToFile(cropped, target, format, quality)
-        return target
+        return writeBitmapToFile(cropped, target, format, quality)
     } finally {
         cropped.recycle()
         bitmap.recycle()
     }
 }
 
-private fun writeBitmapToFile(bitmap: Bitmap, target: File, format: ExportFormat, quality: Int) {
+private fun writeBitmapToFile(bitmap: Bitmap, target: File, format: ExportFormat, quality: Int): File {
     target.parentFile?.mkdirs()
     val outputBitmap = if (format == ExportFormat.JPG && bitmap.hasAlpha()) bitmap.withWhiteBackground() else bitmap
     try {
-        FileOutputStream(target).use { out ->
+        return publishToolOutput(target) { temporary -> FileOutputStream(temporary).use { out ->
             check(outputBitmap.compress(resolveCompressFormat(format), quality.coerceIn(1, 100), out)) {
                 "图片写出失败：${target.name}"
             }
-        }
+        } }
     } finally {
         if (outputBitmap !== bitmap) outputBitmap.recycle()
     }

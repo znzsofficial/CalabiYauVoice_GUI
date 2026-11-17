@@ -216,7 +216,7 @@ internal fun ExtractionDropsScreen(
                         item("loading") { Text("正在读取该来源的物品…") }
                     }
                     source?.containerId != null && containers.error != null -> item("error") {
-                        Text("物品列表加载失败，请重试。", color = MaterialTheme.colorScheme.error)
+                        Text("物品列表加载失败", color = MaterialTheme.colorScheme.error)
                         TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试") }
                     }
                     catalog.error != null -> item("error") {

@@ -83,24 +83,15 @@ Parser robustness checklist:
 Typical API flow:
 
 ```kotlin
-object ExampleApi {
-    init { MemoryCacheRegistry.register("ExampleApi", ::clearMemoryCache) }
+object ExampleApi : CachedWikiApi<ExamplePage>("ExampleApi") {
+    override suspend fun fetchFromCache(): ApiResult<ExamplePage> =
+        ioApiCall("读取缓存失败") { parseSource(ExampleSource.readCache()) }
 
-    private var cachedPage: ExamplePage? = null
+    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<ExamplePage> =
+        ioApiCall("获取资料失败") { parseSource(ExampleSource.fetch(forceRefresh)) }
 
-    fun clearMemoryCache() { cachedPage = null }
-
-    suspend fun fetch(
-        forceRefresh: Boolean = false,
-        cacheOnly: Boolean = false,
-        allowMemoryCache: Boolean = true
-    ): ApiResult<ExamplePage> {
-        if (!forceRefresh && allowMemoryCache) cachedPage?.let { return ApiResult.Success(it) }
-        if (cacheOnly) return fetchFromCache()
-        return fetchFromNetwork(forceRefresh).also {
-            if (it is ApiResult.Success) cachedPage = it.value
-        }
-    }
+    // parseSource preserves offline metadata and rejects incomplete source documents.
+    // Source validates content before disk publication; see BeginnerGuideRemoteSource.
 }
 ```
 

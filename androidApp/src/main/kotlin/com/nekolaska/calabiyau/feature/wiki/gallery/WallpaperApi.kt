@@ -42,7 +42,7 @@ object WallpaperApi {
      * 获取一张随机壁纸的 URL。
      * 优先使用 AppPrefs 中持久化的 URL，仅在无缓存或强制刷新时重新获取。
      */
-    fun fetchRandomWallpaperUrl(forceRefresh: Boolean = false): String? {
+    suspend fun fetchRandomWallpaperUrl(forceRefresh: Boolean = false): String? {
         return ensureWallpaperUrl(forceRefresh)
     }
 
@@ -50,7 +50,7 @@ object WallpaperApi {
      * 确保存在可用的壁纸 URL。
      * 非强制刷新时优先返回持久化缓存；请求失败时不清空旧缓存。
      */
-    fun ensureWallpaperUrl(forceRefresh: Boolean = false): String? {
+    suspend fun ensureWallpaperUrl(forceRefresh: Boolean = false): String? {
         // 非强制刷新时，优先返回持久化缓存
         if (!forceRefresh) {
             val cached = AppPrefs.wallpaperUrl
@@ -73,7 +73,8 @@ object WallpaperApi {
                 hasRefreshedThisSession = true
             }
             url ?: AppPrefs.wallpaperUrl
-        } catch (_: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) {
             AppPrefs.wallpaperUrl
         }
     }
@@ -82,7 +83,7 @@ object WallpaperApi {
      * 从壁纸页面的 wikitext 中提取所有壁纸文件名。
      * 匹配 [[文件:壁纸-xxx.jpg]] 和 <gallery> 中的 文件:壁纸-xxx.jpg 格式。
      */
-    private fun fetchWallpaperFileNames(): List<String> {
+    private suspend fun fetchWallpaperFileNames(): List<String> {
         val cacheFile = cacheFile(WALLPAPER_FILE_LIST_KEY)
         val url = buildParseUrl(API, "壁纸", "wikitext")
         val body = WikiEngine.safeGet(url)?.also { cacheFile?.writeTextSafely(it) }
@@ -118,7 +119,7 @@ object WallpaperApi {
         return fileNames.toList()
     }
 
-    private fun fetchImageUrl(fileName: String, forceRefresh: Boolean): String? {
+    private suspend fun fetchImageUrl(fileName: String, forceRefresh: Boolean): String? {
         return try {
             val cacheFile = cacheFile("wallpaper_image_url_$fileName")
             val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
@@ -133,7 +134,8 @@ object WallpaperApi {
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
                 ?.let { it as? JsonArray }
                 ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
-        } catch (_: Exception) { null }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { null }
     }
 
     private fun cacheFile(key: String): File? {

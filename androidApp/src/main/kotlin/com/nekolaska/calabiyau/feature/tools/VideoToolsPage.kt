@@ -139,8 +139,8 @@ internal fun VideoToolsPage(
     }
 
     fun runBilibiliMux() {
-        val video = biliVideoInput ?: run { showSnack("请先选择 video.m4s"); return }
-        val audioTrack = biliAudioInput ?: run { showSnack("请先选择 audio.m4s"); return }
+        val video = biliVideoInput ?: run { showSnack("尚未选择 video.m4s"); return }
+        val audioTrack = biliAudioInput ?: run { showSnack("尚未选择 audio.m4s"); return }
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "合成失败"
@@ -153,7 +153,7 @@ internal fun VideoToolsPage(
     }
 
     fun runMediaSplit() {
-        val input = splitInput ?: run { showSnack("请先选择要拆分的视频"); return }
+        val input = splitInput ?: run { showSnack("尚未选择视频"); return }
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "拆分失败"
@@ -167,7 +167,7 @@ internal fun VideoToolsPage(
     }
 
     fun runFrameExport() {
-        val input = frameInput ?: run { showSnack("请先选择视频"); return }
+        val input = frameInput ?: run { showSnack("尚未选择视频"); return }
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "帧画面导出失败"
@@ -186,7 +186,7 @@ internal fun VideoToolsPage(
     ToolPageColumn {
         ToolCard(
             title = "提取视频帧",
-            subtitle = "从视频中截取关键画面，用于封面、缩略图或素材留存",
+            subtitle = "视频画面截图",
             icon = Icons.Outlined.Image,
             expandedByDefault = true
         ) {
@@ -266,7 +266,7 @@ internal fun VideoToolsPage(
 
         ToolCard(
             title = "B站缓存音画合成",
-            subtitle = "将 Bilibili 缓存中的视频轨和音频轨合成为可播放文件",
+            subtitle = "Bilibili 缓存音视频合成",
             icon = Icons.Outlined.VideoFile,
             expandedByDefault = false
         ) {
@@ -323,7 +323,7 @@ internal fun VideoToolsPage(
 
         ToolCard(
             title = "音视频拆分",
-            subtitle = "从视频文件中提取独立的视频轨和音频轨",
+            subtitle = "音视频轨道分离",
             icon = Icons.Outlined.VideoFile
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -29,7 +29,7 @@ internal class ExtractionContainersApi(
         val result = ExtractionContainerParser.parseResult(source.html)
         if (!result.canCache) {
             WikiParseLogger.warnMalformed("ExtractionContainers", result.issues.take(8).joinToString("; "), source.html)
-            return ApiResult.Error("完整掉落表结构不完整，请重试或查看 Wiki", kind = ErrorKind.PARSE)
+            return ApiResult.Error("暂时无法显示完整掉落表", kind = ErrorKind.PARSE)
         }
         return ApiResult.Success(result.entries, isOffline = cached || source.isFromCache, cacheAgeMs = source.ageMs)
     }

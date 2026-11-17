@@ -133,6 +133,7 @@ private fun DownloaderContent(
     // 连接 SearchViewModel 的日志到 DownloadViewModel
     LaunchedEffect(Unit) {
         searchVM.onLog = { downloadVM.addLog(it) }
+        searchVM.ensureLoaded()
     }
 
     /** 根据当前搜索模式构造下载任务 */

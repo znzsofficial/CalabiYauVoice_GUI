@@ -1667,7 +1667,7 @@ private fun DeckDetailSheet(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    "点击复制，长按查看完整内容",
+                                    "点按复制，长按展开",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
                                 )

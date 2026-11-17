@@ -49,6 +49,7 @@ import com.kyant.backdrop.Backdrop
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
+import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 
 @Composable
 internal fun WikiGameplayHubScreen(
@@ -119,6 +120,9 @@ internal fun WikiGameplayHubScreen(
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
                         "玩家等级" to { onNavigateTo(WikiRoute.PlayerLevels) },
+                        "弦化" to { onNavigateTo(WikiRoute.Mechanics(MechanicsKind.STRINGIFY)) },
+                        "超弦体定位" to { onNavigateTo(WikiRoute.Mechanics(MechanicsKind.ROLES)) },
+                        "弦能增幅网络" to { onNavigateTo(WikiRoute.Mechanics(MechanicsKind.AUGMENTATION)) },
                         "互动道具" to { onNavigateTo(WikiRoute.InteractionItems) }
                     ),
                     backdrop = backdrop
@@ -267,11 +271,13 @@ internal fun WikiExtensionHubScreen(
                     icon = Icons.Outlined.Tune,
                     items = listOf(
                         "游戏设置（PC）" to "游戏设置PC端",
+                        "新人入坑指南" to "新人入坑指南",
                         "游戏Tips" to "游戏Tips"
                     ),
                     onOpenWikiUrl = onOpenWikiUrl,
                     nativePages = mapOf(
                         "游戏设置（PC）" to { onNavigateTo(WikiRoute.PcGameSettings) },
+                        "新人入坑指南" to { onNavigateTo(WikiRoute.BeginnerGuide) },
                         "游戏Tips" to { onNavigateTo(WikiRoute.GameTips) }
                     ),
                     backdrop = backdrop

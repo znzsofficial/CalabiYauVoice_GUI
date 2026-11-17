@@ -24,7 +24,7 @@ object VotingApi {
     suspend fun fetchVoteData(config: PollConfig): ApiResult<VoteState> = ioApiCall("获取投票数据失败") {
         val cookies = VotingRemoteSource.getWikiCookies()
         if (cookies.isNullOrBlank()) {
-            return@ioApiCall ApiResult.Error("未检测到登录 Cookie，请先在 Wiki 页面登录")
+            return@ioApiCall ApiResult.Error("登录 Wiki 后可投票")
         }
 
         val pollTexts = config.candidates.map { candidate ->

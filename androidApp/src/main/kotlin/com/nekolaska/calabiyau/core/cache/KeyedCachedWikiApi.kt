@@ -53,7 +53,7 @@ abstract class KeyedCachedWikiApi<K, T>(private val name: String) {
     }
 
     protected open suspend fun fetchFromCache(key: K): ApiResult<T> =
-        ApiResult.Error("$name 不支持 cacheOnly")
+        ApiResult.Error("暂无离线资料")
 
     protected abstract suspend fun fetchFromNetwork(key: K, forceRefresh: Boolean): ApiResult<T>
 

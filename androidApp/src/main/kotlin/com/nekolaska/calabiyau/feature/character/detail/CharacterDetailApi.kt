@@ -196,6 +196,17 @@ object CharacterDetailApi {
                 // 从渲染 HTML 解析改动历史
                 val history = if (html != null) parseUpdateHistory(html) else emptyList()
                 val detail = baseDetail.copy(
+                    avatarUrl = fetchAvatarUrl(characterName),
+                    skills = run {
+                        val numbers = mapOf("Q" to 1, "P" to 2, "X" to 3, "E" to 4)
+                        val files = baseDetail.skills.map { "${characterName}技能${numbers[it.slot] ?: 1}.png" }
+                        val urls = fetchImageUrls(files)
+                        baseDetail.skills.mapIndexed { i, skill -> skill.copy(iconUrl = urls[files[i]]) }
+                    },
+                    stories = run {
+                        val urls = fetchImageUrls(baseDetail.stories.map { it.imageFileName })
+                        baseDetail.stories.map { it.copy(imageUrl = urls[it.imageFileName]) }
+                    },
                     portraitUrl = html?.let { parseFirstCostumePortraitUrl(characterName, it) }
                 )
 
@@ -283,7 +294,7 @@ object CharacterDetailApi {
         val navContent = extractTemplate(wikitext, "页顶导航")
         val subPages = if (navContent != null) parseSubPages(navContent) else emptyList()
 
-        val avatarUrl = fetchAvatarUrl(name)
+        val avatarUrl: String? = null
         val skills = parseSkills(name, wikitext, isCrystal, html)
         val augmentationModes = parseAugmentationModes(wikitext, html)
         val stories = parseStories(wikitext)
@@ -416,7 +427,6 @@ object CharacterDetailApi {
     ): List<SkillInfo> {
         var skills: List<SkillInfo>
         // 技能图片编号映射：超弦体 Q=1,P=2,X=3,E=4；晶源体 Q=1,X=3
-        val slotToNum = mapOf("Q" to 1, "P" to 2, "X" to 3, "E" to 4)
 
         if (isCrystal) {
             val skillTemplate = extractTemplate(wikitext, "晶源体技能") ?: return emptyList()
@@ -470,11 +480,7 @@ object CharacterDetailApi {
 
         // 批量获取技能图片 URL：{characterName}技能{N}.png
         if (skills.isEmpty()) return skills
-        val fileNames = skills.map { "${characterName}技能${slotToNum[it.slot] ?: 1}.png" }
-        val imageUrls = fetchImageUrls(fileNames)
-        return skills.mapIndexed { i, skill ->
-            skill.copy(iconUrl = imageUrls[fileNames[i]])
-        }
+        return skills
     }
 
     private fun parseRenderedSkillFallback(characterName: String, html: String): List<SkillInfo> {
@@ -772,12 +778,6 @@ object CharacterDetailApi {
         parseSection(relatedSection, "相关剧情")
 
         // 批量获取封面图 URL
-        if (entries.isNotEmpty()) {
-            val imageUrls = fetchImageUrls(entries.map { it.imageFileName })
-            return entries.map { entry ->
-                entry.copy(imageUrl = imageUrls[entry.imageFileName])
-            }
-        }
         return entries
     }
 
@@ -792,7 +792,7 @@ object CharacterDetailApi {
     }
 
     /** 批量获取图片 URL（最多 50 个） */
-    private fun fetchImageUrls(fileNames: List<String>): Map<String, String> {
+    private suspend fun fetchImageUrls(fileNames: List<String>): Map<String, String> {
         val result = mutableMapOf<String, String>()
         try {
             val titles = fileNames.joinToString("|") { "文件:$it" }
@@ -826,7 +826,8 @@ object CharacterDetailApi {
                         result[from.removePrefix("文件:")] = targetUrl
                     }
                 }
-        } catch (_: Exception) { }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { }
         return result
     }
 
@@ -942,7 +943,7 @@ object CharacterDetailApi {
     /**
      * 获取角色头像 URL。
      */
-    private fun fetchAvatarUrl(characterName: String): String? {
+    private suspend fun fetchAvatarUrl(characterName: String): String? {
         return try {
             val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:${characterName}头像.png", "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return null
@@ -951,7 +952,8 @@ object CharacterDetailApi {
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
                 ?.let { it as? JsonArray }
                 ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) {
             null
         }
     }

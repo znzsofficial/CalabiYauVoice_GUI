@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
+import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 
 /** 子页面路由（替代上帝变量状态的路由密封接口） */
 sealed interface WikiRoute {
@@ -36,6 +37,8 @@ sealed interface WikiRoute {
     data object MeowLanguage : WikiRoute
     data object GameTips : WikiRoute
     data object PcGameSettings : WikiRoute
+    data object BeginnerGuide : WikiRoute
+    data class Mechanics(val kind: MechanicsKind) : WikiRoute
     data object Baseplates : WikiRoute
     data object PersonalCards : WikiRoute
     data object Encasings : WikiRoute

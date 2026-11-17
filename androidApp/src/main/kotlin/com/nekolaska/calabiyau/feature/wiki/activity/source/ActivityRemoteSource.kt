@@ -65,7 +65,7 @@ object ActivityRemoteSource {
         return result?.payload?.takeIf { it.isNotBlank() }
     }
 
-    private fun fetchHighResImageUrlFromDetailPage(detailPageTitle: String): String? {
+    private suspend fun fetchHighResImageUrlFromDetailPage(detailPageTitle: String): String? {
         val detailUrl = buildParseUrl(API, detailPageTitle, "text")
         val detailJson = WikiEngine.safeGet(detailUrl) ?: return null
         val detailHtml = SharedJson.parseToJsonElement(detailJson).jsonObject["parse"]

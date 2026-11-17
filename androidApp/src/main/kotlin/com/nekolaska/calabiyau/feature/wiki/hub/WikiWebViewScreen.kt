@@ -460,7 +460,18 @@ fun WikiWebViewScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var webViewGeneration by remember(initialUrl) { mutableIntStateOf(0) }
     var recoveryUrl by remember(initialUrl) { mutableStateOf<String?>(null) }
-    val viewLifetime = remember { WikiWebViewLifetime<WebView>(::destroyWikiWebView) }
+    val viewLifetime = remember { WikiWebViewLifetime<WebView>(destroy = ::destroyWikiWebView, setResumed = { view, resumed ->
+        if (resumed) view.onResume() else view.onPause()
+    }) }
+    val hostLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(hostLifecycle, viewLifetime) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+            viewLifetime.setHostResumed(hostLifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+        }
+        hostLifecycle.addObserver(observer)
+        viewLifetime.setHostResumed(hostLifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+        onDispose { hostLifecycle.removeObserver(observer) }
+    }
 
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
@@ -545,8 +556,8 @@ fun WikiWebViewScreen(
         {
             snackbarScope.launch {
                 val result = snackbarHostState.showSnackbar(
-                    message = "登录完成后点击返回 Wiki 首页",
-                    actionLabel = "返回",
+                    message = "登录后可返回 Wiki 首页",
+                    actionLabel = "返回首页",
                     withDismissAction = true,
                     duration = SnackbarDuration.Indefinite
                 )
@@ -558,7 +569,7 @@ fun WikiWebViewScreen(
     }
     LaunchedEffect(showLoginHintOnOpen) {
         if (showLoginHintOnOpen) {
-            snackbarHostState.showSnackbar("请点击网页右上角通知按钮完成登录")
+            snackbarHostState.showSnackbar("点击网页右上角的通知按钮完成 Wiki 登录")
         }
     }
     // 长按图片保存
@@ -997,8 +1008,8 @@ fun WikiWebViewScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                if (blockedNavigationUrl != null) "为保护登录信息，内置 Wiki 不加载此外站页面或提交表单。请返回 Wiki，或在系统浏览器中打开原地址。"
-                                else "无法加载页面，请检查网络连接后重试",
+                                if (blockedNavigationUrl != null) "此外站页面需在系统浏览器中打开"
+                                else "网页加载失败",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -1907,7 +1918,7 @@ private fun createWikiWebView(
                             (request.method !in setOf("GET", "HEAD") || !isAllowedWebViewUrl(request.url.toString()))) {
                             mainHandler.post {
                                 if (lifetime.isPopup(tempWebView) && lifetime.isMain(parentWebView)) {
-                                    showSnack("此弹窗操作请在当前页面或系统浏览器中完成")
+                                    showSnack("此弹窗无法在内置浏览器中打开")
                                     lifetime.closePopup(tempWebView)
                                 }
                             }

@@ -212,7 +212,7 @@ private fun VotingContent(
                         listOf(
                             "本投票不设置结束时间和票数限制",
                             "投票的时装会随游戏更新增加",
-                            "可以同时投给多个时装且投票可重新提交"
+                            "可多选，也可重新提交"
                         ).forEach { hint ->
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -264,7 +264,7 @@ private fun VotingContent(
                                 )
                             }
                             Text(
-                                "请先在 Wiki 页面登录后再投票",
+                                "登录 Wiki 后可投票",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )

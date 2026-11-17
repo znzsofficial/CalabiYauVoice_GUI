@@ -119,7 +119,7 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
         withContext(Dispatchers.IO) {
             val cookies = BioDeckShareRemoteSource.getWikiCookies()
             if (cookies.isNullOrBlank()) {
-                return@withContext ApiResult.Error("未检测到登录状态，请先在 Wiki 中登录", kind = ErrorKind.NOT_FOUND)
+                return@withContext ApiResult.Error("登录 Wiki 后可发布卡组", kind = ErrorKind.NOT_FOUND)
             }
 
             try {

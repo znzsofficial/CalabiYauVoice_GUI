@@ -50,6 +50,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlin.time.Duration.Companion.milliseconds
 
 // ════════════════════════════════════════════════════════
@@ -128,17 +129,17 @@ fun ErrorState(
         ErrorKind.NETWORK -> "无法连接网络"
         ErrorKind.TIMEOUT -> "请求超时"
         ErrorKind.CDN_BLOCKED -> "访问被拦截"
-        ErrorKind.PARSE -> "数据解析失败"
+        ErrorKind.PARSE -> "资料暂时无法显示"
         ErrorKind.NOT_FOUND -> "未找到数据"
         ErrorKind.UNKNOWN -> "加载失败"
     }
     val friendlyHint = when (kind) {
-        ErrorKind.NETWORK -> "请检查网络连接后重试"
-        ErrorKind.TIMEOUT -> "服务器响应缓慢，请稍后重试"
-        ErrorKind.CDN_BLOCKED -> "请求被 CDN 拦截，请稍后重试"
-        ErrorKind.PARSE -> "数据格式异常，请稍后重试"
+        ErrorKind.NETWORK -> "网络或服务器暂时不可用"
+        ErrorKind.TIMEOUT -> "服务器响应时间过长"
+        ErrorKind.CDN_BLOCKED -> "站点暂时限制了本次访问"
+        ErrorKind.PARSE -> "暂时无法读取完整资料"
         ErrorKind.NOT_FOUND -> "没有可展示的内容"
-        ErrorKind.UNKNOWN -> "请检查网络后重试"
+        ErrorKind.UNKNOWN -> "暂时无法完成加载"
     }
 
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -244,10 +245,17 @@ class LoadState<T> internal constructor(
             error = null
             isShowingCachedPrefetch = false
 
+            try {
+            // Convert upstream cancellation into a retryable result only while this reader is active.
+            suspend fun readSafely(read: suspend () -> ApiResult<T>): ApiResult<T> = try { read() }
+                catch (e: kotlinx.coroutines.CancellationException) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    ApiResult.Error("读取已中断，请重试")
+                } catch (e: Exception) { ApiResult.Error(e.message ?: "加载失败，请重试") }
             val cachedFetch = cachedFetchRef.value
-            val networkFetch = async { fetchRef.value(forceRefresh) }
+            val networkFetch = async { readSafely { fetchRef.value(forceRefresh) } }
             if (!forceRefresh && cachedFetch != null) {
-                when (val cached = cachedFetch()) {
+                when (val cached = readSafely { cachedFetch() }) {
                     is ApiResult.Success -> {
                         if (cachedPrefetchDelayMs > 0L) delay(cachedPrefetchDelayMs.milliseconds)
                         if (currentVersion != requestVersion) return@launch
@@ -274,12 +282,15 @@ class LoadState<T> internal constructor(
                 is ApiResult.Error -> {
                     if (currentVersion != requestVersion) return@launch
                     isShowingCachedPrefetch = false
-                    if (isLoading) error = result
+                    error = result
                 }
             }
+            } finally {
             if (currentVersion == requestVersion) {
                 isLoading = false
+                isShowingCachedPrefetch = false
                 activeRequestJob = null
+            }
             }
         }
     }

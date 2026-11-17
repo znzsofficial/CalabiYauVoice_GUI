@@ -59,7 +59,7 @@ abstract class CachedWikiApi<T>(private val name: String) {
      * 需要 cacheOnly 支持的子类应覆写此方法。
      */
     protected open suspend fun fetchFromCache(): ApiResult<T> =
-        ApiResult.Error("$name 不支持 cacheOnly")
+        ApiResult.Error("暂无离线资料")
 
     protected abstract suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<T>
 

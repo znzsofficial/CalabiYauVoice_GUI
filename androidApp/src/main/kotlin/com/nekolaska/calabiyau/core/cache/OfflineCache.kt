@@ -101,7 +101,7 @@ object OfflineCache {
     )
 
     // ── 请求去重 ──
-    private val inflight = ConcurrentHashMap<String, CompletableDeferred<CacheResult?>>()
+    private val inflight = ReadSingleFlight<String, CacheResult?>()
     private val cacheLocks = ConcurrentHashMap<String, Mutex>()
     private val cacheMutationLock = Mutex()
     private val typeGenerations = ConcurrentHashMap<Type, AtomicLong>()
@@ -250,16 +250,11 @@ object OfflineCache {
         // 也避免强制刷新的 Deferred 覆盖非强制请求者正在等待的结果
         val dedupKey = if (forceRefresh) "force:${type.dir}:$key" else "${type.dir}:$key"
 
-        val deferred = CompletableDeferred<CacheResult?>()
-        val prev = inflight.putIfAbsent(dedupKey, deferred)
-        if (prev != null) {
-            return prev.await()
-        }
-
+        return inflight.run("$dedupKey:${generation(type, key)}") {
         val lockKey = "${type.dir}:$key"
         val cacheLock = cacheLocks.computeIfAbsent(lockKey) { Mutex() }
         val requestedGeneration = generation(type, key)
-        return try {
+        try {
             cacheLock.withLock {
                 val cacheGeneration = if (forceRefresh) {
                     cacheMutationLock.withLock {
@@ -273,7 +268,6 @@ object OfflineCache {
                             runCatching { validatePayload(entry.content) }.getOrDefault(false)
                         }?.let {
                             val cachedResult = it.toCacheResult()
-                            deferred.complete(cachedResult)
                             return@withLock cachedResult
                         }
                     }
@@ -293,11 +287,9 @@ object OfflineCache {
                         "cache fallback | type=${type.dir} | key=$key | ageMs=${result.ageMs}"
                     )
                 }
-                deferred.complete(result)
                 result
             }
         } catch (e: CancellationException) {
-            deferred.cancel(e)
             throw e
         } catch (e: Exception) {
             if (::appContext.isInitialized) {
@@ -307,10 +299,8 @@ object OfflineCache {
                     "exception | type=${type.dir} | key=$key | ${e::class.java.simpleName}: ${e.message.orEmpty().take(120)}"
                 )
             }
-            deferred.completeExceptionally(e)
             throw e
-        } finally {
-            inflight.remove(dedupKey, deferred)
+        }
         }
     }
 

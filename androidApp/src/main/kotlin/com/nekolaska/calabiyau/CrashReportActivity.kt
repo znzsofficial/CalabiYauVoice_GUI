@@ -153,7 +153,7 @@ private fun CrashReportScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Text(
-                text = "应用遇到了未预期错误。你可以复制崩溃日志并反馈给开发者。",
+                text = "应用意外退出。崩溃日志可复制并反馈给开发者。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

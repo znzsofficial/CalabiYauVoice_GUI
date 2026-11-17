@@ -1,5 +1,9 @@
 package com.nekolaska.calabiyau.core.navigation
 
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -71,11 +75,14 @@ internal fun MessageBoardScreen(onBack: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val copyCommentText = rememberPlainTextClipboardCopier { showSnack("已复制留言内容") }
     var showNotifications by remember { mutableStateOf(false) }
-    LaunchedEffect(state, notifications) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(state, notifications, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
         while (true) {
             state.syncIdentity()
             notifications.syncAccount()
             kotlinx.coroutines.delay(250.milliseconds)
+        }
         }
     }
     LaunchedEffect(state.userInfo?.id) {
@@ -625,7 +632,7 @@ private fun BoardComposerPanel(
             if (thread) {
                 if (state.replyTargetUnavailable) {
                     Text(
-                        "原回复目标已不可用，请先核对上次是否发送成功。",
+                        "回复对象已不可用，上次发送结果待确认。",
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )

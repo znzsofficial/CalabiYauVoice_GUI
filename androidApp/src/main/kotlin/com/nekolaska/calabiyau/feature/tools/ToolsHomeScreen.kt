@@ -103,7 +103,7 @@ fun ToolsHomeScreen(
                 AppPrefs.toolsOutputPath = path
                 showSnack("已更新默认输出目录")
             } else {
-                showSnack("所选目录不支持直接写入，请选择本机可写目录")
+                showSnack("此目录无法直接写入，需要本机可写目录")
             }
         }
     }

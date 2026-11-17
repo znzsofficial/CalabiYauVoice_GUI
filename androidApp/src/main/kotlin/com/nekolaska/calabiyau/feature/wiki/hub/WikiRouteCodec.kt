@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 import android.net.Uri
 import androidx.compose.runtime.saveable.listSaver
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
+import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 
 private const val ROUTE_SEPARATOR = "|"
 
@@ -56,6 +57,8 @@ internal fun WikiRoute.encode(): String = when (this) {
     WikiRoute.MeowLanguage -> "meowLanguage"
     WikiRoute.GameTips -> "gameTips"
     WikiRoute.PcGameSettings -> "pcGameSettings"
+    WikiRoute.BeginnerGuide -> "beginnerGuide"
+    is WikiRoute.Mechanics -> "mechanics|${kind.name}"
     WikiRoute.Baseplates -> "baseplates"
     WikiRoute.PersonalCards -> "personalCards"
     WikiRoute.Encasings -> "encasings"
@@ -130,6 +133,8 @@ internal fun decodeRoute(encoded: String): WikiRoute? {
         "meowLanguage" -> WikiRoute.MeowLanguage
         "gameTips" -> WikiRoute.GameTips
         "pcGameSettings" -> WikiRoute.PcGameSettings
+        "beginnerGuide" -> WikiRoute.BeginnerGuide
+        "mechanics" -> MechanicsKind.entries.find { it.name == parts.getOrNull(1) }?.let { WikiRoute.Mechanics(it) }
         "baseplates" -> WikiRoute.Baseplates
         "personalCards" -> WikiRoute.PersonalCards
         "encasings" -> WikiRoute.Encasings

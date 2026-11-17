@@ -23,7 +23,7 @@ object BalanceDataApi : CachedWikiApi<BalanceSettings>("BalanceDataApi") {
     }
 
     override suspend fun fetchFromCache(): ApiResult<BalanceSettings> =
-        ApiResult.Error("平衡数据不支持 cacheOnly", kind = ErrorKind.NETWORK)
+        ApiResult.Error("平衡数据暂无离线资料", kind = ErrorKind.NETWORK)
 
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<BalanceSettings> =
         withContext(Dispatchers.IO) {

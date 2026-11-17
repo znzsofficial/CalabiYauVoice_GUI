@@ -52,7 +52,7 @@ internal class BoardNotificationsState(
         syncAccount()
         val token = generation
         val cookie = cookies()
-        if (cookie.isNullOrBlank()) { clear(); error = "请先登录 Wiki 查看回复通知"; return }
+        if (cookie.isNullOrBlank()) { clear(); error = "登录 Wiki 后可查看回复通知"; return }
         if (loadedCookie != null && loadedCookie != cookie) {
             clear()
             if (loading) { error = "登录身份已变化，请稍后刷新"; return }
@@ -89,7 +89,7 @@ internal class BoardNotificationsState(
         syncAccount()
         val token = generation
         val cookie = cookies()
-        if (cookie.isNullOrBlank()) { clear(); error = "请先登录 Wiki 查看回复通知"; return }
+        if (cookie.isNullOrBlank()) { clear(); error = "登录 Wiki 后可查看回复通知"; return }
         if (loadedCookie != null && loadedCookie != cookie) { clear(); error = "登录身份已变化，请刷新"; return }
         if (loading) return
         val boundary = latestId

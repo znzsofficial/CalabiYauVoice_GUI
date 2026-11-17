@@ -6,7 +6,7 @@ import java.io.IOException
 import java.io.OutputStream
 import kotlin.math.roundToInt
 
-class AnimatedGifEncoder {
+class AnimatedGifEncoder(private val checkCancelled: () -> Unit = {}) : AutoCloseable {
     private var width = 0
     private var height = 0
     private var fixedWidth = 0
@@ -62,10 +62,10 @@ class AnimatedGifEncoder {
         sizeSet = true
     }
 
-    fun start(os: OutputStream?): Boolean {
+    fun start(os: OutputStream?, closeOnFinish: Boolean = false): Boolean {
         if (os == null) return false
         var ok = true
-        closeStream = false
+        closeStream = closeOnFinish
         out = os
         try {
             writeString("GIF89a")
@@ -79,8 +79,9 @@ class AnimatedGifEncoder {
         var ok: Boolean
         try {
             out = BufferedOutputStream(FileOutputStream(file))
-            ok = start(out)
+            ok = start(out, closeOnFinish = true)
             closeStream = true
+            if (!ok) close()
         } catch (_: IOException) {
             ok = false
         }
@@ -88,6 +89,7 @@ class AnimatedGifEncoder {
     }
 
     fun addFrame(argbPixels: IntArray?, frameWidth: Int, frameHeight: Int, x: Int = 0, y: Int = 0): Boolean {
+        checkCancelled()
         if (argbPixels == null || !started || frameWidth <= 0 || frameHeight <= 0) return false
         var ok = true
         try {
@@ -117,18 +119,28 @@ class AnimatedGifEncoder {
         try {
             out!!.write(0x3b)
             out!!.flush()
-            if (closeStream) out!!.close()
         } catch (_: IOException) {
             ok = false
+        } finally {
+            try { if (closeStream) out?.close() } catch (_: IOException) { ok = false }
         }
         transIndex = 0
         out = null
         pixels = null
         indexedPixels = null
         colorTab = null
+        transparentPixels = null
         closeStream = false
         firstFrame = true
         return ok
+    }
+
+    /** Abort without a trailer; caller decides whether to publish or delete its temporary output. */
+    override fun close() {
+        try { if (closeStream) out?.close() } finally {
+            out = null; started = false; closeStream = false; firstFrame = true
+            pixels = null; indexedPixels = null; transparentPixels = null; colorTab = null
+        }
     }
 
     private fun setFrameSize(w: Int, h: Int) {
@@ -141,7 +153,7 @@ class AnimatedGifEncoder {
         val len = sourcePixels.size
         val nPix = len / 3
         indexedPixels = ByteArray(nPix)
-        val nq = NeuQuant(sourcePixels, len, sample)
+        val nq = NeuQuant(sourcePixels, len, sample, checkCancelled)
         colorTab = nq.process()
         var i = 0
         while (i < colorTab!!.size) {
@@ -153,6 +165,7 @@ class AnimatedGifEncoder {
         }
         var k = 0
         for (pixelIndex in 0 until nPix) {
+            if (pixelIndex % 4096 == 0) checkCancelled()
             val index = nq.map(sourcePixels[k++].toInt() and 0xff, sourcePixels[k++].toInt() and 0xff, sourcePixels[k++].toInt() and 0xff)
             usedEntry[index] = true
             indexedPixels!![pixelIndex] = index.toByte()
@@ -213,6 +226,7 @@ class AnimatedGifEncoder {
         hasTransparentPixels = false
         var transparentCount = 0
         for ((index, pixel) in sourcePixels.withIndex()) {
+            if (index % 4096 == 0) checkCancelled()
             val isTransparent = (pixel ushr 24) == 0
             if (isTransparent) {
                 transparentCount++

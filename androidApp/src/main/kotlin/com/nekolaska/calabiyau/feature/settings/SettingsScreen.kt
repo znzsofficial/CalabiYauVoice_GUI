@@ -127,7 +127,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 AppPrefs.savePath = path
                 showSnack("已更新保存目录")
             } else {
-                showSnack("所选目录不支持直接写入，请选择本机可写目录")
+                showSnack("此目录无法直接写入，需要本机可写目录")
             }
         }
     }
@@ -481,14 +481,14 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val updateScope = rememberCoroutineScope()
                 var isCheckingUpdate by remember { mutableStateOf(false) }
-                var updateSubtitle by remember { mutableStateOf("点击检查新版本") }
+                var updateSubtitle by remember { mutableStateOf("检查新版本") }
                 var updateResult by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.0"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.1"
                     } catch (_: Exception) {
-                        "2.2.0"
+                        "2.2.1"
                     }
                 }
                 val currentVersionCode = remember {

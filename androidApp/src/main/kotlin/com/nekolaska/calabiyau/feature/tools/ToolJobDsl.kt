@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.asContextElement
+import kotlinx.coroutines.currentCoroutineContext
 
 /**
  * 工具页任务回调集合，避免每个任务重复传递同一组三个回调。
@@ -15,6 +17,17 @@ internal data class ToolJobCallbacks(
     val onResult: (ToolOutput) -> Unit,
     val showSnack: (String) -> Unit
 )
+
+internal data class ToolPreview<T>(val data: T? = null, val error: String? = null)
+
+internal suspend fun <T : Any> loadToolPreview(read: () -> T?): ToolPreview<T> = try {
+    val data = withContext(Dispatchers.IO + toolTaskJob.asContextElement(currentCoroutineContext()[Job])) {
+        checkToolCancellation()
+        read().also { checkToolCancellation() }
+    }
+    if (data == null) ToolPreview(error = "无法读取图片") else ToolPreview(data = data)
+} catch (e: CancellationException) { throw e }
+catch (e: Exception) { ToolPreview(error = e.message ?: "预览生成失败") }
 
 /**
  * 工具页通用执行框架：管理 busy 状态、IO 调度、错误提示。
@@ -32,7 +45,10 @@ internal fun CoroutineScope.launchToolJob(
 ): Job = launch {
     callbacks.onBusyChange(true)
     try {
-        val output = withContext(Dispatchers.IO) { block() }
+        val output = withContext(Dispatchers.IO + toolTaskJob.asContextElement(currentCoroutineContext()[Job])) {
+            checkToolCancellation()
+            block().also { checkToolCancellation() }
+        }
         callbacks.onResult(output)
         callbacks.showSnack(output.message)
         onSuccess?.invoke(output)

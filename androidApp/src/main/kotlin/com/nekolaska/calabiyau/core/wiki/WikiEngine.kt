@@ -12,10 +12,9 @@ import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.JsonObject
-import util.awaitGet
+import util.awaitGetString
 import util.awaitGetToFile
 import util.downloadResourceAtomically
-import util.executeGet
 import kotlin.time.Duration.Companion.milliseconds
 
 object WikiEngine {
@@ -61,21 +60,9 @@ object WikiEngine {
      * - 自动检测 CDN 拦截页面（返回 HTML 而非 JSON）
      * - 捕获所有异常，失败返回 null
      */
-    fun safeGet(url: String): String? {
+    suspend fun safeGet(url: String): String? {
         return try {
-            client.executeGet(url).use { response ->
-                if (!response.isSuccessful) {
-                    CalabiYauApplication.instanceOrNull?.let {
-                        CrashContextStore.recordWikiRequest(
-                            it,
-                            "WikiEngine.safeGet",
-                            url,
-                            outcome = "http=${response.code}"
-                        )
-                    }
-                    return null
-                }
-                val body = response.body.string()
+                val body = client.awaitGetString(url) ?: return null
                 val root = runCatching { SharedJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
                 if (root == null || root["error"] != null) {
                     CalabiYauApplication.instanceOrNull?.let {
@@ -89,7 +76,8 @@ object WikiEngine {
                     return null
                 }
                 body
-            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             CalabiYauApplication.instanceOrNull?.let {
                 CrashContextStore.recordWikiRequest(
@@ -173,8 +161,7 @@ object WikiEngine {
     private suspend fun fetchString(url: String, onError: ((String) -> Unit)? = null): String? = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
             try {
-                val response = client.awaitGet(url)
-                val result = response.use { if (it.isSuccessful) it.body.string() else { onError?.invoke("HTTP ${it.code}: ${it.message}"); null } }
+                val result = client.awaitGetString(url)
                 if (result != null) return@withContext result
             } catch (e: CancellationException) {
                 throw e

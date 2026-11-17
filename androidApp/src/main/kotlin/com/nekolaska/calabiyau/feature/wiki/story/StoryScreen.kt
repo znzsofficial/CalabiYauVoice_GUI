@@ -86,11 +86,25 @@ fun StoryScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(sections, key = { it.title }) { section ->
+                sections.forEach { section ->
+                    item(key = "header:${section.title}") {
                     StorySectionCard(
-                        section = section,
+                        section = section.copy(entries = emptyList()),
                         onOpenWikiUrl = onOpenWikiUrl
                     )
+                    }
+                    items(section.entries.chunked(2), key = { row -> "${section.title}:${row.joinToString { it.url }}" }) { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { entry ->
+                                if (entry.imageUrl != null) StoryImageCard(entry, Modifier.weight(1f)) { onOpenWikiUrl(entry.url) }
+                                else Surface(onClick = { onOpenWikiUrl(entry.url) }, modifier = Modifier.weight(1f),
+                                    shape = smoothCornerShape(16.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                                    Text(entry.title, Modifier.padding(16.dp), style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }

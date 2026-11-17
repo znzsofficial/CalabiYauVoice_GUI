@@ -102,7 +102,7 @@ fun CustomProfileEditDialog(
     fun submit() {
         val cookies = WikiAuthHelper.getWikiCookies()
         if (cookies.isNullOrBlank()) {
-            errorMessage = "未检测到 Wiki 登录 Cookie，请先登录"
+            errorMessage = "尚未登录 Wiki"
             return
         }
         val finalName = customName.trim().ifBlank { null }
@@ -224,7 +224,7 @@ fun CustomProfileEditDialog(
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "选图后可拖动裁切为方形",
+                            text = "方形头像，可调整裁切范围",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

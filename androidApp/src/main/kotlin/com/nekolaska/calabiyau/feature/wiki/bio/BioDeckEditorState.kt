@@ -42,7 +42,7 @@ internal class BioDeckEditorState {
     }
 
     fun importCode(cards: List<DeckCardOption>) {
-        require(selectedFaction.isNotBlank()) { "请先选择阵营" }
+        require(selectedFaction.isNotBlank()) { "尚未选择阵营" }
         val name = BioDeckShareCodecs.extractDeckNameFromShareInput(shareCodeInput)
         val (ids, _) = BioDeckShareCodecs.decodeShareCode(shareCodeInput, selectedFaction,
             cards.filter { it.cardId.isNotBlank() && it.index >= 0 }.associate { it.index to it.cardId })
@@ -64,8 +64,8 @@ internal class BioDeckEditorState {
     }
 
     fun payload(cards: List<DeckCardOption>, loggedIn: Boolean, allowMissingShareCode: Boolean): SubmitDeckPayload {
-        require(loggedIn) { "请先登录 Wiki" }
-        require(deckName.isNotBlank() && selectedFaction.isNotBlank()) { "请填写卡组名称并选择阵营" }
+        require(loggedIn) { "登录 Wiki 后可发布卡组" }
+        require(deckName.isNotBlank() && selectedFaction.isNotBlank()) { "卡组名称或阵营未填写" }
         val byId = cards.associateBy { it.cardId }
         val selected = selection(cards)
         require(selected.isNotEmpty()) { "至少需要选择 1 张卡牌" }

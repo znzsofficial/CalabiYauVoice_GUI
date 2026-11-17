@@ -118,7 +118,12 @@ class SearchViewModel : ViewModel() {
     /** 供 DownloadViewModel 追加日志 */
     var onLog: ((String) -> Unit)? = null
 
-    init {
+    private var activated = false
+
+    /** Called on first download-screen entry, not application construction. */
+    fun ensureLoaded() {
+        if (activated) return
+        activated = true
         performSearch()
         observeKeywordForAutoSearch()
     }
@@ -134,7 +139,7 @@ class SearchViewModel : ViewModel() {
     private fun observeKeywordForAutoSearch() {
         viewModelScope.launch {
             _searchKeyword
-                .drop(1)  // 跳过初始 "角色" 值（已由 init 中的 performSearch() 处理）
+                .drop(1)  // 首次激活已处理当前关键词
                 .distinctUntilChanged()
                 .debounce(300.milliseconds)
                 .collect { kw ->

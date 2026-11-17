@@ -403,7 +403,7 @@ internal fun TextToolsPage(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "拖拽平移 · 双指缩放 · 选中后左右滑动调整时间段",
+                        "拖动平移，双指缩放；选中后左右滑动调整时间段",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -783,7 +783,7 @@ private fun ExportTimelineDialog(
                     singleLine = true
                 )
                 Text(
-                    "说明：正数会让全部字幕整体后移，负数会前移；导出时会自动保证时间不小于 0。",
+                    "正数延后，负数提前；导出时间最早为 0",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

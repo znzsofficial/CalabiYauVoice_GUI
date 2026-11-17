@@ -34,7 +34,7 @@ internal class Catalog(
     private fun parse(source: WikiHtmlPageSourceResult?, cached: Boolean): ApiResult<List<ExtractionEntry>> {
         source ?: return ApiResult.Error(if (cached) "没有离线缓存" else "请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
         val result = ExtractionCatalogParsers.parseResult(source.html, kind)
-        return if (!result.canCache) ApiResult.Error("${kind.title}结构不完整，请刷新或查看 Wiki", kind = ErrorKind.PARSE)
+        return if (!result.canCache) ApiResult.Error("暂时无法显示完整${kind.title}", kind = ErrorKind.PARSE)
         else ApiResult.Success(result.entries, isOffline = cached || source.isFromCache, cacheAgeMs = source.ageMs)
     }
 }

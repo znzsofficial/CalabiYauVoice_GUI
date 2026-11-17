@@ -163,7 +163,7 @@ private fun SubmissionIntroCard(count: Int, onSubmit: () -> Unit) {
                 Icon(Icons.Outlined.UploadFile, contentDescription = null, modifier = Modifier.size(28.dp))
                 Column(Modifier.weight(1f)) {
                     Text("引航者投稿作品", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("已收录 $count 个作品，投稿表单请在 Wiki 原页完成", style = MaterialTheme.typography.bodyMedium)
+                    Text("$count 个作品 · 投稿入口在 Wiki 网页", style = MaterialTheme.typography.bodyMedium)
                 }
             }
             FilledTonalButton(onClick = onSubmit) {

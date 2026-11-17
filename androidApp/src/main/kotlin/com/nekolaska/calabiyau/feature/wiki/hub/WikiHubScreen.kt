@@ -1,5 +1,8 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
+import com.nekolaska.calabiyau.feature.wiki.beginner.BeginnerGuideScreen
+import com.nekolaska.calabiyau.feature.wiki.mechanics.MechanicsScreen
+
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -284,6 +287,7 @@ fun WikiHubScreen(
     val restoredFactions = HubListDataSnapshot.factions
     val restoredModes = HubListDataSnapshot.gameModes
     val restoredWeapons = HubListDataSnapshot.weaponCategories
+    val snapshotGeneration = HubListDataSnapshot.generation
     // 角色列表 state 提升到 Hub：从角色详情返回时数据仍非空，
     // 列表直接渲染真实卡片，共享元素动画不被骨架屏抢占
     val shouldLoadCharacterList = backStack.any {
@@ -291,41 +295,44 @@ fun WikiHubScreen(
     }
     val characterState = rememberLoadState(
         initial = restoredFactions ?: emptyList<CharacterListApi.FactionData>(),
+        key = snapshotGeneration,
         enabled = shouldLoadCharacterList,
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { CharacterListApi.fetchAllFactions(cacheOnly = true) },
-        fetch = { force -> CharacterListApi.fetchAllFactions(forceRefresh = force) },
+        fetch = { force -> HubListDataSnapshot.capture("factions",
+            { CharacterListApi.fetchAllFactions(forceRefresh = force, allowMemoryCache = false) },
+            { it.isNotEmpty() && it.all { group -> group.loadError == null } },
+            { HubListDataSnapshot.factions = it }) },
         initiallyLoaded = restoredFactions != null,
         reloadOnEnter = restoredFactions == null
     )
     val mapState = rememberLoadState(
         initial = restoredModes ?: emptyList<GameModeData>(),
+        key = snapshotGeneration,
+        enabled = backStack.any { it is WikiRoute.Home || it is WikiRoute.Maps || it is WikiRoute.GameModes || it is WikiRoute.Navigation },
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { MapListApi.fetchAllModes(cacheOnly = true) },
-        fetch = { force -> MapListApi.fetchAllModes(forceRefresh = force) },
+        fetch = { force -> HubListDataSnapshot.capture("maps",
+            { MapListApi.fetchAllModes(forceRefresh = force, allowMemoryCache = false) },
+            { it.isNotEmpty() && it.all { group -> group.loadError == null } },
+            { HubListDataSnapshot.gameModes = it }) },
         initiallyLoaded = restoredModes != null,
         reloadOnEnter = restoredModes == null
     )
     val shouldLoadWeaponList = backStack.any { it is WikiRoute.Weapons }
     val weaponState = rememberLoadState(
         initial = restoredWeapons ?: emptyList<WeaponListApi.WeaponCategoryData>(),
+        key = snapshotGeneration,
         enabled = shouldLoadWeaponList,
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { WeaponListApi.fetchAllCategories(cacheOnly = true) },
-        fetch = { force -> WeaponListApi.fetchAllCategories(forceRefresh = force) },
+        fetch = { force -> HubListDataSnapshot.capture("weapons",
+            { WeaponListApi.fetchAllCategories(forceRefresh = force, allowMemoryCache = false) },
+            { it.isNotEmpty() && it.all { group -> group.loadError == null } },
+            { HubListDataSnapshot.weaponCategories = it }) },
         initiallyLoaded = restoredWeapons != null,
         reloadOnEnter = restoredWeapons == null
     )
-    // 数据落地后写回快照，供下次 Hub 重建时恢复
-    LaunchedEffect(characterState.data) {
-        if (characterState.data.isNotEmpty()) HubListDataSnapshot.factions = characterState.data
-    }
-    LaunchedEffect(mapState.data) {
-        if (mapState.data.isNotEmpty()) HubListDataSnapshot.gameModes = mapState.data
-    }
-    LaunchedEffect(weaponState.data) {
-        if (weaponState.data.isNotEmpty()) HubListDataSnapshot.weaponCategories = weaponState.data
-    }
     val factions = characterState.data
     val isLoadingCharacters = characterState.isLoading
     val gameModes = mapState.data
@@ -716,7 +723,19 @@ fun WikiHubScreen(
             is WikiRoute.Navigation -> {
                 NavigationMenuScreen(
                     onBack = { popBackStack() },
-                    onOpenWikiUrl = onOpenWikiUrl
+                    onOpenWikiUrl = { url ->
+                        if (isCurrentPage() && !isOverlaid) {
+                            val target = nativeWikiRoute(url,
+                                characters = factions.flatMap { it.characters }.map { it.name }.toSet(),
+                                maps = gameModes.flatMap { it.maps }.map { it.name }.toSet(),
+                                weapons = HubListDataSnapshot.weaponCategories.orEmpty().flatMap { it.weapons }.map { it.name }.toSet())
+                            when (target) {
+                                null -> onOpenWikiUrl(url)
+                                is WikiRoute.MapDetail -> navigateToMapDetail(target.name, target.imageUrl)
+                                else -> navigateTo(target)
+                            }
+                        }
+                    }
                 )
             }
 
@@ -763,6 +782,15 @@ fun WikiHubScreen(
                     onBack = { popBackStack() },
                     onOpenWikiUrl = onOpenWikiUrl
                 )
+            }
+
+            is WikiRoute.BeginnerGuide -> {
+                BeginnerGuideScreen(onBack = { popBackStack() }, onOpenWikiUrl = onOpenWikiUrl)
+            }
+
+            is WikiRoute.Mechanics -> {
+                MechanicsScreen(kind = route.kind, onBack = { popBackStack() }, onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenCharacter = { name, portrait -> navigateTo(WikiRoute.CharDetail(name, portrait)) })
             }
 
             is WikiRoute.BalanceData -> {

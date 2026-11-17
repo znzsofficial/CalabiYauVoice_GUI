@@ -151,7 +151,7 @@ internal class MessageBoardState(
 
     fun togglePostingAsGuest() {
         if (posting || drafts.get(threadId).pending != null) {
-            error = "上次发送结果尚未确认，请先核对或使用原身份重试，再切换发言身份。"
+            error = "上次发送结果尚未确认，暂时无法切换身份；可核对留言或以原身份重试。"
             return
         }
         postingAsGuest = !postingAsGuest
@@ -415,7 +415,7 @@ internal class MessageBoardState(
         scope.launch {
             try {
                 if (!withContext(Dispatchers.IO) { preferences.flushDrafts() }) {
-                    error = "无法保存待发送请求，请重试"
+                    error = "待发送留言保存失败"
                     return@launch
                 }
                 when (val result = post(pending.targetBid ?: targetBid, pending, cookie, guestId)) {

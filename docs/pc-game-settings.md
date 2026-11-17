@@ -93,4 +93,4 @@ Tracked 小 fixture：`androidApp/src/test/resources/fixtures/gamesettings/pc_se
 - Source在请求内保留载荷拒绝原因；有有效旧缓存仍返回离线成功，无有效缓存时明确返回PARSE。只有没有响应且没有可用缓存才归NETWORK，不改变公共缓存层行为。
 - 小fixture `upscaling_reference.html` 覆盖真实新标题和比例表。`PC_GAME_SETTINGS_API_AUDIT_FILE` 指向真实JSON响应，验证完整取数→校验→缓存提交→API链路，核对 **34表／323设置／31推荐／4参考行**；另验证坏新响应保留好缓存、无缓存时报告PARSE。
 - 同时配置旧 `PC_GAME_SETTINGS_AUDIT_FILE` 网页快照及新API快照，PC设置／Hub专项 **35项，0 failures/errors/skips**，Android编译和Lint通过（0 errors / 5既有warnings）。构建使用排查时工作区已有的AGP9.5.1／serialization1.13.0升级；首次离线构建缺AAPT2，下载依赖后的完整检查通过。
-- 本机证据：`C:/Users/NekoLaska/AppData/Local/Temp/opencode/pc-settings-load-fix/response.json`、`api.html`。本轮只读取一次Wiki接口，回归均离线读取捕获。修复尚未发布，线上2.1.30安装包未被替换。
+- 本机证据：`C:/Users/NekoLaska/AppData/Local/Temp/opencode/pc-settings-load-fix/response.json`、`api.html`。本轮只读取一次Wiki接口，回归均离线读取捕获。修复已随 [2.2.0（61）](releases/2.2.0.md) 发布；未替换历史2.1.30安装包。

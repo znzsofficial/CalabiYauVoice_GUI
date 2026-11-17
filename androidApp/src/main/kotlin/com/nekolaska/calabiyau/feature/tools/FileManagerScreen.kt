@@ -162,7 +162,7 @@ fun FileManagerScreen(
         catch (e: Exception) {
             files = emptyList(); entries = emptyList(); metadataByPath = emptyMap()
             selectedFiles = emptySet(); isSelectionMode = false
-            loadError = e.message ?: "读取目录失败，请检查存储权限"
+            loadError = e.message ?: "无法读取目录，可能缺少存储权限"
         } finally {
             isLoading = false
         }
@@ -415,13 +415,13 @@ fun FileManagerScreen(
                                     if (isMutating || loadedDirectory != currentDir) return@FileListItem
                                     if (isSelectionMode) {
                                         // 多选模式下：点击切换选中
-                                        if (isPickerMode && entry.directory) showSnack("请选择文件，不能选择文件夹")
+                                        if (isPickerMode && entry.directory) showSnack("文件夹不能作为文件选择")
                                         else toggleSelectedPath(file.absolutePath, isSelected)
                                     } else {
                                         if (entry.directory) {
                                             currentDir = file
                                         } else if (pickerMode == FileManagerPickerMode.DIRECTORY && isPickerMode) {
-                                            showSnack("当前模式仅支持选择目录")
+                                            showSnack("当前正在选择保存目录")
                                         } else if (canPickFiles) {
                                             if (pickerConfig?.allowMultiSelect == true) {
                                                 toggleSelectedPath(file.absolutePath, isSelected)
@@ -453,7 +453,7 @@ fun FileManagerScreen(
                                             submitPickedFiles(listOf(file))
                                         }
                                     } else if (isPickerMode) {
-                                        showSnack("当前模式仅支持选择目录")
+                                        showSnack("当前正在选择保存目录")
                                     } else if (!isSelectionMode) {
                                         // 长按进入多选模式并选中当前项
                                         enterSelectionWith(file.absolutePath)
@@ -666,7 +666,7 @@ fun FileManagerScreen(
                         scope.launch {
                             try {
                                 val success = withContext(Dispatchers.IO) { deleteManagedFile(rootDir, file, ::isAndroidFileLink) }
-                                showSnack(if (success) "已删除" else "部分或全部删除失败，请检查存储权限")
+                                showSnack(if (success) "已删除" else "部分文件未能删除，可能缺少存储权限")
                             } catch (e: CancellationException) { throw e }
                             catch (e: Exception) { showSnack(e.message ?: "删除失败") }
                             finally { isMutating = false; refreshCounter++ }

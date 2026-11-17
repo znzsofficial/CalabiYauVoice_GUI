@@ -761,7 +761,7 @@ object WeaponDetailApi {
     }
 
     /** 获取图片 URL */
-    private fun fetchImageUrl(fileName: String): String? {
+    private suspend fun fetchImageUrl(fileName: String): String? {
         return try {
             val url = buildWikiUrl(API, "action" to "query", "titles" to "文件:$fileName", "prop" to "imageinfo", "iiprop" to "url", "redirects" to "1", "format" to "json")
             val body = WikiEngine.safeGet(url) ?: return null
@@ -770,7 +770,8 @@ object WeaponDetailApi {
                 ?.firstOrNull()?.jsonObject?.get("imageinfo")
                 ?.let { it as? JsonArray }
                 ?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
-        } catch (_: Exception) { null }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { null }
     }
 
     /**

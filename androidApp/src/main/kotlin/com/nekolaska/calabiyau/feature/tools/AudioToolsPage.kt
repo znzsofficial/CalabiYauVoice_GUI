@@ -287,7 +287,7 @@ internal fun AudioToolsPage(
 
     fun processCurrent(title: String, block: (PickedInput, File) -> AudioProcessOutcome) {
         val audio = currentAudio?.asset?.wav ?: run {
-            showSnack("请先导入音频文件")
+            showSnack("尚未导入音频")
             return
         }
         scope.launch {
@@ -327,7 +327,7 @@ internal fun AudioToolsPage(
     }
 
     fun exportCurrentAudio() {
-        val wav = currentAudio?.asset?.wav ?: run { showSnack("请先导入或处理音频"); return }
+        val wav = currentAudio?.asset?.wav ?: run { showSnack("暂无可导出的音频"); return }
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "导出失败"
@@ -505,9 +505,9 @@ internal fun AudioToolsPage(
                         }
                         Text(
                             if (wav.spectrogramBitmap == null) {
-                                "频谱图后台生成中 · 拖拽与缩放仍可正常使用"
+                                "频谱图生成中，仍可拖动和缩放"
                             } else {
-                                "拖拽平移 · 双指缩放 · 点击定位播放头"
+                                "拖动平移，双指缩放，点按定位"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -945,7 +945,7 @@ private fun SpectrogramSettingsPanel(
                 Icon(Icons.Outlined.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Column(modifier = Modifier.weight(1f)) {
                     Text("频谱图设置", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Text("调整 FFT 窗长、步进和配色，点击重绘后生效", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("参数修改在重绘后生效", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Switch(checked = autoTuning, onCheckedChange = onAutoTuningChange)
@@ -999,7 +999,7 @@ private fun SpectrogramSettingsPanel(
                 onValueChange = onCutoffHzChange,
                 label = { Text("截止频率 Hz") },
                 modifier = Modifier.fillMaxWidth(),
-                supportingText = { Text("填 0 表示自动使用当前音频的 Nyquist 频率") },
+                supportingText = { Text("0 = 自动（采样率的一半）") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = smoothCornerShape(16.dp)
             )
@@ -1091,12 +1091,12 @@ private fun EmptyAudioPreview() {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Text(
-                text = "导入音频后即可预览",
+                text = "尚未导入音频",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "导入音频文件后即可预览波形图与频谱图\n非 WAV 音频的处理结果将默认保存为 WAV 格式",
+                text = "波形与频谱预览\n处理结果默认导出为 WAV",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center

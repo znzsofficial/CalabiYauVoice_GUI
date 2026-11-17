@@ -22,7 +22,7 @@ package com.nekolaska.calabiyau.core.media.gif
 */
 
 // Ported to Java 12/00 K Weiner
-internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
+internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int, private val checkCancelled: () -> Unit = {}) {
     protected var alphadec: Int = 0 /* biased by 10 bits */
 
     /*
@@ -203,6 +203,7 @@ internal class NeuQuant(thepic: ByteArray, len: Int, sample: Int) {
 
         i = 0
         while (i < samplepixels) {
+            if (i % 1024 == 0) checkCancelled()
             b = (p[pix + 0].toInt() and 0xff) shl netbiasshift
             g = (p[pix + 1].toInt() and 0xff) shl netbiasshift
             r = (p[pix + 2].toInt() and 0xff) shl netbiasshift

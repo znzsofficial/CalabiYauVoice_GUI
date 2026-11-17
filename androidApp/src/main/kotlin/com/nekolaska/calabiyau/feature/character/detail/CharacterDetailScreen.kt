@@ -999,7 +999,7 @@ private fun SettingExtraCard(detail: CharacterDetail) {
             )
             detail.settingLoadError?.let {
                 Spacer(Modifier.height(12.dp))
-                Text("$it，可通过顶部刷新重试。", style = MaterialTheme.typography.bodyMedium,
+                Text(it, style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error)
             }
             Spacer(Modifier.height(8.dp))

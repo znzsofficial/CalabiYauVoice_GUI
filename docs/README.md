@@ -12,6 +12,9 @@
 - [工具回退与 Tab 背景巡检](tools-mesh-tab-surfaces.md)：工具视觉回退、生化壁纸遮挡与页签底色。
 - [Android Wiki 页面与复用组件](android-wiki-ui-architecture.md)：统一弹层、选择／保存／分区状态、推进懒网格及生化／投票／平衡业务编排。
 - [PC 游戏设置资料](pc-game-settings.md)：游戏延伸中的实用指南、设置表解析、推荐与默认值边界。
+- [新人入坑指南](beginner-guide.md)：原生章节、版本/配置资料、下载链接与完整性校验。
+- [玩法系统原生页与完整导航](native-mechanics-pages.md)：弦化、角色定位、增幅网络及明确文章链接的原生分流。
+- [Android 架构审查修复](android-architecture-fixes.md)：请求取消、快照失效、图片输出/GIF收尾、内存预算及生命周期。
 - [玩家装饰图鉴](player-decoration-catalogs.md)：休息室手办与个性名片的原生解析、图片及获取方式。
 - [Android 导航与页面状态](android-navigation-followup.md)：主导航状态恢复、预取与玻璃开销、筛选草稿、渐变和网页请求限速。
 - [弦溯战线简介与图鉴](extraction-mode-implementation.md)：模式简介、外观与图鉴中的三个原生入口、专用骨架及完整快照回归。
@@ -28,6 +31,7 @@
 
 ## 发布与维护
 
+- [2.2.1 发布记录](releases/2.2.1.md)：四个原生资料页、架构审查修复和全局文案优化。
 - [2.2.0 发布记录](releases/2.2.0.md)：Android UI 与三个工具页打磨、Wiki 骨架补齐、PC 设置加载修复及文案优化。
 - [2.1.30 发布记录](releases/2.1.30.md)：PC 设置原生页、玩家装饰主源与展示重构、掉落交互及导航维护。
 - [2.1.29 发布记录](releases/2.1.29.md)：搜打撤新版适配、列表健壮性与角色补充设定完善。
