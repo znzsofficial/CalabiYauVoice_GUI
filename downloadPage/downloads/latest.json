@@ -1,20 +1,27 @@
 {
     "versionName": "2.2.1",
     "versionCode": 62,
-    "apkUrl": "/downloads/CalabiYauVoice-2.2.1.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.2.1.apk?build=91e15b659ac546cd",
+    "apkSize": 3949490,
     "releaseUrl": "/",
     "changelog": [
-        "新增新人入坑指南原生页，支持版本选择、下载安装和配置资料阅读",
-        "弦化、超弦体定位与弦能增幅网络改为原生页面，支持章节切换、离线阅读和角色跳转",
-        "完整导航优先打开已支持的原生页面，新增指南与玩法搜索入口",
-        "修复快速切页后持续加载、离线或不完整列表长期滞留，以及清缓存后旧数据回填的问题",
-        "修复图片导出覆盖同名文件，完善 GIF 取消与失败清理，优化大图预览和拼图内存控制",
-        "资源搜索改为按需加载，优化网络取消、后台页面生命周期与剧情列表滚动",
-        "精简登录、工具和图鉴文案，明确 Wiki 通知按钮登录入口，减少重复说明与分隔符"
+        "\u65b0\u589e\u65b0\u4eba\u5165\u5751\u6307\u5357\u539f\u751f\u9875\uff0c\u652f\u6301\u7248\u672c\u9009\u62e9\u3001\u4e0b\u8f7d\u5b89\u88c5\u548c\u914d\u7f6e\u8d44\u6599\u9605\u8bfb",
+        "\u5f26\u5316\u3001\u8d85\u5f26\u4f53\u5b9a\u4f4d\u4e0e\u5f26\u80fd\u589e\u5e45\u7f51\u7edc\u6539\u4e3a\u539f\u751f\u9875\u9762\uff0c\u652f\u6301\u7ae0\u8282\u5207\u6362\u3001\u79bb\u7ebf\u9605\u8bfb\u548c\u89d2\u8272\u8df3\u8f6c",
+        "\u5b8c\u6574\u5bfc\u822a\u4f18\u5148\u6253\u5f00\u5df2\u652f\u6301\u7684\u539f\u751f\u9875\u9762\uff0c\u65b0\u589e\u6307\u5357\u4e0e\u73a9\u6cd5\u641c\u7d22\u5165\u53e3",
+        "\u4fee\u590d\u5feb\u901f\u5207\u9875\u540e\u6301\u7eed\u52a0\u8f7d\u3001\u79bb\u7ebf\u6216\u4e0d\u5b8c\u6574\u5217\u8868\u957f\u671f\u6ede\u7559\uff0c\u4ee5\u53ca\u6e05\u7f13\u5b58\u540e\u65e7\u6570\u636e\u56de\u586b\u7684\u95ee\u9898",
+        "\u4fee\u590d\u56fe\u7247\u5bfc\u51fa\u8986\u76d6\u540c\u540d\u6587\u4ef6\uff0c\u5b8c\u5584 GIF \u53d6\u6d88\u4e0e\u5931\u8d25\u6e05\u7406\uff0c\u4f18\u5316\u5927\u56fe\u9884\u89c8\u548c\u62fc\u56fe\u5185\u5b58\u63a7\u5236",
+        "\u8d44\u6e90\u641c\u7d22\u6539\u4e3a\u6309\u9700\u52a0\u8f7d\uff0c\u4f18\u5316\u7f51\u7edc\u53d6\u6d88\u3001\u540e\u53f0\u9875\u9762\u751f\u547d\u5468\u671f\u4e0e\u5267\u60c5\u5217\u8868\u6eda\u52a8",
+        "\u7cbe\u7b80\u767b\u5f55\u3001\u5de5\u5177\u548c\u56fe\u9274\u6587\u6848\uff0c\u660e\u786e Wiki \u901a\u77e5\u6309\u94ae\u767b\u5f55\u5165\u53e3\uff0c\u51cf\u5c11\u91cd\u590d\u8bf4\u660e\u4e0e\u5206\u9694\u7b26"
     ],
     "publishedAt": "2026-11-17",
     "releases": [
+        {
+            "versionName": "2.2.1",
+            "versionCode": 62,
+            "apkUrl": "/downloads/CalabiYauVoice-2.2.1.apk?build=91e15b659ac546cd",
+            "apkSize": 3949490,
+            "publishedAt": "2026-11-17"
+        },
         {
             "versionName": "2.2.0",
             "versionCode": 61,
