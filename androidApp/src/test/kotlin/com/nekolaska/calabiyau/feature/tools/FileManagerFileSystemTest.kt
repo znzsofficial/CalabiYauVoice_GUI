@@ -24,6 +24,19 @@ class FileManagerFileSystemTest {
         assertTrue(File(root, "sub/../inside").isWithinManagedRoot(root))
     }
 
+    @Test fun toolResultCanChooseInitialDirectoryButNeverTheBoundaryForReadOrDelete() = withDirectory { scratch ->
+        val root = File(scratch, "Voice").apply { mkdir() }
+        val sibling = File(scratch, "Voice-backup").apply { mkdir() }
+        val keep = File(sibling, "keep").apply { writeText("user") }
+        val inside = File(root, "tools").apply { mkdir() }
+        val rejected = toolBrowserLocation(root.path, sibling.path)
+        assertNull(rejected.initialPath)
+        assertEquals(inside.canonicalPath, toolBrowserLocation(root.path, inside.path).initialPath)
+        assertEquals(listOf(inside), readManagedDirectory(File(rejected.rootPath), File(rejected.initialPath ?: rejected.rootPath)).map { it.file })
+        runBlocking { assertFailsWith<IllegalArgumentException> { deleteManagedFile(File(rejected.rootPath), keep) } }
+        assertEquals("user", keep.readText())
+    }
+
     @Test fun renameRejectsTraversalControlsAndExistingTargetWithoutMovingOrOverwriting() = withDirectory { root ->
         val source = File(root, "voice.wav").apply { writeText("source") }
         val existing = File(root, "existing.wav").apply { writeText("keep") }

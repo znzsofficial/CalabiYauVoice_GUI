@@ -5,9 +5,12 @@ import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
 import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteState
 import com.nekolaska.calabiyau.feature.wiki.voting.parser.VotingParsers
 import com.nekolaska.calabiyau.feature.wiki.voting.source.VoteSubmitOperation
+import com.nekolaska.calabiyau.feature.wiki.voting.source.VoteSubmitResult
 import com.nekolaska.calabiyau.feature.wiki.voting.source.VotingRemoteSource
 import data.ApiResult
 import data.ioApiCall
+import com.nekolaska.calabiyau.core.wiki.WikiWriteOwner
+import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 
 object VotingApi {
 
@@ -26,6 +29,7 @@ object VotingApi {
         if (cookies.isNullOrBlank()) {
             return@ioApiCall ApiResult.Error("登录 Wiki 后可投票")
         }
+        val ticket = WikiAuthHelper.beginCookieRequest(cookies)
 
         val pollTexts = config.candidates.map { candidate ->
             "<poll show-results-before-voting=1>\n${config.name}-${candidate.name}\n投给TA\n</poll>"
@@ -37,45 +41,50 @@ object VotingApi {
             ?: return@ioApiCall ApiResult.Error("无法解析投票数据")
 
         val pollDataList = VotingParsers.parseAjaxPollElements(html)
-        if (pollDataList.isEmpty()) {
-            return@ioApiCall ApiResult.Error("服务器未返回投票数据，可能被拦截")
-        }
+        if (!WikiAuthHelper.isCurrentRequest(ticket)) return@ioApiCall ApiResult.Error("登录状态已变化，请刷新投票")
+        bindPolls(config, pollDataList)?.let { ApiResult.Success(it.copy(sessionIsCurrent = { WikiAuthHelper.isCurrentRequest(ticket) })) }
+            ?: ApiResult.Error("投票数据不完整，请刷新后再试")
+    }
 
-        val pollDataMap = mutableMapOf<String, PollData>()
-        config.candidates.forEachIndexed { index, candidate ->
-            if (index < pollDataList.size) pollDataMap[candidate.name] = pollDataList[index]
-        }
-
-        val totalData = if (pollDataList.size > config.candidates.size) pollDataList.last() else null
-
-        ApiResult.Success(
-            VoteState(
-                config = config,
-                totalParticipants = totalData?.votes ?: 0,
-                totalPollId = totalData?.pollId ?: "",
-                userVotedTotal = totalData?.userVoted ?: false,
-                pollDataMap = pollDataMap
-            )
-        )
+    internal fun bindPolls(config: PollConfig, polls: List<PollData>): VoteState? {
+        val names = config.candidates.map { it.name }
+        if (names.isEmpty() || names.distinct().size != names.size || polls.size != names.size + 1 ||
+            polls.any { it.pollId.isBlank() } || polls.distinctBy { it.pollId.lowercase() }.size != polls.size) return null
+        val questions = (names + "总计锚点").map { "${config.name}-$it" }
+        if (questions.distinct().size != questions.size || polls.indices.any { i ->
+                polls[i].question?.let { it != questions[i] } == true }) return null
+        val total = polls.last()
+        return VoteState(config, total.votes, total.pollId, total.userVoted, names.zip(polls).toMap())
     }
 
     suspend fun submitVotes(voteState: VoteState, selectedNames: Set<String>): ApiResult<Unit> =
+        submit(voteState, selectedNames, VotingRemoteSource::getWikiCookies, { WikiWriteOwner.capture(it) },
+            VotingRemoteSource::fetchCsrfToken, VotingRemoteSource::submitVoteOperation)
+
+    internal suspend fun submit(voteState: VoteState, selectedNames: Set<String>, getCookies: () -> String?,
+        capture: (String) -> WikiWriteOwner, getToken: suspend (String) -> String?,
+        write: suspend (String, String, VoteSubmitOperation) -> VoteSubmitResult): ApiResult<Unit> =
         ioApiCall("提交投票失败") {
             val candidateNames = voteState.config.candidates.map { it.name }.toSet()
-            if (!selectedNames.all { it in candidateNames }) {
+            if (voteState.config.voteLimit > 0 && selectedNames.size > voteState.config.voteLimit)
+                return@ioApiCall ApiResult.Error("超过本次投票票数上限")
+            val ids = voteState.pollDataMap.values.map { it.pollId } + voteState.totalPollId
+            if (candidateNames.size != voteState.config.candidates.size || voteState.pollDataMap.keys != candidateNames ||
+                ids.any(String::isBlank) || ids.distinctBy { it.lowercase() }.size != ids.size || !selectedNames.all { it in candidateNames }) {
                 return@ioApiCall ApiResult.Error("包含无效的投票候选项")
             }
 
-            val cookies = VotingRemoteSource.getWikiCookies()
+            val cookies = getCookies()
             if (cookies.isNullOrBlank()) return@ioApiCall ApiResult.Error("未登录")
 
-            val token = VotingRemoteSource.fetchCsrfToken(cookies)
+            val owner = capture(cookies)
+            if (!voteState.sessionIsCurrent()) return@ioApiCall ApiResult.Error("登录状态已变化，请刷新投票")
+            val token = owner.run { getToken(cookies) }
                 ?: return@ioApiCall ApiResult.Error("获取 CSRF Token 失败")
-            val submitCookies = VotingRemoteSource.getWikiCookies()?.takeIf { it.isNotBlank() } ?: cookies
 
             val operations = mutableListOf<VoteSubmitOperation>()
             for ((name) in voteState.config.candidates) {
-                val data = voteState.pollDataMap[name] ?: continue
+                val data = voteState.pollDataMap.getValue(name)
                 val isSelected = name in selectedNames
                 if (isSelected && !data.userVoted) operations.add(VoteSubmitOperation(data.pollId, "1"))
                 else if (!isSelected && data.userVoted) operations.add(VoteSubmitOperation(data.pollId, "0"))
@@ -94,7 +103,7 @@ object VotingApi {
             if (operations.isEmpty()) return@ioApiCall ApiResult.Success(Unit)
 
             for (operation in operations) {
-                val submitResult = VotingRemoteSource.submitVoteOperation(submitCookies, token, operation)
+                val submitResult = owner.run { write(cookies, token, operation) }
                 if (!submitResult.success) {
                     val detail = submitResult.message?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
                     return@ioApiCall ApiResult.Error("提交投票失败: HTTP ${submitResult.statusCode}$detail")

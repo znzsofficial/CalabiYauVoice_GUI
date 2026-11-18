@@ -29,13 +29,29 @@ private class TestBoardPreferences : BoardPreferences {
 }
 
 class MessageBoardStateTest {
+    @Test fun confirmedDeleteCannotReturnFromDiskInANewScreen() = runBlocking {
+        var disk: String? = null
+        var online = true
+        val row = ProfileComment(1, "A", content = "removed")
+        val page = ProfileCommentsResponse(comments = listOf(row), pinnedComments = listOf(row))
+        val scope = CoroutineScope(coroutineContext + Job())
+        fun screen() = MessageBoardState(scope, { disk }, { { json -> disk = json } }, TestBoardPreferences(), { "session" },
+            fetchSession = { ApiResult.Success(UserSession("A", 12)) }, fetchProfile = { ApiResult.Success(null) },
+            fetchPage = { _, _, _ -> if (online) ApiResult.Success(page) else ApiResult.Error("offline") },
+            deleteRemote = { _, _ -> online = false; ApiResult.Success(Unit) }, invalidateListCache = { disk = null })
+        try {
+            val first = screen(); yield(); assertTrue(disk!!.contains("removed"))
+            first.delete(row); yield(); yield(); assertTrue(disk == null)
+            val second = screen(); yield(); assertTrue(second.comments.isEmpty() && second.pinned.isEmpty())
+        } finally { scope.cancel() }
+    }
     @Test
     fun lateDiskCacheCannotResurrectRowsAfterAConfirmedEmptyServerResponse() = runBlocking {
         val scope = CoroutineScope(coroutineContext + Job())
         try {
             val disk = CompletableDeferred<String?>()
             val networkReached = CompletableDeferred<Unit>()
-            val state = MessageBoardState(scope, { disk.await() }, {}, TestBoardPreferences(), { null },
+            val state = MessageBoardState(scope, { disk.await() }, { {} }, TestBoardPreferences(), { null },
                 fetchPage = { _, _, _ -> networkReached.complete(Unit); ApiResult.Success(ProfileCommentsResponse()) })
             networkReached.await()
             disk.complete(SharedJson.encodeToString(ProfileCommentsResponse(
@@ -54,7 +70,7 @@ class MessageBoardStateTest {
             val sent = mutableListOf<Pair<PendingBoardPost, String?>>()
             val first = CompletableDeferred<Unit>()
             val second = CompletableDeferred<Unit>()
-            val state = MessageBoardState(scope, { null }, {}, prefs, { "invalid Wiki cookie" },
+            val state = MessageBoardState(scope, { null }, { {} }, prefs, { "invalid Wiki cookie" },
                 fetchSession = { ApiResult.Error("Wiki unavailable", httpStatus = 503) },
                 fetchPage = { _, _, _ -> ApiResult.Success(ProfileCommentsResponse()) },
                 post = { _, pending, cookie, _ ->
@@ -83,7 +99,7 @@ class MessageBoardStateTest {
         try {
             var time = 0L
             var calls = 0
-            val state = MessageBoardState(scope, { null }, {}, TestBoardPreferences(), { "cookie" },
+            val state = MessageBoardState(scope, { null }, { {} }, TestBoardPreferences(), { "cookie" },
                 fetchSession = {
                     if (++calls == 1) ApiResult.Error("unavailable", httpStatus = 503)
                     else ApiResult.Success(UserSession("A", 7))

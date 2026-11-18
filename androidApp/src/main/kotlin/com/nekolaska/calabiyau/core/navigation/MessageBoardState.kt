@@ -70,8 +70,10 @@ internal class MessageBoardState(
     private val readListCache: suspend () -> String? = {
         OfflineCache.getEntry(OfflineCache.Type.MESSAGE_BOARD, "public_list")?.content
     },
-    private val writeListCache: suspend (String) -> Unit = {
-        OfflineCache.put(OfflineCache.Type.MESSAGE_BOARD, "public_list", it)
+    private val reserveListWrite: suspend () -> (suspend (String) -> Unit) = {
+        val ticket = OfflineCache.captureWrite(OfflineCache.Type.MESSAGE_BOARD, "public_list")
+        val publish: suspend (String) -> Unit = { json -> OfflineCache.put(ticket, json) }
+        publish
     },
     private val preferences: BoardPreferences = AppBoardPreferences,
     private val cookies: () -> String? = WikiAuthHelper::getWikiCookies,
@@ -83,7 +85,9 @@ internal class MessageBoardState(
     private val post: suspend (String, PendingBoardPost, String?, String) -> ApiResult<ProfileComment> = { target, pending, cookie, guestId ->
         CustomUserApi.postComment(target, pending.content, cookie, pending.authorName, pending.requestId, guestId, pending.replyToId)
     },
-    private val now: () -> Long = { System.nanoTime() / 1_000_000 }
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val deleteRemote: suspend (Long, String) -> ApiResult<Unit> = CustomUserApi::deleteComment,
+    private val invalidateListCache: suspend () -> Unit = { OfflineCache.invalidate(OfflineCache.Type.MESSAGE_BOARD, "public_list") }
 ) {
     var userInfo by mutableStateOf<WikiUserApi.UserInfo?>(null)
         private set
@@ -357,6 +361,7 @@ internal class MessageBoardState(
         loading = true; error = null
         listJob = scope.launch {
             try {
+                val publish = if (cursor == null && focusId == null && selected == null) reserveListWrite() else null
                 when (val result = fetchPage(cursor, selected, focusId)) {
                     is ApiResult.Success -> if (token == generation) {
                         val data = result.value
@@ -374,9 +379,7 @@ internal class MessageBoardState(
                         }
                         updateCachedRoot()
                         savePage()
-                        if (cursor == null && focusId == null && selected == null) {
-                            writeListCache(SharedJson.encodeToString(data))
-                        }
+                        publish?.invoke(SharedJson.encodeToString(data))
                     }
                     is ApiResult.Error -> if (token == generation) {
                         error = result.message
@@ -451,9 +454,11 @@ internal class MessageBoardState(
         scope.launch {
             var success = false
             try {
-                when (val result = CustomUserApi.deleteComment(comment.id, cookie)) {
+                when (val result = deleteRemote(comment.id, cookie)) {
                     is ApiResult.Success -> {
                         success = true
+                        cancelRead()
+                        withContext(kotlinx.coroutines.NonCancellable) { invalidateListCache() }
                         // Commit the server-confirmed tombstone locally before attempting a read.
                         restorePage(page().afterDelete(comment))
                         if (identityLoaded && cookie == identityCookie && (root?.deleted == true || replyTarget?.id == comment.id)) {

@@ -28,6 +28,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -35,8 +40,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,38 +75,50 @@ internal fun UpdateAvailableDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val dialogKey = "${info.versionCode}:${info.versionName}"
-    var ui by rememberSaveable(
-        dialogKey,
-        stateSaver = Saver<ApkDownloadUi, Int>(
-            save = { it.ordinal },
-            restore = { ApkDownloadUi.entries.getOrElse(it) { ApkDownloadUi.Idle } }
-        )
-    ) { mutableStateOf(ApkDownloadUi.Idle) }
-    var progress by rememberSaveable(dialogKey) { mutableFloatStateOf(0f) }
-    var progressText by rememberSaveable(dialogKey) { mutableStateOf("") }
-    var errorText by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
-    var pausedReason by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
-    var downloadId by rememberSaveable(dialogKey) { mutableLongStateOf(-1L) }
-    var downloadFilePath by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
-    var apkFilePath by rememberSaveable(dialogKey) { mutableStateOf<String?>(null) }
-
-    fun cancelActiveDownload() {
-        val currentId = downloadId
-        if (currentId >= 0L) {
-            context.getSystemService(DownloadManager::class.java)?.remove(currentId)
-        }
-        downloadId = -1L
-        downloadFilePath = null
-        apkFilePath = null
-        progress = 0f
-        progressText = ""
-        errorText = null
-        pausedReason = null
-        ui = ApkDownloadUi.Idle
+    val dialogKey = "${info.versionCode}:${info.versionName}:${UpdateApi.resolveApkUrl(info)}"
+    // Reconcile from DownloadManager on each entry; stale Bundle progress cannot authorize installation.
+    var ui by remember(dialogKey) { mutableStateOf(ApkDownloadUi.Idle) }
+    var progress by remember(dialogKey) { mutableFloatStateOf(0f) }
+    var progressText by remember(dialogKey) { mutableStateOf("") }
+    var errorText by remember(dialogKey) { mutableStateOf<String?>(null) }
+    var pausedReason by remember(dialogKey) { mutableStateOf<String?>(null) }
+    var downloadId by remember(dialogKey) { mutableLongStateOf(-1L) }
+    var downloadFilePath by remember(dialogKey) { mutableStateOf<String?>(null) }
+    var apkFilePath by remember(dialogKey) { mutableStateOf<String?>(null) }
+    var reconciling by remember(dialogKey) { mutableStateOf(true) }
+    LaunchedEffect(dialogKey) {
+        try {
+            val existing = withContext(Dispatchers.IO) { UpdateDownloadOwner.resolve(context, info, false) }
+            if (existing != null) {
+                downloadFilePath = existing.file.absolutePath; downloadId = existing.id
+                ui = ApkDownloadUi.Downloading
+            } else if (downloadId < 0L) ui = ApkDownloadUi.Idle
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { errorText = e.message; ui = ApkDownloadUi.Failed }
+        finally { reconciling = false }
     }
 
-    LaunchedEffect(downloadId, downloadFilePath) {
+    fun cancelActiveDownload() {
+        if (reconciling) return
+        val currentId = downloadId
+        reconciling = true
+        scope.launch {
+            try {
+                if (currentId >= 0L) withContext(Dispatchers.IO) {
+                    checkNotNull(context.getSystemService(DownloadManager::class.java)).remove(currentId)
+                }
+                downloadId = -1L; downloadFilePath = null; apkFilePath = null
+                progress = 0f; progressText = ""; errorText = null; pausedReason = null
+                ui = ApkDownloadUi.Idle
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { ui = ApkDownloadUi.Failed; errorText = "无法取消系统下载" }
+            finally { reconciling = false }
+        }
+    }
+
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(downloadId, downloadFilePath, lifecycle, reconciling) {
+        if (reconciling) return@LaunchedEffect
         if (downloadId < 0L) return@LaunchedEffect
         val fallbackFile = downloadFilePath?.let(::File) ?: return@LaunchedEffect
         val dm = context.getSystemService(DownloadManager::class.java)
@@ -113,23 +128,15 @@ internal fun UpdateAvailableDialog(
             return@LaunchedEffect
         }
         val query = DownloadManager.Query().setFilterById(downloadId)
-        while (isActive) {
-            val snapshot = withContext(Dispatchers.IO) {
-                dm.query(query)?.use { cursor ->
-                    if (!cursor.moveToFirst()) return@use null
-                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    val soFar = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
-                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                    val reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-                    val localUri = runCatching {
-                        cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                    }.getOrNull()
-                    DownloadSnapshot(status, soFar, total, reason, localUri)
-                }
-            }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+          while (isActive) {
+            val snapshot = try {
+                awaitDownloadRow(read = { withContext(Dispatchers.IO) { readDownloadSnapshot(dm, query) } })
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { errorText = "无法读取系统下载记录"; ui = ApkDownloadUi.Failed; break }
             if (snapshot == null) {
-                delay(250.milliseconds)
-                continue
+                ui = ApkDownloadUi.Failed; errorText = "系统下载任务已不存在"; downloadId = -1L; downloadFilePath = null
+                break
             }
             when (snapshot.status) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
@@ -167,6 +174,7 @@ internal fun UpdateAvailableDialog(
                 }
             }
             delay(250.milliseconds)
+          }
         }
     }
 
@@ -310,26 +318,31 @@ internal fun UpdateAvailableDialog(
                                 Text("正在下载…")
                             }
                         }
+                        ApkDownloadUi.Paused -> {
+                            FilledTonalButton(onClick = ::cancelActiveDownload, enabled = !reconciling,
+                                modifier = Modifier.fillMaxWidth(), shape = smoothCornerShape(16.dp)) { Text("取消下载") }
+                        }
                         else -> {
                             FilledTonalButton(
+                                enabled = !reconciling,
                                 onClick = {
+                                    reconciling = true
+                                    scope.launch {
                                     try {
-                                        // 移除旧任务，避免重复通知/双倍流量/写同一文件的竞争
-                                        if (downloadId >= 0L) {
-                                            context.getSystemService(DownloadManager::class.java)?.remove(downloadId)
-                                        }
                                         errorText = null
                                         pausedReason = null
                                         apkFilePath = null
                                         progress = 0f
                                         progressText = "正在开始…"
                                         ui = ApkDownloadUi.Downloading
-                                        val started = UpdateApi.enqueueApkDownload(context, info)
+                                        val started = withContext(Dispatchers.IO) { checkNotNull(UpdateDownloadOwner.resolve(context, info, true)) }
                                         downloadFilePath = started.file.absolutePath
                                         downloadId = started.id
-                                    } catch (e: Exception) {
+                                    } catch (e: CancellationException) { throw e }
+                                    catch (e: Exception) {
                                         ui = ApkDownloadUi.Failed
                                         errorText = e.message ?: e.javaClass.simpleName
+                                    } finally { reconciling = false }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -340,7 +353,6 @@ internal fun UpdateAvailableDialog(
                                 Text(
                                     when (ui) {
                                         ApkDownloadUi.Failed -> "重试下载"
-                                        ApkDownloadUi.Paused -> "重新下载"
                                         else -> "下载安装包"
                                     }
                                 )
@@ -382,6 +394,25 @@ private data class DownloadSnapshot(
     val reason: Int,
     val localUri: String?,
 )
+
+/** A newly enqueued row may be briefly invisible; a permanently removed row must be terminal. */
+internal suspend fun <T : Any> awaitDownloadRow(read: suspend () -> T?, backoff: suspend () -> Unit = { delay(250.milliseconds) }): T? {
+    repeat(4) { attempt ->
+        read()?.let { return it }
+        if (attempt < 3) backoff()
+    }
+    return null
+}
+
+private fun readDownloadSnapshot(dm: DownloadManager, query: DownloadManager.Query): DownloadSnapshot? =
+    dm.query(query)?.use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        fun int(column: String) = cursor.getInt(cursor.getColumnIndexOrThrow(column))
+        fun long(column: String) = cursor.getLong(cursor.getColumnIndexOrThrow(column))
+        val uri = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI).takeIf { it >= 0 }?.let { cursor.getString(it) }
+        DownloadSnapshot(int(DownloadManager.COLUMN_STATUS), long(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR),
+            long(DownloadManager.COLUMN_TOTAL_SIZE_BYTES), int(DownloadManager.COLUMN_REASON), uri)
+    }
 
 private fun resolveDownloadedFile(fallback: File, localUri: String?): File {
     val fromManager = localUri

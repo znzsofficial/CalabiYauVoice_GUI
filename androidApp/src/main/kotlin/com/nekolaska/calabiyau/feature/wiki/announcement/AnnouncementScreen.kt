@@ -82,6 +82,7 @@ fun AnnouncementScreen(
                         }
                     )
                 }
+                if (announcements.isEmpty()) item { Text("暂无公告", modifier = Modifier.padding(16.dp)) }
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }

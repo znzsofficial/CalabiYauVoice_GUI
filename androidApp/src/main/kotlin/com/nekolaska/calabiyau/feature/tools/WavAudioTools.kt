@@ -156,9 +156,10 @@ internal fun loadWavAudioForPreview(
     context: Context,
     input: PickedInput,
     includeSpectrogram: Boolean = true,
-    spectrogramConfig: SpectrogramRenderConfig = SpectrogramRenderConfig()
+    spectrogramConfig: SpectrogramRenderConfig = SpectrogramRenderConfig(),
+    stagingDir: File = context.cacheDir
 ): LoadedWavAudio? {
-    val tempInput = materializeInputToFile(context, input) ?: return null
+    val tempInput = materializeInputToFile(context, input, stagingDir) ?: return null
     val wav = readPcmWav(tempInput) ?: return null.also {
         if (input.file == null) runCatching { tempInput.delete() }
     }
@@ -181,16 +182,16 @@ internal fun loadWavAudioForPreview(
     )
 }
 
-internal fun loadAudioAssetForPreview(context: Context, input: PickedInput): LoadedAudioAsset? {
+internal fun loadAudioAssetForPreview(context: Context, input: PickedInput, stagingDir: File): LoadedAudioAsset? {
     val meta = inspectAudioMeta(context, input) ?: return null
     val wav = when {
         input.file?.extension.equals("wav", ignoreCase = true) || meta.mimeType.contains("wav", ignoreCase = true) -> {
-            loadWavAudioForPreview(context, input, includeSpectrogram = false)
-                ?: decodeAudioInputToTempWav(context, input, meta.name)?.let {
+            loadWavAudioForPreview(context, input, includeSpectrogram = false, stagingDir = stagingDir)
+                ?: decodeAudioInputToTempWav(context, input, stagingDir)?.let {
                     loadWavAudioFileForPreview(it, includeSpectrogram = false)
                 }
         }
-        else -> decodeAudioInputToTempWav(context, input, meta.name)?.let {
+        else -> decodeAudioInputToTempWav(context, input, stagingDir)?.let {
             loadWavAudioFileForPreview(it, includeSpectrogram = false)
         }
     }
@@ -310,29 +311,25 @@ private data class ResolvedPcmWavInput(
 
 private fun resolvePcmWavInputFile(context: Context, inputFile: File): ResolvedPcmWavInput? {
     readPcmWav(inputFile)?.let { return ResolvedPcmWavInput(inputFile, false) }
-    val decoded = decodeAudioInputToTempWav(context, PickedInput(file = inputFile), inputFile.name) ?: return null
+    val decoded = decodeAudioInputToTempWav(context, PickedInput(file = inputFile)) ?: return null
     return ResolvedPcmWavInput(decoded, true)
 }
 
-private fun materializeInputToFile(context: Context, input: PickedInput): File? {
+private fun materializeInputToFile(context: Context, input: PickedInput, stagingDir: File = context.cacheDir): File? {
     input.file?.let { return it.takeIf(File::exists) }
     val uri = input.uri ?: return null
     val displayName = context.queryDisplayName(uri) ?: "audio.wav"
-    val name = displayName.substringBeforeLast('.').ifBlank { "audio" }
-    val ext = displayName.substringAfterLast('.', "wav")
-    val temp = File.createTempFile("audio_wav_", ".${ext}", context.cacheDir)
-    return runCatching {
-        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-            temp.outputStream().use { output -> inputStream.copyTo(output) }
-        } ?: return null
-        File(temp.parentFile, "${sanitizeFileName(name)}.${ext}").let { renamed ->
-            if (temp.renameTo(renamed)) renamed else temp
-        }
-    }.getOrNull()
+    val ext = displayName.substringAfterLast('.', "wav").takeIf { it.matches(Regex("[A-Za-z0-9]{1,10}")) } ?: "audio"
+    val temp = File.createTempFile("audio_", ".$ext", stagingDir)
+    try {
+        val stream = context.contentResolver.openInputStream(uri) ?: error("无法读取音频文件")
+        stream.use { inputStream -> temp.outputStream().use { inputStream.copyToolBytes(it) } }
+        return temp
+    } catch (e: Throwable) { temp.delete(); throw e }
 }
 
-private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sourceName: String): File? {
-    val sourceFile = materializeInputToFile(context, input) ?: return null
+private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, stagingDir: File = context.cacheDir): File? {
+    val sourceFile = materializeInputToFile(context, input, stagingDir) ?: return null
     val shouldDeleteSource = input.file == null
     val extractor = MediaExtractor()
     var codec: MediaCodec? = null
@@ -359,6 +356,7 @@ private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sour
         var outputEncoding = AudioFormat.ENCODING_PCM_16BIT
 
         while (!outputDone) {
+            checkToolCancellation()
             if (!inputDone) {
                 val inputBufferIndex = decoder.dequeueInputBuffer(10_000)
                 if (inputBufferIndex >= 0) {
@@ -413,10 +411,12 @@ private fun decodeAudioInputToTempWav(context: Context, input: PickedInput, sour
         val alignedSize = pcmData.size - (pcmData.size % outputBlockAlign)
         if (alignedSize <= 0 || outputSampleRate <= 0) return null
         val alignedPcmData = if (alignedSize == pcmData.size) pcmData else pcmData.copyOf(alignedSize)
-        val outputFile = buildUniqueFile(context.cacheDir, sanitizeFileName(sourceName.substringBeforeLast('.') + "_decoded"), "wav")
-        writePcmWav(outputFile, alignedPcmData, outputChannels, outputSampleRate, 16)
+        val outputFile = File.createTempFile("decoded_", ".wav", stagingDir)
+        try { writePcmWav(outputFile, alignedPcmData, outputChannels, outputSampleRate, 16) }
+        catch (e: Throwable) { outputFile.delete(); throw e }
         outputFile
-    } catch (_: Exception) {
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+    catch (_: Exception) {
         null
     } finally {
         runCatching { codec?.stop() }
@@ -620,7 +620,7 @@ private fun applyPcmWavPhase(inputFile: File, outputDir: File, mode: WavPhaseMod
     return WavRepairResult(inputFile.name, outputFile, pcmDurationMs(output))
 }
 
-private fun readPcmWav(inputFile: File): PcmWavData? {
+internal fun readPcmWav(inputFile: File): PcmWavData? {
     RandomAccessFile(inputFile, "r").use { raf ->
         if (raf.length() < 44) return null
         if (raf.readAscii(4) != "RIFF") return null
@@ -759,17 +759,19 @@ internal fun buildSpectrogramBitmap(
     wav: PcmWavData,
     config: SpectrogramRenderConfig = SpectrogramRenderConfig()
 ): Bitmap {
-    val pixels = buildSpectrogramPixels(wav, config.toSharedConfig())
+    val pixels = buildSpectrogramPixels(wav, config.toSharedConfig(), ::checkToolCancellation)
+    checkToolCancellation()
     return Bitmap.createBitmap(pixels.argb, pixels.width, pixels.height, Bitmap.Config.ARGB_8888)
 }
 
-private fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRate: Int, bitsPerSample: Int) {
+internal fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRate: Int, bitsPerSample: Int) {
     val bytesPerSample = bitsPerSample / 8
     val byteRate = sampleRate * channels * bytesPerSample
     val blockAlign = channels * bytesPerSample
     require(expectedPcmBlockAlign(channels, bitsPerSample) == blockAlign && sampleRate > 0) { "无效的 PCM WAV 参数" }
     require(pcmData.isNotEmpty() && pcmData.size % blockAlign == 0) { "PCM 数据不是完整采样帧" }
-    val riffSize = 36L + pcmData.size.toLong()
+    val pad = pcmData.size and 1
+    val riffSize = 36L + pcmData.size.toLong() + pad
     require(riffSize <= 0xffffffffL) { "WAV 文件过大，RIFF size 超过 4GB" }
     file.outputStream().use { out ->
         val header = ByteArrayOutputStream()
@@ -788,6 +790,7 @@ private fun writePcmWav(file: File, pcmData: ByteArray, channels: Int, sampleRat
         header.writeLittleInt(pcmData.size)
         out.write(header.toByteArray())
         out.write(pcmData)
+        if (pad != 0) out.write(0)
     }
 }
 

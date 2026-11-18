@@ -4,8 +4,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
-import util.executeGet
-import util.executeRequest
+import okhttp3.Request
+import okhttp3.OkHttpClient
+import util.awaitResponseText
 
 data class BalanceHttpResult(
     val code: Int,
@@ -22,20 +23,19 @@ object BalanceDataRemoteSource {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    fun fetchSettingsBody(): BalanceHttpResult {
+    suspend fun fetchSettingsBody(): BalanceHttpResult {
         val url = "$BASE_URL/api/pages/KLBQ_BALANCE/index"
-        return client.executeGet(url).use { resp ->
-            val body = if (resp.isSuccessful) resp.body.string() else null
-            BalanceHttpResult(resp.code, body)
-        }
+        return requestBody(client, Request.Builder().url(url).build())
     }
 
-    fun fetchBalanceDataBody(payload: String): BalanceHttpResult {
-        return client.executeRequest("$BASE_URL/api/common/ide") {
-            post(payload.toRequestBody(JSON_MEDIA))
-        }.use { resp ->
-            val body = if (resp.isSuccessful) resp.body.string() else null
-            BalanceHttpResult(resp.code, body)
-        }
+    suspend fun fetchBalanceDataBody(payload: String): BalanceHttpResult =
+        postQuery(client, "$BASE_URL/api/common/ide", payload)
+
+    internal suspend fun postQuery(client: OkHttpClient, url: String, payload: String): BalanceHttpResult =
+        requestBody(client, Request.Builder().url(url).post(payload.toRequestBody(JSON_MEDIA)).build())
+
+    private suspend fun requestBody(client: OkHttpClient, request: Request): BalanceHttpResult {
+        val response = client.newCall(request).awaitResponseText()
+        return BalanceHttpResult(response.code, response.body.takeIf { response.isSuccessful })
     }
 }

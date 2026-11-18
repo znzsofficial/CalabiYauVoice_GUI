@@ -5,7 +5,9 @@ import data.SharedJson
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import util.buildWikiUrl
-import util.executeRequest
+import okhttp3.Request
+import util.awaitResponseText
+import kotlinx.coroutines.CancellationException
 
 internal object WikiAuthHelper {
 
@@ -69,7 +71,7 @@ internal object WikiAuthHelper {
     // key 必须包含 Cookie：token 与登录会话绑定，账号切换后旧 token 会被服务端拒绝且重试无效。
     private val csrfCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
 
-    fun fetchCsrfToken(apiUrl: String, cookies: String): String? {
+    suspend fun fetchCsrfToken(apiUrl: String, cookies: String): String? {
         val ticket = beginCookieRequest(cookies)
         if (!isCurrentRequest(ticket)) return null
         val now = android.os.SystemClock.elapsedRealtime()
@@ -98,37 +100,33 @@ internal object WikiAuthHelper {
         }
     }
 
-    fun httpGet(url: String, expectJson: Boolean = false): String? {
+    suspend fun httpGet(url: String, expectJson: Boolean = false): String? {
         return try {
-            WikiEngine.client.executeRequest(url) {
-                header("User-Agent", DEFAULT_USER_AGENT)
-            }.use { resp ->
+            WikiEngine.client.newCall(Request.Builder().url(url).header("User-Agent", DEFAULT_USER_AGENT).build()).awaitResponseText().let { resp ->
                 if (!resp.isSuccessful) return null
                 // Public requests carry no session: they must not mutate the browser's login cookies.
-                val body = resp.body.string()
+                val body = resp.body
                 if (expectJson && !body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) return null
                 body
             }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
             null
         }
     }
 
-    fun httpGetWithCookies(url: String, cookies: String, expectJson: Boolean = false): String? {
+    suspend fun httpGetWithCookies(url: String, cookies: String, expectJson: Boolean = false): String? {
         val ticket = beginCookieRequest(cookies)
         if (!isCurrentRequest(ticket)) return null
         return try {
-            WikiEngine.client.executeRequest(url) {
-                header("Cookie", cookies)
-                header("User-Agent", DEFAULT_USER_AGENT)
-            }.use { resp ->
+            WikiEngine.client.newCall(Request.Builder().url(url).header("Cookie", cookies)
+                .header("User-Agent", DEFAULT_USER_AGENT).build()).awaitResponseText().let { resp ->
                 if (!resp.isSuccessful) return null
-                syncResponseCookies(resp.headers("Set-Cookie"), ticket)
-                val body = resp.body.string()
+                syncResponseCookies(resp.headers.values("Set-Cookie"), ticket)
+                val body = resp.body
                 if (expectJson && !body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) return null
                 body
             }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
             null
         }
     }

@@ -133,8 +133,10 @@ fun shareFiles(context: Context, fileList: List<File>, onError: (String) -> Unit
 }
 
 fun scanMediaLibrary(context: Context, files: List<File>) {
+    checkToolCancellation()
     val targets = files.filter { it.exists() && it.isFile }
     if (targets.isEmpty()) return
+    checkToolCancellation()
     MediaScannerConnection.scanFile(
         context,
         targets.map { it.absolutePath }.toTypedArray(),

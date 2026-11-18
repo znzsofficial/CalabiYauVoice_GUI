@@ -17,6 +17,7 @@
 - [资源下载](resource-download-implementation.md)：按需搜索、任务恢复、完整性清单及原子下载。
 - [WebView 与登录](android-webview-auth.md)：Cookie 票据、导航规则、宿主生命周期、弹窗和文件选择。
 - [2.2.1 架构修复记录](android-architecture-fixes.md)：审查发现、修复范围、验证证据及未采用的重构建议。
+- [架构二次复审修复](android-architecture-round-two.md)：2.2.1 之后对真实调用路径、文件归属和任务恢复的修复。
 - [桌面端指南](desktop-implementation-guide.md)：Windows 窗口、媒体处理及分发。
 - [用户系统后端](user-system-backend.md)：账号、留言/通知、管理 API 和 D1 迁移。
 

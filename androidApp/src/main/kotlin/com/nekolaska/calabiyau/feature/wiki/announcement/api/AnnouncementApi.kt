@@ -34,11 +34,7 @@ object AnnouncementApi : KeyedCachedWikiApi<Int, List<Announcement>>("Announceme
                 ?: return@ioApiCall ApiResult.Error("没有公告缓存", kind = ErrorKind.NETWORK)
 
             val announcements = AnnouncementParsers.parseAnnouncements(sourceResult.results)
-            if (announcements.isEmpty()) {
-                ApiResult.Error("未找到公告缓存数据", kind = ErrorKind.NOT_FOUND)
-            } else {
-                ApiResult.Success(announcements, isOffline = true, cacheAgeMs = sourceResult.ageMs)
-            }
+            ApiResult.Success(announcements, isOffline = true, cacheAgeMs = sourceResult.ageMs)
         }
 
     override suspend fun fetchFromNetwork(key: Int, forceRefresh: Boolean): ApiResult<List<Announcement>> =
@@ -47,10 +43,6 @@ object AnnouncementApi : KeyedCachedWikiApi<Int, List<Announcement>>("Announceme
                 ?: return@ioApiCall ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
 
             val announcements = AnnouncementParsers.parseAnnouncements(sourceResult.results)
-            if (announcements.isEmpty()) {
-                ApiResult.Error("未找到公告数据", kind = ErrorKind.NOT_FOUND)
-            } else {
-                ApiResult.Success(announcements, isOffline = sourceResult.isFromCache, cacheAgeMs = sourceResult.ageMs)
-            }
+            ApiResult.Success(announcements, isOffline = sourceResult.isFromCache, cacheAgeMs = sourceResult.ageMs)
         }
 }

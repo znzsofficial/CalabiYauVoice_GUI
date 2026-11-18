@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             lifecycleScope.launch(Dispatchers.IO) {
                 OfflineCache.pruneExpired()
-                WallpaperApi.ensureWallpaperUrl(forceRefresh = false)
+                WallpaperApi.refresh()
             }
         }
 
@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
 
         // 解析首次进入时的快捷方式目标。
         shortcutTargetState.value = intent?.getStringExtra("shortcut_target")
-        shortcutRequestKeyState.intValue++
+        shortcutRequestKeyState.intValue = savedInstanceState?.getInt("shortcut_request_key", 1) ?: 1
 
         setContent {
             AppTheme {
@@ -172,6 +172,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("shortcut_request_key", shortcutRequestKeyState.intValue)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -40,3 +40,6 @@ internal class DrawerNavigationQueue(private val scope: CoroutineScope) {
         }
     }
 }
+/** All Wiki browser entry points preserve the first non-browser return destination. */
+internal fun wikiReturnDestination(current: DrawerDestination, previous: DrawerDestination): DrawerDestination =
+    if (current != DrawerDestination.WIKI) current else if (previous != DrawerDestination.WIKI) previous else DrawerDestination.WIKI_HUB

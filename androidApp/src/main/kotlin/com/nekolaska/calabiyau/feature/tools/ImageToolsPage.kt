@@ -77,7 +77,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.floor
@@ -1049,11 +1048,12 @@ internal fun ImageToolsPage(
                 val ext = inferImageExtension(context, input, sourceName)
                 val base = sanitizeFileName(sourceName.substringBeforeLast('.'))
                 val target = buildUniqueFile(outputDir, "${base}_clean", ext)
-                val copied = copyInputToFile(context, input, target)
-                if (!copied) { failed++ } else {
-                    val cleaned = ExifCleaner.cleanPrivacyFields(target)
-                    if (cleaned) { success++; created += target } else { failed++; runCatching { target.delete() } }
-                }
+                try {
+                    created += publishSanitizedCopy(context.cacheDir, target,
+                        copy = { copyInputToFile(context, input, it) }, clean = ExifCleaner::cleanPrivacyFields)
+                    success++
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { failed++ }
             }
             scanMediaLibrary(context, created)
             ToolOutput(title = "元数据清理完成", message = "成功 $success，失败 $failed，原图未覆盖", files = created, directory = outputDir)
@@ -2077,30 +2077,16 @@ private fun inputDisplayName(context: Context, input: PickedInput): String? {
 }
 
 private fun readBytesFromInput(context: Context, input: PickedInput): ByteArray? {
-    return runCatching {
-        input.file?.takeIf { it.isFile }?.readBytes()
-            ?: input.uri?.let { uri ->
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }
-    }.getOrNull()
+    val limit = StandardGifDecoder.inputByteBudget()
+    require((input.file?.length() ?: 0L) <= limit) { "GIF 文件过大" }
+    val stream = input.file?.inputStream() ?: input.uri?.let(context.contentResolver::openInputStream) ?: return null
+    return stream.use { source -> java.io.ByteArrayOutputStream().also { source.copyToolBytes(it, limit) }.toByteArray() }
 }
 
-private fun copyInputToFile(context: Context, input: PickedInput, target: File): Boolean {
-    target.parentFile?.mkdirs()
-    return runCatching {
-        when {
-            input.file?.isFile == true -> input.file.copyTo(target, overwrite = true)
-            input.uri != null -> {
-                context.contentResolver.openInputStream(input.uri)?.use { inputStream ->
-                    FileOutputStream(target).use { outputStream ->
-                        inputStream.copyTo(outputStream)
-                    }
-                } ?: return false
-            }
-            else -> return false
-        }
-        true
-    }.getOrElse { false }
+private fun copyInputToFile(context: Context, input: PickedInput, target: File) {
+    val stream = input.file?.inputStream() ?: input.uri?.let(context.contentResolver::openInputStream)
+        ?: error("无法读取图片")
+    stream.use { source -> target.outputStream().use { source.copyToolBytes(it) } }
 }
 
 private fun compressOrConvertImage(
@@ -3099,9 +3085,7 @@ private fun decomposeGifToFrames(
     val outputs = mutableListOf<File>()
     try {
         val status = decoder.read(bytes)
-        if (status != GifDecoder.STATUS_OK && status != GifDecoder.STATUS_PARTIAL_DECODE) {
-            return emptyList()
-        }
+        check(status == GifDecoder.STATUS_OK) { "GIF 数据不完整或格式错误" }
         val frameCount = decoder.frameCount
         if (frameCount <= 0) return emptyList()
 
@@ -3112,8 +3096,9 @@ private fun decomposeGifToFrames(
             for (index in 0 until frameCount) {
                 checkToolCancellation()
                 decoder.advance()
-                val frame = decoder.nextFrame ?: continue
+                val frame = decoder.nextFrame ?: error("GIF 帧读取失败")
                 try {
+                    check(decoder.status == GifDecoder.STATUS_OK) { "GIF 帧数据不完整" }
                     val file = File(frameDir, "${baseName}_${(index + 1).toString().padStart(3, '0')}.${format.extension}")
                     outputs += writeBitmapToFile(frame, file, format, quality)
                 } finally {
@@ -3189,11 +3174,9 @@ private fun writeBitmapToFile(bitmap: Bitmap, target: File, format: ExportFormat
     target.parentFile?.mkdirs()
     val outputBitmap = if (format == ExportFormat.JPG && bitmap.hasAlpha()) bitmap.withWhiteBackground() else bitmap
     try {
-        return publishToolOutput(target) { temporary -> FileOutputStream(temporary).use { out ->
-            check(outputBitmap.compress(resolveCompressFormat(format), quality.coerceIn(1, 100), out)) {
-                "图片写出失败：${target.name}"
-            }
-        } }
+        return publishEncodedImage(target) { out ->
+            outputBitmap.compress(resolveCompressFormat(format), quality.coerceIn(1, 100), out)
+        }
     } finally {
         if (outputBitmap !== bitmap) outputBitmap.recycle()
     }

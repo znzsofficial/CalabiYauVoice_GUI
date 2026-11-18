@@ -47,6 +47,10 @@ import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.asContextElement
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,6 +94,8 @@ internal fun AudioToolsPage(
         showSnack = showSnack
     )
     var currentAudio by remember { mutableStateOf<AudioPreviewState?>(null) }
+    val playbackOwner = remember { Any() }
+    var spectrogramJob by remember { mutableStateOf<Job?>(null) }
     val audioHistory = remember { AudioHistoryController(File(context.cacheDir, "audio_tool_history_${System.nanoTime()}")) }
     var trimThresholdPercent by remember { mutableStateOf("1.5") }
     var minimumSilenceMs by remember { mutableStateOf("120") }
@@ -125,7 +131,8 @@ internal fun AudioToolsPage(
 
     DisposableEffect(Unit) {
         onDispose {
-            runCatching { File(context.cacheDir, "audio_tool_preview").takeIf { it.isDirectory }?.deleteRecursively() }
+            spectrogramJob?.cancel()
+            AudioPlayerManager.stopOwned(playbackOwner)
             audioHistory.cleanup()
         }
     }
@@ -165,14 +172,11 @@ internal fun AudioToolsPage(
         }
     }
 
-    suspend fun pushAudioHistory(label: String, state: AudioPreviewState): AudioPreviewState? {
-        if (state.asset.wav == null) {
-            setPreview(state)
-            return null
-        }
-        val currentState = audioHistory.push(label, state)
-        currentState?.let(::setPreview)
-        return currentState
+    suspend fun pushAudioHistory(label: String, state: AudioPreviewState, replace: Boolean = false): AudioPreviewState {
+        val committed = audioHistory.push(label, state, replace) ?: error("音频不能解码为可编辑的 WAV")
+        AudioPlayerManager.stopOwned(playbackOwner)
+        setPreview(committed)
+        return committed
     }
 
     fun currentAudioSource(): String? = currentAudio?.asset?.wav?.file?.absolutePath
@@ -209,9 +213,9 @@ internal fun AudioToolsPage(
     fun togglePlayback(positionMs: Long = playheadMs) {
         val source = currentAudioSource() ?: return
         if (isPreviewPlaying()) {
-            AudioPlayerManager.play(source)
+            AudioPlayerManager.playFrom(source, null, playbackOwner)
         } else {
-            AudioPlayerManager.playFrom(source, positionMs.toInt())
+            AudioPlayerManager.playFrom(source, positionMs.toInt(), playbackOwner)
         }
     }
 
@@ -233,11 +237,20 @@ internal fun AudioToolsPage(
     ) {
         if (!force && wav.spectrogramBitmap != null) return
         val requestId = ++spectrogramRequestId
-        scope.launch {
-            val updated = withContext(Dispatchers.IO) {
-                wav.copy(spectrogramBitmap = buildSpectrogramBitmap(wav.data, config))
-            }
-            attachSpectrogramPreview(requestId, updated)
+        spectrogramJob?.cancel()
+        spectrogramJob = scope.launch {
+            var owned: android.graphics.Bitmap? = null
+            try {
+                val updated = withContext(Dispatchers.Default + toolTaskJob.asContextElement(currentCoroutineContext()[Job])) {
+                    wav.copy(spectrogramBitmap = buildSpectrogramBitmap(wav.data, config).also { owned = it })
+                }
+                if (spectrogramRequestId == requestId && currentAudio?.asset?.wav?.file == wav.file) {
+                    attachSpectrogramPreview(requestId, updated)
+                    owned = null
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { showSnack("频谱生成失败：${e.message ?: "未知错误"}") }
+            finally { owned?.recycle() }
         }
     }
 
@@ -248,11 +261,12 @@ internal fun AudioToolsPage(
                 audioHistory.select(index) ?: return@runCatching null
             }.onSuccess { selected ->
                 val (step, state) = selected ?: return@onSuccess
-                AudioPlayerManager.stop()
+                AudioPlayerManager.stopOwned(playbackOwner)
                 setPreview(state)
                 state.asset.wav?.let { scheduleSpectrogramPreview(it, force = true) }
                 showSnack("时间轴：${step.label}")
             }.onFailure {
+                if (it is CancellationException) { onBusyChange(false); throw it }
                 showSnack("历史节点加载失败：${it.message ?: "未知错误"}")
             }
             onBusyChange(false)
@@ -266,22 +280,25 @@ internal fun AudioToolsPage(
     fun loadInput(input: PickedInput) {
         scope.launch {
             onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    loadAudioAssetForPreview(context, input) ?: error("无法读取音频文件")
+            try {
+                withAudioWorkspace(context.cacheDir) { dir ->
+                    val asset = withContext(Dispatchers.IO + toolTaskJob.asContextElement(currentCoroutineContext()[Job])) {
+                        loadAudioAssetForPreview(context, input, dir) ?: error("无法读取音频文件")
+                    }
+                    // A metadata-only source is still a useful preview, but a failed replacement
+                    // must never discard an existing editable session.
+                    if (asset.wav == null) {
+                        check(audioHistory.steps.isEmpty()) { "无法解码此音频，已保留原编辑" }
+                        setPreview(AudioPreviewState(asset, false))
+                    } else {
+                        val state = pushAudioHistory("导入", AudioPreviewState(asset, true), replace = true)
+                        state.asset.wav?.let { scheduleSpectrogramPreview(it, force = true) }
+                    }
+                    showSnack("已导入 ${asset.meta.name}")
                 }
-            }.mapCatching { asset ->
-                AudioPlayerManager.stop()
-                audioHistory.clear()
-                asset to pushAudioHistory("导入", AudioPreviewState(asset, asset.wav != null))
-            }.onSuccess { asset ->
-                val currentState = asset.second
-                currentState?.asset?.wav?.let { scheduleSpectrogramPreview(it, force = true) }
-                showSnack("已导入 ${asset.first.meta.name}")
-            }.onFailure {
-                showSnack("导入音频失败：${it.message ?: "未知错误"}")
-            }
-            onBusyChange(false)
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { showSnack("导入音频失败：${e.message ?: "未知错误"}") }
+            finally { onBusyChange(false) }
         }
     }
 
@@ -292,37 +309,33 @@ internal fun AudioToolsPage(
         }
         scope.launch {
             onBusyChange(true)
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    val previewRoot = File(context.cacheDir, "audio_tool_preview")
-                    val previewDir = File(previewRoot, "${System.currentTimeMillis()}_${title.substringAfterLast('/')}").apply { mkdirs() }
+            try { withAudioWorkspace(context.cacheDir) { previewDir ->
+                val outcome = withContext(Dispatchers.IO + toolTaskJob.asContextElement(currentCoroutineContext()[Job])) {
                     block(audio.input, previewDir)
                 }
-            }.mapCatching { outcome ->
+                check(outcome.output.files.isEmpty() || outcome.preview != null) { "无法读取处理结果，已保留原编辑" }
                 outcome.preview?.let { preview ->
-                    AudioPlayerManager.stop()
+                    val meta = withContext(Dispatchers.IO) {
+                        inspectAudioMeta(context, preview.input) ?: error("无法读取音频元数据")
+                    }
                     val currentState = pushAudioHistory(
                         title.substringAfterLast('/').removePrefix("WAV"),
                         AudioPreviewState(
                             LoadedAudioAsset(
                                 input = preview.input,
                                 file = preview.file,
-                                meta = inspectAudioMeta(context, preview.input) ?: error("无法读取音频元数据"),
+                                meta = meta,
                                 wav = preview
                             ),
                             canPreviewWaveform = true
                         )
                     )
-                    currentState?.asset?.wav?.let { scheduleSpectrogramPreview(it, force = true) }
-                    runCatching { preview.file.parentFile?.deleteRecursively() }
+                    currentState.asset.wav?.let { scheduleSpectrogramPreview(it, force = true) }
                 }
-                outcome
-            }.onSuccess { outcome ->
                 showSnack(outcome.output.message)
-            }.onFailure {
-                showSnack("处理失败：${it.message ?: "未知错误"}")
-            }
-            onBusyChange(false)
+            } } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { showSnack("处理失败：${e.message ?: "未知错误"}") }
+            finally { onBusyChange(false) }
         }
     }
 
@@ -333,8 +346,8 @@ internal fun AudioToolsPage(
             errorLabel = "导出失败"
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "音频工具/导出音频")
-            val target = buildUniqueFile(outputDir, wav.file.nameWithoutExtension.ifBlank { "audio_preview" }, "wav")
-            wav.file.copyTo(target, overwrite = false)
+            val requested = File(outputDir, "${sanitizeFileName(wav.name.substringBeforeLast('.'))}.wav")
+            val target = publishToolOutput(requested) { wav.file.copyToolFile(it) }
             ToolOutput(title = "音频导出完成", message = "已导出 ${target.name}", files = listOf(target), directory = outputDir)
         }
     }

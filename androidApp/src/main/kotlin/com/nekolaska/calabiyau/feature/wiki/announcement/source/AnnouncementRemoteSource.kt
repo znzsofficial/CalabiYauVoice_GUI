@@ -4,6 +4,8 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import com.nekolaska.calabiyau.feature.wiki.announcement.parser.AnnouncementParsers
 import kotlinx.serialization.json.jsonObject
 import util.buildWikiUrl
 
@@ -26,7 +28,7 @@ object AnnouncementRemoteSource {
         val result = OfflineCache.fetchWithCache(
             type = OfflineCache.Type.ANNOUNCEMENTS,
             key = "announcements_v2_$limit",
-            forceRefresh = forceRefresh
+            forceRefresh = forceRefresh, validatePayload = ::validPayload
         ) { WikiEngine.safeGet(url) } ?: return null
 
         val json = SharedJson.parseToJsonElement(result.payload).jsonObject
@@ -44,6 +46,7 @@ object AnnouncementRemoteSource {
                 type = OfflineCache.Type.ANNOUNCEMENTS,
                 key = key
             ) ?: continue
+            if (!validPayload(entry.content)) continue
             val json = SharedJson.parseToJsonElement(entry.content).jsonObject
             return AnnouncementSourceResult(
                 results = extractResults(json),
@@ -58,6 +61,16 @@ object AnnouncementRemoteSource {
      * SMW 无结果时 results 是 JSON 数组（如 []），有结果时是对象。
      * 统一收敛为对象：数组按空结果处理，避免下游 JsonObject 转换崩溃。
      */
+    internal fun validPayload(body: String): Boolean = runCatching {
+        val root = SharedJson.parseToJsonElement(body).jsonObject
+        if ("error" in root) return false
+        when (val rows = (root["query"] as? JsonObject)?.get("results")) {
+            is JsonObject -> rows.keys.none { it.isBlank() } && AnnouncementParsers.parseAnnouncements(rows).size == rows.size
+            is JsonArray -> rows.isEmpty()
+            else -> false
+        }
+    }.getOrDefault(false)
+
     private fun extractResults(json: JsonObject): JsonObject {
         val element = json["query"]?.jsonObject?.get("results") ?: return JsonObject(emptyMap())
         return when (element) {

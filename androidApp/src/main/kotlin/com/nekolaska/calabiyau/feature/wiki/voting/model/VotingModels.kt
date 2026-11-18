@@ -18,7 +18,8 @@ data class PollCandidate(
 data class PollData(
     val pollId: String,
     val votes: Int,
-    val userVoted: Boolean
+    val userVoted: Boolean,
+    val question: String? = null
 )
 
 /** 完整投票状态 */
@@ -27,5 +28,7 @@ data class VoteState(
     val totalParticipants: Int,
     val totalPollId: String,
     val userVotedTotal: Boolean,
-    val pollDataMap: Map<String, PollData>
+    val pollDataMap: Map<String, PollData>,
+    /** Authenticated poll selections belong to the session that read them, even after an optimistic copy. */
+    val sessionIsCurrent: () -> Boolean = { true }
 )

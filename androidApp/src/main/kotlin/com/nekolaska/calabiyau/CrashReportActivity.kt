@@ -47,11 +47,11 @@ import androidx.core.net.toUri
 class CrashReportActivity : ComponentActivity() {
 
     private var crashLog: String = ""
+    private var reportId: String? = null
 
     companion object {
         private const val GITHUB_ISSUE_URL =
             "https://github.com/znzsofficial/CalabiYauVoice_GUI/issues/new?labels=bug&title=%5BCrash%5D+"
-        private const val STATE_CRASH_LOG = "state_crash_log"
         private const val EXTRA_SKIP_PENDING_CRASH = "extra_skip_pending_crash"
 
         fun shouldSkipPendingCrash(intent: Intent?): Boolean =
@@ -62,19 +62,14 @@ class CrashReportActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        crashLog = savedInstanceState?.getString(STATE_CRASH_LOG)
-            ?: intent.getStringExtra(CrashHandler.EXTRA_CRASH_LOG)
-            ?: CrashHandler.peekCrashLog(this)
-            ?: "未找到崩溃日志"
-
-        if (savedInstanceState == null) {
-            CrashHandler.clearCrashLog(this)
-        }
-
-        if (crashLog == "未找到崩溃日志") {
+        reportId = savedInstanceState?.getString(CrashHandler.EXTRA_CRASH_ID)
+            ?: intent.getStringExtra(CrashHandler.EXTRA_CRASH_ID) ?: CrashHandler.pendingId(this)
+        val report = reportId?.let { CrashHandler.open(this, it) }
+        if (report == null) {
             finish()
             return
         }
+        crashLog = report
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -89,7 +84,7 @@ class CrashReportActivity : ComponentActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString(STATE_CRASH_LOG, crashLog)
+        outState.putString(CrashHandler.EXTRA_CRASH_ID, reportId)
         super.onSaveInstanceState(outState)
     }
 
@@ -109,7 +104,7 @@ class CrashReportActivity : ComponentActivity() {
     }
 
     private fun restartApp() {
-        CrashHandler.clearCrashLog(this)
+        reportId?.let { CrashHandler.finishReport(this, it) }
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             putExtra(EXTRA_SKIP_PENDING_CRASH, true)

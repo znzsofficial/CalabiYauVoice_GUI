@@ -13,7 +13,6 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
-import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
@@ -199,7 +198,13 @@ object WikiEngine {
         maxConcurrency: Int,
         onLog: (String) -> Unit,
         onProgress: (Int, Int, String) -> Unit
-    ) = WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, ::downloadFile)
+    ) = withContext(Dispatchers.IO) {
+        val privateRoot = File(System.getenv("APPDATA") ?: System.getProperty("user.home"), "CalabiYauVoice/download_staging")
+        val staging = util.ResourceDownloadStaging(privateRoot, saveDir)
+        WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, { url, target ->
+            downloadResourceAtomically(url, target, fetch = { source, tmp -> client.awaitGetToFile(source, tmp) }, staging = staging)
+        }, staging = staging)
+    }
 
     suspend fun searchAndGroupCharacters(keyword: String, voiceOnly: Boolean = true): List<CharacterGroup> =
         WikiEngineCore.searchAndGroupCharacters(keyword, voiceOnly, ::fetchString, jsonParser, nameCache)
@@ -251,10 +256,4 @@ object WikiEngine {
         null
     }
 
-    private suspend fun downloadFile(url: String, targetFile: File) {
-        val parent = targetFile.absoluteFile.parentFile
-            ?: throw IOException("Target file has no parent: $targetFile")
-        Files.createDirectories(parent.toPath())
-        downloadResourceAtomically(url, targetFile, fetch = { source, tmp -> client.awaitGetToFile(source, tmp) })
-    }
 }

@@ -12,7 +12,6 @@ import data.SharedJson
 import data.ioApiCall
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
@@ -25,7 +24,14 @@ import util.buildWikiUrl
  * 通过 MediaWiki parse API 渲染 `{{#invoke:武器|武器外观筛选}}` Lua 模块，
  * 从返回的 HTML 中提取武器外观数据（data-param 属性 + img 标签）。
  */
-object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinInfo>>("WeaponSkinFilterApi") {
+object WeaponSkinFilterApi {
+
+    internal data class Loaded(val skins: List<WeaponSkinInfo>, val complete: Boolean)
+    private val catalog = object : CachedWikiApi<Loaded>("WeaponSkinFilterApi") {
+        override fun shouldCache(value: Loaded) = value.complete
+        override suspend fun fetchFromCache() = readDisk()
+        override suspend fun fetchFromNetwork(forceRefresh: Boolean) = load(forceRefresh)
+    }
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
@@ -68,25 +74,29 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
         forceRefresh: Boolean = false,
         cacheOnly: Boolean = false,
         allowMemoryCache: Boolean = true
-    ): ApiResult<List<WeaponSkinInfo>> = fetch(
+    ): ApiResult<List<WeaponSkinInfo>> = when (val result = catalog.fetch(
         forceRefresh = forceRefresh,
         cacheOnly = cacheOnly,
         allowMemoryCache = allowMemoryCache
-    )
+    )) {
+        is ApiResult.Success -> ApiResult.Success(result.value.skins, result.isOffline, result.cacheAgeMs)
+        is ApiResult.Error -> result
+    }
 
-    override suspend fun fetchFromCache(): ApiResult<List<WeaponSkinInfo>> =
+    private suspend fun readDisk(): ApiResult<Loaded> =
         ioApiCall("获取武器外观数据失败") {
             val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_SKINS, "all_weapon_skins")
                 ?: return@ioApiCall ApiResult.Error("无离线缓存", kind = ErrorKind.NETWORK)
+            val meta = metaSnapshot(WeaponListApi.fetchAllCategories(cacheOnly = true, includeImages = false))
             parseSkinResult(
                 entry.content,
-                weaponMeta = fetchCachedWeaponMetaMap(),
+                weaponMeta = meta.values,
                 isOffline = true,
-                cacheAgeMs = entry.ageMs
+                cacheAgeMs = maxOf(entry.ageMs, meta.age)
             )
         }
 
-    override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<List<WeaponSkinInfo>> =
+    private suspend fun load(forceRefresh: Boolean): ApiResult<Loaded> =
     ioApiCall("获取武器外观数据失败") {
         // 武器元数据只查询 ask，不获取无关武器图片；与外观渲染互不依赖。
         // 皮肤数据只要 1 次模块渲染（快）。并行执行，关键路径取两者较大值。
@@ -96,14 +106,15 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
             val result = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_SKINS,
                 key = "all_weapon_skins",
-                forceRefresh = forceRefresh
+                forceRefresh = forceRefresh, validatePayload = { parseSkinResult(it, isOffline = false, cacheAgeMs = 0) is ApiResult.Success }
             ) { WikiEngine.safeGet(url) }
                 ?: run {
                     metaDeferred.cancel()
                     return@coroutineScope ApiResult.Error("请求失败，且无离线缓存", kind = ErrorKind.NETWORK)
                 }
 
-            parseSkinResult(result.payload, metaDeferred.await(), isOffline = result.isFromCache, cacheAgeMs = result.ageMs)
+            val meta = metaDeferred.await()
+            assemble(result, meta)
         }
     }
 
@@ -112,9 +123,16 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
         val type: String
     )
 
-    private suspend fun fetchWeaponMetaMap(forceRefresh: Boolean): Map<String, WeaponMeta> {
-        return when (val result = WeaponListApi.fetchAllCategories(forceRefresh = forceRefresh, includeImages = false)) {
-            is ApiResult.Success -> result.value
+    internal data class MetaSnapshot(val values: Map<String, WeaponMeta>, val offline: Boolean, val age: Long, val complete: Boolean)
+
+    internal fun assemble(raw: OfflineCache.CacheResult, meta: MetaSnapshot) =
+        parseSkinResult(raw.payload, meta.values, raw.isFromCache || meta.offline, maxOf(raw.ageMs, meta.age), meta.complete)
+
+    private suspend fun fetchWeaponMetaMap(forceRefresh: Boolean): MetaSnapshot =
+        metaSnapshot(WeaponListApi.fetchAllCategories(forceRefresh = forceRefresh, includeImages = false))
+
+    internal fun metaSnapshot(result: ApiResult<List<WeaponListApi.WeaponCategoryData>>): MetaSnapshot = when (result) {
+            is ApiResult.Success -> MetaSnapshot(result.value
                 .flatMap { categoryData ->
                     categoryData.weapons.map { weapon ->
                         weapon.name to WeaponMeta(
@@ -123,45 +141,18 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
                         )
                     }
                 }
-                .toMap()
-            is ApiResult.Error -> emptyMap()
-        }
-    }
-
-    private suspend fun fetchCachedWeaponMetaMap(): Map<String, WeaponMeta> {
-        return WeaponListApi.WeaponCategory.entries
-            .mapNotNull { category ->
-                val entry = OfflineCache.getEntry(OfflineCache.Type.WEAPON_LIST, "category_${category.name}")
-                    ?: return@mapNotNull null
-                category to entry.content
-            }
-            .flatMap { (category, cachedJson) -> parseWeaponMetaFromAskJson(cachedJson, category) }
-            .toMap()
-    }
-
-    private fun parseWeaponMetaFromAskJson(
-        cachedJson: String,
-        category: WeaponListApi.WeaponCategory
-    ): List<Pair<String, WeaponMeta>> {
-        return runCatching {
-            val root = SharedJson.parseToJsonElement(cachedJson).jsonObject
-            val results = root["query"]?.jsonObject?.get("results")?.jsonObject.orEmpty()
-            results.map { (weaponName, value) ->
-                val type = value.jsonObject["printouts"]?.jsonObject
-                    ?.get("类型")?.jsonArray
-                    ?.firstOrNull()?.jsonPrimitive?.content
-                    .orEmpty()
-                weaponName to WeaponMeta(category.displayName, type)
-            }
-        }.getOrDefault(emptyList())
+                .toMap(), result.isOffline, result.cacheAgeMs,
+                result.value.map { it.category }.toSet() == WeaponListApi.WeaponCategory.entries.toSet() && result.value.all { it.loadError == null })
+            is ApiResult.Error -> MetaSnapshot(emptyMap(), false, 0, false)
     }
 
     private fun parseSkinResult(
         jsonBody: String,
         weaponMeta: Map<String, WeaponMeta> = emptyMap(),
         isOffline: Boolean,
-        cacheAgeMs: Long
-    ): ApiResult<List<WeaponSkinInfo>> {
+        cacheAgeMs: Long,
+        complete: Boolean = false
+    ): ApiResult<Loaded> {
         val json = SharedJson.parseToJsonElement(jsonBody).jsonObject
         val html = json["parse"]?.jsonObject?.get("text")
             ?.jsonObject?.get("*")?.jsonPrimitive?.content
@@ -171,7 +162,7 @@ object WeaponSkinFilterApi : CachedWikiApi<List<WeaponSkinFilterApi.WeaponSkinIn
         return if (skins.isEmpty()) {
             ApiResult.Error("未找到武器外观数据", kind = ErrorKind.NOT_FOUND)
         } else {
-            ApiResult.Success(skins, isOffline = isOffline, cacheAgeMs = cacheAgeMs)
+            ApiResult.Success(Loaded(skins, complete), isOffline = isOffline, cacheAgeMs = cacheAgeMs)
         }
     }
 

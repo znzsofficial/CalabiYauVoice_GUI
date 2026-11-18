@@ -50,7 +50,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -168,16 +167,18 @@ internal fun VideoToolsPage(
 
     fun runFrameExport() {
         val input = frameInput ?: run { showSnack("尚未选择视频"); return }
+        val position = framePositionMs
+        val sourceName = frameName?.substringBeforeLast('.') ?: input.file?.nameWithoutExtension ?: "video"
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "帧画面导出失败"
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "视频工具/帧画面提取")
-            val sourceName = frameName?.substringBeforeLast('.') ?: input.file?.nameWithoutExtension ?: "video"
-            val target = buildUniqueFile(outputDir, "${sanitizeFileName(sourceName)}_${framePositionMs}ms", "png")
-            val bitmap = extractVideoFrameBitmap(context, input, framePositionMs) ?: throw IllegalStateException("无法读取该时间点画面")
-            FileOutputStream(target).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            bitmap.recycle()
+            val requested = File(outputDir, "${sanitizeFileName(sourceName)}_${position}ms.png")
+            val bitmap = extractVideoFrameBitmap(context, input, position) ?: throw IllegalStateException("无法读取该时间点画面")
+            val target = try { publishEncodedImage(requested) { stream ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            } } finally { bitmap.recycle() }
             scanMediaLibrary(context, listOf(target))
             ToolOutput(title = "帧画面提取完成", message = "已导出 ${target.name}", files = listOf(target), directory = outputDir)
         }

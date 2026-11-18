@@ -57,8 +57,9 @@ class AnimatedGifEncoder(private val checkCancelled: () -> Unit = {}) : AutoClos
 
     fun setSize(w: Int, h: Int) {
         if (started) return
-        fixedWidth = if (w < 1) 320 else w
-        fixedHeight = if (h < 1) 240 else h
+        require(w in 1..65535 && h in 1..65535 && w.toLong() * h <= Int.MAX_VALUE / 3) { "GIF 尺寸超出编码范围" }
+        fixedWidth = w
+        fixedHeight = h
         sizeSet = true
     }
 
@@ -90,7 +91,9 @@ class AnimatedGifEncoder(private val checkCancelled: () -> Unit = {}) : AutoClos
 
     fun addFrame(argbPixels: IntArray?, frameWidth: Int, frameHeight: Int, x: Int = 0, y: Int = 0): Boolean {
         checkCancelled()
-        if (argbPixels == null || !started || frameWidth <= 0 || frameHeight <= 0) return false
+        if (argbPixels == null || !started || frameWidth !in 1..65535 || frameHeight !in 1..65535 ||
+            x !in 0..65535 || y !in 0..65535 || frameWidth.toLong() * frameHeight != argbPixels.size.toLong() ||
+            argbPixels.size > Int.MAX_VALUE / 3) return false
         var ok = true
         try {
             if (sizeSet) setFrameSize(fixedWidth, fixedHeight) else setFrameSize(frameWidth, frameHeight)

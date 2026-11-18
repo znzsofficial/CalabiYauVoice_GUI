@@ -863,7 +863,7 @@ private fun buildDynamicSearchEntries(
             )
         }
     }
-    fallbackMapNames.forEach { mapName ->
+    missingFallbackMaps(gameModes).forEach { mapName ->
         mapsByName.putIfAbsent(
             mapName,
             HubSearchEntry(
@@ -899,6 +899,13 @@ private fun buildDynamicSearchEntries(
         )
     }
     return characterEntries + weaponEntries + mapsByName.values + mapModeEntries
+}
+
+internal fun missingFallbackMaps(modes: List<GameModeData>): List<String> {
+    val expected = MapListApi.GAME_MODES.map { it.second }.toSet()
+    if (modes.map { it.templateName }.toSet() == expected && modes.all { it.loadError == null }) return emptyList()
+    val present = modes.flatMap { it.maps }.map { it.name }.toSet()
+    return fallbackMapNames.filterNot(present::contains)
 }
 
 private fun existingRouteImageUrl(entry: HubSearchEntry?): String? {

@@ -2,6 +2,7 @@ package com.nekolaska.calabiyau.feature.wiki.bio.api
 
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiWriteOwner
 import com.nekolaska.calabiyau.feature.wiki.bio.model.DeckCardOption
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckPayload
 import com.nekolaska.calabiyau.feature.wiki.bio.model.SubmitDeckResult
@@ -22,7 +23,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import util.buildWikiUrl
-import util.executeRequest
+import okhttp3.Request
+import util.awaitResponseText
+import kotlinx.serialization.json.JsonObject
 import util.formBodyOf
 
 /**
@@ -53,22 +56,28 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                 "format" to "json"
             )
 
-            val body = BioDeckShareRemoteSource.httpGetWithCache(
+            val raw = BioDeckShareRemoteSource.httpGetWithCache(
                 url = url,
                 cacheKey = "bio_deck_card_map",
-                forceRefresh = forceRefresh
+                forceRefresh = forceRefresh, validate = { parseIndex(it) != null }
             )
                 ?: return@ioApiCall ApiResult.Error("请求卡牌数据失败", kind = ErrorKind.NETWORK)
 
+            val index = parseIndex(raw.payload) ?: return@ioApiCall ApiResult.Error("卡牌索引不完整", kind = ErrorKind.PARSE)
+            ApiResult.Success(index, raw.isFromCache, raw.ageMs)
+        }
+
+    private fun parseIndex(body: String): Map<String, List<DeckCardOption>>? = runCatching {
             val root = SharedJson.parseToJsonElement(body).jsonObject
+            if ("error" in root) return null
             val pages = root["query"]?.jsonObject?.get("pages")?.jsonObject
-                ?: return@ioApiCall ApiResult.Error("卡牌数据结构异常", kind = ErrorKind.PARSE)
+                ?: return null
 
             val page = pages.values.firstOrNull()?.jsonObject
-                ?: return@ioApiCall ApiResult.Error("卡牌数据为空", kind = ErrorKind.NOT_FOUND)
+                ?: return null
 
             if (page.containsKey("missing")) {
-                return@ioApiCall ApiResult.Error("数据源页面不存在: $WIKI_JSON_PAGE", kind = ErrorKind.NOT_FOUND)
+                return null
             }
 
             val rawContent = page["revisions"]
@@ -98,12 +107,8 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                 }
             }
 
-            if (result.isEmpty()) {
-                return@ioApiCall ApiResult.Error("未解析到卡牌数据", kind = ErrorKind.PARSE)
-            }
-
-            ApiResult.Success(result)
-        }
+            result.takeIf { !it["超弦体"].isNullOrEmpty() && !it["晶源体"].isNullOrEmpty() }
+        }.getOrNull()
 
     fun decodeShareCode(
         rawInput: String,
@@ -116,13 +121,20 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
         BioDeckShareCodecs.extractDeckNameFromShareInput(rawInput)
 
     suspend fun submitDeck(payload: SubmitDeckPayload, cardMap: Map<String, List<DeckCardOption>>): ApiResult<SubmitDeckResult> =
+        submit(payload, cardMap, BioDeckShareRemoteSource::getWikiCookies, { WikiWriteOwner.capture(it) },
+            BioDeckShareRemoteSource::fetchCsrfToken, { WikiEngine.client.newCall(it).awaitResponseText() })
+
+    internal suspend fun submit(payload: SubmitDeckPayload, cardMap: Map<String, List<DeckCardOption>>,
+        getCookies: () -> String?, capture: (String) -> WikiWriteOwner, getToken: suspend (String) -> String?,
+        send: suspend (Request) -> util.HttpTextResponse): ApiResult<SubmitDeckResult> =
         withContext(Dispatchers.IO) {
-            val cookies = BioDeckShareRemoteSource.getWikiCookies()
+            val cookies = getCookies()
             if (cookies.isNullOrBlank()) {
                 return@withContext ApiResult.Error("登录 Wiki 后可发布卡组", kind = ErrorKind.NOT_FOUND)
             }
 
             try {
+                val owner = capture(cookies)
                 val options = cardMap[payload.faction].orEmpty()
                 if (options.isEmpty()) {
                     return@withContext ApiResult.Error("当前阵营卡牌数据为空", kind = ErrorKind.NOT_FOUND)
@@ -139,7 +151,7 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                     allowMissingShareCode = payload.allowMissingShareCode
                 )
 
-                val token = BioDeckShareRemoteSource.fetchCsrfToken(cookies)
+                val token = owner.run { getToken(cookies) }
                     ?: return@withContext ApiResult.Error("获取 CSRF Token 失败", kind = ErrorKind.NETWORK)
 
                 val safeDeckName = sanitizeDeckName(payload.deckName)
@@ -177,12 +189,13 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                     "format" to "json"
                 )
 
-                WikiEngine.client.executeRequest(API) {
+                val request = Request.Builder().url(API).apply {
                     post(formBody)
                     header("Cookie", cookies)
                     header("User-Agent", "CalabiYauVoice/2.0 (Android)")
-                }.use { resp ->
-                    val respBody = resp.body.string()
+                }.build()
+                owner.run { send(request) }.let { resp ->
+                    val respBody = resp.body
                     if (!resp.isSuccessful) {
                         return@withContext ApiResult.Error("发布失败：HTTP ${resp.code}", kind = ErrorKind.NETWORK)
                     }
@@ -192,6 +205,7 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                     if (errorObj != null) {
                         val code = errorObj["code"]?.jsonPrimitive?.content.orEmpty()
                         val info = errorObj["info"]?.jsonPrimitive?.content.orEmpty()
+                        if (code == "moderation-edit-queued") return@withContext ApiResult.Success(SubmitDeckResult(targetTitle, true))
                         val msg = when (code) {
                             "articleexists" -> "同名卡组已存在，请修改卡组名称"
                             "assertuserfailed" -> "登录状态失效，请重新登录"
@@ -200,9 +214,7 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                         return@withContext ApiResult.Error(msg, kind = ErrorKind.UNKNOWN)
                     }
 
-                    val editObj = root["edit"]?.jsonObject
-                    val isPending = editObj?.get("moderation") != null
-                    ApiResult.Success(SubmitDeckResult(title = targetTitle, isPending = isPending))
+                    editReceipt(root, targetTitle)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -210,6 +222,16 @@ object BioDeckShareApi : CachedWikiApi<Map<String, List<DeckCardOption>>>("BioDe
                 ApiResult.Error("发布失败: ${e.message}", kind = e.toErrorKind())
             }
         }
+
+    internal fun editReceipt(root: JsonObject, title: String): ApiResult<SubmitDeckResult> {
+        val edit = root["edit"] as? JsonObject
+        val moderation = (edit?.get("moderation") as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val status = (edit?.get("result") as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val pending = moderation in setOf("pending", "queued", "1", "true") && status in setOf(null, "Pending", "Success")
+        return if ("error" !in root && (status == "Success" || pending))
+            ApiResult.Success(SubmitDeckResult(title, pending))
+        else ApiResult.Error("未确认发布结果，请查看 Wiki 后再试", ErrorKind.PARSE)
+    }
 
     private fun rarityRank(q: String): Int = when (normalizeDeckQuality(q)) {
         "完美" -> 3

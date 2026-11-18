@@ -145,6 +145,7 @@ import com.nekolaska.calabiyau.feature.settings.SettingsScreen
 import com.nekolaska.calabiyau.feature.tools.FileManagerDirectoryPickerConfig
 import com.nekolaska.calabiyau.feature.tools.FileManagerPickerMode
 import com.nekolaska.calabiyau.feature.tools.FileManagerScreen
+import com.nekolaska.calabiyau.feature.tools.toolBrowserLocation
 import com.nekolaska.calabiyau.feature.tools.ToolsHomeScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiHubScreen
 import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
@@ -267,7 +268,7 @@ fun MainScreen(
             "wiki" -> {
                 wikiEnteredFromHub = false
                 showWikiLoginHintOnOpen = false
-                previousDestination = currentDestination
+                previousDestination = wikiReturnDestination(currentDestination, previousDestination)
                 currentDestination = DrawerDestination.WIKI
             }
             else -> openWikiHub()
@@ -452,18 +453,17 @@ fun MainScreen(
                     ) {
                         val overlay = toolFileManagerOverlay
                         if (overlay != null) {
-                            val overlayRootPath = if (overlay.directoryPickerConfig == null && !overlay.initialPath.isNullOrBlank()) {
-                                overlay.initialPath
-                            } else {
-                                AppPrefs.savePath
-                            }
+                            // FileManagerScreen checks initialPath against this root; a tool result
+                            // is only an initial location and must never grant management authority.
+                            val savedRoot = AppPrefs.savePath
+                            val location = remember(savedRoot, overlay.initialPath) { toolBrowserLocation(savedRoot, overlay.initialPath) }
                             Surface(
                                 modifier = Modifier.fillMaxSize(),
                                 color = MaterialTheme.colorScheme.background
                             ) {
                                 FileManagerScreen(
-                                    rootPath = overlayRootPath,
-                                    initialPath = overlay.initialPath,
+                                    rootPath = location.rootPath,
+                                    initialPath = location.initialPath,
                                     onBack = { toolFileManagerOverlay = null },
                                     directoryPickerConfig = overlay.directoryPickerConfig,
                                     onDirectoryPicked = { file ->
@@ -537,9 +537,7 @@ fun MainScreen(
                     if (dest == DrawerDestination.WIKI) {
                         wikiEnteredFromHub = false
                         showWikiLoginHintOnOpen = false
-                        if (currentDestination != DrawerDestination.WIKI) {
-                            previousDestination = currentDestination
-                        }
+                        previousDestination = wikiReturnDestination(currentDestination, previousDestination)
                     }
                     if (dest == DrawerDestination.WIKI_HUB) {
                         openWikiHub(resetStack = shouldResetHubOnSelection(currentDestination, dest))
@@ -551,9 +549,7 @@ fun MainScreen(
             onLoginRequested = {
                 afterDrawerClosed {
                     wikiEnteredFromHub = false
-                    if (currentDestination != DrawerDestination.WIKI) {
-                        previousDestination = currentDestination
-                    }
+                    previousDestination = wikiReturnDestination(currentDestination, previousDestination)
                     currentDestination = DrawerDestination.WIKI
                     showWikiLoginHintOnOpen = true
                 }

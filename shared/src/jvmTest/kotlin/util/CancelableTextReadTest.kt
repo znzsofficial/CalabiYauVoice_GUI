@@ -2,6 +2,7 @@ package util
 
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.net.ServerSocket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -9,7 +10,25 @@ import kotlin.concurrent.thread
 import kotlin.test.*
 
 class CancelableTextReadTest {
-    @Test fun cancellationAfterHeadersClosesBodySocket() = runBlocking {
+    @Test fun callerCanClassifyStructuredErrorsAndInspectResponseHeaders() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(409).message("Conflict").header("X-Test-Revision", "42")
+                .body("{\"errorCode\":\"CONFLICT\"}".toResponseBody()).build()
+        }.build()
+        try {
+            val text = client.newCall(okhttp3.Request.Builder().url("https://test.invalid/").build()).awaitResponseText()
+            assertEquals(409, text.code); assertFalse(text.isSuccessful)
+            assertEquals("42", text.headers["X-Test-Revision"]); assertTrue("CONFLICT" in text.body)
+        } finally { client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
+    }
+    @Test fun cancellationAfterHeadersClosesBodySocket() = verifyDisconnect { client, origin -> client.awaitGetString(origin) }
+
+    @Test fun leavingDiscussionCancelsTheActualRepliesBody() = verifyDisconnect { client, origin ->
+        data.CustomUserApi.fetchCommentsFrom(client, origin, "__public__", 1, 20, null, 17, null)
+    }
+
+    private fun verifyDisconnect(request: suspend (OkHttpClient, String) -> Unit) = runBlocking {
         val server = ServerSocket(0)
         val headers = CountDownLatch(1)
         val disconnected = CountDownLatch(1)
@@ -30,7 +49,7 @@ class CancelableTextReadTest {
         }
         val client = OkHttpClient()
         try {
-            val read = async(Dispatchers.IO) { client.awaitGetString("http://127.0.0.1:${server.localPort}/") }
+            val read = async(Dispatchers.IO) { request(client, "http://127.0.0.1:${server.localPort}") }
             assertTrue(withContext(Dispatchers.IO) { headers.await(5, TimeUnit.SECONDS) })
             read.cancelAndJoin()
             assertTrue(withContext(Dispatchers.IO) { disconnected.await(5, TimeUnit.SECONDS) }, "Body socket must close on cancellation")

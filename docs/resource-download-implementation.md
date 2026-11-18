@@ -1,5 +1,7 @@
 # 资源下载：任务、选择与文件完整性
 
+版本后续变化见[架构二次复审修复](android-architecture-round-two.md)。系统 APK 更新任务与资源下载是两条独立链路：前者按版本和 URL 在 DownloadManager 查找已登记任务，后者以保存目录中的资源名称归属和长度/哈希清单为准。
+
 ## 入口与状态
 
 - Android `feature/download/DownloaderScreen.kt` 组合搜索、分类、文件选择与立绘状态；

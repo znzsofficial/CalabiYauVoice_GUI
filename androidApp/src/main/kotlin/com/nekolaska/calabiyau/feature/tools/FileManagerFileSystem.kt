@@ -19,6 +19,17 @@ internal fun File.isWithinManagedRoot(root: File): Boolean {
     return target == base || target.path.startsWith(base.path.trimEnd(File.separatorChar) + File.separator)
 }
 
+internal data class ToolBrowserLocation(val rootPath: String, val initialPath: String?)
+
+/** Resolves a tool request at the navigation boundary. An initial location never grants authority. */
+internal fun toolBrowserLocation(savedRoot: String, requested: String?): ToolBrowserLocation {
+    val root = File(savedRoot).absoluteFile
+    val initial = requested?.let { path -> runCatching {
+        File(path).canonicalFile.takeIf { it.isDirectory && it.isWithinManagedRoot(root) }?.path
+    }.getOrNull() }
+    return ToolBrowserLocation(root.path, initial)
+}
+
 internal fun validManagedFileName(name: String): Boolean = name.isNotBlank() && name != "." && name != ".." &&
     name.none { it == '/' || it == '\\' || it.isISOControl() }
 

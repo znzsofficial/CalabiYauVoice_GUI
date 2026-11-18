@@ -23,12 +23,28 @@ class ExtractionDropLoadingTest {
                     mutableStateOf<suspend () -> ApiResult<List<ExtractionEntry>>>({ disk.await() }))
                 state.reload()
                 network.complete(ApiResult.Success(response))
+                assertEquals(response, state.data, "a successful network read must not wait for disk")
+                assertFalse(state.isLoading)
                 disk.complete(ApiResult.Success(cached, isOffline = true, cacheAgeMs = 99))
                 assertEquals(response, state.data)
                 assertFalse(state.isOffline)
                 assertFalse(state.isLoading)
             } finally { scope.cancel() }
         }
+    }
+
+    @Test fun fastNetworkErrorStillShowsLateDiskAndLeavesRefreshErrorVisible() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val disk = CompletableDeferred<ApiResult<List<ExtractionEntry>>>()
+            val state = LoadState(emptyList<ExtractionEntry>(), scope,
+                mutableStateOf<suspend (Boolean) -> ApiResult<List<ExtractionEntry>>>({ ApiResult.Error("offline") }),
+                mutableStateOf<suspend () -> ApiResult<List<ExtractionEntry>>>({ disk.await() }), cachedPrefetchDelayMs = 300)
+            state.reload(); assertEquals("offline", state.error?.message)
+            disk.complete(ApiResult.Success(cached, true, 123))
+            assertEquals(cached, state.data); assertEquals("offline", state.error?.message)
+            assertTrue(state.isOffline); assertFalse(state.isShowingCachedPrefetch); assertEquals(123L, state.cacheAgeMs)
+        } finally { scope.cancel() }
     }
 
     @Test fun failedSecondaryLoadDoesNotEraseSourceDataAndRetryRetainsLastGoodPool() {

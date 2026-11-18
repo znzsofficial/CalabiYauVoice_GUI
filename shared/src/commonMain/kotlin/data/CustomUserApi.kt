@@ -15,6 +15,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import util.wikiPathEncode
+import util.awaitResponseText
 import java.util.concurrent.TimeUnit
 
 /**
@@ -47,8 +48,8 @@ object CustomUserApi {
         try {
             val request = Request.Builder().url("${baseUrl()}/api/user/session")
                 .header("X-Wiki-Cookie", wikiCookie).get().build()
-            client.newCall(request).execute().use { response ->
-                val body = response.body.string()
+            client.newCall(request).awaitResponseText().let { response ->
+                val body = response.body
                 nonJsonApiMessage(body)?.let { return@withContext ApiResult.Error(it, ErrorKind.NETWORK) }
                 val parsed = json.decodeFromString<UserSessionResponse>(body)
                 if (!response.isSuccessful || parsed.user == null) {
@@ -81,8 +82,8 @@ object CustomUserApi {
                 }.toString()
                 builder.put(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
             }
-            client.newCall(builder.build()).execute().use { response ->
-                val body = response.body.string()
+            client.newCall(builder.build()).awaitResponseText().let { response ->
+                val body = response.body
                 nonJsonApiMessage(body)?.let { return@withContext ApiResult.Error(it, kind = ErrorKind.NETWORK) }
                 val result = json.decodeFromString<ReplyNotificationsResponse>(body)
                 if (!response.isSuccessful || result.error != null) ApiResult.Error(result.error ?: "通知请求失败 (${response.code})", kind = ErrorKind.NETWORK, httpStatus = response.code, apiCode = result.errorCode)
@@ -114,8 +115,8 @@ object CustomUserApi {
 
         try {
             val req = Request.Builder().url(url).get().build()
-            client.newCall(req).execute().use { resp ->
-                val body = resp.body.string()
+            client.newCall(req).awaitResponseText().let { resp ->
+                val body = resp.body
                 nonJsonApiMessage(body)?.let { message ->
                     return@withContext ApiResult.Error(message, kind = ErrorKind.NETWORK)
                 }
@@ -274,15 +275,20 @@ object CustomUserApi {
         before: String? = null,
         rootId: Long? = null,
         focusId: Long? = null
+    ): ApiResult<ProfileCommentsResponse> = fetchCommentsFrom(client, baseUrl(), bid, page, size, before, rootId, focusId)
+
+    internal suspend fun fetchCommentsFrom(
+        transport: OkHttpClient, origin: String, bid: String, page: Int, size: Int,
+        before: String?, rootId: Long?, focusId: Long?
     ): ApiResult<ProfileCommentsResponse> = withContext(Dispatchers.IO) {
         val path = if (rootId == null) "comments?bid=${bid.trim().wikiPathEncode()}&page=$page" else "replies?rootId=$rootId"
-        val url = "${baseUrl()}/api/user/$path&size=$size" +
+        val url = "$origin/api/user/$path&size=$size" +
             (before?.let { "&before=${it.wikiPathEncode()}" } ?: "") +
             (focusId?.let { "&focusId=$it" } ?: "")
         try {
             val req = Request.Builder().url(url).get().build()
-            client.newCall(req).execute().use { resp ->
-                val body = resp.body.string()
+            transport.newCall(req).awaitResponseText().let { resp ->
+                val body = resp.body
                 nonJsonApiMessage(body, replies = rootId != null)?.let { message ->
                     return@withContext ApiResult.Error(message, kind = ErrorKind.NETWORK)
                 }
@@ -404,8 +410,8 @@ object CustomUserApi {
             val req = Request.Builder().url(url).get().apply {
                 if (!wikiCookie.isNullOrBlank()) header("X-Wiki-Cookie", wikiCookie)
             }.build()
-            client.newCall(req).execute().use { resp ->
-                val body = resp.body.string()
+            client.newCall(req).awaitResponseText().let { resp ->
+                val body = resp.body
                 if (!resp.isSuccessful) {
                     val errMsg = runCatching { json.decodeFromString<ProfileLikesResponse>(body).error }.getOrNull()
                     return@withContext ApiResult.Error(errMsg ?: "获取点赞失败 (${resp.code})", kind = ErrorKind.NETWORK)

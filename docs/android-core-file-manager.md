@@ -10,6 +10,7 @@
 - Hub跨页面快照也只保留完整在线列表，绑定清理代数及同类请求序号；搜索没有独立永久列表缓存。离线/不完整内容可显示，但不能阻止重入验证。
 - `OfflineCache` 强刷更新写入代数、使用独立 inflight，但**不先删除旧磁盘副本**。
   网络错误或有效载荷校验失败时，仍可回退旧的有效副本；显式 invalidate/clear 才删除文件。
+- 排队的强刷不跨清理代数接管。对立绘、留言首屏这类派生结果，在读取依赖之前 `captureWrite(type, key)`，完成后 `put(ticket, payload)`；取票与写入之间发生清理、失效或同键新预约时，旧写入被丢弃。
 - `ReadSingleFlight`负责读请求去重：owner取消时，仍active的follower最多接管一次；当前读者取消直接退出，连续接管失败给出可重试错误。`LoadState`按请求版本执行finally，旧请求不能关掉新请求的加载状态。
 - `WikiParseSource` 在发布缓存前验证 `parse`、所需 text/wikitext 字符串字段和 MediaWiki `error`。
   联网与离线读取共用校验规则；无效 JSON/错误 JSON/缺字段响应不得覆盖已有可用缓存。

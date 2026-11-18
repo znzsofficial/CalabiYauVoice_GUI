@@ -44,6 +44,21 @@ class BioTabLoaderTest {
         Unit
     }
 
+    @Test fun onlyOfficialIndexFallsBackAndRemainsRetryableOnOrdinaryNextRead() = runBlocking {
+        var online = false
+        var indexReads = 0
+        val official = mapOf("晶源体" to listOf(DeckCardOption("卡", "id", "精致", false, 1)))
+        val loader = BioTabLoader(source = { _, _, _ -> BioCardPageSourceResult(deck, false, 0) },
+            cardMap = { indexReads++; ApiResult.Success(official, !online, if (online) 0 else 42) },
+            loadPc = { ApiResult.Success(CardPageData(emptyList(), emptyList(), emptyList(), "", "", "")) })
+        val api = object : com.nekolaska.calabiyau.core.cache.CachedWikiApi<CardPageData>("offlineDeckIndexTest") {
+            override suspend fun fetchFromNetwork(forceRefresh: Boolean) = loader.load(BioCatalogTab.DECK, forceRefresh)
+        }
+        val first = assertIs<ApiResult.Success<CardPageData>>(api.fetch()); assertTrue(first.isOffline); assertEquals(42L, first.cacheAgeMs)
+        online = true
+        assertFalse(assertIs<ApiResult.Success<CardPageData>>(api.fetch()).isOffline); assertEquals(2, indexReads)
+    }
+
     @Test fun deckEditorUsesOfficialMapAndPcDependencyOnceWithoutMobileRequests() = runBlocking {
         val keys = mutableListOf<String>()
         var mapCalls = 0

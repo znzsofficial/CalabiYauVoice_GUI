@@ -18,10 +18,18 @@ import kotlin.time.Duration.Companion.milliseconds
  * Android 端音频播放器管理器（单例），基于 MediaPlayer。
  * 支持播放本地文件和网络 URL，同一时间只播放一个音频。
  */
+internal class PlaybackOwnership {
+    var current: Any? = null
+        private set
+    fun claim(owner: Any?) { current = owner }
+    fun releaseIfOwned(owner: Any, release: () -> Unit) { if (current === owner) release() }
+}
+
 object AudioPlayerManager {
     private val playerLock = Any()
     private var mediaPlayer: MediaPlayer? = null
     private var currentSource: String? = null
+    private val ownership = PlaybackOwnership()
     private var playbackToken: Long = 0L
     private var _isPlaying = mutableStateOf(false)
     private var _playingSource = mutableStateOf<String?>(null)
@@ -37,12 +45,12 @@ object AudioPlayerManager {
         playFrom(source, null)
     }
 
-    fun playFrom(source: String, positionMs: Int?) {
+    fun playFrom(source: String, positionMs: Int?, owner: Any? = null) {
         synchronized(playerLock) {
             val existingPlayer = mediaPlayer
 
             // 同一来源正在播放 → 暂停
-            if (currentSource == source && existingPlayer?.isPlaying == true && positionMs == null) {
+            if (ownership.current === owner && currentSource == source && existingPlayer?.isPlaying == true && positionMs == null) {
                 try {
                     existingPlayer.pause()
                     _isPlaying.value = false
@@ -54,7 +62,7 @@ object AudioPlayerManager {
             }
 
             // 同一来源暂停中 → 继续
-            if (currentSource == source && existingPlayer != null && positionMs == null) {
+            if (ownership.current === owner && currentSource == source && existingPlayer != null && positionMs == null) {
                 try {
                     existingPlayer.start()
                     _isPlaying.value = true
@@ -67,6 +75,7 @@ object AudioPlayerManager {
             // 新来源或之前的已释放 → 创建新的
             releaseLocked()
             currentSource = source
+            ownership.claim(owner)
             _playingSource.value = source
             val token = ++playbackToken
 
@@ -129,6 +138,10 @@ object AudioPlayerManager {
         synchronized(playerLock) { releaseLocked() }
     }
 
+    fun stopOwned(owner: Any) {
+        synchronized(playerLock) { ownership.releaseIfOwned(owner) { releaseLocked() } }
+    }
+
     fun getProgress(): Float {
         val mp = synchronized(playerLock) { mediaPlayer } ?: return 0f
         return try {
@@ -173,6 +186,7 @@ object AudioPlayerManager {
         _playingSource.value = null
         _progress.floatValue = 0f
         currentSource = null
+        ownership.claim(null)
     }
 }
 

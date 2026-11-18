@@ -29,8 +29,20 @@ suspend fun OkHttpClient.awaitGet(url: String): Response = suspendCancellableCor
 }
 
 /** Cancellation stays attached through response-body consumption, not merely response headers. */
-suspend fun OkHttpClient.awaitGetString(url: String): String? = suspendCancellableCoroutine { continuation ->
-    val call = newCall(Request.Builder().url(url).build())
+suspend fun OkHttpClient.awaitGetString(url: String): String? =
+    newCall(Request.Builder().url(url).build()).consumeResponse { if (it.isSuccessful) it.body.string() else null }
+
+data class HttpTextResponse(val code: Int, val body: String, val headers: okhttp3.Headers) {
+    val isSuccessful: Boolean get() = code in 200..299
+}
+
+/** Keeps the Call cancellable while consuming success and structured error bodies alike. */
+suspend fun Call.awaitResponseText(): HttpTextResponse = consumeResponse {
+    HttpTextResponse(it.code, it.body.string(), it.headers)
+}
+
+private suspend fun <T> Call.consumeResponse(read: (Response) -> T): T = suspendCancellableCoroutine { continuation ->
+    val call = this
     continuation.invokeOnCancellation { call.cancel() }
     call.enqueue(object : Callback {
         override fun onFailure(call: Call, e: IOException) {
@@ -38,7 +50,7 @@ suspend fun OkHttpClient.awaitGetString(url: String): String? = suspendCancellab
         }
         override fun onResponse(call: Call, response: Response) {
             try {
-                val text = response.use { if (it.isSuccessful) it.body.string() else null }
+                val text = response.use(read)
                 if (continuation.isActive) continuation.resume(text)
             } catch (e: Exception) {
                 if (continuation.isActive) continuation.resumeWithException(e)

@@ -93,11 +93,6 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.StringerTalentScreen
 import com.nekolaska.calabiyau.feature.wiki.tips.GameTipsScreen
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.PcGameSettingsScreen
 import com.nekolaska.calabiyau.feature.wiki.voting.VotingScreen
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 
 // ════════════════════════════════════════════════════════
 //  Wiki 主页 —— 原生客户端版 (MD3 Expressive)
@@ -114,10 +109,6 @@ private val lazyListStateSaver = listSaver<LazyListState, Int>(
 )
 
 private object WikiHubWallpaperState {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    private var refreshJob: Deferred<String?>? = null
-    private var autoRefreshAttempted = false
     private var displayedImageCacheKey: String? = null
 
     @Synchronized
@@ -133,37 +124,6 @@ private object WikiHubWallpaperState {
         displayedImageCacheKey = imageCacheKey
     }
 
-    @Synchronized
-    fun shouldAutoRefresh(currentCachedUrl: String?): Boolean {
-        return when {
-            currentCachedUrl.isNullOrBlank() -> true
-            !AppPrefs.wallpaperAutoRefresh -> false
-            WallpaperApi.hasRefreshedThisSession -> false
-            autoRefreshAttempted -> false
-            else -> true
-        }
-    }
-
-    @Synchronized
-    fun ensureRefresh(forceRefresh: Boolean): Deferred<String?> {
-        refreshJob?.takeIf { it.isActive }?.let { return it }
-        if (forceRefresh) {
-            autoRefreshAttempted = true
-        }
-        return scope.async {
-            WallpaperApi.ensureWallpaperUrl(forceRefresh = forceRefresh)
-        }.also { job ->
-            refreshJob = job
-            job.invokeOnCompletion { clearRefreshIfCurrent(job) }
-        }
-    }
-
-    @Synchronized
-    fun clearRefreshIfCurrent(job: Deferred<String?>) {
-        if (refreshJob === job) {
-            refreshJob = null
-        }
-    }
 }
 
 /**
@@ -343,13 +303,7 @@ fun WikiHubScreen(
     val wallpaperUrl by AppPrefs.wallpaperUrlState.collectAsState()
     val hubBackdrop = rememberLayerBackdrop()
     LaunchedEffect(Unit) {
-        val currentCachedUrl = AppPrefs.wallpaperUrl
-        val needRefresh = WikiHubWallpaperState.shouldAutoRefresh(currentCachedUrl)
-        if (needRefresh) {
-            val refreshJob = WikiHubWallpaperState.ensureRefresh(forceRefresh = !currentCachedUrl.isNullOrBlank())
-            // WallpaperApi persists the result; all consumers observe that same state.
-            refreshJob.await()
-        }
+        WallpaperApi.refresh(rotate = AppPrefs.wallpaperAutoRefresh)
     }
     val hasWallpaper = !wallpaperUrl.isNullOrBlank()
 
@@ -357,6 +311,7 @@ fun WikiHubScreen(
     val transitionState = rememberPredictiveBackTransition(navigationTarget, resetKey)
     val routeStates = key(resetKey) { rememberSaveableStateHolder() }
     val retainedRoutes by rememberUpdatedState(backStack)
+    val overlayVisible by rememberUpdatedState(isOverlaid)
 
     fun popRoute() {
         if (backStack.size > 1) {
@@ -557,13 +512,8 @@ fun WikiHubScreen(
                         userName in characterByName || backStack.any { it is WikiRoute.CharDetail && it.name == userName }
                     },
                     onOpenCharacter = { userName ->
-                        val existingCharIndex = backStack.indexOfLast { it is WikiRoute.CharDetail && it.name == userName }
-                        if (existingCharIndex >= 0) {
-                            backStack = backStack.take(existingCharIndex + 1)
-                        } else {
-                            characterByName[userName]?.let { character ->
-                                navigateTo(WikiRoute.CharDetail(character.name, character.portraitUrl ?: character.imageUrl))
-                            }
+                        backStack = page.openWeaponUser(backStack, overlayVisible, userName) {
+                            characterByName[userName]?.let { WikiRoute.CharDetail(it.name, it.portraitUrl ?: it.imageUrl) }
                         }
                     },
                     sharedTransitionScope = this@SharedTransitionLayout,
@@ -580,6 +530,7 @@ fun WikiHubScreen(
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
                     error = mapState.error?.message,
+                    offlineAge = mapState.cacheAgeMs.takeIf { mapState.isOffline && !mapState.isShowingCachedPrefetch },
                     onRetry = { mapState.reload(forceRefresh = true) },
                     initialTab = mapListTab,
                     onTabChanged = { mapListTab = it },

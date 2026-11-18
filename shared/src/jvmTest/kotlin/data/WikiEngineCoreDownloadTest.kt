@@ -12,6 +12,24 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class WikiEngineCoreDownloadTest {
+    @Test fun absentReservedNameAndOldConflictingRecordsKeepVerifiedOwner() = runBlocking {
+        val root = Files.createTempDirectory("download-owners").toFile()
+        try {
+            val record = File(root, "records")
+            suspend fun run(url: String, fail: Boolean = false) = WikiEngineCore.downloadSpecificFiles(
+                listOf("voice.wav" to url), root, 1, {}, { _, _, _ -> }, { _, f ->
+                    if (fail) throw java.io.IOException("interrupted") else f.writeText(url)
+                }, record).single()
+            assertFailsWith<java.io.IOException> { run("A", true) }
+            val b = run("B")
+            val a = run("A")
+            assertTrue(a != b); assertEquals("B", b.readText()); assertEquals("A", a.readText())
+            assertEquals(a, run("A", true)); assertEquals(b, run("B", true))
+            record.appendText("${b.name}\tC\n")
+            val c = run("C")
+            assertTrue(c != b); assertEquals("B", b.readText()); assertEquals(b, run("B", true))
+        } finally { root.deleteRecursively() }
+    }
     @Test
     fun privateRecordsAvoidBrokenPublicManifestAndKeepRetriesStable() = runBlocking {
         val root = Files.createTempDirectory("wiki-private-records").toFile()

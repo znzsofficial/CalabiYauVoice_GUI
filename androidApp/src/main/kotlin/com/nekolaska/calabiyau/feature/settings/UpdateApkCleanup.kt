@@ -40,7 +40,7 @@ internal data class PendingAppUpdateInstall(
 internal data class UpdateArchiveInfo(val packageName: String, val versionCode: Long)
 
 internal object UpdateApkCleanup {
-    private val updaterFileName = Regex("CalabiYauVoice-(?:\\d+(?:\\.\\d+){1,3}|latest)\\.apk", RegexOption.IGNORE_CASE)
+    private val updaterFileName = Regex("CalabiYauVoice-(?:\\d+(?:\\.\\d+){1,3}|latest)(?:-copy[0-9]+)?\\.apk", RegexOption.IGNORE_CASE)
 
     fun targetVersionInstalled(
         pending: PendingAppUpdateInstall,

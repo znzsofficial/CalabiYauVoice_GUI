@@ -4,6 +4,7 @@ import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
 import com.nekolaska.calabiyau.core.cache.VersionedMemoryCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import data.ApiResult
 import data.ErrorKind
@@ -161,7 +162,7 @@ object CharacterDetailApi {
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.CHARACTER_DETAIL,
                     key = characterName,
-                    forceRefresh = forceRefresh
+                    forceRefresh = forceRefresh, validatePayload = { validDetailPayload(characterName, it) }
                 ) { WikiEngine.safeGet(url) }
                     ?: return@withContext ApiResult.Error(
                         "请求失败，且无离线缓存",
@@ -231,6 +232,10 @@ object CharacterDetailApi {
      * 直接从各角色页面 `{{超弦体}}` / `{{晶源体}}` 表格模板中批量解析定位。
      * 不再依赖“超弦体定位”聚合页，避免聚合页结构变动导致所有角色定位串到同一类。
      */
+    internal fun validDetailPayload(name: String, payload: String) = WikiParseSource.validDetail(payload) { text, html ->
+        parseCharacterWikitext(name, text, html) != null
+    }
+
     suspend fun fetchCharacterPositions(
         characterNames: Collection<String>,
         forceRefresh: Boolean = false

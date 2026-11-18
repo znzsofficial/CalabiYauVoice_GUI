@@ -23,7 +23,8 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
     private const val KEY_CRASH_TIME = "crash_time"
     private const val KEY_CRASH_NON_EMPTY = "crash_non_empty"
 
-    const val EXTRA_CRASH_LOG = "extra_crash_log"
+    const val EXTRA_CRASH_ID = "extra_crash_id"
+    private fun records(context: Context) = CrashReportStore(context.noBackupFilesDir.resolve("crash_reports"))
 
     private val installLock = Any()
 
@@ -58,15 +59,11 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         try {
             CrashContextStore.flush(context)
             val crashLog = buildCrashLog(thread, throwable, context)
-            prefs(context).edit(commit = true) {
-                putString(KEY_CRASH_LOG, crashLog)
-                putLong(KEY_CRASH_TIME, System.currentTimeMillis())
-                putBoolean(KEY_CRASH_NON_EMPTY, crashLog.isNotBlank())
-            }
+            val id = records(context).save(crashLog)
 
             val intent = Intent(context, CrashReportActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                putExtra(EXTRA_CRASH_LOG, crashLog)
+                putExtra(EXTRA_CRASH_ID, id)
             }
             context.startActivity(intent)
         } catch (_: Exception) {
@@ -94,7 +91,7 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             appendLine()
             appendLine("==== Stack Trace ====")
             appendLine()
-            appendLine(throwable.stackTraceToString())
+            appendLine(boundedStackTrace(throwable))
 
             val crashContext = CrashContextStore.dump(context)
             if (crashContext.isNotBlank()) {
@@ -104,13 +101,6 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
                 appendLine(crashContext)
             }
 
-            var cause = throwable.cause
-            while (cause != null) {
-                appendLine()
-                appendLine("==== Caused By ====")
-                appendLine(cause.stackTraceToString())
-                cause = cause.cause
-            }
         }
     }
 
@@ -129,12 +119,17 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         }
     }
 
-    fun peekCrashLog(context: Context): String? {
-        val prefs = prefs(context)
-        return prefs.getString(KEY_CRASH_LOG, null)?.takeIf { it.isNotBlank() }
+    fun pendingId(context: Context): String? {
+        records(context).newestPending()?.let { return it }
+        // Import the 2.2.1 marker so pending reports survive an application upgrade.
+        val old = prefs(context).getString(KEY_CRASH_LOG, null)?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching { records(context).save(old) }.getOrNull()?.also { clearLegacyLog(context) }
     }
 
-    fun clearCrashLog(context: Context) {
+    fun open(context: Context, id: String) = records(context).open(id)
+    fun finishReport(context: Context, id: String) = records(context).finish(id)
+
+    private fun clearLegacyLog(context: Context) {
         val prefs = prefs(context)
         if (!prefs.contains(KEY_CRASH_LOG) && !prefs.contains(KEY_CRASH_TIME) && !prefs.contains(KEY_CRASH_NON_EMPTY)) return
         prefs.edit(commit = true) {
@@ -145,15 +140,5 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
         CrashContextStore.clear(context)
     }
 
-    fun hasPendingCrashLog(context: Context): Boolean {
-        val prefs = prefs(context)
-        val hasValidLog = !prefs.getString(KEY_CRASH_LOG, null).isNullOrBlank() &&
-            prefs.getBoolean(KEY_CRASH_NON_EMPTY, false)
-
-        if (!hasValidLog && (prefs.contains(KEY_CRASH_LOG) || prefs.contains(KEY_CRASH_TIME))) {
-            clearCrashLog(context)
-        }
-
-        return hasValidLog
-    }
+    fun hasPendingCrashLog(context: Context): Boolean = pendingId(context) != null
 }

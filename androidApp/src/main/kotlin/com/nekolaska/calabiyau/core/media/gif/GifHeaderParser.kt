@@ -34,7 +34,7 @@ class GifHeaderParser {
             setData(ByteBuffer.wrap(data))
         } else {
             rawData = null
-            header!!.status = GifDecoder.STATUS_OPEN_ERROR
+            header = GifHeader().apply { status = GifDecoder.STATUS_OPEN_ERROR }
         }
         return this
     }
@@ -192,6 +192,12 @@ class GifHeaderParser {
         header!!.currentFrame!!.iy = readShort()
         header!!.currentFrame!!.iw = readShort()
         header!!.currentFrame!!.ih = readShort()
+        val frame = requireNotNull(header!!.currentFrame)
+        if (frame.iw <= 0 || frame.ih <= 0 || frame.ix + frame.iw > header!!.width ||
+            frame.iy + frame.ih > header!!.height || header!!.numFrames >= MAX_FRAMES) {
+            header!!.status = GifDecoder.STATUS_FORMAT_ERROR
+            return
+        }
 
         /*
      * Image Descriptor packed field:
@@ -229,6 +235,7 @@ class GifHeaderParser {
         header!!.numFrames++
         // Add image to frame.
         header!!.currentFrame?.let { header!!.frames.add(it) }
+        header!!.currentFrame = null
     }
 
     /**
@@ -262,7 +269,7 @@ class GifHeaderParser {
         readLSD()
         if (header!!.gctFlag && !err()) {
             header!!.gct = readColorTable(header!!.gctSize)
-            header!!.bgColor = header!!.gct!![header!!.bgIndex]
+            header!!.gct?.let { header!!.bgColor = it[header!!.bgIndex] }
         }
     }
 
@@ -273,6 +280,7 @@ class GifHeaderParser {
         // Logical screen size.
         header!!.width = readShort()
         header!!.height = readShort()
+        if (header!!.width == 0 || header!!.height == 0) header!!.status = GifDecoder.STATUS_FORMAT_ERROR
         /*
      * Logical Screen Descriptor packed field:
      *      7 6 5 4 3 2 1 0
@@ -386,7 +394,11 @@ class GifHeaderParser {
      */
     private fun readShort(): Int {
         // Read 16-bit value.
-        return rawData!!.getShort().toInt()
+        if (rawData!!.remaining() < 2) {
+            header!!.status = GifDecoder.STATUS_FORMAT_ERROR
+            return 0
+        }
+        return rawData!!.getShort().toInt() and 0xffff
     }
 
     private fun err(): Boolean {
@@ -504,5 +516,6 @@ class GifHeaderParser {
         const val DEFAULT_FRAME_DELAY: Int = 10
 
         private const val MAX_BLOCK_SIZE = 256
+        private const val MAX_FRAMES = 16_384
     }
 }

@@ -6,7 +6,8 @@ import data.SharedJson
 import util.buildWikiUrl
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import util.executeRequest
+import okhttp3.Request
+import util.awaitResponseText
 import util.formBodyOf
 
 data class VoteSubmitOperation(val pollId: String, val answer: String)
@@ -21,11 +22,11 @@ object VotingRemoteSource {
         return WikiAuthHelper.getWikiCookies()
     }
 
-    fun fetchCsrfToken(cookies: String): String? {
+    suspend fun fetchCsrfToken(cookies: String): String? {
         return WikiAuthHelper.fetchCsrfToken(API, cookies)
     }
 
-    fun fetchVotePageHtml(votePage: String): String? {
+    suspend fun fetchVotePageHtml(votePage: String): String? {
         val url = buildWikiUrl(API,
             "action" to "parse",
             "page" to votePage,
@@ -40,7 +41,7 @@ object VotingRemoteSource {
             ?.jsonPrimitive?.content
     }
 
-    fun fetchVoteDataHtml(fullText: String, cookies: String): String? {
+    suspend fun fetchVoteDataHtml(fullText: String, cookies: String): String? {
         val url = buildWikiUrl(API,
             "action" to "parse",
             "text" to fullText,
@@ -57,10 +58,10 @@ object VotingRemoteSource {
             ?.jsonPrimitive?.content
     }
 
-    fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
+    suspend fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
         val ticket = WikiAuthHelper.beginCookieRequest(cookies)
         if (!WikiAuthHelper.isCurrentRequest(ticket)) return VoteSubmitResult(false, 0, "登录状态已变化，请重新确认后投票")
-        return WikiEngine.client.executeRequest(API) {
+        val request = Request.Builder().url(API).apply {
             post(formBodyOf(
                 "action" to "pollsubmitvote",
                 "poll" to operation.pollId,
@@ -74,29 +75,32 @@ object VotingRemoteSource {
             header("Origin", "https://wiki.biligame.com")
             header("Referer", VOTE_PAGE_URL)
             header("X-Requested-With", "XMLHttpRequest")
-        }.use { resp ->
-            WikiAuthHelper.syncResponseCookies(resp.headers("Set-Cookie"), ticket)
-            val body = resp.body.string()
-            val success = resp.isSuccessful && isSubmitBodySuccessful(body)
+        }.build()
+        return WikiEngine.client.newCall(request).awaitResponseText().let { resp ->
+            WikiAuthHelper.syncResponseCookies(resp.headers.values("Set-Cookie"), ticket)
+            val body = resp.body
+            val success = resp.isSuccessful && confirmsVote(body, operation)
             VoteSubmitResult(
                 success = success,
                 statusCode = resp.code,
-                message = if (success) null else body.take(300).ifBlank { resp.message }
+                message = if (success) null else "未确认投票结果，请刷新核对"
             )
         }
     }
 
-    private fun isSubmitBodySuccessful(body: String): Boolean {
-        val text = body.trim()
-        if (text.isBlank()) return true
-        if (text.contains("error", ignoreCase = true)) return false
-        if (text.contains("badtoken", ignoreCase = true)) return false
-        if (text.contains("notloggedin", ignoreCase = true)) return false
-        if (text.contains("permissiondenied", ignoreCase = true)) return false
-        if (text.contains("<html", ignoreCase = true)) return false
-        if (text.contains("pollsubmitvote", ignoreCase = true)) return true
-        if (text.contains("success", ignoreCase = true)) return true
-        return text.startsWith("{") || text.startsWith("[")
+    internal fun confirmsVote(body: String, operation: VoteSubmitOperation): Boolean {
+        return runCatching {
+            val root = SharedJson.parseToJsonElement(body).jsonObject
+            if ("error" in root) return false
+            val result = root["pollsubmitvote"]?.jsonObject?.get("result")?.jsonPrimitive?.content ?: return false
+            // AJAXPoll returns the updated poll HTML even for some failed operations. Check identity and actual selection.
+            if (result.equals("Success", ignoreCase = true)) return true
+            val doc = org.jsoup.Jsoup.parseBodyFragment(result)
+            val poll = doc.getElementById("ajaxpoll-id-${operation.pollId}") ?: doc.getElementById("ajaxpoll-container-${operation.pollId}") ?: return false
+            val answer = poll.selectFirst("div[answer=1]") ?: return false
+            val selected = answer.selectFirst(".ajaxpoll-our-vote, input[checked]") != null
+            selected == (operation.answer == "1")
+        }.getOrDefault(false)
     }
 
 }

@@ -26,6 +26,14 @@ private data class TrackOutputTarget(
     val muxerFormat: Int
 )
 
+/** MediaMuxer.stop writes the trailer and can fail even after every sample was accepted. */
+internal inline fun <T> writeFinalizedTracks(finish: () -> Unit, write: () -> T): T {
+    val result = write()
+    checkToolCancellation()
+    finish()
+    return result
+}
+
 internal fun muxBilibiliM4sCache(
     context: Context,
     videoInput: PickedInput,
@@ -33,19 +41,22 @@ internal fun muxBilibiliM4sCache(
     outputDir: File
 ): BilibiliMuxResult {
     val videoFile = materializeMuxInput(context, videoInput, "video", "m4s")
-    val audioFile = materializeMuxInput(context, audioInput, "audio", "m4s")
+    var ownedAudio: File? = null
     val deleteVideo = videoInput.file == null
-    val deleteAudio = audioInput.file == null
     try {
+        val audioFile = materializeMuxInput(context, audioInput, "audio", "m4s")
+        if (audioInput.file == null) ownedAudio = audioFile
         val baseName = videoFile.nameWithoutExtension
             .replace(Regex("(?i)(^|[_-])video($|[_-])"), "_")
             .trim('_', '-', ' ')
             .ifBlank { "bilibili_cache" }
         val outputFile = buildUniqueFile(outputDir, sanitizeFileName(baseName), "mp4")
-        return muxTracks(videoFile, audioFile, outputFile)
+        lateinit var counts: Pair<Int, Int>
+        val published = publishToolOutput(outputFile) { counts = muxTracks(videoFile, audioFile, it) }
+        return BilibiliMuxResult(published, counts.first, counts.second)
     } finally {
         if (deleteVideo) runCatching { videoFile.delete() }
-        if (deleteAudio) runCatching { audioFile.delete() }
+        ownedAudio?.delete()
     }
 }
 
@@ -55,10 +66,12 @@ private fun materializeMuxInput(context: Context, input: PickedInput, prefix: St
     val displayName = context.queryDisplayName(uri) ?: "$prefix.$fallbackExt"
     val ext = displayName.substringAfterLast('.', fallbackExt).ifBlank { fallbackExt }
     val temp = File.createTempFile("bili_${prefix}_", ".$ext", context.cacheDir)
-    context.contentResolver.openInputStream(uri)?.use { inputStream ->
-        temp.outputStream().use { output -> inputStream.copyTo(output) }
-    } ?: error("无法读取${displayName}")
-    return temp
+    try {
+        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            temp.outputStream().use { output -> inputStream.copyToolBytes(output) }
+        } ?: error("无法读取${displayName}")
+        return temp
+    } catch (e: Throwable) { temp.delete(); throw e }
 }
 
 internal fun splitMediaTracks(
@@ -70,23 +83,24 @@ internal fun splitMediaTracks(
     val deleteSource = input.file == null
     try {
         val baseName = sanitizeFileName(sourceFile.nameWithoutExtension.ifBlank { "media" })
-        val videoResult = extractSingleTrack(sourceFile, "video/", "视频", outputDir, "${baseName}_video")
-        val audioResult = extractSingleTrack(sourceFile, "audio/", "音频", outputDir, "${baseName}_audio")
-        val videoSamples = videoResult?.second ?: 0
-        val audioSamples = audioResult?.second ?: 0
-        if (videoSamples == 0 && audioSamples == 0) error("未找到可拆分的视频或音频轨道")
-        return MediaSplitResult(
-            videoFile = videoResult?.first,
-            audioFile = audioResult?.first,
-            videoSamples = videoSamples,
-            audioSamples = audioSamples
-        )
+        return ToolOutputBatch().use { batch ->
+            val videoSamples = extractSingleTrack(sourceFile, "video/", outputDir, "${baseName}_video", batch)
+            val audioSamples = extractSingleTrack(sourceFile, "audio/", outputDir, "${baseName}_audio", batch)
+            if (videoSamples == 0 && audioSamples == 0) error("未找到可拆分的视频或音频轨道")
+            val published = batch.commit().iterator()
+            MediaSplitResult(
+                videoFile = if (videoSamples > 0) published.next() else null,
+                audioFile = if (audioSamples > 0) published.next() else null,
+                videoSamples = videoSamples,
+                audioSamples = audioSamples
+            )
+        }
     } finally {
         if (deleteSource) runCatching { sourceFile.delete() }
     }
 }
 
-private fun muxTracks(videoFile: File, audioFile: File, outputFile: File): BilibiliMuxResult {
+private fun muxTracks(videoFile: File, audioFile: File, outputFile: File): Pair<Int, Int> {
     val videoExtractor = MediaExtractor()
     val audioExtractor = MediaExtractor()
     var muxer: MediaMuxer? = null
@@ -106,16 +120,14 @@ private fun muxTracks(videoFile: File, audioFile: File, outputFile: File): Bilib
         val outAudioTrack = muxer.addTrack(audioFormat)
         muxer.start()
 
-        val videoSamples = copySamples(videoExtractor, muxer, outVideoTrack)
-        val audioSamples = copySamples(audioExtractor, muxer, outAudioTrack)
-        if (videoSamples == 0) error("视频轨道没有可写入数据")
-        if (audioSamples == 0) error("音频轨道没有可写入数据")
-        return BilibiliMuxResult(outputFile, videoSamples, audioSamples)
-    } catch (e: Exception) {
-        runCatching { outputFile.delete() }
-        throw e
+        return writeFinalizedTracks(muxer::stop) {
+            val videoSamples = copySamples(videoExtractor, muxer, outVideoTrack)
+            val audioSamples = copySamples(audioExtractor, muxer, outAudioTrack)
+            check(videoSamples > 0) { "视频轨道没有可写入数据" }
+            check(audioSamples > 0) { "音频轨道没有可写入数据" }
+            videoSamples to audioSamples
+        }
     } finally {
-        runCatching { muxer?.stop() }
         runCatching { muxer?.release() }
         videoExtractor.release()
         audioExtractor.release()
@@ -141,40 +153,32 @@ private fun selectOutputTarget(mime: String, mimePrefix: String): TrackOutputTar
 private fun extractSingleTrack(
     sourceFile: File,
     mimePrefix: String,
-    label: String,
     outputDir: File,
-    baseName: String
-): Pair<File, Int>? {
+    baseName: String,
+    batch: ToolOutputBatch
+): Int {
     val extractor = MediaExtractor()
-    var muxer: MediaMuxer? = null
-    var outputFile: File? = null
     return try {
         extractor.setDataSource(sourceFile.absolutePath)
-        val track = findTrack(extractor, mimePrefix) ?: return null
+        val track = findTrack(extractor, mimePrefix) ?: return 0
         val format = extractor.getTrackFormat(track)
         val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
         val target = selectOutputTarget(mime, mimePrefix)
-        outputFile = buildUniqueFile(outputDir, baseName, target.extension)
+        val requested = File(outputDir, "$baseName.${target.extension}")
         extractor.selectTrack(track)
-        muxer = MediaMuxer(outputFile.absolutePath, target.muxerFormat)
-        val outTrack = muxer.addTrack(format)
-        muxer.start()
-        val samples = copySamples(extractor, muxer, outTrack)
-        if (samples == 0) {
-            runCatching { outputFile.delete() }
-            return null
+        var count = 0
+        batch.stage(requested) { temporary ->
+            val muxer = MediaMuxer(temporary.absolutePath, target.muxerFormat)
+            try {
+                val outTrack = muxer.addTrack(format)
+                muxer.start()
+                count = writeFinalizedTracks(muxer::stop) {
+                    copySamples(extractor, muxer, outTrack).also { check(it > 0) { "轨道没有可写入数据" } }
+                }
+            } finally { runCatching { muxer.release() } }
         }
-        outputFile to samples
-    } catch (e: Exception) {
-        runCatching { outputFile?.delete() }
-        val mime = runCatching {
-            val track = findTrack(extractor, mimePrefix)
-            track?.let { extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME) }
-        }.getOrNull().orEmpty()
-        error("$label 轨道${if (mime.isBlank()) "" else "($mime)"}无法无转码导出：${e.message ?: "系统不支持该封装"}")
+        count
     } finally {
-        runCatching { muxer?.stop() }
-        runCatching { muxer?.release() }
         extractor.release()
     }
 }
@@ -191,6 +195,7 @@ private fun copySamples(extractor: MediaExtractor, muxer: MediaMuxer, outputTrac
     var sampleCount = 0
 
     while (true) {
+        checkToolCancellation()
         buffer.clear()
         val size = extractor.readSampleData(buffer, 0)
         if (size < 0) break
@@ -205,6 +210,7 @@ private fun copySamples(extractor: MediaExtractor, muxer: MediaMuxer, outputTrac
             extractor.sampleTime.coerceAtLeast(0L),
             flags
         )
+        checkToolCancellation()
         muxer.writeSampleData(outputTrack, buffer, info)
         sampleCount++
         extractor.advance()

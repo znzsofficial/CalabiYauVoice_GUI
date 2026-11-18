@@ -66,8 +66,8 @@ internal class BioTabLoader(
                 val editorError = (mapResult as? ApiResult.Error)?.message ?: (pcResult as? ApiResult.Error)?.message
                 // Deck browsing remains available if editor-only dependencies fail; refresh retries them explicitly.
                 ApiResult.Success(empty.copy(pcCards = pc, decks = decks, deckCardMap = official, deckEditorError = editorError),
-                    isOffline = raw.isFromCache || (pcResult as? ApiResult.Success)?.isOffline == true,
-                    cacheAgeMs = maxOf(raw.ageMs, (pcResult as? ApiResult.Success)?.cacheAgeMs ?: 0L))
+                    isOffline = raw.isFromCache || (pcResult as? ApiResult.Success)?.isOffline == true || (mapResult as? ApiResult.Success)?.isOffline == true,
+                    cacheAgeMs = maxOf(raw.ageMs, (pcResult as? ApiResult.Success)?.cacheAgeMs ?: 0L, (mapResult as? ApiResult.Success)?.cacheAgeMs ?: 0L))
             }
         }
     }

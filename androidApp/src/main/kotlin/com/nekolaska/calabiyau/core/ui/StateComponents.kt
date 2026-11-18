@@ -47,7 +47,6 @@ import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
@@ -253,27 +252,31 @@ class LoadState<T> internal constructor(
                     ApiResult.Error("读取已中断，请重试")
                 } catch (e: Exception) { ApiResult.Error(e.message ?: "加载失败，请重试") }
             val cachedFetch = cachedFetchRef.value
-            val networkFetch = async { readSafely { fetchRef.value(forceRefresh) } }
-            if (!forceRefresh && cachedFetch != null) {
+            var networkSettled = false
+            var networkSucceeded = false
+            val prefetch = if (!forceRefresh && cachedFetch != null) launch {
                 when (val cached = readSafely { cachedFetch() }) {
                     is ApiResult.Success -> {
-                        if (cachedPrefetchDelayMs > 0L) delay(cachedPrefetchDelayMs.milliseconds)
-                        if (currentVersion != requestVersion) return@launch
-                        if (!networkFetch.isCompleted) {
+                        if (!networkSettled && cachedPrefetchDelayMs > 0L) delay(cachedPrefetchDelayMs.milliseconds)
+                        if (currentVersion == requestVersion && !networkSucceeded) {
                             data = cached.value
                             isOffline = true
-                            isShowingCachedPrefetch = true
+                            isShowingCachedPrefetch = !networkSettled
                             cacheAgeMs = cached.cacheAgeMs
                             isLoading = false
                         }
                     }
                     is ApiResult.Error -> {}
                 }
-            }
+            } else null
 
-            when (val result = networkFetch.await()) {
+            val result = readSafely { fetchRef.value(forceRefresh) }
+            networkSettled = true
+            when (result) {
                 is ApiResult.Success -> {
                     if (currentVersion != requestVersion) return@launch
+                    networkSucceeded = true
+                    prefetch?.cancel()
                     data = result.value
                     isOffline = result.isOffline
                     isShowingCachedPrefetch = false
@@ -283,6 +286,8 @@ class LoadState<T> internal constructor(
                     if (currentVersion != requestVersion) return@launch
                     isShowingCachedPrefetch = false
                     error = result
+                    isLoading = false
+                    prefetch?.join()
                 }
             }
             } finally {
@@ -373,6 +378,7 @@ fun <T> ApiResourceContent(
             val body: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize()) {
                     if (state.isOffline && !state.isShowingCachedPrefetch) OfflineBanner(ageMs = state.cacheAgeMs)
+                    state.error?.let { WikiListGroupError(it.message, state.isLoading) { state.reload(forceRefresh = true) } }
                     content(state.data)
                 }
             }

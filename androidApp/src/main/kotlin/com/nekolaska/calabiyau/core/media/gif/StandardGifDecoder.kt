@@ -189,6 +189,15 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
     @get:Synchronized
     override val nextFrame: Bitmap?
         get() {
+            val pixels = decodeFramePixels() ?: return null
+            val result = nextBitmap
+            result.setPixels(pixels, 0, downsampledWidth, 0, 0, downsampledWidth, downsampledHeight)
+            return result
+        }
+
+    /** Decoder-owned composited pixels, valid only until the next decode. */
+    @Synchronized
+    internal fun decodeFramePixels(): IntArray? {
             val header = this.header
             if (header.numFrames <= 0 || this.currentFrameIndex < 0) {
                 status = GifDecoder.STATUS_FORMAT_ERROR
@@ -240,29 +249,23 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         }
 
     override fun read(`is`: InputStream?, contentLength: Int): Int {
-        if (`is` != null) {
-            try {
-                val capacity = if (contentLength > 0) (contentLength + 4 * 1024) else 16 * 1024
-                val buffer = ByteArrayOutputStream(capacity)
-                var nRead: Int
-                val data = ByteArray(16 * 1024)
-                while ((`is`.read(data, 0, data.size).also { nRead = it }) != -1) {
-                    buffer.write(data, 0, nRead)
-                }
-                buffer.flush()
-
-                read(buffer.toByteArray())
-            } catch (e: IOException) {
-                Log.w(TAG, "Error reading data from stream", e)
-            }
-        } else {
-            status = GifDecoder.STATUS_OPEN_ERROR
-        }
-
+        if (`is` == null) { status = GifDecoder.STATUS_OPEN_ERROR; return status }
         try {
-            `is`?.close()
+            `is`.use { source ->
+                require(contentLength <= inputByteBudget()) { "GIF 文件过大" }
+                val buffer = ByteArrayOutputStream()
+                val data = ByteArray(16 * 1024)
+                while (true) {
+                    val n = source.read(data)
+                    if (n < 0) break
+                    require(buffer.size().toLong() + n <= inputByteBudget()) { "GIF 文件过大" }
+                    buffer.write(data, 0, n)
+                }
+                read(buffer.toByteArray())
+            }
         } catch (e: IOException) {
-            Log.w(TAG, "Error closing stream", e)
+            status = GifDecoder.STATUS_OPEN_ERROR
+            Log.w(TAG, "Error reading data from stream", e)
         }
 
         return status
@@ -298,6 +301,15 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         require(sampleSize > 0) { "Sample size must be >=0, not: $sampleSize" }
         // Make sure sample size is a power of 2.
         sampleSize = Integer.highestOneBit(sampleSize)
+        if (header.status != GifDecoder.STATUS_OK) {
+            this.status = header.status
+            return
+        }
+        val pixels = header.width.toLong() * header.height
+        require(header.width > 0 && header.height > 0 && pixels <=
+            (Runtime.getRuntime().maxMemory() / 3).coerceAtMost(128L * 1024 * 1024) / 32) { "GIF 画布尺寸过大" }
+        require(header.frames.all { it.iw > 0 && it.ih > 0 && it.ix >= 0 && it.iy >= 0 &&
+            it.ix.toLong() + it.iw <= header.width && it.iy.toLong() + it.ih <= header.height }) { "GIF 帧超出画布" }
         this.status = GifDecoder.STATUS_OK
         this.header = header
         this.currentFrameIndex = INITIAL_FRAME_POINTER
@@ -336,10 +348,10 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
     @GifDecoder.GifDecodeStatus
     @Synchronized
     override fun read(data: ByteArray?): Int {
+        if (data == null) { status = GifDecoder.STATUS_OPEN_ERROR; return status }
+        require(data.size <= inputByteBudget()) { "GIF 文件过大" }
         this.header = this.headerParser.setData(data).parseHeader()
-        if (data != null) {
-            setData(header, data)
-        }
+        setData(header, data)
 
         return status
     }
@@ -357,7 +369,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
      * Creates new frame image from current data (and previous frames as specified by their
      * disposition codes).
      */
-    private fun setPixels(currentFrame: GifFrame, previousFrame: GifFrame?): Bitmap {
+    private fun setPixels(currentFrame: GifFrame, previousFrame: GifFrame?): IntArray {
         // Final location of blended pixels.
         val dest = requireNotNull(mainScratch)
 
@@ -432,10 +444,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
             )
         }
 
-        // Set pixels for current image.
-        val result = this.nextBitmap
-        result.setPixels(dest, 0, downsampledWidth, 0, 0, downsampledWidth, downsampledHeight)
-        return result
+        return dest
     }
 
     // Readability
@@ -821,6 +830,7 @@ class StandardGifDecoder(provider: GifDecoder.BitmapProvider) : GifDecoder {
         }
 
     companion object {
+        internal fun inputByteBudget(): Long = (Runtime.getRuntime().maxMemory() / 16).coerceAtMost(32L * 1024 * 1024)
         private val TAG: String = StandardGifDecoder::class.java.getSimpleName()
 
         /** Maximum pixel stack size for decoding LZW compressed data.  */

@@ -52,7 +52,8 @@ object ExifCleaner {
                 exif.setAttribute(tag, null)
             }
             exif.saveAttributes()
-            true
+            val verified = ExifInterface(imageFile.absolutePath)
+            PRIVACY_TAGS.none { verified.getAttribute(it) != null }
         }.getOrElse { false }
     }
 }

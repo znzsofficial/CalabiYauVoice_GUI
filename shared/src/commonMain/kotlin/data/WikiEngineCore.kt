@@ -274,7 +274,8 @@ object WikiEngineCore {
         onLog: (String) -> Unit,
         onProgress: (Int, Int, String) -> Unit,
         downloadFileFn: suspend (String, File) -> Unit,
-        manifestFile: File? = null
+        manifestFile: File? = null,
+        staging: util.ResourceDownloadStaging? = null
     ): List<File> = withContext(Dispatchers.IO) {
         require(maxConcurrency > 0) { "maxConcurrency must be greater than 0" }
         val uniqueFiles = files.distinctBy { it.second }
@@ -283,11 +284,12 @@ object WikiEngineCore {
         val normalizedDir = saveDir.canonicalFile
         val directoryLock = downloadDirectoryLocks.computeIfAbsent(normalizedDir.path.lowercase()) { Mutex() }
 
-        directoryLock.withLock {
+        directoryLock.withDownloadLease(staging) {
             if (!normalizedDir.exists() && !normalizedDir.mkdirs()) {
                 throw IOException("Could not create download directory: $normalizedDir")
             }
             if (!normalizedDir.isDirectory) throw IOException("Download target is not a directory: $normalizedDir")
+            staging?.recover()
 
             val legacyManifest = File(normalizedDir, DOWNLOAD_MANIFEST)
             val recordFile = (manifestFile ?: legacyManifest).canonicalFile
@@ -295,8 +297,22 @@ object WikiEngineCore {
             val manifest = readDownloadManifest(if (recordFile.exists()) recordFile else legacyManifest)
             val usedNames = normalizedDir.listFiles()
                 ?.mapTo(HashSet()) { it.name.lowercase() }
-                ?: HashSet()
+                ?: throw IOException("Could not list download directory: $normalizedDir")
             var namesChanged = false
+            // A reserved name is owned even while its file is absent. Repair old many-to-one
+            // records before allocating anything, retaining the owner verified against disk.
+            for ((name, owners) in manifest.entries.groupBy { it.value.name.lowercase() }) {
+                usedNames.add(name)
+                if (owners.size == 1) continue
+                val keeper = owners.firstOrNull { (_, entry) ->
+                    val target = File(normalizedDir, entry.name)
+                    entry.sha256 != null && target.isFile && entry.size == target.length() &&
+                        fileSha256(target) == entry.sha256
+                }
+                // No matching checksum: keep existing bytes unclaimed, not as a repair target.
+                for (owner in owners) if (owner.key != keeper?.key) manifest.remove(owner.key)
+                namesChanged = true
+            }
             val downloads = uniqueFiles.map { (name, url) ->
                 manifest[url]?.let { entry ->
                     val mappedTarget = File(normalizedDir, entry.name).absoluteFile.normalize()
@@ -402,6 +418,9 @@ object WikiEngineCore {
             downloads.map { it.second }
         }
     }
+
+    private suspend inline fun <T> Mutex.withDownloadLease(staging: util.ResourceDownloadStaging?, action: () -> T): T =
+        withLock { staging?.acquireDirectoryLease().use { action() } }
 
     private data class DownloadManifestEntry(val name: String, val size: Long? = null, val sha256: String? = null)
 

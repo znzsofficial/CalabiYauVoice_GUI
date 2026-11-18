@@ -10,6 +10,11 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 
 class MainNavigationPolicyTest {
+    @Test fun repeatedWikiShortcutStillReturnsToOriginalDestination() {
+        val first = wikiReturnDestination(DrawerDestination.SETTINGS, DrawerDestination.WIKI_HUB)
+        assertEquals(DrawerDestination.SETTINGS, wikiReturnDestination(DrawerDestination.WIKI, first))
+        assertEquals(DrawerDestination.WIKI_HUB, wikiReturnDestination(DrawerDestination.WIKI, DrawerDestination.WIKI))
+    }
     @Test fun explicitResetHasANewSavedSubtreeButSwitchingOtherPagesDoesNot() {
         assertNotEquals(mainDestinationStateKey(DrawerDestination.WIKI_HUB, 0),
             mainDestinationStateKey(DrawerDestination.WIKI_HUB, 1))

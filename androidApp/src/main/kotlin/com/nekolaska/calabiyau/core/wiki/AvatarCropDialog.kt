@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.graphics.Bitmap
+import androidx.core.graphics.createBitmap
+import android.graphics.Rect
+import android.graphics.Paint
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -46,6 +54,7 @@ import kotlin.math.roundToInt
 internal fun AvatarCropDialog(
     source: Bitmap,
     onConfirm: (Bitmap) -> Unit,
+    onFailure: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var boxSize by remember { mutableStateOf(android.util.Size(0, 0)) }
@@ -53,6 +62,8 @@ internal fun AvatarCropDialog(
     var scale by remember(source) { mutableFloatStateOf(1f) }
     var offset by remember(source) { mutableStateOf(Offset.Zero) }
     val density = LocalDensity.current
+    val cropScope = rememberCoroutineScope()
+    var cropping by remember(source) { mutableStateOf(false) }
 
     val fit: Float = if (boxSize.width == 0 || boxSize.height == 0) {
         0f
@@ -70,7 +81,7 @@ internal fun AvatarCropDialog(
         offset = Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
     }
 
-    fun croppedBitmap(): Bitmap? {
+    fun cropRect(): Rect? {
         // 取景框尚未测量时无法反算，直接放弃（确认按钮此刻不可达）
         if (fit <= 0f || squarePx <= 0f) return null
         val scaleTotal = fit * scale
@@ -85,7 +96,7 @@ internal fun AvatarCropDialog(
             cropSizeF.roundToInt(),
             min(source.width - left.roundToInt(), source.height - top.roundToInt())
         ).coerceAtLeast(1)
-        return Bitmap.createBitmap(source, left.roundToInt(), top.roundToInt(), side, side)
+        return Rect(left.roundToInt(), top.roundToInt(), left.roundToInt() + side, top.roundToInt() + side)
     }
 
     Dialog(
@@ -181,8 +192,27 @@ internal fun AvatarCropDialog(
                     Text("取消", color = Color.White)
                 }
                 Button(
-                    onClick = { croppedBitmap()?.let(onConfirm) },
-                    enabled = fit > 0f && squarePx > 0f
+                    onClick = {
+                        val area = cropRect()
+                        if (area != null && !cropping) {
+                            cropping = true
+                            cropScope.launch {
+                                try {
+                                    val result = withContext(Dispatchers.Default) {
+                                        val side = min(AVATAR_TARGET_SIZE_PX, area.width())
+                                        createBitmap(side, side, Bitmap.Config.ARGB_8888).also {
+                                            android.graphics.Canvas(it).drawBitmap(source, area, Rect(0, 0, side, side), Paint(Paint.FILTER_BITMAP_FLAG))
+                                        }
+                                    }
+                                    onConfirm(result)
+                                } catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { onFailure() }
+                                catch (_: OutOfMemoryError) { onFailure() }
+                                finally { cropping = false }
+                            }
+                        }
+                    },
+                    enabled = fit > 0f && squarePx > 0f && !cropping
                 ) {
                     Text("裁切并使用")
                 }

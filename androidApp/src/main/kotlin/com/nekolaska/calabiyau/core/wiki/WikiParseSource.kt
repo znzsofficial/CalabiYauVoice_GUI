@@ -84,6 +84,11 @@ object WikiParseSource {
             ("wikitext" !in prop.split('|') || result.wikitext != null)
     }.getOrDefault(false)
 
+    internal fun validDetail(payload: String, usable: (String, String) -> Boolean): Boolean {
+        val parsed = parsePayload(payload, false, 0) ?: return false
+        return usable(parsed.wikitext ?: return false, parsed.html ?: return false)
+    }
+
     private fun parsePayload(
         payload: String,
         isFromCache: Boolean,

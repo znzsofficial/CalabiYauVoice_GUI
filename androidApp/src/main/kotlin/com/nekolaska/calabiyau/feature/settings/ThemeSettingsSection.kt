@@ -78,6 +78,7 @@ import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
+import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperRefresh
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -718,11 +719,13 @@ private fun WallpaperItems() {
             isRefreshing = true
             wallpaperMessage = null
             scope.launch {
-                val url = withContext(Dispatchers.IO) {
-                    WallpaperApi.fetchRandomWallpaperUrl(forceRefresh = true)
-                }
-                wallpaperMessage = if (url != null) "已更换" else "获取失败"
-                isRefreshing = false
+                try {
+                    wallpaperMessage = when (WallpaperApi.refresh(manual = true)) {
+                        WallpaperRefresh.UPDATED -> "已更换"
+                        WallpaperRefresh.RETAINED -> "沿用当前壁纸"
+                        WallpaperRefresh.UNAVAILABLE -> "获取失败"
+                    }
+                } finally { isRefreshing = false }
             }
         }
     )

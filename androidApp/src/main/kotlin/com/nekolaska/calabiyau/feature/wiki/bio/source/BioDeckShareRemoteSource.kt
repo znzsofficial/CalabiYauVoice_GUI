@@ -11,24 +11,25 @@ object BioDeckShareRemoteSource {
         return WikiAuthHelper.getWikiCookies()
     }
 
-    fun fetchCsrfToken(cookies: String): String? {
+    suspend fun fetchCsrfToken(cookies: String): String? {
         return WikiAuthHelper.fetchCsrfToken(API, cookies)
     }
 
-    fun httpGet(url: String): String? {
+    suspend fun httpGet(url: String): String? {
         return WikiAuthHelper.httpGet(url, expectJson = true)
     }
 
     suspend fun httpGetWithCache(
         url: String,
         cacheKey: String,
-        forceRefresh: Boolean
-    ): String? {
+        forceRefresh: Boolean,
+        validate: (String) -> Boolean
+    ): OfflineCache.CacheResult? {
         return OfflineCache.fetchWithCache(
             type = OfflineCache.Type.BIO_CARDS,
             key = cacheKey,
-            forceRefresh = forceRefresh
-        ) { httpGet(url) }?.payload
+            forceRefresh = forceRefresh, validatePayload = validate
+        ) { httpGet(url) }
     }
 
 }

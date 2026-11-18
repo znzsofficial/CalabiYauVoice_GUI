@@ -51,13 +51,15 @@ object VotingParsers {
         val containers = Jsoup.parse(html).select("[id^=ajaxpoll-container-], [class*=ajaxpoll-container]")
         if (containers.isEmpty()) return emptyList()
 
-        return containers.mapNotNull { container ->
-            val pollId = container.selectFirst(".poll-id")?.classNames()
-                ?.firstOrNull { it.matches(Regex("[A-Fa-f0-9]+")) }
-                ?: container.id().removePrefix("ajaxpoll-container-").takeIf {
-                    container.id().startsWith("ajaxpoll-container-") && it.matches(Regex("[A-Fa-f0-9]+"))
-                }
-                ?: return@mapNotNull null
+        // Never compress missing slots: the response order mirrors the generated <poll> tags.
+        return containers.map { container ->
+            val ids = container.select(".poll-id").flatMap { it.classNames() }.filter { it.matches(hexId) }.toMutableList()
+            if (container.id().startsWith("ajaxpoll-container-")) {
+                val id = container.id().removePrefix("ajaxpoll-container-")
+                if (!id.matches(hexId)) return emptyList()
+                ids += id
+            }
+            val pollId = ids.distinctBy { it.lowercase() }.singleOrNull() ?: return emptyList()
 
             val answerBlock = container.selectFirst("div[answer=1]")
             var userVoted = false
@@ -75,9 +77,12 @@ object VotingParsers {
                     ?.groupValues?.get(1)?.toIntOrNull() ?: 0
             }
 
-            PollData(pollId = pollId, votes = votes, userVoted = userVoted)
+            PollData(pollId = pollId, votes = votes, userVoted = userVoted,
+                question = container.selectFirst(".ajaxpoll-question")?.text()?.trim()?.takeIf { it.isNotEmpty() })
         }
     }
+
+    private val hexId = Regex("[A-Fa-f0-9]+")
 
     private fun textLines(element: Element): List<String> =
         element.textWithLineBreaks()

@@ -106,6 +106,7 @@ object OfflineCache {
     private val cacheMutationLock = Mutex()
     private val typeGenerations = ConcurrentHashMap<Type, AtomicLong>()
     private val keyGenerations = ConcurrentHashMap<String, AtomicLong>()
+    private val refreshVersions = ConcurrentHashMap<String, AtomicLong>()
 
     private fun typeGeneration(type: Type): AtomicLong =
         typeGenerations.computeIfAbsent(type) { AtomicLong() }
@@ -113,10 +114,9 @@ object OfflineCache {
     private fun keyGeneration(type: Type, key: String): AtomicLong =
         keyGenerations.computeIfAbsent("${type.dir}:$key") { AtomicLong() }
 
-    private data class CacheGeneration(val type: Long, val key: Long)
-
-    private fun generation(type: Type, key: String): CacheGeneration =
-        CacheGeneration(typeGeneration(type).get(), keyGeneration(type, key).get())
+    private fun generation(type: Type, key: String): WriteTicket =
+        WriteTicket(type, key, typeGeneration(type).get(), keyGeneration(type, key).get(),
+            refreshVersions["${type.dir}:$key"]?.get() ?: 0L)
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -155,18 +155,27 @@ object OfflineCache {
     /**
      * 写入缓存。
      */
-    suspend fun put(type: Type, key: String, json: String) = withContext(Dispatchers.IO) {
-        if (!::cacheDir.isInitialized) return@withContext
-        putIfCurrent(type, key, json, generation(type, key))
+    internal data class WriteTicket(val type: Type, val key: String, val typeVersion: Long, val keyVersion: Long, val refresh: Long)
+
+    /** Reserve before reading dependencies. A newer reservation or an invalidation revokes this writer. */
+    internal suspend fun captureWrite(type: Type, key: String): WriteTicket = cacheMutationLock.withLock {
+        keyGeneration(type, key).incrementAndGet()
+        generation(type, key)
+    }
+
+    internal suspend fun put(ticket: WriteTicket, json: String) = putIfCurrent(ticket.type, ticket.key, json, ticket)
+
+    internal suspend fun publishIfCurrent(ticket: WriteTicket, publish: () -> Unit) = cacheMutationLock.withLock {
+        if (generation(ticket.type, ticket.key) == ticket) publish()
     }
 
     /**
      * 使单个缓存条目失效（用于 forceRefresh）。
      */
     suspend fun invalidate(type: Type, key: String) = withContext(Dispatchers.IO) {
-        if (!::cacheDir.isInitialized) return@withContext
         cacheMutationLock.withLock {
             keyGeneration(type, key).incrementAndGet()
+            if (!::cacheDir.isInitialized) return@withLock
             val f = cacheFile(type, key, createDir = false)
             if (f.exists()) f.delete()
         }
@@ -176,9 +185,9 @@ object OfflineCache {
      * 清除指定类型的所有缓存。
      */
     suspend fun clear(type: Type) = withContext(Dispatchers.IO) {
-        if (!::cacheDir.isInitialized) return@withContext
         cacheMutationLock.withLock {
             typeGeneration(type).incrementAndGet()
+            if (!::cacheDir.isInitialized) return@withLock
             File(cacheDir, type.dir).deleteRecursively()
         }
     }
@@ -250,29 +259,24 @@ object OfflineCache {
         // 也避免强制刷新的 Deferred 覆盖非强制请求者正在等待的结果
         val dedupKey = if (forceRefresh) "force:${type.dir}:$key" else "${type.dir}:$key"
 
-        return inflight.run("$dedupKey:${generation(type, key)}") {
+        val requestedGeneration = cacheMutationLock.withLock { generation(type, key) }
+        // A forced follower may take over from a cancelled forced owner in the SAME clear epoch.
+        // It must never adopt a clear/invalidate or a newer explicitly reserved derived writer.
+        val flightGeneration = if (forceRefresh) requestedGeneration.copy(refresh = 0) else requestedGeneration
+        return inflight.run("$dedupKey:$flightGeneration") {
         val lockKey = "${type.dir}:$key"
         val cacheLock = cacheLocks.computeIfAbsent(lockKey) { Mutex() }
-        val requestedGeneration = generation(type, key)
         try {
             cacheLock.withLock {
-                val cacheGeneration = if (forceRefresh) {
-                    cacheMutationLock.withLock {
-                        keyGeneration(type, key).incrementAndGet()
+                val cacheGeneration = cacheMutationLock.withLock {
+                    val now = generation(type, key)
+                    if (now.typeVersion != requestedGeneration.typeVersion || now.keyVersion != requestedGeneration.keyVersion ||
+                        (!forceRefresh && now.refresh != requestedGeneration.refresh)) null
+                    else if (forceRefresh) {
+                        refreshVersions.computeIfAbsent(lockKey) { AtomicLong() }.incrementAndGet()
                         generation(type, key)
-                    }
-                } else {
-                    val currentGeneration = generation(type, key)
-                    if (currentGeneration != requestedGeneration) {
-                        getEntry(type, key)?.takeIf { entry ->
-                            runCatching { validatePayload(entry.content) }.getOrDefault(false)
-                        }?.let {
-                            val cachedResult = it.toCacheResult()
-                            return@withLock cachedResult
-                        }
-                    }
-                    currentGeneration
-                }
+                    } else requestedGeneration
+                } ?: return@withLock getEntry(type, key)?.takeIf { validatePayload(it.content) }?.toCacheResult()
                 val result = doFetch(type, key, cacheGeneration, validatePayload, networkFetch)
                 if (result == null && ::appContext.isInitialized) {
                     CrashContextStore.record(
@@ -307,7 +311,7 @@ object OfflineCache {
     private suspend fun doFetch(
         type: Type,
         key: String,
-        cacheGeneration: CacheGeneration,
+        cacheGeneration: WriteTicket,
         validatePayload: (String) -> Boolean,
         networkFetch: suspend () -> String?
     ): CacheResult? {
@@ -343,12 +347,11 @@ object OfflineCache {
         type: Type,
         key: String,
         json: String,
-        expectedGeneration: CacheGeneration
+        expectedGeneration: WriteTicket
     ) = withContext(Dispatchers.IO) {
         if (!::cacheDir.isInitialized) return@withContext
         try {
-            cacheMutationLock.withLock {
-                if (generation(type, key) != expectedGeneration) return@withLock
+            publishIfCurrent(expectedGeneration) {
                 val target = cacheFile(type, key)
                 val temp = File.createTempFile(".cache-", ".tmp", target.parentFile)
                 try {

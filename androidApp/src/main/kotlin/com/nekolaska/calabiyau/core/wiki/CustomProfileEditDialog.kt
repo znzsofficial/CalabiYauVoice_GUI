@@ -48,12 +48,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.scale
 import coil3.compose.AsyncImage
 import data.ApiResult
 import data.CustomUserApi
 import data.CustomUserProfile
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 /**
@@ -80,20 +83,20 @@ fun CustomProfileEditDialog(
     var croppedAvatar by remember { mutableStateOf<Bitmap?>(null) }
     var isBusy by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var imageJob by remember { mutableStateOf<Job?>(null) }
+    var readingImage by remember { mutableStateOf(false) }
 
     val avatarPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            scope.launch {
-                val decoded = runCatching {
-                    decodeSampledAvatar(context, uri, AVATAR_CROP_SOURCE_SIZE_PX)
-                }.getOrNull()
-                if (decoded == null) {
-                    errorMessage = "无法读取所选图片"
-                } else {
-                    errorMessage = null
-                    cropSource = decoded
+            imageJob?.cancel()
+            readingImage = true
+            imageJob = scope.launch {
+                val decoded = withContext(Dispatchers.IO) { decodeSampledAvatar(context, uri) }
+                readingImage = false
+                if (decoded == null) errorMessage = "无法读取所选图片" else {
+                    errorMessage = null; cropSource = decoded
                 }
             }
         }
@@ -129,7 +132,11 @@ fun CustomProfileEditDialog(
             var avatarUrl: String? = currentProfile?.avatarUrl
             if (cropped != null) {
                 // 裁切结果已是方形：限制 512px → WEBP 压缩
-                val encoded = runCatching { encodeSquareAvatar(cropped, AVATAR_TARGET_SIZE_PX) }.getOrNull()
+                val encoded = withContext(Dispatchers.Default) {
+                    try { encodeSquareAvatar(cropped) }
+                    catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { null }
+                }
                 if (encoded == null) {
                     errorMessage = "图片处理失败"
                     isBusy = false
@@ -277,7 +284,7 @@ fun CustomProfileEditDialog(
             if (isBusy) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                TextButton(onClick = { submit() }) { Text("保存") }
+                TextButton(onClick = { submit() }, enabled = !readingImage) { Text("保存") }
             }
         },
         dismissButton = {
@@ -295,6 +302,7 @@ fun CustomProfileEditDialog(
                 cropSource = null
                 errorMessage = null
             },
+            onFailure = { cropSource = null; errorMessage = "图片裁切失败" },
             onDismiss = { cropSource = null }
         )
     }
@@ -338,13 +346,24 @@ fun CustomProfileAvatar(
 // ───── 头像压缩管线 ─────
 
 /** 头像目标边长：展示最大 64dp，按 3x 密度留足余量 */
-private const val AVATAR_TARGET_SIZE_PX = 512
+internal const val AVATAR_TARGET_SIZE_PX = 512
 
 /** 裁切源图的最大边长（保证裁切精度，同时避免超大位图） */
 private const val AVATAR_CROP_SOURCE_SIZE_PX = 2048
 
 /** 采样解码：按目标尺寸计算 inSampleSize，避免整图加载进内存 */
-private fun decodeSampledAvatar(context: android.content.Context, uri: Uri, targetSizePx: Int): Bitmap? {
+internal fun avatarSampleSize(width: Int, height: Int, budgetBytes: Long): Int? {
+    if (width !in 1..20000 || height !in 1..20000 || budgetBytes < 4L) return null
+    var sample = 1
+    while (true) {
+        val w = (width + sample - 1) / sample
+        val h = (height + sample - 1) / sample
+        if (maxOf(w, h) <= AVATAR_CROP_SOURCE_SIZE_PX && w.toLong() * h * 4 <= budgetBytes) return sample
+        sample *= 2
+    }
+}
+
+private fun decodeSampledAvatar(context: android.content.Context, uri: Uri): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     // bounds 模式下 decodeStream 返回值恒为 null，只填充 bounds；流打开失败才算读不到
     val streamOpened = runCatching {
@@ -354,15 +373,9 @@ private fun decodeSampledAvatar(context: android.content.Context, uri: Uri, targ
         } ?: false
     }.getOrDefault(false)
     if (!streamOpened) return null
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    // 防御极端大图
-    if (bounds.outWidth > 20000 || bounds.outHeight > 20000) return null
-
-    var sample = 1
-    while (bounds.outWidth / (sample * 2) >= targetSizePx && bounds.outHeight / (sample * 2) >= targetSizePx) {
-        sample *= 2
-    }
-    val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
+    val sample = avatarSampleSize(bounds.outWidth, bounds.outHeight,
+        minOf(16L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 12)) ?: return null
+    val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.ARGB_8888 }
     return runCatching {
         context.contentResolver.openInputStream(uri)?.use { stream ->
             BitmapFactory.decodeStream(stream, null, decodeOpts)
@@ -370,18 +383,9 @@ private fun decodeSampledAvatar(context: android.content.Context, uri: Uri, targ
     }.getOrNull()
 }
 
-/** 中心裁方 → 限制边长 → WEBP 压缩（API 30+ 用 WEBP_LOSSY） */
-private fun encodeSquareAvatar(source: Bitmap, targetSizePx: Int, quality: Int = 85): ByteArray? {
-    val side = minOf(source.width, source.height)
-    if (side <= 0) return null
-    val x = (source.width - side) / 2
-    val y = (source.height - side) / 2
-    val square = Bitmap.createBitmap(source, x, y, side, side)
-    val scaled = if (side > targetSizePx) {
-        square.scale(targetSizePx, targetSizePx)
-    } else {
-        square
-    }
+/** AvatarCropDialog already draws exactly the chosen region at the final pixel size. */
+private fun encodeSquareAvatar(source: Bitmap, quality: Int = 85): ByteArray? {
+    if (source.width != source.height || source.width !in 1..AVATAR_TARGET_SIZE_PX) return null
     val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Bitmap.CompressFormat.WEBP_LOSSY
     } else {
@@ -389,6 +393,6 @@ private fun encodeSquareAvatar(source: Bitmap, targetSizePx: Int, quality: Int =
         Bitmap.CompressFormat.WEBP
     }
     return ByteArrayOutputStream().use { out ->
-        if (!scaled.compress(format, quality, out)) null else out.toByteArray()
+        if (!source.compress(format, quality, out)) null else out.toByteArray()
     }
 }

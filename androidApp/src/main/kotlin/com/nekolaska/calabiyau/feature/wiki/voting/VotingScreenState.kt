@@ -35,6 +35,8 @@ internal class VotingScreenState(
 
     fun toggle(name: String) {
         if (isSubmitting || isLoadingConfig || isLoadingData || config?.candidates?.none { it.name == name } != false) return
+        val limit = config?.voteLimit ?: return
+        if (limit > 0 && selectedNames.size >= limit && name !in selectedNames) return
         selectedNames = if (name in selectedNames) selectedNames - name else selectedNames + name
     }
 

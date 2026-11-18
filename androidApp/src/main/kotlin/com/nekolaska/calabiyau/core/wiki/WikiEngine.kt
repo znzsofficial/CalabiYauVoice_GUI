@@ -116,8 +116,10 @@ object WikiEngine {
         onProgress: (Int, Int, String) -> Unit
     ) = withContext(Dispatchers.IO) {
         val app = checkNotNull(CalabiYauApplication.instanceOrNull) { "Application is not initialized" }
-        WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, ::downloadFile,
-            manifestFile = privateDownloadManifestFile(app.filesDir, saveDir))
+        val staging = util.ResourceDownloadStaging(File(app.filesDir, "download_staging"), saveDir)
+        WikiEngineCore.downloadSpecificFiles(files, saveDir, maxConcurrency, onLog, onProgress, { url, target ->
+            downloadResourceAtomically(url, target, fetch = { source, tmp -> client.awaitGetToFile(source, tmp) }, staging = staging)
+        }, manifestFile = privateDownloadManifestFile(app.filesDir, saveDir), staging = staging)
     }
 
     // === Android 专有功能 ===
@@ -173,8 +175,4 @@ object WikiEngine {
         null
     }
 
-    private suspend fun downloadFile(url: String, targetFile: File) {
-        downloadResourceAtomically(url, targetFile,
-            fetch = { source, tmp -> client.awaitGetToFile(source, tmp) })
-    }
 }

@@ -139,6 +139,7 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
         forceRefresh: Boolean
     ): ApiResult<FactionData> {
         return try {
+            val portraitTicket = OfflineCache.captureWrite(OfflineCache.Type.CHARACTER_LIST, "portraits_$faction")
             val wikitext = "{{阵营角色|$faction}}"
             val url = buildWikiUrl(API, "action" to "parse", "text" to wikitext, "prop" to "text", "contentmodel" to "wikitext", "format" to "json")
 
@@ -172,8 +173,7 @@ object CharacterListApi : CachedWikiApi<List<CharacterListApi.FactionData>>("Cha
                 catch (e: CancellationException) { throw e }
                 catch (_: Exception) { cachedCharacters }
             val resolved = withPortraits.mapNotNull { char -> char.portraitUrl?.let { char.name to it } }.toMap()
-            if (resolved.isNotEmpty()) OfflineCache.put(OfflineCache.Type.CHARACTER_LIST,
-                "portraits_$faction", SharedJson.encodeToString(savedPortraits + resolved))
+            if (resolved.isNotEmpty()) OfflineCache.put(portraitTicket, SharedJson.encodeToString(savedPortraits + resolved))
             ApiResult.Success(
                 FactionData(faction, withPortraits),
                 isOffline = result.isFromCache,

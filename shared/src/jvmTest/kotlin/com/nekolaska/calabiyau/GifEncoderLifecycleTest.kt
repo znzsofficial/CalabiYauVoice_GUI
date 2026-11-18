@@ -6,6 +6,21 @@ import java.io.IOException
 import kotlin.test.*
 
 class GifEncoderLifecycleTest {
+    @Test fun unsigned16BitWidthRoundTripsAndOverflowCannotReportSuccess() {
+        for (width in listOf(32768, 65535)) {
+            val bytes = ByteArrayOutputStream()
+            AnimatedGifEncoder().use { encoder ->
+                encoder.setSize(width, 1); assertTrue(encoder.start(bytes))
+                assertTrue(encoder.addFrame(IntArray(width), width, 1)); assertTrue(encoder.finish())
+            }
+            val payload = bytes.toByteArray()
+            assertEquals(width, (payload[6].toInt() and 255) or ((payload[7].toInt() and 255) shl 8))
+        }
+        AnimatedGifEncoder().use { encoder ->
+            assertFailsWith<IllegalArgumentException> { encoder.setSize(65536, 1) }
+            encoder.start(ByteArrayOutputStream()); assertFalse(encoder.addFrame(IntArray(65536), 65536, 1))
+        }
+    }
     @Test fun finishFailureStillClosesOwnedStreamAndCanAbortTwice() {
         var closed = 0
         val stream = object : ByteArrayOutputStream() {

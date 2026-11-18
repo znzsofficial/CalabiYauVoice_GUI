@@ -1,7 +1,8 @@
 package com.nekolaska.calabiyau.feature.weapon.detail
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
-import com.nekolaska.calabiyau.core.cache.MemoryCacheRegistry
+import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
+import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.TacticalItemEffectParser
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.WeaponSupplementaryDataParser
@@ -19,7 +20,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import java.util.concurrent.ConcurrentHashMap
 import util.buildParseUrl
 import util.buildWikiUrl
 import util.wikiPathEncode
@@ -33,13 +33,10 @@ import util.wikiPathEncode
 object WeaponDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
+    private val reader = WeaponDetailReader(::load)
 
-    private val detailCache = ConcurrentHashMap<String, WeaponDetail>()
-
-    init {
-        MemoryCacheRegistry.register("WeaponDetailApi") {
-            detailCache.clear()
-        }
+    internal fun validDetailPayload(name: String, payload: String) = WikiParseSource.validDetail(payload) { text, html ->
+        parseWeaponWikitext(name, text, renderedHtml = html) != null
     }
 
     /** 武器详情 */
@@ -100,19 +97,17 @@ object WeaponDetailApi {
     suspend fun fetchWeaponDetail(
         weaponName: String,
         forceRefresh: Boolean = false
-    ): ApiResult<WeaponDetail> =
+    ): ApiResult<WeaponDetail> = reader.fetch(weaponName, forceRefresh)
+
+    private suspend fun load(weaponName: String, forceRefresh: Boolean): ApiResult<WeaponDetail> =
         withContext(Dispatchers.IO) {
             try {
-                if (!forceRefresh) {
-                    detailCache[weaponName]?.let { return@withContext ApiResult.Success(it) }
-                }
-
                 val url = buildParseUrl(API, weaponName, "wikitext|text")
 
                 val result = OfflineCache.fetchWithCache(
                     type = OfflineCache.Type.WEAPON_DETAIL,
                     key = weaponName,
-                    forceRefresh = forceRefresh
+                    forceRefresh = forceRefresh, validatePayload = { validDetailPayload(weaponName, it) }
                 ) { WikiEngine.safeGet(url) }
                     ?: return@withContext ApiResult.Error(
                         "请求失败，且无离线缓存",
@@ -136,7 +131,7 @@ object WeaponDetailApi {
                     ?.jsonPrimitive?.content
                     .orEmpty()
 
-                val imageUrl = resolveWeaponImageUrl(
+                val image = resolveWeaponImageUrl(
                     weaponName = weaponName,
                     wikitext = wikitext,
                     forceRefresh = forceRefresh
@@ -146,7 +141,7 @@ object WeaponDetailApi {
                     weaponName,
                     wikitext,
                     renderedHtml = renderedHtml,
-                    resolvedImageUrl = imageUrl
+                    resolvedImageUrl = image?.payload
                 )
                     ?: return@withContext ApiResult.Error(
                         "未找到武器信息模板",
@@ -157,15 +152,13 @@ object WeaponDetailApi {
                 // the secondary request; pure parsing itself must never fetch the network.
                 val tactical = parsedDetail.type == "战术道具" ||
                     extractTemplate(wikitext, "武器-战术道具") != null
-                val detail = if (tactical && parsedDetail.cooldowns.isEmpty()) {
-                    parsedDetail.copy(cooldowns = fetchCooldowns(weaponName, forceRefresh))
-                } else parsedDetail
-                detailCache[weaponName] = detail
+                val cooldown = if (tactical && parsedDetail.cooldowns.isEmpty()) fetchCooldowns(weaponName, forceRefresh) else null
+                val detail = cooldown?.let { parsedDetail.copy(cooldowns = it.value) } ?: parsedDetail
 
                 ApiResult.Success(
                     detail,
-                    isOffline = result.isFromCache,
-                    cacheAgeMs = result.ageMs
+                    isOffline = result.isFromCache || image?.isFromCache == true || cooldown?.isOffline == true,
+                    cacheAgeMs = maxOf(result.ageMs, image?.ageMs ?: 0L, cooldown?.cacheAgeMs ?: 0L)
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -383,7 +376,7 @@ object WeaponDetailApi {
         weaponName: String,
         wikitext: String,
         forceRefresh: Boolean
-    ): String? {
+    ): OfflineCache.CacheResult? {
         // 依次尝试候选文件名（不同页面时代的命名格式不同），命中即返回
         for (fileName in extractWeaponImageFileNameCandidates(weaponName, wikitext)) {
             val cacheResult = OfflineCache.fetchWithCache(
@@ -391,8 +384,7 @@ object WeaponDetailApi {
                 key = "image_$fileName",
                 forceRefresh = forceRefresh
             ) { fetchImageUrl(fileName) }
-            val url = cacheResult?.payload?.takeIf { it.isNotBlank() }
-            if (url != null) return url
+            if (!cacheResult?.payload.isNullOrBlank()) return cacheResult
         }
         return null
     }
@@ -778,22 +770,22 @@ object WeaponDetailApi {
      * 从「战术道具冷却时间表」页面获取指定道具的冷却时间。
      * @return 模式名→冷却秒数 的映射，如 {"极限推进模式" to 40, "弦区争夺模式" to 60}
      */
-    private suspend fun fetchCooldowns(weaponName: String, forceRefresh: Boolean): Map<String, Int> {
+    private suspend fun fetchCooldowns(weaponName: String, forceRefresh: Boolean): ApiResult.Success<Map<String, Int>>? {
         return try {
             val url = buildParseUrl(API, "战术道具冷却时间表", "text")
-            val body = OfflineCache.fetchWithCache(
+            val source = OfflineCache.fetchWithCache(
                 type = OfflineCache.Type.WEAPON_DETAIL,
                 key = "tactical_cooldowns_v1",
-                forceRefresh = forceRefresh
-            ) { WikiEngine.safeGet(url) }?.payload ?: return emptyMap()
-            val json = SharedJson.parseToJsonElement(body).jsonObject
+                forceRefresh = forceRefresh, validatePayload = { WikiParseSource.isValidParsePayload(it, "text") }
+            ) { WikiEngine.safeGet(url) } ?: return null
+            val json = SharedJson.parseToJsonElement(source.payload).jsonObject
             val html = json["parse"]?.jsonObject?.get("text")
-                ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return emptyMap()
-            parseCooldownTable(html, weaponName)
+                ?.jsonObject?.get("*")?.jsonPrimitive?.content ?: return null
+            ApiResult.Success(parseCooldownTable(html, weaponName), source.isFromCache, source.ageMs)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            emptyMap()
+            null
         }
     }
 
@@ -820,4 +812,11 @@ object WeaponDetailApi {
         return result
     }
 
+}
+
+internal class WeaponDetailReader(
+    private val load: suspend (String, Boolean) -> ApiResult<WeaponDetailApi.WeaponDetail>,
+    cacheName: String = "WeaponDetailApi"
+) : KeyedCachedWikiApi<String, WeaponDetailApi.WeaponDetail>(cacheName) {
+    override suspend fun fetchFromNetwork(key: String, forceRefresh: Boolean) = load(key, forceRefresh)
 }

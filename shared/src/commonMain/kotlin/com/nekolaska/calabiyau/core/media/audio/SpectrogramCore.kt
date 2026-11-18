@@ -33,7 +33,9 @@ const val MAX_SPECTROGRAM_PIXELS = 8_000_000
 private const val MAX_SPECTROGRAM_TIME_BINS = 128_000
 private const val MAX_SPECTROGRAM_FREQUENCY_BINS = 4_096
 
-fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = SpectrogramConfig()): SpectrogramPixels {
+fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = SpectrogramConfig(),
+    checkCancelled: () -> Unit = {}): SpectrogramPixels {
+    checkCancelled()
     val frameCount = pcmFrameCount(wav)
     if (frameCount <= 0) return SpectrogramPixels(1, 1, IntArray(1))
 
@@ -69,6 +71,7 @@ fun buildSpectrogramPixels(wav: PcmWavData, config: SpectrogramConfig = Spectrog
     for (channel in 0 until wav.channels) {
         val channelTop = channel * maxFrequencyBins
         for (timeIndex in 0 until timeBins) {
+            checkCancelled()
             real.fill(0.0)
             imag.fill(0.0)
             val startFrame = when {

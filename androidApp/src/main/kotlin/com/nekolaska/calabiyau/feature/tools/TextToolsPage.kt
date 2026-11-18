@@ -206,13 +206,15 @@ internal fun TextToolsPage(
 
     fun exportTimeline(shiftMs: Int, normalize: Boolean, skipEmptyText: Boolean) {
         if (clips.isEmpty()) { showSnack("没有可导出的片段"); return }
+        val format = exportFormat
+        val input = clips.toList()
         scope.launchToolJob(
             callbacks = toolJobs,
             errorLabel = "导出失败"
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "文本工具/时间轴")
-            val target = buildUniqueFile(outputDir, "timeline_${System.currentTimeMillis()}", exportFormat.ext)
-            var source = clips.toList()
+            val requested = File(outputDir, "timeline_${System.currentTimeMillis()}.${format.ext}")
+            var source = input
             if (skipEmptyText) source = source.filter { it.text.isNotBlank() }
             if (source.isEmpty()) error("所有片段都为空文本，无法导出")
             source = if (normalize) {
@@ -230,14 +232,14 @@ internal fun TextToolsPage(
                 val e = max(s + MIN_CLIP_MS, it.endMs + shiftMs)
                 it.copy(startMs = s, endMs = e)
             }
-            val content = when (exportFormat) {
+            val content = when (format) {
                 TimelineExportFormat.SRT -> toSrt(shifted)
                 TimelineExportFormat.LRC -> toLrc(shifted)
                 TimelineExportFormat.VTT -> toVtt(shifted)
                 TimelineExportFormat.ASS -> toAss(shifted)
                 TimelineExportFormat.SSA -> toSsa(shifted)
             }
-            target.writeText(content)
+            val target = publishToolOutput(requested) { it.writeText(content) }
             ToolOutput(title = "时间轴导出完成", message = "已导出 ${target.name}", files = listOf(target), directory = outputDir)
         }
     }

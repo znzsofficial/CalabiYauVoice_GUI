@@ -1,7 +1,5 @@
 package com.nekolaska.calabiyau.feature.settings
 
-import android.content.Context
-import com.nekolaska.calabiyau.core.util.enqueueDownload
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import data.SharedJson
 import kotlinx.coroutines.CancellationException
@@ -9,7 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import java.util.concurrent.TimeUnit
-import util.executeRequest
+import okhttp3.Request
+import util.awaitResponseText
 
 /**
  * 检查更新 API — 基于 Cloudflare Pages 上的 latest.json。
@@ -56,12 +55,9 @@ object UpdateApi {
         currentVersionCode: Long
     ): Result = withContext(Dispatchers.IO) {
         try {
-            val response = client.executeRequest(API_URL) {
-                header("Accept", "application/json")
-            }
-            val body = response.use {
-                if (it.isSuccessful) it.body.string() else null
-            } ?: return@withContext Result.Error("无法连接更新服务器")
+            val response = client.newCall(Request.Builder().url(API_URL).header("Accept", "application/json").build()).awaitResponseText()
+            if (!response.isSuccessful) return@withContext Result.Error("无法连接更新服务器")
+            val body = response.body
 
             val json = SharedJson.parseToJsonElement(body).jsonObject
             val remoteVersion = json["versionName"]?.jsonPrimitive?.contentOrNull
@@ -125,24 +121,6 @@ object UpdateApi {
         val fileName: String,
     )
 
-    fun enqueueApkDownload(context: Context, info: UpdateInfo): ApkDownload {
-        val apkUrl = resolveApkUrl(info).takeIf { it.startsWith("http") }
-            ?: error("没有可用的安装包地址")
-        val fileName = apkFileName(info)
-        // DownloadManager file destinations must be on external storage, not filesDir.
-        val dir = context.getExternalFilesDir(null)
-            ?: throw IllegalStateException("应用外部存储不可用，无法下载更新")
-        val file = java.io.File(dir, fileName)
-        if (file.exists()) file.delete()
-        val id = context.enqueueDownload(
-            url = apkUrl,
-            dir = dir,
-            fileName = fileName,
-            description = "正在下载 ${info.versionName}",
-            mimeType = "application/vnd.android.package-archive",
-        )
-        return ApkDownload(id, file, fileName)
-    }
 
     private fun resolveUrl(url: String): String = when {
         url.startsWith("http://") || url.startsWith("https://") -> url

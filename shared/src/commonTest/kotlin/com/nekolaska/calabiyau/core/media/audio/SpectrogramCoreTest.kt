@@ -5,6 +5,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SpectrogramCoreTest {
+    @Test fun cancelledRenderStopsDuringTimeWindows() {
+        val wav = silentWav(100_000, 2)
+        var calls = 0
+        kotlin.test.assertFailsWith<kotlinx.coroutines.CancellationException> {
+            buildSpectrogramPixels(wav) { if (++calls == 3) throw kotlinx.coroutines.CancellationException("superseded") }
+        }
+        assertEquals(3, calls)
+    }
 
     @Test
     fun limitsPixelAllocationForExtremeConfig() {

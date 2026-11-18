@@ -1610,6 +1610,7 @@ internal fun MapListFullScreen(
     gameModes: List<GameModeData>,
     isLoading: Boolean,
     error: String? = null,
+    offlineAge: Long? = null,
     onRetry: () -> Unit = {},
     initialTab: Int = 0,
     onTabChanged: ((Int) -> Unit)? = null,
@@ -1629,6 +1630,7 @@ internal fun MapListFullScreen(
         topBar = {
             TopAppBar(
                 title = { Text("地图一览", fontWeight = FontWeight.Bold) },
+                actions = { com.nekolaska.calabiyau.core.ui.RefreshActionButton(onClick = onRetry, enabled = !isLoading) },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
                 },
@@ -1642,7 +1644,7 @@ internal fun MapListFullScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
+            isLoading && gameModes.isEmpty() -> {
                 Box(
                     Modifier.fillMaxSize().padding(innerPadding),
                     contentAlignment = Alignment.Center
@@ -1676,6 +1678,8 @@ internal fun MapListFullScreen(
             else -> {
                 Column(Modifier.padding(innerPadding)) {
                     // 模式切换
+                    offlineAge?.let { com.nekolaska.calabiyau.core.ui.OfflineBanner(ageMs = it) }
+                    error?.let { com.nekolaska.calabiyau.core.ui.WikiListGroupError(it, isLoading, onRetry) }
                     Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
                         Row(
                             modifier = Modifier

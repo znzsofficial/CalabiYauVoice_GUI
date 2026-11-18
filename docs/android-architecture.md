@@ -2,6 +2,8 @@
 
 基线：[2.2.1（62）](releases/2.2.1.md)，2026-11-17。本文描述当前职责；修复经过见[架构修复记录](android-architecture-fixes.md)，设备验证见[验收清单](device-acceptance.md)。
 
+2.2.1 之后的调用方修复及其验证独立记录于[架构二次复审修复](android-architecture-round-two.md)。
+
 ## 模块边界
 
 - `androidApp`：Android入口、Compose界面、Wiki解析/缓存、WebView、文件与素材工具。
