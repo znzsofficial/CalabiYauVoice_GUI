@@ -1,8 +1,8 @@
 {
     "versionName": "2.2.2",
     "versionCode": 63,
-    "apkUrl": "/downloads/CalabiYauVoice-2.2.2.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.2.2.apk?build=a2b8d6720217a823",
+    "apkSize": 3965870,
     "releaseUrl": "/",
     "changelog": [
         "图鉴详情保留 Wiki 原文的换行和段间空行，道具说明、时装引语和卡牌效果不再挤成一段",
@@ -15,6 +15,13 @@
     ],
     "publishedAt": "2026-11-18",
     "releases": [
+        {
+            "versionName": "2.2.2",
+            "versionCode": 63,
+            "apkUrl": "/downloads/CalabiYauVoice-2.2.2.apk?build=a2b8d6720217a823",
+            "apkSize": 3965870,
+            "publishedAt": "2026-11-18"
+        },
         {
             "versionName": "2.2.1",
             "versionCode": 62,
