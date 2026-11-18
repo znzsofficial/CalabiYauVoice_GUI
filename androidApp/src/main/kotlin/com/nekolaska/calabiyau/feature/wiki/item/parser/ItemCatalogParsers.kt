@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.item.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.feature.wiki.item.model.ItemInfo
 import com.nekolaska.calabiyau.feature.wiki.item.model.Quality
 import org.jsoup.Jsoup
@@ -18,7 +19,7 @@ object ItemCatalogParsers {
                 category = card.attr("data-param1").trim().ifBlank { "其他" },
                 quality = quality,
                 qualityName = quality?.displayName.orEmpty(),
-                description = card.selectFirst("[class*=desc]")?.text()?.trim().orEmpty(),
+                description = HtmlText.detail(card.selectFirst("[class*=desc]")),
                 iconUrl = WikiImageUrls.originalFromThumbnail(
                     card.selectFirst("[class*=imagebox] img[src]")?.attr("src")?.takeIf { it.isNotBlank() }
                 )

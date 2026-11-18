@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.character.costume
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
 import data.ApiResult
 import data.ErrorKind
@@ -136,9 +137,7 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
         val name = card.firstBySkinClass("name")?.text()?.trim()
             .orEmpty()
             .ifBlank { "$character：未知" }
-        val description = card.firstBySkinClass("desc")
-            ?.firstBySkinClass("value")
-            ?.text()?.trim().orEmpty()
+        val description = HtmlText.detail(card.firstBySkinClass("desc")?.firstBySkinClass("value"))
         val previewImage = card.firstBySkinClass("imagebox")?.selectFirst("img")
             ?: card.selectFirst("img[alt*=图鉴]")
         val screenshotImage = card.select("img").firstOrNull { image ->
@@ -268,15 +267,7 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
 
     private fun htmlColumnToText(html: String): String {
         if (html.isBlank()) return ""
-        val normalizedHtml = html
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-        return Jsoup.parse(normalizedHtml)
-            .body()
-            .textWithLineBreaks()
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .joinToString("\n")
+        return HtmlText.detail(Jsoup.parseBodyFragment(html).body(), preserveTextLines = true)
     }
 
     private fun String.isLikelyDescription(): Boolean {
@@ -294,27 +285,6 @@ object CostumeFilterApi : CachedWikiApi<List<CostumeFilterApi.CostumeInfo>>("Cos
         return true
     }
 
-
-    private fun Element.textWithLineBreaks(): String {
-        val builder = StringBuilder()
-        fun appendNode(element: Element) {
-            element.childNodes().forEach { node ->
-                when (node) {
-                    is org.jsoup.nodes.TextNode -> builder.append(node.wholeText)
-                    is Element -> {
-                        if (node.tagName().equals("br", ignoreCase = true)) {
-                            builder.append('\n')
-                        } else {
-                            appendNode(node)
-                            if (node.tagName().equals("p", ignoreCase = true)) builder.append('\n')
-                        }
-                    }
-                }
-            }
-        }
-        appendNode(this)
-        return builder.toString()
-    }
 
     private data class ParsedVisualInfo(
         val name: String,

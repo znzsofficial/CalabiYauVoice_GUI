@@ -22,7 +22,7 @@ class CostumeFilterApiTest {
                   <div class="klbq-skin-card&#95;_name">诺诺：晦朔-常磐</div>
                   <div class="klbq-skin-card&#95;_desc">
                     <span class="klbq-skin-card&#95;_label">简介：</span>
-                    <span class="klbq-skin-card&#95;_value">踏入自然中，可以放空思维。</span>
+                    <span class="klbq-skin-card&#95;_value">踏入<b>自然</b>中，<br>可以放空思维。</span>
                   </div>
                 </div>
               </div>
@@ -53,7 +53,7 @@ class CostumeFilterApiTest {
         assertEquals(listOf("角色预设直购"), first.sources)
         assertEquals("150", first.crystalCost)
         assertEquals("150", first.baseCost)
-        assertEquals("踏入自然中，可以放空思维。", first.description)
+        assertEquals("踏入自然中，\n可以放空思维。", first.description)
         assertEquals(
             "https://patchwiki.biligame.com/images/klbq/f/ff/hash.png",
             first.fullImageUrl

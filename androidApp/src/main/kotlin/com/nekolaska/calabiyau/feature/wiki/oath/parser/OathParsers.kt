@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.oath.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.feature.wiki.oath.model.OathBirthdayGift
 import com.nekolaska.calabiyau.feature.wiki.oath.model.OathBondItem
 import com.nekolaska.calabiyau.feature.wiki.oath.model.OathBondSection
@@ -61,7 +62,7 @@ object OathParsers {
 
     private fun parseBirthdayGifts(table: Element): List<OathBirthdayGift> {
         return table.select("tr").drop(1).mapNotNull { row ->
-            val cells = row.select("th,td").map { it.cleanText() }
+            val cells = row.select("th,td").mapIndexed { i, cell -> if (i == 2 || i == 3) cell.prose() else cell.cleanText() }
             if (cells.size < 4 || cells[0].isBlank()) return@mapNotNull null
             OathBirthdayGift(
                 name = cells[0],
@@ -78,7 +79,7 @@ object OathParsers {
         val headers = rows.firstOrNull()?.select("th,td")?.map { it.cleanText() }.orEmpty()
         val characters = headers.drop(3).filter { it.isNotBlank() }
         return rows.drop(1).mapNotNull { row ->
-            val cells = row.select("th,td").map { it.cleanText() }
+            val cells = row.select("th,td").mapIndexed { i, cell -> if (i == 1) cell.prose() else cell.cleanText() }
             if (cells.size < 4 || cells[0].isBlank()) return@mapNotNull null
             OathFavorGift(
                 name = cells[0],
@@ -102,7 +103,7 @@ object OathParsers {
                     val nameCell = pair.getOrNull(0)
                     val descriptionCell = pair.getOrNull(1)
                     val name = nameCell?.cleanText().orEmpty()
-                    val description = descriptionCell?.cleanText().orEmpty()
+                    val description = descriptionCell?.prose().orEmpty()
                     if (name.isBlank() || description.isBlank()) {
                         null
                     } else {
@@ -113,6 +114,11 @@ object OathParsers {
             val character = bondCharacters.getOrNull(index) ?: "角色 ${index + 1}"
             if (items.isEmpty()) null else OathBondSection(character, items)
         }
+    }
+
+    private fun Element.prose(): String {
+        select(".mw-editsection").remove()
+        return HtmlText.detail(this)
     }
 
     private fun Element.cleanText(): String {

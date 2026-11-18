@@ -29,8 +29,8 @@ internal object DecorationModuleParser {
                 if (file != null && file !is LuaValue.LuaString) issues += "$id: file 类型错误"
                 val readableName = DecorationText.read(name)
                 if (readableName.isBlank()) issues += "$id: 名称只有空标记"
-                val row = LuaDecorationItem(id, readableName, quality, DecorationText.read(description),
-                    (special as? LuaValue.LuaString)?.value?.let(DecorationText::read),
+                val row = LuaDecorationItem(id, readableName, quality, DecorationText.description(description),
+                    (special as? LuaValue.LuaString)?.value?.let(DecorationText::description),
                     (file as? LuaValue.LuaString)?.value?.trim(), name)
                 val previous = items[id]
                 if (previous != null && previous != row) issues += "条目 ID 冲突: $id"

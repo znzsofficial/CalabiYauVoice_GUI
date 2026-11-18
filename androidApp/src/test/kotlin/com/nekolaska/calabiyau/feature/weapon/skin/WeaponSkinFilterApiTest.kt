@@ -6,6 +6,16 @@ import kotlin.test.assertTrue
 
 class WeaponSkinFilterApiTest {
 
+    @Test fun modernCardKeepsBlankLineBeforeQuoteButNotHtmlIndentation() {
+        val html = """<div class="gallerygrid-item klbq-skin-card" data-param1="小蜜蜂">
+            <div class="klbq-skin-card__name">小蜜蜂：凝香鸣音</div>
+            <div class="klbq-skin-card__desc"><span class="klbq-skin-card__label">简介：</span>
+            <span class="klbq-skin-card__value">伴随着花香的清越鸣音。<br />
+            <br />【“仲春惊蛰时节，你可有听到天地的鸣动？”】</span></div></div>"""
+        assertEquals("伴随着花香的清越鸣音。\n\n【“仲春惊蛰时节，你可有听到天地的鸣动？”】",
+            WeaponSkinFilterApi.parseWeaponSkinHtml(html).single().description)
+    }
+
     @Test
     fun parsesLegacyDivsortRows() {
         val skins = WeaponSkinFilterApi.parseWeaponSkinHtml(

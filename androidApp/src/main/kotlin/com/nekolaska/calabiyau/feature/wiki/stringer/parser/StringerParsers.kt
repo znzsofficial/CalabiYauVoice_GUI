@@ -6,6 +6,7 @@ import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentItem
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.TalentSection
 import org.jsoup.Jsoup
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 
 object StringerPushCardParsers {
 
@@ -34,12 +35,11 @@ object StringerPushCardParsers {
                 findItemValue(itemRows, "分类")
             }
             val rarity = item.attr("data-param2").toIntOrNull() ?: 0
-            val rawEffect = item.selectFirst(".mobile-card-desc .card-item-value")?.text()?.trim().orEmpty()
+            val effect = HtmlText.detail(item.selectFirst(".mobile-card-desc .card-item-value"))
             val roles = findItemValue(itemRows, "适用角色")
                 .split("、")
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
-            val effect = rawEffect.trim()
 
             ModeCard(
                 name = name,
@@ -141,7 +141,7 @@ object StringerTalentParsers {
             val imageUrl = nameCell.selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
             val unlockLevel = cells[1].text().trim()
             val maxLevel = cells[2].text().trim()
-            val detailText = cells[3].text().trim()
+            val detailText = HtmlText.detail(cells[3])
             val details = splitTalentDetails(detailText)
 
             TalentItem(

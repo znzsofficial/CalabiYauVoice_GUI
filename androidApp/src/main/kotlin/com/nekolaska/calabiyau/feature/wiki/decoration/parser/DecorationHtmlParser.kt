@@ -95,7 +95,7 @@ internal object DecorationHtmlParser {
         val caption = item.selectFirst(".gallerygrid-player-decoration, .gallerygrid-vehicle-skin, .roomgrid__player-decoration, .roomgrid-player-decoration, .gallerytext")
         val name = DecorationText.read(badge ?: caption).takeIf(String::isNotBlank) ?: return null
         val special = labelledList(item, "外观效果")
-        val description = DecorationText.read(item.selectFirst(
+        val description = DecorationText.description(item.selectFirst(
             ".roomgrid__desc, .roomgrid-desc, .klbq-decoration-card__subtitle, small"
         ))
         val previews = if (room) item.select(".roomgrid__ui-item, .roomgrid-ui-item").mapNotNull { ui ->

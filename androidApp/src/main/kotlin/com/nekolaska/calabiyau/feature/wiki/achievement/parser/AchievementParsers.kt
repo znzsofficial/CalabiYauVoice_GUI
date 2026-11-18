@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.achievement.parser
 
 import com.nekolaska.calabiyau.core.wiki.WikiImageUrls
+import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.feature.wiki.achievement.model.ACHIEVEMENT_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.achievement.model.AchievementItem
 import com.nekolaska.calabiyau.feature.wiki.achievement.model.AchievementPage
@@ -50,10 +51,7 @@ object AchievementParsers {
     private fun parseItem(item: Element, category: String, level: String?): AchievementItem? {
         val name = item.selectFirst(".gallerytext big")?.cleanText().orEmpty()
         if (name.isBlank()) return null
-        val text = item.selectFirst(".gallerytext p")?.wholeText()
-            ?.replace(Regex("\\s+"), " ")
-            ?.trim()
-            .orEmpty()
+        val text = HtmlText.detail(item.selectFirst(".gallerytext p"))
         val condition = text.substringAfter("获得方式：", "").trim()
         val image = item.selectFirst(".thumb a.image img")
         val imageUrl = image?.attr("src")?.takeIf { it.isNotBlank() }?.let(WikiImageUrls::originalFromThumbnail)
@@ -65,7 +63,7 @@ object AchievementParsers {
             category = category,
             level = level,
             name = name,
-            flavorText = item.selectFirst(".gallerytext small")?.cleanText().orEmpty(),
+            flavorText = HtmlText.detail(item.selectFirst(".gallerytext small")),
             condition = condition,
             imageUrl = imageUrl,
             fileName = fileName

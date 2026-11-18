@@ -31,8 +31,8 @@ object InteractionItemParsers {
                 name = name,
                 quality = quality,
                 qualityName = quality?.displayName ?: HtmlText.clean(cells[1].html()),
-                description = HtmlText.clean(cells[2].html()),
-                obtainMethod = HtmlText.clean(cells[3].html()),
+                description = HtmlText.detail(cells[2]),
+                obtainMethod = HtmlText.detail(cells[3]),
                 iconUrl = WikiImageUrls.originalFromThumbnail(
                     cells[0].selectFirst("img")?.attr("src")?.takeIf { it.isNotBlank() }
                 )

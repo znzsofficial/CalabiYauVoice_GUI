@@ -11,10 +11,10 @@ internal object ExtractionItemParser {
         val rawId = card.attr("data-sort-id").trim()
         val category = card.attr("data-param1").trim()
         val quality = (card.attr("data-quality").ifBlank { card.attr("data-param2") }).toIntOrNull()
-        val description = content(card.selectFirst(".$prefix-desc"), ".$prefix-title")
+        val description = itemProse(card.selectFirst(".$prefix-desc"), ".$prefix-title")
         val fields = buildList {
             content(card.selectFirst(".$prefix-value")).takeIf { it.isNotBlank() }?.let { add(ExtractionField("价值", it.removePrefix("价值").trim())) }
-            content(card.selectFirst(".$prefix-detail"), ".$prefix-title").takeIf { it.isNotBlank() }?.let { add(ExtractionField("实际效果", it)) }
+            itemProse(card.selectFirst(".$prefix-detail"), ".$prefix-title").takeIf { it.isNotBlank() }?.let { add(ExtractionField("实际效果", it)) }
             content(card.selectFirst(".$prefix-compat")).takeIf { it.isNotBlank() }?.let { add(ExtractionField("适用", it.removePrefix("适用").trim())) }
             card.select(".$prefix-stats > span").forEach {
                 val text = content(it)

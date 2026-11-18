@@ -242,7 +242,7 @@ object WeaponSkinFilterApi {
             sources = card.attr("data-param3").split(",").map { it.trim() }.filter { it.isNotBlank() },
             crystalCost = card.attr("data-param4").replace("无", "").trim(),
             baseCost = card.attr("data-param5").replace("无", "").trim(),
-            description = card.selectFirst("[class*=desc] [class*=value]")?.text()?.trim().orEmpty(),
+            description = HtmlText.detail(card.selectFirst("[class*=desc] [class*=value]")),
             thumbnailUrl = previewImage?.attr("src")?.takeIf { it.isNotBlank() },
             fullImageUrl = WikiImageUrls.originalFromThumbnail(
                 previewImage?.attr("srcset")
@@ -356,15 +356,7 @@ object WeaponSkinFilterApi {
 
     private fun htmlColumnToText(html: String): String {
         if (html.isBlank()) return ""
-        val normalizedHtml = html
-            .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
-        return Jsoup.parse(normalizedHtml)
-            .body()
-            .textWithLineBreaks()
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .joinToString("\n")
+        return HtmlText.detail(Jsoup.parseBodyFragment(html).body(), preserveTextLines = true)
     }
 
     private fun String.isLikelyDescription(): Boolean {
@@ -382,9 +374,6 @@ object WeaponSkinFilterApi {
         return true
     }
 
-
-    private fun Element.textWithLineBreaks(): String =
-        HtmlText.textWithLineBreaks(this)
 
     private data class ParsedSkinVisualInfo(
         val name: String,

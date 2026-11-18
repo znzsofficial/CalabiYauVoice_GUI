@@ -9,6 +9,44 @@ import org.jsoup.nodes.TextNode
 object HtmlText {
     private val ignoredTags = setOf("script", "style")
 
+    /** Catalog prose: keep authored breaks (including adjacent br), but not HTML source indentation. */
+    fun detail(element: Element?, preserveTextLines: Boolean = false): String {
+        if (element == null) return ""
+        val out = StringBuilder()
+        var space = false
+        fun boundary() {
+            space = false
+            if (out.isNotEmpty() && out.last() != '\n') out.append('\n')
+        }
+        fun visit(node: Node, literalLines: Boolean) {
+            when (node) {
+                is TextNode -> for (c in node.wholeText.replace("\r\n", "\n").replace('\r', '\n')) {
+                    when {
+                        c == '\uFFFC' -> Unit
+                        literalLines && c == '\n' -> { space = false; out.append('\n') }
+                        c in " \t\n\u000c\u00a0" -> space = true
+                        else -> {
+                            if (space && out.isNotEmpty() && out.last() != '\n') out.append(' ')
+                            space = false; out.append(c)
+                        }
+                    }
+                }
+                is Element -> when (node.normalName()) {
+                    "br" -> { space = false; out.append('\n') }
+                    in ignoredTags -> Unit
+                    else -> {
+                        if (node.isBlock) boundary()
+                        val keep = literalLines || node.normalName() == "pre"
+                        for (child in node.childNodes()) visit(child, keep)
+                        if (node.isBlock) boundary()
+                    }
+                }
+            }
+        }
+        visit(element, preserveTextLines)
+        return out.toString().trim()
+    }
+
     /**
      * Converts an HTML fragment to plain text: breaks and block elements separate lines,
      * entities are decoded, non-breaking spaces normalized and object placeholders removed.

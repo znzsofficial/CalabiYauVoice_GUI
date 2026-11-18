@@ -39,7 +39,7 @@ object BioCardParsers {
                 acquireType = item.attr("data-param5"),
                 releaseDate = item.attr("data-param6"),
                 maxLevel = HtmlText.clean(item.selectFirst(".zombie-card__stat .zombie-card__value")?.html().orEmpty()),
-                effect = HtmlText.clean(item.selectFirst(".zombie-card__desc .zombie-card__value")?.html().orEmpty()),
+                effect = HtmlText.detail(item.selectFirst(".zombie-card__desc .zombie-card__value")),
                 roles = roles,
                 imageUrl = item.selectFirst(".zombie-card__imagebox img")?.let { img ->
                     img.attr("data-src").ifBlank { img.attr("src") }
@@ -91,7 +91,7 @@ object BioCardParsers {
                 category = item.attr("data-param2"),
                 rarity = item.attr("data-param3").toIntOrNull() ?: 0,
                 maxLevel = HtmlText.clean(item.selectFirst(".zombie-card-mobile__stat .zombie-card-mobile__value")?.html().orEmpty()),
-                effect = HtmlText.clean(item.selectFirst(".zombie-card-mobile__desc .zombie-card-mobile__value")?.html().orEmpty()),
+                effect = HtmlText.detail(item.selectFirst(".zombie-card-mobile__desc .zombie-card-mobile__value")),
                 imageUrl = item.selectFirst(".zombie-card-mobile__imagebox img")?.let { img ->
                     img.attr("data-src").ifBlank { img.attr("src") }
                 }.let { WikiImageUrls.originalFromThumbnail(it) }
@@ -149,7 +149,7 @@ object BioCardParsers {
             val normalizedFaction = normalizeDeckFaction(faction)
             extractShareIdFromDynamicScript(shareIdCell?.html().orEmpty(), normalizedFaction, cardIndexMapByFaction)
         }
-        val intro = table.selectFirst("tr:has(th:contains(介绍)) td")?.text()?.trim().orEmpty()
+        val intro = HtmlText.detail(table.selectFirst("tr:has(th:contains(介绍)) td"))
         val cardNames = table.select(".zombie-card-name, .zombie-card-item-name, .card-name")
             .map { it.text().trim() }
             .filter { it.isNotBlank() }

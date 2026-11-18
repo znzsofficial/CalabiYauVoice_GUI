@@ -57,6 +57,7 @@ For simple HTML-only parse pages, use `fetchWikiHtmlPage(...)` instead of repeat
 
 - Converts raw HTML/wikitext into model objects.
 - Must not perform network requests.
+- For catalog descriptions and effect text, use `HtmlText.detail(element)` on the value node. Keep explicit `<br>` breaks (two breaks leave an empty line), block boundaries, and inline text together. Use `preserveTextLines = true` for source fields that carry literal newlines, such as Lua descriptions. Names, filter keys and table headers still use compact text. Existing raw HTML/Lua disk caches can be parsed again without migration.
 - Resolve images and other dependencies in API/source after parsing. Character detail follows this rule as of 2.2.1; offline parser audits must never trigger network calls.
 - Should tolerate missing optional fields.
 - Should not throw for normal content drift; return partial data when possible.

@@ -30,7 +30,7 @@ class DecorationModuleParserTest {
         val item = result.sections.single().items.single()
         assertEquals(0, item.quality)
         assertEquals(listOf("房间外观_93001_FriendTitleBg.png", "房间外观_93001_BtnBg.png"), item.extraPreviews.map { it.image.fileName })
-        assertTrue(item.description.contains('\n'))
+        assertEquals("自此间，链接无限。\n\n匹配房间背景和个人名片样式。装配后，其他玩家加入你的房间也会可见。", item.description)
     }
 
     @Test

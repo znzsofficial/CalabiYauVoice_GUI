@@ -6,6 +6,13 @@ import kotlin.test.assertEquals
 
 class ItemCatalogParsersTest {
 
+    @Test fun seasonAndInstructionsRemainOnSeparateLines() {
+        val html = """<div class="klbq-item-card" data-param1="消耗品"><div class="klbq-item-card__name">升级卡</div>
+            <div class="klbq-item-card__desc">可用赛季：<a>鸣弦之誓</a><br />使用后，可以立刻提升特别行动等级1级（仅限本赛季特别行动等级小于100级时使用）</div></div>"""
+        assertEquals("可用赛季：鸣弦之誓\n使用后，可以立刻提升特别行动等级1级（仅限本赛季特别行动等级小于100级时使用）",
+            ItemCatalogParsers.parseItems(html).single().description)
+    }
+
     @Test
     fun parsesKlbqItemCards() {
         val items = ItemCatalogParsers.parseItems(

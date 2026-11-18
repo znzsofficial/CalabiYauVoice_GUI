@@ -15,6 +15,15 @@ internal fun content(element: Element?, remove: String? = null): String {
     return HtmlText.clean(doc.body().html())
 }
 
+/** Drop-table keys use compact text; item descriptions and effect fields keep their original paragraphs. */
+internal fun itemProse(element: Element?, remove: String? = null): String {
+    val copy = element?.clone() ?: return ""
+    copy.select(".smwttcontent, .smwtticon, .mw-editsection").remove()
+    if (remove != null) copy.select(remove).remove()
+    copy.select("li").forEach { it.prependText("• ") }
+    return HtmlText.detail(copy)
+}
+
 internal fun headerKey(value: String): String = value.replace('（', '(').replace('）', ')')
     .filterNot { it.isWhitespace() || it == '\u00a0' }
 

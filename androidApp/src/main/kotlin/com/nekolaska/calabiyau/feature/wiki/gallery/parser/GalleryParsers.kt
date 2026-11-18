@@ -127,7 +127,7 @@ object GalleryParsers {
     private fun parseGalleryText(element: Element?): GalleryText {
         if (element == null) return GalleryText(null, null, null)
         val caption = element.selectFirst("big")?.text()?.cleanText().takeUnless { it.isNullOrBlank() }
-        val description = element.selectFirst("small")?.text()?.cleanText().takeUnless { it.isNullOrBlank() }
+        val description = com.nekolaska.calabiyau.core.wiki.HtmlText.detail(element.selectFirst("small")).ifBlank { null }
         val fullText = element.text().trim()
         val obtainMethod = extractObtainMethod(fullText)
         return GalleryText(
