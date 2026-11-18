@@ -1,8 +1,6 @@
 # Android 当前架构
 
-基线：[2.2.1（62）](releases/2.2.1.md)，2026-11-17。本文描述当前职责；修复经过见[架构修复记录](android-architecture-fixes.md)，设备验证见[验收清单](device-acceptance.md)。
-
-2.2.1 之后的调用方修复及其验证独立记录于[架构二次复审修复](android-architecture-round-two.md)。
+基线：[2.2.2（63）](releases/2.2.2.md)，2026-11-18。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备验证见[验收清单](device-acceptance.md)。
 
 ## 模块边界
 
@@ -28,16 +26,19 @@
 `Screen → API → Source → OfflineCache → WikiEngine`，纯 `Parser` 将HTML/wikitext转成model。
 
 - Screen负责展示和本地选择；API负责IO、组合依赖、错误分类和内存缓存；Source负责请求及磁盘载荷；Parser不联网。
+- 图鉴条目介绍由解析器保留原文换行和段间空行。详情弹窗只负责展开与显示；名称、分类和搜索标识继续用紧凑文本。见[解析约定](android-wiki-feature-guide.md#parser)。
 - `CachedWikiApi` / `KeyedCachedWikiApi` 使用版本票据：清理或新请求使旧发布失效，离线成功不成为永久内存命中。
 - `OfflineCache`保留好磁盘副本，校验失败/网络失败可回退。通用JSON envelope校验不能代替业务完整性校验；各图鉴/阅读页自行审核完整结构。
 - `ReadSingleFlight`合并相同读请求。旧owner取消时仍活跃的读者有界接管；当前读者自身取消必须透传。
 - `LoadState`将有效网络结果置于磁盘预取之上，包括成功空结果；异常/上游取消可重试，finally只收尾当前请求。
 - `WikiEngine.safeGet`是suspend，底层 `awaitGetString`的取消绑定覆盖body消费和关闭。只对GET/HEAD自动重试，不重放业务写请求。
+- 投票与卡组写入绑定发起时的账号会话，每次新请求前核验会话和任务状态；取消不代表已发送请求在服务器端回滚。
 - Hub跨页面快照只接收完整在线结果，绑定清理代数和请求序号。搜索复用当前快照，不维护另一份永久索引；离线/部分结果重入后仍有验证机会。
 
 ## 文件与媒体
 
 - 资源下载是固定请求快照、目录锁、长度/SHA-256验证和临时文件发布。Android清单位于内部filesDir，Desktop保留目录sidecar。
+- 即使目标文件尚未写出，清单记录的名称也属于原资源。系统 APK 更新通过版本及 URL 查找 DownloadManager 中的同一任务，弹窗重新进入后先核对任务状态。
 - 下载搜索首次进入才初始化；进程死亡后可明确恢复原任务，不保证后台持续执行或字节级续传。
 - 图片工具使用 `launchToolJob` / `loadToolPreview` 绑定取消检查。输出通过 `ToolOutputTransaction` 保留旧同名文件，返回实际新路径；GIF只有finish成功才发布。
 - 原图与输出先检查像素预算，拼图逐张解码/绘制；极端宽高比GIF直接绘制目标画布。预算是工程限额，不是真机峰值测量。

@@ -1,6 +1,6 @@
 # Android WebView、Cookie 与文件选择
 
-本文保留已验证的身份/导航约束，并纳入2.2.1宿主生命周期变化。历史回归数字仅对应各阶段；当前发布结果见[2.2.1](releases/2.2.1.md)，设备验证见[清单](device-acceptance.md)。
+本文记录 WebView 身份、导航及宿主生命周期约束。原生投票与卡组提交的会话检查见[二次复审](android-architecture-round-two.md)；历史回归数字仅对应各阶段，当前发布结果见[发布索引](README.md#发布记录)，设备验证见[清单](device-acceptance.md)。
 
 ## 登录入口与原生导航
 

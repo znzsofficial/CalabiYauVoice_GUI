@@ -1,6 +1,6 @@
 # Android 架构二次复审修复
 
-审查基线 `5b0b6ee`（2.2.1）。本页记录基线之后的源码维护；线上版本见[发布记录](README.md#发布记录)。
+审查基线 `5b0b6ee`（2.2.1），修复提交 `f59a0dd`，纳入 [2.2.2（63）](releases/2.2.2.md)。本页记录各问题的处理和回归边界；图鉴介绍换行另见[解析约定](android-wiki-feature-guide.md#parser)。
 
 ## Android 入口与持久状态
 

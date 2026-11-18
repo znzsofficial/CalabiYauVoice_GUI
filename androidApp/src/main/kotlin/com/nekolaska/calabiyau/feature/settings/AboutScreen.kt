@@ -85,11 +85,11 @@ fun AboutScreen(onBack: () -> Unit) {
                 info.versionCode.toLong()
             }
             AboutVersionInfo(
-                name = info.versionName?.takeIf { it.isNotBlank() } ?: "2.2.1",
+                name = info.versionName?.takeIf { it.isNotBlank() } ?: "2.2.2",
                 code = code
             )
         } catch (_: Exception) {
-            AboutVersionInfo(name = "2.2.1", code = 0L)
+            AboutVersionInfo(name = "2.2.2", code = 0L)
         }
     }
 

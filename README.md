@@ -63,7 +63,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **👤 Custom User Profile** — Sign in with your Wiki account to set a custom nickname, avatar (auto-compressed to WebP), badge, and bio; displayed on the sidebar and user sheet, with official info as fallback.
 - **🖼️ Portrait Viewer** — Swipeable multi-image preview per costume with image type labels and page indicators.
 - **📁 File Manager** — Browse downloaded files with multi-select mode (long-press), batch delete/share, image gallery preview, and audio playback.
-- **🧰 Asset Tools** — Image conversion, cropping, stitching and GIF tools; audio, subtitle and video utilities. Image exports use unique filenames and temporary-file publication, with size limits for memory-heavy work.
+- **🧰 Asset Tools** — Convert, crop and stitch images, process GIFs, or edit audio, subtitles and video. Privacy-cleaned image copies are exported after EXIF cleanup; a failed audio import preserves the previous edit and undo history.
 - **📊 Download History** — Track past downloads with status and file count.
 - **⭐ Favorites** — Bookmark characters for quick access.
 - **💾 Offline Cache** — Disk cache for Wiki resources with offline-first mode, cache pruning, and manual cache clearing.

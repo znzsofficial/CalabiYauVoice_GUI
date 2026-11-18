@@ -3,7 +3,7 @@
 ## 从这里开始
 
 - 使用与构建：[中文 README](../README_ZH_CN.md) / [English README](../README.md)
-- 当前发布：[2.2.1（62）](releases/2.2.1.md)，2026-11-17；机器可读元数据以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+- 当前发布：[2.2.2（63）](releases/2.2.2.md)，2026-11-18；机器可读元数据以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
 - 理解客户端：[Android 当前架构](android-architecture.md)
 - 开发 Wiki 功能：[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)
 - 发版：[版本发布清单](release-version-checklist.md)
@@ -17,7 +17,7 @@
 - [资源下载](resource-download-implementation.md)：按需搜索、任务恢复、完整性清单及原子下载。
 - [WebView 与登录](android-webview-auth.md)：Cookie 票据、导航规则、宿主生命周期、弹窗和文件选择。
 - [2.2.1 架构修复记录](android-architecture-fixes.md)：审查发现、修复范围、验证证据及未采用的重构建议。
-- [架构二次复审修复](android-architecture-round-two.md)：2.2.1 之后对真实调用路径、文件归属和任务恢复的修复。
+- [2.2.2 架构二次复审修复](android-architecture-round-two.md)：Wiki 提交、离线副本、文件归属、媒体成品及系统任务恢复。
 - [桌面端指南](desktop-implementation-guide.md)：Windows 窗口、媒体处理及分发。
 - [用户系统后端](user-system-backend.md)：账号、留言/通知、管理 API 和 D1 迁移。
 
@@ -49,6 +49,7 @@
 
 发布记录保存**当次**版本、产物指纹、部署和检查结果，不作为每次发版必须重跑的测试清单。
 
+- [2.2.2](releases/2.2.2.md)：图鉴详情换行、下载与更新恢复、Wiki 写入和离线资料、媒体工具修复。
 - [2.2.1](releases/2.2.1.md)：四个原生资料页、架构修复、全局文案。
 - [2.2.0](releases/2.2.0.md)：UI统一、骨架、工具交互、PC设置修复。
 - [2.1.30](releases/2.1.30.md)：PC设置和装饰主源。
