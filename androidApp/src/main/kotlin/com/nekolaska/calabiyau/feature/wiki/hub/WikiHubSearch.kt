@@ -547,8 +547,9 @@ private val hubSearchEntries = listOf(
     searchEntry(
         "beginner_guide",
         "新人入坑指南",
-        "版本选择、下载安装与配置需求",
-        listOf("新人", "新手", "入坑", "指南", "配置需求", "最低配置", "推荐配置", "下载游戏", "腾讯服", "创梦服", "国际服", "Steam", "实用指南"),
+        "版本与配置、玩法入门和常见问题",
+        listOf("新人", "新手", "入坑", "指南", "配置需求", "最低配置", "推荐配置", "下载游戏", "腾讯服", "创梦服", "国际服", "Steam", "实用指南",
+            "装备类型", "游戏设置建议", "常见问题", "开始游戏前需要了解什么"),
         Icons.Outlined.SportsEsports,
         WikiRoute.BeginnerGuide
     ),

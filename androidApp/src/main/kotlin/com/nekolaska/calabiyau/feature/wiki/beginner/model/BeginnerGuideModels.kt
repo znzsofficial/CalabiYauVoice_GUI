@@ -9,6 +9,7 @@ const val BEGINNER_GUIDE_URL = "https://wiki.biligame.com/klbq/新人入坑指�
 sealed interface GuideBlock {
     val id: String
     data class Heading(override val id: String, val title: String) : GuideBlock
+    data class Term(override val id: String, val content: GuideText) : GuideBlock
     data class Paragraph(
         override val id: String, val content: GuideText, val depth: Int = 0,
         val marker: String? = null, val notice: Boolean = false

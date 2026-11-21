@@ -342,37 +342,35 @@ internal fun TextToolsPage(
                     ) { Text("整理") }
                 }
 
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.itemGap), verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
-                    Text("导出格式", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Box {
-                        FilterChip(
-                            selected = true,
-                            onClick = { exportFormatExpanded = true },
-                            label = { Text(exportFormat.label) },
-                            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                            shape = smoothCornerShape(16.dp)
-                        )
-                        DropdownMenu(
-                            expanded = exportFormatExpanded,
-                            onDismissRequest = { exportFormatExpanded = false }
-                        ) {
-                            TimelineExportFormat.entries.forEach { format ->
-                                DropdownMenuItem(
-                                    text = { Text(format.label) },
-                                    onClick = {
-                                        exportFormat = format
-                                        exportFormatExpanded = false
-                                    }
-                                )
+                SplitButtonLayout(
+                    leadingButton = {
+                        SplitButtonDefaults.TonalLeadingButton(onClick = { showExportDialog = true }, enabled = !isBusy) {
+                            Icon(Icons.Outlined.SaveAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("导出 ${exportFormat.label}")
+                        }
+                    },
+                    trailingButton = {
+                        Box {
+                            SplitButtonDefaults.TonalTrailingButton(
+                                checked = exportFormatExpanded, onCheckedChange = { exportFormatExpanded = it }, enabled = !isBusy
+                            ) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = "选择导出格式")
+                            }
+                            DropdownMenu(expanded = exportFormatExpanded, onDismissRequest = { exportFormatExpanded = false }) {
+                                TimelineExportFormat.entries.forEachIndexed { index, format ->
+                                    SelectableDropdownMenuItem(
+                                        selected = exportFormat == format,
+                                        text = { Text(format.label) },
+                                        shapes = MenuDefaults.itemShape(index, TimelineExportFormat.entries.size),
+                                        selectedLeadingIcon = { Icon(Icons.Outlined.Check, contentDescription = null) },
+                                        onClick = { exportFormat = format; exportFormatExpanded = false }
+                                    )
+                                }
                             }
                         }
                     }
-                    FilledTonalButton(onClick = { showExportDialog = true }, enabled = !isBusy, shape = smoothCornerShape(20.dp)) {
-                        Icon(Icons.Outlined.SaveAlt, contentDescription = null)
-                        Spacer(Modifier.size(6.dp))
-                        Text("导出")
-                    }
-                }
+                )
             }
         }
 

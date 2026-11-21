@@ -2,7 +2,6 @@ package com.nekolaska.calabiyau.feature.wiki.beginner
 
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.cache.fetchValidatedCachePayload
-import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.feature.wiki.beginner.api.BeginnerGuideApi
 import com.nekolaska.calabiyau.feature.wiki.beginner.model.*
 import com.nekolaska.calabiyau.feature.wiki.beginner.parser.BeginnerGuideParser
@@ -21,13 +20,18 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.junit.Assume.assumeTrue
 import java.io.File
+import java.net.URI
 import kotlin.test.*
 
 class BeginnerGuideTest {
     private val html = javaClass.getResource("/fixtures/beginner/guide.html")!!.readText()
-    private fun payload(content: String, version2: Boolean = false) = buildJsonObject {
+    private val expanded = javaClass.getResource("/fixtures/beginner/guide-120494.html")!!.readText()
+    // Verified 120474 delta: the four chapters and TOC stayed; only the notice title disappeared.
+    private val historical by lazy { html.replace("<span style=\"font-weight:bold;\">先弄清楚这两件事</span><br>", "") }
+    private fun payload(content: String, version2: Boolean = false, revision: Long? = null) = buildJsonObject {
         putJsonObject("parse") {
             put("title", BEGINNER_GUIDE_PAGE)
+            revision?.let { put("revid", it) }
             if (version2) put("text", content) else putJsonObject("text") { put("*", content) }
         }
     }.toString()
@@ -66,7 +70,7 @@ class BeginnerGuideTest {
             { it.selectFirst("td[colspan]")!!.attr("rowspan", "2000") },
             { it.select(".resp-tab-content").last()!!.remove() },
             { it.select(".resp-tab-content")[1].select("li").last()!!.remove() },
-            { it.selectFirst("li")!!.remove() },
+            { it.selectFirst("h3 + p + ul > li")!!.remove() },
             { it.selectFirst(".alert")!!.remove() },
             { it.selectFirst("h3")!!.remove() },
             { it.select("table")[0].select("tr").forEach { row -> row.child(2).remove() } },
@@ -76,7 +80,7 @@ class BeginnerGuideTest {
             val broken = Jsoup.parse(html).also(damage).html()
             assertFalse(BeginnerGuideParser.parse(broken).canCache, "damage $index")
             assertNotNull(BeginnerGuideRemoteSource.validationIssue(payload(broken)), "payload $index")
-            assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(BeginnerGuideApi.parseSource(WikiHtmlPageSourceResult(broken, true, 1L))).kind)
+            assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(BeginnerGuideApi.parseSource(OfflineCache.CacheResult(payload(broken), true, 1L))).kind)
         }
     }
 
@@ -114,37 +118,193 @@ class BeginnerGuideTest {
         assertNull(text.spans.single().url)
     }
 
+    @Test fun expandedGuideKeepsAllFiveTablesListsSystemLinksAndAuthorAnswersInSourceOrder() {
+        val result = BeginnerGuideParser.parse(expanded)
+        assertTrue(result.canCache, result.issues.joinToString())
+        val sections = result.page.sections
+        assertEquals(listOf("这是一款怎样的游戏", "我适合入坑吗", "我该下哪个版本", "下载与安装", "配置需求",
+            "开始游戏前需要了解什么", "游戏设置建议", "常见问题"), sections.map { it.title })
+        val old = BeginnerGuideParser.parse(html).page.sections
+        listOf(0, 2, 3).forEach { assertEquals(old[it], sections[it + 1]) }
+        assertEquals(old[1].blocks.filterNot { it is GuideBlock.Paragraph && it.notice },
+            sections[2].blocks.filterNot { it is GuideBlock.Paragraph && it.notice })
+        val notice = sections[2].blocks.filterIsInstance<GuideBlock.Paragraph>().single { it.notice }.content
+        assertTrue(notice.text.startsWith("腾讯服和创梦服"))
+        assertEquals(listOf("数据不互通", "另一个游戏"), notice.spans.filter { it.bold }.map { it.text })
+        assertEquals(listOf(0, 0, 4, 0, 13, 4, 6, 0), sections.map { it.blocks.count { block -> block is GuideBlock.Record } })
+        val allKeys = sections.flatMap { it.blocks }.map { it.id }
+        assertEquals(allKeys.distinct(), allKeys)
+
+        val overview = sections.first().blocks.filterIsInstance<GuideBlock.Paragraph>()
+        assertEquals(10, overview.size)
+        assertEquals(listOf("FPS（第一人称射击）：", "TPS（第三人称射击）：", "弦化机制：", "超弦体技能：", "立体战场："),
+            overview.filter { it.marker != null }.map { p -> p.content.spans.first { it.bold }.text })
+        val systems = sections[5].blocks
+        assertEquals(listOf("弦化", "超弦体", "武器装备"), systems.filterIsInstance<GuideBlock.Heading>().map { it.title })
+        assertEquals("新玩家需要了解：", systems.filterIsInstance<GuideBlock.Term>().single().content.text)
+        val systemParagraphs = systems.filterIsInstance<GuideBlock.Paragraph>()
+        assertEquals(14, systemParagraphs.count { it.marker != null })
+        val links = systemParagraphs.flatMap { it.content.spans }.filter { it.url != null }
+        assertEquals(listOf("弦化", "角色筛选", "武器筛选"), links.map { it.text })
+        links.forEach { assertEquals(URI("https://wiki.biligame.com/klbq/${it.text}").toASCIIString(), it.url) }
+
+        val dom = Jsoup.parse(expanded)
+        // Independent cell-for-cell oracle for both new shapes. No rowspan or colspan in either source table.
+        listOf(3 to 5, 4 to 6).forEach { (tableIndex, sectionIndex) ->
+            val rows = dom.select("table")[tableIndex].select("tr")
+            val headers = rows.first()!!.children().eachText()
+            val records = sections[sectionIndex].blocks.filterIsInstance<GuideBlock.Record>()
+            assertEquals(rows.drop(1).map { it.children().eachText() }, records.map { r -> listOf(r.title.text) + r.fields.map { it.value.text } })
+            records.forEach { assertEquals(headers.drop(1), it.fields.map { field -> field.label }) }
+        }
+        assertContains((sections[6].blocks.last() as GuideBlock.Paragraph).content.text, "没有适用于所有人的唯一最佳设置")
+        val faq = sections.last().blocks
+        assertEquals(16, faq.size)
+        val pairs = dom.select("dl").drop(1).map { it.text() to it.nextElementSibling()!!.text() }
+        assertEquals(pairs, faq.chunked(2).map { (q, a) ->
+            assertIs<GuideBlock.Term>(q).content.text to assertIs<GuideBlock.Paragraph>(a).content.text
+        })
+    }
+
+    @Test fun recognizesReorderedAdviceAndEquipmentColumnsAndRichDefinitionTerms() {
+        val document = Jsoup.parse(expanded)
+        document.select("table").takeLast(2).forEach { table -> table.select("tr").forEach { it.appendChild(it.child(0)) } }
+        val question = document.select("dt").last()!!
+        question.html("移动端支持<b>模拟器</b>吗？")
+        val answer = question.parent()!!.nextElementSibling()!!
+        question.after(answer.tagName("dd")) // MediaWiki also permits dl > dt + dd.
+        val result = BeginnerGuideParser.parse(document.html())
+        assertTrue(result.canCache, result.issues.joinToString())
+        val sections = result.page.sections
+        assertEquals(listOf("主武器", "副武器", "近战武器", "战术道具"), sections[5].blocks.filterIsInstance<GuideBlock.Record>().map { it.title.text })
+        val sensitivity = sections[6].blocks.filterIsInstance<GuideBlock.Record>().first()
+        assertEquals("鼠标灵敏度", sensitivity.title.text)
+        assertEquals("建议检查的内容", sensitivity.fields.single().label)
+        val lastPair = sections.last().blocks.takeLast(2)
+        assertEquals("模拟器", assertIs<GuideBlock.Term>(lastPair.first()).content.spans.single { it.bold }.text)
+        assertEquals("移动端官方不支持模拟器登录。", assertIs<GuideBlock.Paragraph>(lastPair.last()).content.text)
+    }
+
+    @Test fun requiredLinksMatchCurrentWikiArticleIdentityAndRetainTheActualHref() {
+        val title = "角色筛选"
+        val encoded = URI(null, null, "/$title", null).toASCIIString().drop(1)
+        fun withHref(href: String) = Jsoup.parse(expanded).apply { selectFirst("a[title=$title]")!!.attr("href", href) }.html()
+        listOf("/klbq/$title", "/klbq/${encoded.lowercase()}", "/klbq/index.php?title=$title",
+            "/klbq/index.php?title=$encoded", "https://wiki.biligame.com:443/klbq/index.php?action=view&title=$encoded").forEach { href ->
+            val result = BeginnerGuideParser.parse(withHref(href))
+            assertTrue(result.canCache, "$href: ${result.issues}")
+            val links = result.page.sections.flatMap { it.blocks }.filterIsInstance<GuideBlock.Paragraph>().flatMap { it.content.spans }
+            assertEquals(URI(BEGINNER_GUIDE_URL).resolve(href).toASCIIString(), links.single { it.text == title && it.url != null }.url)
+        }
+        listOf("https://example.com/klbq/$title", "https://wiki.biligame.com:444/klbq/$title", "/other/$title",
+            "/klbq/武器筛选", "/klbq/$title?action=edit", "/klbq/$title?diff=2", "/klbq/index.php?title=$title&action=history",
+            "/klbq/index.php?title=$title&oldid=120474", "/klbq/index.php?title=$title&title=其他", "/klbq/%25${encoded.drop(1)}"
+        ).forEach { href -> assertFalse(BeginnerGuideParser.parse(withHref(href)).canCache, href) }
+    }
+
+    @Test fun editorialChangesKeepRewordedContentAndNewSourceOrderPublishable() {
+        val doc = Jsoup.parse(expanded)
+        val notice = "两个国服账号的进度分别保存，但可以组队。移动版与 PC 版各自结算赛季。"
+        doc.selectFirst(".alert")!!.text(notice)
+        val overview = doc.select("h2").first()!!
+        val overviewBody = overview.nextElementSiblings().takeWhile { it.tagName() != "h2" }
+        val root = overview.parent()!!
+        (listOf(overview) + overviewBody).forEach { root.appendChild(it) }
+        listOf(".resp-tabs-list", ".resp-tabs-container").forEach { selector ->
+            val parent = doc.selectFirst(selector)!!
+            parent.prependChild(parent.children().last()!!)
+        }
+        val equipment = doc.select("table")[3].selectFirst("tbody")!!
+        val renamed = equipment.child(1)
+        renamed.child(0).text("主要武器")
+        equipment.appendChild(renamed)
+
+        val edited = doc.html()
+        assertNull(BeginnerGuideRemoteSource.validationIssue(payload(edited)))
+        val sections = BeginnerGuideParser.parse(edited).page.sections
+        assertEquals("这是一款怎样的游戏", sections.last().title)
+        assertEquals(notice, sections.single { it.title == "我该下哪个版本" }.blocks.filterIsInstance<GuideBlock.Paragraph>().single { it.notice }.content.text)
+        assertEquals(listOf("移动端", "PC国服", "PC国际服"), sections.single { it.title == "下载与安装" }.blocks.filterIsInstance<GuideBlock.Heading>().map { it.title })
+        assertEquals(listOf("副武器", "近战武器", "战术道具", "主要武器"), sections.single { it.title == "开始游戏前需要了解什么" }.blocks.filterIsInstance<GuideBlock.Record>().map { it.title.text })
+    }
+
+    @Test fun truncatedOrMislabeledExpandedResponsesCannotMasqueradeAsCompleteGuide() {
+        fun Document.removeChapter(name: String) {
+            val heading = select("h2").single { it.text() == name }
+            heading.nextElementSiblings().takeWhile { it.tagName() != "h2" }.forEach { it.remove() }
+            heading.remove()
+        }
+        val added = listOf("这是一款怎样的游戏", "开始游戏前需要了解什么", "游戏设置建议", "常见问题")
+        val changes: List<(Document) -> Unit> = added.map { name -> { doc: Document -> doc.removeChapter(name) } } + listOf<(Document) -> Unit>(
+            { doc -> added.forEach { doc.removeChapter(it) } }, // A superficially intact four-chapter result, but not revision 120197.
+            { it.selectFirst("li")!!.remove() },
+            { it.select("h3").last()!!.remove() },
+            { it.select("dt").first()!!.remove() },
+            { it.selectFirst("a[title=角色筛选]")!!.attr("href", "/klbq/武器筛选") },
+            { it.select("table")[3].select("tr").last()!!.remove() },
+            { it.select("table")[3].selectFirst("th")!!.text("项目") },
+            { it.select("table")[3].selectFirst("td")!!.nextElementSibling()!!.empty() },
+            { it.select("table")[3].select("tr")[2].child(0).text("主武器") }, // Enough rows, duplicate identity.
+            { it.select("table")[4].select("tr").last()!!.remove() },
+            { it.select("table")[4].select("tr")[1].child(0).remove() },
+            { it.select("table")[4].selectFirst("th")!!.attr("colspan", "2") },
+            { doc -> doc.select("table")[3].replaceWith(doc.select("table")[0].clone()) }, // Valid known schema in the wrong section.
+            { it.select("small").last()!!.remove() },
+            { it.select("dt")[2].remove() },
+            { it.select("dl")[2].nextElementSibling()!!.remove() }, // Plenty of answers overall, this question has none.
+            { it.select("dl").last()!!.nextElementSibling()!!.empty() }
+        )
+        changes.forEachIndexed { index, damage ->
+            val broken = Jsoup.parse(expanded).also(damage).html()
+            assertNotNull(BeginnerGuideRemoteSource.validationIssue(payload(broken)), "damage $index")
+        }
+    }
+
     @Test fun validatesBothEnvelopesAndRejectsWrongPage() {
-        listOf(false, true).forEach { assertNull(BeginnerGuideRemoteSource.validationIssue(payload(html, it))) }
+        listOf(false, true).forEach { v2 -> listOf(html, expanded).forEach { assertNull(BeginnerGuideRemoteSource.validationIssue(payload(it, v2))) } }
         assertNotNull(BeginnerGuideRemoteSource.validationIssue(payload(html).replace(BEGINNER_GUIDE_PAGE, "其他页面")))
         assertNotNull(BeginnerGuideRemoteSource.validationIssue("{\"error\":{}}"))
     }
 
-    @Test fun invalidFreshDataKeepsGoodDiskAndOfflineMetadata() = runBlocking {
-        val good = payload(html)
-        var disk: String? = null
-        val loaded = BeginnerGuideApi.loadSource {
-            BeginnerGuideRemoteSource.fetchValidated { validate ->
-                fetchValidatedCachePayload(true, { good }, { null }, { disk = it }, validate)
+    @Test fun revisionAndVerifiedDirectoryIdentifyBothLegacyLayoutsButNeverDowngradeExpanded() {
+        assertFalse("先弄清楚这两件事" in historical)
+        val noToc = Jsoup.parse(historical).apply { select("#toc").remove() }.html()
+        val brokenToc = Jsoup.parse(historical).apply { selectFirst("#toc a")!!.attr("href", "#配置需求") }.html()
+        assertNull(BeginnerGuideRemoteSource.validationIssue(payload(historical))) // actual pre-revid disk format
+        assertNull(BeginnerGuideRemoteSource.validationIssue(payload(noToc, revision = 120474)))
+        listOf(payload(noToc), payload(brokenToc), payload(historical, revision = 120494),
+            payload(historical, revision = -1)).forEach { raw ->
+            assertNotNull(BeginnerGuideRemoteSource.validationIssue(raw))
+            assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(BeginnerGuideApi.parseSource(OfflineCache.CacheResult(raw, true, 0))).kind)
+        }
+    }
+
+    @Test fun badFreshRevisionCannotReplaceHistoricalDiskAndBothReadPathsPreserveThePage() = runBlocking {
+        val legacyDisk = payload(historical) // text only, as written by released clients
+        var disk: String? = legacyDisk
+        val cached = assertIs<ApiResult.Success<BeginnerGuidePage>>(BeginnerGuideApi.parseSource(OfflineCache.CacheResult(legacyDisk, true, 456L)))
+        assertEquals(4, cached.value.sections.size)
+        suspend fun fetch(raw: String) = BeginnerGuideApi.loadSource {
+            BeginnerGuideRemoteSource.fetchValidated(network = { raw }) { validate, network ->
+                fetchValidatedCachePayload(true, network, { disk?.let { OfflineCache.CacheResult(it, true, 456L) } }, { disk = it }, validate)
             }
         }
-        assertFalse(assertIs<ApiResult.Success<*>>(loaded).isOffline)
-        assertEquals(good, disk)
-        val broken = payload(Jsoup.parse(html).apply { select("table").last()!!.remove() }.html())
-        val fallback = BeginnerGuideApi.loadSource {
-            BeginnerGuideRemoteSource.fetchValidated { validate ->
-                fetchValidatedCachePayload(true, { broken }, { OfflineCache.CacheResult(disk!!, true, 456L) }, { disk = it }, validate)
-            }
+        val badLink = Jsoup.parse(expanded).apply { selectFirst("a[title=角色筛选]")!!.attr("href", "/klbq/index.php?title=角色筛选&action=edit") }.html()
+        val broken = payload(Jsoup.parse(expanded).apply { select("table").last()!!.remove() }.html(), revision = 120494)
+        listOf(broken, payload(historical, revision = 120494), payload(badLink, revision = 120494), legacyDisk).forEach { bad ->
+            assertEquals(cached, fetch(bad))
+            assertEquals(legacyDisk, disk)
+            disk = null
+            assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(fetch(bad)).kind)
+            assertNull(disk)
+            disk = legacyDisk
         }
-        assertTrue(assertIs<ApiResult.Success<*>>(fallback).isOffline)
-        assertEquals(456L, fallback.cacheAgeMs)
-        assertEquals(good, disk)
-        val noCache = BeginnerGuideApi.loadSource {
-            BeginnerGuideRemoteSource.fetchValidated { validate ->
-                fetchValidatedCachePayload(true, { broken }, { null }, { error("Invalid write") }, validate)
-            }
-        }
-        assertEquals(ErrorKind.PARSE, assertIs<ApiResult.Error>(noCache).kind)
+        val fresh = payload(historical, version2 = true, revision = 120474)
+        val loaded = assertIs<ApiResult.Success<BeginnerGuidePage>>(fetch(fresh))
+        assertFalse(loaded.isOffline)
+        assertEquals(cached.value, loaded.value)
+        assertEquals(fresh, disk)
+        assertEquals(cached, BeginnerGuideApi.parseSource(OfflineCache.CacheResult(disk!!, true, 456L)))
         assertEquals(ErrorKind.NETWORK, assertIs<ApiResult.Error>(BeginnerGuideApi.parseSource(null)).kind)
     }
 
@@ -161,17 +321,36 @@ class BeginnerGuideTest {
     @Test fun fullLiveCaptureMatchesContentFixture() {
         val file = System.getenv("BEGINNER_GUIDE_AUDIT_FILE")?.let(::File)
         assumeTrue("Set BEGINNER_GUIDE_AUDIT_FILE to full parse HTML", file?.isFile == true)
-        val actual = BeginnerGuideParser.parse(file!!.readText(Charsets.UTF_8))
-        assertTrue(actual.canCache, actual.issues.joinToString())
-        val expected = BeginnerGuideParser.parse(html)
-        // Normalized visible content (capture whitespace may differ around inline tags).
-        fun text(page: BeginnerGuidePage) = page.sections.map { section ->
-            section.blocks.map { block -> when (block) {
-                is GuideBlock.Heading -> block.title
-                is GuideBlock.Paragraph -> block.content.text
-                is GuideBlock.Record -> block.title.text + block.fields.joinToString { it.label + it.value.text }
-            }.replace(Regex("\\s+"), "") }
+        assertFullCapture(file!!, html)
+    }
+
+    @Test fun fullNov21CaptureMatchesExpandedFixture() {
+        val dir = System.getenv("WIKI_NOV21_AUDIT_DIR")
+        assumeTrue("Set WIKI_NOV21_AUDIT_DIR to the Nov 21 capture directory", !dir.isNullOrBlank())
+        assertFullCapture(File(dir!!, "beginner.html"), expanded)
+    }
+
+    @Test fun fullHistorical120474ResponseWithAndWithoutEnvelopeRevision() {
+        val dir = System.getenv("WIKI_NOV21_AUDIT_DIR")
+        assumeTrue("Set WIKI_NOV21_AUDIT_DIR to the Nov 21 capture directory", !dir.isNullOrBlank())
+        val review = File(dir!!, "review-1121")
+        val fullHtml = File(review, "120474.html")
+        assertFullCapture(fullHtml, historical)
+        val expected = BeginnerGuideParser.parse(historical).page
+        val raw = File(review, "historical-120474.json").readText(Charsets.UTF_8)
+        listOf(raw, payload(fullHtml.readText(Charsets.UTF_8))).forEach { archived ->
+            assertNull(BeginnerGuideRemoteSource.validationIssue(archived))
+            assertEquals(expected, assertIs<ApiResult.Success<BeginnerGuidePage>>(
+                BeginnerGuideApi.parseSource(OfflineCache.CacheResult(archived, true, 456L))).value)
         }
-        assertEquals(text(expected.page), text(actual.page))
+    }
+
+    private fun assertFullCapture(file: File, fixture: String) {
+        val actual = BeginnerGuideParser.parse(file.readText(Charsets.UTF_8))
+        assertTrue(actual.canCache, actual.issues.joinToString())
+        val expected = BeginnerGuideParser.parse(fixture)
+        assertTrue(expected.canCache, expected.issues.joinToString())
+        // Includes stable IDs, rich spans/URLs, labels, list markers, every table cell and their order.
+        assertEquals(expected.page, actual.page)
     }
 }

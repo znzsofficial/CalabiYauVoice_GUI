@@ -45,6 +45,7 @@ internal fun ExtractionDropLookupList(
     val results = remember(lookup, query, currentQuality) {
         lookup.keys.filter { it.name.contains(query.trim(), true) && (currentQuality == null || it.qualityLabel == currentQuality) }
     }
+    val distinctNames = remember(results) { results.distinctBy { it.name }.size }
     val hits = selected?.let { lookup[it] }.orEmpty()
     val categories = hits.map { it.source.filterCategory }.distinct()
     // Empty prefetches are not authoritative: retain the user's filters until data arrives.
@@ -88,14 +89,15 @@ internal fun ExtractionDropLookupList(
                     }
                     DropFilterBar(
                         summary = if (loading && lookup.isEmpty()) "正在读取物品来源…"
-                        else "${shownHits.size} 个来源 · ${if (includeZero) "含零掉落来源" else "已隐藏零掉落来源"}",
+                        else if (hiddenZeroCount == 0) "${shownHits.size} 个来源"
+                        else "${shownHits.size} 个来源（${if (includeZero) "含" else "已隐藏"} $hiddenZeroCount 个零掉落来源）",
                         label = sourceCategory ?: "筛选来源",
                         onClick = { showFilters = true },
                         enabled = selected != null,
                         activeFilter = sourceCategory != null || includeZero,
                         onReset = if (sourceCategory != null || includeZero) ({ sourceCategory = null; includeZero = false }) else null
                     )
-                    Text("可能来源 · 非必掉，具体掉率暂无数据", style = MaterialTheme.typography.bodySmall,
+                    Text("收录于这些来源的候选池，具体掉率未在表中列出。", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (selected == null && !loading && !loadFailed) {
                         Text("暂无该品质物品的来源资料", style = MaterialTheme.typography.bodyMedium)
@@ -106,14 +108,14 @@ internal fun ExtractionDropLookupList(
                     SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索物品名，如切割器…")
                     DropFilterBar(
-                        summary = if (loading && lookup.isEmpty()) "正在读取物品…" else "${results.size} 件物品",
+                        summary = if (loading && lookup.isEmpty()) "正在读取物品…" else "$distinctNames 个名称，${results.size} 条品质记录",
                         label = currentQuality ?: "筛选品质",
                         onClick = { showFilters = true },
                         enabled = lookup.isNotEmpty(),
                         activeFilter = currentQuality != null,
                         onReset = if (currentQuality != null) ({ quality = null }) else null
                     )
-                    Text("按品质区分物品 · 来源数不含零掉落来源", style = MaterialTheme.typography.bodySmall,
+                    Text("同名物品按品质分列，来源数不含已确认零掉落的容器。", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 status()

@@ -3,7 +3,7 @@
 ## 从这里开始
 
 - 使用与构建：[中文 README](../README_ZH_CN.md) / [English README](../README.md)
-- 当前发布：[2.2.2（63）](releases/2.2.2.md)，2026-11-18；机器可读元数据以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
+- 当前发布：[2.2.3（64）](releases/2.2.3.md)，2026-11-21；机器可读元数据以 [`latest.json`](../downloadPage/downloads/latest.json) 为准。
 - 理解客户端：[Android 当前架构](android-architecture.md)
 - 开发 Wiki 功能：[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)
 - 发版：[版本发布清单](release-version-checklist.md)
@@ -25,7 +25,7 @@
 
 ### 指南与玩法
 
-- [新人入坑指南](beginner-guide.md)：原生章节、版本/配置表、下载链接。
+- [新人入坑指南](beginner-guide.md)：玩法入门、版本与下载、装备及设置建议、常见问题。
 - [PC 游戏设置](pc-game-settings.md)：设置、推荐和参考表的语义边界。
 - [弦化、角色定位与增幅网络](native-mechanics-pages.md)：三页原生阅读和完整导航分流。
 - [弦溯战线](extraction-mode-implementation.md)：物品、配件、掉落查询及历次上游结构兼容。
@@ -34,7 +34,7 @@
 ### 图鉴与资料
 
 - [角色详情](character-detail-presentation.md)：技能、设定、关系和呈现规则。
-- [武器解析](weapon-parsing-audit.md)：武器结构、战术道具和参数审计。
+- [武器解析](weapon-parsing-audit.md)：伏闪时间轴、按模式展示的武器增幅、多使用者入口与参数审计。
 - [玩家装饰](player-decoration-catalogs.md)：Lua 双表/HTML 主源、获取方式、缺图和预览。
 - [列表健壮性](wiki-list-resilience.md)：角色、武器、地图的身份与完整性。
 - [导航覆盖审计](wiki-navigation-coverage.md)：历史菜单矩阵和2.2.1增量，非实时全站清单。
@@ -49,6 +49,7 @@
 
 发布记录保存**当次**版本、产物指纹、部署和检查结果，不作为每次发版必须重跑的测试清单。
 
+- [2.2.3](releases/2.2.3.md)：伏闪详情、弦溯掉落反查、新人指南八章、字幕导出与单选控件。
 - [2.2.2](releases/2.2.2.md)：图鉴详情换行、下载与更新恢复、Wiki 写入和离线资料、媒体工具修复。
 - [2.2.1](releases/2.2.1.md)：四个原生资料页、架构修复、全局文案。
 - [2.2.0](releases/2.2.0.md)：UI统一、骨架、工具交互、PC设置修复。

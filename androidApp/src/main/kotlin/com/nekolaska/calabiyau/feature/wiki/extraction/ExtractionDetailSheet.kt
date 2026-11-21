@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Info
@@ -15,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -43,6 +42,7 @@ internal fun ExtractionDetailSheet(
     artwork: DropArtworkIndex = DropArtworkIndex.Empty,
     dismissLabel: String = "返回",
     onViewSourceNotes: (() -> Unit)? = null,
+    sharedSourceList: Boolean = false,
     onDismiss: () -> Unit
 ) {
     // A source name or rule can match the browser without matching any pool item.
@@ -54,6 +54,9 @@ internal fun ExtractionDetailSheet(
     val effectiveQuality = resolveDropQualityLabel(selectedQuality, entry.dropPoolGroups.map { it.label })
     var referenceExpanded by rememberSaveable(entry.id) { mutableStateOf(false) }
     val isDropDetail = containerDetails || entry.type != ExtractionEntryType.ITEM
+    val readingDescription = remember(entry.description, entry.sectionIntroduction) {
+        listOf(entry.description, entry.sectionIntroduction).filter { it.isNotBlank() }.joinToString("\n")
+    }
     // These entries are the reference itself, not extra rules behind an item list.
     // Legacy pool text also remains readable when it has no structured item groups.
     val referenceIsMainContent = entry.type == ExtractionEntryType.DROP_STAGE ||
@@ -192,8 +195,10 @@ internal fun ExtractionDetailSheet(
                             verticalAlignment = Alignment.Top
                         ) {
                             Icon(Icons.Outlined.Info, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                            val reportedCount = fields.firstOrNull { it.label == "件数概率" }?.value
                             Text(
-                                "掉落数量待确认，物品名单仅供参考。",
+                                if (reportedCount.isNullOrBlank() || reportedCount == "—") "掉落数量待确认，物品名单仅供参考。"
+                                else "掉落数量待确认\n件数概率：$reportedCount",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -261,7 +266,11 @@ internal fun ExtractionDetailSheet(
                         selectedQuality = effectiveQuality, onSelect = { selectedQuality = it },
                         summary = if (isFiltered) "$matchingItems / $totalItems 件物品" else "共 $totalItems 件物品",
                         onReset = showAllItems.takeIf { isFiltered })
-                    Text(if (entry.dropCountState == DropCountState.ZERO) "候选名单 · 实际掉落 0 件" else "候选名单 · 非必掉清单", style = MaterialTheme.typography.bodySmall,
+                    Text(when {
+                        entry.dropCountState == DropCountState.ZERO -> "候选名单 · 实际掉落 0 件"
+                        sharedSourceList -> "共用候选名单，顺序不代表此来源的掉率排名。"
+                        else -> "候选名单 · 非必掉清单"
+                    }, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -314,14 +323,14 @@ internal fun ExtractionDetailSheet(
                 }
                 if (containerDetails) item(key = "pool-rules", contentType = "description") {
                     Text(
-                        "掉落数量确定后，每件物品按权重抽取。单件掉率及整箱获得概率暂无数据。",
+                        "先确定掉落件数，再逐件独立抽取。候选名单不表示单件掉率或整箱获得概率。",
                         modifier = Modifier.dropItemMotion(this),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (entry.description.isNotBlank()) item(key = "description", contentType = "description") {
-                    Text(entry.description, modifier = Modifier.dropItemMotion(this), style = MaterialTheme.typography.bodyMedium)
+                if (readingDescription.isNotBlank()) item(key = "description", contentType = "description") {
+                    Text(readingDescription, modifier = Modifier.dropItemMotion(this), style = MaterialTheme.typography.bodyMedium)
                 }
                 items(fields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
                     Surface(Modifier.dropItemMotion(this), shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -330,9 +339,9 @@ internal fun ExtractionDetailSheet(
                 }
             }
         } else {
-            if (entry.description.isNotBlank()) item(key = "description", contentType = "description") {
+            if (readingDescription.isNotBlank()) item(key = "description", contentType = "description") {
                 Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
-                    Text(entry.description, Modifier.fillMaxWidth().padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                    Text(readingDescription, Modifier.fillMaxWidth().padding(14.dp), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             items(fields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
@@ -360,11 +369,14 @@ private fun ExtractionPoolQualityMenu(labels: List<String>, selectedQuality: Str
             onReset = onReset
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("全部品质") }, modifier = Modifier.semantics { selected = selectedQuality == null },
-                onClick = { onSelect(null); expanded = false })
-            labels.forEach { label ->
-                DropdownMenuItem(text = { Text(label) }, modifier = Modifier.semantics { selected = selectedQuality == label },
-                    onClick = { onSelect(label); expanded = false })
+            (listOf(null) + labels).forEachIndexed { index, label ->
+                SelectableDropdownMenuItem(
+                    selected = selectedQuality == label,
+                    text = { Text(label ?: "全部品质") },
+                    shapes = MenuDefaults.itemShape(index, labels.size + 1),
+                    selectedLeadingIcon = { Icon(Icons.Outlined.Check, contentDescription = null) },
+                    onClick = { onSelect(label); expanded = false }
+                )
             }
         }
     }

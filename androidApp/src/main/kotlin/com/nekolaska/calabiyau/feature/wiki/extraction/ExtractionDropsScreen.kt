@@ -228,7 +228,7 @@ internal fun ExtractionDropsScreen(
                 item("back") { TextButton(onClick = ::goBack) { Text("返回来源说明") } }
             }
             sharedPool != null -> detailState.SaveableStateProvider(detailKey) {
-                ExtractionDetailSheet(sharedPool.copy(dropCountState = source!!.dropCountState), location.query,
+                ExtractionDetailSheet(sourcePoolDetail(source!!, sharedPool), location.query, sharedSourceList = true,
                     artwork = artwork, onFindItem = { item -> navigate { it.openItem(item) } },
                     offlineAgeMs = catalog.cacheAgeMs.takeIf { catalog.isOffline && !catalog.isShowingCachedPrefetch },
                     poolError = catalog.error?.message, poolIsLoading = catalogPending,
@@ -269,6 +269,14 @@ internal fun ExtractionDropsScreen(
         }
     }
 }
+
+/** A shared pool proves membership only, even when two sources are in the same section. */
+internal fun sourcePoolDetail(source: ExtractionEntry, pool: ExtractionEntry): ExtractionEntry =
+    pool.copy(name = "${source.name}的物品清单", category = source.category, sourceCategory = source.category,
+        description = source.description, sectionIntroduction = source.sectionIntroduction,
+        containerId = null, dropCountState = source.dropCountState,
+        fields = pool.fields.filter { it.label == "池规模" } +
+            source.fields.filter { it.label in setOf("掉落件数", "本节掉落说明", "抽中率最高") })
 
 @Composable
 private fun ExtractionDropBrowser(

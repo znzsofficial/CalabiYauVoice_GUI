@@ -45,7 +45,9 @@ data class ExtractionEntry(
     val dropCountState: DropCountState = DropCountState.UNKNOWN,
     val dropImages: List<ExtractionDropImage> = emptyList(),
     /** A page-local pool explicitly named for this source; not a container identity. */
-    val sharedPoolId: String? = null
+    val sharedPoolId: String? = null,
+    /** Reading context for a source, not search evidence about what this particular source drops. */
+    val sectionIntroduction: String = ""
 ) {
     val isDropPool: Boolean get() = type == ExtractionEntryType.DROP_POOL
     val filterCategory: String get() = sourceCategory?.takeIf { it.isNotBlank() } ?: category

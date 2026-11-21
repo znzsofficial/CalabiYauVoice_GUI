@@ -5,7 +5,10 @@ import com.nekolaska.calabiyau.core.cache.KeyedCachedWikiApi
 import com.nekolaska.calabiyau.core.wiki.WikiParseSource
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.TacticalItemEffectParser
+import com.nekolaska.calabiyau.feature.weapon.detail.parser.WeaponPublishedSections
 import com.nekolaska.calabiyau.feature.weapon.detail.parser.WeaponSupplementaryDataParser
+import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponAugmentMode
+import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDiagram
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDamageCoefficients
 import data.ApiResult
@@ -34,6 +37,12 @@ object WeaponDetailApi {
 
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private val reader = WeaponDetailReader(::load)
+    private val wikiComment = Regex("""<!--.*?(?:-->|\z)""", RegexOption.DOT_MATCHES_ALL)
+
+    // The Wiki may leave whole unpublished templates in comments. Strip them before looking at
+    // any template (including artwork and cooldown lookup), without parsing wikitext as HTML.
+    private fun visibleWikitext(text: String): String =
+        if ("<!--" in text) text.replace(wikiComment, "") else text
 
     internal fun validDetailPayload(name: String, payload: String) = WikiParseSource.validDetail(payload) { text, html ->
         parseWeaponWikitext(name, text, renderedHtml = html) != null
@@ -73,8 +82,13 @@ object WeaponDetailApi {
         val mechanics: List<WeaponDataSection> = emptyList(),
         val extraStats: Map<String, String> = emptyMap(),
         val damageDescription: String = "",
-        val mobileDamageCoefficients: WeaponDamageCoefficients? = null
-    )
+        val mobileDamageCoefficients: WeaponDamageCoefficients? = null,
+        val diagrams: List<WeaponDiagram> = emptyList(),
+        val augmentations: List<WeaponAugmentMode> = emptyList()
+    ) {
+        // The main template uses an enumeration comma; a middle dot belongs to the character's full name.
+        val users = user.split('、').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    }
 
     data class DamageRow(
         val distance: String,   // 距离（10米、20米等）
@@ -122,7 +136,7 @@ object WeaponDetailApi {
                         kind = ErrorKind.PARSE
                     )
                 val wikitext = parseObj["wikitext"]?.jsonObject?.get("*")
-                    ?.jsonPrimitive?.content
+                    ?.jsonPrimitive?.content?.let(::visibleWikitext)
                     ?: return@withContext ApiResult.Error(
                         "无法获取页面内容",
                         kind = ErrorKind.PARSE
@@ -137,9 +151,10 @@ object WeaponDetailApi {
                     forceRefresh = forceRefresh
                 )
 
-                val parsedDetail = parseWeaponWikitext(
+                val parsedDetail = parseVisibleWeaponWikitext(
                     weaponName,
                     wikitext,
+                    isTactical = false,
                     renderedHtml = renderedHtml,
                     resolvedImageUrl = image?.payload
                 )
@@ -173,13 +188,21 @@ object WeaponDetailApi {
         isTactical: Boolean = false,
         renderedHtml: String = "",
         resolvedImageUrl: String? = null
+    ): WeaponDetail? = parseVisibleWeaponWikitext(name, visibleWikitext(wikitext), isTactical, renderedHtml, resolvedImageUrl)
+
+    private fun parseVisibleWeaponWikitext(
+        name: String,
+        visible: String,
+        isTactical: Boolean,
+        renderedHtml: String,
+        resolvedImageUrl: String?
     ): WeaponDetail? {
         // 尝试多种模板名：{{武器|...}}、{{武器-近战武器|...}}、{{武器-副武器|...}}、{{武器-战术道具|...}}
         val templateNames = listOf("武器-近战武器", "武器-副武器", "武器-战术道具", "武器")
         var weaponParams: Map<String, String> = emptyMap()
         var matchedTemplate = ""
         for (tpl in templateNames) {
-            val content = extractTemplate(wikitext, tpl)
+            val content = extractTemplate(visible, tpl)
             if (content != null) {
                 weaponParams = parseTemplateParams(content)
                 matchedTemplate = tpl
@@ -194,8 +217,8 @@ object WeaponDetailApi {
 
         // 解析伤害数值模板。Wiki 已将 {{武器伤害}} 改名为 {{武器详细数据}}，
         // 距离伤害/基础伤害参数同时存在于主 {{武器}} 模板，读取时按 新模板 → 旧模板 → 主模板 回退。
-        val damageContent = extractTemplate(wikitext, "武器伤害")
-            ?: extractTemplate(wikitext, "武器详细数据")
+        val damageContent = extractTemplate(visible, "武器伤害")
+            ?: extractTemplate(visible, "武器详细数据")
         val damageParams = if (damageContent != null) parseTemplateParams(damageContent) else emptyMap()
         val allDamageParams: (String) -> String? = { key ->
             damageParams[key]?.takeIf { it.isNotBlank() } ?: weaponParams[key]?.takeIf { it.isNotBlank() }
@@ -295,7 +318,7 @@ object WeaponDetailApi {
         }
 
         // 解析子页面
-        val navContent = extractTemplate(wikitext, "页顶导航")
+        val navContent = extractTemplate(visible, "页顶导航")
         val subPages = if (navContent != null) parseSubPages(navContent) else emptyList()
 
         // 获取武器图片
@@ -324,6 +347,10 @@ object WeaponDetailApi {
             allDamageParams("${key}移动端") ?: allDamageParams("移动端$key")
         }
 
+        val document = Jsoup.parse(renderedHtml)
+        val published = WeaponPublishedSections(document)
+        val upgrades = extractTemplates(WeaponPublishedSections.augmentationSource(visible), "弦能增幅网络3/武器")
+            .map(::parseTemplateParams)
         return WeaponDetail(
             name = name,
             user = user,
@@ -354,7 +381,9 @@ object WeaponDetailApi {
             cooldowns = cooldowns,
             itemEffect = itemEffect,
             performanceData = WeaponSupplementaryDataParser.performance(renderedHtml, damageParams),
-            mechanics = WeaponSupplementaryDataParser.mechanics(renderedHtml),
+            mechanics = WeaponSupplementaryDataParser.mechanics(document),
+            diagrams = published.diagrams(),
+            augmentations = published.augmentations(upgrades),
             extraStats = buildMap {
                 listOf("蓄力速度", "蓄力速度移动端", "瞄准速度移动端", "弦化伤害移动端").forEach { key ->
                     weaponParams[key]?.takeIf { it.isNotBlank() }?.let { put(key, it) }
@@ -662,12 +691,15 @@ object WeaponDetailApi {
 
     /** 提取指定名称的模板内容（处理嵌套大括号）。
      *  模板名后必须紧跟 `|`、`\n` 或 `}}` 以避免前缀误匹配。 */
-    private fun extractTemplate(wikitext: String, templateName: String): String? {
+    private fun extractTemplate(wikitext: String, templateName: String): String? =
+        extractTemplates(wikitext, templateName).firstOrNull()
+
+    private fun extractTemplates(wikitext: String, templateName: String): Sequence<String> = sequence {
         val startMarker = "{{$templateName"
         var searchFrom = 0
         while (true) {
             val startIdx = wikitext.indexOf(startMarker, searchFrom)
-            if (startIdx == -1) return null
+            if (startIdx == -1) break
 
             // 检查模板名后的字符，确保是精确匹配而非前缀
             val afterName = startIdx + startMarker.length
@@ -687,14 +719,16 @@ object WeaponDetailApi {
                 } else if (wikitext[i] == '}' && wikitext[i + 1] == '}') {
                     depth--
                     if (depth == 0) {
-                        return wikitext.substring(afterName, i).trimStart()
+                        yield(wikitext.substring(afterName, i).trimStart())
+                        searchFrom = i + 2
+                        break
                     }
                     i += 2
                 } else {
                     i++
                 }
             }
-            return null
+            if (depth != 0) break
         }
     }
 

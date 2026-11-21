@@ -8,6 +8,35 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WeaponSupplementaryDataParsingTest {
+    @Test fun unpublishedTemplatesDoNotSelectAWeaponKindOrSupplyDetailFallbacks() {
+        val source = """
+            <!-- {{武器-战术道具|类型=战术道具|效果=旧稿}} -->
+            {{武器|类型=狙击步枪|基础伤害=1<!-- 编辑备注：|错误=}} -->20}}
+            <!--
+            {{武器详细数据|单发间隔=0.153846 秒/发|基础伤害=旧值}}
+            {{页顶导航|旧稿=未发布}}
+            -->
+        """.trimIndent()
+        val detail = assertNotNull(WeaponDetailApi.parseWeaponWikitext("伏闪", source))
+        assertEquals("狙击步枪", detail.type)
+        assertEquals("120", detail.baseDamage)
+        assertTrue(detail.performanceData.isEmpty() && detail.subPages.isEmpty() && detail.itemEffect.isEmpty())
+        val published = assertNotNull(WeaponDetailApi.parseWeaponWikitext("伏闪", source + "\n{{武器详细数据|快速换弹=已公开}}"))
+        assertEquals("已公开", published.performanceData.single().values.single().value)
+        assertNull(WeaponDetailApi.parseWeaponWikitext("伏闪", "<!-- {{武器|类型=主武器}} -->"))
+    }
+
+    @Test fun publicNestedFiringStagesKeepTheirOrderWithoutSwallowingTheNextMechanic() {
+        val sections = WeaponSupplementaryDataParser.mechanics("""
+            <h2>武器</h2><ul><li>完整单发开火流程（按住左键）：
+            <ul><li>阶段1：充能</li><li>阶段2：爆炸</li><li>阶段3：冷却</li></ul></li>
+            <li>另一机制：独立说明</li></ul><h2>历史</h2><ul><li>旧稿：不收录</li></ul>
+        """.trimIndent())
+        assertEquals(listOf("完整单发开火流程（按住左键）", "武器机制"), sections.map { it.title })
+        assertEquals(listOf("阶段1" to "充能", "阶段2" to "爆炸", "阶段3" to "冷却"), sections.first().values.map { it.label to it.value })
+        assertEquals("独立说明", sections.last().values.single().value)
+    }
+
     @Test fun renderedStatAliasesAndBlankDamageOverridesDoNotDuplicateOrEraseData() {
         val sections = WeaponSupplementaryDataParser.performance("""
             <h2><span class="mw-headline">武器详细数据</span></h2><table class="klbqtable">

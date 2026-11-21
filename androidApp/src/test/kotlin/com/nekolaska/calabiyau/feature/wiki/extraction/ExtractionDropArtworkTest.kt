@@ -90,6 +90,28 @@ class ExtractionDropArtworkTest {
 
     private fun parse(html: String) = ExtractionCatalogParsers.parseResult(html, ExtractionCatalogKind.DROPS)
 
+    @Test fun november21ItemDirectoriesKeepSharedArtworkAndItemsWithoutImages() {
+        val path = System.getenv("WIKI_NOV21_AUDIT_DIR")
+        assumeTrue("Set WIKI_NOV21_AUDIT_DIR to the November 21 captures", !path.isNullOrBlank())
+        fun items(file: String, kind: ExtractionCatalogKind): List<ExtractionEntry> {
+            val result = ExtractionCatalogParsers.parseResult(File(path!!, file).readText(Charsets.UTF_8), kind)
+            assertTrue(result.canCache, result.issues.toString())
+            return result.entries
+        }
+        val loot = items("loot.html", ExtractionCatalogKind.LOOT)
+        val attachments = items("attachments.html", ExtractionCatalogKind.ATTACHMENTS)
+        assertEquals(161, loot.size)
+        assertEquals(130, attachments.size)
+        val boxes = listOf("阵列礼盒Ⅰ", "阵列礼盒Ⅱ", "阵列礼盒Ⅲ").map { name -> loot.single { it.name == name } }
+        assertEquals(3, boxes.map { it.id }.distinct().size)
+        assertNotNull(boxes.map { it.imageUrl }.distinct().single()) // Wiki declares one shared texture.
+        assertNull(loot.single { it.name == "仓库扩容模组" }.imageUrl)
+        assertEquals(setOf("超载核心【伏闪】", "超载核心【静风】", "超载核心【雨晦】"),
+            attachments.filter { it.id in listOf("4083671", "4083672", "4083673") }.map { it.name }.toSet())
+        val crystal = loot.single { it.name == "激化晶体" }
+        assertEquals(assertNotNull(crystal.imageUrl), buildDropArtworkIndex(loot + attachments).imageFor(crystal.name, "Q3 卓越"))
+    }
+
     @Test fun capturedCatalogsEnrichRealPoolIdentitiesWithoutGuessingUnknownEquipment() {
         val directory = System.getenv("EXTRACTION_CONTAINERS_AUDIT_DIR")?.let(::File)
         assumeTrue("Optional full artwork captures", directory?.resolve("loot.html")?.isFile == true &&

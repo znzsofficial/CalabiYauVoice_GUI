@@ -6,8 +6,10 @@ import org.jsoup.nodes.Element
 
 /** November 2026's paired overview/colspan panel table, independent of the historical merged tables. */
 internal object ExtractionContainerParser {
-    private val required = setOf("名称", "来源类别", "子类", "档次", "件数概率", "专属池", "掉落池")
+    private val columns = setOf("名称", "来源类别", "子类", "件数概率", "掉落池")
+    private val legacyColumns = columns + setOf("档次", "专属池")
     private val togglePattern = Regex("mw-customtoggle-sec-c-(\\d+)")
+    private const val panelSelector = "[id^=mw-customcollapsible-sec-c-]"
     private val panelPattern = Regex("mw-customcollapsible-sec-c-(\\d+)")
 
     fun parseResult(html: String): ExtractionParseResult {
@@ -19,48 +21,62 @@ internal object ExtractionContainerParser {
         root.select("table").forEach { table ->
             val rows = table.select("tr").filter { it.closest("table") === table }
             val header = rows.firstOrNull { row ->
-                required.all { key -> row.children().any { headerKey(content(it)) == key } }
+                row.childrenSize() >= columns.size && row.children().map { headerKey(content(it)) }.containsAll(columns)
             } ?: return@forEach
             val headers = header.children().map { headerKey(content(it)) }
-            if (headers.size != required.size || headers.toSet() != required) {
-                issues += "container-table: ambiguous headers"
+            val keys = headers.toSet()
+            if ((keys != columns && keys != legacyColumns) || headers.size != keys.size ||
+                header.children().any { it.hasAttr("rowspan") || it.hasAttr("colspan") }) {
+                issues += "container-table: unsupported/ambiguous headers"
                 return@forEach
             }
-            rows.dropWhile { it !== header }.drop(1).forEach rowLoop@{ row ->
+            // Index panels only from standalone, full-width rows in this table. Order is immaterial.
+            val panelsById = mutableMapOf<String, Element>()
+            val metadataRows = rows.dropWhile { it !== header }.drop(1).filter { row ->
+                val panels = row.select(panelSelector).filter { it.closest("table") === table }
+                if (panels.isEmpty()) return@filter true
+                val panel = panels.singleOrNull()
+                val id = panel?.let { panelPattern.matchEntire(it.id())?.groupValues?.get(1) }
+                val cell = row.children().singleOrNull()
+                if (cell == null || cell.tagName() != "td" || cell.hasAttr("rowspan") ||
+                    cell.attr("colspan") != headers.size.toString() || panel == null || id == null) {
+                    issues += "container-table: malformed panel row"
+                } else if (panelsById.put(id, panel) != null) issues += "container-table: duplicate panel $id"
+                false
+            }
+            metadataRows.forEach rowLoop@{ row ->
                 val cells = row.children().filter { it.tagName() in setOf("td", "th") }
-                if (cells.map { headerKey(content(it)) } == headers) return@rowLoop
-                if (row.select("[id^=mw-customcollapsible-sec-c-]").isNotEmpty()) {
-                    if (cells.size != 1 || cells.single().attr("colspan") != headers.size.toString())
-                        issues += "container-table: malformed panel row"
-                    return@rowLoop
-                }
                 if (cells.size != headers.size || cells.any { it.hasAttr("rowspan") || it.hasAttr("colspan") }) {
                     issues += "container-table: incomplete metadata row"
                     return@rowLoop
                 }
-                fun field(key: String) = content(cells[headers.indexOf(key)])
-                val name = field("名称")
+                val values = cells.map { content(it) }
+                if (values.map(::headerKey) == headers) return@rowLoop
+                val fields = headers.zip(values).toMap()
+                val name = fields.getValue("名称")
+                val category = fields.getValue("来源类别")
+                val pool = fields.getValue("掉落池")
                 val poolCell = cells[headers.indexOf("掉落池")]
                 val toggles = poolCell.getAllElements().flatMap { element ->
-                    element.classNames().mapNotNull { togglePattern.matchEntire(it)?.groupValues?.get(1) }
+                    element.classNames().filter { it.startsWith("mw-customtoggle-sec-c-") }
                 }
-                val id = toggles.singleOrNull()
-                if (name.isBlank() || field("来源类别").isBlank()) issues += "container-table: missing identity"
+                val id = toggles.singleOrNull()?.let { togglePattern.matchEntire(it)?.groupValues?.get(1) }
+                // Blank cells are lost metadata. An explicit dash or partial distribution is data
+                // and remains visible as reported, without being classified as a zero-count draw.
+                fields.filterValues { it.isBlank() }.keys.forEach { issues += "container-table: missing $it ($name)" }
                 val groups = if (id == null) {
-                    // The live airdrop row explicitly has no published pool. Never infer ID 80001 here.
-                    if (toggles.isNotEmpty() || field("掉落池") != "—") issues += "container-table: missing toggle"
+                    // An explicit dash (as in the old airdrop row) publishes neither an ID nor a pool.
+                    if (toggles.isNotEmpty() || pool != "—") issues += "container-table: missing toggle"
                     emptyList()
                 } else {
                     if (!usedIds.add(id)) issues += "container-table: duplicate container $id"
-                    val panels = table.select("[id=mw-customcollapsible-sec-c-$id]")
-                        .filter { it.closest("table") === table }
-                    val panel = panels.singleOrNull()
+                    val panel = panelsById[id]
                     if (panel == null) {
-                        issues += "container-table: missing/duplicate panel $id"
+                        issues += "container-table: missing panel $id"
                         emptyList()
                     } else {
                         usedPanels.add(panel)
-                        val expected = Regex("""展开\s+(\d+)\s*项""").matchEntire(field("掉落池"))
+                        val expected = Regex("""展开\s+(\d+)\s*项""").matchEntire(pool)
                             ?.groupValues?.get(1)?.toIntOrNull()
                         if (expected == null) issues += "container-table: missing total $id"
                         parseGroups(panel, issues).also { groups ->
@@ -69,18 +85,21 @@ internal object ExtractionContainerParser {
                     }
                 }
                 entries += ExtractionEntry(
-                    id = "container:${id ?: "unpublished:$name:${field("来源类别")}"}", name = name,
-                    category = field("来源类别"), sourceCategory = field("来源类别"),
-                    tags = listOf(field("子类"), field("档次")).filter { it.isNotBlank() },
-                    fields = headers.filter { it !in setOf("名称", "掉落池", "来源类别") }
-                        .map { ExtractionField(it, field(it)) },
+                    id = "container:${id ?: "unpublished:$name:$category"}", name = name,
+                    category = category, sourceCategory = category,
+                    tags = listOfNotNull(fields["子类"], fields["档次"]).filter { it.isNotBlank() },
+                    fields = fields.filterKeys { it !in setOf("名称", "掉落池", "来源类别") }
+                        .map { (key, value) -> ExtractionField(key, value) },
                     type = ExtractionEntryType.DROP_POOL, containerId = id, dropPoolGroups = groups,
-                    dropCountState = dropCountState(field("件数概率"))
+                    dropCountState = dropCountState(fields.getValue("件数概率"))
                 )
             }
+            if (table.select(".sec-drop-chip").any { it.closest("table") === table && it.closest(panelSelector) == null }) {
+                issues += "container-table: chip outside panel"
+            }
         }
-        root.select("[id^=mw-customcollapsible-sec-c-]").forEach {
-            if (panelPattern.matches(it.id()) && it !in usedPanels) issues += "container-table: orphan panel"
+        root.select(panelSelector).forEach {
+            if (it !in usedPanels) issues += "container-table: orphan panel"
         }
         val declared = root.select("h2").mapNotNull {
             Regex("""容器掉落全表[（(]\s*(\d+)\s*个容器[）)]""").find(content(it))?.groupValues?.get(1)?.toIntOrNull()
@@ -98,8 +117,8 @@ internal object ExtractionContainerParser {
         panel.select(".sec-drop-pool__q, .sec-drop-pool__chips").forEach { element ->
             if (element.hasClass("sec-drop-pool__q")) {
                 if (label != null) issues += "container-pool: missing chips"
-                label = content(element.selectFirst(".sec-drop-pool__tag")).takeIf { it.isNotBlank() }
-                count = Regex("""(\d+)\s*项""").matchEntire(content(element.selectFirst(".sec-drop-pool__cnt")))
+                label = content(element.select(".sec-drop-pool__tag").singleOrNull()).takeIf { it.isNotBlank() }
+                count = Regex("""(\d+)\s*项""").matchEntire(content(element.select(".sec-drop-pool__cnt").singleOrNull()))
                     ?.groupValues?.get(1)?.toIntOrNull()
                 if (label == null || count == null) issues += "container-pool: missing group metadata"
             } else {

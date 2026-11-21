@@ -4,6 +4,7 @@ import com.nekolaska.calabiyau.core.wiki.HtmlText
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataValue
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
 /** Reads bounded gameplay sections only; keeps reference-data provenance separate from base stats. */
@@ -55,8 +56,9 @@ internal object WeaponSupplementaryDataParser {
         return sections.distinct()
     }
 
-    fun mechanics(html: String): List<WeaponDataSection> {
-        val document = Jsoup.parse(html)
+    fun mechanics(html: String): List<WeaponDataSection> = mechanics(Jsoup.parse(html))
+
+    fun mechanics(document: Document): List<WeaponDataSection> {
         val groups = linkedMapOf<String, MutableList<WeaponDataValue>>()
         for (heading in document.select("h2, h3")) {
             if (headingTitle(heading) !in basicHeadings) continue
@@ -68,15 +70,33 @@ internal object WeaponSupplementaryDataParser {
                     element.selectFirst("> dt")?.let { group = clean(it).trimEnd('：', ':') }
                 } else if (element.tagName() == "ul") {
                     for (item in element.select("> li")) {
-                        val text = clean(item)
-                        val parts = text.split('：', ':', limit = 2)
-                        if (parts.size != 2 || parts.any { it.isBlank() }) continue
-                        groups.getOrPut(group) { mutableListOf() } += WeaponDataValue(parts[0].trim(), parts[1].trim())
+                        // A list heading can own a sequence of labelled stages. Keep the heading
+                        // local to this item; it is not a mode change for the following siblings.
+                        val steps = item.select("> ul > li")
+                        if (steps.isNotEmpty()) {
+                            val headingOnly = item.clone().also { it.select("> ul").remove() }
+                            val title = clean(headingOnly)
+                            val rows = steps.mapNotNull { labelledValue(clean(it)) }
+                            if ((title.endsWith('：') || title.endsWith(':')) && rows.size == steps.size) {
+                                val label = title.dropLast(1).trim()
+                                if (label.isNotEmpty()) {
+                                    val scoped = if (group == "武器机制") label else "$group：$label"
+                                    groups.getOrPut(scoped) { mutableListOf() } += rows
+                                    continue
+                                }
+                            }
+                        }
+                        labelledValue(clean(item))?.let { groups.getOrPut(group) { mutableListOf() } += it }
                     }
                 }
             }
         }
         return groups.map { (title, values) -> WeaponDataSection(title, values.distinct()) }
+    }
+
+    private fun labelledValue(text: String): WeaponDataValue? {
+        val parts = text.split('：', ':', limit = 2)
+        return if (parts.size == 2 && parts.none { it.isBlank() }) WeaponDataValue(parts[0].trim(), parts[1].trim()) else null
     }
 
     private fun canonical(label: String) = label.removeSuffix("时间").replace(" ", "")

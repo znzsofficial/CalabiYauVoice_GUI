@@ -69,7 +69,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **💾 Offline Cache** — Disk cache for Wiki resources with offline-first mode, cache pruning, and manual cache clearing.
 - **🎨 Material You** — Dynamic color with wallpaper-based seed color, light/dark/system theme, and liquid glass effects.
 - **💬 Message Board** — Two-level discussions with reply notifications, pinned threads, admin moderation, per-account draft isolation, and rename-stable identity.
-- **🔎 Character Detail** — Skills, augmentation network, signature weapon renders, and relations parsed live from the Wiki.
+- **🔎 Character and Weapon Details** — Browse character skills, relationships, and signature weapons. The 伏闪 sniper rifle page includes a zoomable firing timeline, Demolition-mode upgrades, and individual links to its five users.
 - **⬇️ In-App Updates** — Release-site update checker with changelog and one-tap APK download.
 
 ---

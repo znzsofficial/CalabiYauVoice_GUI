@@ -17,7 +17,7 @@ import com.nekolaska.calabiyau.feature.wiki.beginner.api.BeginnerGuideApi
 import com.nekolaska.calabiyau.feature.wiki.beginner.model.*
 import java.net.URI
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BeginnerGuideScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
     val state = rememberLoadState(
@@ -45,17 +45,8 @@ fun BeginnerGuideScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             val current = state.data.sections.firstOrNull { it.id == selection.selectedKey } ?: state.data.sections.firstOrNull()
-            if (state.data.sections.isNotEmpty()) {
-                FlowRow(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    state.data.sections.forEach { section ->
-                        FilterChip(selected = section.id == current?.id, onClick = { selection.select(section.id) },
-                            label = { Text(section.title) })
-                    }
-                }
-            }
+            if (current != null) HorizontalFilterChips(items = state.data.sections, selected = current,
+                label = { it.title }, onSelected = { selection.select(it.id) }, modifier = Modifier.padding(horizontal = 16.dp))
             ApiResourceContent(
                 state = state, modifier = Modifier.weight(1f), isDataEmpty = BeginnerGuidePage::isEmpty,
                 loading = { BeginnerGuideSkeleton(it) }
@@ -75,7 +66,7 @@ fun BeginnerGuideScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                             }
                         }
                         item("source") {
-                            Text("来自卡拉彼丘 Wiki", style = MaterialTheme.typography.labelMedium,
+                            Text(if (current.title == "常见问题") "卡拉彼丘 Wiki 作者问答" else "来自卡拉彼丘 Wiki", style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         items(current.blocks, key = { it.id }) { block -> GuideBlockContent(block, openLink) }
@@ -91,6 +82,7 @@ private fun GuideBlockContent(block: GuideBlock, onOpenLink: (String) -> Unit) {
     when (block) {
         is GuideBlock.Heading -> Text(block.title, Modifier.padding(top = 8.dp),
             style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        is GuideBlock.Term -> WikiRichText(block.content, onOpenLink, Modifier.padding(top = 8.dp), heading = true)
         is GuideBlock.Paragraph -> {
             val content: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth().padding(start = ((block.depth - 1).coerceIn(0, 4) * 16).dp),
@@ -122,10 +114,8 @@ private fun BeginnerGuideSkeleton(modifier: Modifier = Modifier) {
     LazyColumn(modifier.fillMaxSize().semantics { contentDescription = "正在加载新人入坑指南" },
         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(2) { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    repeat(2) { ShimmerBox(Modifier.weight(1f).height(32.dp), AppShapes.capsule) }
-                } }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(3) { ShimmerBox(Modifier.weight(1f).height(32.dp), AppShapes.capsule) }
             }
         }
         item { SkeletonTextLine(widthFraction = 0.7f, height = 16.dp) }

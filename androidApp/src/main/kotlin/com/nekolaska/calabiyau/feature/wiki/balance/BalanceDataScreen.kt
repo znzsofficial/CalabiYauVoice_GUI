@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenu
@@ -43,13 +46,16 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalToggleButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -597,30 +603,35 @@ private fun SideAndSortBar(
 ) {
     Column(Modifier.fillMaxWidth()) {
         // 进攻/防守切换
-        Row(
-            Modifier
+        ButtonGroup(
+            overflowIndicator = { ButtonGroupDefaults.OverflowIndicator(it) },
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
         ) {
-            FilterChip(
-                selected = !showAttackers,
-                onClick = { onSideToggle(false) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("防守方") },
-                leadingIcon = if (!showAttackers) {
-                    { Icon(Icons.Outlined.Shield, null, Modifier.size(16.dp)) }
-                } else null
-            )
-            FilterChip(
-                selected = showAttackers,
-                onClick = { onSideToggle(true) },
-                shape = smoothCornerShape(12.dp),
-                label = { Text("进攻方") },
-                leadingIcon = if (showAttackers) {
-                    { Icon(Icons.Outlined.FlashOn, null, Modifier.size(16.dp)) }
-                } else null
-            )
+            listOf(false, true).forEach { attack ->
+                val label = if (attack) "进攻方" else "防守方"
+                val icon = if (attack) Icons.Outlined.FlashOn else Icons.Outlined.Shield
+                val selected = showAttackers == attack
+                customItem(
+                    buttonGroupContent = {
+                        FilledTonalToggleButton(
+                            checked = selected, onCheckedChange = { if (!selected) onSideToggle(attack) },
+                            shapes = if (attack) ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                            icon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        ) { Text(label) }
+                    },
+                    menuContent = { menu ->
+                        SelectableDropdownMenuItem(
+                            selected = selected, text = { Text(label) }, shapes = MenuDefaults.itemShapes(),
+                            onClick = { if (!selected) onSideToggle(attack); menu.dismiss() }
+                        )
+                    }
+                )
+            }
         }
 
         // 卡片的指标自带标签，不再保留与窄表格列对齐的表头。

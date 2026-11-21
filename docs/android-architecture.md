@@ -1,6 +1,6 @@
 # Android 当前架构
 
-基线：[2.2.2（63）](releases/2.2.2.md)，2026-11-18。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备验证见[验收清单](device-acceptance.md)。
+基线：[2.2.3（64）](releases/2.2.3.md)，2026-11-21。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备验证见[验收清单](device-acceptance.md)。
 
 ## 模块边界
 
