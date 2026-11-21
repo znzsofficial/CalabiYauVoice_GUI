@@ -1,5 +1,9 @@
 package com.nekolaska.calabiyau.feature.tools
 
+import com.nekolaska.calabiyau.core.usage.Outcome
+import com.nekolaska.calabiyau.core.usage.UsageFeature
+import com.nekolaska.calabiyau.core.usage.UsageStats
+
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -210,7 +214,9 @@ internal fun TextToolsPage(
         val input = clips.toList()
         scope.launchToolJob(
             callbacks = toolJobs,
-            errorLabel = "导出失败"
+            errorLabel = "导出失败",
+            onSuccess = { UsageStats.result(UsageFeature.SUBTITLE, Outcome.OK) },
+            onFailure = { UsageStats.result(UsageFeature.SUBTITLE, Outcome.OTHER) }
         ) {
             val outputDir = resolveOutputDirectory(outputPath, "文本工具/时间轴")
             val requested = File(outputDir, "timeline_${System.currentTimeMillis()}.${format.ext}")

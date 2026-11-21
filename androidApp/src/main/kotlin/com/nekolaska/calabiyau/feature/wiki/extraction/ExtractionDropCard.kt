@@ -46,11 +46,16 @@ internal fun ExtractionDropCard(
                 ExtractionDropSourceIconBox(entry)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    val subtitle = (listOf(entry.category) + entry.tags).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+                    val subtitle = buildList {
+                        add(entry.category)
+                        addAll(entry.tags)
+                        if (entry.dropPoolGroups.isNotEmpty()) add("${entry.dropPoolGroups.sumOf { it.items.size }} 项候选")
+                    }.filter { it.isNotBlank() }.distinct().joinToString(" · ")
                     if (subtitle.isNotBlank()) {
                         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (entry.dropCountState == DropCountState.ZERO) {
                 Surface(shape = AppShapes.chip, color = MaterialTheme.colorScheme.errorContainer) {
@@ -78,22 +83,15 @@ internal fun ExtractionDropCard(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ExtractionDropThumbnail(item.name, item.qualityLabel, item.qualityCode ?: 0, url, Modifier.size(40.dp))
                     Text(
-                        "包含 · ${item.name}（${item.qualityLabel}）",
+                        "${item.name}（${item.qualityLabel}）",
                         Modifier.weight(1f),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            if (entry.dropPoolGroups.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    entry.dropPoolGroups.forEach { group ->
-                        ExtractionDropQualityBadge("${group.label} · ${group.items.size}", group.qualityCode ?: 0)
-                    }
-                }
-            }
-            entry.fields.firstOrNull { it.label in setOf("掉落件数", "件数概率", "池规模", "阈值") }?.let {
-                Text("${it.label} · ${it.value}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            entry.fields.firstOrNull { it.label in setOf("掉落件数", "件数概率", "阈值") }?.let {
+                Text("${it.label}：${it.value}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (evidence == null) {
                 val preview = if (entry.type == ExtractionEntryType.DROP_STAGE) {
@@ -103,26 +101,6 @@ internal fun ExtractionDropCard(
                         ?.let { "${it.label} · ${it.value}" }
                 } else null
                 preview?.let { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium) }
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    if (entry.containerId != null && entry.isDropPool) "查看包含物品 · ${entry.dropPoolGroups.sumOf { it.items.size }} 项"
-                    else "查看来源详情",
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
             }
         }
     }

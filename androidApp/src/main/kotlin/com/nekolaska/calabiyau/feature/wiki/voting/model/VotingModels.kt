@@ -1,5 +1,10 @@
 package com.nekolaska.calabiyau.feature.wiki.voting.model
 
+import com.nekolaska.calabiyau.core.wiki.CookieSessionGuard
+
+/** Non-persisted capability bound to the verified Wiki account and original browser login. */
+class VoteSession internal constructor(internal val name: String, internal val request: () -> CookieSessionGuard.Ticket?)
+
 /** 投票配置（从页面 HTML 解析） */
 data class PollConfig(
     val name: String,
@@ -30,5 +35,5 @@ data class VoteState(
     val userVotedTotal: Boolean,
     val pollDataMap: Map<String, PollData>,
     /** Authenticated poll selections belong to the session that read them, even after an optimistic copy. */
-    val sessionIsCurrent: () -> Boolean = { true }
+    val session: VoteSession? = null
 )

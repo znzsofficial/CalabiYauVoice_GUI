@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -25,19 +26,23 @@ import io.github.composefluent.icons.Icons
 import io.github.composefluent.icons.regular.Search
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import viewmodel.FileDialogContent
+import viewmodel.FileDialogState
 
 @OptIn(ExperimentalFluentApi::class)
 @Composable
-fun FileSelectionDialog(
-    title: String,
-    files: List<Pair<String, String>>,
-    initialSelection: List<String>,
-    isLoading: Boolean,
+internal fun FileSelectionDialog(
+    dialog: FileDialogState,
+    onRetry: () -> Unit,
     onClose: () -> Unit,
-    onConfirm: (List<Pair<String, String>>) -> Unit
+    onConfirm: (Set<String>) -> Unit
 ) {
-    val selectedUrls = remember { mutableStateListOf<String>() }
-    val selectedSet by remember { derivedStateOf { selectedUrls.toSet() } }
+    val title = dialog.category
+    val ready = dialog.content as? FileDialogContent.Ready
+    val files = ready?.files.orEmpty()
+    val selectedUrls = remember(dialog) { ready?.initialUrls.orEmpty().toMutableStateList() }
+    val selectedSet by remember(dialog) { derivedStateOf { selectedUrls.toSet() } }
+    var searchFocused by remember { mutableStateOf(false) }
     var searchKeyword by remember { mutableStateOf("") }
     var playingUrl by remember { mutableStateOf<String?>(null) }
     var loadingUrl by remember { mutableStateOf<String?>(null) }
@@ -64,11 +69,10 @@ fun FileSelectionDialog(
         }
     }
 
-    LaunchedEffect(files, initialSelection) {
-        if (files.isNotEmpty()) {
-            selectedUrls.clear()
-            selectedUrls.addAll(initialSelection)
-        }
+    fun confirmSelection() {
+        if (ready == null) return
+        AudioPlayerManager.stop()
+        onConfirm(selectedSet)
     }
 
     val filteredFiles = remember(files, searchKeyword) {
@@ -104,9 +108,8 @@ fun FileSelectionDialog(
                     AudioPlayerManager.stop(); onClose(); true
                 }
 
-                Key.Enter if !isLoading -> {
-                    AudioPlayerManager.stop()
-                    onConfirm(files.filter { it.second in selectedSet })
+                Key.Enter if ready != null -> {
+                    confirmSelection()
                     true
                 }
 
@@ -119,7 +122,7 @@ fun FileSelectionDialog(
                 .fillMaxSize()
                 .padding(16.dp)
                 .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (ready == null || searchFocused || keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
                         keyEvent.isCtrlPressed && !keyEvent.isShiftPressed && keyEvent.key == Key.A -> {
                             filteredFiles.map { it.second }
@@ -140,12 +143,12 @@ fun FileSelectionDialog(
 
             // 工具栏
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = {
+                Button(disabled = ready == null, onClick = {
                     filteredFiles.map { it.second }
                         .forEach { if (it !in selectedSet) selectedUrls.add(it) }
                 }) { Text("全选可见") }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = { selectedUrls.clear() }) { Text("清空") }
+                Button(disabled = ready == null, onClick = { selectedUrls.clear() }) { Text("清空") }
                 Spacer(Modifier.width(16.dp))
                 Text("选择后缀:", fontSize = 12.sp, color = Color.Gray)
                 Spacer(Modifier.width(4.dp))
@@ -177,7 +180,7 @@ fun FileSelectionDialog(
                 value = searchKeyword,
                 onValueChange = { searchKeyword = it },
                 placeholder = { Text("搜索文件名...") },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { searchFocused = it.hasFocus },
                 singleLine = true,
                 leadingIcon = {
                     Image(
@@ -194,13 +197,21 @@ fun FileSelectionDialog(
             // 文件列表
             SubtleBox(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    isLoading -> Column(
+                    dialog.content == FileDialogContent.Loading -> Column(
                         Modifier.align(Alignment.Center),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         ProgressRing(size = 48.dp)
                         Spacer(Modifier.height(8.dp))
                         Text("正在加载列表...")
+                    }
+
+                    dialog.content is FileDialogContent.Failed -> Column(
+                        Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("文件列表加载失败：${dialog.content.message}")
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = onRetry) { Text("重试") }
                     }
 
                     filteredFiles.isEmpty() -> Text(
@@ -220,7 +231,7 @@ fun FileSelectionDialog(
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(4.dp)
                             ) {
-                                items(filteredFiles) { (name, url) ->
+                                items(filteredFiles, key = { it.second }) { (name, url) ->
                                     FileListItem(
                                         name = name,
                                         url = url,
@@ -256,7 +267,7 @@ fun FileSelectionDialog(
 
             // 底部操作栏
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Text(
+                if (ready != null) Text(
                     "已选 ${selectedUrls.size} / ${files.size}",
                     modifier = Modifier.align(Alignment.CenterVertically).padding(end = 16.dp),
                     color = Color.Gray,
@@ -265,11 +276,8 @@ fun FileSelectionDialog(
                 Button(onClick = { AudioPlayerManager.stop(); onClose() }) { Text("取消") }
                 Spacer(Modifier.width(12.dp))
                 Button(
-                    onClick = {
-                        AudioPlayerManager.stop()
-                        onConfirm(files.filter { it.second in selectedSet })
-                    },
-                    disabled = isLoading
+                    onClick = ::confirmSelection,
+                    disabled = ready == null
                 ) { Text("确认选择", fontWeight = FontWeight.Bold) }
             }
         }

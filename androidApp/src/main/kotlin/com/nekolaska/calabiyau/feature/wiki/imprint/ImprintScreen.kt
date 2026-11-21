@@ -137,7 +137,6 @@ fun ImprintScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索印迹 / 台词 / 获得方式"

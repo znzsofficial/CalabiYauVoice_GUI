@@ -30,14 +30,12 @@ fun NetworkImage(
     contentScale: ContentScale = ContentScale.Fit,
     placeholder: @Composable (() -> Unit)? = null
 ) {
-    val isGif = remember(url) {
-        url.substringAfterLast('.', "").lowercase().substringBefore('?') == "gif"
-    }
+    val isGif = remember(url) { isGifUrl(url) }
 
     if (isGif) {
         // GIF 路径：加载原始字节用于动画解码
-        var bytes by remember { mutableStateOf<ByteArray?>(null) }
-        var loaded by remember { mutableStateOf(false) }
+        var bytes by remember(url) { mutableStateOf<ByteArray?>(null) }
+        var loaded by remember(url) { mutableStateOf(false) }
 
         LaunchedEffect(url) {
             if (url.isBlank()) { loaded = true; return@LaunchedEffect }
@@ -58,7 +56,7 @@ fun NetworkImage(
         }
     } else {
         // 静态图路径（原有逻辑）
-        var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+        var imageBitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
 
         LaunchedEffect(url) {
             if (url.isBlank()) {
@@ -87,7 +85,7 @@ fun CharacterAvatar(
     modifier: Modifier = Modifier.size(32.dp)
 ) {
     // 1. 获取头像的真实 URL (MediaWiki 解析)
-    var avatarUrl by remember { mutableStateOf<String?>(null) }
+    var avatarUrl by remember(characterName) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(characterName) {
         // 缓存表中不存在该角色名时，不发请求，直接用默认图标

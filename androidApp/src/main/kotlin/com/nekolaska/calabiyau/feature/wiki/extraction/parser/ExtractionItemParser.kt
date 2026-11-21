@@ -49,9 +49,9 @@ internal object ExtractionItemParser {
         return ExtractionEntry(
             id = rawId.ifBlank { "$prefix:$category:$quality:$name:${fields.hashCode()}" },
             name = name, category = category.ifBlank { "未分类" }, quality = quality,
-            qualityLabel = qualities[quality] ?: when (quality) {
+            qualityLabel = qualities[quality]?.takeIf { it.isNotBlank() } ?: when (quality) {
                 1 -> "优秀"; 2 -> "精致"; 3 -> "卓越"; 4 -> "完美"; 5 -> "臻藏"
-                else -> ""
+                null -> ""; else -> "Q$quality"
             }, imageUrl = imageUrl, description = description, fields = fields, tags = tags.distinct(),
             numericValues = ExtractionSort.entries.filter { it != ExtractionSort.DEFAULT }.mapNotNull { sort ->
                 card.attr("data-sort-${sort.attribute}").toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }?.let { sort to it }

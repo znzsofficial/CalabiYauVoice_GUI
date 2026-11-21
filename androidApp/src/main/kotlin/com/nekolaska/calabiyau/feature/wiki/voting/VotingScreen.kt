@@ -90,7 +90,7 @@ fun VotingScreen(onBack: () -> Unit, embedded: Boolean = false) {
         },
         bottomBar = {
             // 提交投票栏
-            if (isLoggedIn && pollConfig != null && !isLoadingConfig && !isLoadingData) {
+            if (isLoggedIn && voteState != null && !isLoadingConfig && !isLoadingData) {
                 VotingBottomBar(
                     selectedCount = selectedNames.size,
                     hasChanges = hasVoteChanges(voteState, selectedNames),

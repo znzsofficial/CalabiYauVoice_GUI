@@ -99,7 +99,7 @@ fun SearchBar(
     modifier: Modifier = Modifier,
     keyword: String,
     onKeywordChange: (String) -> Unit,
-    onSearch: () -> Unit,
+    onSearch: (() -> Unit)? = null,
     onClear: () -> Unit,
     isSearching: Boolean,
     placeholder: String = "搜索角色名称..."
@@ -146,8 +146,9 @@ fun SearchBar(
             }
         },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() })
+        keyboardOptions = KeyboardOptions(imeAction = if (onSearch == null) ImeAction.Done else ImeAction.Search),
+        // The default Done action dismisses the IME for live local filters.
+        keyboardActions = if (onSearch == null) KeyboardActions.Default else KeyboardActions(onSearch = { onSearch() })
     )
 }
 

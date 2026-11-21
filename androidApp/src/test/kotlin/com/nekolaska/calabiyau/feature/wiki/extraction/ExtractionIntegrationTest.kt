@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.extraction
 import com.nekolaska.calabiyau.core.wiki.WikiHtmlPageSourceResult
 import com.nekolaska.calabiyau.feature.wiki.extraction.api.Catalog
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
+import com.nekolaska.calabiyau.feature.wiki.extraction.parser.ExtractionCatalogParsers
 import com.nekolaska.calabiyau.feature.wiki.extraction.source.ExtractionCatalogRemoteSource
 import com.nekolaska.calabiyau.feature.wiki.game.api.GameModeApi
 import com.nekolaska.calabiyau.feature.wiki.game.model.ModeEntry
@@ -11,6 +12,7 @@ import com.nekolaska.calabiyau.feature.wiki.hub.WikiRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.decodeRoute
 import com.nekolaska.calabiyau.feature.wiki.hub.encode
 import com.nekolaska.calabiyau.feature.wiki.hub.catalogHubExtractionEntries
+import com.nekolaska.calabiyau.feature.wiki.hub.nativeWikiRoute
 import data.ApiResult
 import data.ErrorKind
 import kotlinx.coroutines.CancellationException
@@ -18,6 +20,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import org.junit.Assume.assumeTrue
+import java.io.File
 import kotlin.test.*
 
 class ExtractionIntegrationTest {
@@ -50,6 +54,40 @@ class ExtractionIntegrationTest {
         val detail = GameModeParsers.parseModeWikitext(ModeEntry("其它模式", "战斗模式/其它"), fixture("overview.wikitext"), listOf("旧地图"))
         assertEquals("", detail.summary)
         assertEquals(listOf("旧地图"), detail.maps)
+    }
+
+    @Test fun splitCatalogUsesSuppliesAndKeepsUnnamedAttachmentQualityDistinct() {
+        val path = System.getenv("EXTRACTION_SPLIT_AUDIT_DIR")
+        assumeTrue("Set EXTRACTION_SPLIT_AUDIT_DIR to the November 21 evening captures", !path.isNullOrBlank())
+        val root = File(requireNotNull(path))
+        val loot = ExtractionCatalogKind.LOOT
+        fun captured(stem: String, kind: ExtractionCatalogKind = loot) =
+            ExtractionCatalogParsers.parseResult(root.resolve("$stem.html").readText(Charsets.UTF_8), kind)
+
+        val route = decodeRoute("extractionCatalog|LOOT")
+        assertEquals(WikiRoute.ExtractionCatalog(loot), route)
+        assertEquals("extraction_loot_v1", loot.cacheKey)
+        assertEquals("$EXTRACTION_MODE_PAGE/物资图鉴", loot.pageName)
+        assertEquals(route, nativeWikiRoute("/klbq/${loot.pageName}"))
+        assertEquals(route, nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/物品图鉴"))
+        assertNull(nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/枪械图鉴"))
+        assertNull(nativeWikiRoute("/klbq/$EXTRACTION_MODE_PAGE/防具图鉴"))
+        for (other in listOf("loot", "guns", "armor")) assertFalse(captured(other).canCache, other)
+        assertTrue(ExtractionCatalogParsers.parseResult(fixture("loot.html"), loot).canCache) // old offline cards
+        val supplies = captured("supplies"); assertTrue(supplies.canCache)
+        assertEquals(188, supplies.entries.size)
+        val attachments = captured("attachments", ExtractionCatalogKind.ATTACHMENTS); assertTrue(attachments.canCache)
+        assertEquals(142, attachments.entries.size)
+        val q8 = filterExtractionEntries(attachments.entries, "", null, 8, false, ExtractionSort.DEFAULT, false)
+        assertEquals(setOf("4084706", "4084707"), q8.map { it.id }.toSet())
+        val artwork = buildDropArtworkIndex(supplies.entries + attachments.entries)
+        for (entry in q8) {
+            assertEquals("Q8", entry.qualityLabel)
+            val q4 = attachments.entries.single { it.name == entry.name && it.quality == 4 }
+            assertEquals(assertNotNull(q4.imageUrl), artwork.imageFor(entry.name, "Q4 完美"))
+            assertEquals(assertNotNull(entry.imageUrl), artwork.imageFor(entry.name, "Q8"))
+            assertNull(artwork.imageFor(entry.name, "Q8 特殊"))
+        }
     }
 
     @Test fun allThreeCatalogEntriesBelongToTheAppearanceAndCatalogHub() {

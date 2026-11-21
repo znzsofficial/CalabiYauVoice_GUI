@@ -73,14 +73,21 @@ internal fun DropFilterBar(
     }
 }
 
+internal object DropMotion {
+    const val page = 360
+    const val move = 340
+    const val reveal = 300
+    const val exit = 200
+}
+
 /** Finite native Compose animations respect the system animator duration scale, including zero. */
 internal fun Modifier.dropItemMotion(scope: LazyItemScope): Modifier = with(scope) {
     this@dropItemMotion.animateItem(
-        fadeInSpec = tween(180), placementSpec = tween(220, easing = FastOutSlowInEasing), fadeOutSpec = tween(120)
+        fadeInSpec = tween(DropMotion.reveal), placementSpec = tween(DropMotion.move, easing = FastOutSlowInEasing), fadeOutSpec = tween(DropMotion.exit)
     )
 }
 
-/** Mirrors the 12dp inset, 56dp artwork / 40dp source badge and three text slots of a lookup result. */
+/** Mirrors the artwork, title and metadata line(s) of an item or source result. */
 @Composable
 internal fun DropLookupRowSkeleton(modifier: Modifier = Modifier, source: Boolean = false) {
     val typography = MaterialTheme.typography
@@ -104,22 +111,21 @@ internal fun DropLookupRowSkeleton(modifier: Modifier = Modifier, source: Boolea
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SkeletonTextLine(widthFraction = 0.65f, height = titleHeight)
-                ShimmerBox(Modifier.width(76.dp).height(if (source) bodyHeight else badgeHeight))
-                SkeletonTextLine(widthFraction = 0.45f, height = bodyHeight)
+                ShimmerBox(Modifier.width(if (source) 76.dp else 128.dp).height(if (source) bodyHeight else badgeHeight))
+                if (source) SkeletonTextLine(widthFraction = 0.65f, height = bodyHeight)
             }
             Spacer(Modifier.size(24.dp))
         }
     }
 }
 
-/** Source cards have a heading, quality chips and footer, rather than item-list geometry. */
+/** Header, example item and count rule match the compact source card. */
 @Composable
 internal fun DropSourceCardSkeleton(modifier: Modifier = Modifier) {
     val typography = MaterialTheme.typography
     val titleHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() }
     val bodyHeight = with(LocalDensity.current) { typography.bodySmall.lineHeight.toDp() }
     val labelHeight = with(LocalDensity.current) { typography.labelLarge.lineHeight.toDp() }
-    val badgeHeight = with(LocalDensity.current) { typography.labelSmall.lineHeight.toDp() } + 6.dp
     Surface(
         modifier.clearAndSetSemantics {},
         shape = AppShapes.compactCard,
@@ -134,11 +140,11 @@ internal fun DropSourceCardSkeleton(modifier: Modifier = Modifier) {
                     SkeletonTextLine(widthFraction = 0.4f, height = bodyHeight)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                repeat(3) { ShimmerBox(Modifier.width(64.dp).height(badgeHeight)) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ShimmerBox(Modifier.size(40.dp), shape = AppShapes.chip)
+                SkeletonTextLine(widthFraction = 0.6f, height = bodyHeight)
             }
-            SkeletonTextLine(widthFraction = 0.6f, height = bodyHeight)
-            SkeletonTextLine(widthFraction = 0.45f, height = labelHeight)
+            SkeletonTextLine(widthFraction = 0.7f, height = labelHeight)
         }
     }
 }

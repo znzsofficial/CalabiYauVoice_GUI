@@ -145,7 +145,6 @@ fun WeaponSkinFilterScreen(
                         SearchBar(
                             keyword = searchQuery,
                             onKeywordChange = { searchQuery = it },
-                            onSearch = {},
                             onClear = { searchQuery = "" },
                             isSearching = false,
                             placeholder = "搜索外观名称或武器…",

@@ -315,13 +315,14 @@ object OfflineCache {
         validatePayload: (String) -> Boolean,
         networkFetch: suspend () -> String?
     ): CacheResult? {
-        val isOnline = try {
-            NetworkMonitor.isNetworkAvailable(appContext)
+        val route = try {
+            NetworkMonitor.defaultRoute(appContext)
         } catch (_: Exception) {
-            true
+            NetworkMonitor.Route.UNVALIDATED
         }
 
-        return fetchValidatedCachePayload(isOnline, network = {
+        return fetchValidatedCachePayload(route == NetworkMonitor.Route.VALIDATED,
+            tryNetworkOnMiss = route == NetworkMonitor.Route.UNVALIDATED, network = {
             try {
                 networkFetch()
             } catch (e: CancellationException) {

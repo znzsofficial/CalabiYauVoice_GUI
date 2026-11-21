@@ -3,7 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.extraction.model
 const val EXTRACTION_MODE_PAGE = "战斗模式/弦溯战线"
 
 enum class ExtractionCatalogKind(val title: String, val pageSuffix: String) {
-    LOOT("战利品图鉴", "物品图鉴"),
+    LOOT("物资图鉴", "物资图鉴"),
     ATTACHMENTS("配件图鉴", "配件图鉴"),
     DROPS("掉落图鉴", "掉落图鉴");
 

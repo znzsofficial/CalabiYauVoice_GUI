@@ -53,6 +53,9 @@ object WikiEngine {
         .build()
 
     private val jsonParser = SharedJson
+    // Only body-less GETs use this client. OkHttp can recover a stale pooled connection or try
+    // another route without enabling transport retries for voting, deck publishing or other writes.
+    private val publicReadClient = client.newBuilder().retryOnConnectionFailure(true).build()
     private val nameCache = WikiEngineCore.CharacterNameCache()
 
     /**
@@ -62,7 +65,7 @@ object WikiEngine {
      */
     suspend fun safeGet(url: String): String? {
         return try {
-                val body = client.awaitGetString(url) ?: return null
+                val body = publicReadClient.awaitGetString(url) ?: return null
                 val root = runCatching { SharedJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
                 if (root == null || root["error"] != null) {
                     CalabiYauApplication.instanceOrNull?.let {
@@ -106,7 +109,7 @@ object WikiEngine {
         WikiEngineCore.scanCategoryTrees(roots, ::fetchStringSimple, jsonParser)
 
     suspend fun fetchFilesInCategory(category: String, audioOnly: Boolean = true): List<Pair<String, String>> =
-        WikiEngineCore.fetchFilesInCategory(category, audioOnly, ::fetchStringSimple, jsonParser)
+        WikiEngineCore.fetchFilesInCategory(category, audioOnly, { fetchString(it, propagateFinalFailure = true) }, jsonParser)
 
     suspend fun downloadSpecificFiles(
         files: List<Pair<String, String>>,
@@ -160,7 +163,7 @@ object WikiEngine {
     private suspend fun fetchStringSimple(url: String): String? = fetchString(url, onError = null)
 
     /** 带错误回调的 fetchString */
-    private suspend fun fetchString(url: String, onError: ((String) -> Unit)? = null): String? = withContext(Dispatchers.IO) {
+    private suspend fun fetchString(url: String, propagateFinalFailure: Boolean = false, onError: ((String) -> Unit)? = null): String? = withContext(Dispatchers.IO) {
         repeat(2) { attempt ->
             try {
                 val result = client.awaitGetString(url)
@@ -169,6 +172,7 @@ object WikiEngine {
                 throw e
             } catch (e: Exception) {
                 onError?.invoke("网络异常: ${e.javaClass.simpleName}: ${e.message}")
+                if (attempt == 1 && propagateFinalFailure) throw e
             }
             if (attempt == 0) delay(500.milliseconds)
         }

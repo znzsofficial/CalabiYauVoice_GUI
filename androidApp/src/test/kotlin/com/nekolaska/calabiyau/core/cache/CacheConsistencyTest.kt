@@ -107,4 +107,14 @@ class CacheConsistencyTest {
             { OfflineCache.CacheResult(disk, true, 10) }, { disk = it }, { true })
         assertEquals("new", disk); assertEquals(false, fresh?.isFromCache)
     }
+
+    @Test fun unvalidatedNetworkWithNoDiskStillReadsOnFirstOpen() = runBlocking {
+        var disk: String? = null
+        var calls = 0
+        suspend fun open() = fetchValidatedCachePayload(false, { calls++; "cards" },
+            { disk?.let { OfflineCache.CacheResult(it, true, 12) } }, { disk = it }, { it == "cards" }, tryNetworkOnMiss = true)
+        assertEquals(false, open()?.isFromCache)
+        assertEquals(true, open()?.isFromCache)
+        assertEquals(1, calls)
+    }
 }

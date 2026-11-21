@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -45,8 +46,6 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -66,11 +65,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,14 +102,13 @@ import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.SkeletonCard
 import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
-import com.nekolaska.calabiyau.core.ui.SkeletonStatRow
+import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.weapon.detail.WeaponDetailApi.WeaponDetail
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDamageCoefficients
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataSection
-import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDataValue
 import com.nekolaska.calabiyau.feature.weapon.detail.model.WeaponDiagram
 import util.wikiPathEncode
 
@@ -167,7 +168,7 @@ fun WeaponDetailScreen(
             )
         }
     ) { innerPadding ->
-        Box(Modifier.padding(innerPadding)) {
+        Box(Modifier.padding(innerPadding).consumeWindowInsets(innerPadding)) {
             ApiResourceContent(
                 state = state,
                 modifier = Modifier.fillMaxSize(),
@@ -197,6 +198,8 @@ fun WeaponDetailScreen(
     }
 }
 
+private enum class WeaponSection(val label: String) { OVERVIEW("概览"), DATA("数据"), UPGRADES("增幅") }
+
 @Composable
 private fun WeaponDetailContent(
     detail: WeaponDetail,
@@ -209,146 +212,80 @@ private fun WeaponDetailContent(
 ) {
     var previewImage by remember(detail.name) { mutableStateOf<PreviewImage?>(null) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // ── 头部：武器图片 + 关键属性标签 ──
-        item(key = "header") {
-            Box(Modifier.padding(horizontal = 16.dp)) {
-                WeaponHeaderCard(
-                    detail = detail,
-                    onPreviewImage = { previewImage = it },
-                    onOpenCharacter = onOpenCharacter,
-                    canOpenCharacter = canOpenCharacter,
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-            }
+    val stats = remember(detail) { weaponStats(detail) }
+    val distanceRows = remember(detail) { detail.damageTable.filter { it.distance.contains("米") &&
+        (it.upper.isNotBlank() || it.lower.isNotBlank() || it.head.isNotBlank()) } }
+    val simpleRows = remember(detail) { detail.damageTable.filter { !it.distance.contains("米") && it.upper.isBlank() && it.lower.isBlank() } }
+    val sections = buildList {
+        add(WeaponSection.OVERVIEW)
+        if (stats.isNotEmpty() || detail.baseDamage.isNotBlank() || distanceRows.isNotEmpty() || simpleRows.isNotEmpty() ||
+            detail.damageDescription.isNotBlank() || detail.cooldowns.isNotEmpty() || detail.performanceData.isNotEmpty()) add(WeaponSection.DATA)
+        if (detail.augmentations.isNotEmpty()) add(WeaponSection.UPGRADES)
+    }
+    var selected by rememberSaveable(detail.name) { mutableStateOf(WeaponSection.OVERVIEW) }
+    val current = selected.takeIf { it in sections } ?: WeaponSection.OVERVIEW
+    val pages = rememberSaveableStateHolder()
+    Column(Modifier.fillMaxSize()) {
+        if (sections.size > 1) PrimaryTabRow(selectedTabIndex = sections.indexOf(current)) {
+            sections.forEach { tab -> Tab(selected = current == tab, onClick = { selected = tab }, text = { Text(tab.label) }) }
         }
-
-        // ── 武器介绍 ──
-        if (detail.description.isNotBlank()) {
-            item(key = "description") {
-                Box(Modifier.padding(horizontal = 16.dp)) { WeaponDescriptionCard(detail.description) }
-            }
-        }
-
-        if (detail.itemEffect.isNotBlank()) {
-            item(key = "item_effect") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    WeaponDescriptionCard(detail.itemEffect, title = "道具效果")
-                }
-            }
-        }
-        if (detail.damageDescription.isNotBlank()) {
-            item(key = "damage_description") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    WeaponDescriptionCard(detail.damageDescription, title = "伤害说明")
-                }
-            }
-        }
-
-        // ── 获取途径 ──
-        if (detail.obtainMethod.isNotBlank()) {
-            item(key = "obtain") {
-                Box(Modifier.padding(horizontal = 16.dp)) { WeaponObtainCard(method = detail.obtainMethod) }
-            }
-        }
-
-        // ── 数据属性 (满级) ──
-        item(key = "stats") {
-            Box(Modifier.padding(horizontal = 16.dp)) { WeaponStatsCard(detail = detail) }
-        }
-
-        if (detail.mechanics.isNotEmpty() || detail.diagrams.isNotEmpty()) {
-            item(key = "weapon_mechanics") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    WeaponSupplementaryCard(
-                        if (detail.itemEffect.isNotBlank()) "道具数据" else "武器机制", detail.mechanics,
-                        diagramCount = detail.diagrams.size
-                    ) {
-                        detail.diagrams.forEach { diagram -> WeaponDiagramPreview(diagram) { previewImage = it } }
+        pages.SaveableStateProvider("${detail.name}:${current.name}") {
+            LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (current) {
+                    WeaponSection.OVERVIEW -> {
+                        item("header") {
+                            WeaponHeaderCard(detail, onPreviewImage = { previewImage = it }, onOpenCharacter = onOpenCharacter,
+                                canOpenCharacter = canOpenCharacter, sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope)
+                        }
+                        if (detail.itemEffect.isNotBlank()) item("item_effect") { WeaponDescriptionCard(detail.itemEffect, "道具效果") }
+                        if (detail.mechanics.isNotEmpty() || detail.diagrams.isNotEmpty()) item("weapon_mechanics") {
+                            WeaponSupplementaryCard(if (detail.itemEffect.isNotBlank()) "道具数据" else "武器机制", detail.mechanics,
+                                diagramCount = detail.diagrams.size, initiallyExpanded = true) {
+                                detail.diagrams.forEach { diagram -> WeaponDiagramPreview(diagram) { previewImage = it } }
+                            }
+                        }
+                        if (onOpenSkins != null) item("skins") {
+                            FilledTonalButton(onClick = { onOpenSkins(detail.name) }, modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Outlined.Palette, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("查看武器外观")
+                            }
+                        }
+                        if (detail.subPages.isNotEmpty()) item("sub_pages") { WeaponSubPagesCard(detail.subPages, onOpenWikiUrl) }
+                    }
+                    WeaponSection.DATA -> {
+                        if (detail.baseDamage.isNotBlank() || distanceRows.isNotEmpty()) item("damage") { WeaponDamageCard(detail, distanceRows) }
+                        if (detail.damageDescription.isNotBlank()) item("damage_description") { WeaponDescriptionCard(detail.damageDescription, "伤害说明") }
+                        if (simpleRows.isNotEmpty()) item("simple_damage") { WeaponSimpleDamageCard(simpleRows) }
+                        if (detail.cooldowns.isNotEmpty()) item("cooldowns") { WeaponCooldownCard(detail.cooldowns) }
+                        if (stats.isNotEmpty()) item("stats") { WeaponStatsCard(stats) }
+                        if (detail.performanceData.isNotEmpty()) item("reference") { WeaponSupplementaryCard("详细性能（Wiki 参考）", detail.performanceData) }
+                    }
+                    WeaponSection.UPGRADES -> detail.augmentations.forEach { network ->
+                        item("mode:${network.mode}") { Text(network.mode, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+                        network.groups.forEachIndexed { index, group ->
+                            item("group:${network.mode}:$index") {
+                                Card(shape = AppShapes.card, modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(group.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        group.options.forEachIndexed { i, option ->
+                                            if (i > 0) HorizontalDivider()
+                                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(option.title, style = MaterialTheme.typography.titleSmall)
+                                                option.energyCost?.let { Text("$it 能量点", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+                                            }
+                                            Text(option.changes, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+                item("bottom_nav_spacer") { Spacer(Modifier.navigationBarsPadding()) }
             }
-        }
-        if (detail.performanceData.isNotEmpty()) {
-            item(key = "performance_data") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    WeaponSupplementaryCard("详细性能（Wiki 参考）", detail.performanceData)
-                }
-            }
-        }
-
-        // ── 伤害数据 ──
-        val distanceRows = detail.damageTable.filter { row ->
-            row.distance.contains("米") &&
-                (row.upper.isNotBlank() || row.lower.isNotBlank() || row.head.isNotBlank())
-        }
-        val simpleRows = detail.damageTable.filter { row ->
-            !row.distance.contains("米") && row.upper.isBlank() && row.lower.isBlank()
-        }
-        
-        if (detail.baseDamage.isNotBlank() || distanceRows.isNotEmpty()) {
-            item("damage_table") {
-                Box(Modifier.padding(horizontal = 16.dp)) { 
-                    WeaponDamageCard(detail, distanceRows) 
-                }
-            }
-        }
-
-        // ── 补充说明 / 其他伤害数据 ──
-        if (simpleRows.isNotEmpty()) {
-            item("damage_tips") {
-                Box(Modifier.padding(horizontal = 16.dp)) {
-                    WeaponSimpleDamageCard(simpleRows)
-                }
-            }
-        }
-
-        detail.augmentations.forEach { network ->
-            item(key = "augment:${network.mode}") {
-                val sections = remember(network) {
-                    network.groups.map { group -> WeaponDataSection(group.title, group.options.map { option ->
-                        val cost = option.energyCost?.let { "（$it 能量点）" }.orEmpty()
-                        WeaponDataValue(option.title + cost, option.changes)
-                    }) }
-                }
-                Box(Modifier.padding(horizontal = 16.dp)) { WeaponSupplementaryCard("${network.mode}增幅", sections) }
-            }
-        }
-
-        // ── 冷却时间 ──
-        if (detail.cooldowns.isNotEmpty()) {
-            item("cooldowns") {
-                Box(Modifier.padding(horizontal = 16.dp)) { WeaponCooldownCard(cooldowns = detail.cooldowns) }
-            }
-        }
-
-        if (onOpenSkins != null) {
-            item(key = "shortcuts") {
-                FilledTonalButton(
-                    onClick = { onOpenSkins(detail.name) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("查看武器外观")
-                }
-            }
-        }
-
-        // ── 子页面导航 ──
-        if (detail.subPages.isNotEmpty()) {
-            item(key = "sub_pages") {
-                Box(Modifier.padding(horizontal = 16.dp)) { WeaponSubPagesCard(detail.subPages, onOpenWikiUrl) }
-            }
-        }
-
-        item(key = "bottom_nav_spacer") {
-            Spacer(Modifier.navigationBarsPadding().height(AppSpacing.xLarge))
         }
     }
 
@@ -458,8 +395,7 @@ private fun WeaponHeaderCard(
                 }
             }
 
-            val hasChips = detail.type.isNotBlank()
-                    || detail.fireMode.isNotBlank() || detail.obtainMethod.isNotBlank()
+            val hasChips = detail.type.isNotBlank() || detail.fireMode.isNotBlank()
             if (hasChips) {
                 if (detail.imageUrl != null) Spacer(Modifier.height(14.dp))
                 FlowRow(
@@ -480,14 +416,15 @@ private fun WeaponHeaderCard(
                             MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
-                    if (detail.obtainMethod.isNotBlank()) {
-                        InfoChip(
-                            detail.obtainMethod, Icons.Outlined.Lock,
-                            MaterialTheme.colorScheme.errorContainer,
-                            MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
                 }
+            }
+            if (detail.description.isNotBlank()) {
+                Spacer(Modifier.height(12.dp))
+                Text(detail.description, style = MaterialTheme.typography.bodyLarge)
+            }
+            if (detail.obtainMethod.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text("获取途径：${detail.obtainMethod}", style = MaterialTheme.typography.bodyMedium, color = AppTextColors.muted)
             }
             if (detail.users.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
@@ -530,31 +467,10 @@ private fun WeaponDescriptionCard(description: String, title: String = "武器�
 }
 
 // ────────────────────────────────────────────
-//  武器获取途径
-// ────────────────────────────────────────────
-
-@Composable
-private fun WeaponObtainCard(method: String) {
-    Card(
-        shape = AppShapes.card,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            SectionTitle(Icons.Outlined.Inventory2, "获取途径")
-            Spacer(Modifier.height(10.dp))
-            Text(method, style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-// ────────────────────────────────────────────
 //  武器数据卡片
 // ────────────────────────────────────────────
 
-@Composable
-private fun WeaponStatsCard(detail: WeaponDetail) {
-    val stats = buildList {
+private fun weaponStats(detail: WeaponDetail): List<Pair<String, String>> = buildList {
         if (detail.fireRate.isNotBlank()) add("射速" to detail.fireRate)
         if (detail.mobileFireRate.isNotBlank()) add("移动端射速" to detail.mobileFireRate)
         if (detail.aimSpeed.isNotBlank()) add("瞄准速度" to detail.aimSpeed)
@@ -570,8 +486,8 @@ private fun WeaponStatsCard(detail: WeaponDetail) {
         if (detail.magnification.isNotBlank()) add("放大倍率" to detail.magnification)
         detail.extraStats.forEach { (label, value) -> add(label to value) }
     }
-    if (stats.isEmpty()) return
-
+@Composable
+private fun WeaponStatsCard(stats: List<Pair<String, String>>) {
     Card(
         shape = AppShapes.card,
         modifier = Modifier.fillMaxWidth()
@@ -608,9 +524,10 @@ private fun WeaponSupplementaryCard(
     title: String,
     sections: List<WeaponDataSection>,
     diagramCount: Int = 0,
+    initiallyExpanded: Boolean = false,
     diagrams: @Composable () -> Unit = {}
 ) {
-    var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     val itemCount = sections.sumOf { it.values.size } + diagramCount
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
@@ -1180,7 +1097,9 @@ private fun WeaponDetailSkeleton(
             .padding(top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 头部卡片骨架（对齐紧凑顶栏后的图片 + 标签布局）
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            repeat(2) { ShimmerBox(Modifier.width(52.dp).height(16.dp), AppShapes.chip) }
+        }
         Box(Modifier.padding(horizontal = 16.dp)) {
             SkeletonCard {
                 Column(Modifier.padding(20.dp)) {
@@ -1219,37 +1138,23 @@ private fun WeaponDetailSkeleton(
                         }
                     }
                     Spacer(Modifier.height(14.dp))
-                    SkeletonChipRow(count = 3)
-                }
-            }
-        }
-        // 武器数据卡片骨架
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            SkeletonCard {
-                Column(Modifier.padding(20.dp)) {
-                    SkeletonSectionTitle()
+                    SkeletonChipRow(count = 2)
                     Spacer(Modifier.height(12.dp))
-                    repeat(3) { row ->
-                        if (row > 0) Spacer(Modifier.height(12.dp))
-                        SkeletonStatRow()
-                    }
-                }
-            }
-        }
-        // 伤害表卡片骨架
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            SkeletonCard {
-                Column(Modifier.padding(20.dp)) {
-                    SkeletonSectionTitle()
-                    Spacer(Modifier.height(12.dp))
-                    ShimmerBox(
-                        Modifier.fillMaxWidth().height(32.dp),
-                        shape = smoothCornerShape(8.dp)
-                    )
+                    SkeletonTextLine(widthFraction = 0.9f)
                     Spacer(Modifier.height(4.dp))
-                    repeat(3) {
-                        Spacer(Modifier.height(4.dp))
-                        ShimmerBox(Modifier.fillMaxWidth().height(28.dp))
+                    SkeletonTextLine(widthFraction = 0.62f)
+                }
+            }
+        }
+        // Overview initially shows the published mechanics, not the off-screen data table.
+        Box(Modifier.padding(horizontal = 16.dp)) {
+            SkeletonCard {
+                Column(Modifier.padding(20.dp)) {
+                    SkeletonSectionTitle()
+                    Spacer(Modifier.height(12.dp))
+                    repeat(2) {
+                        SkeletonTextLine(widthFraction = 0.8f)
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
             }

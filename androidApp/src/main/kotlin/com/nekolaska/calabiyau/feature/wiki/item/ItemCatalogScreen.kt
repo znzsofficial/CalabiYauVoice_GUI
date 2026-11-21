@@ -133,7 +133,6 @@ fun ItemCatalogScreen(platform: ItemCatalogPlatform, onBack: () -> Unit) {
                         SearchBar(
                             keyword = searchQuery,
                             onKeywordChange = { searchQuery = it },
-                            onSearch = {},
                             onClear = { searchQuery = "" },
                             isSearching = false,
                             placeholder = "搜索道具名称、分类或描述…",
@@ -324,8 +323,8 @@ private fun ItemDetailSheet(item: ItemInfo, onDismiss: () -> Unit) {
         descriptionCollapsedLines = 5,
         descriptionExpandedMaxHeight = 260.dp,
         heroHeight = 220.dp,
-        imageContent = {
-            if (!item.iconUrl.isNullOrBlank()) {
+        imageContent = if (item.iconUrl.isNullOrBlank()) null else {
+            {
                 AsyncImage(
                     model = item.iconUrl,
                     contentDescription = item.name,

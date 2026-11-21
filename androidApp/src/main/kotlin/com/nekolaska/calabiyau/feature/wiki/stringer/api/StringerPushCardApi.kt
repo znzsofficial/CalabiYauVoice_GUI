@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.stringer.api
 
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
+import com.nekolaska.calabiyau.core.wiki.UnusableWikiHtml
 import com.nekolaska.calabiyau.feature.wiki.stringer.model.CardPage
 import com.nekolaska.calabiyau.feature.wiki.stringer.parser.StringerPushCardParsers
 import com.nekolaska.calabiyau.feature.wiki.stringer.source.StringerRemoteSource
@@ -26,7 +27,8 @@ object StringerPushCardApi : CachedWikiApi<CardPage>("StringerPushCardApi") {
 
     override suspend fun fetchFromNetwork(forceRefresh: Boolean): ApiResult<CardPage> =
         ioApiCall("获取超弦推进卡牌失败") {
-            val result = StringerRemoteSource.fetchPageHtml(PAGE_NAME, "stringer_push_cards", forceRefresh)
+            val result = try { StringerRemoteSource.fetchPageHtml(PAGE_NAME, "stringer_push_cards", forceRefresh) }
+                catch (e: UnusableWikiHtml) { return@ioApiCall ApiResult.Error(e.message.orEmpty(), kind = ErrorKind.PARSE) }
                 ?: return@ioApiCall ApiResult.Error("获取超弦推进卡牌失败，且无离线缓存", kind = ErrorKind.NETWORK)
             val page = StringerPushCardParsers.parseHtml(result.html)
             if (page.cards.isEmpty()) {

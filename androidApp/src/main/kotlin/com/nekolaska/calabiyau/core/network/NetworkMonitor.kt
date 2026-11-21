@@ -16,15 +16,25 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  */
 object NetworkMonitor {
 
+    internal enum class Route { NONE, UNVALIDATED, VALIDATED }
+
+    internal fun defaultRoute(context: Context): Route {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return Route.NONE
+        // Capabilities may not be available yet immediately after the default network changes.
+        val caps = cm.getNetworkCapabilities(network) ?: return Route.UNVALIDATED
+        return when {
+            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) -> Route.NONE
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> Route.VALIDATED
+            else -> Route.UNVALIDATED
+        }
+    }
+
     /**
      * 同步检查当前是否有网络连接。
      */
     fun isNetworkAvailable(context: Context): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        return defaultRoute(context) == Route.VALIDATED
     }
 
     /**

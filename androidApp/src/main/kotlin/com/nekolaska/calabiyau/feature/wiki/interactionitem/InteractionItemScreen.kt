@@ -125,7 +125,6 @@ fun InteractionItemScreen(
                         SearchBar(
                             keyword = keyword,
                             onKeywordChange = { keyword = it },
-                            onSearch = {},
                             onClear = { keyword = "" },
                             isSearching = state.isLoading,
                             placeholder = "搜索互动道具 / 简介 / 获得方式"

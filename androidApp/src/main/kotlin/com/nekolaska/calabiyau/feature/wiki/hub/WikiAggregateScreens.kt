@@ -233,7 +233,7 @@ internal data class CatalogHubExtractionEntry(val kind: ExtractionCatalogKind, v
 }
 
 internal val catalogHubExtractionEntries = listOf(
-    CatalogHubExtractionEntry(ExtractionCatalogKind.LOOT, "材料、消耗品与收藏品"),
+    CatalogHubExtractionEntry(ExtractionCatalogKind.LOOT, "材料、消耗品、弹药、背包与钥匙卡等"),
     CatalogHubExtractionEntry(ExtractionCatalogKind.ATTACHMENTS, "配件效果与适用武器"),
     CatalogHubExtractionEntry(ExtractionCatalogKind.DROPS, "晶源体、首领与容器掉落")
 )

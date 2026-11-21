@@ -89,10 +89,13 @@ class WikiEngineCoreDownloadTest {
             val file = WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> },
                 { _, target -> target.writeText("keep") }).single()
             file.writeText("damaged")
-            assertFailsWith<java.io.IOException> {
+            val failure = assertFailsWith<java.io.IOException> {
                 WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> },
-                    { _, _ -> throw java.io.IOException("network down") })
+                    { _, _ -> throw java.net.UnknownHostException("network down") })
             }
+            // A dispatcher boundary may wrap the aggregate IOException in a recovered copy.
+            val causes = generateSequence<Throwable>(failure) { it.cause }.take(12).toList()
+            assertTrue(causes.any { it is java.net.UnknownHostException }, causes.joinToString(" -> "))
             assertEquals("damaged", file.readText())
             assertFailsWith<java.io.IOException> {
                 WikiEngineCore.downloadSpecificFiles(input, dir, 1, {}, { _, _, _ -> }, { url, target ->

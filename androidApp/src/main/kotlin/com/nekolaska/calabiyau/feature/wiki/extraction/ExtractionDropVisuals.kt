@@ -68,7 +68,7 @@ internal fun ExtractionDropThumbnail(
     val shape = smoothCornerShape(10.dp)
     val color = extractionDropQualityColor(qualityCode)
     var loaded by remember(imageUrl) { mutableStateOf(false) }
-    val imageAlpha by animateFloatAsState(if (loaded) 1f else 0f, tween(180), label = "drop-artwork")
+    val imageAlpha by animateFloatAsState(if (loaded) 1f else 0f, tween(DropMotion.reveal), label = "drop-artwork")
     Box(modifier.size(56.dp).clip(shape)
         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         .border(1.dp, color.copy(alpha = 0.45f), shape)

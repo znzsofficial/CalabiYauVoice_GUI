@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.bio.api
 
 import com.nekolaska.calabiyau.core.cache.CachedWikiApi
+import com.nekolaska.calabiyau.core.wiki.UnusableWikiHtml
 import com.nekolaska.calabiyau.feature.wiki.bio.model.*
 import com.nekolaska.calabiyau.feature.wiki.bio.parser.BioCardParsers
 import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardPageSourceResult
@@ -8,6 +9,7 @@ import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardRemoteSource
 import data.ApiResult
 import data.ErrorKind
 import data.ioApiCall
+import kotlinx.coroutines.CancellationException
 
 object BioCardApi {
     private val loader = BioTabLoader(loadPc = { force -> fetchTab(BioCatalogTab.PC, force) })
@@ -24,6 +26,8 @@ private class BioTabCatalog(private val tab: BioCatalogTab, private val loader: 
     suspend fun fetchPage(force: Boolean): ApiResult<CardPageData> = fetch(forceRefresh = force,
         allowMemoryCache = getCachedValue()?.deckEditorError == null)
     override suspend fun fetchFromNetwork(forceRefresh: Boolean) = loader.load(tab, forceRefresh)
+    override fun shouldCache(value: CardPageData) = value.deckEditorError == null &&
+        (tab != BioCatalogTab.PC || value.pcCards.any { it.refreshProbability != null })
 }
 
 /** Independent tab dependencies. A broken mobile page cannot take down PC cards or deck browsing. */
@@ -38,16 +42,22 @@ internal class BioTabLoader(
         val deckPage = "晶源感染卡组分享"
         val page = when (tab) { BioCatalogTab.PC -> pcPage; BioCatalogTab.MOBILE -> mobilePage; BioCatalogTab.DECK -> deckPage }
         val key = when (tab) { BioCatalogTab.PC -> "bio_cards_pc"; BioCatalogTab.MOBILE -> "bio_cards_mobile"; BioCatalogTab.DECK -> "bio_cards_decks" }
-        val raw = source(page, key, force) ?: return@ioApiCall ApiResult.Error("无法获取当前卡牌页面", kind = ErrorKind.NETWORK)
+        val raw = try { source(page, key, force) } catch (e: UnusableWikiHtml) {
+            return@ioApiCall ApiResult.Error(e.message.orEmpty(), kind = ErrorKind.PARSE)
+        } ?: return@ioApiCall ApiResult.Error("无法获取当前卡牌页面", kind = ErrorKind.NETWORK)
         val empty = CardPageData(emptyList(), emptyList(), emptyList(), BioCardRemoteSource.pageUrl(pcPage),
             BioCardRemoteSource.pageUrl(mobilePage), BioCardRemoteSource.pageUrl(deckPage), loadedTab = tab)
         when (tab) {
             BioCatalogTab.PC -> {
-                val mode = source("战斗模式/晶源感染", "bio_cards_mode", force)
-                val cards = BioCardParsers.parsePcCards(raw.html, mode?.let { BioCardParsers.parseRefreshProbabilities(it.html) }.orEmpty())
+                // Refresh probabilities are supplemental. A failed mode page must not discard
+                // the PC cards we already have or become a permanent memory hit.
+                val mode = try {
+                    source("战斗模式/晶源感染", "bio_cards_mode", force)?.let { it to BioCardParsers.parseRefreshProbabilities(it.html) }
+                } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+                val cards = BioCardParsers.parsePcCards(raw.html, mode?.second.orEmpty())
                 if (cards.isEmpty()) ApiResult.Error("未找到 PC 卡牌数据", kind = ErrorKind.PARSE)
-                else ApiResult.Success(empty.copy(pcCards = cards), isOffline = raw.isFromCache || mode?.isFromCache == true,
-                    cacheAgeMs = maxOf(raw.ageMs, mode?.ageMs ?: 0L))
+                else ApiResult.Success(empty.copy(pcCards = cards), isOffline = raw.isFromCache || mode?.first?.isFromCache == true,
+                    cacheAgeMs = maxOf(raw.ageMs, mode?.first?.ageMs ?: 0L))
             }
             BioCatalogTab.MOBILE -> {
                 val cards = BioCardParsers.parseMobileCards(raw.html)

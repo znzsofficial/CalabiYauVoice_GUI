@@ -5,9 +5,11 @@ import { storedProfileBid } from "./identity.js";
 import { deleteComment } from "./comments.js";
 import { avatarPath, retireAvatar, cleanupAvatars } from "./avatars.js";
 import { moderate, auditList, auditStatement } from "./moderation.js";
+import { usageSummary, archiveUsage } from "./usage.js";
 
 export async function admin(request, env, url, ctx) {
   await requireAdmin(request, env);
+  if (request.method === "GET" && url.pathname === "/api/admin/usage") return usageSummary(env.DB);
   if (request.method === "GET" && url.pathname === "/api/admin/profile") return getProfile(request, env, url);
   if (request.method === "PUT" && url.pathname === "/api/admin/comment") return moderate(request, env);
   if (request.method === "GET" && url.pathname === "/api/admin/audit") return auditList(env, url);
@@ -19,6 +21,7 @@ export async function admin(request, env, url, ctx) {
       env.DB.prepare("DELETE FROM write_throttle WHERE key IN (SELECT key FROM write_throttle WHERE last_at < unixepoch()-86400 LIMIT 1000)"),
       env.DB.prepare("DELETE FROM write_requests WHERE rowid IN (SELECT rowid FROM write_requests WHERE created_at < unixepoch()-604800 LIMIT 1000)"),
       env.DB.prepare("DELETE FROM reply_notifications WHERE rowid IN (SELECT rowid FROM reply_notifications WHERE read_at < unixepoch()-7776000 LIMIT 1000)"),
+      ...archiveUsage(env.DB),
     ]);
     return json({ success: true });
   }

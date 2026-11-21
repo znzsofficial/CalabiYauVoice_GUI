@@ -83,6 +83,7 @@ fun StringerTalentScreen(
         ApiResourceContent(
             state = state,
             modifier = Modifier.padding(innerPadding),
+            isDataEmpty = { it.sections.isEmpty() },
             loading = { mod -> LoadingState(mod, "正在加载天赋数据…") }
         ) { page ->
             LazyColumn(

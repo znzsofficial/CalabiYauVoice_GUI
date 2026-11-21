@@ -138,11 +138,7 @@ fun NewDownloaderContent() {
     val manualSelectionMap by viewModel.manualSelectionMap.collectAsState()
     val categoryTotalCountMap by viewModel.categoryTotalCountMap.collectAsState()
 
-    val showFileDialog by viewModel.showFileDialog.collectAsState()
-    val dialogCategoryName by viewModel.dialogCategoryName.collectAsState()
-    val dialogFileList by viewModel.dialogFileList.collectAsState()
-    val dialogIsLoading by viewModel.dialogIsLoading.collectAsState()
-    val dialogInitialSelection by viewModel.dialogInitialSelection.collectAsState()
+    val fileDialog by viewModel.fileDialog.collectAsState()
 
     val logLines by viewModel.logLines.collectAsState()
 
@@ -176,15 +172,12 @@ fun NewDownloaderContent() {
     }
 
     // === 文件选择弹窗 ===
-    if (showFileDialog) {
+    fileDialog?.let { dialog ->
         FileSelectionDialog(
-            title = dialogCategoryName,
-            files = dialogFileList,
-            // 传入初始选中的 URL 列表
-            initialSelection = dialogInitialSelection,
-            isLoading = dialogIsLoading,
+            dialog = dialog,
+            onRetry = { viewModel.openFileDialog(dialog.category) },
             onClose = { viewModel.closeFileDialog() },
-            onConfirm = { selectedFiles -> viewModel.confirmFileDialog(selectedFiles) }
+            onConfirm = { viewModel.confirmFileDialog(dialog.requestId, it) }
         )
     }
 
@@ -773,7 +766,7 @@ fun NewDownloaderContent() {
                                             modifier = Modifier.fillMaxSize(),
                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
-                                            items(fileSearchResults) { (name, url) ->
+                                            items(fileSearchResults, key = { it.second }) { (name, url) ->
                                                 FileListItem(
                                                     name = name,
                                                     url = url,

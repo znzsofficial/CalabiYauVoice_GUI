@@ -17,6 +17,7 @@
 | `CHARACTER_SETTINGS_AUDIT_FILE` | 超弦体补充设定 | [设定审计](character-detail-presentation.md) |
 | `WIKI_LIST_AUDIT_DIR` | 角色、武器、地图列表 | [列表审计](wiki-list-resilience.md) |
 | `EXTRACTION_AUDIT_DIR`、`EXTRACTION_DROPS_AUDIT_FILE`、`EXTRACTION_CONTAINERS_AUDIT_DIR`、`EXTRACTION_UPDATED_AUDIT_DIR` | 多代弦溯结构 | 各自对应不同上游结构，不相互替代；[专题](extraction-mode-implementation.md) |
+| `EXTRACTION_SPLIT_AUDIT_DIR` | 11 月 21 日晚物资迁页与配件 Q8 | 使用独立的晚间完整快照，核对新旧入口、188 项物资、142 项配件及配图身份；保留白天快照基线。 |
 | `WEAPON_AUDIT_DIR` / `MAP_BIO_AUDIT_DIR` | 武器、地图、生化 | [武器](weapon-parsing-audit.md)、[地图与卡池](rift-bio-pool-followup.md) |
 | `WIKI_NOV21_AUDIT_DIR` | 11 月 21 日弦溯、指南、伏闪 | 弦溯读 `drops.html`、`table.html`、`loot.html`、`attachments.html`；指南读 `beginner.html`、`review-1121/120474.html`、`review-1121/historical-120474.json`；伏闪优先读 `fushan-current.json`，也可用 `fushan.html` 与 `120510.txt`。 |
 

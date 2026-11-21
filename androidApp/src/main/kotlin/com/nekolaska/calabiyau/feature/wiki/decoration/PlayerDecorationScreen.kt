@@ -59,8 +59,6 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var detailKey by rememberSaveable { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<PreviewImage?>(null) }
-    var saveTarget by remember { mutableStateOf<PreviewImage?>(null) }
-    val showMessage = rememberSnackbarLauncher()
     val gridStates = rememberSaveableStateHolder()
     val effectiveCategory = category?.takeIf { id -> groups.any { it.key == id } }
     LaunchedEffect(groups, state.isLoading, state.isShowingCachedPrefetch, state.error) {
@@ -102,7 +100,7 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SearchBar(modifier = Modifier.weight(1f), keyword = query, onKeywordChange = ::updateQuery,
-                        onSearch = { keyboard?.hide() }, onClear = { updateQuery("") }, isSearching = false,
+                        onClear = { updateQuery("") }, isSearching = false,
                         placeholder = "搜索名称或获取方式…")
                     if (hasCategories) FilledTonalIconButton(
                         onClick = { keyboard?.hide(); showCategories = true },
@@ -251,9 +249,6 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
         onPreview = { if (isActive() && it.url.isNotBlank()) preview = it })
     preview?.takeIf { isActive() }?.let { image ->
         ImagePreviewDialog(model = image.url, contentDescription = image.title, onDismiss = { preview = null },
-            onSave = { if (isActive()) saveTarget = image })
-    }
-    saveTarget?.takeIf { isActive() }?.let { image ->
-        ConfirmImageSaveDialog(url = image.url, label = image.title, onDismiss = { saveTarget = null }, showMessage = showMessage)
+            saveConfirmationLabel = image.title)
     }
 }

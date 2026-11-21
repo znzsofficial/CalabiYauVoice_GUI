@@ -67,6 +67,9 @@ internal fun ExtractionDetailSheet(
     val fields = remember(entry) {
         if (entry.dropPoolGroups.isNotEmpty()) entry.fields.filterNot { it.label == "掉落池条目（完整）" } else entry.fields
     }
+    val (summaryFields, otherFields) = remember(entry.type, fields) {
+        fields.partition { entry.type == ExtractionEntryType.DROP_SOURCE && it.label in sourceSummaryLabels }
+    }
     val evidence = remember(entry, query, isDropDetail) {
         if (isDropDetail) extractionDropMatchEvidence(entry, query) else null
     }
@@ -82,7 +85,7 @@ internal fun ExtractionDetailSheet(
         expandedGroups = entry.dropPoolGroups.map { it.key }
     }
     val referenceRotation by animateFloatAsState(if (referenceExpanded) 180f else 0f,
-        animationSpec = tween(180), label = "drop-reference-arrow")
+        animationSpec = tween(DropMotion.reveal), label = "drop-reference-arrow")
 
     WikiContentSheet(onDismiss = onDismiss) {
         // Ordinary loot/attachment details keep their full artwork and fields.
@@ -218,11 +221,15 @@ internal fun ExtractionDetailSheet(
         }
         if (isDropDetail && entry.type == ExtractionEntryType.DROP_SOURCE) {
             item(key = "source-summary", contentType = "source-summary") {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (onViewCompletePool != null) {
+                        FilledTonalButton(onClick = onViewCompletePool, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (entry.containerId == null) "查看共用物品池" else "查看完整物品池")
+                        }
+                    } else if (entry.containerId == null) {
+                        Text("暂无对应物品池", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Text("掉落概览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(if (entry.dropImages.isNotEmpty()) "部分物品配图 · 掉落方式见下方说明"
-                        else "掉落摘要 · 完整名单见物品池",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             items(entry.dropImages.size, key = { "source-image-$it" }, contentType = { "pool-item" }) { index ->
@@ -233,9 +240,6 @@ internal fun ExtractionDetailSheet(
                     qualityCode = image.qualityLabel?.let { Regex("^Q(\\d+)\\b").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: -1,
                     imageUrl = image.imageUrl, onClick = null)
             }
-            // Only gameplay-facing summaries are promoted; every original field remains below.
-            val summaryFields = fields.filter { it.label in setOf("必掉物", "掉落材料（按权重抽）", "掉落材料（按概率抽）",
-                "限定池", "掉落池构成", "掉落池内最高权重", "抽中率最高", "掉落件数") }
             items(summaryFields.size, key = { "source-summary-field-$it" }, contentType = { "field" }) { index ->
                 Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
                     DetailField(
@@ -245,22 +249,13 @@ internal fun ExtractionDetailSheet(
                     )
                 }
             }
-            item(key = "source-pool-link", contentType = "source-pool-link") {
-                if (onViewCompletePool != null) {
-                    FilledTonalButton(onClick = onViewCompletePool, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (entry.containerId == null) "查看共用物品池" else "查看完整物品池")
-                    }
-                } else if (entry.containerId == null) {
-                    Text("暂无对应物品池，已知掉落见上方说明。", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
         }
         if (entry.dropPoolGroups.isNotEmpty()) {
             item(key = "pool-search", contentType = "pool-search") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (entry.dropCountState == DropCountState.ZERO) "候选物品（无实际掉落）" else "池内物品",
                         style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it }, onSearch = {},
+                    SearchBar(keyword = poolQuery, onKeywordChange = { poolQuery = it },
                         onClear = { poolQuery = "" }, isSearching = false, placeholder = "搜索池内物品…")
                     ExtractionPoolQualityMenu(labels = entry.dropPoolGroups.map { it.label }.distinct(),
                         selectedQuality = effectiveQuality, onSelect = { selectedQuality = it },
@@ -287,7 +282,8 @@ internal fun ExtractionDetailSheet(
             }
         }
         if (isDropDetail && !referenceIsMainContent) {
-            item(key = "reference-toggle", contentType = "reference-toggle") {
+            val hasReference = otherFields.isNotEmpty() || readingDescription.isNotBlank() || containerDetails || entry.containerId != null
+            if (hasReference) item(key = "reference-toggle", contentType = "reference-toggle") {
                 Surface(
                     onClick = { referenceExpanded = !referenceExpanded },
                     modifier = Modifier.dropItemMotion(this).fillMaxWidth(),
@@ -332,9 +328,9 @@ internal fun ExtractionDetailSheet(
                 if (readingDescription.isNotBlank()) item(key = "description", contentType = "description") {
                     Text(readingDescription, modifier = Modifier.dropItemMotion(this), style = MaterialTheme.typography.bodyMedium)
                 }
-                items(fields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
+                items(otherFields.size, key = { "field-$it" }, contentType = { "field" }) { index ->
                     Surface(Modifier.dropItemMotion(this), shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.surfaceContainer) {
-                        DetailField(Modifier.fillMaxWidth().padding(14.dp), label = fields[index].label, value = fields[index].value)
+                        DetailField(Modifier.fillMaxWidth().padding(14.dp), label = otherFields[index].label, value = otherFields[index].value)
                     }
                 }
             }
@@ -381,3 +377,6 @@ private fun ExtractionPoolQualityMenu(labels: List<String>, selectedQuality: Str
         }
     }
 }
+
+private val sourceSummaryLabels = setOf("必掉物", "掉落材料（按权重抽）", "掉落材料（按概率抽）", "掉落物品",
+    "限定池", "掉落池构成", "掉落池内最高权重", "抽中率最高", "掉落件数")

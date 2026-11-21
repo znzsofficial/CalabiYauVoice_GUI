@@ -2,6 +2,9 @@ package com.nekolaska.calabiyau.feature.wiki.voting.source
 
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
+import com.nekolaska.calabiyau.core.wiki.CookieSessionGuard
+import com.nekolaska.calabiyau.core.wiki.WikiUserApi
+import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteSession
 import data.SharedJson
 import util.buildWikiUrl
 import kotlinx.serialization.json.jsonObject
@@ -18,12 +21,27 @@ object VotingRemoteSource {
     private const val API = "https://wiki.biligame.com/klbq/api.php"
     private const val VOTE_PAGE_URL = "https://wiki.biligame.com/klbq/%E8%A7%92%E8%89%B2%E6%97%B6%E8%A3%85%E6%8A%95%E7%A5%A8"
 
-    fun getWikiCookies(): String? {
-        return WikiAuthHelper.getWikiCookies()
+    internal suspend fun verifiedUser(ticket: CookieSessionGuard.Ticket): WikiUserApi.UserInfo {
+        val url = buildWikiUrl(API, "action" to "query", "meta" to "userinfo", "format" to "json")
+        val body = WikiAuthHelper.httpGetWithTicket(url, ticket) ?: error("无法读取 Wiki 登录信息，请刷新重试")
+        return WikiUserApi.parseUserInfoJson(body)
     }
 
-    suspend fun fetchCsrfToken(cookies: String): String? {
-        return WikiAuthHelper.fetchCsrfToken(API, cookies)
+    private fun VoteSession.currentRequest() = request() ?: error("账号已切换或退出，请刷新投票")
+
+    internal suspend fun fetchCsrfToken(session: VoteSession): String? {
+        val url = buildWikiUrl(API, "action" to "query", "meta" to "tokens", "type" to "csrf",
+            "assert" to "user", "assertuser" to session.name, "format" to "json")
+        val body = WikiAuthHelper.httpGetWithTicket(url, session.currentRequest()) ?: return null
+        val root = checkedWikiResponse(body)
+        return root["query"]?.jsonObject?.get("tokens")?.jsonObject?.get("csrftoken")?.jsonPrimitive?.content
+            ?.takeIf { it.isNotBlank() && it != "+\\" }
+    }
+
+    private fun checkedWikiResponse(body: String) = SharedJson.parseToJsonElement(body).jsonObject.also { root ->
+        when (root["error"]?.jsonObject?.get("code")?.jsonPrimitive?.content) {
+            "assertuserfailed", "assertnameduserfailed" -> error("Wiki 登录身份不一致，请刷新投票")
+        }
     }
 
     suspend fun fetchVotePageHtml(votePage: String): String? {
@@ -41,35 +59,36 @@ object VotingRemoteSource {
             ?.jsonPrimitive?.content
     }
 
-    suspend fun fetchVoteDataHtml(fullText: String, cookies: String): String? {
+    internal suspend fun fetchVoteDataHtml(fullText: String, session: VoteSession): String? {
         val url = buildWikiUrl(API,
             "action" to "parse",
             "text" to fullText,
             "prop" to "text",
             "contentmodel" to "wikitext",
+            "assert" to "user", "assertuser" to session.name,
             "disablelimitreport" to "true",
             "format" to "json"
         )
-        val body = WikiAuthHelper.httpGetWithCookies(url, cookies) ?: return null
-        val json = SharedJson.parseToJsonElement(body)
+        val body = WikiAuthHelper.httpGetWithTicket(url, session.currentRequest()) ?: return null
+        val json = checkedWikiResponse(body)
         return json.jsonObject["parse"]
             ?.jsonObject?.get("text")
             ?.jsonObject?.get("*")
             ?.jsonPrimitive?.content
     }
 
-    suspend fun submitVoteOperation(cookies: String, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
-        val ticket = WikiAuthHelper.beginCookieRequest(cookies)
-        if (!WikiAuthHelper.isCurrentRequest(ticket)) return VoteSubmitResult(false, 0, "登录状态已变化，请重新确认后投票")
+    internal suspend fun submitVoteOperation(session: VoteSession, token: String, operation: VoteSubmitOperation): VoteSubmitResult {
+        val ticket = session.currentRequest()
         val request = Request.Builder().url(API).apply {
             post(formBodyOf(
                 "action" to "pollsubmitvote",
                 "poll" to operation.pollId,
                 "answer" to operation.answer,
+                "assert" to "user", "assertuser" to session.name,
                 "token" to token,
                 "format" to "json"
             ))
-            header("Cookie", cookies)
+            header("Cookie", ticket.cookies)
             header("User-Agent", "CalabiYauVoice/2.0 (Android)")
             header("Accept", "application/json, text/javascript, */*; q=0.01")
             header("Origin", "https://wiki.biligame.com")

@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,12 +44,14 @@ fun BoxScope.CatalogQualityBadge(
     padding: Dp = if (compact) 4.dp else 12.dp
 ) {
     if (label.isNullOrBlank() || level == null) return
+    val background = catalogQualityColor(level)
     Surface(
         modifier = modifier
             .align(Alignment.TopEnd)
             .padding(padding),
         shape = AppShapes.capsule,
-        color = catalogQualityColor(level).copy(alpha = if (compact) 0.85f else 0.9f)
+        color = background,
+        contentColor = if (background.luminance() >= 0.179f) Color.Black else Color.White
     ) {
         Text(
             label,
@@ -57,7 +60,6 @@ fun BoxScope.CatalogQualityBadge(
             } else {
                 MaterialTheme.typography.labelMedium
             },
-            color = Color.White,
             fontWeight = if (compact) FontWeight.SemiBold else FontWeight.Bold,
             modifier = Modifier.padding(
                 horizontal = if (compact) 6.dp else 10.dp,

@@ -29,8 +29,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import coil3.compose.AsyncImage
@@ -44,6 +42,7 @@ import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.ZoomableImage
+import com.nekolaska.calabiyau.core.ui.FullscreenImageDialog
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import kotlinx.coroutines.Dispatchers
@@ -756,15 +755,11 @@ fun FileManagerScreen(
         )
         val currentFile = galleryImages.getOrNull(pagerState.currentPage)
 
-        Dialog(
-            onDismissRequest = { showGallery = false },
-            // This full-screen dialog owns its insets instead of combining platform fitting with padding.
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-        ) {
+        FullscreenImageDialog(onDismiss = { showGallery = false }) {
+            val galleryMessage = rememberSnackbarLauncher()
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
-                    .safeDrawingPadding()
                     .padding(AppSpacing.medium),
                 shape = AppShapes.dialog,
                 color = MaterialTheme.colorScheme.surfaceContainerLow
@@ -791,7 +786,7 @@ fun FileManagerScreen(
                         }
                         Row {
                             if (currentFile != null) {
-                                IconButton(onClick = { shareFile(context, currentFile, showSnack) }) {
+                                IconButton(onClick = { shareFile(context, currentFile, galleryMessage) }) {
                                     Icon(Icons.Outlined.Share, "分享", modifier = Modifier.size(AppSizes.iconMedium))
                                 }
                             }

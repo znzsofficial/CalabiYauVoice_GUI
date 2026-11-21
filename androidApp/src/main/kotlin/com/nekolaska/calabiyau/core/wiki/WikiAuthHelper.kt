@@ -20,6 +20,7 @@ internal object WikiAuthHelper {
     private var cookieMemo: Pair<Long, String?>? = null
     private val cookieLock = Any()
     private val sessionGuard = CookieSessionGuard()
+    private val voteGuard = CookieSessionGuard()
     private var clearingCookies = false
 
     fun getWikiCookies(): String? = synchronized(cookieLock) {
@@ -29,7 +30,7 @@ internal object WikiAuthHelper {
         readWikiCookies().also { cookieMemo = now to it }
     }
 
-    private fun readWikiCookies(): String? = try {
+    private fun readWikiCookies(): String? = (try {
         val cm = CookieManager.getInstance()
         val rootCookies = cm.getCookie(WIKI_ROOT_URL) ?: ""
         val klbqCookies = cm.getCookie(WIKI_SUB_PATH) ?: ""
@@ -41,8 +42,21 @@ internal object WikiAuthHelper {
                 cookieMap[trimmed.substring(0, eq).trim()] = trimmed.substring(eq + 1).trim()
             }
         }
-        cookieMap.takeIf { it.isNotEmpty() }?.entries?.joinToString("; ") { "${it.key}=${it.value}" }
-    } catch (_: Exception) { null }
+        cookieMap.takeIf { it.isNotEmpty() }?.toSortedMap()?.entries?.joinToString("; ") { "${it.key}=${it.value}" }
+    } catch (_: Exception) { null }).also { voteGuard.observe(voteLoginKey(it)) }
+
+    /** Capture the login once; issue each transport ticket with the latest cookies for that login. */
+    fun beginVoteLogin(): CookieSessionGuard.Ticket? = synchronized(cookieLock) {
+        if (clearingCookies) return@synchronized null
+        val key = voteLoginKey(readWikiCookies()) ?: return@synchronized null
+        voteGuard.capture(key, key)
+    }
+
+    fun voteRequest(login: CookieSessionGuard.Ticket): CookieSessionGuard.Ticket? = synchronized(cookieLock) {
+        if (clearingCookies) return@synchronized null
+        val cookies = readWikiCookies()
+        if (voteGuard.isCurrent(login, voteLoginKey(cookies)) && cookies != null) sessionGuard.capture(cookies, cookies) else null
+    }
 
     fun beginCookieRequest(cookies: String): CookieSessionGuard.Ticket = synchronized(cookieLock) {
         sessionGuard.capture(cookies, if (clearingCookies) null else readWikiCookies())
@@ -54,6 +68,7 @@ internal object WikiAuthHelper {
 
     fun clearLoginCookies() = synchronized(cookieLock) {
         sessionGuard.invalidate()
+        voteGuard.invalidate()
         csrfCache.clear(); cookieMemo = null; clearingCookies = true
         try {
             CookieManager.getInstance().removeAllCookies {
@@ -117,8 +132,12 @@ internal object WikiAuthHelper {
     suspend fun httpGetWithCookies(url: String, cookies: String, expectJson: Boolean = false): String? {
         val ticket = beginCookieRequest(cookies)
         if (!isCurrentRequest(ticket)) return null
+        return httpGetWithTicket(url, ticket, expectJson)
+    }
+
+    suspend fun httpGetWithTicket(url: String, ticket: CookieSessionGuard.Ticket, expectJson: Boolean = false): String? {
         return try {
-            WikiEngine.client.newCall(Request.Builder().url(url).header("Cookie", cookies)
+            WikiEngine.client.newCall(Request.Builder().url(url).header("Cookie", ticket.cookies)
                 .header("User-Agent", DEFAULT_USER_AGENT).build()).awaitResponseText().let { resp ->
                 if (!resp.isSuccessful) return null
                 syncResponseCookies(resp.headers.values("Set-Cookie"), ticket)

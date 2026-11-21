@@ -142,7 +142,6 @@ fun BgmScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索曲名 / 分类 / 场景"

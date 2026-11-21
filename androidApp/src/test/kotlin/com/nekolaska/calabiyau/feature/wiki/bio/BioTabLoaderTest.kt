@@ -3,6 +3,9 @@ package com.nekolaska.calabiyau.feature.wiki.bio
 import com.nekolaska.calabiyau.feature.wiki.bio.api.BioTabLoader
 import com.nekolaska.calabiyau.feature.wiki.bio.model.*
 import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardPageSourceResult
+import com.nekolaska.calabiyau.feature.wiki.bio.source.BioCardRemoteSource
+import com.nekolaska.calabiyau.core.cache.OfflineCache
+import com.nekolaska.calabiyau.core.cache.fetchValidatedCachePayload
 import data.ApiResult
 import kotlinx.coroutines.*
 import kotlin.test.*
@@ -11,6 +14,19 @@ class BioTabLoaderTest {
     private val pc = """<div class="gallerygrid-item zombie-card" data-param1="3" data-param2="防御" data-param3="晶源体"><div class="zombie-card__name">测试卡</div></div>"""
     private val mobile = """<div class="gallerygrid-item zombie-card-mobile" data-param1="超弦体" data-param2="进攻" data-param3="4"><div class="zombie-card-mobile__name">移动卡</div></div>"""
     private val deck = """<div class="mw-parser-output"><table class="klbqtable"><tr><th colspan="2">测试卡组</th></tr><tr><th>分享作者</th><td>测试作者</td></tr></table></div>"""
+
+    @Test fun wrongTabAndPlaceholderCannotReplaceUsableOfflineCards() = runBlocking {
+        for ((stored, wrongTab) in listOf(pc to mobile, mobile to pc)) {
+            var disk = stored
+            for (bad in listOf(wrongTab, "<div class='mw-parser-output'>建设中</div>")) {
+                val result = fetchValidatedCachePayload(true, { bad }, { OfflineCache.CacheResult(disk, true, 42) },
+                    { disk = it }, { BioCardRemoteSource.hasNamedCards(it, mobile = stored == mobile) })
+                assertEquals(stored, result?.payload)
+                assertEquals(true, result?.isFromCache)
+                assertEquals(stored, disk)
+            }
+        }
+    }
 
     @Test fun pcAndMobileNeverLoadDeckIndexesOrEachOthersPages() = runBlocking {
         for (tab in listOf(BioCatalogTab.PC, BioCatalogTab.MOBILE)) {
@@ -34,6 +50,16 @@ class BioTabLoaderTest {
         assertEquals("indexes unavailable", result.value.deckEditorError)
         assertTrue(result.isOffline)
         assertEquals(42L, result.cacheAgeMs)
+    }
+
+    @Test fun pcListSurvivesFailureOfOptionalProbabilityPage() = runBlocking {
+        val loader = BioTabLoader(source = { _, key, _ ->
+            if (key == "bio_cards_mode") throw java.io.IOException("connection reset")
+            BioCardPageSourceResult(pc, false, 0)
+        })
+        val card = assertIs<ApiResult.Success<CardPageData>>(loader.load(BioCatalogTab.PC, false)).value.pcCards.single()
+        assertEquals("测试卡", card.name)
+        assertNull(card.refreshProbability)
     }
 
     @Test fun emptyPcAndCancellationDoNotBecomeSuccessfulEmptyCatalogs() = runBlocking {

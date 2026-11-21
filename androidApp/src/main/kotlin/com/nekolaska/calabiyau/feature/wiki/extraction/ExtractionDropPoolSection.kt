@@ -31,7 +31,7 @@ internal fun LazyListScope.extractionDropPoolSection(
 ) {
     item(key = "pool-heading:${group.key}", contentType = "pool-heading") {
         val canExpand = group.items.size > 8
-        val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(180), label = "drop-pool-arrow")
+        val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(DropMotion.reveal), label = "drop-pool-arrow")
         Surface(
             modifier = Modifier.dropItemMotion(this).fillMaxWidth()
                 .then(if (canExpand) Modifier.clickable(

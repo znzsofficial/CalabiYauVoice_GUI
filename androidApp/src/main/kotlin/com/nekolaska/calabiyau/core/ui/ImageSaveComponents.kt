@@ -4,7 +4,6 @@ import android.content.Context
 import android.webkit.URLUtil
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.util.enqueueDownload
 import java.io.File
@@ -22,12 +21,8 @@ fun enqueueImageSave(context: Context, url: String, showMessage: (String) -> Uni
 }
 
 @Composable
-fun ConfirmImageSaveDialog(url: String, label: String, onDismiss: () -> Unit, showMessage: (String) -> Unit) {
-    val context = LocalContext.current
+internal fun ConfirmImageSaveDialog(label: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("保存图片") }, text = { Text(label) },
-        confirmButton = { FilledTonalButton(onClick = {
-            onDismiss()
-            enqueueImageSave(context, url, showMessage)
-        }) { Text("保存") } },
+        confirmButton = { FilledTonalButton(onClick = onConfirm) { Text("保存") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }, shape = AppShapes.sheet)
 }

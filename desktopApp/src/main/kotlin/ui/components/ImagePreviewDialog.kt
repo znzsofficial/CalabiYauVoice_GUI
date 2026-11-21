@@ -16,7 +16,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -48,13 +47,11 @@ private const val SCALE_STEP = 0.15f
  */
 @Composable
 fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
-    val isGif = remember(url) {
-        url.substringAfterLast('.', "").lowercase().substringBefore('?') == "gif"
-    }
-    var bitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var gifBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var loadFailed by remember { mutableStateOf(false) }
+    val isGif = remember(url) { isGifUrl(url) }
+    var bitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
+    var gifBytes by remember(url) { mutableStateOf<ByteArray?>(null) }
+    var isLoading by remember(url) { mutableStateOf(true) }
+    var loadFailed by remember(url) { mutableStateOf(false) }
 
     LaunchedEffect(url) {
         isLoading = true
@@ -72,8 +69,8 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
     }
 
     // 缩放与平移状态
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    var scale by remember(url) { mutableStateOf(1f) }
+    var offset by remember(url) { mutableStateOf(Offset.Zero) }
 
     fun resetTransform() {
         scale = 1f; offset = Offset.Zero
@@ -189,29 +186,8 @@ fun ImagePreviewDialog(url: String, name: String, onClose: () -> Unit) {
                             contentDescription = name,
                             modifier = imageModifier,
                             contentScale = ContentScale.Fit,
-                            placeholder = {
-                                val staticBitmap = remember(gifBytes) {
-                                    runCatching {
-                                        val img = javax.imageio.ImageIO.read(gifBytes!!.inputStream())
-                                        if (img != null) {
-                                            val out = java.io.ByteArrayOutputStream()
-                                            javax.imageio.ImageIO.write(img, "png", out)
-                                            org.jetbrains.skia.Image.makeFromEncoded(out.toByteArray())
-                                                .toComposeImageBitmap()
-                                        } else null
-                                    }.getOrNull()
-                                }
-                                if (staticBitmap != null) {
-                                    Image(
-                                        bitmap = staticBitmap,
-                                        contentDescription = name,
-                                        modifier = imageModifier,
-                                        contentScale = ContentScale.Fit
-                                    )
-                                } else {
-                                    Text("图片加载失败", color = Color.Gray)
-                                }
-                            }
+                            placeholder = { ProgressRing(size = 48.dp) },
+                            errorContent = { Text("无法预览此图片", color = Color.White) }
                         )
                     } else if (bitmap != null) {
                         Image(

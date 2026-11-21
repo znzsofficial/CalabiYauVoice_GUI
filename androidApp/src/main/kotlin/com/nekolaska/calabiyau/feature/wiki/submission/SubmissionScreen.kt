@@ -121,7 +121,6 @@ fun SubmissionScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索作品 / 作者 / 类型 / 题材"

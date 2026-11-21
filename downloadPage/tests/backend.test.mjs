@@ -3,7 +3,7 @@ import { before, after, test } from "node:test";
 import { readFile, readdir } from "node:fs/promises";
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
-import { guestIdentity } from "../src/api/auth.js";
+import { guestIdentity, hmac } from "../src/api/auth.js";
 
 let mf, db, assets, releases;
 const base = "https://example.test";
@@ -53,6 +53,69 @@ before(async () => {
   }
 });
 after(async () => { await mf?.dispose(); });
+
+test("app usage upserts daily snapshots, counts returning installs, and never exposes installation IDs", async () => {
+  const today = Math.floor((Date.now()+28800000)/86400000), cohort=today-8;
+  const day = (date, seq, starts, counts = {}) => ({day:date,version:"2.2.4",seq,active:1,starts,counts});
+  const body = {schema:1,install:crypto.randomUUID(),cohort,days:[day(today,2,2,{vote_ok:2,cards_network:1,cards_recovered:1})]};
+  const post = async (payload, n) => call("/api/app/usage","POST",payload,{"CF-Connecting-IP":`192.0.2.${n}`});
+  assert.equal((await post(body,1)).status,200);
+  // A second installation on the same IP shares the quota. Hold the gate so this is clock-independent.
+  const rateKey = `usage:${await hmac(secret, `usage-rate:${today}:192.0.2.1`)}`;
+  await db.prepare("UPDATE write_throttle SET last_at=unixepoch()+60 WHERE key=?").bind(rateKey).run();
+  const limited = await post({...body,install:crypto.randomUUID()},1);
+  assert.equal(limited.status,429); assert.equal(limited.headers.get("Retry-After"),"2");
+  assert.equal((await post(body,2)).status,200);
+  assert.equal((await post({...body,days:[day(today,1,1,{vote_ok:1})]},3)).status,200);
+  const saved=await db.prepare("SELECT install_key,seq,counts FROM app_usage_daily WHERE day=?").bind(today).first();
+  assert.notEqual(saved.install_key,body.install); assert.equal(saved.seq,2);
+  assert.equal(JSON.parse(saved.counts).vote_ok,2);
+  assert.equal((await post({...body,days:[day(today-7,1,0),day(today-1,1,0)]},4)).status,200);
+  // The first activation was already received 8 days ago, outside today's backfill window.
+  await db.prepare("INSERT INTO app_usage_daily VALUES(?,?,?,'2.2.3',1,1,1,'{}')").bind(cohort,saved.install_key,cohort).run();
+  const newInstall={...body,install:crypto.randomUUID(),cohort:today,days:[day(today,1,1)]};
+  assert.equal((await post(newInstall,5)).status,200);
+  // Background-only feature use counts, without contributing an activation or retained user.
+  const background={...newInstall,install:crypto.randomUUID(),cohort:today-2,
+    days:[day(today-2,1,1), {...day(today-1,1,0,{download_network:1}),active:0}]};
+  assert.equal((await post(background,7)).status,200);
+  assert.equal((await post({...newInstall,days:[{...day(today,2,1),counts:{raw_message:1}}]},6)).status,400);
+  assert.equal((await call("/api/admin/usage")).status,401);
+  const summary=await (await call("/api/admin/usage","GET",null,{"X-Admin-Password":"test-admin"})).json();
+  assert.equal(summary.days.length,30); assert.equal(summary.days.at(-1).dau,2); assert.equal(summary.days.at(-1).starts,3);
+  assert.equal(summary.days.at(-1).newInstalls,1); assert.equal(summary.days.at(-1).d1,null);
+  assert.equal(summary.days.at(-9).d1,1); assert.equal(summary.days.at(-9).d7,1); assert.equal(summary.totals.vote_ok,2);
+  assert.equal(summary.days.at(-3).d1,0); assert.equal(summary.days.at(-2).dau,1);
+  assert.equal(summary.totals.download_network,1);
+  assert.equal(summary.lifetime.starts,5); assert.equal(summary.lifetime.newInstalls,3);
+  assert.deepEqual(summary.versions,[{version:"2.2.4",installs:2}]); assert.ok(!JSON.stringify(summary).includes(saved.install_key));
+});
+
+test("app usage lifetime stays exact before, during and after compaction of the same day", async () => {
+  await db.prepare("DELETE FROM app_usage_daily").run();
+  await db.prepare("DELETE FROM app_usage_history").run();
+  const auth = {"X-Admin-Password":"test-admin"};
+  const summary = async () => (await call("/api/admin/usage","GET",null,auth)).json();
+  assert.deepEqual((await summary()).lifetime,{starts:0,newInstalls:0,since:null});
+  const now = Math.floor((Date.now()+28800000)/86400000), old = now-45;
+  const row = (day,key,cohort,starts) => db.prepare("INSERT INTO app_usage_daily VALUES(?,?,?,'2.2.4',1,1,?,'{}')").bind(day,key,cohort,starts);
+  await db.batch(Array.from({length:20},(_,i) => row(old,`old-${i}`,old,2)));
+  await db.batch([row(now-44,'old-0',old,3),row(now-32,'old-0',old,4),row(now,'old-0',old,1)]);
+  const expected={since:new Date(old*86400000).toISOString().slice(0,10),starts:20*2+3+4+1,newInstalls:20};
+  assert.deepEqual((await summary()).lifetime,expected);
+  // A normal upload archives at most 16 rows; the admin read must also count the 4 unarchived ones.
+  const body={schema:1,install:crypto.randomUUID(),cohort:now,days:[{day:now,version:'2.2.4',seq:1,active:1,starts:1,counts:{}}]};
+  assert.equal((await call('/api/app/usage','POST',body,{'CF-Connecting-IP':'198.51.100.33'})).status,200);
+  assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM app_usage_daily WHERE day=?').bind(old).first()).n,4);
+  const updated = {...expected,starts:expected.starts+1,newInstalls:21};
+  assert.deepEqual((await summary()).lifetime,updated);
+  for (let i=0;i<2;i++) {
+    assert.equal((await call('/api/admin/maintenance','POST',null,auth)).status,200);
+    assert.deepEqual((await summary()).lifetime,updated);
+  }
+  assert.deepEqual((await db.prepare('SELECT * FROM app_usage_history').all()).results,[{day:old,starts:40,new_installs:20}]);
+  assert.equal((await db.prepare('SELECT MIN(day) AS day FROM app_usage_daily').first()).day,now-44);
+});
 
 test("credential failures never silently publish anonymous comments", async () => {
   await reset();

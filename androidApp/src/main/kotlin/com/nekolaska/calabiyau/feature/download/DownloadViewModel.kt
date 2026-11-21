@@ -1,5 +1,9 @@
 package com.nekolaska.calabiyau.feature.download
 
+import com.nekolaska.calabiyau.core.usage.Outcome
+import com.nekolaska.calabiyau.core.usage.UsageFeature
+import com.nekolaska.calabiyau.core.usage.UsageStats
+
 import android.app.Application
 import android.media.MediaScannerConnection
 import android.webkit.MimeTypeMap
@@ -97,6 +101,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
         // 发送通知
         if (record.status == "success") {
+            UsageStats.result(UsageFeature.DOWNLOAD, Outcome.OK)
             NotificationHelper.notifyDownloadComplete(
                 context = getApplication(),
                 title = record.name,
@@ -169,6 +174,10 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
                 throw e
             } catch (e: Exception) {
                 val detail = e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName.orEmpty()
+                val transportFailure = generateSequence<Throwable>(e) { it.cause }.take(16).any {
+                    it is java.net.SocketException || it is java.io.InterruptedIOException || it is java.net.UnknownHostException
+                }
+                UsageStats.result(UsageFeature.DOWNLOAD, if (transportFailure) Outcome.NETWORK else Outcome.OTHER)
                 val msg = downloadFailureMessage(warnings, detail)
                 _errorEvent.tryEmit(ResourceDownloadFailure(msg, request))
                 addLog("[错误] $msg")
@@ -267,7 +276,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         resolved.failures.forEach { addLog("[错误] 分类获取失败: $it") }
         if (resolved.batches.isEmpty()) {
             if (resolved.failures.isEmpty()) addLog("所选分类没有可下载的文件")
-            else throw java.io.IOException(incompleteDownloadMessage(null, resolved.failures))
+            else throw java.io.IOException(incompleteDownloadMessage(null, resolved.failures), resolved.firstFailure)
             return
         }
         val totalFiles = resolved.batches.sumOf { it.files.size }
@@ -306,7 +315,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
             if (totalDownloaded > 0) addLog("已保存 $totalDownloaded 个文件，其余分类未完成")
             throw java.io.IOException(
                 incompleteDownloadMessage(downloadError?.message, resolved.failures),
-                downloadError
+                downloadError ?: resolved.firstFailure
             )
         }
         addLog("全部下载完成！共 $totalDownloaded 个文件，保存至: ${charDir.absolutePath}")

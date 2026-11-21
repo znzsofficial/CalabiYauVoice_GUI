@@ -41,6 +41,7 @@ internal fun CoroutineScope.launchToolJob(
     callbacks: ToolJobCallbacks,
     errorLabel: String,
     onSuccess: ((ToolOutput) -> Unit)? = null,
+    onFailure: ((Exception) -> Unit)? = null,
     block: suspend () -> ToolOutput
 ): Job = launch {
     callbacks.onBusyChange(true)
@@ -55,6 +56,7 @@ internal fun CoroutineScope.launchToolJob(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
+        onFailure?.invoke(e)
         callbacks.showSnack("$errorLabel：${e.message ?: "未知错误"}")
     } finally {
         callbacks.onBusyChange(false)

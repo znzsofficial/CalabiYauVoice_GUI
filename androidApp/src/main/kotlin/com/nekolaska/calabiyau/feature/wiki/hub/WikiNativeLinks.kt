@@ -74,7 +74,8 @@ private val nativePages: Map<String, WikiRoute> = mapOf(
     "超弦体天赋" to WikiRoute.StringerTalents,
     "战斗模式/晶源感染/PC端卡牌筛选" to WikiRoute.BioCards,
     "战斗模式/晶源感染/移动端卡牌筛选" to WikiRoute.BioMobileCards,
-    "战斗模式/弦溯战线/物品图鉴" to WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT),
+    ExtractionCatalogKind.LOOT.pageName to WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT),
+    "战斗模式/弦溯战线/物品图鉴" to WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT), // verified former title
     "战斗模式/弦溯战线/配件图鉴" to WikiRoute.ExtractionCatalog(ExtractionCatalogKind.ATTACHMENTS),
     "战斗模式/弦溯战线/掉落图鉴" to WikiRoute.ExtractionCatalog(ExtractionCatalogKind.DROPS)
 )

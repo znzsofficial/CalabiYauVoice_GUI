@@ -128,7 +128,6 @@ fun PlayerLevelScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索等级 / 经验 / 奖励 / 武器"

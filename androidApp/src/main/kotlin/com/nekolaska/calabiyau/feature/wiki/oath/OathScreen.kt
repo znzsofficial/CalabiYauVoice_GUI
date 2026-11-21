@@ -140,7 +140,6 @@ fun OathScreen(
                         SearchBar(
                             keyword = keyword,
                             onKeywordChange = { keyword = it },
-                            onSearch = {},
                             onClear = { keyword = "" },
                             isSearching = state.isLoading,
                             placeholder = when (selectedTab) {

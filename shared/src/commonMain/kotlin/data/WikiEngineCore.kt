@@ -22,9 +22,9 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
 import util.buildWikiUrl
 import util.atomicReplaceFile
@@ -351,7 +351,8 @@ object WikiEngineCore {
 
             val semaphore = Semaphore(maxConcurrency)
             val counter = AtomicInteger(0)
-            val failures = ConcurrentLinkedQueue<String>()
+            val failures = AtomicInteger()
+            val firstFailure = AtomicReference<Exception?>()
             val progressLock = Mutex()
             val verifiedChanged = AtomicBoolean(false)
             val expectedFiles = manifest.toMap()
@@ -381,7 +382,8 @@ object WikiEngineCore {
                         throw e
                     } catch (e: Exception) {
                         val message = e.message ?: e::class.simpleName.orEmpty()
-                        failures.add("${targetFile.name}: $message")
+                        failures.incrementAndGet()
+                        firstFailure.compareAndSet(null, e)
                         onLog("[错误] ${targetFile.name}: $message")
                     } finally {
                         semaphore.release()
@@ -412,8 +414,8 @@ object WikiEngineCore {
                 if (cancellation == null) throw e
             }
             cancellation?.let { throw it }
-            if (failures.isNotEmpty()) {
-                throw IOException("${failures.size} of $total downloads failed")
+            if (failures.get() > 0) {
+                throw IOException("${failures.get()} of $total downloads failed", firstFailure.get())
             }
             downloads.map { it.second }
         }

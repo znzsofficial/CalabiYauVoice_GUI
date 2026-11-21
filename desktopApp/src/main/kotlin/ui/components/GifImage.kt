@@ -1,6 +1,7 @@
 package ui.components
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -18,7 +19,12 @@ import javax.imageio.ImageIO
 import javax.imageio.metadata.IIOMetadataNode
 
 private const val MAX_GIF_FRAME_COUNT = 500
-private const val MAX_GIF_CANVAS_PIXELS = 16_000_000L
+private const val GIF_BUDGET_BYTES = 64L * 1024 * 1024
+// In addition to retained ARGB frames, allow for the canvas, reader and bitmap conversion buffers.
+private const val GIF_WORKING_SURFACES = 4
+private val gifDecodeDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+internal fun isGifUrl(url: String): Boolean = url.substringBefore('?').substringBefore('#').endsWith(".gif", ignoreCase = true)
 
 // ---------------------------------------------------------------------------
 // 数据模型
@@ -54,7 +60,6 @@ private class GifCacheKey private constructor(private val digest: ByteArray) {
 
 private object GifFrameCache {
     private const val MAX_ENTRIES = 32
-    private const val MAX_ESTIMATED_BYTES = 64L * 1024L * 1024L
     private const val ENTRY_OVERHEAD_BYTES = 256L
 
     private data class Entry(val value: CachedGif, val estimatedBytes: Long)
@@ -95,13 +100,13 @@ private object GifFrameCache {
 
     private fun put(key: GifCacheKey, value: CachedGif) = synchronized(lock) {
         val entryBytes = estimateBytes(value)
-        if (entryBytes > MAX_ESTIMATED_BYTES) return@synchronized
+        if (entryBytes > GIF_BUDGET_BYTES) return@synchronized
 
         entries.put(key, Entry(value, entryBytes))?.let { estimatedBytes -= it.estimatedBytes }
         estimatedBytes += entryBytes
 
         val iterator = entries.entries.iterator()
-        while ((entries.size > MAX_ENTRIES || estimatedBytes > MAX_ESTIMATED_BYTES) && iterator.hasNext()) {
+        while ((entries.size > MAX_ENTRIES || estimatedBytes > GIF_BUDGET_BYTES) && iterator.hasNext()) {
             estimatedBytes -= iterator.next().value.estimatedBytes
             iterator.remove()
         }
@@ -116,22 +121,37 @@ private object GifFrameCache {
         }
     }
 
-    fun isWithinDecodeBudget(width: Int, height: Int, frameCount: Int): Boolean =
-        isGifDecodeBudgetAllowed(width, height, frameCount)
 }
 
 internal fun isGifDecodeBudgetAllowed(width: Int, height: Int, frameCount: Int): Boolean {
-    if (width <= 0 || height <= 0 || frameCount !in 2..MAX_GIF_FRAME_COUNT) return false
-    return width.toLong() * height.toLong() <= MAX_GIF_CANVAS_PIXELS
+    if (width <= 0 || height <= 0 || frameCount !in 1..MAX_GIF_FRAME_COUNT) return false
+    val pixels = width.toLong() * height
+    return pixels <= GIF_BUDGET_BYTES / 4 / (frameCount + GIF_WORKING_SURFACES)
+}
+
+/** Probe descriptors only until the next frame would force a static preview. */
+private suspend fun framesToDecode(reader: javax.imageio.ImageReader, width: Int, height: Int): Int {
+    if (!isGifDecodeBudgetAllowed(width, height, 1)) return 0
+    var count = 0
+    while (true) {
+        currentCoroutineContext().ensureActive()
+        try {
+            reader.getWidth(count)
+        } catch (_: IndexOutOfBoundsException) {
+            return count
+        }
+        count++
+        if (!isGifDecodeBudgetAllowed(width, height, count)) return 1
+    }
 }
 
 /**
  * 在 IO 线程解码 GIF 所有帧并合成完整画面。
- * - 单帧或解码失败使用负缓存，由调用方回退到静态图
+ * - 动画超出预算时只尝试有界的首帧；单帧直接作为静态图显示。
  * - 缓存使用内容摘要作为键，避免缓存帧时同时长期保留原始字节
  */
 internal suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
-    withContext(Dispatchers.IO) {
+    withContext(gifDecodeDispatcher) {
         val key = GifCacheKey.from(bytes)
         val cached = GifFrameCache.getOrDecode(key) {
             try {
@@ -145,17 +165,14 @@ internal suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
                     val reader = readers.next()
                     try {
                         reader.input = stream
-                        val frameCount = reader.getNumImages(true)
-                        if (frameCount <= 1) return@getOrDecode CachedGif.NoFrames
                         val (canvasWidth, canvasHeight) = readGifCanvasSize(reader)
-                        if (!GifFrameCache.isWithinDecodeBudget(canvasWidth, canvasHeight, frameCount)) {
-                            return@getOrDecode CachedGif.NoFrames
-                        }
+                        val framesToRead = framesToDecode(reader, canvasWidth, canvasHeight)
+                        if (framesToRead == 0) return@getOrDecode CachedGif.NoFrames
 
                         val frames = mutableListOf<GifFrame>()
                         var canvas: BufferedImage? = null
 
-                        for (i in 0 until frameCount) {
+                        for (i in 0 until framesToRead) {
                             currentCoroutineContext().ensureActive()
                             val meta = reader.getImageMetadata(i)
 
@@ -178,8 +195,7 @@ internal suspend fun decodeGifFramesAsync(bytes: ByteArray): List<GifFrame>? =
 
                             val frameWidth = reader.getWidth(i)
                             val frameHeight = reader.getHeight(i)
-                            val framePixels = frameWidth.toLong() * frameHeight.toLong()
-                            if (frameWidth <= 0 || frameHeight <= 0 || framePixels > MAX_GIF_CANVAS_PIXELS ||
+                            if (frameWidth <= 0 || frameHeight <= 0 ||
                                 offsetX < 0 || offsetY < 0 || offsetX.toLong() + frameWidth > canvasWidth ||
                                 offsetY.toLong() + frameHeight > canvasHeight
                             ) {
@@ -253,8 +269,7 @@ private fun IIOMetadataNode.childElements(): List<IIOMetadataNode> =
 /**
  * 带动画的 GIF 显示组件。
  * - 在 IO 线程异步解码帧，不阻塞主线程
- * - 所有实例共用全局时钟驱动帧切换，无额外协程开销
- * - 若解码失败或为单帧 GIF，显示 [placeholder]
+ * - 等待解码时使用轻量占位；单帧直接绘制，不启动动画时钟。
  */
 @Composable
 fun AnimatedGifImage(
@@ -262,19 +277,25 @@ fun AnimatedGifImage(
     contentDescription: String? = null,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
-    placeholder: @Composable (() -> Unit)? = null
+    placeholder: @Composable (() -> Unit)? = null,
+    errorContent: @Composable (() -> Unit)? = placeholder
 ) {
-    // 异步解码：loading=true 时先显示占位符
-    val frames by produceState<List<GifFrame>?>(initialValue = null, bytes) {
-        value = if (bytes != null) decodeGifFramesAsync(bytes) else null
+    var frames by remember(bytes) { mutableStateOf<List<GifFrame>?>(null) }
+    LaunchedEffect(bytes) {
+        frames = bytes?.let { decodeGifFramesAsync(it) }.orEmpty()
     }
-
-    if (frames == null || frames!!.isEmpty()) {
+    val frameList = frames ?: run {
         placeholder?.invoke()
         return
     }
-
-    val frameList = frames!!
+    if (frameList.isEmpty()) {
+        errorContent?.invoke()
+        return
+    }
+    if (frameList.size == 1) {
+        Image(frameList.single().bitmap, contentDescription, modifier, contentScale = contentScale)
+        return
+    }
 
     // The ticker exists only while this GIF is in composition.
     val tickMs by produceState(System.currentTimeMillis(), frameList) {

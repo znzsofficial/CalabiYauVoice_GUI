@@ -127,7 +127,6 @@ fun AchievementScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索成就 / 获得方式 / 台词"

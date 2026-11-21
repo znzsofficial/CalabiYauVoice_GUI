@@ -1,7 +1,10 @@
 package com.nekolaska.calabiyau.core.ui
 
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -12,7 +15,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
-import coil3.compose.AsyncImage
+import androidx.compose.ui.unit.dp
+import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImageContent
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
@@ -51,10 +56,50 @@ fun ZoomableImage(
     modifier: Modifier = Modifier,
     loadOriginalSize: Boolean = false,
     onClick: (() -> Unit)? = null,
-    onLongPress: (() -> Unit)? = null
+    onLongPress: (() -> Unit)? = null,
+    onImageReady: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val request = remember(context, model, loadOriginalSize) {
+        ImageRequest.Builder(context).apply {
+            data(model)
+            crossfade(true)
+            if (loadOriginalSize) size(Size.ORIGINAL)
+        }.build()
+    }
+    SubcomposeAsyncImage(
+        model = request, modifier = modifier, contentDescription = contentDescription, contentScale = ContentScale.Fit,
+        onLoading = { onImageReady(false) }, onError = { onImageReady(false) }, onSuccess = { onImageReady(true) },
+        loading = {
+            Box(contentAlignment = Alignment.Center) {
+                Surface(shape = AppShapes.chip) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text("正在加载图片…")
+                    }
+                }
+            }
+        },
+        error = {
+            val retry = painter::restart
+            Box(contentAlignment = Alignment.Center) {
+                Surface(shape = AppShapes.card) {
+                    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("图片加载失败")
+                        TextButton(onClick = retry) { Text("重新加载") }
+                    }
+                }
+            }
+        },
+        success = {
+            key(model) { SubcomposeAsyncImageContent(modifier = zoomGestures(onClick, onLongPress)) }
+        }
+    )
+}
 
+@Composable
+private fun zoomGestures(onClick: (() -> Unit)?, onLongPress: (() -> Unit)?): Modifier {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
@@ -78,15 +123,7 @@ fun ZoomableImage(
         return (panX > 0 && offset.x >= maxX - 1f) || (panX < 0 && offset.x <= -maxX + 1f)
     }
 
-    AsyncImage(
-        model = ImageRequest.Builder(context).apply {
-            data(model)
-            crossfade(true)
-            if (loadOriginalSize) size(Size.ORIGINAL)
-        }.build(),
-        contentDescription = contentDescription,
-        contentScale = ContentScale.Fit,
-        modifier = modifier
+    return Modifier
             .onSizeChanged { containerSize = it }
             .graphicsLayer {
                 scaleX = scale
@@ -161,5 +198,4 @@ fun ZoomableImage(
                     } else null
                 )
             }
-    )
 }

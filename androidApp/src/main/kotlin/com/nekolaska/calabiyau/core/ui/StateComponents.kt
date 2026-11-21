@@ -283,11 +283,12 @@ class LoadState<T> internal constructor(
                     cacheAgeMs = result.cacheAgeMs
                 }
                 is ApiResult.Error -> {
+                    // Resolve any disk fallback before exposing the full-screen error on a cold entry.
+                    prefetch?.join()
                     if (currentVersion != requestVersion) return@launch
                     isShowingCachedPrefetch = false
                     error = result
                     isLoading = false
-                    prefetch?.join()
                 }
             }
             } finally {

@@ -71,7 +71,7 @@ fun WikiSelectionSheet(
             Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.large)) {
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 if (query != null) SearchBar(keyword = query, onKeywordChange = onQueryChange,
-                    onSearch = {}, onClear = { onQueryChange("") }, isSearching = false, placeholder = searchPlaceholder)
+                    onClear = { onQueryChange("") }, isSearching = false, placeholder = searchPlaceholder)
                 controls()
             }
         }

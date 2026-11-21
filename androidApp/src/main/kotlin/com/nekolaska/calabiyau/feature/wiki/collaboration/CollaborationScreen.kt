@@ -90,7 +90,6 @@ fun CollaborationScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索联动 / 时间 / 主题 / 内容"

@@ -61,10 +61,8 @@ import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.core.ui.ConfirmImageSaveDialog
 import com.nekolaska.calabiyau.core.ui.rememberSectionSelection
 import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
-import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
 import com.nekolaska.calabiyau.feature.wiki.gallery.api.GalleryApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GalleryImage
 import com.nekolaska.calabiyau.feature.wiki.gallery.model.GallerySection
@@ -79,7 +77,6 @@ fun GalleryScreen(
     pageName: String,
     onBack: () -> Unit
 ) {
-    val showMessage = rememberSnackbarLauncher()
     val state = rememberLoadState(
         initial = emptyList<GallerySection>(),
         key = pageName,
@@ -94,8 +91,6 @@ fun GalleryScreen(
 
     // 全屏预览
     var previewImage by remember { mutableStateOf<GalleryImage?>(null) }
-    // 长按保存
-    var saveTargetImage by remember { mutableStateOf<GalleryImage?>(null) }
 
 
     Scaffold(
@@ -179,7 +174,7 @@ fun GalleryScreen(
             model = image.imageUrl,
             contentDescription = image.caption,
             onDismiss = { previewImage = null },
-            onSave = { saveTargetImage = image }
+            saveConfirmationLabel = image.fileName
         ) {
             if (image.caption.isNotBlank()) {
                 Column(
@@ -218,11 +213,6 @@ fun GalleryScreen(
         }
     }
 
-    // ── 保存图片确认对话框 ──
-    saveTargetImage?.let { image ->
-        ConfirmImageSaveDialog(url = image.imageUrl, label = image.fileName,
-            onDismiss = { saveTargetImage = null }, showMessage = showMessage)
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -98,6 +98,8 @@ object AppPrefs {
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: String?) = prefs.edit { putString(property.name, value) }
     }
 
+    var usageStatsEnabled by booleanPref(true)
+
     private fun stringSetPref(def: Set<String> = emptySet()) = object : ReadWriteProperty<Any?, Set<String>> {
         override fun getValue(thisRef: Any?, property: KProperty<*>) = prefs.getStringSet(property.name, def) ?: def
         override fun setValue(thisRef: Any?, property: KProperty<*>, value: Set<String>) = prefs.edit { putStringSet(property.name, value) }

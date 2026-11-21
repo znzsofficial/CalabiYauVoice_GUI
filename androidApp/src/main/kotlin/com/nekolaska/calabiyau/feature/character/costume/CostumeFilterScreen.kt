@@ -143,7 +143,6 @@ fun CostumeFilterScreen(
                         SearchBar(
                             keyword = searchQuery,
                             onKeywordChange = { searchQuery = it },
-                            onSearch = {},
                             onClear = { searchQuery = "" },
                             isSearching = false,
                             placeholder = "搜索时装名称或角色…",

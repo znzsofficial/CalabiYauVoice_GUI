@@ -3,6 +3,19 @@ package com.nekolaska.calabiyau.core.wiki
 import kotlin.test.*
 
 class CookieSessionGuardTest {
+    @Test fun voteLoginSurvivesWikiCookieRefreshButNotAccountSwitchOrLogout() {
+        val guard = CookieSessionGuard()
+        val first = "DedeUserID=42; SESSDATA=A; klbqwiki_session=old; pref=1"
+        val login = voteLoginKey(first)!!
+        val ticket = guard.capture(login, login)
+        val refreshed = "pref=2; klbqwiki_session=new; SESSDATA=A; DedeUserID=42"
+        assertTrue(guard.isCurrent(ticket, voteLoginKey(refreshed)))
+        assertFalse(guard.isCurrent(ticket, voteLoginKey(refreshed.replace("=42", "=43"))))
+        assertFalse(guard.isCurrent(ticket, voteLoginKey(first)))
+        val fresh = guard.capture(login, login)
+        guard.invalidate()
+        assertFalse(guard.isCurrent(fresh, voteLoginKey(refreshed)))
+    }
     @Test fun responseCanUpdateOnlyItsUnchangedSession() {
         val guard = CookieSessionGuard()
         var store: String? = "session=A"

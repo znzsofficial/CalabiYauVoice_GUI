@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.stringer
 
+import com.nekolaska.calabiyau.core.usage.CardVisit
+
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -87,6 +89,7 @@ fun StringerPushCardScreen(
     onBack: () -> Unit,
     onOpenWikiUrl: (String) -> Unit
 ) {
+    val visit = remember { CardVisit() }
     val state = rememberLoadState(
         initial = CardPage(
             title = "超弦推进卡牌",
@@ -97,7 +100,7 @@ fun StringerPushCardScreen(
         cachedPrefetchDelayMs = 300L,
         cachedFetch = { StringerPushCardApi.fetch(cacheOnly = true) }
     ) { force ->
-        StringerPushCardApi.fetch(forceRefresh = force, allowMemoryCache = false)
+        visit.load(force) { StringerPushCardApi.fetch(forceRefresh = force, allowMemoryCache = false) }
     }
 
     var keyword by rememberSaveable { mutableStateOf("") }
@@ -181,7 +184,6 @@ fun StringerPushCardScreen(
                     SearchBar(
                         keyword = keyword,
                         onKeywordChange = { keyword = it },
-                        onSearch = {},
                         onClear = { keyword = "" },
                         isSearching = state.isLoading,
                         placeholder = "搜索卡牌 / 效果 / 适用角色"

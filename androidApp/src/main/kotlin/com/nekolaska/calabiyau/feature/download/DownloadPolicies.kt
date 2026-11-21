@@ -19,7 +19,8 @@ internal data class CategoryFileBatch(
 
 internal data class CategoryFileResolution(
     val batches: List<CategoryFileBatch>,
-    val failures: List<String>
+    val failures: List<String>,
+    val firstFailure: Exception? = null
 )
 
 /** Resume bookkeeping is optional. It must not reject a download or turn finished files into a failure. */
@@ -50,6 +51,7 @@ internal suspend fun resolveCategoryDownloads(
 ): CategoryFileResolution {
     val batches = mutableListOf<CategoryFileBatch>()
     val failures = mutableListOf<String>()
+    var firstFailure: Exception? = null
     for (category in categories.distinct()) {
         val files = if (category in manualSelectionMap) {
             manualSelectionMap.getValue(category)
@@ -59,6 +61,7 @@ internal suspend fun resolveCategoryDownloads(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (firstFailure == null) firstFailure = e
                 failures += "${categoryDisplayName(category)}: ${e.message ?: e::class.simpleName.orEmpty()}"
                 continue
             }
@@ -66,7 +69,7 @@ internal suspend fun resolveCategoryDownloads(
         val unique = files.distinctBy { it.second }
         if (unique.isNotEmpty()) batches += CategoryFileBatch(category, unique)
     }
-    return CategoryFileResolution(batches, failures)
+    return CategoryFileResolution(batches, failures, firstFailure)
 }
 
 internal fun incompleteDownloadMessage(downloadError: String?, fetchFailures: List<String>): String {

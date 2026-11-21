@@ -1,6 +1,6 @@
 # Android 当前架构
 
-基线：[2.2.3（64）](releases/2.2.3.md)，2026-11-21。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备验证见[验收清单](device-acceptance.md)。
+基线：[2.2.4（65）](releases/2.2.4.md)，2026-11-21。本文描述模块和状态归属；首次修复见[架构修复记录](android-architecture-fixes.md)，生产调用路径及故障回归见[二次复审](android-architecture-round-two.md)，设备验证见[验收清单](device-acceptance.md)。
 
 ## 模块边界
 
@@ -11,6 +11,8 @@
 - `webApp`：归档原型，默认不参与Gradle构建。
 
 依赖版本统一在 `gradle/libs.versions.toml`；网页依赖由 `downloadPage/package.json` 与锁文件维护。
+
+`core/usage` 只接收固定类别的计数，使用独立客户端异步上传。主界面记录前台活跃，业务页面只报告结果；统计与 Wiki 身份、Cookie 和操作内容分离。数据保留及管理页见[使用统计](app-usage.md)。
 
 ## 导航与状态所有权
 

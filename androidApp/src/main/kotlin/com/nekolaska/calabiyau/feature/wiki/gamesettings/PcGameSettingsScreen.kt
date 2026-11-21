@@ -147,7 +147,7 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                     SearchBar(
                         modifier = Modifier.weight(1f), keyword = query,
                         onKeywordChange = { query = it; resetScroll() },
-                        onSearch = { keyboard?.hide() }, onClear = { query = ""; resetScroll() },
+                        onClear = { query = ""; resetScroll() },
                         isSearching = false,
                         placeholder = when (view) {
                             PcSettingsView.SETTINGS -> "搜索设置、按键…"

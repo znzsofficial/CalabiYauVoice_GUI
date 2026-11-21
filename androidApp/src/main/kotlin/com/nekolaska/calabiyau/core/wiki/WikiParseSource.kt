@@ -13,6 +13,8 @@ data class WikiParseSourceResult(
     val ageMs: Long
 )
 
+internal class UnusableWikiHtml(page: String) : IllegalStateException("${page}页面内容不完整")
+
 object WikiParseSource {
     private const val API = "https://wiki.biligame.com/klbq/api.php"
 
@@ -20,8 +22,9 @@ object WikiParseSource {
         pageName: String,
         cacheType: OfflineCache.Type,
         cacheKey: String,
-        forceRefresh: Boolean
-    ): WikiParseSourceResult? = fetch(pageName, cacheType, cacheKey, "text", forceRefresh)
+        forceRefresh: Boolean,
+        acceptHtml: ((String) -> Boolean)? = null
+    ): WikiParseSourceResult? = fetch(pageName, cacheType, cacheKey, "text", forceRefresh, acceptHtml)
 
     suspend fun fetchWikitext(
         pageName: String,
@@ -57,15 +60,20 @@ object WikiParseSource {
         cacheType: OfflineCache.Type,
         cacheKey: String,
         prop: String,
-        forceRefresh: Boolean
+        forceRefresh: Boolean,
+        acceptHtml: ((String) -> Boolean)? = null
     ): WikiParseSourceResult? {
         val url = buildParseUrl(API, pageName, prop)
+        var rejected = false
         val result = OfflineCache.fetchWithCache(
             type = cacheType,
             key = cacheKey,
             forceRefresh = forceRefresh,
-            validatePayload = { isValidParsePayload(it, prop) }
-        ) { WikiEngine.safeGet(url) } ?: return null
+            validatePayload = { payload ->
+                if (acceptHtml == null) isValidParsePayload(payload, prop)
+                else (parsePayload(payload, false, 0)?.html?.let(acceptHtml) == true).also { if (!it) rejected = true }
+            }
+        ) { WikiEngine.safeGet(url) } ?: if (rejected) throw UnusableWikiHtml(pageName) else return null
 
         return parsePayload(result.payload, result.isFromCache, result.ageMs)
     }

@@ -290,8 +290,9 @@ private val hubSearchEntries = listOf(
         WikiRoute.GameModes
     ),
     searchEntry(
-        "extraction_loot", "弦溯战线战利品", "搜打撤物品图鉴 · 材料、消耗品与收藏品",
-        listOf("弦溯战线", "搜打撤", "战利品", "搜打撤图鉴", "搜打撤物品", "弦溯战线物品图鉴"),
+        "extraction_loot", "弦溯战线物资图鉴", "材料、消耗品、收藏品、弹药、背包与钥匙卡",
+        listOf("弦溯战线", "搜打撤", "物资", "物资图鉴", "搜打撤物资图鉴", "搜打撤图鉴", "弹药", "背包", "钥匙卡",
+            "战利品", "搜打撤物品图鉴", "弦溯战线物品图鉴", "弦溯战线战利品图鉴"),
         Icons.Outlined.Inventory2, WikiRoute.ExtractionCatalog(ExtractionCatalogKind.LOOT)
     ),
     searchEntry(

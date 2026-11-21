@@ -36,6 +36,8 @@ Release verification is lightweight by user preference (2026-11-06): run change-
 
 `downloadPage/src/api/proxy.js`, `src/api/auth.js`, and `downloadPage/vite.config.ts` share upstream constants; change both production and development paths.
 
+First-party Android usage stats need `0011_app_usage.sql` and `0012_app_usage_history.sql` before deploying the updated Worker. Keep one cumulative row per Beijing day and random installation (not per event), idempotent sequence updates, and admin-only aggregates. Archive expired detail counts and delete the same keys in one D1 batch; historical daily rollups contain no installation keys. Lifetime new installs count cohort-day activations, never a sum of DAU. Never join analytics to Wiki identity or include operation payloads. See `docs/app-usage.md`.
+
 Before deploying the backend consistency update, apply migration `0005_backend_consistency.sql` and configure a dedicated random `GUEST_SECRET` (at least 32 characters) in Pages. Do not reuse `ADMIN_PASSWORD`. `POST /api/admin/maintenance` performs bounded orphan-avatar and expired-metadata cleanup; it needs an external schedule or manual invocation.
 
 Two-level replies additionally require `0006_comment_replies.sql`. `/api/user/comments` lists roots only for old-client compatibility; `/api/user/replies` lists/posts replies. Comment deletion clears content and retains a tombstone; a deleted root closes its discussion to new replies.
@@ -81,6 +83,8 @@ Resource download changes: see `docs/resource-download-implementation.md`. Dialo
 Item catalogs were split in 2026-10: `功能道具图鉴PC端` and `功能道具图鉴移动端` (mobile-exclusive items only). `ItemCatalogPlatform` owns page names/cache keys; never fetch the retired combined page or reuse its `item_catalog` cache. `WikiRoute.Items` keeps old saved routes/shortcuts as PC; `MobileItems` is separate. Current card-only parser and tracked `fixtures/items/` replace retired table tests; live smoke validates both pages independently with 6.5s request spacing.
 
 Extraction mode (弦溯战线): battle modes show the introduction/settings; its three native catalogs belong in **外观与图鉴**, not the battle-mode card. `feature/wiki/extraction` owns page names and separate `extraction_*_v1` cache keys. Loot/attachment loading uses image-grid skeletons, drops a text-list skeleton. Keep source item rarity labels (1 优秀 / 5 臻藏), do not treat drop `data-tier` as rarity, and do not relabel pool weights as match drop probabilities. See `docs/extraction-mode-implementation.md`.
+
+`LOOT` now fetches `战斗模式/弦溯战线/物资图鉴`, including for drop artwork. Keep the exact former `战斗模式/弦溯战线/物品图鉴` navigation alias, saved `LOOT` route and `extraction_loot_v1` for genuine old cards; reject redirect shells and separate gun/armor galleries that reuse `.sec-card`. Unnamed attachment quality 8 is `Q8`: filter by code, match artwork by exact name and quality, never alias it to equipment 臻藏 or drop `Q8 特殊`. `EXTRACTION_SPLIT_AUDIT_DIR` uses the November 21 evening captures, separate from the daytime audit.
 
 Drop summary tables support both legacy `掉落池条目（完整）` and `掉落池条目（按稀有度分行）` with `rowspan` metadata. Group continuation rows by their original name cell, never name/tier alone (Boss cores share both). Preserve source labels such as Q8 without inventing a rarity name. Source cards and complete pools are separate views; do not infer joins from similar names or row order.
 

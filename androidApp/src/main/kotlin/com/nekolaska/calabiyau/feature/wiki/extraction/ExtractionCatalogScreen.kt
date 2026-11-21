@@ -48,8 +48,8 @@ fun ExtractionCatalogScreen(
     val categories = remember(entries) { entries.map { it.filterCategory }.distinct() }
     val qualities = remember(entries) { entries.mapNotNull { e -> e.quality?.let { it to e.qualityLabel } }.distinctBy { it.first }.sortedBy { it.first } }
     val sorts = remember(entries) { ExtractionSort.entries.filter { s -> s == ExtractionSort.DEFAULT || entries.any { s in it.numericValues } } }
-    LaunchedEffect(entries) {
-        if (entries.isNotEmpty()) {
+    LaunchedEffect(entries, state.isShowingCachedPrefetch) {
+        if (entries.isNotEmpty() && !state.isShowingCachedPrefetch) {
             if (category !in categories) category = null
             if (qualities.none { it.first == quality }) quality = null
             if (sort !in sorts) sort = ExtractionSort.DEFAULT
@@ -72,7 +72,7 @@ fun ExtractionCatalogScreen(
             val header: @Composable () -> Unit = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("弦溯战线专用图鉴", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
+                    SearchBar(keyword = query, onKeywordChange = { query = it }, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索名称、描述或效果…")
                     val hasActiveFilters = category != null || quality != null || valuableOnly || sort != ExtractionSort.DEFAULT
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -117,7 +117,9 @@ fun ExtractionCatalogScreen(
                     }
                     gridItems(filtered, key = { it.id }) { entry ->
                         CatalogGridCard(name = entry.name, imageUrl = entry.imageUrl,
-                            qualityLabel = entry.qualityLabel, qualityLevel = entry.quality,
+                             qualityLabel = entry.qualityLabel,
+                             // Use the neutral palette for codes outside the verified extraction colors.
+                             qualityLevel = entry.quality?.let { if (it in 1..5) it else -1 },
                             fallbackIcon = Icons.Outlined.Inventory2, contentScale = ContentScale.Fit, imagePadding = 8.dp,
                             onClick = { selectedId = entry.id })
                     }

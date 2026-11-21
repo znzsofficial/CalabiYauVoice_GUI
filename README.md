@@ -71,6 +71,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 - **💬 Message Board** — Two-level discussions with reply notifications, pinned threads, admin moderation, per-account draft isolation, and rename-stable identity.
 - **🔎 Character and Weapon Details** — Browse character skills, relationships, and signature weapons. The 伏闪 sniper rifle page includes a zoomable firing timeline, Demolition-mode upgrades, and individual links to its five users.
 - **⬇️ In-App Updates** — Release-site update checker with changelog and one-tap APK download.
+- **Usage statistics and privacy** — Since 2.2.4, the Android app sends daily per-installation counters to the project's own service. Reports exclude Wiki accounts, filenames, subtitle text, and vote choices. This is enabled by default and can be turned off in Settings → Privacy. [Data and retention](docs/app-usage.md)
 
 ---
 

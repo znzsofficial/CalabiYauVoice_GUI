@@ -88,9 +88,12 @@ internal fun ExtractionDropsScreen(
     var moreActions by remember(location.task, location.reference) { mutableStateOf(false) }
     // Animate the single active subtree: outgoing pages never retain sheets or duplicate saved-state owners.
     val entrance = remember { Animatable(1f) }
+    var lastContentKey by remember { mutableStateOf(contentKey) }
     LaunchedEffect(contentKey) {
+        if (lastContentKey == contentKey) return@LaunchedEffect
+        lastContentKey = contentKey
         entrance.snapTo(0f)
-        entrance.animateTo(1f, tween(200, easing = FastOutSlowInEasing))
+        entrance.animateTo(1f, tween(DropMotion.page, easing = FastOutSlowInEasing))
     }
 
     Scaffold(topBar = {
@@ -116,7 +119,7 @@ internal fun ExtractionDropsScreen(
                 }
             })
     }) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             if (location.reference == null) PrimaryTabRow(selectedTabIndex = location.task.ordinal) {
                 DropTask.entries.forEach { task ->
                     Tab(selected = location.task == task, onClick = {
@@ -125,7 +128,7 @@ internal fun ExtractionDropsScreen(
                 }
             }
             Box(Modifier.weight(1f).graphicsLayer {
-                alpha = entrance.value
+                alpha = 0.55f + 0.45f * entrance.value
                 translationY = (1f - entrance.value) * 8.dp.toPx()
             }) {
                 uiState.SaveableStateProvider(contentKey) {
@@ -180,7 +183,6 @@ internal fun ExtractionDropsScreen(
                                                 label = { Text(if (view == ExtractionDropView.POOLS) "共用掉落池" else "Boss 阶段对照") })
                                         }
                                     }
-                                    Text("共用物品池与 Boss 阶段资料", style = MaterialTheme.typography.bodySmall)
                                     status()
                                 }, onSelect = { record, query -> navigate { it.openSource(record.entry.id, query) } })
                         }
@@ -298,7 +300,7 @@ private fun ExtractionDropBrowser(
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item("controls") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
+                SearchBar(keyword = query, onKeywordChange = { query = it }, onClear = { query = "" },
                     isSearching = false, placeholder = if (reference) "搜索资料名称或内容…" else "搜索箱子、Boss 或物品…")
                 DropFilterBar(summary = if (loading && records.isEmpty()) "正在读取${if (reference) "资料" else "来源"}…"
                     else "${filtered.size} 条${if (reference) "资料" else "来源记录"}",

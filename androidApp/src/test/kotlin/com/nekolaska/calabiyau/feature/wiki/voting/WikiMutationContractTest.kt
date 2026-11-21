@@ -31,13 +31,13 @@ class WikiMutationContractTest {
         assertEquals(setOf("甲"), editor.selectedNames)
         for ((state, selected) in listOf(valid to setOf("甲", "乙"), valid.copy(totalPollId = "aa") to setOf("甲"))) {
             var reachedTransport = false
-            val r = VotingApi.submit(state, selected, { reachedTransport = true; null }, { error("owner") },
-                { error("token") }, { _, _, _ -> error("unexpected POST") })
+            val r = VotingApi.submit(state, selected, WikiWriteOwner { reachedTransport = true; false },
+                { error("token") }, { _, _ -> error("unexpected POST") })
             assertIs<ApiResult.Error>(r); assertFalse(reachedTransport)
         }
         var tokenReads = 0
-        val stale = VotingApi.submit(valid.copy(sessionIsCurrent = { false }), setOf("甲"), { "new-account" },
-            { WikiWriteOwner { true } }, { tokenReads++; "token" }, { _, _, _ -> error("unexpected write") })
+        val stale = VotingApi.submit(valid, setOf("甲"), WikiWriteOwner { false },
+            { tokenReads++; "token" }, { _, _ -> error("unexpected write") })
         assertIs<ApiResult.Error>(stale); assertEquals(0, tokenReads)
     }
 
@@ -54,8 +54,8 @@ class WikiMutationContractTest {
             var current = true
             val first = CompletableDeferred<Unit>(); val release = CompletableDeferred<Unit>()
             val writes = mutableListOf<String>()
-            val job = async { VotingApi.submit(valid, setOf("甲"), { "a" }, { WikiWriteOwner { current } }, { "token" },
-                { _, _, op -> writes += op.pollId; first.complete(Unit)
+            val job = async { VotingApi.submit(valid, setOf("甲"), WikiWriteOwner { current }, { "token" },
+                { _, op -> writes += op.pollId; first.complete(Unit)
                     withContext(NonCancellable) { release.await() }; VoteSubmitResult(true, 200) }) }
             first.await(); if (cancel) job.cancel() else current = false
             release.complete(Unit); job.join()

@@ -15,8 +15,19 @@ import util.DEFAULT_BIT_DEPTH_INDEX
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
+internal sealed interface FileDialogContent {
+    data object Loading : FileDialogContent
+    data class Failed(val message: String) : FileDialogContent
+    data class Ready(val files: List<Pair<String, String>>, val initialUrls: Set<String>) : FileDialogContent
+}
+
+internal data class FileDialogState(val requestId: Long, val category: String, val content: FileDialogContent)
+
 class MainViewModel(
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val loadCategoryFiles: suspend (String, Boolean) -> List<Pair<String, String>> = { cat, audioOnly ->
+        WikiEngine.fetchFilesInCategory(cat, audioOnly)
+    }
 ) {
     // =========================================================
     // 搜索状态
@@ -77,20 +88,8 @@ class MainViewModel(
     // =========================================================
     // 文件弹窗状态
     // =========================================================
-    private val _showFileDialog = MutableStateFlow(false)
-    val showFileDialog: StateFlow<Boolean> = _showFileDialog.asStateFlow()
-
-    private val _dialogCategoryName = MutableStateFlow("")
-    val dialogCategoryName: StateFlow<String> = _dialogCategoryName.asStateFlow()
-
-    private val _dialogFileList = MutableStateFlow<List<Pair<String, String>>>(emptyList())
-    val dialogFileList: StateFlow<List<Pair<String, String>>> = _dialogFileList.asStateFlow()
-
-    private val _dialogIsLoading = MutableStateFlow(false)
-    val dialogIsLoading: StateFlow<Boolean> = _dialogIsLoading.asStateFlow()
-
-    private val _dialogInitialSelection = MutableStateFlow<List<String>>(emptyList())
-    val dialogInitialSelection: StateFlow<List<String>> = _dialogInitialSelection.asStateFlow()
+    private val _fileDialog = MutableStateFlow<FileDialogState?>(null)
+    internal val fileDialog = _fileDialog.asStateFlow()
 
     // =========================================================
     // 手动选择 & 总数缓存
@@ -218,11 +217,7 @@ class MainViewModel(
         portraitJob?.cancel()
         portraitJob = null
         _isPortraitLoading.value = false
-        fileDialogRequestId++
-        fileDialogJob?.cancel()
-        fileDialogJob = null
-        _showFileDialog.value = false
-        _dialogIsLoading.value = false
+        closeFileDialog()
 
         // 先保存当前模式的关键词
         cachedKeywords[prev] = _searchKeyword.value
@@ -276,6 +271,7 @@ class MainViewModel(
         _isSearching.value = false
         if (mode != SearchMode.PORTRAIT && keyword.isBlank()) return
 
+        closeFileDialog()
         scanRequestId++
         scanJob?.cancel()
         scanJob = null
@@ -417,6 +413,8 @@ class MainViewModel(
     fun onSelectGroup(group: CharacterGroup) {
         if (_isDownloading.value) return
 
+        // This is a separate desktop window; the parent can change groups while it is open.
+        closeFileDialog()
         val requestId = ++scanRequestId
         scanJob?.cancel()
         scanJob = null
@@ -484,32 +482,33 @@ class MainViewModel(
     fun openFileDialog(cat: String) {
         val requestId = ++fileDialogRequestId
         fileDialogJob?.cancel()
-        _dialogCategoryName.value = cat
-        _dialogFileList.value = emptyList()
-        _dialogInitialSelection.value = emptyList()
-        _showFileDialog.value = true
-        _dialogIsLoading.value = true
+        val dialog = FileDialogState(requestId, cat, FileDialogContent.Loading)
+        _fileDialog.value = dialog
         val selectionMode = _searchMode.value
         val audioOnly = selectionMode == SearchMode.VOICE_ONLY
 
         fileDialogJob = scope.launch {
             try {
-                val files = WikiEngine.fetchFilesInCategory(cat, audioOnly = audioOnly)
+                val files = loadCategoryFiles(cat, audioOnly)
                 currentCoroutineContext().ensureActive()
                 if (requestId != fileDialogRequestId) return@launch
-                _dialogFileList.value = files
                 val totals = categoryTotalsByMode.getOrPut(selectionMode) { mutableMapOf() }
                 totals[cat] = files.size
                 _categoryTotalCountMap.value = totals.toMap()
 
                 val manual = manualSelectionsByMode[selectionMode]?.get(cat)
-                _dialogInitialSelection.value = manual?.map { it.second } ?: files.map { it.second }
+                val available = files.mapTo(mutableSetOf()) { it.second }
+                val initialUrls = manual?.map { it.second }?.intersect(available) ?: available
+                _fileDialog.value = dialog.copy(content = FileDialogContent.Ready(files, initialUrls))
             } catch (_: CancellationException) {
             } catch (e: Exception) {
-                if (requestId == fileDialogRequestId) addLog("加载失败: ${e.message}")
+                if (requestId == fileDialogRequestId) {
+                    val message = e.message ?: "请稍后重试"
+                    _fileDialog.value = dialog.copy(content = FileDialogContent.Failed(message))
+                    addLog("文件列表加载失败：$message")
+                }
             } finally {
                 if (requestId == fileDialogRequestId) {
-                    _dialogIsLoading.value = false
                     fileDialogJob = null
                 }
             }
@@ -520,13 +519,15 @@ class MainViewModel(
         fileDialogRequestId++
         fileDialogJob?.cancel()
         fileDialogJob = null
-        _showFileDialog.value = false
-        _dialogIsLoading.value = false
+        _fileDialog.value = null
     }
 
-    fun confirmFileDialog(selectedFiles: List<Pair<String, String>>) {
-        val cat = _dialogCategoryName.value
-        val totalCount = _dialogFileList.value.size
+    fun confirmFileDialog(requestId: Long, selectedUrls: Set<String>) {
+        val dialog = _fileDialog.value?.takeIf { it.requestId == requestId } ?: return
+        val ready = dialog.content as? FileDialogContent.Ready ?: return
+        val selectedFiles = ready.files.filter { it.second in selectedUrls }
+        val cat = dialog.category
+        val totalCount = ready.files.size
         val selectionMode = _searchMode.value
         closeFileDialog()
 

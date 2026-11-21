@@ -24,6 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.nekolaska.calabiyau.core.usage.UsageStats
+import kotlinx.coroutines.delay
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.launcher.LauncherIconTheme
@@ -67,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
         NotificationHelper.createChannel(this)
         AppPrefs.init(this)
+        UsageStats.attach(applicationContext)
         lifecycleScope.launch(Dispatchers.IO) { UpdateApkCleanup.cleanupAfterLaunch(applicationContext) }
         LauncherIconTheme.syncWithPreference(this, AppPrefs.launcherIconTheme)
         OfflineCache.init(this)
@@ -105,6 +110,12 @@ class MainActivity : ComponentActivity() {
                     // 主界面和系统栏都完成至少一帧后，再由 Compose 覆盖层退场。
                     withFrameNanos { }
                     showSplashCover = false
+                    lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                        while (true) {
+                            UsageStats.foreground()
+                            delay(UsageStats.untilTomorrow())
+                        }
+                    }
                 }
 
                 // 启动时静默检查更新，每天最多一次。

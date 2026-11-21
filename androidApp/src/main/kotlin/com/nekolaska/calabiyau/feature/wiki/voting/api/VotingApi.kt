@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau.feature.wiki.voting.api
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollData
 import com.nekolaska.calabiyau.feature.wiki.voting.model.PollConfig
 import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteState
+import com.nekolaska.calabiyau.feature.wiki.voting.model.VoteSession
 import com.nekolaska.calabiyau.feature.wiki.voting.parser.VotingParsers
 import com.nekolaska.calabiyau.feature.wiki.voting.source.VoteSubmitOperation
 import com.nekolaska.calabiyau.feature.wiki.voting.source.VoteSubmitResult
@@ -25,11 +26,11 @@ object VotingApi {
     }
 
     suspend fun fetchVoteData(config: PollConfig): ApiResult<VoteState> = ioApiCall("获取投票数据失败") {
-        val cookies = VotingRemoteSource.getWikiCookies()
-        if (cookies.isNullOrBlank()) {
-            return@ioApiCall ApiResult.Error("登录 Wiki 后可投票")
-        }
-        val ticket = WikiAuthHelper.beginCookieRequest(cookies)
+        val login = WikiAuthHelper.beginVoteLogin() ?: return@ioApiCall ApiResult.Error("登录 Wiki 后可投票")
+        val ticket = WikiAuthHelper.voteRequest(login) ?: return@ioApiCall ApiResult.Error("账号已切换或退出，请刷新投票")
+        val user = VotingRemoteSource.verifiedUser(ticket)
+        if (!user.isLoggedIn || user.name.isBlank()) return@ioApiCall ApiResult.Error("登录 Wiki 后可投票")
+        val session = VoteSession(user.name) { WikiAuthHelper.voteRequest(login) }
 
         val pollTexts = config.candidates.map { candidate ->
             "<poll show-results-before-voting=1>\n${config.name}-${candidate.name}\n投给TA\n</poll>"
@@ -37,12 +38,12 @@ object VotingApi {
         val totalPollText = "<poll show-results-before-voting=1>\n${config.name}-总计锚点\n已参加\n</poll>"
         val fullText = (pollTexts + totalPollText).joinToString("\n")
 
-        val html = VotingRemoteSource.fetchVoteDataHtml(fullText, cookies)
+        val html = VotingRemoteSource.fetchVoteDataHtml(fullText, session)
             ?: return@ioApiCall ApiResult.Error("无法解析投票数据")
 
         val pollDataList = VotingParsers.parseAjaxPollElements(html)
-        if (!WikiAuthHelper.isCurrentRequest(ticket)) return@ioApiCall ApiResult.Error("登录状态已变化，请刷新投票")
-        bindPolls(config, pollDataList)?.let { ApiResult.Success(it.copy(sessionIsCurrent = { WikiAuthHelper.isCurrentRequest(ticket) })) }
+        if (session.request() == null) return@ioApiCall ApiResult.Error("账号已切换或退出，请刷新投票")
+        bindPolls(config, pollDataList)?.let { ApiResult.Success(it.copy(session = session)) }
             ?: ApiResult.Error("投票数据不完整，请刷新后再试")
     }
 
@@ -58,12 +59,12 @@ object VotingApi {
     }
 
     suspend fun submitVotes(voteState: VoteState, selectedNames: Set<String>): ApiResult<Unit> =
-        submit(voteState, selectedNames, VotingRemoteSource::getWikiCookies, { WikiWriteOwner.capture(it) },
-            VotingRemoteSource::fetchCsrfToken, VotingRemoteSource::submitVoteOperation)
+        submit(voteState, selectedNames, WikiWriteOwner { voteState.session?.request?.invoke() != null },
+            { VotingRemoteSource.fetchCsrfToken(checkNotNull(voteState.session)) },
+            { token, operation -> VotingRemoteSource.submitVoteOperation(checkNotNull(voteState.session), token, operation) })
 
-    internal suspend fun submit(voteState: VoteState, selectedNames: Set<String>, getCookies: () -> String?,
-        capture: (String) -> WikiWriteOwner, getToken: suspend (String) -> String?,
-        write: suspend (String, String, VoteSubmitOperation) -> VoteSubmitResult): ApiResult<Unit> =
+    internal suspend fun submit(voteState: VoteState, selectedNames: Set<String>, owner: WikiWriteOwner,
+        getToken: suspend () -> String?, write: suspend (String, VoteSubmitOperation) -> VoteSubmitResult): ApiResult<Unit> =
         ioApiCall("提交投票失败") {
             val candidateNames = voteState.config.candidates.map { it.name }.toSet()
             if (voteState.config.voteLimit > 0 && selectedNames.size > voteState.config.voteLimit)
@@ -74,12 +75,7 @@ object VotingApi {
                 return@ioApiCall ApiResult.Error("包含无效的投票候选项")
             }
 
-            val cookies = getCookies()
-            if (cookies.isNullOrBlank()) return@ioApiCall ApiResult.Error("未登录")
-
-            val owner = capture(cookies)
-            if (!voteState.sessionIsCurrent()) return@ioApiCall ApiResult.Error("登录状态已变化，请刷新投票")
-            val token = owner.run { getToken(cookies) }
+            val token = owner.run { getToken() }
                 ?: return@ioApiCall ApiResult.Error("获取 CSRF Token 失败")
 
             val operations = mutableListOf<VoteSubmitOperation>()
@@ -103,7 +99,7 @@ object VotingApi {
             if (operations.isEmpty()) return@ioApiCall ApiResult.Success(Unit)
 
             for (operation in operations) {
-                val submitResult = owner.run { write(cookies, token, operation) }
+                val submitResult = owner.run { write(token, operation) }
                 if (!submitResult.success) {
                     val detail = submitResult.message?.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
                     return@ioApiCall ApiResult.Error("提交投票失败: HTTP ${submitResult.statusCode}$detail")

@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.usage.UsageStats
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
@@ -476,6 +477,16 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 Spacer(Modifier.height(AppSpacing.itemGap))
 
+                SettingsGroupHeader("隐私")
+                var statsEnabled by remember { mutableStateOf(AppPrefs.usageStatsEnabled) }
+                Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = AppSpacing.screen), shape = AppShapes.card,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    SettingsToggleItem(icon = Icons.Outlined.Info, title = "匿名使用统计",
+                        subtitle = "向自有服务器发送随机安装标识、版本和每日使用次数，不含账号或操作内容。",
+                        checked = statsEnabled, onCheckedChange = { statsEnabled = it; UsageStats.setEnabled(it) })
+                }
+                Spacer(Modifier.height(AppSpacing.itemGap))
+
                 // 关于分组
                 SettingsGroupHeader("关于")
 
@@ -486,9 +497,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
                 val currentVersion = remember {
                     try {
-                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.3"
+                        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.2.4"
                     } catch (_: Exception) {
-                        "2.2.3"
+                        "2.2.4"
                     }
                 }
                 val currentVersionCode = remember {

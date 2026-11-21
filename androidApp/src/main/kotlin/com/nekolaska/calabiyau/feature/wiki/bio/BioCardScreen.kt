@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.bio
 
+import com.nekolaska.calabiyau.core.usage.CardVisit
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -142,6 +144,8 @@ fun BioCardScreen(
         mutableStateOf(when (initialTab) { 1 -> BioCardTab.MOBILE; 2 -> BioCardTab.DECK; else -> BioCardTab.PC })
     }
     val state = key(selectedTab) {
+        val visit = remember { CardVisit() }
+        val tab = selectedTab
         rememberLoadState(
             initial = CardPageData(
                 pcCards = emptyList(),
@@ -153,7 +157,8 @@ fun BioCardScreen(
             ),
             key = selectedTab
         ) { force ->
-            BioCardApi.fetchTab(selectedTab, force)
+            if (tab == BioCardTab.DECK) BioCardApi.fetchTab(tab, force)
+            else visit.load(force) { BioCardApi.fetchTab(tab, force) }
         }
     }
     val showSnack = rememberSnackbarLauncher()
@@ -381,7 +386,6 @@ fun BioCardScreen(
                         modifier = Modifier.weight(1f),
                         keyword = currentKeyword,
                         onKeywordChange = ::updateKeyword,
-                        onSearch = { keyboard?.hide() },
                         onClear = { updateKeyword("") },
                         isSearching = false,
                         placeholder = when (selectedTab) {

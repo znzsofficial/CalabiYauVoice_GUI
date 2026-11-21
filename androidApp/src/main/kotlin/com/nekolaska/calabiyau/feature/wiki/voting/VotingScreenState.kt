@@ -5,6 +5,9 @@ import com.nekolaska.calabiyau.feature.wiki.hub.hasWikiLoginCookie
 import com.nekolaska.calabiyau.feature.wiki.voting.api.VotingApi
 import com.nekolaska.calabiyau.feature.wiki.voting.model.*
 import data.ApiResult
+import com.nekolaska.calabiyau.core.usage.UsageFeature
+import com.nekolaska.calabiyau.core.usage.UsageStats
+import com.nekolaska.calabiyau.core.usage.usageOutcome
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
@@ -83,6 +86,7 @@ internal class VotingScreenState(
         ++version // Any earlier read may no longer publish over this mutation.
         try {
             val result = writeVotes(before, submitted)
+            UsageStats.result(UsageFeature.VOTE, result.usageOutcome())
             currentCoroutineContext().ensureActive()
             if (result is ApiResult.Success) votes = before.withSelectedNames(submitted)
             isLoadingData = true

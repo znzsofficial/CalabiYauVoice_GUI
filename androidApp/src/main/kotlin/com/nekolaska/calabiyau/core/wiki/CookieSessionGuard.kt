@@ -9,7 +9,7 @@ internal class CookieSessionGuard {
     private var initialized = false
     private var observed: String? = null
 
-    private fun observe(current: String?) {
+    fun observe(current: String?) {
         if (!initialized || current != observed) { revision++; observed = current; initialized = true }
     }
     fun capture(requestCookies: String, currentCookies: String?): Ticket {
@@ -26,6 +26,15 @@ internal class CookieSessionGuard {
         return true
     }
     fun invalidate() { revision++; initialized = false; observed = null }
+}
+
+/** Bilibili login, not the whole WebView header. The Wiki username is independently asserted by the server. */
+internal fun voteLoginKey(cookies: String?): String? {
+    val fields = cookies.orEmpty().split(';').map { it.trim() }
+    val uid = fields.singleOrNull { it.startsWith("DedeUserID=") }?.substringAfter('=')
+        ?.takeIf { (it.toLongOrNull() ?: 0L) > 0 } ?: return null
+    val session = fields.singleOrNull { it.startsWith("SESSDATA=") }?.substringAfter('=').orEmpty()
+    return "$uid:$session"
 }
 
 internal fun csrfSessionCacheKey(apiUrl: String, cookies: String): String = "$apiUrl#" +

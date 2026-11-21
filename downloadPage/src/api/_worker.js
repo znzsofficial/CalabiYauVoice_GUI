@@ -7,12 +7,14 @@ import { listComments, listReplies, postComment, deleteComment } from "./comment
 import { likes } from "./likes.js";
 import { admin } from "./admin.js";
 import { notifications } from "./notifications.js";
+import { recordUsage } from "./usage.js";
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+      if (request.method === "POST" && url.pathname === "/api/app/usage") return await recordUsage(request, env);
       if (url.pathname.startsWith("/api/user/avatar/")) return await serveAvatar(request, env, url);
       if (url.pathname.startsWith("/api/user/") || url.pathname.startsWith("/api/admin/")) {
         requireDb(env);

@@ -12,6 +12,10 @@ object ExtractionCatalogParsers {
         val issues = mutableListOf<String>()
         val entries = if (kind == ExtractionCatalogKind.DROPS) {
             ExtractionDropParser.parse(document, issues)
+        } else if (kind == ExtractionCatalogKind.LOOT && document.selectFirst(".redirectMsg, .sec-weapon-gallery, .sec-armor-gallery") != null) {
+            // Equipment pages reuse .sec-card, but have different fields and rarity meanings.
+            issues += "loot: expected supplies, found a redirect or equipment catalog"
+            emptyList()
         } else {
             val prefix = if (kind == ExtractionCatalogKind.LOOT) "sec-card" else "sec-att-card"
             val qualityNames = document.select(".cardSelectOption[data-group=2]").mapNotNull {

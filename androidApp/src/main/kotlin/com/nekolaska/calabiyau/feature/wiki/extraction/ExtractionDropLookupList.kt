@@ -97,15 +97,14 @@ internal fun ExtractionDropLookupList(
                         activeFilter = sourceCategory != null || includeZero,
                         onReset = if (sourceCategory != null || includeZero) ({ sourceCategory = null; includeZero = false }) else null
                     )
-                    Text("收录于这些来源的候选池，具体掉率未在表中列出。", style = MaterialTheme.typography.bodySmall,
+                    Text("以下为候选来源，件数概率不等于该物品的掉率。", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (selected == null && !loading && !loadFailed) {
                         Text("暂无该品质物品的来源资料", style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { onChooseItem(null) }) { Text(backLabel) }
                     }
                 } else {
-                    Text("物品来源", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    SearchBar(keyword = query, onKeywordChange = { query = it }, onSearch = {}, onClear = { query = "" },
+                    SearchBar(keyword = query, onKeywordChange = { query = it }, onClear = { query = "" },
                         isSearching = false, placeholder = "搜索物品名，如切割器…")
                     DropFilterBar(
                         summary = if (loading && lookup.isEmpty()) "正在读取物品…" else "$distinctNames 个名称，${results.size} 条品质记录",
@@ -115,7 +114,7 @@ internal fun ExtractionDropLookupList(
                         activeFilter = currentQuality != null,
                         onReset = if (currentQuality != null) ({ quality = null }) else null
                     )
-                    Text("同名物品按品质分列，来源数不含已确认零掉落的容器。", style = MaterialTheme.typography.bodySmall,
+                    Text("来源数不含已确认零掉落的容器。", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 status()
@@ -166,9 +165,10 @@ internal fun ExtractionDropLookupList(
                             ) {
                                 Text(
                                     when (hit.source.dropCountState) {
-                                        DropCountState.ZERO -> "无物品掉落 · 0 件"
+                                        DropCountState.ZERO -> "无物品掉落（0 件）"
                                         DropCountState.UNKNOWN -> "掉落数量待确认"
-                                        DropCountState.POSITIVE -> "具体物品掉率暂无数据"
+                                        DropCountState.POSITIVE -> hit.source.fields.firstOrNull { it.label == "件数概率" }
+                                            ?.let { "件数概率：${it.value}" } ?: "可掉落物品"
                                     },
                                     Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                     style = MaterialTheme.typography.labelSmall,
@@ -210,12 +210,12 @@ internal fun ExtractionDropLookupList(
                         )
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            ExtractionDropQualityBadge(item.qualityLabel, item.qualityCode ?: 0)
-                            Text(
-                                "${lookup.getValue(item).count { it.source.dropCountState != DropCountState.ZERO }} 个来源",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                ExtractionDropQualityBadge(item.qualityLabel, item.qualityCode ?: 0)
+                                Text("${lookup.getValue(item).count { it.source.dropCountState != DropCountState.ZERO }} 个来源",
+                                    modifier = Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                         Icon(
                             Icons.Outlined.ChevronRight,
