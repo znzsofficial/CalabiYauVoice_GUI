@@ -1,8 +1,8 @@
 {
     "versionName": "2.2.4",
     "versionCode": 65,
-    "apkUrl": "/downloads/CalabiYauVoice-2.2.4.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.2.4.apk?build=9c3b91db41f277b7",
+    "apkSize": 4034724,
     "releaseUrl": "/",
     "changelog": [
         "修复时装投票在同一账号下反复提示登录状态变化的问题",
@@ -15,6 +15,13 @@
     ],
     "publishedAt": "2026-11-21",
     "releases": [
+        {
+            "versionName": "2.2.4",
+            "versionCode": 65,
+            "apkUrl": "/downloads/CalabiYauVoice-2.2.4.apk?build=9c3b91db41f277b7",
+            "apkSize": 4034724,
+            "publishedAt": "2026-11-21"
+        },
         {
             "versionName": "2.2.3",
             "versionCode": 64,
