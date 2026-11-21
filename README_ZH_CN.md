@@ -16,7 +16,7 @@
 **官网入口：** [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)  
 **备用链接：** [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/)
 
-[English](README.md)
+[English](README.md) · [项目文档](docs/README.md) · [发布记录](docs/README.md#发布记录)
 
 <br>
 
@@ -114,98 +114,24 @@
 |-------|-----------------------------------------|
 | 前端框架  | Svelte 5 + TypeScript                   |
 | 构建工具  | Vite 8                                  |
- | 包管理    | pnpm workspace                            |
+| 包管理    | pnpm workspace                            |
 | 部署    | Cloudflare Pages                        |
 | 边缘接口  | Cloudflare Worker（`src/api/_worker.js`） |
-| 存储    | Cloudflare D1（用户档案）+ R2（头像、APK）         |
- | 依赖库    | `jszip`（批量导出）                        |
- | 页面    | 首页 / 下载 / Wiki 搜索 / Wiki 导航 / 管理后台           |
+| 存储    | D1（账号、留言及独立的使用统计表）；R2（头像、APK） |
+| 依赖库    | `jszip`（批量导出）                        |
+| 页面    | 首页 / 下载 / Wiki 搜索 / Wiki 导航 / 管理后台           |
 
 ---
 
 ## 📂 项目结构
 
-```text
-.
-├── androidApp/                         # Android 应用模块
-│   ├── build.gradle.kts
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       ├── kotlin/com/nekolaska/calabiyau/
-│       │   ├── core/                   #   缓存、媒体、导航、网络、偏好设置、UI 工具
-│       │   ├── feature/                #   Android 页面与功能 API
-│       │   │   ├── character/          #   角色列表/详情、时装
-│       │   │   ├── weapon/             #   武器列表/详情与外观筛选
-│       │   │   ├── download/           #   资源搜索、分类浏览、下载、历史、立绘
-│       │   │   ├── settings/           #   设置、关于、更新检查、存储管理
-│       │   │   ├── tools/              #   本地文件管理与工具
-│       │   │   └── wiki/               #   原生 Wiki Hub、WebView、解析器
-│       │   ├── MainActivity.kt
-│       │   ├── CrashHandler.kt
-│       │   └── NotificationHelper.kt
-│       └── res/
-├── desktopApp/                         # 桌面应用模块
-│   ├── build.gradle.kts
-│   ├── icon.ico
-│   ├── libs/
-│   └── src/main/
-│       ├── kotlin/
-│       │   ├── data/                   #   OkHttp 客户端、图片加载器、Cookie
-│       │   ├── viewmodel/              #   搜索/下载状态管理
-│       │   ├── ui/screens/             #   桌面端页面
-│       │   ├── ui/components/          #   可复用 Fluent UI 组件
-│       │   ├── util/                   #   音频转换、偏好设置、文件工具
-│       │   ├── jna/windows/            #   Win32 绑定与窗口特效
-│       │   └── Main.kt
-│       └── resources/
-├── shared/                             # Kotlin Multiplatform 共享模块
-│   ├── build.gradle.kts
-│   └── src/
-│       ├── commonMain/kotlin/
-│       │   ├── data/                   #   Wiki API 核心、模型、DTO
-│       │   ├── portrait/               #   立绘解析与组织
-│       │   ├── util/                   #   共享工具
-│       │   └── com/nekolaska/calabiyau/ #   共享媒体 / 偏好设置
-│       ├── commonTest/
-│       ├── jvmTest/
-│       └── androidHostTest/
-├── downloadPage/                       # 网页下载站与浏览器端工具
-│   ├── index.html                      #   首页：APK 下载、QQ 群、平衡数据
-│   ├── search/index.html               #   Wiki 搜索 / 分类打包 / 语音字幕
-│   ├── nav/index.html                  #   Wiki 导航站（基于侧边栏的全站目录）
-│   ├── admin.html                      #   密码保护的用户档案管理后台
-│   ├── package.json
-│   ├── pnpm-workspace.yaml / pnpm-lock.yaml
-│   ├── vite.config.ts                  #   多页 Vite 构建 + 本地 API 代理
-│   ├── download.css / base.css
-│   ├── migrations/                     #   D1 迁移脚本（档案、评论、审核、通知）
-│   ├── downloads/                      #   latest.json；APK 实际在 R2 calabiyau-releases
-│   └── src/
-│       ├── main.ts                     #   首页入口
-│       ├── App.svelte                  #   首页 UI
-│       ├── BalanceDialog.svelte        #   平衡数据弹窗
-│       ├── CustomSelect.svelte
-│       ├── api/_worker.js              #   CF Worker：GitHub stars、Wiki/图片代理、平衡数据代理、用户档案（D1 + R2）
-│       ├── search/                     #   Wiki 搜索、语音索引、批量下载
-│       │   ├── SearchApp.svelte
-│       │   ├── searchApi.ts
-│       │   ├── download/               #   ZIP / 队列 / Blob 工具
-│       │   ├── panels/                 #   Wiki / 分类 / 语音面板
-│       │   └── voice/                  #   语音索引构建与播放 UI
-│       └── nav/                        #   Wiki 导航应用
-│           ├── NavApp.svelte
-│           ├── sidebar.ts              #   侧边栏抓取与解析（与 Android 端解析器保持一致）
-│           ├── gameAssets.ts           #   武器立绘、地图实景缩略图与道具图标
-│           ├── searchAliases.ts        #   搜索别名与模糊词字典
-│           ├── toolboxes.ts            #   二级合集弹窗数据源
-│           ├── wallpaper.ts            #   官方随机壁纸系统与缓存
-│           ├── birthdays.ts            #   超弦体生日档案、倒计时与生日日历
-│           └── nav.css
-├── webApp/                             # 已归档的 UI 原型，默认不参与构建
-├── gradle/libs.versions.toml           # 集中管理依赖版本
-├── build.gradle.kts
-└── settings.gradle.kts
-```
+| 目录 | 职责 |
+| --- | --- |
+| [`androidApp/`](androidApp/) | 原生 Wiki、资源下载、工具与设置。模块归属见 [Android 架构](docs/android-architecture.md)。 |
+| [`desktopApp/`](desktopApp/) | Windows 窗口、素材工具及原生接口。见[桌面实现说明](docs/desktop-implementation-guide.md)。 |
+| [`shared/`](shared/) | 双端共用的 Wiki 查询、下载编排、模型与媒体处理。 |
+| [`downloadPage/`](downloadPage/) | 生产下载站、网页工具、Pages Worker 与 D1 迁移。见[后端说明](docs/user-system-backend.md)。 |
+| [`webApp/`](webApp/README.md) | 已归档的 Compose Web 演示，默认不参与构建。 |
 
 ## 🚀 构建与运行
 

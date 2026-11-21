@@ -35,7 +35,7 @@
 
 Worker 按职责拆分：`_worker.js` 只负责路由和统一错误处理；`http.js` 负责限量读取与参数校验，
 `auth.js` 负责 Wiki/管理员鉴权及访客 HMAC，`identity.js` 负责已验证名字别名及旧行归属补全，`writes.js` 负责原子写入门禁，
-`profiles.js`、`avatars.js`、`comments.js`、`likes.js`、`admin.js` 是业务模块，
+`profiles.js`、`avatars.js`、`comments.js`、`likes.js`、`admin.js` 处理账号及管理业务，`usage.js` 处理独立的安装日统计与归档，
 `releases.js` 负责 APK Range/HEAD/ETag，`proxy.js` 负责上游代理。
 `pnpm build` 使用 esbuild 将模块打包为 `dist/_worker.js`；`webStatic` 不再覆盖此产物。
 
@@ -43,24 +43,16 @@ Worker 按职责拆分：`_worker.js` 只负责路由和统一错误处理；`ht
 
 | 资源 | 名称 / ID | 绑定 | 用途 |
 |---|---|---|---|
-| D1 | `calabiyau-db`<br>`cb8d4bdf-540c-420e-931e-6e6c1da88cd1` | `DB` | 档案 / 留言 / 点赞 / 限流表 |
+| D1 | `calabiyau-db` | `DB` | 档案、留言、点赞、通知、限流、管理审计；另有独立的应用统计表 |
 | R2 | `calabiyau-releases` | `RELEASES` | APK 分发 |
 | R2 | `calabiyau-user-assets` | `USER_ASSETS` | 用户头像 |
 | Pages 密钥 | `ADMIN_PASSWORD` | `env.ADMIN_PASSWORD` | 管理后台密码 |
-| Pages 密钥 | `GUEST_SECRET` | `env.GUEST_SECRET` | 独立随机访客 HMAC 密钥，至少 32 字符；不得复用管理员密码 |
+| Pages 密钥 | `GUEST_SECRET` | `env.GUEST_SECRET` | 至少 32 字符的独立随机密钥；访客编号和统计使用不同 HMAC 输入，不复用管理员密码 |
 | Pages 密钥 | `GITHUB_TOKEN` | `env.GITHUB_TOKEN` | Star 计数（既有） |
 
 配置见 `downloadPage/wrangler.jsonc`（含 `migrations_dir: ./migrations`）。
 
-密钥管理（不进仓库）：
-
-```powershell
-# 查看当前登录
-npx wrangler whoami
-
-# 修改管理后台密码（改完需重新 webPush 部署生效）
-cmd /c "echo 新密码| npx wrangler pages secret put ADMIN_PASSWORD --project-name calabiyauwiki"
-```
+密钥在 Pages 项目 `calabiyauwiki` 的生产环境管理，不写入 Git。常规部署保留现有 `GUEST_SECRET`；轮换会改变访客编号，也会中断统计的跨日去重与留存关联。
 
 ## 3. 数据库结构
 
@@ -116,7 +108,7 @@ CREATE TABLE write_throttle (
 );
 ```
 
-## 4. 用户 API（/api/user/*）
+### 0004–0009 — 匿名编号、写入一致性、回复与通知
 
 `0004_anonymous_tag.sql` 增加匿名展示编号 `author_tag`。
 `0005_backend_consistency.sql` 增加：
@@ -156,6 +148,12 @@ CREATE TABLE write_throttle (
   BID 兼容授权和旧留言档案关联均排除匿名占位，真实同名账号只可操作其 Wiki ID 所属留言。
 - **部署前先备份 D1，检查重复 Wiki ID 与名字冲突，再应用 0010；随后部署新版 Worker，最后发布客户端。**
   迁移中的归档/合并已在本地 D1 回归验证，不代表已经操作线上数据库。名字冲突应由管理员核对，不能直接改写归属 ID。
+
+### 0011–0012 — 匿名使用统计
+
+[`0011`](../downloadPage/migrations/0011_app_usage.sql) 建立安装日明细，[`0012`](../downloadPage/migrations/0012_app_usage_history.sql) 建立不含安装标识的历史日汇总。统计上报走 `POST /api/app/usage`，不经过 Wiki 账号接口。保留期限与两张表的关系见[统计专题](app-usage.md#保存什么)。
+
+## 4. 用户 API（/api/user/*）
 
 所有响应带 CORS 头；错误统一为 `{"error": "..."}` + 非 200；业务错误额外带结构化
 `errorCode`（如 `DISCUSSION_UNAVAILABLE`、`FOCUS_UNAVAILABLE`、`REPLY_TARGET_UNAVAILABLE`、
@@ -309,12 +307,10 @@ PUT 请求体：
 | DELETE | `/api/admin/profile?bid=` | 删除档案 + R2 头像 + 该用户留言板与点赞 |
 | GET | `/api/admin/comments?page=&size=&q=` | 全站留言列表（跨目标，含匿名昵称；按内容/作者/目标搜索） |
 | DELETE | `/api/admin/comment?id=` | 删除任意留言 |
-| POST | `/api/admin/maintenance` | 有界清理头像、24h 过期限流记录、7 天前的幂等记录；可由运维定期调用 |
+| GET | `/api/admin/usage` | 近 30 天趋势、今日版本分布、功能结果及历史累计；只返回聚合数据 |
+| POST | `/api/admin/maintenance` | 分批清理孤儿头像、过期限流/幂等记录和旧已读通知，同时归档过期统计明细 |
 
-页面 `downloadPage/admin.html`（`/admin` 由 Pages pretty-URL 解析）：
-密码存 sessionStorage；顶部切换「用户档案 / 留言板管理」两个区块；
-档案：列表 / 搜索 / 分页 / 编辑 / 删除 / 头像预览；
-留言：列表 / 搜索 / 分页 / 删除；已加 `noindex`。
+页面 `downloadPage/admin.html` 的公开入口为 `/admin`，凭据保存在当前标签页的 `sessionStorage`。顶部有「用户档案」「留言板管理」「操作记录」「应用统计」四个入口。统计面板显示的新增按安装计，不能用于查找某个 Wiki 用户。
 
 ## 6. 鉴权与限流模型
 
@@ -356,28 +352,16 @@ PUT 请求体：
 
 ## 8. 部署与运维
 
-```powershell
-# 必须先备份并迁移（至 0010）、配置密钥，再部署新版 Worker
-# 以下命令在 downloadPage 目录执行
-cd downloadPage
-npx wrangler@4.130.0 d1 migrations apply calabiyau-db --remote
-npx wrangler@4.130.0 pages secret put GUEST_SECRET --project-name calabiyauwiki
+在 `downloadPage/` 下用 `pnpm exec wrangler d1 migrations list calabiyau-db --remote` 核对生产库待迁移清单。[2.2.4 的生产记录](releases/2.2.4.md#部署记录)已确认 `0011`、`0012` 上线；新环境需按顺序应用[迁移目录](../downloadPage/migrations/)中的脚本。
 
-# D1 查询 / 备份
-npx wrangler@4.130.0 d1 execute calabiyau-db --remote --command "SELECT ..."
-npx wrangler@4.130.0 d1 export calabiyau-db --remote --output backup.sql
-```
+若本次发布依赖新迁移，先备份数据库（`d1 export` 的输出放在仓库外）；涉及 `0010` 时先按上面的身份冲突规则核对旧数据。确认待应用项后，执行 `pnpm exec wrangler d1 migrations apply calabiyau-db --remote`，确认成功且生产密钥已配置，再从项目根目录运行 `.\gradlew.bat webPush`。一并发布 Android 时遵循[版本发布清单](release-version-checklist.md)。
 
-注意：
-
-- `npx wrangler` 可能拉到新版导致 OAuth 授权异常（7403），
-  固定 `npx wrangler@4.130.0` 可复现已验证行为。
-- 迁移和密钥准备好后，在项目根目录执行 `.\gradlew.bat webPush`；新版业务代码依赖 0010，不可省略。
+日常维护：
 - 测试：downloadPage 目录 `pnpm test:worker`（Miniflare/workerd + 本地 D1/R2），`pnpm check`、`pnpm build`。
 - `node -c` 只能验证语法，不能替代并发、鉴权、事务和 Range 回归测试。
 - 维护调用不会自动调度；部署后定期使用管理凭据调用 `/api/admin/maintenance`。
   每次扫描 100 个 R2 对象、最多回收 100 个过期对象；旧对象扫描游标持久化，可重复执行。
-  每次最多删除各 1000 条过期限流/幂等记录，积压时重复调用即可。
+  每次最多清理限流记录（24 小时）、幂等记录（7 天）、已读通知（读后 90 天）各 1,000 条，并将最多 500 条过期安装日记录汇总后删除。普通统计上报也会小批量归档；清理积压时可重复维护，不会重复增加历史总数。
 - APK 接口支持 GET/HEAD、单范围与 suffix Range、If-Range、ETag/304 和 416；HEAD 返回完整大小。
 
 ## 9. 快速验证

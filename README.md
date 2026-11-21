@@ -16,7 +16,7 @@ A Kotlin Multiplatform [Strinova](https://wiki.biligame.com/klbq/) Wiki resource
 **Website:** [wiki.nekolaska.vip](https://wiki.nekolaska.vip/)  
 **Backup:** [calabiyauwiki.pages.dev](https://calabiyauwiki.pages.dev/)
 
-[简体中文](README_ZH_CN.md)
+[简体中文](README_ZH_CN.md) · [Project documentation](docs/README.md) · [Release notes](docs/README.md#发布记录)
 
 <br>
 
@@ -114,98 +114,24 @@ Exact versions are maintained in [`gradle/libs.versions.toml`](gradle/libs.versi
 |-------------|-------------------------------------------------|
 | Framework   | Svelte 5 + TypeScript                           |
 | Bundler     | Vite 8                                          |
- | Package mgr | pnpm workspace                                  |
+| Package mgr | pnpm workspace                                  |
 | Hosting     | Cloudflare Pages                                |
 | Edge API    | Cloudflare Worker (`src/api/_worker.js`)        |
-| Storage     | Cloudflare D1 (user profiles) + R2 (avatars, APKs) |
- | Libraries   | `jszip` (batch export)                          |
- | Pages       | Home / Download / Wiki Search / Wiki Navigation / Admin console |
+| Storage     | D1 for accounts, the message board and separate usage counters; R2 for avatars and APKs |
+| Libraries   | `jszip` (batch export)                          |
+| Pages       | Home / Download / Wiki Search / Wiki Navigation / Admin console |
 
 ---
 
 ## 📂 Project Structure
 
-```text
-.
-├── androidApp/                         # Android application module
-│   ├── build.gradle.kts
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       ├── kotlin/com/nekolaska/calabiyau/
-│       │   ├── core/                   #   Cache, media, navigation, network, preferences, UI helpers
-│       │   ├── feature/                #   Android screens and feature APIs
-│       │   │   ├── character/          #   Character list/detail, costumes
-│       │   │   ├── weapon/             #   Weapon list/detail and skin filters
-│       │   │   ├── download/           #   Search, category browse, downloads, history, portraits
-│       │   │   ├── settings/           #   Settings, about, update checks, storage
-│       │   │   ├── tools/              #   Local file manager and utilities
-│       │   │   └── wiki/               #   Native Wiki Hub, WebView shell, parsers
-│       │   ├── MainActivity.kt
-│       │   ├── CrashHandler.kt
-│       │   └── NotificationHelper.kt
-│       └── res/
-├── desktopApp/                         # Desktop application module
-│   ├── build.gradle.kts
-│   ├── icon.ico
-│   ├── libs/
-│   └── src/main/
-│       ├── kotlin/
-│       │   ├── data/                   #   OkHttp client, image loader, cookies
-│       │   ├── viewmodel/              #   Search/download state
-│       │   ├── ui/screens/             #   Desktop screens
-│       │   ├── ui/components/          #   Reusable Fluent UI components
-│       │   ├── util/                   #   Audio conversion, preferences, file helpers
-│       │   ├── jna/windows/            #   Win32 bindings and window effects
-│       │   └── Main.kt
-│       └── resources/
-├── shared/                             # Kotlin Multiplatform shared module
-│   ├── build.gradle.kts
-│   └── src/
-│       ├── commonMain/kotlin/
-│       │   ├── data/                   #   Wiki API core, models, DTOs
-│       │   ├── portrait/               #   Portrait parsing and organization
-│       │   ├── util/                   #   Shared helpers
-│       │   └── com/nekolaska/calabiyau/ #   Shared media / preferences utilities
-│       ├── commonTest/
-│       ├── jvmTest/
-│       └── androidHostTest/
-├── downloadPage/                       # Web download hub + browser tools
-│   ├── index.html                      #   Home: APK download, QQ group, balance data
-│   ├── search/index.html               #   Wiki search / category download / voice tools
-│   ├── nav/index.html                  #   Wiki navigation hub (sidebar-driven directory)
-│   ├── admin.html                      #   Password-protected user profile admin console
-│   ├── package.json
-│   ├── pnpm-workspace.yaml / pnpm-lock.yaml
-│   ├── vite.config.ts                  #   Multi-page Vite build + local API proxy
-│   ├── download.css / base.css
-│   ├── migrations/                     #   D1 migrations (profiles, comments, moderation, notifications)
-│   ├── downloads/                      #   latest.json; APKs are served from R2 calabiyau-releases
-│   └── src/
-│       ├── main.ts                     #   Home entry
-│       ├── App.svelte                  #   Home UI
-│       ├── BalanceDialog.svelte        #   Balance data dialog
-│       ├── CustomSelect.svelte
-│       ├── api/_worker.js              #   Cloudflare Worker: GitHub stars, Wiki/image proxy, balance proxy, user profiles (D1 + R2)
-│       ├── search/                     #   Wiki search app, voice index, bulk download
-│       │   ├── SearchApp.svelte
-│       │   ├── searchApi.ts
-│       │   ├── download/               #   ZIP / queue / blob helpers
-│       │   ├── panels/                 #   Wiki / category / voice panels
-│       │   └── voice/                  #   Voice index builder & player UI
-│       └── nav/                        #   Wiki navigation hub app
-│           ├── NavApp.svelte
-│           ├── sidebar.ts              #   Sidebar fetch & parser (mirrors Android parser)
-│           ├── gameAssets.ts           #   Weapon renders, map thumbnails and item icons
-│           ├── searchAliases.ts        #   Search aliases & fuzzy keyword dictionary
-│           ├── toolboxes.ts            #   Collection modals data sources
-│           ├── wallpaper.ts            #   Random official wallpaper system
-│           ├── birthdays.ts            #   Character birthdays, countdowns and calendar
-│           └── nav.css
-├── webApp/                             # Archived UI prototype; excluded from default builds
-├── gradle/libs.versions.toml           # Centralized dependency versions
-├── build.gradle.kts
-└── settings.gradle.kts
-```
+| Directory | What lives here |
+| --- | --- |
+| [`androidApp/`](androidApp/) | Native Wiki pages, Android downloads, tools and settings. See the [architecture guide](docs/android-architecture.md) for module ownership. |
+| [`desktopApp/`](desktopApp/) | Windows UI, media tooling and native integrations. See the [desktop guide](docs/desktop-implementation-guide.md). |
+| [`shared/`](shared/) | Wiki queries, download coordination, models and media code shared by both apps. |
+| [`downloadPage/`](downloadPage/) | Production download site, browser tools, Pages Worker and D1 migrations. [Backend guide](docs/user-system-backend.md) |
+| [`webApp/`](webApp/README.md) | Archived Compose Web demo; excluded from default builds. |
 
 ## 🚀 Build and Run
 

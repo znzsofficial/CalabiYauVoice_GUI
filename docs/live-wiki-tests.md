@@ -21,9 +21,11 @@
 | `WEAPON_AUDIT_DIR` / `MAP_BIO_AUDIT_DIR` | 武器、地图、生化 | [武器](weapon-parsing-audit.md)、[地图与卡池](rift-bio-pool-followup.md) |
 | `WIKI_NOV21_AUDIT_DIR` | 11 月 21 日弦溯、指南、伏闪 | 弦溯读 `drops.html`、`table.html`、`loot.html`、`attachments.html`；指南读 `beginner.html`、`review-1121/120474.html`、`review-1121/historical-120474.json`；伏闪优先读 `fushan-current.json`，也可用 `fushan.html` 与 `120510.txt`。 |
 
-2026-11-21 适配复测：使用新版完整页面及旧快照，Android 武器详情 43 项、新人指南与容器表 34 项、其余弦溯专项 80 项通过，三组筛选不重叠，均无跳过。Debug 编译通过，Lint 0 错误，5 个既有警告（4 UseKtx、1 ModifierParameter）。此处验证的是源码对真实页面的解析和缓存行为。
+**2026-11-21 白天（[2.2.3](releases/2.2.3.md)）：** 使用新版完整页面及旧快照，Android 武器详情 43 项、新人指南与容器表 34 项、其余弦溯专项 80 项通过，三组筛选不重叠，均无跳过。Debug 编译通过，Lint 0 错误，5 个既有警告（4 UseKtx、1 ModifierParameter）。此处验证的是源码对真实页面的解析和缓存行为。
 
 同日二审修复后，重跑新人指南与全部弦溯专项：**122 项通过，0 失败、0 跳过**；Debug 编译和 Lint 通过，仍为上述 5 个警告。覆盖 120474 旧缓存、等价文章链接、逐个删除共用池、来源卡数量和池规模矛盾、同区来源搜索与排序说明、容器件数空白与明确未知的区别。该批与前一批有重叠，不累加计数。
+
+**同日晚间（[2.2.4](releases/2.2.4.md)）：** `EXTRACTION_SPLIT_AUDIT_DIR` 的迁页回归核对物资新页、配件 Q8、旧缓存及错页拒收。两个版本的快照和结果分别保留。
 
 ## 主动联网抓取
 

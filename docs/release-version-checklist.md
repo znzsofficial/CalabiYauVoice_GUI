@@ -73,11 +73,11 @@ For formatting-only metadata changes, compare the parsed JSON with the committed
 ## Default release sequence
 
 1. Review all changes since the last release, including already committed work. Update the version fields and concise changelog **before webDist**; preserve historical versions, especially 2.1.6.
-2. Complete the change-scoped checks above. Record what actually ran; optional fixture skips are not passes.
+2. Complete the change-scoped checks above. Record what actually ran; optional fixture skips are not passes. If the Worker needs schema changes, check the pending migrations against this release and apply them to production **before deploying the Worker**. See [backend operations](user-system-backend.md#8-部署与运维); migrations already applied do not need repeating.
 3. Commit source/version preparation, then run `.\gradlew.bat webDist`. It builds the signed release from that commit, updates the size/hash URL/archive record and uploads the two R2 objects. Confirm task success and final metadata's version and nonzero size; never deploy a preparation-time apkSize=0.
 4. Commit generated metadata and push normally, then run `.\gradlew.bat webPush`. Confirm deployment succeeds to the production project/branch. Avoid a separate duplicate website build.
 5. Check **the primary domain only** by default: `latest.json` has the expected version, notes and download URL; the versioned download responds successfully with the expected size (HEAD or one small Range request is enough). No mandatory full APK download, browser screenshot or historical-file sweep.
-6. Record a short release summary, commits/deployment reference and checks. Fold known evidence into the metadata commit where practical; use at most one necessary documentation closeout commit, push it, and leave the tree clean.
+6. Record the artifact, commits, deployment and checks in `docs/releases/<version>.md`. Add it to the [release archive](releases/README.md), update the [current release link](README.md#发布记录), and put outstanding device checks in [device acceptance](device-acceptance.md). Fold known evidence into the metadata commit where practical; use at most one necessary documentation closeout commit, push it, and leave the tree clean.
 
 ## Extra verification only when relevant
 
