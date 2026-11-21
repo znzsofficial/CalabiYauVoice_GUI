@@ -1,8 +1,8 @@
 {
     "versionName": "2.2.3",
     "versionCode": 64,
-    "apkUrl": "/downloads/CalabiYauVoice-2.2.3.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.2.3.apk?build=bfa389548d8e7a44",
+    "apkSize": 4018340,
     "releaseUrl": "/",
     "changelog": [
         "伏闪详情可放大查看单发开火时间轴，按组查看爆破模式的 8 项增幅，并分别跳转到 5 位使用者",
@@ -13,6 +13,13 @@
     ],
     "publishedAt": "2026-11-21",
     "releases": [
+        {
+            "versionName": "2.2.3",
+            "versionCode": 64,
+            "apkUrl": "/downloads/CalabiYauVoice-2.2.3.apk?build=bfa389548d8e7a44",
+            "apkSize": 4018340,
+            "publishedAt": "2026-11-21"
+        },
         {
             "versionName": "2.2.2",
             "versionCode": 63,
