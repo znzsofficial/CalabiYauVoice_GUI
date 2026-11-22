@@ -4,7 +4,7 @@
 
 - **安装或从源码运行**：[Android 下载站](https://wiki.nekolaska.vip/) · [中文构建说明](../README_ZH_CN.md#-构建与运行) · [English build instructions](../README.md#-build-and-run)。Windows 桌面端可从源码运行，本次发布只分发 Android APK。
 - **接续开发**：常用命令和仓库边界见[根协作指南](../AGENTS.md)。从 [Android 当前架构](android-architecture.md) 找模块；改界面视觉与组件样式先读 [Android 视觉设计规范](android-ui-design-guide.md)；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
-- **本版改了什么**：[2.3.0 发布记录](releases/2.3.0.md)收录更新日志、签名 APK 和线上核验。旧版之后的开发过程另见[阶段交接](handoffs/2026-11-22-post-2.2.5.md)。
+- **从 2.3.0 接续**：[发版后交接](handoffs/2026-11-22-2.3.0.md)列出已定设计、已结案调查和真机待验事项；更新日志、签名 APK 和主站核验见[发布记录](releases/2.3.0.md)。
 - **排查线上问题**：Wiki 登录或投票看[账号会话](android-webview-auth.md#cookie-会话边界)，图鉴读不到数据看[快照索引](live-wiki-tests.md)，后台数字看[统计口径](app-usage.md#面板与口径)。
 - **验证与发版**：[设备验收清单](device-acceptance.md)记录仍需实机操作的项目；[发布清单](release-version-checklist.md)列出签名、迁移和主站核验顺序。
 
