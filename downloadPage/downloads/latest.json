@@ -1,8 +1,8 @@
 {
     "versionName": "2.2.5",
     "versionCode": 66,
-    "apkUrl": "/downloads/CalabiYauVoice-2.2.5.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.2.5.apk?build=a2f6751bd59e572d",
+    "apkSize": 4149412,
     "releaseUrl": "/",
     "changelog": [
         "Wiki 首页新增「弦溯战线」专题，搜索「搜打撤」也能直达；角色和地图预览可切换，返回后保留阅读位置",
@@ -15,6 +15,13 @@
     ],
     "publishedAt": "2026-11-22",
     "releases": [
+        {
+            "versionName": "2.2.5",
+            "versionCode": 66,
+            "apkUrl": "/downloads/CalabiYauVoice-2.2.5.apk?build=a2f6751bd59e572d",
+            "apkSize": 4149412,
+            "publishedAt": "2026-11-22"
+        },
         {
             "versionName": "2.2.4",
             "versionCode": 65,
