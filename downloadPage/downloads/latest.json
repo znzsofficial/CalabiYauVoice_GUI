@@ -1,8 +1,8 @@
 {
     "versionName": "2.3.0",
     "versionCode": 67,
-    "apkUrl": "/downloads/CalabiYauVoice-2.3.0.apk",
-    "apkSize": 0,
+    "apkUrl": "/downloads/CalabiYauVoice-2.3.0.apk?build=f50f1144b6134963",
+    "apkSize": 4231332,
     "releaseUrl": "/",
     "changelog": [
         "Wiki 首页与图鉴换上柔光画册布局，恢复壁纸上的透明折叠大标题；精简滚动时的布局与预加载，减少首页卡顿。",
@@ -15,6 +15,13 @@
     ],
     "publishedAt": "2026-11-22",
     "releases": [
+        {
+            "versionName": "2.3.0",
+            "versionCode": 67,
+            "apkUrl": "/downloads/CalabiYauVoice-2.3.0.apk?build=f50f1144b6134963",
+            "apkSize": 4231332,
+            "publishedAt": "2026-11-22"
+        },
         {
             "versionName": "2.2.5",
             "versionCode": 66,
