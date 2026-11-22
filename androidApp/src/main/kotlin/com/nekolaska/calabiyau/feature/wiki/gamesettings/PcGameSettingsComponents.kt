@@ -53,6 +53,7 @@ import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsBlock
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsSection
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcSettingsView
+import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.pcSettingsSearchTerms
 
 @Composable
 internal fun PcSettingsListHeader(view: PcSettingsView, category: String, countLabel: String, onReset: (() -> Unit)?) {
@@ -114,6 +115,7 @@ internal fun PcSettingsListHeader(view: PcSettingsView, category: String, countL
 internal fun LazyListScope.pcSettingsItems(
     sections: List<PcSettingsSection>, query: String, onSelect: (PcSettingsBlock.Setting) -> Unit
 ) {
+    val terms = pcSettingsSearchTerms(query)
     sections.forEach { section ->
         item(key = "heading:${section.id}", contentType = "section") {
             Row(
@@ -175,7 +177,7 @@ internal fun LazyListScope.pcSettingsItems(
                     fadeInSpec = tween(150), placementSpec = tween(180), fadeOutSpec = tween(100)
                 )
                 when (block) {
-                    is PcSettingsBlock.Setting -> PcSettingRow(motion, block, query) { onSelect(block) }
+                    is PcSettingsBlock.Setting -> PcSettingRow(motion, block, terms) { onSelect(block) }
                     is PcSettingsBlock.Text -> PcSettingsParagraph(motion, block)
                     is PcSettingsBlock.Reference -> PcSettingsReferenceRow(motion, block)
                 }
@@ -249,7 +251,7 @@ private fun PcSettingsReferenceRow(modifier: Modifier, block: PcSettingsBlock.Re
 }
 
 @Composable
-private fun PcSettingRow(modifier: Modifier, setting: PcSettingsBlock.Setting, query: String, onClick: () -> Unit) {
+private fun PcSettingRow(modifier: Modifier, setting: PcSettingsBlock.Setting, terms: List<String>, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -304,7 +306,6 @@ private fun PcSettingRow(modifier: Modifier, setting: PcSettingsBlock.Setting, q
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
             val evidence = setting.fields.firstOrNull { field ->
                 field.label != primaryLabel && terms.isNotEmpty() && terms.any { field.value.contains(it, ignoreCase = true) }
             } ?: setting.fields.firstOrNull { it.label in setOf("作用", "说明", "可选值或说明", "可选值") }

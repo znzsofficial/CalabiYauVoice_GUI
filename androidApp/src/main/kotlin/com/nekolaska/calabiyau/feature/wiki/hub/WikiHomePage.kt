@@ -2,24 +2,22 @@ package com.nekolaska.calabiyau.feature.wiki.hub
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalOverscrollFactory
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,19 +37,19 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ExpandLess
@@ -70,120 +68,98 @@ import androidx.compose.material.icons.outlined.Handshake
 import androidx.compose.material.icons.outlined.HowToVote
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MilitaryTech
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Style
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wallpaper
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarState
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutBoundsHolder
+import androidx.compose.ui.layout.layoutBounds
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
-import coil3.SingletonImageLoader
+import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
-import com.nekolaska.calabiyau.core.wiki.portraitPrefetchIndices
-import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.BackNavButton
+import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.core.ui.ErrorState
-import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
+import com.nekolaska.calabiyau.core.ui.SelectionOptionRow
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
-import com.nekolaska.calabiyau.core.ui.WallpaperSeedColor
-import com.nekolaska.calabiyau.core.ui.liquidGlass
-import com.nekolaska.calabiyau.core.ui.liquidGlassLight
+import com.nekolaska.calabiyau.core.ui.ShimmerGroup
+import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import data.ErrorKind
+import com.nekolaska.calabiyau.core.wiki.portraitPrefetchIndices
+import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
 import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.map.model.MapInfo
+import data.ApiResult
 import util.wikiPathEncode
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 
 // ────────────────────────────────────────────
 //  Wiki 主页
 // ────────────────────────────────────────────
 
-/** 是否有壁纸背景（用于非液态玻璃模式下的半透明卡片） */
-internal val LocalHasWallpaper = staticCompositionLocalOf { false }
-
 @Composable
 internal fun WikiHomePage(
     onOpenDrawer: () -> Unit,
     showDrawerButton: Boolean = true,
-    onOpenWikiUrl: (String) -> Unit,
     listState: LazyListState,
     characterRowState: LazyListState,
     mapRowState: LazyListState,
     topAppBarState: TopAppBarState,
-    wallpaperUrl: String?,
     resetKey: Int,
     onNavigateTo: (WikiRoute) -> Unit,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
@@ -201,149 +177,88 @@ internal fun WikiHomePage(
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
     isPageActive: Boolean = true
 ) {
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(state = topAppBarState)
-    val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
-    var searchQuery by rememberSaveable(resetKey) { mutableStateOf("") }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(state = topAppBarState)
+    val searchField = rememberTextFieldState()
     var showMaps by rememberSaveable(resetKey) { mutableStateOf(false) }
-    val factionFilterScroll = rememberScrollState()
-    val modeFilterScroll = rememberScrollState()
 
-    val wallpaperSeedColor = LocalWallpaperSeedColor.current
-    val context = LocalContext.current
-    val contentBounds = remember { mutableStateOf(Rect.Zero) }
-    LaunchedEffect(wallpaperUrl) {
-        val color = WallpaperSeedColor.resolve(context, wallpaperUrl)
-        if (color != 0) wallpaperSeedColor.intValue = color
-    }
-
-    val surfaceColor = MaterialTheme.colorScheme.surface
-
-    val topBarScrimAlpha by remember(scrollBehavior, liquidGlassEnabled) {
-        derivedStateOf {
-            wikiTopBarScrimAlpha(
-                progress = scrollBehavior.state.overlappedFraction,
-                liquidGlassEnabled = liquidGlassEnabled,
-                regularMaxAlpha = 0.78f,
-                startThreshold = 0.08f
-            )
-        }
-    }
+    val viewport = remember { LayoutBoundsHolder() }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
-        topBar = {
-            TopAppBar(
-                title = { Text("卡拉彼丘 Wiki", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                actions = {
-                    TextButton(onClick = { onNavigateTo(WikiRoute.Navigation) }) { Text("完整导航") }
-                },
-                navigationIcon = {
-                    if (showDrawerButton) {
-                        IconButton(onClick = onOpenDrawer) {
-                            Icon(Icons.Outlined.Menu, contentDescription = "菜单")
-                        }
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                colors = if (hasWallpaper) {
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent
-                    )
-                } else {
-                    TopAppBarDefaults.topAppBarColors()
-                },
-                modifier = if (hasWallpaper) {
-                    Modifier.wikiTopBarScrim(surfaceColor, topBarScrimAlpha)
-                } else Modifier
-            )
-        },
+        topBar = { WikiHomeTopBar(scrollBehavior, showDrawerButton, onOpenDrawer) },
         containerColor = Color.Transparent
     ) { innerPadding ->
         // LocalHasWallpaper 已由 Hub 层 provide，这里只关 overscroll
         CompositionLocalProvider(LocalOverscrollFactory provides null) {
-            Box(Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding), contentAlignment = Alignment.TopCenter) {
+            HomeListViewport(innerPadding) { width ->
+                val fontScale = LocalDensity.current.fontScale
+                val linkColumns = homeLinkColumns(width, fontScale)
+                val shortcutColumns = quickEntryColumns(width, fontScale)
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .widthIn(max = 960.dp)
-                        .fillMaxSize()
-                        .onGloballyPositioned { contentBounds.value = it.boundsInWindow() },
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.fillMaxSize().layoutBounds(viewport),
+                    contentPadding = PaddingValues(horizontal = HomeGutter, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     item(key = "hub_search", contentType = "search") {
                         HubSearchPanel(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
+                            textFieldState = searchField,
                             onNavigateTo = onNavigateTo,
                             factions = factions,
                             gameModes = gameModes,
-                             isIndexLoading = isLoadingCharacters || isLoadingMaps,
-                             isPageActive = isPageActive,
+                            isIndexLoading = isLoadingCharacters || isLoadingMaps,
+                            isPageActive = isPageActive,
                             backdrop = backdrop
                         )
                     }
 
                     // ── 快捷入口 ──
                     item(key = "quick_access", contentType = "grid") {
-                        Column {
-                            HomeSectionHeader("我的快捷入口", "编辑", "编辑我的快捷入口") { onNavigateTo(WikiRoute.QuickEntryEditor) }
-                            QuickAccessGrid(
-                                onNavigateTo = onNavigateTo,
-                                backdrop = backdrop
-                            )
-                        }
+                        QuickAccessGrid(onNavigateTo, backdrop, shortcutColumns)
                     }
 
+                    // ── 弦溯战线 Spotlight Hero ──
+                    item(key = "extraction_hub", contentType = "spotlight") {
+                        ExtractionSpotlightCard(onClick = { onNavigateTo(WikiRoute.ExtractionHub) }, backdrop = backdrop)
+                    }
+
+                    // ── 核心数据双列 Bento ──
                     item(key = "data_links", contentType = "direct_grid") {
-                        HomeLinkGrid(dataLinks, onNavigateTo, backdrop)
+                        HomeLinkGrid(dataLinks, onNavigateTo, backdrop, linkColumns)
                     }
 
-                    item(key = "extraction_hub", contentType = "action_card") {
-                        DirectEntryTile(
-                            title = "弦溯战线",
-                            subtitle = "物资、装备与掉落",
-                            icon = Icons.Outlined.Explore,
-                            onClick = { onNavigateTo(WikiRoute.ExtractionHub) },
-                            backdrop = backdrop
-                        )
-                    }
-
+                    // ── 资料预览画册 ──
                     item(key = HOME_PREVIEW_KEY, contentType = "preview_section") {
-                        Column {
-                            HomeSectionHeader("资料预览", if (showMaps) "全部地图" else "全部角色", onAction = {
-                                onNavigateTo(if (showMaps) WikiRoute.Maps else WikiRoute.Characters)
-                            })
-                            HomePreviewCard(showMaps, { showMaps = it }, backdrop) {
-                                if (showMaps) {
-                                    MapPreviewSection(
-                                        gameModes, isLoadingMaps, selectedHomeMapMode, onHomeMapModeChanged,
-                                        mapRowState, modeFilterScroll, onOpenMapDetail,
-                                        sharedTransitionScope, animatedVisibilityScope
-                                    )
-                                } else {
-                                    CharacterPreviewSection(
-                                        factions, isLoadingCharacters, selectedHomeFaction, onHomeFactionChanged,
-                                        characterRowState, factionFilterScroll, onOpenCharacterDetail,
-                                         listState, contentBounds, isPageActive, sharedTransitionScope, animatedVisibilityScope
-                                    )
-                                }
+                        HomePreviewCard(
+                            showMaps = showMaps,
+                            onShowMapsChanged = { showMaps = it },
+                            backdrop = backdrop,
+                            onOpenAll = { onNavigateTo(if (showMaps) WikiRoute.Maps else WikiRoute.Characters) }
+                        ) {
+                            if (showMaps) {
+                                MapPreviewSection(
+                                    gameModes, isLoadingMaps, selectedHomeMapMode, onHomeMapModeChanged,
+                                    mapRowState, isPageActive, onOpenMapDetail, sharedTransitionScope, animatedVisibilityScope
+                                )
+                            } else {
+                                CharacterPreviewSection(
+                                    factions, isLoadingCharacters, selectedHomeFaction, onHomeFactionChanged,
+                                    characterRowState, onOpenCharacterDetail, listState, viewport, isPageActive,
+                                    sharedTransitionScope, animatedVisibilityScope
+                                )
                             }
                         }
                     }
 
+                    // ── 更多资料 2×2 柔光 Bento ──
                     item(key = "hub_grid", contentType = "hub_grid") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            HomeSectionTitle("更多资料", "玩法、图鉴与游戏内容分类")
-                            HomeLinkGrid(categoryLinks, onNavigateTo, backdrop, categoryCards = true)
-                        }
+                        HomeCategoryDirectory(onNavigateTo, backdrop, linkColumns)
                     }
 
+                    // ── 底部直达网格 ──
                     item(key = "direct_entries_grid", contentType = "direct_grid") {
-                        HomeLinkGrid(directLinks, onNavigateTo, backdrop)
+                        HomeLinkGrid(directLinks, onNavigateTo, backdrop, linkColumns)
                     }
 
                     // 底部留白（适配手势导航安全区）
@@ -354,47 +269,227 @@ internal fun WikiHomePage(
     }
 }
 
+private val HomeGutter = 16.dp
+
+/** Resolve breakpoints once for the list, outside the items which enter and leave during scroll. */
+@Composable
+private fun HomeListViewport(insets: PaddingValues, content: @Composable (Dp) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        val density = LocalDensity.current
+        val direction = LocalLayoutDirection.current
+        val limit = 960.dp
+        // Scaffold stores all four paddings together. A changing top-bar height must not recompose the list.
+        val sideInsetsPx by remember(insets, density, direction) {
+            derivedStateOf {
+                with(density) { insets.calculateLeftPadding(direction).roundToPx() + insets.calculateRightPadding(direction).roundToPx() }
+            }
+        }
+        val width = with(density) {
+            (minOf(constraints.maxWidth - sideInsetsPx, limit.roundToPx()) - 2 * HomeGutter.roundToPx()).coerceAtLeast(0).toDp()
+        }
+        Box(Modifier.padding(insets).consumeWindowInsets(insets).widthIn(max = limit).fillMaxSize()) { content(width) }
+    }
+}
+
 // ────────────────────────────────────────────
-//  聚合入口卡（通向 WikiAggregateScreens 的二级菜单页）
-//  用浅色图标底 + 主色描边 + 竖排瓦片，与直连内容的行卡区分
+//  柔光画册基础原子与视觉层级
 // ────────────────────────────────────────────
 
+private enum class HubBadgeTone { Primary, Secondary, Tertiary }
+
 @Composable
-private fun HomeSectionTitle(title: String, description: String? = null) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(title, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        if (!description.isNullOrBlank()) {
-            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun HubBadgeTone.resolveColors(alpha: Float = 0.74f): Pair<Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        HubBadgeTone.Primary -> scheme.primaryContainer.copy(alpha = alpha) to scheme.onPrimaryContainer
+        HubBadgeTone.Secondary -> scheme.secondaryContainer.copy(alpha = alpha) to scheme.onSecondaryContainer
+        HubBadgeTone.Tertiary -> scheme.tertiaryContainer.copy(alpha = alpha) to scheme.onTertiaryContainer
+    }
+}
+
+@Composable
+private fun HubIconBadge(
+    icon: ImageVector,
+    size: Dp = 38.dp,
+    cornerRadius: Dp = 13.dp,
+    iconSize: Dp = 20.dp,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.70f),
+    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer
+) {
+    Surface(
+        shape = smoothCornerShape(cornerRadius),
+        color = containerColor,
+        contentColor = contentColor,
+        modifier = Modifier.size(size)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(iconSize)
+            )
         }
     }
 }
 
 @Composable
-private fun HomeSectionHeader(title: String, action: String, actionDescription: String = action, onAction: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { HomeSectionTitle(title) }
-        TextButton(onClick = onAction) {
-            Text(action, Modifier.clearAndSetSemantics { contentDescription = actionDescription })
+private fun HomeSectionTitle(title: String, modifier: Modifier = Modifier) {
+    Text(
+        title,
+        modifier.semantics { heading() },
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
+private fun HomeFloatingSectionTitle(title: String, modifier: Modifier = Modifier) {
+    val hasWallpaper = LocalHasWallpaper.current
+    val tone = MaterialTheme.colorScheme.surface
+    val ink = MaterialTheme.colorScheme.onSurface
+    val pillModifier = if (hasWallpaper) {
+        val backing = remember(tone, ink) { hubReadableTint(tone, ink, 0.72f) }
+        modifier
+            .background(backing, AppShapes.capsule)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+    } else {
+        modifier.padding(horizontal = 4.dp)
+    }
+    HomeSectionTitle(title, pillModifier)
+}
+
+@Composable
+private fun QuickAccessEditPill(
+    onClick: () -> Unit,
+    onCard: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val colors = MaterialTheme.colorScheme
+    val hasWallpaper = LocalHasWallpaper.current
+    val containerColor = remember(colors.secondaryContainer, colors.onSecondaryContainer, onCard, hasWallpaper) {
+        if (!onCard && hasWallpaper) {
+            hubReadableTint(colors.secondaryContainer, colors.onSecondaryContainer, 0.84f)
+        } else {
+            colors.secondaryContainer.copy(alpha = 0.76f)
+        }
+    }
+    Row(
+        modifier = modifier
+            .heightIn(min = 34.dp)
+            .clip(AppShapes.capsule)
+            .background(containerColor)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = "编辑快捷入口" }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            Icons.Outlined.Tune,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = colors.onSecondaryContainer
+        )
+        Text(
+            "编辑",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = colors.onSecondaryContainer
+        )
+    }
+}
+
+// ────────────────────────────────────────────
+//  旗舰「弦溯战线」Spotlight Hero 卡
+// ────────────────────────────────────────────
+
+@Composable
+private fun ExtractionSpotlightCard(
+    onClick: () -> Unit,
+    backdrop: Backdrop,
+) {
+    val shape = AppShapes.card
+    val colors = MaterialTheme.colorScheme
+    val hasWallpaper = LocalHasWallpaper.current
+    val material = rememberHubPanelMaterial(
+        glassAlpha = 0.44f,
+        tone = colors.primaryContainer,
+        ink = colors.onPrimaryContainer,
+        supportingInk = colors.onPrimaryContainer,
+        tintPlainGlass = true
+    )
+    val subtitleColor = if (hasWallpaper) {
+        colors.onPrimaryContainer
+    } else {
+        colors.onPrimaryContainer.copy(alpha = 0.82f)
+    }
+    Surface(
+        onClick = onClick,
+        shape = shape,
+        color = material.containerColor,
+        contentColor = colors.onPrimaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .hubPanelGlass(backdrop, shape, material)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(AppSpacing.screen),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.large)
+        ) {
+            val badgeSurface = remember(colors.surface, colors.primary, hasWallpaper) {
+                if (hasWallpaper) hubReadableTint(colors.surface, colors.primary, 0.88f)
+                else colors.surface.copy(alpha = 0.88f)
+            }
+            HubIconBadge(
+                icon = Icons.Outlined.Explore,
+                size = 42.dp,
+                cornerRadius = 14.dp,
+                iconSize = 22.dp,
+                containerColor = badgeSurface,
+                contentColor = colors.primary
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("弦溯战线", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("物资、装备、工坊与掉落", style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = subtitleColor
+            )
         }
     }
 }
 
-private data class HomeLink(val title: String, val subtitle: String, val icon: ImageVector, val route: WikiRoute)
+// ────────────────────────────────────────────
+//  首页分区与目录
+// ────────────────────────────────────────────
+
+private data class HomeLink(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val route: WikiRoute,
+    val tone: HubBadgeTone = HubBadgeTone.Primary
+)
 
 private val dataLinks = listOf(
-    HomeLink("平衡数据", "官网胜率、选取率与 KD", Icons.Outlined.BarChart, WikiRoute.BalanceData),
-    HomeLink("武器一览", "武器分类与数据", Icons.Outlined.GpsFixed, WikiRoute.Weapons)
+    HomeLink("平衡数据", "官网胜率、选取率与 KD", Icons.Outlined.BarChart, WikiRoute.BalanceData, HubBadgeTone.Primary),
+    HomeLink("武器一览", "武器分类与数据", Icons.Outlined.GpsFixed, WikiRoute.Weapons, HubBadgeTone.Secondary)
 )
 private val categoryLinks = listOf(
-    HomeLink("玩法与养成", "角色培养、玩法系统与移动端内容", Icons.Outlined.Extension, WikiRoute.GameplayHub),
-    HomeLink("外观与图鉴", "道具图鉴、时装筛选与武器外观", Icons.Outlined.Inventory2, WikiRoute.CatalogHub),
-    HomeLink("玩家装饰", "基板、封装、勋章、喷漆等外观装饰", Icons.Outlined.Palette, WikiRoute.DecorationHub),
-    HomeLink("游戏延伸", "实用指南、剧情、历史与影音资料", Icons.Outlined.MoreHoriz, WikiRoute.ExtensionHub)
+    HomeLink("玩法与养成", "战斗模式与誓约", Icons.Outlined.Extension, WikiRoute.GameplayHub, HubBadgeTone.Primary),
+    HomeLink("外观与图鉴", "道具、时装与枪皮", Icons.Outlined.Inventory2, WikiRoute.CatalogHub, HubBadgeTone.Secondary),
+    HomeLink("玩家装饰", "基板、勋章与喷漆", Icons.Outlined.Palette, WikiRoute.DecorationHub, HubBadgeTone.Tertiary),
+    HomeLink("游戏延伸", "指南、剧情与影音", Icons.Outlined.MoreHoriz, WikiRoute.ExtensionHub, HubBadgeTone.Primary)
 )
 private val directLinks = listOf(
-    HomeLink("生化卡牌", "图鉴与卡组", Icons.Outlined.Style, WikiRoute.BioCards),
-    HomeLink("活动", "当前与历史", Icons.Outlined.Event, WikiRoute.Activities),
-    HomeLink("公告资讯", "公告与更新", Icons.Outlined.Campaign, WikiRoute.Announcements)
+    HomeLink("生化卡牌", "图鉴与卡组", Icons.Outlined.Style, WikiRoute.BioCards, HubBadgeTone.Primary),
+    HomeLink("活动", "当前与历史", Icons.Outlined.Event, WikiRoute.Activities, HubBadgeTone.Primary),
+    HomeLink("公告资讯", "公告与更新", Icons.Outlined.Campaign, WikiRoute.Announcements, HubBadgeTone.Primary),
+    HomeLink("完整导航", "Wiki 目录", Icons.Outlined.AccountTree, WikiRoute.Navigation, HubBadgeTone.Primary)
 )
 
 @Composable
@@ -402,23 +497,40 @@ private fun HomeLinkGrid(
     links: List<HomeLink>,
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop,
-    categoryCards: Boolean = false
+    columns: Int,
 ) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-        val columns = if (maxWidth >= 308.dp * fontScale) 2 else 1
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            links.chunked(columns).forEach { row ->
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { link ->
-                        val tile = Modifier.weight(1f).fillMaxHeight()
-                        val open = { onNavigateTo(link.route) }
-                        if (categoryCards) {
-                            HubCard(link.title, link.subtitle, link.icon, open, tile, backdrop)
-                        } else {
-                            DirectEntryTile(link.title, link.subtitle, link.icon, open, tile, backdrop)
-                        }
-                    }
+    HomeLinkRows(links, columns) { link, tile ->
+        val (badgeBg, badgeFg) = link.tone.resolveColors(alpha = 0.72f)
+        DirectEntryTile(link.title, link.subtitle, link.icon, { onNavigateTo(link.route) }, tile, backdrop,
+            compactHorizontal = columns == 1, badgeContainerColor = badgeBg, badgeContentColor = badgeFg)
+    }
+}
+
+internal fun homeLinkColumns(contentWidth: Dp, fontScale: Float) = if (contentWidth >= 308.dp * fontScale.coerceAtLeast(1f)) 2 else 1
+
+@Composable
+internal fun HomeCategoryDirectory(onNavigateTo: (WikiRoute) -> Unit, backdrop: Backdrop, columns: Int) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        HomeFloatingSectionTitle("更多资料")
+        HomeLinkRows(categoryLinks, columns) { link, tile ->
+            HomeCategoryBentoCard(link, columns == 1, { onNavigateTo(link.route) }, backdrop, tile)
+        }
+    }
+}
+
+@Composable
+private fun HomeLinkRows(links: List<HomeLink>, columns: Int, tile: @Composable (HomeLink, Modifier) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (columns == 1) {
+            links.forEach { tile(it, Modifier.fillMaxWidth()) }
+        } else {
+            remember(links, columns) { links.chunked(columns) }.forEach { row ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { tile(it, Modifier.weight(1f).fillMaxHeight()) }
+                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -426,67 +538,132 @@ private fun HomeLinkGrid(
 }
 
 @Composable
-private fun HubCard(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
+private fun HomeCategoryBentoCard(
+    link: HomeLink,
+    useHorizontalRow: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop,
+    modifier: Modifier = Modifier
 ) {
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
-    val hubCardShape = AppShapes.card
-    val accent = MaterialTheme.colorScheme.primary
-    Card(
+    val shape = AppShapes.card
+    val colors = MaterialTheme.colorScheme
+    val material = rememberHubPanelMaterial(glassAlpha = 0.28f)
+    val (badgeBg, badgeFg) = link.tone.resolveColors(alpha = 0.78f)
+    Surface(
         onClick = onClick,
-        shape = hubCardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                liquidGlass -> Color.Transparent
-                hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
-                else -> MaterialTheme.colorScheme.surfaceContainerLow
-            }
-        ),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.28f)),
+        shape = shape,
+        color = material.containerColor,
+        contentColor = colors.onSurface,
         modifier = modifier
             .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { hubCardShape },
-                surfaceAlpha = 0.25f
-            )
+            .hubPanelGlass(backdrop, shape, material)
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Surface(shape = CircleShape, color = accent.copy(alpha = 0.12f), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) {
+        if (useHorizontalRow) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 68.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                HubIconBadge(
+                    icon = link.icon,
+                    size = 40.dp,
+                    cornerRadius = 14.dp,
+                    iconSize = 21.dp,
+                    containerColor = badgeBg,
+                    contentColor = badgeFg
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        link.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onSurface
+                    )
+                    Text(
+                        link.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = colors.onSurfaceVariant.copy(alpha = 0.52f)
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    HubIconBadge(
+                        icon = link.icon,
+                        size = 40.dp,
+                        cornerRadius = 14.dp,
+                        iconSize = 21.dp,
+                        containerColor = badgeBg,
+                        contentColor = badgeFg
+                    )
                     Icon(
-                        icon,
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(18.dp),
+                        tint = colors.onSurfaceVariant.copy(alpha = 0.50f)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        link.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.onSurface
+                    )
+                    Text(
+                        link.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
 
+@Composable
+private fun HomeReadingSurface(backdrop: Backdrop, content: @Composable ColumnScope.() -> Unit) {
+    val shape = AppShapes.card
+    val material = rememberHubPanelMaterial(glassAlpha = 0.30f)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .hubPanelGlass(backdrop, shape, material),
+        shape = shape,
+        color = material.containerColor,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
+        Column(content = content)
+    }
+}
+
 // ────────────────────────────────────────────
-//  快捷入口网格（2 行 3 列圆角图标按钮）
+//  快捷入口网格（2 行 3 列柔光图标入口）
 // ────────────────────────────────────────────
 
 /** 快捷入口数据（提取到顶层避免每次重组分配） */
@@ -528,8 +705,13 @@ internal val defaultQuickEntryIds = listOf(
 internal val quickEntryById = allQuickEntries.associateBy(QuickEntry::id)
 
 private val mapGradient = Brush.verticalGradient(
-    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+    colorStops = arrayOf(
+        0f to Color.Transparent,
+        0.52f to Color.Black.copy(alpha = 0.34f),
+        1f to Color.Black.copy(alpha = 0.74f)
+    )
 )
+private val homeCaptionShadow = Shadow(color = Color.Black.copy(alpha = 0.85f), blurRadius = 3f)
 
 @Composable
 private fun DirectEntryTile(
@@ -538,67 +720,106 @@ private fun DirectEntryTile(
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop,
+    compactHorizontal: Boolean = false,
+    badgeContainerColor: Color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.70f),
+    badgeContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer
 ) {
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
     val tileShape = AppShapes.card
-    val contentColor = MaterialTheme.colorScheme.onSurface
-    val accent = MaterialTheme.colorScheme.primary
-    Card(
+    val colors = MaterialTheme.colorScheme
+    val material = rememberHubPanelMaterial(glassAlpha = 0.26f)
+    Surface(
         onClick = onClick,
         shape = tileShape,
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                liquidGlass -> Color.Transparent
-                hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
-                else -> MaterialTheme.colorScheme.surfaceContainerLow
-            },
-            contentColor = contentColor
-        ),
+        color = material.containerColor,
+        contentColor = colors.onSurface,
         modifier = modifier
             .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { tileShape },
-                surfaceAlpha = 0.25f
-            )
+            .hubPanelGlass(backdrop, tileShape, material)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = accent.copy(alpha = 0.12f),
-                modifier = Modifier.size(32.dp)
+        if (compactHorizontal) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 64.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(20.dp)
+                HubIconBadge(
+                    icon = icon,
+                    size = 38.dp,
+                    cornerRadius = 13.dp,
+                    iconSize = 20.dp,
+                    containerColor = badgeContainerColor,
+                    contentColor = badgeContentColor
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface
+                    )
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant
                     )
                 }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = colors.onSurfaceVariant.copy(alpha = 0.48f)
+                )
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = contentColor
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    HubIconBadge(
+                        icon = icon,
+                        size = 38.dp,
+                        cornerRadius = 13.dp,
+                        iconSize = 20.dp,
+                        containerColor = badgeContainerColor,
+                        contentColor = badgeContentColor
+                    )
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = colors.onSurfaceVariant.copy(alpha = 0.48f)
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface
+                    )
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -607,7 +828,8 @@ private fun DirectEntryTile(
 @Composable
 private fun QuickAccessGrid(
     onNavigateTo: (WikiRoute) -> Unit,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop,
+    columns: Int,
 ) {
     val configuredIds by AppPrefs.homeQuickEntryIdsState.collectAsState()
     val quickEntries = remember(configuredIds) {
@@ -615,23 +837,18 @@ private fun QuickAccessGrid(
     }
     val layout by AppPrefs.homeQuickEntryLayoutState.collectAsState()
 
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = quickEntryColumns(maxWidth, LocalDensity.current.fontScale)
-        if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
-            QuickAccessButtonGrid(
-                quickEntries = quickEntries,
-                columns = columns,
-                onNavigateTo = onNavigateTo,
-                backdrop = backdrop
-            )
-        } else {
-            QuickAccessGridCard(
-                quickEntries = quickEntries,
-                columns = columns,
-                onNavigateTo = onNavigateTo,
-                backdrop = backdrop
-            )
+    val edit = { onNavigateTo(WikiRoute.QuickEntryEditor) }
+    if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                HomeFloatingSectionTitle("快捷入口")
+                QuickAccessEditPill(onClick = edit, onCard = false)
+            }
+            QuickAccessButtonGrid(quickEntries, columns, onNavigateTo, backdrop)
         }
+    } else {
+        QuickAccessGridCard(quickEntries, columns, edit, onNavigateTo, backdrop)
     }
 }
 
@@ -649,48 +866,54 @@ internal fun quickEntryColumns(maxWidth: Dp, fontScale: Float): Int {
 private fun QuickAccessGridCard(
     quickEntries: List<QuickEntry>,
     columns: Int,
+    onEdit: () -> Unit,
     onNavigateTo: (WikiRoute) -> Unit,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop
 ) {
     val quickEntryRows = remember(quickEntries, columns) { quickEntries.chunked(columns) }
 
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
     val gridShape = AppShapes.card
-    val cellShape = smoothCornerShape(18.dp)
-    val surfaceColor = when {
-        liquidGlass -> Color.Transparent
-        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
+    val cellShape = smoothCornerShape(16.dp)
     val contentColor = MaterialTheme.colorScheme.onSurface
-    val iconTint = MaterialTheme.colorScheme.primary
-    val dividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (liquidGlass) 0.22f else 0.42f)
+    val material = rememberHubPanelMaterial(
+        glassAlpha = 0.26f,
+        tone = MaterialTheme.colorScheme.surfaceContainerLow,
+        supportingInk = contentColor
+    )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { gridShape },
-                blurRadius = 2.dp,
-                lensHeight = 12.dp,
-                lensAmount = 20.dp,
-                surfaceAlpha = if (liquidGlass) 0.22f else 0.35f
-            ),
+            .hubPanelGlass(backdrop, gridShape, material),
         shape = gridShape,
-        color = surfaceColor,
+        color = material.containerColor,
         contentColor = contentColor
     ) {
-        Column(Modifier.padding(6.dp)) {
-            quickEntryRows.forEachIndexed { rowIndex, row ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                HomeSectionTitle("快捷入口")
+                QuickAccessEditPill(onClick = onEdit, onCard = true)
+            }
+            quickEntryRows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
                     repeat(columns) { columnIndex ->
                         val entry = row.getOrNull(columnIndex)
                         if (entry != null) {
                             QuickAccessCell(
                                 entry = entry,
-                                iconTint = iconTint,
                                 cellShape = cellShape,
                                 onClick = { entry.targetRoute?.let(onNavigateTo) },
                                 modifier = Modifier.weight(1f)
@@ -699,22 +922,10 @@ private fun QuickAccessGridCard(
                             Spacer(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(56.dp)
-                            )
-                        }
-                        if (columnIndex < columns - 1) {
-                            VerticalDivider(
-                                modifier = Modifier.height(44.dp),
-                                color = dividerColor
+                                    .height(68.dp)
                             )
                         }
                     }
-                }
-                if (rowIndex < quickEntryRows.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        color = dividerColor
-                    )
                 }
             }
         }
@@ -726,24 +937,23 @@ private fun QuickAccessButtonGrid(
     quickEntries: List<QuickEntry>,
     columns: Int,
     onNavigateTo: (WikiRoute) -> Unit,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop
 ) {
     val quickEntryRows = remember(quickEntries, columns) { quickEntries.chunked(columns) }
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
     val entryShape = smoothCornerShape(20.dp)
-    val surfaceColor = when {
-        liquidGlass -> Color.Transparent
-        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
     val contentColor = MaterialTheme.colorScheme.onSurface
-    val iconTint = MaterialTheme.colorScheme.primary
+    val material = rememberHubPanelMaterial(
+        glassAlpha = 0.26f,
+        tone = MaterialTheme.colorScheme.surfaceContainerLow,
+        supportingInk = contentColor
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         quickEntryRows.forEach { row ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 row.forEach { entry ->
@@ -751,33 +961,35 @@ private fun QuickAccessButtonGrid(
                         onClick = { entry.targetRoute?.let(onNavigateTo) },
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 60.dp)
+                            .fillMaxHeight()
+                            .heightIn(min = 78.dp)
                             .semantics { role = Role.Button }
-                            .liquidGlassLight(
-                                backdrop = backdrop,
-                                shape = { entryShape }
-                            ),
+                            .hubPanelGlass(backdrop, entryShape, material),
                         shape = entryShape,
-                        color = surfaceColor,
+                        color = material.containerColor,
                         contentColor = contentColor
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 6.dp, vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Icon(
-                                entry.icon,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp),
-                                tint = iconTint
+                            HubIconBadge(
+                                icon = entry.icon,
+                                size = 38.dp,
+                                cornerRadius = 13.dp,
+                                iconSize = 20.dp
                             )
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(6.dp))
                             Text(
                                 entry.label,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -791,33 +1003,33 @@ private fun QuickAccessButtonGrid(
 @Composable
 private fun QuickAccessCell(
     entry: QuickEntry,
-    iconTint: Color,
-    cellShape: androidx.compose.ui.graphics.Shape,
+    cellShape: Shape,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
-            .heightIn(min = 56.dp)
-            .padding(3.dp)
+            .heightIn(min = 68.dp)
             .clip(cellShape)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            entry.icon,
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint = iconTint
+        HubIconBadge(
+            icon = entry.icon,
+            size = 38.dp,
+            cornerRadius = 13.dp,
+            iconSize = 20.dp
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             entry.label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -831,61 +1043,161 @@ internal fun List<String>.resolveQuickEntries(): List<QuickEntry> {
 }
 
 // ────────────────────────────────────────────
-//  角色预览区（横向滚动立绘卡片）
+//  角色 / 地图预览画册
 // ────────────────────────────────────────────
 
 private const val HOME_PREVIEW_KEY = "home_preview"
 
 @Composable
-private fun HomePreviewCard(
+internal fun HomePreviewCard(
     showMaps: Boolean,
     onShowMapsChanged: (Boolean) -> Unit,
     backdrop: Backdrop,
+    onOpenAll: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
+    val colors = MaterialTheme.colorScheme
     val hasWallpaper = LocalHasWallpaper.current
-
-    val shape = AppShapes.card
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    Card(
-        shape = shape,
-        modifier = Modifier
-            .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { shape },
-                surfaceAlpha = 0.3f
-            ),
-        colors = when {
-            liquidGlass -> CardDefaults.cardColors(
-                containerColor = Color.Transparent, contentColor = onSurface
-            )
-
-            hasWallpaper -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f),
-                contentColor = onSurface
-            )
-
-            else -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        }
+    val actionColor = remember(
+        hasWallpaper,
+        colors.surfaceContainerLow,
+        colors.primary,
+        colors.onSurfaceVariant,
+        colors.onSurface
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                repeat(2) { index ->
-                    val maps = index == 1
-                    SegmentedButton(
-                        selected = showMaps == maps,
-                        onClick = { onShowMapsChanged(maps) },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2)
-                    ) { Text(if (maps) "地图" else "角色") }
+        if (!hasWallpaper) {
+            colors.primary
+        } else {
+            val primaryNeed = wallpaperInkProtection(colors.surfaceContainerLow, colors.primary)
+            val supportingNeed = wallpaperInkProtection(colors.surfaceContainerLow, colors.onSurfaceVariant)
+            if (primaryNeed <= supportingNeed) colors.primary else colors.onSurface
+        }
+    }
+    HomeReadingSurface(backdrop) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PreviewModeToggle(
+                    showMaps = showMaps,
+                    onShowMapsChanged = onShowMapsChanged,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .heightIn(min = 40.dp)
+                        .clip(AppShapes.capsule)
+                        .clickable(role = Role.Button, onClick = onOpenAll)
+                        .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        if (showMaps) "全部地图" else "全部角色",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = actionColor,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = actionColor
+                    )
                 }
             }
             content()
         }
     }
+}
+
+@Composable
+private fun PreviewModeToggle(
+    showMaps: Boolean,
+    onShowMapsChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = AppShapes.capsule,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .selectableGroup()
+                .padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            PreviewTogglePill(
+                label = "角色",
+                selected = !showMaps,
+                onClick = { onShowMapsChanged(false) }
+            )
+            PreviewTogglePill(
+                label = "地图",
+                selected = showMaps,
+                onClick = { onShowMapsChanged(true) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreviewTogglePill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) colors.primary else Color.Transparent,
+        animationSpec = tween(durationMillis = 180),
+        label = "PreviewToggleBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) colors.onPrimary else colors.onSurfaceVariant,
+        animationSpec = tween(durationMillis = 180),
+        label = "PreviewToggleFg"
+    )
+    Box(
+        modifier = Modifier
+            .heightIn(min = 40.dp)
+            .clip(AppShapes.capsule)
+            .background(containerColor)
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick
+            )
+            .padding(horizontal = 15.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = contentColor,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+private fun factionAccentColor(faction: String): Color? = when (faction) {
+    "欧泊" -> Color(0xFF4B77DC)
+    "剪刀手" -> Color(0xFFBC3B47)
+    "乌尔比诺" -> Color(0xFFDEB639)
+    "晶源体" -> Color(0xFF8B5CF6)
+    else -> null
 }
 
 @Composable
@@ -895,29 +1207,84 @@ private fun CharacterPreviewSection(
     selectedFaction: Int,
     onSelectedFactionChanged: (Int) -> Unit,
     rowState: LazyListState,
-    filterScroll: ScrollState,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
     listState: LazyListState,
-    contentBounds: State<Rect>,
+    viewport: LayoutBoundsHolder,
     prefetchEnabled: Boolean,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
     if (factions.isEmpty()) {
-        if (isLoading) {
-            ShimmerBox(Modifier.fillMaxWidth().height(40.dp), shape = AppShapes.capsule)
-            LazyRow(userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(4) { ShimmerBox(Modifier.width(90.dp).aspectRatio(5f / 12f), shape = AppShapes.compactCard) }
+        if (isLoading) ShimmerGroup {
+            PreviewFiltersSkeleton()
+            LazyRow(
+                userScrollEnabled = false,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp)
+            ) {
+                items(4) {
+                    ShimmerBox(
+                        Modifier
+                            .width(94.dp)
+                            .aspectRatio(5f / 12f),
+                        shape = AppShapes.compactCard
+                    )
+                }
             }
-        } else PreviewMessage("加载失败")
+        } else PreviewMessage("角色资料未加载，可在「全部角色」中重试")
         return
     }
 
     val currentIndex = selectedFaction.coerceIn(0, factions.lastIndex)
-    Row(Modifier.fillMaxWidth().horizontalScroll(filterScroll), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val colors = MaterialTheme.colorScheme
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+    ) {
         factions.forEachIndexed { index, faction ->
-            FilterChip(selected = currentIndex == index, onClick = { onSelectedFactionChanged(index) },
-                label = { Text(faction.faction, style = MaterialTheme.typography.labelMedium) })
+            val selected = currentIndex == index
+            val accent = factionAccentColor(faction.faction)
+            val dotColor = accent ?: colors.primary
+            val pillBg = if (selected) {
+                accent?.copy(alpha = 0.16f) ?: colors.primaryContainer
+            } else {
+                colors.surfaceContainerHigh.copy(alpha = 0.72f)
+            }
+            val pillFg = when {
+                !selected -> colors.onSurfaceVariant
+                accent != null -> colors.onSurface
+                else -> colors.onPrimaryContainer
+            }
+            Row(
+                modifier = Modifier
+                    .heightIn(min = 34.dp)
+                    .clip(AppShapes.capsule)
+                    .background(pillBg)
+                    .selectable(
+                        selected = selected,
+                        role = Role.Tab,
+                        onClick = { onSelectedFactionChanged(index) }
+                    )
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(if (selected) 7.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) dotColor else dotColor.copy(alpha = 0.55f))
+                )
+                Text(
+                    faction.faction,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = pillFg
+                )
+            }
         }
     }
     val faction = factions[currentIndex]
@@ -925,82 +1292,59 @@ private fun CharacterPreviewSection(
         PreviewMessage(if (faction.loadError != null) "该阵营加载失败，可进入角色一览重试" else "暂无角色数据")
         return
     }
-    val factionColor = when (faction.faction) {
-        "欧泊" -> Color(0xFF4B77DC)
-        "剪刀手" -> Color(0xFFBC3B47)
-        "乌尔比诺" -> Color(0xFFDEB639)
-        "晶源体" -> Color(0xFF8B5CF6)
-        else -> null
-    }
-    val portraitBounds = remember(faction.faction) { mutableStateOf(Rect.Zero) }
+    val factionColor = factionAccentColor(faction.faction)
+    var portraitsVisible by remember { mutableStateOf(false) }
     LazyRow(
         state = rowState,
-        modifier = Modifier.onGloballyPositioned { portraitBounds.value = it.boundsInWindow() },
+        modifier = Modifier.onVisibilityChanged(viewportBounds = viewport, minFractionVisible = 0f) { portraitsVisible = it },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(horizontal = 2.dp)
     ) {
         items(faction.characters, key = { it.name }) { character ->
             CharacterPortraitCard(
-                character, factionColor, { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
-                sharedTransitionScope, animatedVisibilityScope
+                character,
+                factionColor,
+                { onOpenCharacterDetail(character.name, character.portraitUrl ?: character.imageUrl) },
+                sharedTransitionScope,
+                animatedVisibilityScope
             )
         }
     }
-    if (prefetchEnabled) {
-        val context = LocalContext.current
-        val lifecycle = LocalLifecycleOwner.current.lifecycle
-        val routeTransition = animatedVisibilityScope?.transition
-        val characters = faction.characters
-        LaunchedEffect(characters, listState, rowState, portraitBounds, lifecycle, routeTransition, sharedTransitionScope, context) {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                snapshotFlow {
-                    if (listState.isScrollInProgress || rowState.isScrollInProgress ||
-                        listState.layoutInfo.visibleItemsInfo.none { it.key == HOME_PREVIEW_KEY } ||
-                        !isSettledPortraitViewport(
-                            viewport = contentBounds.value,
-                            portraits = portraitBounds.value,
-                            current = routeTransition?.currentState,
-                            target = routeTransition?.targetState,
-                            animating = routeTransition?.isRunning == true || sharedTransitionScope?.isTransitionActive == true
-                        )
-                    ) return@snapshotFlow emptyList()
+    HubPortraitPrefetch(prefetchEnabled, sharedTransitionScope, animatedVisibilityScope) {
+        if (!canPrefetchHomePortraits(portraitsVisible, listState.isScrollInProgress, rowState.isScrollInProgress)) {
+            return@HubPortraitPrefetch emptyList()
+        }
 
-                    val layout = rowState.layoutInfo
-                    val visible = layout.visibleItemsInfo.filter { item ->
-                        characters.getOrNull(item.index)?.name == item.key &&
-                            item.offset + item.size > layout.viewportStartOffset && item.offset < layout.viewportEndOffset
-                    }.map { it.index }
-                    portraitPrefetchIndices(characters.size, visible).map { index ->
-                        characters[index].let { it.portraitUrl ?: it.imageUrl }
-                    }
-                }.collectLatest { urls ->
-                    if (urls.isNotEmpty()) {
-                        delay(160)
-                        SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
-                    }
-                }
+        val characters = faction.characters
+        val layout = rowState.layoutInfo
+        val visible = layout.visibleItemsInfo.mapNotNull { item ->
+            item.index.takeIf {
+                characters.getOrNull(it)?.name == item.key &&
+                    item.offset + item.size > layout.viewportStartOffset && item.offset < layout.viewportEndOffset
             }
+        }
+        portraitPrefetchIndices(characters.size, visible).map { index ->
+            characters[index].let { it.portraitUrl ?: it.imageUrl }
         }
     }
 }
 
-// AnimatedContent retains outgoing and predictive-back pages with valid old layout bounds.
-internal fun isSettledPortraitViewport(
-    viewport: Rect, portraits: Rect, current: EnterExitState?, target: EnterExitState?, animating: Boolean
-): Boolean {
-    val stableRoute = (current == null && target == null) ||
-        (current == EnterExitState.Visible && target == EnterExitState.Visible)
-    return stableRoute && !animating && !viewport.isEmpty && !portraits.isEmpty && viewport.overlaps(portraits)
-}
+internal fun canPrefetchHomePortraits(rowVisible: Boolean, pageScrolling: Boolean, rowScrolling: Boolean) =
+    rowVisible && !pageScrolling && !rowScrolling
 
 @Composable
 private fun PreviewMessage(message: String) {
-    Box(Modifier.fillMaxWidth().heightIn(min = 80.dp), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 80.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
-/** 角色立绘卡片，底部色带随名字换行增高。 */
+/** 角色立绘卡片，阵营渐变随名字换行增高。 */
 @Composable
 private fun CharacterPortraitCard(
     character: CharacterListApi.CharacterInfo,
@@ -1014,16 +1358,23 @@ private fun CharacterPortraitCard(
         wikiPortraitRequest(context, character.portraitUrl ?: character.imageUrl, crossfade = false)
     }
     val cardShape = AppShapes.compactCard
-    val cardBgColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
-    val captionColor = lerp(Color.Black, factionBaseColor ?: Color.Black, 0.18f).copy(alpha = 0.88f)
+    val cardBgColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.82f)
+    val captionGradient = remember(factionBaseColor) {
+        val base = factionBaseColor ?: Color.Black
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.Transparent,
+                0.45f to base.copy(alpha = 0.42f),
+                1f to base.copy(alpha = 0.82f)
+            )
+        )
+    }
 
-    Card(
+    Surface(
         onClick = onClick,
         shape = cardShape,
-        modifier = Modifier.width(90.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = cardBgColor
-        )
+        color = cardBgColor,
+        modifier = Modifier.width(94.dp)
     ) {
         Box {
             // 立绘图片：使用原始比例 (280x680 ≈ 5:12)
@@ -1052,18 +1403,23 @@ private fun CharacterPortraitCard(
                 )
             }
 
-            Text(
-                text = character.name,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
+            Box(
+                Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(captionColor)
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
-            )
+                    .heightIn(min = 42.dp)
+                    .background(captionGradient)
+                    .padding(start = 5.dp, end = 5.dp, top = 14.dp, bottom = 7.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Text(
+                    character.name,
+                    style = MaterialTheme.typography.labelSmall.copy(shadow = homeCaptionShadow),
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }
@@ -1079,30 +1435,39 @@ private fun MapPreviewSection(
     selectedMode: Int,
     onSelectedModeChanged: (Int) -> Unit,
     rowState: LazyListState,
-    filterScroll: ScrollState,
+    isPageActive: Boolean,
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     sharedTransitionScope: SharedTransitionScope?,
     animatedVisibilityScope: AnimatedVisibilityScope?
 ) {
     if (gameModes.isEmpty()) {
-        if (isLoading) {
-            LazyRow(userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(4) { ShimmerBox(Modifier.width(68.dp).height(32.dp), shape = AppShapes.chip) }
+        if (isLoading) ShimmerGroup {
+            ShimmerBox(
+                Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = smoothCornerShape(24.dp)
+            )
+            LazyRow(
+                userScrollEnabled = false,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 2.dp)
+            ) {
+                items(2) {
+                    ShimmerBox(
+                        Modifier
+                            .width(226.dp)
+                            .aspectRatio(16f / 9f),
+                        shape = AppShapes.compactCard
+                    )
+                }
             }
-            LazyRow(userScrollEnabled = false, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(2) { ShimmerBox(Modifier.width(220.dp).aspectRatio(16f / 9f), shape = AppShapes.compactCard) }
-            }
-        } else PreviewMessage("加载失败")
+        } else PreviewMessage("地图资料未加载，可在「全部地图」中重试")
         return
     }
 
     val currentIndex = selectedMode.coerceIn(0, gameModes.lastIndex)
-    Row(Modifier.fillMaxWidth().horizontalScroll(filterScroll), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        gameModes.forEachIndexed { index, mode ->
-            FilterChip(selected = currentIndex == index, onClick = { onSelectedModeChanged(index) },
-                label = { Text(mode.displayName, style = MaterialTheme.typography.labelMedium) })
-        }
-    }
+    MapModePicker(gameModes, currentIndex, isPageActive, onSelectedModeChanged)
     val mode = gameModes[currentIndex]
     if (mode.maps.isEmpty()) {
         PreviewMessage(if (mode.loadError != null) "该模式加载失败，可进入地图一览重试" else "暂无地图数据")
@@ -1119,6 +1484,104 @@ private fun MapPreviewSection(
     }
 }
 
+@Composable
+internal fun MapModePicker(modes: List<GameModeData>, selected: Int, isActive: Boolean, onSelect: (Int) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    val hasWallpaper = LocalHasWallpaper.current
+    val containerColor = remember(colors.surfaceContainerHigh, colors.onSurface, colors.onSurfaceVariant, hasWallpaper) {
+        if (hasWallpaper) hubReadableTint(colors.surfaceContainerHigh, colors.onSurface, 0.84f, colors.onSurfaceVariant)
+        else colors.surfaceContainerHigh
+    }
+    Surface(
+        onClick = { if (isActive) open = true },
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { role = Role.Button },
+        shape = smoothCornerShape(24.dp),
+        color = containerColor,
+        contentColor = colors.onSurface
+    ) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Outlined.Tune,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = colors.primary
+            )
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = colors.onSurfaceVariant, fontWeight = FontWeight.Normal)) {
+                        append("地图模式 · ")
+                    }
+                    withStyle(SpanStyle(color = colors.onSurface, fontWeight = FontWeight.SemiBold)) {
+                        append(modes[selected].displayName)
+                    }
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                Icons.Filled.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = colors.onSurfaceVariant
+            )
+        }
+    }
+    if (open && isActive) {
+        var query by rememberSaveable { mutableStateOf("") }
+        val matches = remember(modes, query) { matchingMapModes(modes, query) }
+        WikiSelectionSheet(
+            "地图模式",
+            onDismiss = { open = false },
+            query = query,
+            onQueryChange = { query = it },
+            searchPlaceholder = "搜索模式"
+        ) {
+            if (matches.isEmpty()) item { CatalogEmptyResults(message = "没有匹配的模式", onClear = { query = "" }) }
+            items(matches, key = { it.value.templateName }) { (index, mode) ->
+                SelectionOptionRow(label = mode.displayName, selected = index == selected, onClick = {
+                    onSelect(index)
+                    open = false
+                })
+            }
+        }
+    }
+}
+
+/** Keep the source index: choosing row 0 of a filtered list need not select mode 0. */
+internal fun matchingMapModes(modes: List<GameModeData>, query: String): List<IndexedValue<GameModeData>> {
+    val term = query.trim()
+    return modes.withIndex().filter { (_, mode) -> mode.displayName.contains(term, true) || mode.templateName.contains(term, true) }
+}
+
+@Composable
+private fun PreviewFiltersSkeleton() {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+    ) {
+        repeat(4) {
+            ShimmerBox(
+                Modifier
+                    .width(72.dp)
+                    .height(34.dp),
+                shape = AppShapes.capsule
+            )
+        }
+    }
+}
+
 /** 首页地图卡片，16:9 图片与可换行的名称。 */
 @Composable
 private fun MapCard(
@@ -1128,72 +1591,90 @@ private fun MapCard(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val cardShape = AppShapes.compactCard
-    val cardColors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    )
-    Card(
+    Surface(
         onClick = onClick,
         shape = cardShape,
-        modifier = Modifier.width(220.dp)
-            .then(
-                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedElement(
-                            sharedContentState = rememberSharedContentState(key = "home-map-image-${map.name}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> tween(350) }
-                        )
-                    }
-                } else Modifier
-            ),
-        colors = cardColors
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.width(226.dp)
     ) {
-        var imageFailed by remember(map.imageUrl) { mutableStateOf(false) }
         Box {
-            if (!map.imageUrl.isNullOrBlank() && !imageFailed) {
-                AsyncImage(
-                    model = map.imageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    onError = { imageFailed = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Outlined.Map,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
+            MapSharedArtwork(map, "home-map-image-${map.name}", sharedTransitionScope, animatedVisibilityScope)
+            MapCaption(map.name, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+}
 
-            Text(
-                text = map.name,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.72f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+@Composable
+private fun MapCaption(name: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 46.dp)
+            .background(mapGradient)
+            .padding(start = AppSpacing.large, end = AppSpacing.large, top = AppSpacing.large, bottom = 9.dp),
+        contentAlignment = Alignment.BottomStart
+    ) {
+        Text(
+            name,
+            style = MaterialTheme.typography.labelLarge.copy(shadow = homeCaptionShadow),
+            fontWeight = FontWeight.Medium,
+            color = Color.White
+        )
+    }
+}
+
+/** Match the image-only detail header. The caption belongs to the card, not the moving overlay. */
+@Composable
+private fun MapSharedArtwork(
+    map: MapInfo,
+    key: String,
+    sharedScope: SharedTransitionScope?,
+    visibilityScope: AnimatedVisibilityScope?,
+    clipShape: Shape = AppShapes.compactCard
+) {
+    var failed by remember(map.imageUrl) { mutableStateOf(false) }
+    val shared = if (sharedScope != null && visibilityScope != null) with(sharedScope) {
+        Modifier.sharedElement(
+            rememberSharedContentState(key),
+            visibilityScope,
+            boundsTransform = { _, _ -> tween(350) },
+            clipInOverlayDuringTransition = remember(sharedScope, clipShape) { OverlayClip(clipShape) }
+        )
+    } else Modifier
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(16f / 9f)
+            .then(shared)
+    ) {
+        if (!map.imageUrl.isNullOrBlank() && !failed) {
+            AsyncImage(
+                model = map.imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize()
             )
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Outlined.Map,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
     }
 }
 
 // ────────────────────────────────────────────
-//  通用内容块卡片（标题 + FlowRow 标签）
+//  通用内容块卡片（标题 + FlowRow 胶囊入口）
 // ────────────────────────────────────────────
 
 private const val WIKI_BASE = "https://wiki.biligame.com/klbq/"
@@ -1205,66 +1686,74 @@ internal fun ContentBlockCard(
     items: List<Pair<String, String>>,  // displayName to pageName
     onOpenWikiUrl: (String) -> Unit,
     nativePages: Map<String, () -> Unit> = emptyMap(),  // displayName → 原生导航
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop
 ) {
-    var expanded by remember { mutableStateOf(true) }
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
-
+    var expanded by rememberSaveable(title) { mutableStateOf(true) }
     val blockCardShape = AppShapes.card
-    val clickableShape = smoothCornerShape(12.dp)
-    val onSurface = MaterialTheme.colorScheme.onSurface
-    Card(
+    val clickableShape = smoothCornerShape(14.dp)
+    val colors = MaterialTheme.colorScheme
+    val material = rememberHubPanelMaterial(0.30f)
+    Surface(
         shape = blockCardShape,
+        color = material.containerColor,
+        contentColor = colors.onSurface,
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { blockCardShape },
-                surfaceAlpha = 0.3f
-            ),
-        colors = when {
-            liquidGlass -> CardDefaults.cardColors(
-                containerColor = Color.Transparent, contentColor = onSurface
-            )
-
-            hasWallpaper -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f),
-                contentColor = onSurface
-            )
-
-            else -> CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        }
+            .hubPanelGlass(backdrop, blockCardShape, material)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(clickableShape)
-                    .clickable { expanded = !expanded }
-                    .padding(vertical = 2.dp),
+                    .clickable(role = Role.Button, onClickLabel = if (expanded) "收起" else "展开") {
+                        expanded = !expanded
+                    }
+                    .semantics {
+                        heading()
+                        stateDescription = if (expanded) "已展开" else "已收起"
+                    }
+                    .heightIn(min = 48.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                HubIconBadge(
+                    icon = icon,
+                    size = 40.dp,
+                    cornerRadius = 14.dp,
+                    iconSize = 21.dp,
+                    containerColor = colors.primaryContainer.copy(alpha = 0.74f),
+                    contentColor = colors.onPrimaryContainer
                 )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                Icon(
-                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "${items.size} 项资料",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.onSurfaceVariant
+                    )
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = colors.surfaceContainerHigh.copy(alpha = 0.72f),
+                    contentColor = colors.onSurfaceVariant,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
 
             // 预计算 URL，避免每次重组都调用 URLEncoder
@@ -1280,7 +1769,6 @@ internal fun ContentBlockCard(
                 enter = fadeIn(tween(220)) + expandVertically(tween(250, easing = FastOutSlowInEasing)),
                 exit = fadeOut(tween(180)) + shrinkVertically(tween(220, easing = FastOutSlowInEasing))
             ) {
-                val btnShape = smoothCornerShape(14.dp)
                 FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1292,14 +1780,18 @@ internal fun ContentBlockCard(
                         val nativeAction = nativePages[display]
                         FilledTonalButton(
                             onClick = nativeAction ?: { onOpenWikiUrl(url) },
-                            shape = btnShape,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            shape = AppShapes.capsule,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = colors.secondaryContainer.copy(alpha = 0.84f),
+                                contentColor = colors.onSecondaryContainer
+                            ),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 9.dp)
                         ) {
                             Text(
                                 display,
                                 style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -1310,7 +1802,7 @@ internal fun ContentBlockCard(
 }
 
 // ────────────────────────────────────────────
-//  动作卡片（投票 / 导航入口）
+//  动作卡片（聚合二级页直达入口）
 // ────────────────────────────────────────────
 
 @Composable
@@ -1319,78 +1811,66 @@ internal fun ActionCard(
     subtitle: String,
     icon: ImageVector,
     onClick: () -> Unit,
-    backdrop: Backdrop = emptyBackdrop()
+    backdrop: Backdrop
 ) {
-    val liquidGlass = LocalLiquidGlassEnabled.current.value
-    val hasWallpaper = LocalHasWallpaper.current
     val actionCardShape = AppShapes.card
-    val contentColor = MaterialTheme.colorScheme.onSurface
-    val accent = MaterialTheme.colorScheme.primary
-    Card(
+    val colors = MaterialTheme.colorScheme
+    val material = rememberHubPanelMaterial(0.26f)
+    Surface(
         onClick = onClick,
         shape = actionCardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                liquidGlass -> Color.Transparent
-                hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
-                else -> MaterialTheme.colorScheme.surfaceContainerLow
-            },
-            contentColor = contentColor
-        ),
+        color = material.containerColor,
+        contentColor = colors.onSurface,
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { actionCardShape },
-                surfaceAlpha = 0.25f
-            )
+            .hubPanelGlass(backdrop, actionCardShape, material)
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = AppShapes.capsule,
-                color = accent.copy(alpha = 0.12f),
-                modifier = Modifier.size(48.dp)
+            HubIconBadge(
+                icon = icon,
+                size = 42.dp,
+                cornerRadius = 14.dp,
+                iconSize = 22.dp,
+                containerColor = colors.primaryContainer.copy(alpha = 0.74f),
+                contentColor = colors.onPrimaryContainer
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
                 Text(
                     title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = contentColor
+                    color = colors.onSurface
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            Spacer(Modifier.width(8.dp))
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(20.dp),
+                tint = colors.onSurfaceVariant.copy(alpha = 0.56f)
             )
         }
     }
 }
 
 // ────────────────────────────────────────────
-//  地图一览全屏页（从主页"查看全部"或快捷入口进入）
+//  地图一览全屏页（从主页"全部地图"或快捷入口进入）
 // ────────────────────────────────────────────
 
 @Composable
@@ -1399,11 +1879,12 @@ internal fun MapListFullScreen(
     onOpenMapDetail: (name: String, imageUrl: String?) -> Unit,
     gameModes: List<GameModeData>,
     isLoading: Boolean,
-    error: String? = null,
+    error: ApiResult.Error? = null,
     offlineAge: Long? = null,
     onRetry: () -> Unit = {},
     selectedTab: Int,
     onTabChanged: (Int) -> Unit,
+    isPageActive: Boolean = true,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
@@ -1432,7 +1913,9 @@ internal fun MapListFullScreen(
         when {
             isLoading && gameModes.isEmpty() -> {
                 Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1445,16 +1928,20 @@ internal fun MapListFullScreen(
 
             error != null && gameModes.isEmpty() -> {
                 Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
-                    ErrorState(message = error, onRetry = onRetry, kind = ErrorKind.NETWORK)
+                    ErrorState(message = error.message, onRetry = onRetry, kind = error.kind)
                 }
             }
 
             gameModes.isEmpty() -> {
                 Box(
-                    Modifier.fillMaxSize().padding(innerPadding),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("暂无地图数据", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1462,51 +1949,28 @@ internal fun MapListFullScreen(
             }
 
             else -> {
-                Column(Modifier.padding(innerPadding)) {
-                    // 模式切换
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .consumeWindowInsets(innerPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                     offlineAge?.let { com.nekolaska.calabiyau.core.ui.OfflineBanner(ageMs = it) }
-                    error?.let { com.nekolaska.calabiyau.core.ui.WikiListGroupError(it, isLoading, onRetry) }
-                    Surface(color = if (hasWallpaper) translucentSurface else MaterialTheme.colorScheme.surface) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            gameModes.forEachIndexed { index, mode ->
-                                FilterChip(
-                                    selected = selectedMode == index,
-                                     onClick = { onTabChanged(index) },
-                                    shape = smoothCornerShape(12.dp),
-                                    label = { Text(mode.displayName, maxLines = 1) }
-                                )
-                            }
-                        }
+                    error?.let { com.nekolaska.calabiyau.core.ui.WikiListGroupError(it.message, isLoading, onRetry) }
+                    Box(
+                        Modifier
+                            .widthIn(max = MapDirectoryMaxWidth)
+                            .fillMaxWidth()
+                            .padding(horizontal = AppSpacing.screen, vertical = AppSpacing.medium)
+                    ) {
+                        MapModePicker(gameModes, selectedMode, isPageActive, onTabChanged)
                     }
 
-                    // 地图网格
-                    val currentMode = gameModes.getOrNull(selectedMode.coerceIn(0, gameModes.lastIndex.coerceAtLeast(0)))
-                    if (currentMode != null && currentMode.maps.isNotEmpty()) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 160.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(currentMode.maps, key = { it.name }) { map ->
-                                MapGridCard(
-                                    map = map,
-                                    onClick = { onOpenMapDetail(map.name, map.imageUrl) },
-                                    sharedTransitionScope = sharedTransitionScope,
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                            }
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Spacer(Modifier.height(16.dp))
-                            }
-                        }
-                    } else if (currentMode?.loadError != null) {
+                    val currentMode = gameModes[selectedMode]
+                    if (currentMode.maps.isNotEmpty()) {
+                        MapDirectoryGrid(currentMode.maps, onOpenMapDetail, sharedTransitionScope, animatedVisibilityScope)
+                    } else if (currentMode.loadError != null) {
                         com.nekolaska.calabiyau.core.ui.WikiListGroupError(currentMode.loadError, isLoading, onRetry)
                     } else {
                         Box(
@@ -1522,81 +1986,106 @@ internal fun MapListFullScreen(
     }
 }
 
-/** 地图网格卡片 —— 16:9 图片 + 底部渐变叠加地图名 */
+private val MapDirectoryMaxWidth = 880.dp
+
 @Composable
-private fun MapGridCard(
+private fun MapDirectoryGrid(
+    maps: List<MapInfo>,
+    onOpen: (String, String?) -> Unit,
+    sharedScope: SharedTransitionScope?,
+    visibilityScope: AnimatedVisibilityScope?,
+) {
+    BoxWithConstraints(
+        Modifier
+            .widthIn(max = MapDirectoryMaxWidth)
+            .fillMaxSize()
+            .padding(horizontal = AppSpacing.screen)
+    ) {
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val minTileWidth = 144.dp * fontScale
+        val gap = AppSpacing.medium
+        val useRows = fontScale >= 1.5f || maxWidth < minTileWidth * 2 + gap
+        LazyVerticalGrid(
+            columns = if (useRows) GridCells.Fixed(1) else GridCells.Adaptive(minSize = minTileWidth),
+            contentPadding = PaddingValues(top = AppSpacing.xSmall, bottom = AppSpacing.xLarge),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+            verticalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            items(maps, key = { it.name }) { map ->
+                MapDirectoryCard(map, useRows, { onOpen(map.name, map.imageUrl) }, sharedScope, visibilityScope)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapDirectoryCard(
     map: MapInfo,
+    useRow: Boolean,
     onClick: () -> Unit,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val cardShape = AppShapes.compactCard
+    val colors = MaterialTheme.colorScheme
     val hasWallpaper = LocalHasWallpaper.current
-    val cardColors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = if (hasWallpaper) 0.86f else 1f)
-    )
-    Card(
+    val cardShape = if (useRow) smoothCornerShape(20.dp) else AppShapes.compactCard
+    val thumbShape = smoothCornerShape(12.dp)
+    val containerColor = remember(colors.surfaceContainerLow, colors.onSurface, hasWallpaper) {
+        if (hasWallpaper) hubReadableTint(colors.surfaceContainerLow, colors.onSurface, 0.86f)
+        else colors.surfaceContainerLow
+    }
+    Surface(
         onClick = onClick,
         shape = cardShape,
+        color = containerColor,
+        contentColor = colors.onSurface,
         modifier = Modifier.fillMaxWidth()
-            .then(
-                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedElement(
-                            sharedContentState = rememberSharedContentState(key = "list-map-image-${map.name}"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = { _, _ -> tween(350) }
-                        )
-                    }
-                } else Modifier
-            ),
-        colors = cardColors
     ) {
-        var imageFailed by remember(map.imageUrl) { mutableStateOf(false) }
-        Box {
-            if (!map.imageUrl.isNullOrBlank() && !imageFailed) {
-                AsyncImage(
-                    model = map.imageUrl,
-                    contentDescription = map.name,
-                    contentScale = ContentScale.Crop,
-                    onError = { imageFailed = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                )
-            } else {
+        if (useRow) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 68.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                    contentAlignment = Alignment.Center
+                    Modifier
+                        .width(76.dp)
+                        .clip(thumbShape)
                 ) {
-                    Icon(
-                        Icons.Outlined.Map,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(28.dp)
+                    MapSharedArtwork(
+                        map,
+                        "list-map-image-${map.name}",
+                        sharedTransitionScope,
+                        animatedVisibilityScope,
+                        clipShape = thumbShape
                     )
                 }
-            }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .background(mapGradient),
-                contentAlignment = Alignment.BottomStart
-            ) {
                 Text(
-                    text = map.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    map.name,
+                    Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
                 )
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = colors.onSurfaceVariant.copy(alpha = 0.55f)
+                )
+            }
+        } else {
+            Box {
+                MapSharedArtwork(
+                    map,
+                    "list-map-image-${map.name}",
+                    sharedTransitionScope,
+                    animatedVisibilityScope,
+                    clipShape = cardShape
+                )
+                MapCaption(map.name, Modifier.align(Alignment.BottomCenter))
             }
         }
     }

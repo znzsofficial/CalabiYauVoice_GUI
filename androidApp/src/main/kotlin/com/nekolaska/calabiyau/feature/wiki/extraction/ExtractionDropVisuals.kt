@@ -1,12 +1,13 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
-import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,9 +26,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
@@ -47,14 +51,33 @@ internal fun extractionDropQualityColor(code: Int): Color {
 }
 
 @Composable
-internal fun ExtractionDropQualityBadge(label: String, code: Int) {
+internal fun ExtractionDropQualityBadge(label: String, code: Int, surfaceBacked: Boolean = false) {
     val color = extractionDropQualityColor(code)
-    Surface(shape = smoothCornerShape(6.dp), color = color.copy(alpha = 0.10f)) {
-        Row(Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+    val colors = MaterialTheme.colorScheme
+    val background = if (surfaceBacked) {
+        color.copy(alpha = 0.14f).compositeOver(colors.surfaceContainerLow.copy(alpha = 0.92f))
+    } else {
+        color.copy(alpha = 0.10f)
+    }
+    Surface(
+        shape = smoothCornerShape(6.dp),
+        color = background,
+        border = BorderStroke(1.dp, color.copy(alpha = if (surfaceBacked) 0.36f else 0.28f))
+    ) {
+        Row(
+            Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(Modifier.size(5.dp).background(color, smoothCornerShape(2.dp)))
-            Text(label.ifBlank { if (code > 0) "Q$code" else "品质未标注" },
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                label.ifBlank { if (code > 0) "Q$code" else "品质未标注" },
+                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.Medium,
+                color = colors.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -65,18 +88,35 @@ internal fun ExtractionDropThumbnail(
 ) {
     val shape = smoothCornerShape(10.dp)
     val color = extractionDropQualityColor(qualityCode)
+    val borderColor = if (qualityCode in 1..5) {
+        color.copy(alpha = 0.45f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    }
     var loaded by remember(imageUrl) { mutableStateOf(false) }
     val imageAlpha by animateFloatAsState(if (loaded) 1f else 0f, tween(DropMotion.reveal), label = "drop-artwork")
-    Box(modifier.size(56.dp).clip(shape)
-        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-        .border(1.dp, color.copy(alpha = 0.45f), shape),
-        contentAlignment = Alignment.Center) {
-        if (!loaded) Icon(Icons.Outlined.Inventory2, contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+    Box(
+        modifier
+            .size(56.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, borderColor, shape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!loaded) Icon(
+            Icons.Outlined.Inventory2,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
+        )
         if (!imageUrl.isNullOrBlank()) AsyncImage(
-            model = imageUrl, contentDescription = null, contentScale = ContentScale.Fit,
+            model = imageUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().padding(5.dp).graphicsLayer { alpha = imageAlpha },
-            onLoading = { loaded = false }, onSuccess = { loaded = true }, onError = { loaded = false }
+            onLoading = { loaded = false },
+            onSuccess = { loaded = true },
+            onError = { loaded = false }
         )
     }
 }

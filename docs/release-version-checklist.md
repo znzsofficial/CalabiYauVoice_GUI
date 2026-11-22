@@ -13,8 +13,7 @@ This project currently stores the app release version in a few separate places. 
 - `desktopApp/build.gradle.kts`
   - `compose.desktop.application.nativeDistributions.packageVersion`: desktop package version, for example `"2.1.0"`.
 
-- `androidApp/src/main/kotlin/com/nekolaska/calabiyau/feature/settings/AboutScreen.kt`
-  - About and Settings both call `rememberAppVersion()`. Update both fallback names in that function: one for a blank/missing `PackageInfo.versionName`, one for a failed package lookup.
+- About and Settings both call `rememberAppVersion()`. When the installed package name/version cannot be read, the version name falls back to `BuildConfig.VERSION_NAME` from `androidApp/build.gradle.kts`; no separate string to bump.
 
 ## Update Metadata
 

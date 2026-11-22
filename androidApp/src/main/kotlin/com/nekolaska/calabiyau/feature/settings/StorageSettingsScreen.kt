@@ -1,7 +1,11 @@
 package com.nekolaska.calabiyau.feature.settings
 
 import android.content.Context
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import android.webkit.WebView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,15 +13,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cached
@@ -57,8 +62,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.SingletonImageLoader
 import com.nekolaska.calabiyau.core.cache.OfflineCache
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
@@ -68,26 +75,22 @@ import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.tools.formatFileSize
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
-data class DirSizeInfo(
-    val name: String,
-    val size: Long
-)
-
-data class StorageSnapshot(
-    val downloadTotalSize: Long = 0L,
-    val downloadFileCount: Int = 0,
-    val subDirSizes: List<DirSizeInfo> = emptyList(),
-    val cacheSizes: Map<CacheCategory, Long> = emptyMap()
+private data class StorageSnapshot(
+    val download: DownloadStorageInfo,
+    val cacheSizes: Map<CacheCategory, Long>
 ) {
     val cacheTotalSize: Long get() = cacheSizes.values.sum()
-    val totalSize: Long get() = downloadTotalSize + cacheTotalSize
+    val knownSize: Long get() = download.totalSize + cacheTotalSize
 }
 
 private data class StorageSegment(
@@ -110,17 +113,17 @@ enum class CacheCategory(
 @Composable
 internal fun StorageSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val savePath = remember { AppPrefs.savePath }
     var revision by remember { mutableIntStateOf(0) }
     var snapshot by remember(revision) { mutableStateOf<StorageSnapshot?>(null) }
     val isCalculating = snapshot == null
-    LaunchedEffect(savePath, revision) { snapshot = computeStorageSnapshot(context, savePath) }
+    LaunchedEffect(revision) { snapshot = computeStorageSnapshot(context) }
     val scope = rememberCoroutineScope()
     val showSnack = rememberSnackbarLauncher()
     var clearingCategory by remember { mutableStateOf<CacheCategory?>(null) }
     var isClearingAll by remember { mutableStateOf(false) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
     var offlineCacheNeverExpire by remember { mutableStateOf(AppPrefs.offlineCacheNeverExpire) }
+    val colors = MaterialTheme.colorScheme
 
     Scaffold(
         topBar = {
@@ -128,90 +131,97 @@ internal fun StorageSettingsScreen(onBack: () -> Unit) {
                 title = { Text("存储空间", style = AppTextStyles.topBarTitle) },
                 navigationIcon = { BackNavButton(onClick = onBack) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = colors.background
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = colors.background
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .consumeWindowInsets(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = AppSpacing.xxxLarge)
+                .consumeWindowInsets(innerPadding),
+            contentAlignment = Alignment.TopCenter
         ) {
-            SettingsGroupHeader("总览")
-            Surface(
+            Column(
                 modifier = Modifier
+                    .widthIn(max = 680.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.screen),
-                shape = AppShapes.card,
-                color = MaterialTheme.colorScheme.surfaceContainerLow
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = AppSpacing.small, bottom = AppSpacing.xxxLarge)
             ) {
-                Column(Modifier.padding(AppSpacing.cardContent), verticalArrangement = Arrangement.spacedBy(AppSpacing.sectionGap)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            modifier = Modifier.size(48.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Outlined.Storage,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(AppSizes.iconLarge)
+                SettingsGroupHeader("总览", topPadding = AppSpacing.small)
+                SettingsCard(highlighted = true, accentTopBar = true) {
+                    Column(
+                        modifier = Modifier.padding(AppSpacing.screen),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.sectionGap)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SettingsFramedIcon(
+                                icon = Icons.Outlined.Storage,
+                                size = 44.dp,
+                                iconSize = 22.dp,
+                                containerColor = colors.primaryContainer,
+                                borderColor = colors.primary.copy(alpha = 0.3f),
+                                iconTint = colors.onPrimaryContainer
+                            )
+                            Spacer(Modifier.width(SettingsRowIconGap))
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
+                            ) {
+                                Text(
+                                    text = "已用空间",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.4.sp
+                                    ),
+                                    color = colors.primary
+                                )
+                                val current = snapshot
+                                Text(
+                                    text = when {
+                                        current == null -> "计算中…"
+                                        current.download.coverage == ScanCoverage.Complete -> formatFileSize(current.knownSize)
+                                        current.knownSize > 0 -> "已统计 ${formatFileSize(current.knownSize)}"
+                                        else -> "用量未知"
+                                    },
+                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFeatureSettings = "tnum"
+                                    ),
+                                    color = colors.onSurface
+                                )
+                                Text(
+                                    text = when (current?.download?.coverage) {
+                                        ScanCoverage.RootUnavailable -> "仅统计应用缓存，下载目录无法读取"
+                                        ScanCoverage.Partial -> "仅统计可读取的下载内容与应用缓存"
+                                        else -> "下载目录与应用缓存合计"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.onSurfaceVariant
                                 )
                             }
+                            if (isCalculating) {
+                                CircularProgressIndicator(Modifier.size(AppSizes.iconLarge), strokeWidth = 2.dp)
+                            }
                         }
-                        Spacer(Modifier.width(AppSpacing.sectionGap))
-                        Column(Modifier.weight(1f)) {
-                            Text("已用空间", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                            Text(
-                                if (isCalculating) "计算中…" else formatFileSize(snapshot?.totalSize ?: 0L),
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "下载目录与应用缓存合计",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (isCalculating) CircularProgressIndicator(Modifier.size(AppSizes.iconLarge), strokeWidth = 2.dp)
-                    }
 
-                    val current = snapshot
-                    if (current != null && !isCalculating) {
-                        StorageUsageChart(
-                            segments = buildStorageSegments(current)
-                        )
+                        val current = snapshot
+                        if (current != null && current.download.coverage == ScanCoverage.Complete) {
+                            StorageUsageChart(segments = buildStorageSegments(current))
+                        }
                     }
                 }
-            }
 
-            SettingsGroupHeader("下载目录")
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.screen),
-                shape = AppShapes.card,
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                StorageStatisticsCard(snapshot = snapshot, isCalculating = isCalculating)
-            }
+                SettingsGroupHeader("下载目录")
+                SettingsCard {
+                    StorageStatisticsCard(snapshot?.download, onRetry = { revision++ })
+                }
 
-            SettingsGroupHeader("缓存")
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.screen),
-                shape = AppShapes.card,
-                color = MaterialTheme.colorScheme.surfaceContainerLow
-            ) {
-                Column {
+                SettingsGroupHeader("缓存")
+                SettingsCard {
                     SettingsToggleItem(
                         icon = Icons.Outlined.EventRepeat,
                         title = "离线缓存不自动过期",
@@ -222,7 +232,7 @@ internal fun StorageSettingsScreen(onBack: () -> Unit) {
                             AppPrefs.offlineCacheNeverExpire = it
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                    SettingsDivider()
 
                     CacheCategory.entries.forEach { category ->
                         CacheCategoryRow(
@@ -230,38 +240,41 @@ internal fun StorageSettingsScreen(onBack: () -> Unit) {
                             size = snapshot?.cacheSizes?.get(category) ?: 0L,
                             isClearing = clearingCategory == category,
                             enabled = !isCalculating && clearingCategory == null && !isClearingAll,
-                            modifier = Modifier.padding(horizontal = AppSpacing.cardContent),
                             onClear = {
                                 scope.launch {
                                     clearingCategory = category
                                     clearCache(context, category)
                                     clearingCategory = null
                                     revision++
-                                    showSnack(if (category == CacheCategory.WEBVIEW) "已清理网页缓存，使用时会重新生成" else "${category.title}已清除")
+                                    showSnack(
+                                        if (category == CacheCategory.WEBVIEW) "已清理网页缓存，使用时会重新生成"
+                                        else "${category.title}已清除"
+                                    )
                                 }
                             }
                         )
                         if (category != CacheCategory.entries.last()) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                            SettingsDivider()
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
+                    SettingsDivider(startIndent = SettingsRowHorizontalPadding)
                     Box(Modifier.padding(AppSpacing.screen)) {
                         FilledTonalButton(
                             enabled = (snapshot?.cacheTotalSize ?: 0L) > 0L && !isCalculating && clearingCategory == null && !isClearingAll,
                             onClick = { showClearAllConfirm = true },
                             modifier = Modifier.fillMaxWidth(),
+                            shape = SettingsIconFrameShape,
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                containerColor = colors.errorContainer,
+                                contentColor = colors.onErrorContainer
                             )
                         ) {
                             if (isClearingAll) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(AppSizes.iconXSmall),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                    color = colors.onErrorContainer
                                 )
                                 Spacer(Modifier.width(AppSpacing.itemGap))
                             }
@@ -296,15 +309,15 @@ internal fun StorageSettingsScreen(onBack: () -> Unit) {
                         }
                     },
                     colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        containerColor = colors.errorContainer,
+                        contentColor = colors.onErrorContainer
                     )
                 ) {
                     if (isClearingAll) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(AppSizes.iconXSmall),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = colors.onErrorContainer
                         )
                         Spacer(Modifier.width(AppSpacing.itemGap))
                     }
@@ -323,51 +336,85 @@ internal fun StorageSettingsScreen(onBack: () -> Unit) {
 
 @Composable
 private fun StorageUsageChart(segments: List<StorageSegment>) {
+    val colors = MaterialTheme.colorScheme
     val visibleSegments = segments.filter { it.size > 0L }
     if (visibleSegments.isEmpty()) {
         Text(
             "暂无可展示的数据",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = colors.onSurfaceVariant
         )
         return
     }
     val total = visibleSegments.sumOf { it.size }.coerceAtLeast(1L)
 
     Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.large)) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(18.dp)
-                .clip(AppShapes.capsule)
+                .height(14.dp),
+            shape = SettingsIconFrameShape,
+            color = colors.surfaceContainerHigh,
+            border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.35f))
         ) {
-            visibleSegments.forEach { segment ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        // Do not inflate small categories: the legend keeps them discoverable.
-                        .weight(segment.size.toFloat() / total)
-                        .background(segment.color)
-                )
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                visibleSegments.forEach { segment ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            // Do not inflate small categories: the legend keeps them discoverable.
+                            .weight(segment.size.toFloat() / total)
+                            .background(segment.color)
+                    )
+                }
             }
         }
 
-        visibleSegments.forEach { segment ->
-            val percent = segment.size * 100f / total
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(segment.color)
-                )
-                Spacer(Modifier.width(AppSpacing.itemGap))
-                Column(Modifier.weight(1f)) {
-                    Text(segment.label, style = AppTextStyles.listItemMeta)
+        Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)) {
+            visibleSegments.forEach { segment ->
+                val percent = segment.size * 100f / total
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(smoothCornerShape(3.dp))
+                            .background(segment.color)
+                    )
+                    Spacer(Modifier.width(10.dp))
                     Text(
-                        "${formatFileSize(segment.size)} · ${String.format(Locale.ROOT, "%.1f", percent)}%",
-                        style = AppTextStyles.listItemMeta,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = segment.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(Modifier.width(AppSpacing.medium))
+                    Text(
+                        text = formatFileSize(segment.size),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontFeatureSettings = "tnum"
+                        ),
+                        color = colors.onSurface,
+                        textAlign = TextAlign.End
+                    )
+                    Spacer(Modifier.width(AppSpacing.medium))
+                    Text(
+                        text = "${String.format(Locale.ROOT, "%.1f", percent)}%",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFeatureSettings = "tnum"
+                        ),
+                        color = colors.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.widthIn(min = 42.dp)
                     )
                 }
             }
@@ -378,7 +425,7 @@ private fun StorageUsageChart(segments: List<StorageSegment>) {
 @Composable
 private fun buildStorageSegments(snapshot: StorageSnapshot): List<StorageSegment> {
     return listOf(
-        StorageSegment("下载目录", snapshot.downloadTotalSize, MaterialTheme.colorScheme.primary),
+        StorageSegment("下载目录", snapshot.download.totalSize, MaterialTheme.colorScheme.primary),
         StorageSegment(CacheCategory.OFFLINE.title, snapshot.cacheSizes[CacheCategory.OFFLINE] ?: 0L, MaterialTheme.colorScheme.secondary),
         StorageSegment(CacheCategory.IMAGE.title, snapshot.cacheSizes[CacheCategory.IMAGE] ?: 0L, MaterialTheme.colorScheme.tertiary),
         StorageSegment(CacheCategory.WEBVIEW.title, snapshot.cacheSizes[CacheCategory.WEBVIEW] ?: 0L, MaterialTheme.colorScheme.outline)
@@ -386,90 +433,91 @@ private fun buildStorageSegments(snapshot: StorageSnapshot): List<StorageSegment
 }
 
 @Composable
-private fun StorageStatisticsCard(snapshot: StorageSnapshot?, isCalculating: Boolean) {
+private fun StorageStatisticsCard(download: DownloadStorageInfo?, onRetry: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(AppSpacing.cardContent)
+            .padding(AppSpacing.screen)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Surface(
-                modifier = Modifier.size(AppSizes.iconButton),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh
+            SettingsFramedIcon(icon = Icons.Outlined.Folder)
+            Spacer(Modifier.width(SettingsRowIconGap))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Outlined.Storage, null,
-                        modifier = Modifier.size(AppSizes.iconMedium),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Spacer(Modifier.width(AppSpacing.sectionGap))
-            Column(Modifier.weight(1f)) {
                 Text(
-                    "已用空间",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                    text = "已用空间",
+                    style = AppTextStyles.settingsItemTitle,
+                    color = colors.onSurface
                 )
-                if (isCalculating) {
-                    Text(
-                        "计算中...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        "${formatFileSize(snapshot?.downloadTotalSize ?: 0)}  ·  ${snapshot?.downloadFileCount ?: 0} 个文件",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Text(
+                    text = when (download?.coverage) {
+                        null -> "计算中…"
+                        ScanCoverage.RootUnavailable -> "无法读取下载目录，请检查保存位置或访问权限"
+                        ScanCoverage.Partial -> if (download.fileCount == 0) "部分内容无法读取，用量未知"
+                            else "部分内容无法读取，已统计 ${formatFileSize(download.totalSize)} · ${download.fileCount} 个文件"
+                        ScanCoverage.Complete -> "${formatFileSize(download.totalSize)} · ${download.fileCount} 个文件"
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                    color = colors.onSurfaceVariant
+                )
             }
-            if (isCalculating) {
+            if (download == null) {
                 CircularProgressIndicator(Modifier.size(AppSizes.iconMedium), strokeWidth = 2.dp)
+            } else if (download.coverage != ScanCoverage.Complete) {
+                TextButton(onClick = onRetry) { Text("重试") }
             }
         }
 
-        val subDirSizes = snapshot?.subDirSizes.orEmpty()
-        if (!isCalculating && subDirSizes.isNotEmpty()) {
-            Spacer(Modifier.height(AppSpacing.sectionGap))
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-            )
-            Spacer(Modifier.height(AppSpacing.large))
+        val subDirSizes = download?.subDirSizes.orEmpty()
+        if (subDirSizes.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(thickness = 1.dp, color = settingsDividerColor())
+            Spacer(Modifier.height(10.dp))
 
-            subDirSizes.forEach { dirInfo ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = AppSpacing.xSmall),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Outlined.Folder,
-                        null,
-                        modifier = Modifier.size(AppSizes.iconXSmall),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                    Spacer(Modifier.width(AppSpacing.itemGap))
-                    Text(
-                        text = dirInfo.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = formatFileSize(dirInfo.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
+                subDirSizes.forEach { dirInfo ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Folder,
+                            contentDescription = null,
+                            modifier = Modifier.size(AppSizes.iconXSmall),
+                            tint = colors.primary.copy(alpha = 0.72f)
+                        )
+                        Spacer(Modifier.width(AppSpacing.itemGap))
+                        Text(
+                            text = dirInfo.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = colors.onSurface
+                        )
+                        Spacer(Modifier.width(AppSpacing.medium))
+                        Text(
+                            text = when {
+                                !dirInfo.incomplete -> formatFileSize(dirInfo.size)
+                                dirInfo.size > 0 -> "已统计 ${formatFileSize(dirInfo.size)}"
+                                else -> "用量未知"
+                            },
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontFeatureSettings = "tnum"
+                            ),
+                            color = colors.onSurfaceVariant,
+                            textAlign = TextAlign.End
+                        )
+                    }
                 }
             }
         }
@@ -482,47 +530,65 @@ private fun CacheCategoryRow(
     size: Long,
     isClearing: Boolean,
     enabled: Boolean,
-    modifier: Modifier = Modifier,
     onClear: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = AppSpacing.medium),
+            .heightIn(min = 58.dp)
+            .padding(
+                start = SettingsRowHorizontalPadding,
+                end = AppSpacing.medium,
+                top = 10.dp,
+                bottom = 10.dp
+            ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            category.icon,
-            null,
-            modifier = Modifier.size(AppSizes.iconMedium),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.width(AppSpacing.iconGap))
-        Column(Modifier.weight(1f)) {
+        SettingsFramedIcon(icon = category.icon)
+        Spacer(Modifier.width(SettingsRowIconGap))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.tiny)
+        ) {
             Text(
-                category.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                text = category.title,
+                style = AppTextStyles.settingsItemTitle,
+                color = colors.onSurface
             )
             Text(
-                text = if (size > 0) formatFileSize(size) else category.subtitle,
+                text = category.subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
+        Spacer(Modifier.width(AppSpacing.medium))
+        Text(
+            text = formatFileSize(size),
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontFeatureSettings = "tnum"
+            ),
+            color = if (size > 0) colors.onSurface else colors.onSurfaceVariant,
+            textAlign = TextAlign.End
+        )
+        Spacer(Modifier.width(AppSpacing.xSmall))
         if (isClearing) {
-            CircularProgressIndicator(Modifier.size(AppSizes.iconSmall), strokeWidth = 2.dp)
+            Box(Modifier.size(AppSizes.iconButton), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(AppSizes.iconSmall), strokeWidth = 2.dp)
+            }
         } else {
             IconButton(
                 onClick = onClear,
                 enabled = enabled && size > 0
             ) {
                 Icon(
-                    Icons.Outlined.Delete,
+                    imageVector = Icons.Outlined.Delete,
                     contentDescription = "清除${category.title}",
                     modifier = Modifier.size(AppSizes.iconSmall),
-                    tint = MaterialTheme.colorScheme.error.copy(
+                    tint = colors.error.copy(
                         alpha = if (enabled && size > 0) 1f else 0.3f
                     )
                 )
@@ -544,51 +610,21 @@ internal suspend fun computeAllCacheSizes(
     )
 }
 
-internal suspend fun computeStorageSnapshot(
-    context: Context,
-    savePath: String
-): StorageSnapshot = withContext(Dispatchers.IO) {
-    val downloadInfo = computeDownloadStorageInfo(savePath)
+private suspend fun computeStorageSnapshot(context: Context): StorageSnapshot = withContext(Dispatchers.IO) {
+    val downloadInfo = scanDownloadStorage(File(AppPrefs.savePath)) { file ->
+        try {
+            val stat = Os.lstat(file.absolutePath)
+            when {
+                OsConstants.S_ISDIR(stat.st_mode) -> StorageEntry.Directory
+                OsConstants.S_ISREG(stat.st_mode) -> StorageEntry.RegularFile(stat.st_size)
+                else -> StorageEntry.Skipped
+            }
+        } catch (_: ErrnoException) { StorageEntry.Unreadable }
+    }
     StorageSnapshot(
-        downloadTotalSize = downloadInfo.totalSize,
-        downloadFileCount = downloadInfo.fileCount,
-        subDirSizes = downloadInfo.subDirSizes,
+        download = downloadInfo,
         cacheSizes = computeAllCacheSizes(context)
     )
-}
-
-private data class DownloadStorageInfo(
-    val totalSize: Long,
-    val fileCount: Int,
-    val subDirSizes: List<DirSizeInfo>
-)
-
-private fun computeDownloadStorageInfo(savePath: String): DownloadStorageInfo {
-    return try {
-        val root = File(savePath)
-        if (!root.exists() || !root.isDirectory) {
-            return DownloadStorageInfo(0L, 0, emptyList())
-        }
-        val totalSize = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-        val fileCount = root.walkTopDown().count { it.isFile }
-        val subDirSizes = root.listFiles()
-            ?.asSequence()
-            ?.filter { it.isDirectory }
-            ?.map { dir ->
-                DirSizeInfo(
-                    name = dir.name,
-                    size = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
-                )
-            }
-            ?.filter { it.size > 0 }
-            ?.sortedByDescending { it.size }
-            ?.take(8)
-            ?.toList()
-            ?: emptyList()
-        DownloadStorageInfo(totalSize, fileCount, subDirSizes)
-    } catch (_: Exception) {
-        DownloadStorageInfo(0L, 0, emptyList())
-    }
 }
 
 private suspend fun clearCache(
@@ -618,11 +654,15 @@ private suspend fun clearCache(
     }
 }
 
-private fun calculateWebViewCacheSize(context: Context): Long {
+private suspend fun calculateWebViewCacheSize(context: Context): Long {
+    val scanContext = currentCoroutineContext()
     var total = 0L
     for (dir in webViewCacheDirs(context)) {
         if (dir.exists() && dir.isDirectory) {
-            total += dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            total += dir.walkTopDown().sumOf { file ->
+                scanContext.ensureActive()
+                if (file.isFile) file.length() else 0L
+            }
         }
     }
     return total

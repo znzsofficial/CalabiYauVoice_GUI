@@ -4,7 +4,7 @@
 
 ## 改哪里，先读什么
 
-- `androidApp/` 是 Android 客户端，`desktopApp/` 是 Windows 客户端，`shared/` 是两端共用的 Kotlin 业务与媒体代码。模块归属见 [Android 架构](docs/android-architecture.md)和[桌面实现](docs/desktop-implementation-guide.md)。
+- `androidApp/` 是 Android 客户端，`desktopApp/` 是 Windows 客户端，`shared/` 是两端共用的 Kotlin 业务与媒体代码。模块归属见 [Android 架构](docs/android-architecture.md)和[桌面实现](docs/desktop-implementation-guide.md)；改 Android 界面视觉、卡片、配色或布局前先读 [Android 视觉设计规范](docs/android-ui-design-guide.md)。
 - 改 Android Wiki 页面：先在[功能专题](docs/README.md#wiki-功能专题)找对应页面。新增解析或缓存看[分层约定](docs/android-wiki-feature-guide.md)；改弹层、加载状态或文案看[公共 UI 与状态](docs/android-wiki-ui-architecture.md)；核对上游变更优先用[已有快照](docs/live-wiki-tests.md)。
 - 改登录、网络、文件或下载：对应入口在[架构与基础设施](docs/README.md#架构与基础设施)；下载的跨端契约见[资源下载](docs/resource-download-implementation.md)。
 - `downloadPage/` 是独立的 Vite/Svelte 站点和 Pages Worker，不是 Gradle 子模块。账号、留言与 D1 迁移见[用户系统后端](docs/user-system-backend.md)；匿名安装统计见[使用统计](docs/app-usage.md)。[`webApp/`](webApp/README.md) 是归档的演示原型，默认不参与构建，不承载正式网页功能。

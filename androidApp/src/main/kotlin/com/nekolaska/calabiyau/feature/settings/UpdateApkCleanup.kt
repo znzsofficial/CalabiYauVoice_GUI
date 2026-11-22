@@ -4,7 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import android.content.pm.PackageInfo
 import android.os.Build
-import android.net.Uri
+import androidx.core.net.toUri
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import data.SharedJson
 import kotlinx.serialization.json.buildJsonObject
@@ -165,8 +165,7 @@ internal object UpdateApkCleanup {
                 val uriColumn = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
                 while (cursor.moveToNext()) {
                     val rawUri: String? = if (uriColumn >= 0) cursor.getString(uriColumn) else null
-                    val parsedUri: Uri? = rawUri?.let { raw -> Uri.parse(raw) }
-                    val path: String? = parsedUri?.let { uri ->
+                    val path: String? = rawUri?.toUri()?.let { uri ->
                         if (uri.scheme.equals("file", true)) uri.path else null
                     }
                     add(OwnedDownload(cursor.getLong(idColumn), cursor.getInt(statusColumn), path))

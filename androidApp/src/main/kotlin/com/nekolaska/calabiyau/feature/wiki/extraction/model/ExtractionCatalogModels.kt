@@ -57,9 +57,17 @@ data class ExtractionEntry(
     val isDropPool: Boolean get() = type == ExtractionEntryType.DROP_POOL
     val filterCategory: String get() = sourceCategory?.takeIf { it.isNotBlank() } ?: category
 
-    fun matches(query: String): Boolean = query.isBlank() ||
-        (listOf(name, category, description) + tags + fields.map { it.value } +
-            dropPoolGroups.flatMap { listOf(it.label) + it.items }).any { it.contains(query.trim(), true) }
+    internal fun matchesMetadata(term: String): Boolean = name.contains(term, true) || category.contains(term, true) ||
+        description.contains(term, true) || tags.any { it.contains(term, true) } || fields.any { it.value.contains(term, true) }
+
+    internal fun matchesPoolTerm(term: String): Boolean = dropPoolGroups.any { group ->
+        group.label.contains(term, true) || group.items.any { it.contains(term, true) }
+    }
+
+    fun matches(query: String): Boolean {
+        val term = query.trim()
+        return term.isEmpty() || matchesMetadata(term) || matchesPoolTerm(term)
+    }
 }
 
 internal fun extractionEntriesForView(entries: List<ExtractionEntry>, view: ExtractionDropView): List<ExtractionEntry> =
@@ -90,8 +98,8 @@ internal fun filterExtractionEntries(
     sort: ExtractionSort, descending: Boolean
 ): List<ExtractionEntry> {
     val filtered = entries.filter {
-        it.matches(query) && (category == null || it.filterCategory == category) &&
-            (quality == null || it.quality == quality) && (!valuableOnly || "贵重" in it.tags)
+        (category == null || it.filterCategory == category) && (quality == null || it.quality == quality) &&
+            (!valuableOnly || "贵重" in it.tags) && it.matches(query)
     }
     if (sort == ExtractionSort.DEFAULT) return filtered
     return filtered.sortedWith { a, b ->

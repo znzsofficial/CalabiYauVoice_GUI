@@ -5,17 +5,20 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.EmojiEvents
-import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HowToVote
 import androidx.compose.material.icons.outlined.Inventory2
@@ -29,7 +32,6 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material.icons.outlined.Wallpaper
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,14 +44,45 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
+import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
 import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
+
+private val AggregateContentMaxWidth = 720.dp
+
+@Composable
+private fun AggregateHubList(
+    innerPadding: PaddingValues,
+    content: LazyListScope.() -> Unit
+) {
+    val layoutDirection = LocalLayoutDirection.current
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .widthIn(max = AggregateContentMaxWidth)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = innerPadding.calculateStartPadding(layoutDirection) + AppSpacing.screen,
+                top = innerPadding.calculateTopPadding() + AppSpacing.large,
+                end = innerPadding.calculateEndPadding(layoutDirection) + AppSpacing.screen,
+                bottom = innerPadding.calculateBottomPadding() + AppSpacing.xxLarge
+            ),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.large),
+            content = content
+        )
+    }
+}
 
 @Composable
 internal fun WikiGameplayHubScreen(
@@ -58,24 +91,15 @@ internal fun WikiGameplayHubScreen(
     onOpenWikiUrl: (String) -> Unit,
     backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "玩法与养成", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = innerPadding.calculateTopPadding() + 10.dp,
-                end = 16.dp,
-                bottom = 24.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    AggregatePageScaffold(title = "玩法与养成", onBack = onBack, backdrop = backdrop) { innerPadding, pageBackdrop ->
+        AggregateHubList(innerPadding) {
             item {
                 ActionCard(
                     title = "战斗模式",
                     subtitle = "查看所有战斗模式详情",
                     icon = Icons.Outlined.SportsEsports,
                     onClick = { onNavigateTo(WikiRoute.GameModes) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -84,7 +108,7 @@ internal fun WikiGameplayHubScreen(
                     subtitle = "查看战斗勋章、荣耀成就与光辉事迹",
                     icon = Icons.Outlined.EmojiEvents,
                     onClick = { onNavigateTo(WikiRoute.Achievements) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -100,7 +124,7 @@ internal fun WikiGameplayHubScreen(
                         "誓约" to { onNavigateTo(WikiRoute.Oath) },
                         "印迹" to { onNavigateTo(WikiRoute.Imprints) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -125,7 +149,7 @@ internal fun WikiGameplayHubScreen(
                         "弦能增幅网络" to { onNavigateTo(WikiRoute.Mechanics(MechanicsKind.AUGMENTATION)) },
                         "互动道具" to { onNavigateTo(WikiRoute.InteractionItems) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -147,10 +171,9 @@ internal fun WikiGameplayHubScreen(
                         "载具外观" to { onNavigateTo(WikiRoute.VehicleSkins) },
                         "头像框" to { onNavigateTo(WikiRoute.AvatarFrames) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
-            item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
@@ -161,24 +184,15 @@ internal fun WikiCatalogHubScreen(
     onNavigateTo: (WikiRoute) -> Unit,
     backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "外观与图鉴", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = innerPadding.calculateTopPadding() + 10.dp,
-                end = 16.dp,
-                bottom = 24.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    AggregatePageScaffold(title = "外观与图鉴", onBack = onBack, backdrop = backdrop) { innerPadding, pageBackdrop ->
+        AggregateHubList(innerPadding) {
             item {
                 ActionCard(
                     title = "PC 道具图鉴",
                     subtitle = "PC 端及双端共有的功能道具、货币与礼包",
                     icon = Icons.Outlined.Inventory2,
                     onClick = { onNavigateTo(WikiRoute.Items) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -187,7 +201,7 @@ internal fun WikiCatalogHubScreen(
                     subtitle = "浏览移动端独有的功能道具、货币与礼包",
                     icon = Icons.Outlined.Inventory2,
                     onClick = { onNavigateTo(WikiRoute.MobileItems) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -196,7 +210,7 @@ internal fun WikiCatalogHubScreen(
                     subtitle = "浏览全部角色时装与外观",
                     icon = Icons.Outlined.Checkroom,
                     onClick = { onNavigateTo(WikiRoute.Costumes()) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -205,19 +219,18 @@ internal fun WikiCatalogHubScreen(
                     subtitle = "浏览全部武器外观与皮肤",
                     icon = Icons.Outlined.Palette,
                     onClick = { onNavigateTo(WikiRoute.WeaponSkins()) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item(key = "extraction_hub") {
                 ActionCard(
                     title = "弦溯战线",
-                    subtitle = "物资、装备与掉落",
+                    subtitle = "物资、装备、工坊与掉落",
                     icon = Icons.Outlined.Explore,
                     onClick = { onNavigateTo(WikiRoute.ExtractionHub) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
-            item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
@@ -229,24 +242,15 @@ internal fun WikiExtensionHubScreen(
     onOpenWikiUrl: (String) -> Unit,
     backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "游戏延伸", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = innerPadding.calculateTopPadding() + 10.dp,
-                end = 16.dp,
-                bottom = 24.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    AggregatePageScaffold(title = "游戏延伸", onBack = onBack, backdrop = backdrop) { innerPadding, pageBackdrop ->
+        AggregateHubList(innerPadding) {
             item {
                 ActionCard(
                     title = "投票",
                     subtitle = "查看并参与当前 Wiki 投票",
                     icon = Icons.Outlined.HowToVote,
                     onClick = { onNavigateTo(WikiRoute.Voting) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item("practical-guides") {
@@ -264,7 +268,7 @@ internal fun WikiExtensionHubScreen(
                         "新人入坑指南" to { onNavigateTo(WikiRoute.BeginnerGuide) },
                         "游戏Tips" to { onNavigateTo(WikiRoute.GameTips) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -286,7 +290,7 @@ internal fun WikiExtensionHubScreen(
                         "联动" to { onNavigateTo(WikiRoute.Collaborations) },
                         "梗百科" to { onNavigateTo(WikiRoute.Memes) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -295,7 +299,7 @@ internal fun WikiExtensionHubScreen(
                     subtitle = "查看引航者投稿的视频、文章与游戏作品",
                     icon = Icons.Outlined.UploadFile,
                     onClick = { onNavigateTo(WikiRoute.Submissions) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -304,7 +308,7 @@ internal fun WikiExtensionHubScreen(
                     subtitle = "浏览官方壁纸与视觉图",
                     icon = Icons.Outlined.Wallpaper,
                     onClick = { onNavigateTo(WikiRoute.Wallpapers) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -313,7 +317,7 @@ internal fun WikiExtensionHubScreen(
                     subtitle = "查看官方表情包资源",
                     icon = Icons.Outlined.EmojiEmotions,
                     onClick = { onNavigateTo(WikiRoute.Stickers) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -322,7 +326,7 @@ internal fun WikiExtensionHubScreen(
                     subtitle = "查看喵言喵语词条内容",
                     icon = Icons.Outlined.Pets,
                     onClick = { onNavigateTo(WikiRoute.MeowLanguage) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -331,10 +335,9 @@ internal fun WikiExtensionHubScreen(
                     subtitle = "浏览原声音乐、专辑与场景曲目",
                     icon = Icons.Outlined.MusicNote,
                     onClick = { onNavigateTo(WikiRoute.Bgm) },
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
-            item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
@@ -346,17 +349,8 @@ internal fun WikiDecorationHubScreen(
     onOpenWikiUrl: (String) -> Unit,
     backdrop: Backdrop
 ) {
-    AggregatePageScaffold(title = "玩家装饰", onBack = onBack, backdrop = backdrop) { innerPadding, backdrop ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = innerPadding.calculateTopPadding() + 10.dp,
-                end = 16.dp,
-                bottom = 24.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    AggregatePageScaffold(title = "玩家装饰", onBack = onBack, backdrop = backdrop) { innerPadding, pageBackdrop ->
+        AggregateHubList(innerPadding) {
             item {
                 ContentBlockCard(
                     title = "身份展示",
@@ -376,7 +370,7 @@ internal fun WikiDecorationHubScreen(
                         "勋章" to { onNavigateTo(WikiRoute.Medals) },
                         "头像框" to { onNavigateTo(WikiRoute.AvatarFrames) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -396,7 +390,7 @@ internal fun WikiDecorationHubScreen(
                         "头套" to { onNavigateTo(WikiRoute.Headgear) },
                         "超弦体动作" to { onNavigateTo(WikiRoute.StringerActions) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
             item {
@@ -414,10 +408,9 @@ internal fun WikiDecorationHubScreen(
                         "休息室手办" to { onNavigateTo(WikiRoute.LoungeFigures) },
                         "载具外观" to { onNavigateTo(WikiRoute.VehicleSkins) }
                     ),
-                    backdrop = backdrop
+                    backdrop = pageBackdrop
                 )
             }
-            item { Spacer(Modifier.height(4.dp)) }
         }
     }
 }
@@ -464,7 +457,7 @@ internal fun AggregatePageScaffold(
                     TopAppBarDefaults.topAppBarColors()
                 },
                 modifier = if (hasWallpaper) {
-                    Modifier.wikiTopBarScrim(surfaceColor, topBarScrimAlpha)
+                    Modifier.aggregateTopBarScrim(surfaceColor) { topBarScrimAlpha }
                 } else Modifier
             )
         },

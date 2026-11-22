@@ -1,12 +1,10 @@
 package com.nekolaska.calabiyau.feature.weapon.skin
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -29,14 +28,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.CatalogDetailRow
 import com.nekolaska.calabiyau.core.ui.CatalogDetailSheet
+import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.core.ui.CatalogGridCard
 import com.nekolaska.calabiyau.core.ui.CatalogGridSkeleton
 import com.nekolaska.calabiyau.core.ui.CatalogPreviewImage
@@ -59,6 +59,7 @@ private const val CRYSTAL_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Sp
 private const val BASE_ICON_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E9%81%93%E5%85%B7%E5%9B%BE%E6%A0%87_6.png"
 private const val BASE_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E5%9B%BE%E6%A0%87-%E5%B0%8F%E5%9F%BA%E5%BC%A6.png"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeaponSkinFilterScreen(
     initialWeapon: String? = null,
@@ -115,12 +116,19 @@ fun WeaponSkinFilterScreen(
                 },
                 actions = {
                     if (allSkins.isNotEmpty()) {
-                        Text(
-                            text = filteredSkins.size.toString(),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Surface(
+                            shape = AppShapes.capsule,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             modifier = Modifier.padding(end = 16.dp)
-                        )
+                        ) {
+                            Text(
+                                text = filteredSkins.size.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -136,19 +144,21 @@ fun WeaponSkinFilterScreen(
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 110.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column {
+                    Column(
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         SearchBar(
                             keyword = searchQuery,
                             onKeywordChange = { searchQuery = it },
                             onClear = { searchQuery = "" },
                             isSearching = false,
-                            placeholder = "搜索外观名称或武器…",
-                            modifier = Modifier.padding(bottom = 12.dp)
+                            placeholder = "搜索外观名称或武器…"
                         )
 
                         // ── 筛选栏 ──
@@ -169,12 +179,19 @@ fun WeaponSkinFilterScreen(
                 // ── 外观网格 ──
                 if (filteredSkins.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            Modifier.fillMaxWidth().height(300.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("没有匹配的武器外观", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        CatalogEmptyResults(
+                            message = "没有匹配的武器外观",
+                            onClear = if (searchQuery.isNotBlank() || selectedWeapon != null || selectedWeaponCategory != null || selectedQualityLevel != null) {
+                                {
+                                    searchQuery = ""
+                                    selectedWeapon = null
+                                    selectedWeaponCategory = null
+                                    selectedQualityLevel = null
+                                }
+                            } else {
+                                null
+                            }
+                        )
                     }
                 } else {
                     items(filteredSkins, key = { it.hashCode().toString() }) { skin ->
@@ -223,15 +240,7 @@ private fun WeaponSkinFilterBar(
     selectedQuality: Quality?,
     onQualitySelected: (Quality?) -> Unit
 ) {
-    Column(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "按武器筛选",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         WeaponSelector(
             label = "武器",
             weapons = weaponOptions,
@@ -242,11 +251,6 @@ private fun WeaponSkinFilterBar(
         )
 
         // 品质筛选
-        Text(
-            text = "按品质筛选",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         QualityFilterChips(
             selectedLevel = selectedQuality?.level,
             levels = Quality.entries.sortedByDescending { it.level }.map { it.level to it.displayName },
@@ -272,10 +276,6 @@ private fun WeaponSkinCard(skin: WeaponSkinInfo, onClick: () -> Unit) {
         fallbackIcon = Icons.Outlined.Palette
     )
 }
-
-// ────────────────────────────────────────────
-//  品质颜色
-// ────────────────────────────────────────────
 
 // ────────────────────────────────────────────
 //  外观详情底部弹窗
@@ -306,42 +306,52 @@ private fun WeaponSkinDetailSheet(
         description = skin.description,
         descriptionCollapsedLines = 5
     ) {
+        var hasRow = false
         if (skin.sources.isNotEmpty()) {
             CatalogDetailRow(
                 icon = Icons.Outlined.ShoppingBag,
                 label = "获取方式",
                 value = skin.sources.joinToString("、")
             )
+            hasRow = true
         }
         if (skin.crystalCost.isNotBlank()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (hasRow) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+            }
             CatalogDetailRow(
                 imageUrl = CRYSTAL_ICON_URL,
                 fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
                 label = "巴布洛晶核",
                 value = skin.crystalCost
             )
+            hasRow = true
         }
         if (skin.baseCost.isNotBlank()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (hasRow) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+            }
             CatalogDetailRow(
                 imageUrl = BASE_ICON_URL,
                 fallbackImageUrl = BASE_ICON_FALLBACK_URL,
                 label = "基弦",
                 value = skin.baseCost
             )
+            hasRow = true
         }
         if (skin.quality != null) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (hasRow) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+            }
             CatalogDetailRow(
                 icon = Icons.Outlined.Star,
                 label = "品质",

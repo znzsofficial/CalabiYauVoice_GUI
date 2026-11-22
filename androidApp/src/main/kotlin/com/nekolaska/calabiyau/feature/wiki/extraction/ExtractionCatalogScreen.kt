@@ -1,6 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -13,10 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,43 +65,86 @@ fun ExtractionCatalogScreen(
         filterExtractionEntries(entries, query, category, quality, valuableOnly, sort, descending)
     }
     val focus = LocalFocusManager.current
-    val conditions = listOfNotNull(category, qualities.find { it.first == quality }?.second,
-        "仅贵重物品".takeIf { valuableOnly }, sort.takeUnless { it == ExtractionSort.DEFAULT }?.let {
+    val conditions = listOfNotNull(
+        category,
+        qualities.find { it.first == quality }?.second,
+        "仅贵重物品".takeIf { valuableOnly },
+        sort.takeUnless { it == ExtractionSort.DEFAULT }?.let {
             "${it.label}${if (descending) "降序" else "升序"}"
-        })
+        }
+    )
     fun clearFilters() { category = null; quality = null; valuableOnly = false }
     fun resetOptions() { clearFilters(); sort = ExtractionSort.DEFAULT; descending = true }
     val wikiUrl = extractionArticleUrl(kind.pageName)
     val subject = if (kind == ExtractionCatalogKind.LOOT) "物资" else "配件"
     Scaffold(topBar = {
-        TopAppBar(title = { Text(kind.title, fontWeight = FontWeight.Bold) },
+        TopAppBar(
+            title = { Text(kind.title, fontWeight = FontWeight.Bold) },
             navigationIcon = { BackNavButton(onClick = onBack) },
             actions = {
                 RefreshActionButton(onClick = { state.reload(forceRefresh = true) }, enabled = !state.isLoading)
                 OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = onOpenWikiUrl, contentDescription = "查看 Wiki 原文")
-            })
+            }
+        )
     }) { padding ->
-        ApiResourceContent(state, modifier = Modifier.padding(padding).consumeWindowInsets(padding).imePadding(),
-            loading = { ExtractionCatalogSkeleton(kind = kind, modifier = it) }) {
-            LazyVerticalGrid(columns = extractionItemGridCells(), modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ApiResourceContent(
+            state,
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding).imePadding(),
+            loading = { ExtractionCatalogSkeleton(kind = kind, modifier = it) }
+        ) {
+            LazyVerticalGrid(
+                columns = extractionItemGridCells(),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 item(key = "controls", span = { GridItemSpan(maxLineSpan) }) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SearchBar(keyword = query, onKeywordChange = { query = it }, onClear = { query = "" },
-                            isSearching = false, placeholder = "搜索$subject")
+                        SearchBar(
+                            keyword = query,
+                            onKeywordChange = { query = it },
+                            onClear = { query = "" },
+                            isSearching = false,
+                            placeholder = "搜索$subject"
+                        )
                         DropFilterBar(
-                            summary = if (filtered.size == entries.size) "${entries.size} 项$subject" else "${filtered.size} / ${entries.size} 项$subject",
-                            label = "筛选与排序", activeFilter = conditions.isNotEmpty(),
+                            summary = if (filtered.size == entries.size) "${entries.size} 项$subject"
+                                else "${filtered.size} / ${entries.size} 项$subject",
+                            label = "筛选与排序",
+                            activeFilter = conditions.isNotEmpty(),
+                            activeCount = conditions.size,
                             onClick = { focus.clearFocus(); showFilters = true }
                         )
-                        if (conditions.isNotEmpty()) Text(conditions.joinToString("、"), style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (conditions.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                conditions.forEach { condition ->
+                                    Surface(
+                                        shape = smoothCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                                    ) {
+                                        Text(
+                                            condition,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 if (filtered.isEmpty()) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
-                    ExtractionEmptyResults(message = if (entries.isEmpty()) "暂无$subject" else "没有符合条件的$subject",
+                    ExtractionEmptyResults(
+                        message = if (entries.isEmpty()) "暂无$subject" else "没有符合条件的$subject",
                         onClearQuery = if (query.isNotEmpty()) ({ query = "" }) else null,
-                        onClearFilters = if (category != null || quality != null || valuableOnly) ::clearFilters else null)
+                        onClearFilters = if (category != null || quality != null || valuableOnly) ::clearFilters else null
+                    )
                 }
                 gridItems(filtered, key = { it.id }) { entry ->
                     ExtractionItemCard(kind, entry) { focus.clearFocus(); selectedId = entry.id }
@@ -107,11 +152,16 @@ fun ExtractionCatalogScreen(
             }
         }
     }
-    if (showFilters && isActive()) ExtractionFilterSheet(kind, categories, qualities, sorts, category, quality, valuableOnly, sort, descending,
-        onCategory = { category = it }, onQuality = { quality = it }, onValuable = { valuableOnly = it }, onSort = { sort = it },
-        onDescending = { descending = it }, onClear = if (conditions.isNotEmpty()) ::resetOptions else null,
-        onDismiss = { showFilters = false })
-    if (isActive()) entries.firstOrNull { it.id == selectedId }?.let { entry -> ExtractionItemDetailSheet(entry, kind) { selectedId = null } }
+    if (showFilters && isActive()) ExtractionFilterSheet(
+        kind, categories, qualities, sorts, category, quality, valuableOnly, sort, descending,
+        onCategory = { category = it }, onQuality = { quality = it }, onValuable = { valuableOnly = it },
+        onSort = { sort = it }, onDescending = { descending = it },
+        onClear = if (conditions.isNotEmpty()) ::resetOptions else null,
+        onDismiss = { showFilters = false }
+    )
+    if (isActive()) entries.firstOrNull { it.id == selectedId }?.let { entry ->
+        ExtractionItemDetailSheet(entry, kind) { selectedId = null }
+    }
 }
 
 @Composable
@@ -125,22 +175,98 @@ internal fun Modifier.extractionItemImageSlot() = fillMaxWidth().layout { measur
 }
 
 @Composable
+internal fun ColumnScope.ExtractionItemImageHeader(
+    accent: Color,
+    artwork: @Composable () -> Unit,
+    badge: @Composable () -> Unit
+) {
+    Spacer(Modifier.fillMaxWidth().height(2.dp).background(accent))
+    Box(Modifier.extractionItemImageSlot().background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center) {
+        artwork()
+        Box(Modifier.align(Alignment.TopStart).padding(6.dp)) { badge() }
+    }
+}
+
+@Composable
 private fun ExtractionItemCard(kind: ExtractionCatalogKind, entry: ExtractionEntry, onClick: () -> Unit) {
     val quality = entry.quality?.takeIf { it in 1..5 } ?: -1
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = AppShapes.compactCard,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        border = BorderStroke(1.dp, extractionDropQualityColor(quality).copy(alpha = 0.32f))) {
-        Box(Modifier.extractionItemImageSlot(), contentAlignment = Alignment.Center) {
-            ExtractionCatalogArtwork(entry, Modifier.fillMaxSize().padding(8.dp))
-            CatalogQualityBadge(label = entry.qualityLabel, level = quality)
+    val qualityColor = extractionDropQualityColor(quality)
+    val colors = MaterialTheme.colorScheme
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = smoothCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+    ) {
+        ExtractionItemImageHeader(
+            accent = qualityColor,
+            artwork = { ExtractionCatalogArtwork(entry, Modifier.fillMaxSize().padding(10.dp)) }
+        ) {
+            if (entry.qualityLabel.isNotBlank()) {
+                ExtractionDropQualityBadge(label = entry.qualityLabel, code = quality, surfaceBacked = true)
+            }
         }
-        Column(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(entry.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                maxLines = 3, overflow = TextOverflow.Ellipsis)
-            val summary = if (kind == ExtractionCatalogKind.ATTACHMENTS) entry.category else
-                entry.fields.firstOrNull { it.label == "价值" && it.value.isNotBlank() }?.let { "价值 ${it.value}" }
-            if (summary != null) Text(summary, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.35f))
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                entry.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (kind == ExtractionCatalogKind.ATTACHMENTS) {
+                if (entry.category.isNotBlank()) {
+                    Surface(
+                        shape = smoothCornerShape(6.dp),
+                        color = colors.surfaceContainerHigh,
+                        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.45f))
+                    ) {
+                        Text(
+                            entry.category,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            } else {
+                val valueText = entry.fields.firstOrNull { it.label == "价值" && it.value.isNotBlank() }?.value
+                if (valueText != null) {
+                    Surface(
+                        shape = smoothCornerShape(6.dp),
+                        color = colors.surfaceContainerHigh,
+                        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.45f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "价值",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.onSurfaceVariant
+                            )
+                            Text(
+                                valueText,
+                                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -150,9 +276,14 @@ internal fun ExtractionCatalogArtwork(entry: ExtractionEntry, modifier: Modifier
     Box(modifier, contentAlignment = Alignment.Center) {
         var loaded by remember(entry.imageUrl) { mutableStateOf(false) }
         if (!loaded) Icon(Icons.Outlined.Inventory2, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (!entry.imageUrl.isNullOrBlank()) AsyncImage(model = entry.imageUrl, contentDescription = null,
-            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit,
-            onLoading = { loaded = false; onReady?.invoke(false) }, onSuccess = { loaded = true; onReady?.invoke(true) },
-            onError = { loaded = false; onReady?.invoke(false) })
+        if (!entry.imageUrl.isNullOrBlank()) AsyncImage(
+            model = entry.imageUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit,
+            onLoading = { loaded = false; onReady?.invoke(false) },
+            onSuccess = { loaded = true; onReady?.invoke(true) },
+            onError = { loaded = false; onReady?.invoke(false) }
+        )
     }
 }

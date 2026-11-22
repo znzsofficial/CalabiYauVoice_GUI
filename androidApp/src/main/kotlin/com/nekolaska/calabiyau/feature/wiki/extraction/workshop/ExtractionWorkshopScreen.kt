@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.wiki.extraction.workshop
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -10,9 +12,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.*
+import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
 import com.nekolaska.calabiyau.feature.wiki.extraction.workshop.api.WorkshopApi
 import com.nekolaska.calabiyau.feature.wiki.extraction.workshop.model.*
-import com.nekolaska.calabiyau.feature.wiki.extraction.model.extractionArticleUrl
 
 internal enum class WorkshopTab(val title: String) { RECIPES("配方"), ROOMS("舱室"), STAFF("派驻"), DECOR("装修与收藏") }
 private enum class WorkshopPanel { NOTES, DETAIL }
@@ -20,9 +22,12 @@ private enum class WorkshopPanel { NOTES, DETAIL }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ExtractionWorkshopScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit, isActive: () -> Boolean = { true }) {
-    val state = rememberLoadState(initial = WorkshopPage(), cachedPrefetchDelayMs = 300,
+    val state = rememberLoadState(
+        initial = WorkshopPage(),
+        cachedPrefetchDelayMs = 300,
         cachedFetch = { WorkshopApi.fetch(cacheOnly = true) },
-        fetch = { WorkshopApi.fetch(forceRefresh = it, allowMemoryCache = false) })
+        fetch = { WorkshopApi.fetch(forceRefresh = it, allowMemoryCache = false) }
+    )
     var tab by rememberSaveable { mutableStateOf(WorkshopTab.RECIPES) }
     val tabStates = rememberSaveableStateHolder()
     val panelStates = rememberSaveableStateHolder()
@@ -51,32 +56,65 @@ internal fun ExtractionWorkshopScreen(onBack: () -> Unit, onOpenWikiUrl: (String
     // Toggling pull-to-refresh for the web overlay changes the content's parent. Move the
     // live tab with it: remounting the same saveable key in a new branch resets its controls.
     val keepTab = remember { movableContentOf<@Composable () -> Unit> { content -> content() } }
+    val colors = MaterialTheme.colorScheme
     Scaffold(topBar = {
         Column {
-            TopAppBar(title = { Text("工坊", fontWeight = FontWeight.Bold) }, navigationIcon = { BackNavButton(onClick = {
-                if (acceptsInput()) { focus.clearFocus(); onBack() }
-            }) },
+            TopAppBar(
+                title = { Text("工坊", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    BackNavButton(onClick = {
+                        if (acceptsInput()) { focus.clearFocus(); onBack() }
+                    })
+                },
                 actions = {
                     RefreshActionButton(onClick = { if (acceptsInput()) state.reload(forceRefresh = true) }, enabled = active && !state.isLoading)
                     OpenWikiActionButton(wikiUrl = wikiUrl, onOpenWikiUrl = { openOriginal() }, contentDescription = "查看 Wiki 原文")
-                })
-            SecondaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 4.dp) {
-                WorkshopTab.entries.forEach { choice -> Tab(selected = tab == choice,
-                    onClick = { if (acceptsInput()) { focus.clearFocus(); tab = choice } }, text = { Text(choice.title) }) }
+                }
+            )
+            SecondaryScrollableTabRow(
+                selectedTabIndex = tab.ordinal,
+                edgePadding = 12.dp,
+                divider = { HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.55f)) }
+            ) {
+                WorkshopTab.entries.forEach { choice ->
+                    Tab(
+                        selected = tab == choice,
+                        onClick = { if (acceptsInput()) { focus.clearFocus(); tab = choice } },
+                        text = {
+                            Text(
+                                choice.title,
+                                fontWeight = if (tab == choice) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
+                    )
+                }
             }
         }
     }) { padding ->
-        ApiResourceContent(state, Modifier.padding(padding).consumeWindowInsets(padding).imePadding(), isDataEmpty = { it.recipes.isEmpty() },
-            enablePullToRefresh = active, loading = { WorkshopSkeleton(tab, it) }) { page ->
+        ApiResourceContent(
+            state,
+            Modifier.padding(padding).consumeWindowInsets(padding).imePadding(),
+            isDataEmpty = { it.recipes.isEmpty() },
+            enablePullToRefresh = active,
+            loading = { WorkshopSkeleton(tab, it) }
+        ) { page ->
             keepTab {
                 tabStates.SaveableStateProvider(tab.name) {
                     when (tab) {
-                        WorkshopTab.RECIPES -> WorkshopRecipes(page, query, acceptsInput = ::acceptsInput, onQuery = { query = it },
-                            onNotes = { openPanel(WorkshopPanel.NOTES) }, onRecipe = { match ->
+                        WorkshopTab.RECIPES -> WorkshopRecipes(
+                            page, query,
+                            acceptsInput = ::acceptsInput,
+                            onQuery = { query = it },
+                            onNotes = { openPanel(WorkshopPanel.NOTES) },
+                            onRecipe = { match ->
                                 openPanel(WorkshopPanel.DETAIL, match.recipe.id, match.materialTiers.firstOrNull()?.quality)
-                            })
-                        WorkshopTab.ROOMS -> WorkshopRooms(page, onNotes = { openPanel(WorkshopPanel.NOTES) },
-                            onRoom = { openPanel(WorkshopPanel.DETAIL, it.overview.name) })
+                            }
+                        )
+                        WorkshopTab.ROOMS -> WorkshopRooms(
+                            page,
+                            onNotes = { openPanel(WorkshopPanel.NOTES) },
+                            onRoom = { openPanel(WorkshopPanel.DETAIL, it.overview.name) }
+                        )
                         WorkshopTab.STAFF -> WorkshopStaff(page, ::acceptsInput)
                         WorkshopTab.DECOR -> WorkshopDecorations(page, ::acceptsInput)
                     }
@@ -95,13 +133,41 @@ internal fun ExtractionWorkshopScreen(onBack: () -> Unit, onOpenWikiUrl: (String
     if (active && panel != null && page.recipes.isNotEmpty()) panelStates.SaveableStateProvider("panel") {
         when (panel) {
             WorkshopPanel.NOTES -> WikiScrollableSheet(onDismiss = ::dismissPanel) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (tab == WorkshopTab.RECIPES) {
-                        WorkshopTitle("配方说明"); Text(page.recipeNotes)
-                    } else {
-                        WorkshopTitle("舱室说明"); Text(page.intro)
-                        DetailField(label = "舱室用途", value = page.roomNotes)
-                        DetailField(label = "升级规则", value = page.upgradeNotes)
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = smoothCornerShape(12.dp),
+                        color = colors.surfaceContainer,
+                        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+                    ) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Box(Modifier.fillMaxWidth().height(2.dp).background(colors.primary))
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                WorkshopTitle(if (tab == WorkshopTab.RECIPES) "配方说明" else "舱室说明")
+                                Text(
+                                    if (tab == WorkshopTab.RECIPES) page.recipeNotes else page.intro,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                    if (tab != WorkshopTab.RECIPES) {
+                        val notes = listOf("舱室用途" to page.roomNotes, "升级规则" to page.upgradeNotes).filter { it.second.isNotBlank() }
+                        if (notes.isNotEmpty()) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = smoothCornerShape(12.dp),
+                                color = colors.surfaceContainer,
+                                border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.50f))
+                            ) {
+                                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    notes.forEachIndexed { index, (label, value) ->
+                                        if (index > 0) HorizontalDivider(color = colors.outlineVariant.copy(alpha = 0.40f))
+                                        DetailField(label = label, value = value)
+                                    }
+                                }
+                            }
+                        }
                     }
                     WorkshopSheetActions(::openOriginal, ::dismissPanel)
                 }
@@ -109,8 +175,12 @@ internal fun ExtractionWorkshopScreen(onBack: () -> Unit, onOpenWikiUrl: (String
             WorkshopPanel.DETAIL -> when {
                 recipe != null -> {
                     val tier = recipe.tiers.find { it.quality == quality } ?: recipe.tiers.first()
-                    WorkshopRecipeSheet(recipe, tier, query, onQuality = { if (acceptsInput()) quality = it },
-                        onOriginal = ::openOriginal, onDismiss = ::dismissPanel)
+                    WorkshopRecipeSheet(
+                        recipe, tier, query,
+                        onQuality = { if (acceptsInput()) quality = it },
+                        onOriginal = ::openOriginal,
+                        onDismiss = ::dismissPanel
+                    )
                 }
                 room != null -> WorkshopRoomSheet(room, ::openOriginal, ::dismissPanel)
                 else -> Unit

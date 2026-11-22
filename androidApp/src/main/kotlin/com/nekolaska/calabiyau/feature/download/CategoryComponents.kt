@@ -3,6 +3,8 @@ package com.nekolaska.calabiyau.feature.download
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DoneAll
@@ -169,11 +171,13 @@ fun GroupCard(
 }
 
 @Composable
-fun CategoryDetailContent(
+internal fun CategoryDetailContent(
     group: CharacterGroup,
     subCategories: List<String>,
     checkedCategories: List<String>,
     isScanning: Boolean,
+    scanFailure: CategoryScanFailure?,
+    onRetryScan: (CategoryScanFailure) -> Unit,
     isDownloading: Boolean,
     manualSelectionMap: Map<String, List<Pair<String, String>>>,
     onCheckAll: () -> Unit,
@@ -226,7 +230,16 @@ fun CategoryDetailContent(
             }
         }
 
-        if (!isScanning && subCategories.isNotEmpty()) {
+        if (!isScanning && scanFailure != null && scanFailure.group == group) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(AppSpacing.screen),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.itemGap)
+            ) {
+                Text(scanFailure.message, color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = { onRetryScan(scanFailure) }) { Text("重试") }
+            }
+        } else if (!isScanning && subCategories.isNotEmpty()) {
             // ── 操作栏 ──
             Row(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),

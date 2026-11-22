@@ -85,6 +85,7 @@ private fun DownloaderContent(
     val subCategories by searchVM.subCategories.collectAsState()
     val checkedCategories by searchVM.checkedCategories.collectAsState()
     val isScanningTree by searchVM.isScanningTree.collectAsState()
+    val categoryScanFailure by searchVM.categoryScanFailure.collectAsState()
     val fileSearchResults by searchVM.fileSearchResults.collectAsState()
     val fileSearchSelectedUrls by searchVM.fileSearchSelectedUrls.collectAsState()
     val hasSearched by searchVM.hasSearched.collectAsState()
@@ -601,6 +602,8 @@ private fun DownloaderContent(
                 subCategories = subCategories,
                 checkedCategories = checkedCategories,
                 isScanning = isScanningTree,
+                scanFailure = categoryScanFailure,
+                onRetryScan = searchVM::retryCategoryScan,
                 isDownloading = isDownloading,
                 manualSelectionMap = manualSelectionMap,
                 onCheckAll = { searchVM.checkAllCategories() },

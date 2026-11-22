@@ -59,14 +59,6 @@ private data class ResolvedLiquidGlassTuning(
     val surfaceColor: Color
 )
 
-private fun LiquidGlassTuning?.resolveWith(defaultTuning: ResolvedLiquidGlassTuning): ResolvedLiquidGlassTuning =
-    ResolvedLiquidGlassTuning(
-        brightness = this?.brightness ?: defaultTuning.brightness,
-        contrast = this?.contrast ?: defaultTuning.contrast,
-        saturation = this?.saturation ?: defaultTuning.saturation,
-        surfaceColor = this?.surfaceColor ?: defaultTuning.surfaceColor
-    )
-
 @Composable
 private fun rememberLiquidGlassTuning(surfaceAlpha: Float, isLightVariant: Boolean): ResolvedLiquidGlassTuning {
     val isDark = isAppInDarkTheme()
@@ -128,23 +120,33 @@ fun Modifier.liquidGlass(
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
     val defaultTuning = rememberLiquidGlassTuning(surfaceAlpha = surfaceAlpha, isLightVariant = false)
-    val appliedTuning = tuning.resolveWith(defaultTuning)
+    return drawLiquidGlass(backdrop, shape, blurRadius, lensHeight, lensAmount, defaultTuning, tuning)
+}
 
+private fun Modifier.drawLiquidGlass(
+    backdrop: Backdrop,
+    shape: () -> Shape,
+    blurRadius: Dp,
+    lensHeight: Dp,
+    lensAmount: Dp,
+    defaults: ResolvedLiquidGlassTuning,
+    tuning: LiquidGlassTuning?,
+): Modifier {
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = shape,
         effects = {
             colorControls(
-                brightness = appliedTuning.brightness,
-                contrast = appliedTuning.contrast,
-                saturation = appliedTuning.saturation
+                brightness = tuning?.brightness ?: defaults.brightness,
+                contrast = tuning?.contrast ?: defaults.contrast,
+                saturation = tuning?.saturation ?: defaults.saturation
             )
             blur(blurRadius.toPx())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 lens(lensHeight.toPx(), lensAmount.toPx())
             }
         },
-        onDrawSurface = { drawRect(appliedTuning.surfaceColor) }
+        onDrawSurface = { drawRect(tuning?.surfaceColor ?: defaults.surfaceColor) }
     )
 }
 
@@ -155,28 +157,14 @@ fun Modifier.liquidGlass(
 fun Modifier.liquidGlassLight(
     backdrop: Backdrop = emptyBackdrop(),
     shape: () -> Shape = { ContinuousCapsule },
-    enabled: Boolean = LocalLiquidGlassEnabled.current.value
+    enabled: Boolean = LocalLiquidGlassEnabled.current.value,
+    tuning: LiquidGlassTuning? = null,
 ): Modifier {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return this
-    val tuning = rememberLiquidGlassTuning(
+    val defaults = rememberLiquidGlassTuning(
         surfaceAlpha = if (isAppInDarkTheme()) 0.22f else 0.26f,
         isLightVariant = true
     )
 
-    return this.drawBackdrop(
-        backdrop = backdrop,
-        shape = shape,
-        effects = {
-            colorControls(
-                brightness = tuning.brightness,
-                contrast = tuning.contrast,
-                saturation = tuning.saturation
-            )
-            blur(2.dp.toPx())
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                lens(12.dp.toPx(), 20.dp.toPx())
-            }
-        },
-        onDrawSurface = { drawRect(tuning.surfaceColor) }
-    )
+    return drawLiquidGlass(backdrop, shape, 2.dp, 12.dp, 20.dp, defaults, tuning)
 }

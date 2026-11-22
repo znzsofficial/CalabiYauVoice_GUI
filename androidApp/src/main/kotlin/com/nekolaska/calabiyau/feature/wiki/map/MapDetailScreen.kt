@@ -2,32 +2,32 @@ package com.nekolaska.calabiyau.feature.wiki.map
 
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Update
+import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.feature.wiki.map.api.MapDetailApi
-import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
-import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
@@ -35,11 +35,14 @@ import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
-import com.nekolaska.calabiyau.core.ui.SkeletonCard
+import com.nekolaska.calabiyau.core.ui.ShimmerGroup
 import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.feature.wiki.map.api.MapDetailApi
+import com.nekolaska.calabiyau.feature.wiki.map.model.MapDetail
+import com.nekolaska.calabiyau.feature.wiki.map.model.UpdateEntry
 import util.wikiPathEncode
 
 // ════════════════════════════════════════════════════════
@@ -48,10 +51,23 @@ import util.wikiPathEncode
 
 private val HeaderCardPadding = 16.dp
 private val HeaderCardVerticalPadding = 10.dp
+private val MapCardRadius = 22.dp
+private val MapMediaRadius = 18.dp
+private val MapFrostedSurface = Color(0xCC141720)
+private val MapFrostedRim = Color.White.copy(alpha = 0.14f)
 
 @Composable
-private fun headerCardShape() = smoothCornerShape(16.dp)
+private fun mapCardShape() = smoothCornerShape(MapCardRadius)
 
+@Composable
+private fun mapMediaShape() = smoothCornerShape(MapMediaRadius)
+
+@Composable
+private fun mapCardColors() = CardDefaults.cardColors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapDetailScreen(
     mapName: String,
@@ -79,8 +95,12 @@ fun MapDetailScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(mapName, fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        mapName,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 },
                 navigationIcon = {
                     BackNavButton(onClick = onBack)
@@ -93,7 +113,7 @@ fun MapDetailScreen(
         }
     ) { innerPadding ->
         var previewImage by remember { mutableStateOf<PreviewImage?>(null) }
-        val headerShape = headerCardShape()
+        val cardShape = mapCardShape()
         Column(
             Modifier
                 .padding(innerPadding)
@@ -105,7 +125,7 @@ fun MapDetailScreen(
                 onClick = {
                     if (imageUrl != null) previewImage = PreviewImage(imageUrl, mapName)
                 },
-                shape = headerShape,
+                shape = cardShape,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = HeaderCardPadding, vertical = HeaderCardVerticalPadding)
@@ -120,7 +140,7 @@ fun MapDetailScreen(
                             }
                         } else Modifier
                     ),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                colors = mapCardColors()
             ) {
                 if (imageUrl != null) {
                     AsyncImage(
@@ -130,19 +150,22 @@ fun MapDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
-                            .clip(headerShape)
+                            .clip(cardShape)
                     )
                 } else if (state.isLoading) {
                     ShimmerBox(
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f),
-                        shape = headerShape
+                        shape = cardShape
                     )
                 } else {
                     Box(Modifier.fillMaxWidth().height(72.dp), contentAlignment = Alignment.Center) {
-                        Text("暂无地图图片", style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "暂无地图图片",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -178,20 +201,19 @@ private fun MapDetailBody(
     detail: MapDetail,
     onPreviewImage: (url: String, title: String) -> Unit
 ) {
-    val headerShape = headerCardShape()
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = HeaderCardPadding, vertical = HeaderCardVerticalPadding),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // ── 标题 + 简介 ──
         Card(
-            shape = headerShape,
+            shape = mapCardShape(),
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            colors = mapCardColors()
         ) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     detail.name,
                     style = MaterialTheme.typography.headlineMedium,
@@ -243,34 +265,40 @@ private fun MapDetailBody(
 @Composable
 private fun MapInfoCard(detail: MapDetail) {
     Card(
-        shape = smoothCornerShape(26.dp),
+        shape = mapCardShape(),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = mapCardColors()
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.Info, "地图信息")
 
             // 支持模式
             if (detail.supportedModes.isNotBlank()) {
-                Text("支持模式", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    detail.supportedModes.split("、", "，", ",").forEach { mode ->
-                        val trimmed = mode.trim()
-                        if (trimmed.isNotBlank()) {
-                            Surface(
-                                shape = smoothCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Text(
-                                    trimmed,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "支持模式",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        detail.supportedModes.split("、", "，", ",").forEach { mode ->
+                            val trimmed = mode.trim()
+                            if (trimmed.isNotBlank()) {
+                                Surface(
+                                    shape = AppShapes.capsule,
+                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Text(
+                                        trimmed,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -279,26 +307,34 @@ private fun MapInfoCard(detail: MapDetail) {
 
             // 上线平台
             if (detail.platforms.isNotBlank()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                Text("上线平台", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    detail.platforms.split("、", "，", ",").forEach { platform ->
-                        val trimmed = platform.trim()
-                        if (trimmed.isNotBlank()) {
-                            Surface(
-                                shape = smoothCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer
-                            ) {
-                                Text(
-                                    trimmed,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                )
+                if (detail.supportedModes.isNotBlank()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "上线平台",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        detail.platforms.split("、", "，", ",").forEach { platform ->
+                            val trimmed = platform.trim()
+                            if (trimmed.isNotBlank()) {
+                                Surface(
+                                    shape = AppShapes.capsule,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer
+                                ) {
+                                    Text(
+                                        trimmed,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -314,23 +350,56 @@ private fun MapInfoCard(detail: MapDetail) {
 
 @Composable
 private fun MapTerrainCard(terrainMapUrl: String, onPreview: () -> Unit) {
+    val mediaShape = mapMediaShape()
     Card(
-        shape = smoothCornerShape(26.dp),
+        shape = mapCardShape(),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = mapCardColors()
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.Layers, "地形图")
-            Surface(shape = smoothCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-                AsyncImage(
-                    model = terrainMapUrl,
-                    contentDescription = "地形图",
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onPreview)
-                        .clip(smoothCornerShape(18.dp))
-                )
+            Surface(
+                onClick = onPreview,
+                shape = mediaShape,
+                color = MaterialTheme.colorScheme.surfaceContainer
+            ) {
+                Box(Modifier.fillMaxWidth()) {
+                    AsyncImage(
+                        model = terrainMapUrl,
+                        contentDescription = "地形图",
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(mediaShape)
+                    )
+                    Surface(
+                        shape = AppShapes.capsule,
+                        color = MapFrostedSurface,
+                        border = BorderStroke(0.5.dp, MapFrostedRim),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Outlined.ZoomIn,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = Color.White
+                            )
+                            Text(
+                                "放大",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -342,21 +411,23 @@ private fun MapTerrainCard(terrainMapUrl: String, onPreview: () -> Unit) {
 
 @Composable
 private fun MapGalleryCard(galleryUrls: List<String>, onPreview: (String) -> Unit) {
+    val mediaShape = mapMediaShape()
     Card(
-        shape = smoothCornerShape(26.dp),
+        shape = mapCardShape(),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = mapCardColors()
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.PhotoLibrary, "地图概览")
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(galleryUrls, key = { it }) { url ->
                     Card(
-                        shape = smoothCornerShape(20.dp),
+                        shape = mediaShape,
                         onClick = { onPreview(url) },
-                        modifier = Modifier.width(280.dp)
+                        modifier = Modifier.width(280.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         AsyncImage(
                             model = url,
@@ -380,42 +451,43 @@ private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {
     val visibleHistory = if (expanded) updateHistory else updateHistory.take(3)
 
     Card(
-        shape = smoothCornerShape(26.dp),
+        shape = mapCardShape(),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = mapCardColors()
     ) {
-        Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             SectionTitle(Icons.Outlined.Update, "更新改动历史")
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 visibleHistory.forEach { entry ->
-                    Spacer(Modifier.height(6.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        shape = smoothCornerShape(16.dp)
-                    ) {
-                        Text(
-                            text = entry.date,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = AppShapes.capsule
+                        ) {
+                            Text(
+                                text = entry.date,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                            )
+                        }
 
-                    entry.changes.forEach { change ->
-                        Row(Modifier.padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.Top) {
-                            Text(
-                                "•",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Text(
-                                text = change,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                lineHeight = 20.sp
-                            )
+                        entry.changes.forEach { change ->
+                            Row(Modifier.padding(start = 4.dp, top = 2.dp), verticalAlignment = Alignment.Top) {
+                                Text(
+                                    "•",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                )
+                                Text(
+                                    text = change,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    lineHeight = 20.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -425,7 +497,7 @@ private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {
                 TextButton(
                     onClick = { expanded = !expanded },
                     modifier = Modifier.align(Alignment.CenterHorizontally),
-                    shape = smoothCornerShape(14.dp)
+                    shape = AppShapes.capsule
                 ) {
                     Text(if (expanded) "收起" else "查看全部 ${updateHistory.size} 条更新")
                 }
@@ -435,36 +507,38 @@ private fun MapUpdateHistoryCard(updateHistory: List<UpdateEntry>) {
 }
 
 @Composable
-private fun MapDetailBodySkeleton(modifier: Modifier = Modifier) {
+private fun MapDetailBodySkeleton(modifier: Modifier = Modifier) = ShimmerGroup {
+    val cardShape = mapCardShape()
+    val cardColors = mapCardColors()
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = HeaderCardPadding, vertical = HeaderCardVerticalPadding),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 标题 + 简介 shimmer
-        SkeletonCard {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ShimmerBox(Modifier.width(160.dp).height(36.dp))
-                ShimmerBox(Modifier.fillMaxWidth().height(48.dp), shape = smoothCornerShape(8.dp))
+        Card(shape = cardShape, modifier = Modifier.fillMaxWidth(), colors = cardColors) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                ShimmerBox(Modifier.width(160.dp).height(34.dp))
+                ShimmerBox(Modifier.fillMaxWidth().height(48.dp), shape = smoothCornerShape(10.dp))
             }
         }
 
         // 地图信息卡片骨架
-        SkeletonCard {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Card(shape = cardShape, modifier = Modifier.fillMaxWidth(), colors = cardColors) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 SkeletonSectionTitle()
                 SkeletonChipRow(count = 4)
             }
         }
 
         // 地形图卡片骨架
-        SkeletonCard {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Card(shape = cardShape, modifier = Modifier.fillMaxWidth(), colors = cardColors) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 SkeletonSectionTitle()
                 ShimmerBox(
                     Modifier.fillMaxWidth().height(200.dp),
-                    shape = smoothCornerShape(18.dp)
+                    shape = mapMediaShape()
                 )
             }
         }

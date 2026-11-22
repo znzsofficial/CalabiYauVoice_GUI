@@ -75,6 +75,9 @@ class PcGameSettingsParserTest {
         val result = page.filteredSections(PcSettingsView.SETTINGS, query = "手柄 跳跃")
         assertEquals(1, result.size)
         assertEquals("A", (result.single().blocks.single() as PcSettingsBlock.Setting).field("默认"))
+        for (space in listOf(" \u3000 ", "\u3000", " \u00a0 ")) {
+            assertEquals(result, page.filteredSections(PcSettingsView.SETTINGS, query = "手柄${space}跳跃"))
+        }
         assertEquals(1, page.filteredSections(PcSettingsView.RECOMMENDATIONS, query = "198").sumOf { it.blocks.size })
         assertTrue(page.filteredSections(PcSettingsView.SETTINGS, query = "198").isEmpty())
         val sourceId = page.settings.single { it.name == "主音量" }.id

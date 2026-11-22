@@ -99,11 +99,48 @@ class ExtractionDropNavigationTest {
         val container = ExtractionEntry("container", "容器", "Boss", containerId = "10001", type = ExtractionEntryType.DROP_POOL)
         val notes = ExtractionEntry("source", "Boss别名", "Boss", containerId = "10001", type = ExtractionEntryType.DROP_SOURCE,
             fields = listOf(ExtractionField("掉落说明", "独有材料")))
-        val record = dropSourceRecords(listOf(container), listOf(notes)).single()
-        assertEquals(container, record.matchingRecord("")?.entry)
-        assertEquals(notes, record.matchingRecord("Boss别名")?.entry)
-        assertEquals(notes, record.matchingRecord("独有材料")?.entry)
-        assertEquals(false, record.matchingRecord("独有材料")?.isContainer)
-        assertNull(record.matchingRecord("完全无关"))
+        val search = DropSourceSearch(dropSourceRecords(listOf(container), listOf(notes)), listOf(notes))
+        assertEquals(container, search.filter("", null).single().entry)
+        assertEquals(container, search.filter("boss", null).single().entry)
+        assertEquals(notes, search.filter("Boss别名", null).single().entry)
+        assertEquals(DropSourceRecord(notes, false), search.filter("独有材料", null).single())
+        assertTrue(search.filter("完全无关", null).isEmpty())
+    }
+
+    @Test fun candidateTermsAreReadOnceAcrossRepeatedQueriesAndSharedSources() {
+        var reads = 0
+        val names = object : AbstractList<String>() {
+            override val size = 2
+            override fun get(index: Int): String { reads++; return if (index == 0) "Alpha" else "Beta" }
+        }
+        val pool = ExtractionEntry("pool", "清单", "地图", type = ExtractionEntryType.DROP_POOL,
+            dropPoolGroups = listOf(ExtractionDropPoolGroup("Q4 完美", names)))
+        val a = DropSourceRecord(ExtractionEntry("a", "甲", "地图", sharedPoolId = pool.id), false)
+        val b = DropSourceRecord(a.entry.copy(id = "b", category = "晶源体"), false)
+        val search = DropSourceSearch(listOf(a, b), listOf(pool))
+        assertEquals(listOf(a), search.filter("  ", "地图"))
+        assertEquals(0, reads)
+        search.prepare()
+        assertEquals(listOf(a, b), search.filter(" PHa ", null))
+        assertEquals(listOf(b), search.filter("q4", "晶源体"))
+        assertTrue(search.filter("AlphaBeta", null).isEmpty())
+        assertEquals(2, reads)
+    }
+
+    @Test fun firstSearchInABossCategoryDoesNotReadUnrelatedContainerPools() {
+        var reads = 0
+        val names = object : AbstractList<String>() {
+            override val size = 1
+            override fun get(index: Int) = "目标物品".also { reads++ }
+        }
+        val boss = DropSourceRecord(ExtractionEntry("boss", "莉莉丝 ／ KONG", "首领（Boss）"), false)
+        val box = DropSourceRecord(ExtractionEntry("box", "弹药仓", "地图", dropPoolGroups = listOf(
+            ExtractionDropPoolGroup("Q4 完美", names))), true)
+        val search = DropSourceSearch(listOf(box, boss), emptyList())
+        assertEquals(listOf(boss), search.filter("kong", boss.entry.category))
+        assertEquals(0, reads)
+        assertEquals(listOf(box), search.filter("目标", null))
+        assertEquals(listOf(box), search.filter("完美", box.entry.category))
+        assertEquals(1, reads)
     }
 }

@@ -52,13 +52,14 @@ dependencies {
 android {
     namespace = "com.nekolaska.calabiyau"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+    buildFeatures { buildConfig = true }
 
     defaultConfig {
         applicationId = "com.nekolaska.calabiyau"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 66
-        versionName = "2.2.5"
+        versionCode = 67
+        versionName = "2.3.0"
     }
 
     val localProps = Properties()

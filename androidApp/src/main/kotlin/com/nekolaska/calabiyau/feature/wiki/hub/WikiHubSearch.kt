@@ -1,6 +1,5 @@
 package com.nekolaska.calabiyau.feature.wiki.hub
 
-import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -9,7 +8,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
@@ -68,21 +66,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
-import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
-import com.nekolaska.calabiyau.core.ui.liquidGlass
 import com.nekolaska.calabiyau.core.ui.smoothCapsuleShape
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.character.list.CharacterListApi
@@ -92,7 +86,6 @@ import com.nekolaska.calabiyau.feature.wiki.map.model.GameModeData
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionCatalogKind
 import com.nekolaska.calabiyau.feature.wiki.mechanics.model.MechanicsKind
 import data.ApiResult
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -118,8 +111,6 @@ private data class GroupedSearchResults(
 
 private object HubWeaponSearchIndex {
     private val mutex = Mutex()
-
-    fun cached(): List<WeaponListApi.WeaponCategoryData> = HubListDataSnapshot.weaponCategories.orEmpty()
 
     suspend fun load(): List<WeaponListApi.WeaponCategoryData> = mutex.withLock {
         // 用户进过武器页时快照已是完整数据：直接复用，零请求
@@ -642,28 +633,17 @@ private fun searchEntry(
 
 @Composable
 internal fun HubSearchPanel(
-    query: String,
-    onQueryChange: (String) -> Unit,
+    textFieldState: TextFieldState,
     onNavigateTo: (WikiRoute) -> Unit,
     factions: List<CharacterListApi.FactionData> = emptyList(),
     gameModes: List<GameModeData> = emptyList(),
     isIndexLoading: Boolean = false,
     isPageActive: Boolean = true,
-    backdrop: Backdrop = emptyBackdrop(),
+    backdrop: Backdrop,
 ) {
-    val textFieldState = rememberTextFieldState(query)
     val focusManager = LocalFocusManager.current
-    val normalizedQuery = query.trim()
+    val normalizedQuery = textFieldState.text.toString().trim()
     var searchActive by remember { mutableStateOf(false) }
-    var weaponCategories by remember { mutableStateOf(HubWeaponSearchIndex.cached()) }
-    var isLoadingWeapons by remember { mutableStateOf(false) }
-
-    // 字段是唯一事实源，经 snapshotFlow 单向流出；不回写（快速输入时滞后镜像会覆写字段丢字）
-    LaunchedEffect(textFieldState) {
-        snapshotFlow { textFieldState.text.toString() }
-            .distinctUntilChanged()
-            .collect(onQueryChange)
-    }
 
     fun collapseSearch() {
         focusManager.clearFocus(force = true)
@@ -671,8 +651,9 @@ internal fun HubSearchPanel(
     }
 
     fun selectResult(entry: HubSearchEntry) {
+        // A retained result row can still receive a click during collapse or before the next frame.
+        if (!searchActive || !isPageActive || textFieldState.text.toString().trim() != normalizedQuery) return
         textFieldState.edit { replace(0, length, "") }
-        onQueryChange("")
         collapseSearch()
         onNavigateTo(entry.targetRoute)
     }
@@ -681,62 +662,80 @@ internal fun HubSearchPanel(
 
     val weaponSnapshot = HubListDataSnapshot.weaponCategories
     val snapshotGeneration = HubListDataSnapshot.generation
-    LaunchedEffect(searchActive, isPageActive, snapshotGeneration, weaponSnapshot) {
-        weaponCategories = HubWeaponSearchIndex.cached()
-        if (!searchActive || !isPageActive) return@LaunchedEffect
-        isLoadingWeapons = true
-        try {
-            val loadedCategories = HubWeaponSearchIndex.load()
-            if (loadedCategories.isNotEmpty()) {
-                weaponCategories = loadedCategories
-            }
-        } finally {
-            isLoadingWeapons = false
-        }
+    val needsWeaponIndex = searchActive && isPageActive && weaponSnapshot == null
+    var lightweightWeapons by remember(snapshotGeneration, needsWeaponIndex) {
+        mutableStateOf<List<WeaponListApi.WeaponCategoryData>?>(null)
     }
+    LaunchedEffect(snapshotGeneration, needsWeaponIndex) {
+        if (needsWeaponIndex) lightweightWeapons = HubWeaponSearchIndex.load()
+    }
+    val weaponCategories = weaponSnapshot ?: lightweightWeapons.orEmpty()
+    val isLoadingWeapons = needsWeaponIndex && lightweightWeapons == null
 
-    val dynamicEntries = remember(factions, weaponCategories, gameModes) {
-        buildDynamicSearchEntries(factions, weaponCategories, gameModes)
-    }
-    val groupedResults = remember(normalizedQuery, dynamicEntries) {
-        buildGroupedSearchResults(normalizedQuery, dynamicEntries)
-    }
-    val liquidGlass = LocalLiquidGlassEnabled.current.value &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val hasWallpaper = LocalHasWallpaper.current
     val shape = smoothCornerShape(28.dp)
-    val surfaceColor = when {
-        liquidGlass -> Color.Transparent
-        hasWallpaper -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.86f)
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
+    val colors = MaterialTheme.colorScheme
+    val material = rememberHubPanelMaterial(0.22f, tone = colors.surfaceContainerHigh, wallpaperAlpha = 0.86f)
 
     Surface(
         shape = shape,
-        color = surfaceColor,
+        color = material.containerColor,
+        contentColor = colors.onSurface,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(
-                backdrop = backdrop,
-                shape = { shape },
-                surfaceAlpha = 0.22f
-            )
+            .hubPanelGlass(backdrop, shape, material)
     ) {
         Column {
             TextField(
                 state = textFieldState,
                 placeholder = {
-                    Text("搜索入口、角色、武器、地图", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "搜索入口、角色、武器、地图",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = if (query.isNotBlank()) {
+                leadingIcon = {
+                    Surface(
+                        shape = smoothCapsuleShape(),
+                        color = colors.primaryContainer.copy(alpha = 0.72f),
+                        contentColor = colors.onPrimaryContainer,
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Outlined.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                },
+                trailingIcon = if (normalizedQuery.isNotEmpty()) {
                     {
                         IconButton(
                             onClick = { textFieldState.edit { replace(0, length, "") } }
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "清空")
+                            Surface(
+                                shape = smoothCapsuleShape(),
+                                color = colors.surfaceContainerHighest.copy(alpha = 0.72f),
+                                contentColor = colors.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "清空",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 } else null,
@@ -765,20 +764,31 @@ internal fun HubSearchPanel(
                 ) + fadeOut(animationSpec = tween(durationMillis = 160)),
             ) {
                 Column {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = colors.outlineVariant.copy(alpha = 0.36f)
+                    )
                     Column(
                         modifier = Modifier.padding(
-                            PaddingValues(start = 14.dp, end = 14.dp, bottom = 12.dp)
+                            PaddingValues(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 14.dp)
                         ),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        // The empty prompt never consumes the index. In particular, first-page data
+                        // arrivals shouldn't build character, weapon and map entries before typing.
+                        val groupedResults = if (normalizedQuery.isEmpty()) null else {
+                            val entries = remember(factions, weaponCategories, gameModes) {
+                                buildDynamicSearchEntries(factions, weaponCategories, gameModes)
+                            }
+                            remember(normalizedQuery, entries) { buildGroupedSearchResults(normalizedQuery, entries) }
+                        }
                         when {
-                            normalizedQuery.isBlank() -> {
+                            groupedResults == null -> {
                                 Text(
                                     "输入关键词以搜索 Wiki 内容",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                                    color = colors.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp)
                                 )
                             }
 
@@ -786,8 +796,8 @@ internal fun HubSearchPanel(
                                 Text(
                                     "正在加载搜索索引",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    color = colors.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
                                 )
                             }
 
@@ -795,8 +805,8 @@ internal fun HubSearchPanel(
                                 Text(
                                     "没有匹配的入口",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    color = colors.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)
                                 )
                             }
 
@@ -890,7 +900,7 @@ internal fun buildDynamicSearchEntries(
                 icon = Icons.Outlined.Map,
                 targetRoute = WikiRoute.MapDetail(
                     map.name,
-                    existingRouteImageUrl(existing) ?: map.imageUrl
+                    existingRouteImageUrl(existing) ?: map.imageUrl.takeIf(String::isNotBlank)
                 ),
                 kind = SearchEntryKind.Map,
             )
@@ -1064,13 +1074,33 @@ private fun SearchResultSection(
     onEntryClick: (HubSearchEntry) -> Unit,
 ) {
     if (entries.isEmpty()) return
-    Text(
-        title,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp)
-    )
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.onSurfaceVariant
+        )
+        Surface(
+            shape = smoothCapsuleShape(),
+            color = colors.secondaryContainer.copy(alpha = 0.72f),
+            contentColor = colors.onSecondaryContainer
+        ) {
+            Text(
+                entries.size.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
+            )
+        }
+    }
     entries.forEach { entry ->
         HubSearchResultRow(entry = entry, onClick = { onEntryClick(entry) })
     }
@@ -1081,43 +1111,66 @@ private fun HubSearchResultRow(
     entry: HubSearchEntry,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(smoothCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+    val colors = MaterialTheme.colorScheme
+    val isDark = colors.surface.luminance() < 0.5f
+    val rowContainerColor = if (isDark) {
+        colors.surfaceContainerHighest.copy(alpha = 0.46f)
+    } else {
+        colors.surface.copy(alpha = 0.74f)
+    }
+    val (badgeContainer, badgeContent) = when (entry.kind) {
+        SearchEntryKind.Character -> colors.primaryContainer.copy(alpha = 0.78f) to colors.onPrimaryContainer
+        SearchEntryKind.Weapon -> colors.secondaryContainer.copy(alpha = 0.82f) to colors.onSecondaryContainer
+        SearchEntryKind.Map, SearchEntryKind.MapMode -> colors.tertiaryContainer.copy(alpha = 0.82f) to colors.onTertiaryContainer
+        SearchEntryKind.Static -> colors.primaryContainer.copy(alpha = 0.68f) to colors.onPrimaryContainer
+    }
+    Surface(
+        onClick = onClick,
+        shape = smoothCornerShape(16.dp),
+        color = rowContainerColor,
+        contentColor = colors.onSurface,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Surface(
-            shape = smoothCapsuleShape(),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.size(36.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(entry.icon, contentDescription = null, modifier = Modifier.size(19.dp))
+            Surface(
+                shape = smoothCornerShape(12.dp),
+                color = badgeContainer,
+                contentColor = badgeContent,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(entry.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
             }
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                entry.title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    entry.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    entry.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = colors.onSurfaceVariant.copy(alpha = 0.55f)
             )
-            Text(
-                entry.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
-        Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
-        )
     }
 }

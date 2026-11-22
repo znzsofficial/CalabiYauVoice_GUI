@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -80,16 +81,20 @@ fun ImagePreviewDialog(
             onLongPress = saveImage,
             onImageReady = { ready = it }
         )
+        // These controls can sit directly over white artwork, even in dark mode.
+        val controls = IconButtonDefaults.iconButtonColors(containerColor = Color.Black.copy(alpha = 0.64f),
+            contentColor = Color.White, disabledContainerColor = Color.Black.copy(alpha = 0.64f),
+            disabledContentColor = Color.White.copy(alpha = 0.38f))
         IconButton(
             onClick = onDismiss,
             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-            colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+            colors = controls
         ) { Icon(Icons.Outlined.Close, contentDescription = "关闭") }
         IconButton(
             onClick = saveImage,
             enabled = ready,
             modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
-            colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
+            colors = controls
         ) { Icon(Icons.Outlined.SaveAlt, contentDescription = "保存") }
         bottomContent?.invoke(this)
         if (confirming && saveConfirmationLabel != null) {
@@ -125,7 +130,8 @@ internal fun FullscreenImageDialog(onDismiss: () -> Unit, content: @Composable B
         }
         val host = remember { SnackbarHostState() }
         CompositionLocalProvider(LocalSnackbarHostState provides host) {
-            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding(), contentAlignment = Alignment.Center) {
+            // Insets alone position children but don't clip a scaled image's drawing layer.
+            Box(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().clipToBounds(), contentAlignment = Alignment.Center) {
                 content()
                 SnackbarHost(host, Modifier.align(Alignment.BottomCenter))
             }

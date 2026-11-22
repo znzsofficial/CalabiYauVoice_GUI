@@ -60,9 +60,10 @@ fun PcGameSettingsPage.filteredSections(
     sectionId: String = "",
     query: String = ""
 ): List<PcSettingsSection> {
-    val terms = query.trim().split(Regex("\\s+")).filter(String::isNotBlank)
-    return sections.filter { it.view == view && (sectionId.isEmpty() || it.id == sectionId) }
-        .mapNotNull { section ->
+    val selected = sections.filter { it.view == view && (sectionId.isEmpty() || it.id == sectionId) && it.blocks.isNotEmpty() }
+    val terms = pcSettingsSearchTerms(query)
+    if (terms.isEmpty()) return selected
+    return selected.mapNotNull { section ->
             val blocks = section.blocks.filter { block ->
                 val body = when (block) {
                     is PcSettingsBlock.Text -> block.text
@@ -81,3 +82,9 @@ fun PcGameSettingsPage.filteredSections(
             section.copy(blocks = blocks).takeIf { blocks.isNotEmpty() }
         }
 }
+
+// Chinese IMEs and pasted text can use ideographic or non-breaking spaces between terms.
+private val queryWhitespace = Regex("[\\s\\p{Z}]+")
+
+internal fun pcSettingsSearchTerms(query: String): List<String> =
+    if (query.isBlank()) emptyList() else query.trim().split(queryWhitespace)

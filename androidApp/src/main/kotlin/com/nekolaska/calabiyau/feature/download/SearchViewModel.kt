@@ -8,6 +8,7 @@ import data.CharacterGroup
 import data.PortraitRepository
 import data.SearchMode
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -24,11 +25,21 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
+/** Identity belongs to a single failed attempt, including when the same group is reopened. */
+internal class CategoryScanFailure(val group: CharacterGroup, val message: String)
+
 /**
  * 搜索 & 分类树相关状态。
  * 管理关键词搜索、角色分组、分类文件选择对话框等。
  */
-class SearchViewModel : ViewModel() {
+class SearchViewModel : ViewModel {
+    private val scanCategoryTrees: suspend (List<String>) -> List<String>
+
+    constructor() : super() { scanCategoryTrees = WikiEngine::scanCategoryTrees }
+
+    internal constructor(scope: CoroutineScope, scanCategoryTrees: suspend (List<String>) -> List<String>) : super(scope) {
+        this.scanCategoryTrees = scanCategoryTrees
+    }
 
     /** 一次性错误事件（Snackbar 消费后即消失） */
     private val _errorEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -68,6 +79,9 @@ class SearchViewModel : ViewModel() {
 
     private val _isScanningTree = MutableStateFlow(false)
     val isScanningTree: StateFlow<Boolean> = _isScanningTree.asStateFlow()
+
+    private val _categoryScanFailure = MutableStateFlow<CategoryScanFailure?>(null)
+    internal val categoryScanFailure = _categoryScanFailure.asStateFlow()
 
     // 文件搜索结果
     private val _fileSearchResults = MutableStateFlow<List<Pair<String, String>>>(emptyList())
@@ -168,13 +182,6 @@ class SearchViewModel : ViewModel() {
         if (mode == prev) return
 
         cancelSearch()
-        val wasScanningCategory = categoryScanJob?.isActive == true
-        cancelCategoryScan()
-        if (wasScanningCategory) {
-            _selectedGroup.value = null
-            _subCategories.value = emptyList()
-            _checkedCategories.value = emptyList()
-        }
         _searchError.value = null
         cachedKeywords[prev] = _searchKeyword.value
         persistManualSelections(prev)
@@ -182,7 +189,8 @@ class SearchViewModel : ViewModel() {
         if (prev == SearchMode.VOICE_ONLY || prev == SearchMode.ALL_CATEGORIES) {
             cachedCharacterGroups[prev] = _characterGroups.value
             cachedCharacterAvatars[prev] = _characterAvatars.value
-            cachedSelectedGroup[prev] = _selectedGroup.value
+            // An unfinished tree has no usable detail page to restore on returning to this mode.
+            cachedSelectedGroup[prev] = _selectedGroup.value.takeUnless { _isScanningTree.value || _categoryScanFailure.value != null }
             cachedSubCategories[prev] = _subCategories.value
             cachedCheckedCategories[prev] = _checkedCategories.value
         } else if (prev == SearchMode.PORTRAIT) {
@@ -190,6 +198,7 @@ class SearchViewModel : ViewModel() {
             cachedCharacterAvatars[prev] = _characterAvatars.value
         }
 
+        clearSelectedGroup()
         _searchMode.value = mode
 
         if (mode == SearchMode.FILE_SEARCH) {
@@ -344,15 +353,25 @@ class SearchViewModel : ViewModel() {
     }
 
     fun onSelectGroup(group: CharacterGroup) {
-        cancelCategoryScan()
-        val scanVersion = ++categoryScanVersion
         _selectedGroup.value = group
+        scanGroup(group)
+    }
+
+    internal fun retryCategoryScan(failure: CategoryScanFailure) {
+        if (_categoryScanFailure.value === failure && _selectedGroup.value == failure.group) {
+            scanGroup(failure.group)
+        }
+    }
+
+    private fun scanGroup(group: CharacterGroup) {
+        cancelCategoryScan()
+        val scanVersion = categoryScanVersion
         _subCategories.value = emptyList()
         _checkedCategories.value = emptyList()
         _isScanningTree.value = true
         categoryScanJob = viewModelScope.launch {
             try {
-                val cats = WikiEngine.scanCategoryTrees(listOf(group.rootCategory) + group.subCategories)
+                val cats = scanCategoryTrees(listOf(group.rootCategory) + group.subCategories)
                 currentCoroutineContext().ensureActive()
                 if (scanVersion != categoryScanVersion || _selectedGroup.value != group) return@launch
                 _subCategories.value = cats
@@ -360,9 +379,11 @@ class SearchViewModel : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (scanVersion == categoryScanVersion) {
-                    _errorEvent.tryEmit("扫描分类树失败: ${e.message}")
-                    onLog?.invoke("[错误] 扫描分类树失败: ${e.message}")
+                currentCoroutineContext().ensureActive()
+                if (scanVersion == categoryScanVersion && _selectedGroup.value == group) {
+                    val message = e.message?.takeIf { it.isNotBlank() }?.let { "分类扫描失败：$it" } ?: "分类扫描失败"
+                    _categoryScanFailure.value = CategoryScanFailure(group, message)
+                    onLog?.invoke("[错误] $message")
                 }
             } finally {
                 if (scanVersion == categoryScanVersion) {
@@ -381,10 +402,11 @@ class SearchViewModel : ViewModel() {
     }
 
     private fun cancelCategoryScan() {
+        categoryScanVersion++
         fileSelection.close()
         categoryScanJob?.cancel()
         categoryScanJob = null
-        categoryScanVersion++
+        _categoryScanFailure.value = null
         _isScanningTree.value = false
     }
 

@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 
 @Composable
@@ -24,59 +24,93 @@ internal fun ExtractionDropCard(
     isContainer: Boolean = false, sharedPool: ExtractionEntry? = null,
     artwork: DropArtworkIndex = DropArtworkIndex.Empty, onClick: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     val groups = sharedPool?.dropPoolGroups ?: entry.dropPoolGroups
     val evidence = remember(entry, query, groups) { extractionDropMatchEvidence(entry, query, groups) }
     val previewItem = remember(groups, evidence, artwork, query) {
-        val candidates = if (query.isNotBlank()) evidence?.items.orEmpty().take(1).asSequence() else groups.asSequence().flatMap { group ->
-            group.items.asSequence().map { ExtractionDropItem(it, group.label, group.qualityCode) }
-        }
-        candidates.firstNotNullOfOrNull { item -> artwork.imageFor(item.name, item.qualityLabel)?.let { item to it } }
+        dropPreviewArtwork(query, evidence, groups, artwork)
     }
     val poolSummary = dropCandidateSummary(entry, isContainer, sharedPool)
     val isZero = entry.dropCountState == DropCountState.ZERO
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = AppShapes.compactCard,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = smoothCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLow),
         border = BorderStroke(
             1.dp,
-            if (entry.dropCountState == DropCountState.ZERO) MaterialTheme.colorScheme.error.copy(alpha = 0.35f)
-            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            if (isZero) colors.error.copy(alpha = 0.45f)
+            else colors.outlineVariant.copy(alpha = 0.55f)
         )
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ExtractionDropSourceIconBox(entry)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(entry.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                        maxLines = 3, overflow = TextOverflow.Ellipsis,
-                        color = if (evidence?.isNameMatch == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        entry.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (evidence?.isNameMatch == true) colors.primary else colors.onSurface
+                    )
                     val subtitle = (listOfNotNull(poolSummary, entry.category) + entry.tags)
                         .filter { it.isNotBlank() && it != entry.name }.distinct().joinToString("，")
                     if (subtitle.isNotBlank()) {
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            color = colors.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
-                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(
+                    Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = colors.onSurfaceVariant
+                )
             }
             if (isZero || (isContainer && entry.dropCountState == DropCountState.UNKNOWN)) DropCountStatus(entry)
             val preview = when {
-                evidence != null -> evidence.caption
+                evidence != null -> evidence.captionWithThumbnail(previewItem?.first)
                 previewItem != null -> "候选物品：${previewItem.first.name}（${previewItem.first.qualityLabel}）"
                 !isContainer -> entry.fields.firstOrNull {
                     it.label in setOf("候选池", "阈值", "必掉物", "掉落材料（按权重抽）", "掉落材料（按概率抽）", "掉落件数")
                 }?.let { "${it.label}：${it.value}" }
                 else -> null
             }
-            if (preview != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                previewItem?.let { (item, url) ->
-                    ExtractionDropThumbnail(item.qualityCode ?: -1, url, Modifier.size(36.dp))
+            if (preview != null) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = smoothCornerShape(8.dp),
+                    color = colors.surfaceContainerHigh.copy(alpha = 0.55f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (evidence != null) colors.primary.copy(alpha = 0.28f)
+                        else colors.outlineVariant.copy(alpha = 0.35f)
+                    )
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        previewItem?.let { (item, url) ->
+                            ExtractionDropThumbnail(item.qualityCode ?: -1, url, Modifier.size(36.dp))
+                        }
+                        Text(
+                            preview,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+                            color = if (evidence != null) colors.primary else colors.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-                Text(preview, style = MaterialTheme.typography.bodyMedium,
-                    color = if (evidence != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -92,10 +126,35 @@ internal fun DropCountStatus(entry: ExtractionEntry) {
         DropCountState.UNKNOWN -> "掉落件数未知"
         DropCountState.POSITIVE -> entry.fields.firstOrNull { it.label == "件数概率" }?.let { "件数概率：${it.value}" } ?: return
     }
-    Surface(shape = AppShapes.chip, color = when { zero -> colors.errorContainer; unknown -> colors.secondaryContainer; else -> colors.surfaceContainerHigh }) {
-        Text(label, Modifier.padding(horizontal = 8.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium,
-            color = when { zero -> colors.onErrorContainer; unknown -> colors.onSecondaryContainer; else -> colors.onSurfaceVariant },
-            maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Surface(
+        shape = smoothCornerShape(6.dp),
+        color = when {
+            zero -> colors.errorContainer
+            unknown -> colors.secondaryContainer
+            else -> colors.surfaceContainerHigh
+        },
+        border = BorderStroke(
+            1.dp,
+            when {
+                zero -> colors.error.copy(alpha = 0.30f)
+                unknown -> colors.outlineVariant.copy(alpha = 0.45f)
+                else -> colors.outlineVariant.copy(alpha = 0.40f)
+            }
+        )
+    ) {
+        Text(
+            label,
+            Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+            fontWeight = FontWeight.Medium,
+            color = when {
+                zero -> colors.onErrorContainer
+                unknown -> colors.onSecondaryContainer
+                else -> colors.onSurfaceVariant
+            },
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -112,17 +171,21 @@ internal fun dropCandidateSummary(entry: ExtractionEntry, isContainer: Boolean, 
 /** A source's semantic type is reliable; an item in its pool is not a portrait of that source. */
 @Composable
 internal fun ExtractionDropSourceIconBox(entry: ExtractionEntry, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
     val isZero = entry.dropCountState == DropCountState.ZERO
     Surface(
         modifier = modifier.size(40.dp),
-        shape = AppShapes.sectionIcon,
-        color = if (isZero) MaterialTheme.colorScheme.errorContainer
-        else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+        shape = smoothCornerShape(10.dp),
+        color = if (isZero) colors.errorContainer else colors.surfaceContainerHigh,
+        border = BorderStroke(
+            1.dp,
+            if (isZero) colors.error.copy(alpha = 0.35f) else colors.outlineVariant.copy(alpha = 0.55f)
+        )
     ) {
         Box(contentAlignment = Alignment.Center) {
             ExtractionDropSourceIcon(
                 entry = entry,
-                tint = if (isZero) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.primary
+                tint = if (isZero) colors.onErrorContainer else colors.primary
             )
         }
     }
@@ -140,7 +203,7 @@ internal fun ExtractionDropSourceIcon(
             else -> Icons.Outlined.LocationOn
         },
         contentDescription = null,
-        modifier = Modifier.size(22.dp),
+        modifier = Modifier.size(20.dp),
         tint = tint
     )
 }

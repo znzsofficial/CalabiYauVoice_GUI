@@ -31,6 +31,7 @@ import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
 import com.kyant.capsule.ContinuousRoundedRectangle
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.preferences.explicitSeedArgb
 
 /** Global theme mode state, readable and writable from composables. */
 val LocalThemeMode = staticCompositionLocalOf { mutableIntStateOf(AppPrefs.themeMode) }
@@ -89,7 +90,7 @@ fun AppTheme(content: @Composable () -> Unit) {
     }
     val effectiveSeed = when (seedColor.intValue) {
         AppPrefs.SEED_WALLPAPER -> wallpaperSeedColor.intValue
-        else -> seedColor.intValue
+        else -> explicitSeedArgb(seedColor.intValue) ?: 0
     }
     val systemColorScheme = when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {

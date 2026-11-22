@@ -38,7 +38,7 @@ object AppPrefs {
      * 自定义主题种子色（ARGB Int）。
      * [SEED_WALLPAPER] (-1) = 跟随背景图主题色（默认）
      * 0 = 使用系统动态取色 / 默认配色
-     * 其他正整数 = 自定义 ARGB 色值
+     * 其余值由 explicitSeedArgb 解码；不按 Int 正负判断是否为自定义颜色。
      */
     const val SEED_WALLPAPER = -1
 

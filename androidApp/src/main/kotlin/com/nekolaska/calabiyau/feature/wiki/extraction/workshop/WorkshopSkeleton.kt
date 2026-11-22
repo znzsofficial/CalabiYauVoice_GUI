@@ -11,10 +11,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
+import com.nekolaska.calabiyau.core.ui.ShimmerGroup
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
 
 @Composable
-internal fun WorkshopSkeleton(tab: WorkshopTab, modifier: Modifier = Modifier) {
+internal fun WorkshopSkeleton(tab: WorkshopTab, modifier: Modifier = Modifier) = ShimmerGroup {
     Column(modifier.fillMaxSize().clearAndSetSemantics { contentDescription = "正在加载${tab.title}资料" }) {
         when (tab) {
             WorkshopTab.RECIPES -> ShimmerBox(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

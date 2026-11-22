@@ -6,7 +6,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,12 +25,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -39,29 +42,38 @@ import androidx.compose.ui.unit.dp
 //  Shared loading skeletons
 // ════════════════════════════════════════════════════════
 
-/**
- * Animated shimmer background used by placeholder blocks.
- */
+internal val LocalShimmerPhase = staticCompositionLocalOf<State<Float>?> { null }
+
+/** Share one animation while a group of placeholders is on screen, never on the loaded page. */
+@Composable
+internal fun ShimmerGroup(content: @Composable () -> Unit) {
+    if (LocalShimmerPhase.current == null) {
+        CompositionLocalProvider(LocalShimmerPhase provides rememberShimmerPhase(), content = content)
+    } else content()
+}
+
+@Composable
+private fun rememberShimmerPhase(): State<Float> = rememberInfiniteTransition(label = "shimmer").animateFloat(
+    initialValue = 0f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(tween(durationMillis = 1200, easing = LinearEasing), RepeatMode.Restart),
+    label = "shimmerPhase"
+)
+
 @Composable
 fun Modifier.shimmerEffect(): Modifier {
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = -300f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerTranslate"
-    )
+    val phase = LocalShimmerPhase.current ?: rememberShimmerPhase()
     val baseColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val highlightColor = MaterialTheme.colorScheme.surfaceContainerHighest
-    val brush = Brush.linearGradient(
-        colors = listOf(baseColor, highlightColor, baseColor),
-        start = Offset(translateAnim, 0f),
-        end = Offset(translateAnim + 300f, 0f)
-    )
-    return this.background(brush)
+    return drawWithCache {
+        val band = 100.dp.toPx().coerceAtMost(size.width).coerceAtLeast(1f)
+        val brush = Brush.horizontalGradient(listOf(baseColor, highlightColor, baseColor), endX = band)
+        onDrawBehind {
+            val x = (size.width + band) * phase.value - band
+            // Move the shader but keep the painted rectangle within the original bounds.
+            translate(left = x) { drawRect(brush, topLeft = Offset(-x, 0f), size = size) }
+        }
+    }
 }
 
 /**
@@ -158,7 +170,7 @@ fun WikiListSkeleton(
     showSearch: Boolean = true,
     chipRows: Int = 1,
     cardCount: Int = 5
-) {
+) = ShimmerGroup {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),

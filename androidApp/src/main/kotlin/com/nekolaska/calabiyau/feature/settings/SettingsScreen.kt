@@ -11,21 +11,18 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.DesktopWindows
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +33,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -46,15 +42,15 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.BackNavButton
-import com.nekolaska.calabiyau.core.ui.LocalThemeMode
 import com.nekolaska.calabiyau.core.ui.SeekablePredictiveBackHandler
 import com.nekolaska.calabiyau.core.ui.rememberPredictiveBackTransition
-import com.nekolaska.calabiyau.core.usage.UsageStats
 import com.nekolaska.calabiyau.core.wiki.WikiAuthHelper
 
 private val settingsNavigationSaver = listSaver<SettingsNavigation, String>(
@@ -119,12 +115,9 @@ fun SettingsScreen(isActive: () -> Boolean = { true }, onBack: () -> Unit) {
                 SettingsPage.STORAGE -> StorageSettingsScreen(onBack = pop)
                 else -> SettingsPageLayout(page.title, pop) {
                     when (page) {
-                        SettingsPage.HOME -> SettingsHome(concurrency, desktopMode, open)
-                        SettingsPage.APPEARANCE -> AppearanceSettingsSection(
-                            wallpaperAutoRefresh = wallpaperAutoRefresh,
-                            onOpenColors = { open(SettingsPage.COLORS) },
-                            onOpenWallpaper = { open(SettingsPage.WALLPAPER) }
-                        )
+                        SettingsPage.HOME -> SettingsHome(concurrency, desktopMode, wallpaperAutoRefresh,
+                            isActive = { stack.current == SettingsPage.HOME && isActive() }, open = open)
+                        SettingsPage.APPEARANCE -> AppearanceSettingsSection(onOpenColors = { open(SettingsPage.COLORS) })
                         SettingsPage.COLORS -> ColorSettingsSection()
                         SettingsPage.WALLPAPER -> WallpaperSettingsSection(wallpaperAutoRefresh) {
                             wallpaperAutoRefresh = it
@@ -159,39 +152,9 @@ private fun SettingsPageLayout(title: String, onBack: () -> Unit, content: @Comp
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { inner ->
-        Column(
-            Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner)
-                .verticalScroll(rememberScrollState())
-                .padding(top = AppSpacing.small, bottom = AppSpacing.xxxLarge)
-        ) { content() }
-    }
-}
-
-@Composable
-private fun SettingsHome(concurrency: Int, desktopMode: Boolean, open: (SettingsPage) -> Unit) {
-    val layout by AppPrefs.homeQuickEntryLayoutState.collectAsState()
-    val themeMode = LocalThemeMode.current.intValue
-    val version = rememberAppVersion()
-    SettingsCard {
-        SettingsItem(Icons.Outlined.GridView, SettingsPage.QUICK_ENTRIES.title,
-            if (layout == AppPrefs.HOME_QUICK_LAYOUT_BUTTONS) "按钮布局" else "网格布局") { open(SettingsPage.QUICK_ENTRIES) }
-        SettingsDivider()
-        SettingsItem(Icons.Outlined.Palette, SettingsPage.APPEARANCE.title, themeModeLabel(themeMode)) { open(SettingsPage.APPEARANCE) }
-        SettingsDivider()
-        SettingsItem(Icons.Outlined.Folder, SettingsPage.DOWNLOADS.title, "同时下载 $concurrency 项") { open(SettingsPage.DOWNLOADS) }
-        SettingsDivider()
-        SettingsItem(Icons.Outlined.Language, SettingsPage.WIKI.title, if (desktopMode) "桌面版网页" else "移动版网页") { open(SettingsPage.WIKI) }
-        SettingsDivider()
-        SettingsItem(Icons.Outlined.Info, SettingsPage.ABOUT.title, "当前版本 ${version.name}") { open(SettingsPage.ABOUT) }
-    }
-
-    Spacer(Modifier.height(AppSpacing.itemGap))
-    SettingsGroupHeader("隐私")
-    var statsEnabled by remember { mutableStateOf(AppPrefs.usageStatsEnabled) }
-    SettingsCard {
-        SettingsToggleItem(Icons.Outlined.Info, "匿名使用统计", "上报每日使用次数，不含账号", statsEnabled) {
-            statsEnabled = it
-            UsageStats.setEnabled(it)
+        Box(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = 680.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(top = AppSpacing.small, bottom = AppSpacing.xxxLarge)) { content() }
         }
     }
 }
@@ -199,10 +162,22 @@ private fun SettingsHome(concurrency: Int, desktopMode: Boolean, open: (Settings
 @Composable
 private fun WikiAccountSettings(desktopMode: Boolean, onDesktopModeChange: (Boolean) -> Unit) {
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
+    SettingsGroupHeader("浏览与账号", topPadding = AppSpacing.small)
     SettingsCard {
-        SettingsToggleItem(Icons.Outlined.DesktopWindows, "桌面版网页", if (desktopMode) "开启" else "关闭", desktopMode, onDesktopModeChange)
+        SettingsToggleItem(
+            icon = Icons.Outlined.DesktopWindows,
+            title = "桌面版网页",
+            subtitle = if (desktopMode) "默认请求桌面版页面" else "默认请求移动版页面",
+            checked = desktopMode,
+            onCheckedChange = onDesktopModeChange
+        )
         SettingsDivider()
-        SettingsItem(Icons.Outlined.DeleteSweep, "退出登录", "清除 Wiki 登录信息") { confirmLogout = true }
+        SettingsItem(
+            icon = Icons.Outlined.DeleteSweep,
+            title = "退出登录",
+            subtitle = "清除 Wiki 登录信息",
+            iconTint = MaterialTheme.colorScheme.error
+        ) { confirmLogout = true }
     }
     if (confirmLogout) {
         SettingsDialog(
@@ -210,10 +185,16 @@ private fun WikiAccountSettings(desktopMode: Boolean, onDesktopModeChange: (Bool
             title = { Text("退出登录") },
             text = { Text("将清除 Wiki 登录信息。之后需要重新登录才能使用投票等功能。") },
             confirmButton = {
-                FilledTonalButton(onClick = {
-                    WikiAuthHelper.clearLoginCookies()
-                    confirmLogout = false
-                }) { Text("确定清除") }
+                FilledTonalButton(
+                    onClick = {
+                        WikiAuthHelper.clearLoginCookies()
+                        confirmLogout = false
+                    },
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) { Text("确定清除") }
             },
             dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("取消") } }
         )

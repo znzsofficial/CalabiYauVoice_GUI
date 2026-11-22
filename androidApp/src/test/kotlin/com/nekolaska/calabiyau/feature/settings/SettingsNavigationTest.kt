@@ -9,7 +9,6 @@ class SettingsNavigationTest {
     @Test fun restoredDetailsReturnToTheirOwnCategoryBeforeHome() {
         for ((category, detail) in listOf(
             SettingsPage.DOWNLOADS to SettingsPage.STORAGE,
-            SettingsPage.APPEARANCE to SettingsPage.WALLPAPER,
             SettingsPage.APPEARANCE to SettingsPage.COLORS
         )) {
             val path = SettingsNavigation().open(SettingsPage.HOME, category).open(category, detail)
@@ -24,6 +23,26 @@ class SettingsNavigationTest {
         }
     }
 
+    @Test fun wallpaperOpensFromHomeAndReturnsDirectlyAfterRestore() {
+        val wallpaper = SettingsNavigation().open(SettingsPage.HOME, SettingsPage.WALLPAPER)
+        assertEquals(listOf("HOME", "WALLPAPER"), wallpaper.save())
+        val restored = SettingsNavigation.restore(wallpaper.save())
+        assertEquals(SettingsPage.WALLPAPER, restored.current)
+        assertEquals(SettingsPage.HOME, restored.previous)
+        assertEquals(listOf("HOME"), restored.pop(SettingsPage.WALLPAPER).save())
+    }
+
+    @Test fun legacyWallpaperStackRestoresWithoutAppearance() {
+        val restored = SettingsNavigation.restore(listOf("HOME", "APPEARANCE", "WALLPAPER"))
+        assertEquals(listOf("HOME", "WALLPAPER"), restored.save())
+        assertEquals(SettingsPage.HOME, restored.pop(SettingsPage.WALLPAPER).current)
+    }
+
+    @Test fun appearanceCanNoLongerOpenWallpaper() {
+        val appearance = SettingsNavigation().open(SettingsPage.HOME, SettingsPage.APPEARANCE)
+        assertSame(appearance, appearance.open(SettingsPage.APPEARANCE, SettingsPage.WALLPAPER))
+    }
+
     @Test fun outgoingToolbarOrLateGestureCannotPopOrPushOverAnotherPage() {
         val category = SettingsNavigation().open(SettingsPage.HOME, SettingsPage.DOWNLOADS)
         val detail = category.open(SettingsPage.DOWNLOADS, SettingsPage.STORAGE)
@@ -35,6 +54,8 @@ class SettingsNavigationTest {
 
     @Test fun invalidRestoredBranchStopsAtLastReachablePage() {
         assertEquals(SettingsPage.APPEARANCE, SettingsNavigation.restore(listOf("HOME", "APPEARANCE", "STORAGE")).current)
+        assertEquals(SettingsPage.APPEARANCE, SettingsNavigation.restore(listOf("HOME", "APPEARANCE", "RETIRED", "WALLPAPER")).current)
+        assertEquals(SettingsPage.WALLPAPER, SettingsNavigation.restore(listOf("HOME", "APPEARANCE", "WALLPAPER", "COLORS")).current)
         assertEquals(SettingsPage.DOWNLOADS, SettingsNavigation.restore(listOf("HOME", "DOWNLOADS", "RETIRED", "STORAGE")).current)
         assertEquals(SettingsPage.HOME, SettingsNavigation.restore(listOf("STORAGE")).current)
     }

@@ -1,12 +1,10 @@
 package com.nekolaska.calabiyau.feature.character.costume
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -29,15 +28,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
+import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.CatalogDetailRow
 import com.nekolaska.calabiyau.core.ui.CatalogDetailSheet
+import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.core.ui.CatalogGridCard
 import com.nekolaska.calabiyau.core.ui.CatalogGridSkeleton
 import com.nekolaska.calabiyau.core.ui.CatalogPreviewImage
@@ -46,6 +46,7 @@ import com.nekolaska.calabiyau.core.ui.SearchBar
 import com.nekolaska.calabiyau.core.ui.catalogQualityColor
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.feature.character.components.CharacterSelector
+import com.nekolaska.calabiyau.feature.character.components.CharacterSelectorOption
 import com.nekolaska.calabiyau.feature.character.components.rememberCharacterSelectorOptions
 import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterApi.CostumeInfo
 import com.nekolaska.calabiyau.feature.character.costume.CostumeFilterApi.Quality
@@ -59,6 +60,7 @@ private const val CRYSTAL_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Sp
 private const val BASE_ICON_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E9%81%93%E5%85%B7%E5%9B%BE%E6%A0%87_6.png"
 private const val BASE_ICON_FALLBACK_URL = "https://wiki.biligame.com/klbq/Special:Redirect/file/%E5%9B%BE%E6%A0%87-%E5%B0%8F%E5%9F%BA%E5%BC%A6.png"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CostumeFilterScreen(
     initialCharacter: String? = null,
@@ -113,12 +115,19 @@ fun CostumeFilterScreen(
                 },
                 actions = {
                     if (allCostumes.isNotEmpty()) {
-                        Text(
-                            text = filteredCostumes.size.toString(),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Surface(
+                            shape = AppShapes.capsule,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
                             modifier = Modifier.padding(end = 16.dp)
-                        )
+                        ) {
+                            Text(
+                                text = filteredCostumes.size.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -134,19 +143,21 @@ fun CostumeFilterScreen(
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 110.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column {
+                    Column(
+                        modifier = Modifier.padding(bottom = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         SearchBar(
                             keyword = searchQuery,
                             onKeywordChange = { searchQuery = it },
                             onClear = { searchQuery = "" },
                             isSearching = false,
-                            placeholder = "搜索时装名称或角色…",
-                            modifier = Modifier.padding(bottom = 12.dp)
+                            placeholder = "搜索时装名称或角色…"
                         )
 
                         // ── 筛选栏 ──
@@ -163,12 +174,18 @@ fun CostumeFilterScreen(
                 // ── 时装网格 ──
                 if (filteredCostumes.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Box(
-                            Modifier.fillMaxWidth().height(300.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("没有匹配的时装", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        CatalogEmptyResults(
+                            message = "没有匹配的时装",
+                            onClear = if (searchQuery.isNotBlank() || selectedCharacter != null || selectedQualityLevel != null) {
+                                {
+                                    searchQuery = ""
+                                    selectedCharacter = null
+                                    selectedQualityLevel = null
+                                }
+                            } else {
+                                null
+                            }
+                        )
                     }
                 } else {
                     items(filteredCostumes, key = { "${it.character}|${it.name}|${it.thumbnailUrl.orEmpty()}" }) { costume ->
@@ -210,21 +227,13 @@ private fun CostumeFilterSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 private fun CostumeFilterBar(
-    characterOptions: List<com.nekolaska.calabiyau.feature.character.components.CharacterSelectorOption>,
+    characterOptions: List<CharacterSelectorOption>,
     selectedCharacter: String?,
     onCharacterSelected: (String?) -> Unit,
     selectedQuality: Quality?,
     onQualitySelected: (Quality?) -> Unit
 ) {
-    Column(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "按角色筛选",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         CharacterSelector(
             options = characterOptions,
             selectedName = selectedCharacter,
@@ -234,11 +243,6 @@ private fun CostumeFilterBar(
         )
 
         // 品质筛选（跳过“初始”品质）
-        Text(
-            text = "按品质筛选",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         QualityFilterChips(
             selectedLevel = selectedQuality?.level,
             levels = Quality.entries
@@ -268,10 +272,6 @@ private fun CostumeCard(costume: CostumeInfo, onClick: () -> Unit) {
         fallbackIcon = Icons.Outlined.Checkroom
     )
 }
-
-// ────────────────────────────────────────────
-//  品质颜色
-// ────────────────────────────────────────────
 
 // ────────────────────────────────────────────
 //  时装详情底部弹窗
@@ -310,42 +310,52 @@ private fun CostumeDetailSheet(
         qualityLevel = quality?.level,
         description = costume.description
     ) {
+        var hasRow = false
         if (costume.sources.isNotEmpty()) {
             CatalogDetailRow(
                 icon = Icons.Outlined.ShoppingBag,
                 label = "获取方式",
                 value = costume.sources.joinToString("、")
             )
+            hasRow = true
         }
         if (costume.crystalCost.isNotBlank()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (hasRow) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+            }
             CatalogDetailRow(
                 imageUrl = CRYSTAL_ICON_URL,
                 fallbackImageUrl = CRYSTAL_ICON_FALLBACK_URL,
                 label = "巴布洛晶核",
                 value = costume.crystalCost
             )
+            hasRow = true
         }
         if (costume.baseCost.isNotBlank()) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (hasRow) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+            }
             CatalogDetailRow(
                 imageUrl = BASE_ICON_URL,
                 fallbackImageUrl = BASE_ICON_FALLBACK_URL,
                 label = "基弦",
                 value = costume.baseCost
             )
+            hasRow = true
         }
         if (quality != null) {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
+            if (hasRow) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                )
+            }
             CatalogDetailRow(
                 icon = Icons.Outlined.Star,
                 label = "品质",

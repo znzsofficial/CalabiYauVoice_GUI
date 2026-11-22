@@ -20,6 +20,8 @@ data class PcSettingsParseResult(
 }
 
 object PcGameSettingsParser {
+    private val headerWhitespace = Regex("\\s+")
+    private val textWhitespace = Regex("[\\s\\u00a0]+")
     // Revision 120159's independently named table contexts and minimum complete row counts.
     // A source deletion/rename should be reviewed, rather than silently publishing a truncated page.
     internal val expectedTables: Map<String, Map<String, Int>> = linkedMapOf(
@@ -218,7 +220,7 @@ object PcGameSettingsParser {
             }
             if (rowIndex == 0) {
                 headers = grid.toSortedMap().values.map { header ->
-                    when (header.replace(Regex("\\s+"), "")) {
+                    when (header.replace(headerWhitespace, "")) {
                         "可选值/说明", "可选值／说明", "可选值或说明" -> "可选值或说明"
                         else -> header
                     }
@@ -252,14 +254,15 @@ object PcGameSettingsParser {
     private fun readableText(element: Element): String = buildString {
         fun visit(node: Node) {
             when (node) {
-                is TextNode -> append(node.text().replace(Regex("[\\s\\u00a0]+"), " "))
+                is TextNode -> append(node.text().replace(textWhitespace, " "))
                 is Element -> {
                     val tag = node.tagName()
                     if (tag == "br") { append('\n'); return }
-                    if (tag in setOf("p", "div", "ul", "ol", "li")) append('\n')
+                    val paragraph = tag == "p" || tag == "div" || tag == "li"
+                    if (paragraph || tag == "ul" || tag == "ol") append('\n')
                     if (tag == "li") append("• ")
                     node.childNodes().forEach(::visit)
-                    if (tag in setOf("p", "div", "li")) append('\n')
+                    if (paragraph) append('\n')
                 }
             }
         }

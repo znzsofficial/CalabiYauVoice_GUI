@@ -12,6 +12,8 @@ import coil3.size.Size
 import coil3.toBitmap
 import com.materialkolor.ktx.themeColors
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal object WallpaperSeedColor {
     fun cachedColorFor(url: String?): Int {
@@ -42,13 +44,12 @@ internal object WallpaperSeedColor {
             .build()
         val result = SingletonImageLoader.get(context).execute(request)
         if (result !is SuccessResult) return 0
-        val bitmap = runCatching { result.image.toBitmap() }.getOrNull() ?: return 0
-        val color = bitmap.asImageBitmap()
-            .themeColors(fallback = Color.Unspecified, desired = 1)
-            .firstOrNull()
-            ?.takeUnless { it == Color.Unspecified }
-            ?.toArgb()
-            ?: 0
+        // Coil returns to the caller's dispatcher. Quantizing a software bitmap is CPU work.
+        val color = withContext(Dispatchers.Default) {
+            val bitmap = runCatching { result.image.toBitmap() }.getOrNull() ?: return@withContext 0
+            bitmap.asImageBitmap().themeColors(fallback = Color.Unspecified, desired = 1)
+                .firstOrNull()?.takeUnless { it == Color.Unspecified }?.toArgb() ?: 0
+        }
         if (color != 0) {
             AppPrefs.wallpaperSeedColorCache = color
             AppPrefs.wallpaperSeedColorUrl = url

@@ -92,39 +92,35 @@ fun ZoomableImage(
                 }
             }
         },
-        success = {
-            key(model) { SubcomposeAsyncImageContent(modifier = zoomGestures(onClick, onLongPress)) }
+        success = { success ->
+            val image = success.result.image
+            key(model, image.width, image.height) {
+                SubcomposeAsyncImageContent(modifier = Modifier.zoomGestures(IntSize(image.width, image.height), onClick, onLongPress))
+            }
         }
     )
 }
 
 @Composable
-private fun zoomGestures(onClick: (() -> Unit)?, onLongPress: (() -> Unit)?): Modifier {
+private fun Modifier.zoomGestures(image: IntSize, onClick: (() -> Unit)?, onLongPress: (() -> Unit)?): Modifier {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
 
     /** 限制平移范围，防止图片拖出可视区域 */
     fun clampOffset(newOffset: Offset, newScale: Float): Offset {
-        if (containerSize == IntSize.Zero || newScale <= 1f) return Offset.Zero
-        val maxX = (containerSize.width * (newScale - 1f)) / 2f
-        val maxY = (containerSize.height * (newScale - 1f)) / 2f
+        val (maxX, maxY) = zoomPanLimits(containerSize, image, newScale)
         return Offset(
             x = newOffset.x.coerceIn(-maxX, maxX),
             y = newOffset.y.coerceIn(-maxY, maxY)
         )
     }
 
-    /** 检查水平方向是否已到达边界 */
-    fun isAtHorizontalEdge(panX: Float): Boolean {
-        if (scale <= 1.05f) return true  // 未缩放，始终放行
-        val maxX = (containerSize.width * (scale - 1f)) / 2f
-        // 向右滑（panX > 0）且已在左边界，或向左滑（panX < 0）且已在右边界
-        return (panX > 0 && offset.x >= maxX - 1f) || (panX < 0 && offset.x <= -maxX + 1f)
-    }
-
-    return Modifier
-            .onSizeChanged { containerSize = it }
+    return this
+            .onSizeChanged {
+                containerSize = it
+                offset = clampOffset(offset, scale)
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -152,15 +148,13 @@ private fun zoomGestures(onClick: (() -> Unit)?, onLongPress: (() -> Unit)?): Mo
                             // 消费所有指针事件
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         } else if (pointerCount == 1 && scale > 1.05f) {
-                            // 单指 + 已缩放：处理平移
                             val pan = event.calculatePan()
-                            if (!isAtHorizontalEdge(pan.x) || abs(pan.y) > abs(pan.x)) {
-                                // 未到边界，或纵向拖拽为主 → 消费事件，自己处理平移
-                                val newOffset = offset + pan * scale
-                                offset = clampOffset(newOffset, scale)
+                            val next = clampOffset(offset + pan * scale, scale)
+                            if (imageCanPan(offset, next, pan)) {
+                                offset = next
                                 event.changes.forEach { if (it.positionChanged()) it.consume() }
                             }
-                            // 到达水平边界且水平拖拽为主 → 不消费，让 Pager 处理
+                            // Let a horizontal or vertical pager take a drag along an exhausted axis.
                         }
                         // 单指 + 未缩放 → 完全不消费，Pager 正常滑动
                     } while (event.changes.any { it.pressed })
@@ -198,4 +192,16 @@ private fun zoomGestures(onClick: (() -> Unit)?, onLongPress: (() -> Unit)?): Mo
                     } else null
                 )
             }
+}
+
+internal fun imageCanPan(current: Offset, clamped: Offset, drag: Offset): Boolean =
+    if (abs(drag.x) >= abs(drag.y)) current.x != clamped.x else current.y != clamped.y
+
+/** The painted image (ContentScale.Fit), rather than its letterboxed viewport, determines how far we can pan. */
+internal fun zoomPanLimits(viewport: IntSize, image: IntSize, scale: Float): Offset {
+    if (viewport.width <= 0 || viewport.height <= 0 || scale <= 1f) return Offset.Zero
+    val source = if (image.width > 0 && image.height > 0) image else viewport
+    val fit = minOf(viewport.width.toFloat() / source.width, viewport.height.toFloat() / source.height)
+    return Offset((source.width * fit * scale - viewport.width).coerceAtLeast(0f) / 2f,
+        (source.height * fit * scale - viewport.height).coerceAtLeast(0f) / 2f)
 }

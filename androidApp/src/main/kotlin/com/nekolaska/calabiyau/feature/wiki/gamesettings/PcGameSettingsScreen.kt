@@ -3,22 +3,18 @@ package com.nekolaska.calabiyau.feature.wiki.gamesettings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -32,7 +28,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -58,9 +53,11 @@ import com.nekolaska.calabiyau.core.ui.CatalogEmptyResults
 import com.nekolaska.calabiyau.core.ui.OpenWikiActionButton
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SearchBar
+import com.nekolaska.calabiyau.core.ui.ShimmerGroup
 import com.nekolaska.calabiyau.core.ui.SelectionOptionRow
 import com.nekolaska.calabiyau.core.ui.WikiSelectionSheet
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
+import com.nekolaska.calabiyau.core.ui.retainedWikiPageError
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.api.PcGameSettingsApi
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PC_GAME_SETTINGS_PAGE_URL
 import com.nekolaska.calabiyau.feature.wiki.gamesettings.model.PcGameSettingsPage
@@ -123,8 +120,10 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                 state.data.filteredSections(view, effectiveSectionId, query)
             }
             val categoryTitle = sections.firstOrNull { it.id == effectiveSectionId }?.title ?: "全部分类"
-            val entryCount = if (view == PcSettingsView.KNOWLEDGE) visible.sumOf { it.blocks.size }
+            val entryCount = remember(visible, view) {
+                if (view == PcSettingsView.KNOWLEDGE) visible.sumOf { it.blocks.size }
                 else visible.sumOf { section -> section.blocks.count { it is PcSettingsBlock.Setting } }
+            }
             val loading = state.isLoading && state.data.isEmpty()
             val entrance = remember { Animatable(1f) }
             LaunchedEffect(view) {
@@ -174,37 +173,14 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                 ApiResourceContent(
                     state = state, modifier = Modifier.weight(1f).graphicsLayer { alpha = entrance.value },
                     isDataEmpty = PcGameSettingsPage::isEmpty,
-                    loading = { PcSettingsSkeleton(modifier = it, knowledge = view == PcSettingsView.KNOWLEDGE, header = listHeader) }
+                    retainedErrorMessage = ::retainedWikiPageError,
+                    loading = { mod -> ShimmerGroup { PcSettingsSkeleton(modifier = mod, knowledge = view == PcSettingsView.KNOWLEDGE, header = listHeader) } }
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(), state = listState,
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        if (state.error != null) item(key = "refresh-error") {
-                            Surface(
-                                shape = AppShapes.compactCard,
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.ErrorOutline, contentDescription = null,
-                                        modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "更新失败，正在显示上次资料。${state.error?.message.orEmpty()}",
-                                        Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    TextButton(onClick = { state.reload(forceRefresh = true) }) { Text("重试") }
-                                }
-                            }
-                        }
                         item(key = "source-note") { listHeader() }
                         if (visible.isEmpty()) item(key = "empty") {
                             CatalogEmptyResults(message = "当前${view.label}中没有匹配内容", onClear = {
@@ -229,9 +205,10 @@ fun PcGameSettingsScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
             }
         }
     }
-    val detailSection = state.data.sections.firstOrNull { section -> section.blocks.any { it.id == detailId } }
-    val detail = detailSection?.blocks?.filterIsInstance<PcSettingsBlock.Setting>()?.firstOrNull { it.id == detailId }
-    if (detail != null) PcSettingsDetailSheet(
-        setting = detail, section = detailSection, onDismiss = { detailId = null }
-    )
+    val detail = remember(state.data, detailId) {
+        detailId?.let { id -> state.data.sections.firstNotNullOfOrNull { section ->
+            (section.blocks.firstOrNull { it.id == id } as? PcSettingsBlock.Setting)?.let { section to it }
+        } }
+    }
+    detail?.let { (section, setting) -> PcSettingsDetailSheet(setting, section) { detailId = null } }
 }

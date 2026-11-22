@@ -1,12 +1,13 @@
 package com.nekolaska.calabiyau.feature.settings
 
+import com.nekolaska.calabiyau.BuildConfig
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,8 +36,6 @@ import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -46,17 +45,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutBoundsHolder
+import androidx.compose.ui.layout.layoutBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -65,13 +62,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.nekolaska.calabiyau.R
-import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.AppShapes
 import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.AppTextStyles
 import com.nekolaska.calabiyau.core.ui.rememberSnackbarLauncher
-import kotlinx.coroutines.launch
 
 internal data class AboutVersionInfo(
     val name: String,
@@ -94,11 +89,11 @@ internal fun rememberAppVersion(): AboutVersionInfo {
                 info.versionCode.toLong()
             }
             AboutVersionInfo(
-                name = info.versionName?.takeIf { it.isNotBlank() } ?: "2.2.5",
+                name = info.versionName?.takeIf { it.isNotBlank() } ?: BuildConfig.VERSION_NAME,
                 code = code
             )
         } catch (_: Exception) {
-            AboutVersionInfo(name = "2.2.5", code = 0L)
+            AboutVersionInfo(name = BuildConfig.VERSION_NAME, code = 0L)
         }
     }
 }
@@ -152,11 +147,13 @@ fun AboutScreen(onBack: () -> Unit) {
         },
         containerColor = pageBackground
     ) { innerPadding ->
+        val scrollViewport = remember { LayoutBoundsHolder() }
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding)
+                .layoutBounds(scrollViewport)
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = AppSpacing.screen)
@@ -169,8 +166,12 @@ fun AboutScreen(onBack: () -> Unit) {
                     .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                UpdateSettingsCard(version)
-                Spacer(Modifier.height(AppSpacing.sectionGap))
+                if (SHOW_SETTINGS_DEBUG_ITEM) {
+                    Surface(modifier = Modifier.fillMaxWidth(), shape = AppShapes.card, color = cardProtection.background) {
+                        SettingsDebugItem(currentVersion = version.name, showSnack = showSnack)
+                    }
+                    Spacer(Modifier.height(AppSpacing.sectionGap))
+                }
                 // Hero 卡片：网格渐变仅烘托顶部图标区并平滑淡入卡片底色，正文与标题无需零碎底框。
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -188,6 +189,7 @@ fun AboutScreen(onBack: () -> Unit) {
                             contentAlignment = Alignment.Center
                         ) {
                             AboutMeshBackdrop(
+                                viewport = scrollViewport,
                                 modifier = Modifier.fillMaxSize(),
                                 fadeColor = cardProtection.background
                             )
@@ -379,57 +381,6 @@ fun AboutScreen(onBack: () -> Unit) {
 private const val SHOW_SETTINGS_DEBUG_ITEM = false
 
 @Composable
-private fun UpdateSettingsCard(version: AboutVersionInfo) {
-    val context = LocalContext.current
-    val showSnack = rememberSnackbarLauncher()
-    val scope = rememberCoroutineScope()
-    var checking by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var available by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
-
-    Surface(modifier = Modifier.fillMaxWidth(), shape = AppShapes.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column {
-            SettingsItem(
-                icon = if (checking) Icons.Outlined.Sync else Icons.Outlined.SystemUpdate,
-                title = "检查更新",
-                subtitle = if (checking) "正在检查…" else status ?: "当前版本 ${version.name}",
-                onClick = {
-                    if (checking) return@SettingsItem
-                    checking = true
-                    scope.launch {
-                        try {
-                            when (val result = UpdateApi.checkUpdate(version.name, version.code)) {
-                                is UpdateApi.Result.NewVersion -> {
-                                    status = "发现新版本：${result.info.versionName}"
-                                    available = result.info
-                                    AppPrefs.lastUpdateCheck = System.currentTimeMillis()
-                                }
-                                UpdateApi.Result.AlreadyLatest -> {
-                                    status = "已是最新版本 (${version.name})"
-                                    AppPrefs.lastUpdateCheck = System.currentTimeMillis()
-                                }
-                                is UpdateApi.Result.Error -> status = result.message
-                            }
-                        } finally {
-                            checking = false
-                        }
-                    }
-                }
-            )
-            if (SHOW_SETTINGS_DEBUG_ITEM) SettingsDebugItem(currentVersion = version.name, showSnack = showSnack)
-        }
-    }
-    available?.let { info ->
-        UpdateAvailableDialog(
-            info = info, currentVersion = version.name, onDismiss = { available = null },
-            onOpenBrowser = {
-                openExternalUri(context, UpdateApi.resolveApkUrl(info).toUri(), onError = { showSnack("未找到可用的浏览器") })
-            }
-        )
-    }
-}
-
-@Composable
 private fun TechTag(label: String, protection: AboutTextProtection) {
     Surface(
         shape = AppShapes.chip,
@@ -506,7 +457,7 @@ private fun LinkItem(
     }
 }
 
-private fun openExternalUri(
+internal fun openExternalUri(
     context: Context,
     uri: Uri,
     newTask: Boolean = false,

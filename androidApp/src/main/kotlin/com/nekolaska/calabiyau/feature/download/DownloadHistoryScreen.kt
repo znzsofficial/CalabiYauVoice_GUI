@@ -96,6 +96,11 @@ fun DownloadHistoryScreen(
 @Composable
 private fun DownloadHistoryItem(record: DownloadRecord) {
     val isError = record.status == "error"
+    val (statusIcon, statusDescription) = when (record.status) {
+        "success" -> Icons.Default.CheckCircleOutline to "下载成功"
+        "error" -> Icons.Default.ErrorOutline to "下载失败"
+        else -> Icons.Outlined.History to "完成状态未确认"
+    }
     val dateFormat = remember {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
     }
@@ -126,8 +131,8 @@ private fun DownloadHistoryItem(record: DownloadRecord) {
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        if (isError) Icons.Default.ErrorOutline else Icons.Default.CheckCircleOutline,
-                        contentDescription = null,
+                        statusIcon,
+                        contentDescription = statusDescription,
                         modifier = Modifier.size(24.dp),
                         tint = if (isError)
                             MaterialTheme.colorScheme.onErrorContainer
@@ -139,24 +144,27 @@ private fun DownloadHistoryItem(record: DownloadRecord) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = record.name,
+                    text = record.historyTitle(),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(2.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
                         text = dateFormat.format(Date(record.timestamp)),
+                        softWrap = false,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (record.fileCount > 0) {
                         Text(
                             text = "${record.fileCount} 个文件",
+                            softWrap = false,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

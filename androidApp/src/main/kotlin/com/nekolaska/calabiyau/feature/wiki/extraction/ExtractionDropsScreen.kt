@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -21,8 +23,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nekolaska.calabiyau.core.ui.*
@@ -31,10 +38,12 @@ import com.nekolaska.calabiyau.feature.wiki.extraction.api.extractionContainersA
 import com.nekolaska.calabiyau.feature.wiki.extraction.api.rememberDropArtwork
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.*
 import com.nekolaska.calabiyau.feature.wiki.extraction.source.ExtractionCatalogRemoteSource
-import data.SharedJson
 import data.ErrorKind
-import kotlinx.serialization.encodeToString
+import data.SharedJson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 
 private const val dropReferenceTitle = "掉落池与首领阶段"
 
@@ -99,7 +108,8 @@ internal fun ExtractionDropsScreen(
     val page = if (location.reference != null) ExtractionCatalogKind.DROPS.pageName else ExtractionCatalogRemoteSource.CONTAINERS_PAGE
     val uiState = rememberSaveableStateHolder()
     val detailState = rememberSaveableStateHolder()
-    val lookup = remember(containers.data) { buildDropLookup(containers.data) }
+    val containerEntries = containers.data
+    val lookup = remember(containerEntries) { lazy(LazyThreadSafetyMode.NONE) { buildDropLookup(containerEntries) } }
     val sourceRecords = remember(containers.data, catalog.data) { dropSourceRecords(containers.data, catalog.data) }
     val contentKey = if (location.reference == null && location.task == DropTask.ITEMS && location.itemName != null)
         SharedJson.encodeToString(navigation.contentStatePath) else location.contentKey
@@ -115,7 +125,8 @@ internal fun ExtractionDropsScreen(
     }
 
     Scaffold(topBar = {
-        TopAppBar(title = { Text(if (location.reference != null) dropReferenceTitle else "掉落查询", fontWeight = FontWeight.Bold) },
+        TopAppBar(
+            title = { Text(if (location.reference != null) dropReferenceTitle else "掉落查询", fontWeight = FontWeight.Bold) },
             navigationIcon = { BackNavButton(onClick = ::goBack) },
             actions = {
                 RefreshActionButton(onClick = {
@@ -125,95 +136,129 @@ internal fun ExtractionDropsScreen(
                 Box {
                     IconButton(onClick = { moreActions = true }) { Icon(Icons.Outlined.MoreVert, "更多操作") }
                     DropdownMenu(expanded = moreActions && isActive(), onDismissRequest = { moreActions = false }) {
-                        if (location.reference == null) DropdownMenuItem(text = { Text(dropReferenceTitle) },
+                        if (location.reference == null) DropdownMenuItem(
+                            text = { Text(dropReferenceTitle) },
                             leadingIcon = { Icon(Icons.Outlined.Info, null) },
-                            onClick = { moreActions = false; navigate { it.openReference() } })
-                        DropdownMenuItem(text = { Text("Wiki 原文") }, leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
+                            onClick = { moreActions = false; navigate { it.openReference() } }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Wiki 原文") },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Outlined.OpenInNew, null) },
                             onClick = {
                                 moreActions = false
                                 onOpenWikiUrl(extractionArticleUrl(page))
-                            })
+                            }
+                        )
                     }
                 }
-            })
+            }
+        )
     }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
-            if (location.reference == null) PrimaryTabRow(selectedTabIndex = location.task.ordinal) {
-                DropTask.entries.forEach { task ->
-                    Tab(selected = location.task == task, onClick = {
-                        if (location.task != task) navigate { it.selectTask(task) }
-                    }, text = { Text(task.title) })
-                }
+            if (location.reference == null) {
+                DropTaskSwitcher(
+                    selectedTask = location.task,
+                    onSelect = { task -> if (location.task != task) navigate { it.selectTask(task) } }
+                )
             }
             Box(Modifier.weight(1f).graphicsLayer {
                 alpha = 0.55f + 0.45f * entrance.value
                 translationY = (1f - entrance.value) * 8.dp.toPx()
             }) {
                 uiState.SaveableStateProvider(contentKey) {
-                if (location.reference == null && location.task == DropTask.SOURCES) {
-                    ExtractionDropBrowser(sourceRecords, artwork, catalogEntries = catalog.data,
-                        isActive = isActive(),
-                        partialSources = containers.data.isEmpty() != catalog.data.isEmpty(),
-                         loading = containersPending || catalogPending,
-                         loadFailed = containers.error != null || catalog.error != null,
-                        filtersAuthoritative = !containersPending && !catalogPending && containers.error == null && catalog.error == null,
-                        status = {
-                            if (containers.isOffline && !containers.isShowingCachedPrefetch) OfflineBanner(ageMs = containers.cacheAgeMs)
-                            if (catalog.isOffline && !catalog.isShowingCachedPrefetch) {
-                                Text("来源说明", style = MaterialTheme.typography.labelMedium)
-                                OfflineBanner(ageMs = catalog.cacheAgeMs)
-                            }
-                            if ((containersPending || catalogPending) && sourceRecords.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
-                            containers.error?.let { error ->
-                                DropErrorBanner(dropLoadMessage("容器掉落表", error.kind), "重试") {
-                                    containers.reload(forceRefresh = true)
+                    if (location.reference == null && location.task == DropTask.SOURCES) {
+                        ExtractionDropBrowser(
+                            sourceRecords, artwork, catalogEntries = catalog.data,
+                            isActive = isActive(),
+                            partialSources = containers.data.isEmpty() != catalog.data.isEmpty(),
+                            loading = containersPending || catalogPending,
+                            loadFailed = containers.error != null || catalog.error != null,
+                            filtersAuthoritative = !containersPending && !catalogPending && containers.error == null && catalog.error == null,
+                            status = {
+                                if (containers.isOffline && !containers.isShowingCachedPrefetch) OfflineBanner(ageMs = containers.cacheAgeMs)
+                                if (catalog.isOffline && !catalog.isShowingCachedPrefetch) {
+                                    Text("来源说明", style = MaterialTheme.typography.labelMedium)
+                                    OfflineBanner(ageMs = catalog.cacheAgeMs)
                                 }
-                            }
-                            catalog.error?.let { error ->
-                                DropErrorBanner(dropLoadMessage("来源说明", error.kind), "重试") {
-                                    catalog.reload(forceRefresh = true)
-                                }
-                            }
-                        }, onSelect = { record, query ->
-                            navigate { if (record.isContainer) it.openContainer(record.entry.id, query)
-                                else it.openSource(record.entry.id, query) }
-                        })
-                } else PullToRefreshBox(isRefreshing = active.isLoading && active.data.isNotEmpty(),
-                    onRefresh = { active.reload(forceRefresh = true) }, modifier = Modifier.fillMaxSize()) {
-                    val status: @Composable () -> Unit = {
-                        if (active.isOffline && !active.isShowingCachedPrefetch) OfflineBanner(ageMs = active.cacheAgeMs)
-                        active.error?.let { error ->
-                            DropErrorBanner(dropLoadMessage(if (location.reference != null) "掉落图鉴" else "容器掉落表", error.kind), "重试") {
-                                active.reload(forceRefresh = true)
-                            }
-                        }
-                    }
-                    when {
-                        location.reference != null -> {
-                            val reference = location.reference
-                            val entries = extractionEntriesForView(catalog.data, reference)
-                            ExtractionDropBrowser(entries.map { DropSourceRecord(it, false) }, artwork,
-                                isActive = isActive(),
-                                filtersAuthoritative = !catalogPending && catalog.error == null,
-                                 view = reference, loading = catalogPending, loadFailed = catalog.error != null, status = {
-                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        listOf(ExtractionDropView.POOLS, ExtractionDropView.STAGES).forEach { view ->
-                                            FilterChip(selected = reference == view, onClick = { navigate { it.selectReference(view) } },
-                                                label = { Text(if (view == ExtractionDropView.POOLS) "掉落池" else "首领阶段对照") })
-                                        }
+                                if ((containersPending || catalogPending) && sourceRecords.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                containers.error?.let { error ->
+                                    DropErrorBanner(dropLoadMessage("容器掉落表", error.kind), "重试") {
+                                        containers.reload(forceRefresh = true)
                                     }
-                                    status()
-                                }, onSelect = { record, query -> navigate { it.openSource(record.entry.id, query) } })
+                                }
+                                catalog.error?.let { error ->
+                                    DropErrorBanner(dropLoadMessage("来源说明", error.kind), "重试") {
+                                        catalog.reload(forceRefresh = true)
+                                    }
+                                }
+                            }, onSelect = { record, query ->
+                                navigate {
+                                    if (record.isContainer) it.openContainer(record.entry.id, query)
+                                    else it.openSource(record.entry.id, query)
+                                }
+                            }
+                        )
+                    } else PullToRefreshBox(
+                        isRefreshing = active.isLoading && active.data.isNotEmpty(),
+                        onRefresh = { active.reload(forceRefresh = true) },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val status: @Composable () -> Unit = {
+                            if (active.isOffline && !active.isShowingCachedPrefetch) OfflineBanner(ageMs = active.cacheAgeMs)
+                            active.error?.let { error ->
+                                DropErrorBanner(dropLoadMessage(if (location.reference != null) "掉落图鉴" else "容器掉落表", error.kind), "重试") {
+                                    active.reload(forceRefresh = true)
+                                }
+                            }
                         }
-                        else -> ExtractionDropLookupList(lookup, location.itemName, location.itemQuality,
-                            onChooseItem = { item -> if (item == null) goBack() else navigate { it.openItem(item) } },
-                            onSource = { source -> navigate { it.openContainer(source.id, location.itemName.orEmpty(), location.itemQuality) } },
-                             artwork = artwork, isActive = isActive(),
-                             loading = containersPending, loadFailed = containers.error != null, status = status,
-                            filtersAuthoritative = !containersPending && containers.error == null,
-                            backLabel = if (navigation.history.dropLast(1).lastOrNull()?.hasDetail == true) "返回来源详情" else "返回物品列表")
+                        when {
+                            location.reference != null -> {
+                                val reference = location.reference
+                                val entries = extractionEntriesForView(catalog.data, reference)
+                                ExtractionDropBrowser(
+                                    entries.map { DropSourceRecord(it, false) }, artwork,
+                                    isActive = isActive(),
+                                    filtersAuthoritative = !catalogPending && catalog.error == null,
+                                    view = reference, loading = catalogPending, loadFailed = catalog.error != null,
+                                    status = {
+                                        val colors = MaterialTheme.colorScheme
+                                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            listOf(ExtractionDropView.POOLS, ExtractionDropView.STAGES).forEach { view ->
+                                                val isChosen = reference == view
+                                                FilterChip(
+                                                    selected = isChosen,
+                                                    onClick = { navigate { it.selectReference(view) } },
+                                                    shape = smoothCornerShape(10.dp),
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        if (isChosen) colors.primary.copy(alpha = 0.55f)
+                                                        else colors.outlineVariant.copy(alpha = 0.55f)
+                                                    ),
+                                                    colors = FilterChipDefaults.filterChipColors(
+                                                        selectedContainerColor = colors.primaryContainer.copy(alpha = 0.65f),
+                                                        selectedLabelColor = colors.onPrimaryContainer,
+                                                        containerColor = colors.surfaceContainerLow,
+                                                        labelColor = colors.onSurface
+                                                    ),
+                                                    label = { Text(if (view == ExtractionDropView.POOLS) "掉落池" else "首领阶段对照") }
+                                                )
+                                            }
+                                        }
+                                        status()
+                                    }, onSelect = { record, query -> navigate { it.openSource(record.entry.id, query) } }
+                                )
+                            }
+                            else -> ExtractionDropLookupList(
+                                lookup.value, location.itemName, location.itemQuality,
+                                onChooseItem = { item -> if (item == null) goBack() else navigate { it.openItem(item) } },
+                                onSource = { source -> navigate { it.openContainer(source.id, location.itemName.orEmpty(), location.itemQuality) } },
+                                artwork = artwork, isActive = isActive(),
+                                loading = containersPending, loadFailed = containers.error != null, status = status,
+                                filtersAuthoritative = !containersPending && containers.error == null,
+                                backLabel = if (navigation.history.dropLast(1).lastOrNull()?.hasDetail == true) "返回来源详情" else "返回物品列表"
+                            )
+                        }
                     }
-                }
                 }
             }
         }
@@ -230,63 +275,148 @@ internal fun ExtractionDropsScreen(
     if (isActive()) key(detailKey) {
         when {
             location.linkedPool && container == null && sharedPool == null -> WikiContentSheet(onDismiss = ::goBack) {
-                item("title") { Text(source?.name ?: "候选物品", style = MaterialTheme.typography.headlineSmall) }
+                item("title") { Text(source?.name ?: "候选物品", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
                 when {
                     (source?.containerId != null && containersPending) || catalogPending -> {
-                         items(4) { DropLookupRowSkeleton() }
-                         item("loading") { Text("正在加载候选物品…") }
+                        items(4) { DropLookupRowSkeleton() }
+                        item("loading") { Text("正在加载候选物品…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     }
                     source?.containerId != null && containers.error != null -> item("error") {
-                        Text("容器掉落表加载失败", color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { containers.reload(forceRefresh = true) }) { Text("重试") }
+                        DropErrorBanner("容器掉落表加载失败", "重试") { containers.reload(forceRefresh = true) }
                     }
                     catalog.error != null -> item("error") {
-                        Text("来源说明加载失败", color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { catalog.reload(forceRefresh = true) }) { Text("重试") }
+                        DropErrorBanner("来源说明加载失败", "重试") { catalog.reload(forceRefresh = true) }
                     }
-                    else -> item("unlinked") { Text("暂无对应的掉落池") }
+                    else -> item("unlinked") {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = smoothCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.50f))
+                        ) {
+                            Text("暂无对应的掉落池", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
                 }
-                item("back") { TextButton(onClick = ::goBack) { Text("返回来源说明") } }
+                item("back") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        FilledTonalButton(onClick = ::goBack, shape = smoothCornerShape(10.dp)) { Text("返回来源说明") }
+                    }
+                }
             }
             sharedPool != null -> detailState.SaveableStateProvider(detailKey) {
-                ExtractionDetailSheet(sourcePoolDetail(source!!, sharedPool), location.query, sharedSourceList = true,
+                ExtractionDetailSheet(
+                    sourcePoolDetail(source!!, sharedPool), location.query, resource = catalog, sharedSourceList = true,
                     artwork = artwork, onFindItem = { item -> navigate { it.openItem(item) } },
-                    offlineAgeMs = catalog.cacheAgeMs.takeIf { catalog.isOffline && !catalog.isShowingCachedPrefetch },
-                    poolError = catalog.error?.let { dropLoadMessage("掉落池", it.kind) }, poolIsLoading = catalogPending,
-                    onRefreshPool = { catalog.reload(forceRefresh = true) },
-                    dismissLabel = "返回来源说明", onDismiss = ::goBack)
+                    dismissLabel = "返回来源说明", onDismiss = ::goBack
+                )
             }
             container != null -> detailState.SaveableStateProvider(detailKey) {
                 val notes = sourceRecords.singleOrNull { it.isContainer && it.entry.id == container.id }?.sourceNotes
-                ExtractionDetailSheet(container, location.query, containerDetails = true,
+                ExtractionDetailSheet(
+                    container, location.query, resource = containers, containerDetails = true,
                     initialPoolQuality = location.poolQuality,
                     onFindItem = { item -> navigate { it.openItem(item) } },
-                    offlineAgeMs = containers.cacheAgeMs.takeIf { containers.isOffline && !containers.isShowingCachedPrefetch },
-                    poolError = containers.error?.let { dropLoadMessage("容器掉落表", it.kind) }, poolIsLoading = containersPending,
-                    onRefreshPool = { containers.reload(forceRefresh = true) }, artwork = artwork,
+                    artwork = artwork,
                     onViewSourceNotes = notes?.let { note -> { navigate { it.openSource(note.id) } } },
-                    dismissLabel = "返回上一页", onDismiss = ::goBack)
+                    dismissLabel = "返回上一页", onDismiss = ::goBack
+                )
             }
             source != null -> detailState.SaveableStateProvider(detailKey) {
                 val sourcePool = linkedDropSharedPool(source, catalog.data)
-                ExtractionDetailSheet(source, location.query, artwork = artwork,
+                ExtractionDetailSheet(
+                    source, location.query, resource = catalog, artwork = artwork,
                     evidenceGroups = sourcePool?.dropPoolGroups ?: source.dropPoolGroups,
                     onFindItem = { item -> navigate { it.openItem(item) } },
                     onViewCompletePool = if (source.type == ExtractionEntryType.DROP_SOURCE &&
                         (source.containerId != null || sourcePool != null))
                         ({ navigate { it.openLinkedPool() } }) else null,
-                    dismissLabel = "返回上一页", onDismiss = ::goBack)
+                    dismissLabel = "返回上一页", onDismiss = ::goBack
+                )
             }
             location.hasDetail -> WikiContentSheet(onDismiss = ::goBack) {
                 item("missing") {
                     val pending = if (location.sourceId != null) catalogPending else containersPending
                     val resource = if (location.sourceId != null) catalog else containers
-                    if (pending || resource.error == null) Text(if (pending) "正在加载来源详情…" else "暂未找到此来源")
-                    resource.error?.let { error ->
-                        Text(dropLoadMessage("来源详情", error.kind), color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { resource.reload(forceRefresh = true) }) { Text("重试") }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (pending || resource.error == null) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = smoothCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.50f))
+                            ) {
+                                Text(
+                                    if (pending) "正在加载来源详情…" else "暂未找到此来源",
+                                    Modifier.padding(14.dp),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                        resource.error?.let { error ->
+                            DropErrorBanner(dropLoadMessage("来源详情", error.kind), "重试") {
+                                resource.reload(forceRefresh = true)
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            FilledTonalButton(onClick = ::goBack, shape = smoothCornerShape(10.dp)) { Text("返回上一页") }
+                        }
                     }
-                    TextButton(onClick = ::goBack) { Text("返回上一页") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DropTaskSwitcher(selectedTask: DropTask, onSelect: (DropTask) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = smoothCornerShape(10.dp),
+        color = colors.surfaceContainerLow,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            DropTask.entries.forEach { task ->
+                val isSelected = selectedTask == task
+                Surface(
+                    onClick = { onSelect(task) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 40.dp)
+                        .semantics {
+                            role = Role.Tab
+                            selected = isSelected
+                        },
+                    shape = smoothCornerShape(8.dp),
+                    color = if (isSelected) colors.primaryContainer.copy(alpha = 0.65f) else Color.Transparent,
+                    border = if (isSelected) BorderStroke(1.dp, colors.primary.copy(alpha = 0.55f)) else null
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (task == DropTask.ITEMS) Icons.Outlined.Search else Icons.Outlined.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (isSelected) colors.primary else colors.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            task.title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = if (isSelected) colors.primary else colors.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -320,26 +450,40 @@ private fun ExtractionDropBrowser(
         ExtractionDropView.STAGES -> "首领阶段"
     }
     val categories = remember(records) { records.map { it.entry.filterCategory }.distinct() }
-    val filtered = remember(records, query, category, catalogEntries) {
-        records.filter { category == null || it.entry.filterCategory == category }.mapNotNull { it.matchingRecord(query, catalogEntries) }
-    }
+    val search = remember(records, catalogEntries) { DropSourceSearch(records, catalogEntries) }
+    if (query.isNotBlank()) LaunchedEffect(search) { withContext(Dispatchers.Default) { search.prepare() } }
+    val filtered = remember(search, query, category) { search.filter(query, category) }
     LaunchedEffect(categories, filtersAuthoritative) {
         if (filtersAuthoritative && categories.isNotEmpty() && category !in categories) category = null
     }
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         item("controls") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SearchBar(keyword = query, onKeywordChange = { query = it }, onClear = { query = "" },
-                    isSearching = false, placeholder = when (view) {
+                SearchBar(
+                    keyword = query,
+                    onKeywordChange = { query = it },
+                    onClear = { query = "" },
+                    isSearching = false,
+                    placeholder = when (view) {
                         ExtractionDropView.SOURCES -> "搜索来源或物品"
                         ExtractionDropView.POOLS -> "搜索掉落池或物品"
                         ExtractionDropView.STAGES -> "搜索阶段或掉落内容"
-                    })
-                DropFilterBar(summary = if (loading && records.isEmpty()) "正在加载${subject}…"
+                    }
+                )
+                DropFilterBar(
+                    summary = if (loading && records.isEmpty()) "正在加载${subject}…"
                     else if (loadFailed && records.isEmpty()) subject
                     else if (partialSources) "已加载的来源中匹配 ${filtered.size} 个" else "${filtered.size} 个$subject",
-                    label = category ?: "分类", onClick = { focus.clearFocus(); filters = true }, enabled = records.isNotEmpty(),
-                    activeFilter = category != null)
+                    label = category ?: "分类",
+                    onClick = { focus.clearFocus(); filters = true },
+                    enabled = records.isNotEmpty(),
+                    activeFilter = category != null,
+                    activeCount = if (category != null) 1 else 0
+                )
                 status()
             }
         }
@@ -348,20 +492,31 @@ private fun ExtractionDropBrowser(
                 DropSourceCardSkeleton(Modifier.dropItemMotion(this))
             }
             else if (!(loadFailed && records.isEmpty())) item("empty") {
-                ExtractionEmptyResults(message = if (partialSources) "已加载的来源中没有匹配项"
+                ExtractionEmptyResults(
+                    message = if (partialSources) "已加载的来源中没有匹配项"
                     else if (query.isNotBlank() || category != null) "没有符合条件的$subject" else "暂无$subject",
                     onClearQuery = if (query.isNotEmpty()) ({ query = "" }) else null,
-                    onClearFilters = if (category != null) ({ category = null }) else null)
+                    onClearFilters = if (category != null) ({ category = null }) else null
+                )
             }
         }
         items(filtered, key = { "${it.isContainer}:${it.entry.id}" }, contentType = { it.entry.type }) { record ->
             val sharedPool = remember(record.entry, catalogEntries) { linkedDropSharedPool(record.entry, catalogEntries) }
-            ExtractionDropCard(modifier = Modifier.dropItemMotion(this), entry = record.entry, query = query, isContainer = record.isContainer,
-                sharedPool = sharedPool, artwork = artwork, onClick = { onSelect(record, query) })
+            ExtractionDropCard(
+                modifier = Modifier.dropItemMotion(this),
+                entry = record.entry,
+                query = query,
+                isContainer = record.isContainer,
+                sharedPool = sharedPool,
+                artwork = artwork,
+                onClick = { onSelect(record, query) }
+            )
         }
     }
     if (filters && isActive) WikiSelectionSheet(title = "${subject}分类", onDismiss = { filters = false }) {
-        item("all") { SelectionOptionRow(label = "全部分类", selected = category == null, onClick = { category = null; filters = false }) }
+        item("all") {
+            SelectionOptionRow(label = "全部分类", selected = category == null, onClick = { category = null; filters = false })
+        }
         items(categories, key = { it }) { value ->
             SelectionOptionRow(label = value, selected = category == value, onClick = { category = value; filters = false })
         }
@@ -370,10 +525,11 @@ private fun ExtractionDropBrowser(
 
 @Composable
 private fun DropErrorBanner(message: String, retryLabel: String, onRetry: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
     Surface(
-        shape = AppShapes.compactCard,
-        color = MaterialTheme.colorScheme.errorContainer,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
+        shape = smoothCornerShape(12.dp),
+        color = colors.errorContainer,
+        border = BorderStroke(1.dp, colors.error.copy(alpha = 0.35f))
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -383,14 +539,14 @@ private fun DropErrorBanner(message: String, retryLabel: String, onRetry: () -> 
                 Icons.Outlined.ErrorOutline,
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onErrorContainer
+                tint = colors.onErrorContainer
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 message,
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                color = colors.onErrorContainer
             )
             TextButton(onClick = onRetry) { Text(retryLabel) }
         }

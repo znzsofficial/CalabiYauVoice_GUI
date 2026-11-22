@@ -3,12 +3,12 @@ package com.nekolaska.calabiyau.feature.settings
 internal enum class SettingsPage(val title: String, val parent: SettingsPage? = null) {
     HOME("设置"),
     QUICK_ENTRIES("首页快捷入口", HOME),
-    APPEARANCE("外观与壁纸", HOME),
+    APPEARANCE("外观", HOME),
+    WALLPAPER("壁纸", HOME),
     DOWNLOADS("下载与存储", HOME),
     WIKI("Wiki 与账号", HOME),
-    ABOUT("关于与更新", HOME),
+    ABOUT("关于", HOME),
     COLORS("配色细节", APPEARANCE),
-    WALLPAPER("壁纸", APPEARANCE),
     STORAGE("存储空间", DOWNLOADS);
 }
 
@@ -33,6 +33,10 @@ internal class SettingsNavigation private constructor(private val pages: List<Se
             var path = SettingsNavigation()
             if (names.firstOrNull() == path.current.name) {
                 for (name in names.drop(1)) {
+                    // Older saves placed WALLPAPER under APPEARANCE; restore it directly under HOME.
+                    if (path.current == SettingsPage.APPEARANCE && name == SettingsPage.WALLPAPER.name) {
+                        path = path.pop(SettingsPage.APPEARANCE)
+                    }
                     val child = SettingsPage.entries.find { it.name == name && it.parent == path.current } ?: break
                     path = path.open(path.current, child)
                 }

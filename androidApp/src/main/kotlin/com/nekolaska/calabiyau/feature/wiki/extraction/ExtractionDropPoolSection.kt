@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
@@ -21,7 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.DropArtworkIndex
 import com.nekolaska.calabiyau.feature.wiki.extraction.model.ExtractionDropPoolGroup
 
@@ -31,35 +32,56 @@ internal fun LazyListScope.extractionDropPoolSection(
     artwork: DropArtworkIndex = DropArtworkIndex.Empty, onToggle: () -> Unit
 ) {
     item(key = "pool-heading:${group.key}", contentType = "pool-heading") {
+        val colors = MaterialTheme.colorScheme
+        val shape = smoothCornerShape(12.dp)
         val canExpand = group.items.size > 8
         val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(DropMotion.reveal), label = "drop-pool-arrow")
         Surface(
-            modifier = Modifier.dropItemMotion(this).fillMaxWidth()
+            modifier = Modifier.dropItemMotion(this).fillMaxWidth().clip(shape)
                 .then(if (canExpand) Modifier.clickable(
                     role = Role.Button,
                     onClickLabel = if (expanded) "收起物品" else "展开全部物品",
                     onClick = onToggle
                 ).semantics { stateDescription = if (expanded) "已展开" else "显示前 8 项" } else Modifier),
-            shape = AppShapes.compactCard,
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            shape = shape,
+            color = colors.surfaceContainer,
+            border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.55f))
         ) {
             FlowRow(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(Modifier.align(Alignment.CenterVertically)) { ExtractionDropQualityBadge(label = group.label, code = group.qualityCode ?: -1) }
-                Text(
-                    "${group.items.size} 项候选物品",
-                    Modifier.align(Alignment.CenterVertically),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ExtractionDropQualityBadge(label = group.label, code = group.qualityCode ?: -1)
+                    Text(
+                        "${group.items.size} 项候选物品",
+                        style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 if (canExpand) {
-                    Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (expanded) "收起" else "展开全部", style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                        Icon(Icons.Outlined.ExpandMore, null, Modifier.rotate(rotation), tint = MaterialTheme.colorScheme.primary)
+                    Row(
+                        Modifier.align(Alignment.CenterVertically),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            if (expanded) "收起" else "展开全部",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Icon(
+                            Icons.Outlined.ExpandMore,
+                            null,
+                            Modifier.size(18.dp).rotate(rotation),
+                            tint = colors.primary
+                        )
                     }
                 }
             }
@@ -91,14 +113,16 @@ internal fun ExtractionDetailItemRow(
     modifier: Modifier = Modifier
 ) {
     val focus = LocalFocusManager.current
+    val colors = MaterialTheme.colorScheme
+    val shape = smoothCornerShape(12.dp)
     Surface(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().clip(shape)
             .then(if (onClick == null) Modifier else Modifier.clickable(
                 role = Role.Button, onClickLabel = "查看物品来源", onClick = { focus.clearFocus(); onClick() }
             )),
-        shape = AppShapes.compactCard,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        shape = shape,
+        color = colors.surfaceContainerLow,
+        border = BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.50f))
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp, vertical = 10.dp),
@@ -106,7 +130,9 @@ internal fun ExtractionDetailItemRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ExtractionDropThumbnail(
-                qualityCode = qualityCode, imageUrl = imageUrl, modifier = Modifier.size(48.dp)
+                qualityCode = qualityCode,
+                imageUrl = imageUrl,
+                modifier = Modifier.size(48.dp)
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
@@ -115,7 +141,8 @@ internal fun ExtractionDetailItemRow(
             if (onClick != null) Icon(
                 Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(18.dp),
+                tint = colors.onSurfaceVariant
             )
         }
     }

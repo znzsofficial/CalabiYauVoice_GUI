@@ -1,5 +1,7 @@
 package com.nekolaska.calabiyau.feature.settings
 
+import android.system.Os
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,44 +11,47 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.BlurOn
+import androidx.compose.material.icons.outlined.AppShortcut
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.BlurOn
 import androidx.compose.material.icons.outlined.ColorLens
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.SaveAlt
-import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.Wallpaper
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,14 +64,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.launcher.LauncherIconTheme
+import com.nekolaska.calabiyau.core.preferences.AppPrefs
+import com.nekolaska.calabiyau.core.preferences.encodeCustomSeed
+import com.nekolaska.calabiyau.core.preferences.explicitSeedArgb
 import com.nekolaska.calabiyau.core.ui.AppShapes
+import com.nekolaska.calabiyau.core.ui.AppSizes
 import com.nekolaska.calabiyau.core.ui.AppSpacing
+import com.nekolaska.calabiyau.core.ui.AppTextStyles
+import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.LocalAmoledDark
 import com.nekolaska.calabiyau.core.ui.LocalColorSpec2025
 import com.nekolaska.calabiyau.core.ui.LocalContrastLevel
@@ -76,16 +93,20 @@ import com.nekolaska.calabiyau.core.ui.LocalPaletteStyle
 import com.nekolaska.calabiyau.core.ui.LocalSeedColor
 import com.nekolaska.calabiyau.core.ui.LocalThemeMode
 import com.nekolaska.calabiyau.core.ui.LocalWallpaperSeedColor
-import com.nekolaska.calabiyau.core.ui.smoothCornerShape
+import com.nekolaska.calabiyau.core.ui.WallpaperSeedColor
 import com.nekolaska.calabiyau.core.wiki.WikiEngine
+import com.nekolaska.calabiyau.feature.tools.rememberSyncedSliderState
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperApi
 import com.nekolaska.calabiyau.feature.wiki.gallery.WallpaperRefresh
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import util.bodyToFile
-import util.executeGet
+import util.awaitGetToFile
 import java.io.File
+import java.io.IOException
 
 private data class ThemeColorSource(
     val value: Int,
@@ -120,20 +141,25 @@ internal fun themeModeLabel(mode: Int): String = when (mode) {
 }
 
 @Composable
-internal fun AppearanceSettingsSection(wallpaperAutoRefresh: Boolean, onOpenColors: () -> Unit, onOpenWallpaper: () -> Unit) {
+internal fun AppearanceSettingsSection(onOpenColors: () -> Unit) {
     var themeMode by LocalThemeMode.current
     var amoledDark by LocalAmoledDark.current
     var liquidGlassEnabled by LocalLiquidGlassEnabled.current
     var highReadabilityDrawer by LocalHighReadabilityDrawer.current
     var launcherIconTheme by remember { mutableIntStateOf(AppPrefs.launcherIconTheme) }
 
-    SettingsGroupHeader("主题")
+    SettingsGroupHeader("主题", topPadding = AppSpacing.small)
     SettingsCard {
         var showThemeDialog by remember { mutableStateOf(false) }
-        SettingsItem(Icons.Outlined.Palette, "主题模式", themeModeLabel(themeMode)) { showThemeDialog = true }
+        SettingsItem(
+            icon = Icons.Outlined.Contrast,
+            title = "主题模式",
+            value = themeModeLabel(themeMode)
+        ) { showThemeDialog = true }
         if (showThemeDialog) {
             SettingsSingleChoiceDialog(
-                title = "主题模式", options = listOf(AppPrefs.THEME_SYSTEM, AppPrefs.THEME_LIGHT, AppPrefs.THEME_DARK)
+                title = "主题模式",
+                options = listOf(AppPrefs.THEME_SYSTEM, AppPrefs.THEME_LIGHT, AppPrefs.THEME_DARK)
                     .map { it to themeModeLabel(it) },
                 selectedValue = themeMode,
                 onSelect = { themeMode = it; AppPrefs.themeMode = it; showThemeDialog = false },
@@ -141,115 +167,124 @@ internal fun AppearanceSettingsSection(wallpaperAutoRefresh: Boolean, onOpenColo
             )
         }
         SettingsDivider()
-        SettingsToggleItem(Icons.Outlined.DarkMode, "纯黑模式", "深色外观下使用纯黑背景", amoledDark) {
+        SettingsToggleItem(
+            icon = Icons.Outlined.DarkMode,
+            title = "纯黑模式",
+            subtitle = "深色外观下使用纯黑背景",
+            checked = amoledDark
+        ) {
             amoledDark = it
             AppPrefs.amoledDark = it
         }
         SettingsDivider()
-        SettingsItem(Icons.Outlined.ColorLens, SettingsPage.COLORS.title, themeColorName(LocalSeedColor.current.intValue), onOpenColors)
-        SettingsDivider()
-        SettingsItem(Icons.Outlined.Wallpaper, SettingsPage.WALLPAPER.title,
-            if (wallpaperAutoRefresh) "启动时随机更换" else "自动更换已关闭", onOpenWallpaper)
+        SettingsItem(
+            icon = Icons.Outlined.ColorLens,
+            title = SettingsPage.COLORS.title,
+            value = themeColorName(LocalSeedColor.current.intValue),
+            onClick = onOpenColors
+        )
     }
 
-    // ── 视觉效果 ──
-    Spacer(Modifier.height(AppSpacing.itemGap))
     SettingsGroupHeader("视觉效果")
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppSpacing.screen),
-        shape = AppShapes.card,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Column {
-            // 应用图标
-            var showLauncherIconDialog by remember { mutableStateOf(false) }
-            val launcherIconName = when (launcherIconTheme) {
-                AppPrefs.LAUNCHER_ICON_SYSTEM -> "系统强调色"
-                else -> "品牌深色"
-            }
-            SettingsItem(
-                icon = Icons.Outlined.Palette,
-                title = "图标",
-                subtitle = launcherIconName,
-                onClick = { showLauncherIconDialog = true }
-            )
-            if (showLauncherIconDialog) {
-                val context = LocalContext.current
-                AlertDialog(
-                    onDismissRequest = { showLauncherIconDialog = false },
-                    title = { Text("图标") },
-                    text = {
-                        Column {
-                            Text(
-                                "更改后，主屏幕图标可能需要片刻才会更新。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(AppSpacing.medium))
+    SettingsCard {
+        var showLauncherIconDialog by remember { mutableStateOf(false) }
+        val launcherIconName = when (launcherIconTheme) {
+            AppPrefs.LAUNCHER_ICON_SYSTEM -> "系统强调色"
+            else -> "品牌深色"
+        }
+        SettingsItem(
+            icon = Icons.Outlined.AppShortcut,
+            title = "图标",
+            value = launcherIconName,
+            onClick = { showLauncherIconDialog = true }
+        )
+        if (showLauncherIconDialog) {
+            val context = LocalContext.current
+            SettingsDialog(
+                onDismissRequest = { showLauncherIconDialog = false },
+                title = { Text("图标") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)) {
+                        Text(
+                            "更改后，主屏幕图标可能需要片刻才会更新。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Column(
+                            modifier = Modifier.selectableGroup(),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)
+                        ) {
                             listOf(
                                 AppPrefs.LAUNCHER_ICON_BRAND to "品牌深色",
                                 AppPrefs.LAUNCHER_ICON_SYSTEM to "系统强调色"
                             ).forEach { (theme, label) ->
+                                val selected = launcherIconTheme == theme
+                                val colors = MaterialTheme.colorScheme
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(smoothCornerShape(12.dp))
-                                        .clickable {
-                                            launcherIconTheme = theme
-                                            AppPrefs.launcherIconTheme = theme
-                                            LauncherIconTheme.apply(context, theme)
-                                            showLauncherIconDialog = false
-                                        }
-                                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clip(SettingsIconFrameShape)
+                                        .border(
+                                            width = if (selected) 1.5.dp else 1.dp,
+                                            color = if (selected) colors.primary else colors.outlineVariant.copy(alpha = 0.35f),
+                                            shape = SettingsIconFrameShape
+                                        )
+                                        .selectable(
+                                            selected = selected,
+                                            role = Role.RadioButton,
+                                            onClick = {
+                                                launcherIconTheme = theme
+                                                AppPrefs.launcherIconTheme = theme
+                                                LauncherIconTheme.apply(context, theme)
+                                                showLauncherIconDialog = false
+                                            }
+                                        )
+                                        .minimumInteractiveComponentSize()
+                                        .padding(horizontal = AppSpacing.large, vertical = AppSpacing.medium),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.iconGap)
                                 ) {
-                                    RadioButton(
-                                        selected = launcherIconTheme == theme,
-                                        onClick = {
-                                            launcherIconTheme = theme
-                                            AppPrefs.launcherIconTheme = theme
-                                            LauncherIconTheme.apply(context, theme)
-                                            showLauncherIconDialog = false
-                                        }
+                                    RadioButton(selected = selected, onClick = null)
+                                    Text(
+                                        text = label,
+                                        style = AppTextStyles.settingsItemTitle,
+                                        color = if (selected) colors.primary else colors.onSurface
                                     )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(label, style = MaterialTheme.typography.bodyLarge)
                                 }
                             }
                         }
-                    },
-                    shape = AppShapes.dialog,
-                    confirmButton = {}
-                )
-            }
-
-            // 液态玻璃
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            SettingsToggleItem(
-                icon = Icons.Outlined.BlurOn,
-                title = "液态玻璃",
-                subtitle = "需要 Android 12 或更高版本",
-                checked = liquidGlassEnabled,
-                onCheckedChange = {
-                    liquidGlassEnabled = it
-                    AppPrefs.liquidGlassEnabled = it
-                }
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = AppSpacing.screen))
-            SettingsToggleItem(
-                icon = Icons.Outlined.Visibility,
-                title = "提高侧栏对比度",
-                subtitle = "增强液态玻璃侧栏中的文字可读性",
-                checked = highReadabilityDrawer,
-                onCheckedChange = {
-                    highReadabilityDrawer = it
-                    AppPrefs.highReadabilityDrawer = it
+                    }
+                },
+                shape = AppShapes.dialog,
+                confirmButton = {
+                    TextButton(onClick = { showLauncherIconDialog = false }) { Text("关闭") }
                 }
             )
         }
+
+        SettingsDivider()
+        SettingsToggleItem(
+            icon = Icons.Outlined.BlurOn,
+            title = "液态玻璃",
+            subtitle = "需要 Android 12 或更高版本",
+            checked = liquidGlassEnabled,
+            onCheckedChange = {
+                liquidGlassEnabled = it
+                AppPrefs.liquidGlassEnabled = it
+            }
+        )
+
+        SettingsDivider()
+        SettingsToggleItem(
+            icon = Icons.Outlined.Visibility,
+            title = "提高侧栏对比度",
+            subtitle = "增强液态玻璃侧栏中的文字可读性",
+            checked = highReadabilityDrawer,
+            onCheckedChange = {
+                highReadabilityDrawer = it
+                AppPrefs.highReadabilityDrawer = it
+            }
+        )
     }
 }
 
@@ -259,6 +294,8 @@ internal fun ColorSettingsSection() {
     var paletteStyle by LocalPaletteStyle.current
     var contrast by LocalContrastLevel.current
     var colorSpec2025 by LocalColorSpec2025.current
+
+    SettingsGroupHeader("配色参数", topPadding = AppSpacing.small)
     SettingsCard {
         ThemeColorPicker(seedColor) { seedColor = it; AppPrefs.customSeedColor = it }
         SettingsDivider()
@@ -266,7 +303,13 @@ internal fun ColorSettingsSection() {
         SettingsDivider()
         ContrastLevelPicker(contrast) { contrast = it; AppPrefs.contrastLevel = it }
         SettingsDivider()
-        SettingsToggleItem(Icons.Outlined.AutoAwesome, "动态配色", if (colorSpec2025) "2025 规范" else "2021 规范", colorSpec2025) {
+        SettingsToggleItem(
+            icon = Icons.Outlined.AutoAwesome,
+            title = "动态配色",
+            subtitle = if (colorSpec2025) "2025 规范" else "2021 规范",
+            checked = colorSpec2025,
+            tabularSubtitle = true
+        ) {
             colorSpec2025 = it
             AppPrefs.colorSpec2025 = it
         }
@@ -278,26 +321,60 @@ internal fun ColorSettingsSection() {
 private fun themeColorName(color: Int): String = THEME_COLOR_SOURCES.firstOrNull { it.value == color }?.label
     ?: PRESET_SWATCHES.firstOrNull { it.first == color }?.second ?: "自定义"
 
+// Choose the higher WCAG contrast of black and white on the opaque color swatch.
+private fun swatchInk(background: Color) = if (background.luminance() > 0.179f) Color.Black else Color.White
+
 @Composable
 private fun ThemeColorPicker(
     currentSeedColor: Int,
     onColorSelected: (Int) -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    val wallpaperSeedArgb = LocalWallpaperSeedColor.current.intValue
+    val wallpaperSeed = LocalWallpaperSeedColor.current
+    val explicitArgb = explicitSeedArgb(currentSeedColor)
+    val activeSwatch = when {
+        explicitArgb != null -> Color(explicitArgb)
+        currentSeedColor == AppPrefs.SEED_WALLPAPER && wallpaperSeed.intValue != 0 -> Color(wallpaperSeed.intValue)
+        else -> MaterialTheme.colorScheme.primary
+    }
 
     SettingsItem(
         icon = Icons.Outlined.ColorLens,
         title = "主题色",
-        subtitle = themeColorName(currentSeedColor),
+        value = themeColorName(currentSeedColor),
+        trailing = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.small)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(activeSwatch)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                )
+                SettingsNavigationChevron()
+            }
+        },
         onClick = { showDialog = true }
     )
 
     if (showDialog) {
+        // AppTheme owns the active wallpaper seed. Other themes only need this sample inside the chooser.
+        val wallpaperSeedArgb = if (currentSeedColor == AppPrefs.SEED_WALLPAPER) wallpaperSeed.intValue else {
+            val context = LocalContext.current
+            val url by AppPrefs.wallpaperUrlState.collectAsState()
+            var sample by remember(url) { mutableIntStateOf(WallpaperSeedColor.cachedColorFor(url)) }
+            if (sample == 0 && !url.isNullOrBlank()) LaunchedEffect(context, url) {
+                sample = WallpaperSeedColor.resolve(context, url)
+            }
+            sample
+        }
         val initHsv = remember {
             FloatArray(3).also { hsv ->
-                if (currentSeedColor > 0) {
-                    android.graphics.Color.colorToHSV(currentSeedColor, hsv)
+                if (explicitArgb != null) {
+                    android.graphics.Color.colorToHSV(explicitArgb, hsv)
                 } else {
                     hsv[0] = 210f
                     hsv[1] = 0.7f
@@ -310,21 +387,16 @@ private fun ThemeColorPicker(
         var value by remember { mutableFloatStateOf(initHsv[2]) }
         val isPresetSelected = PRESET_SWATCHES.any { it.first == currentSeedColor }
         var showCustomPicker by remember {
-            mutableStateOf(currentSeedColor > 0 && !isPresetSelected)
+            mutableStateOf(explicitArgb != null && !isPresetSelected)
         }
         val customColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
         val hueColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f)))
 
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("选择主题色") },
             text = {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 520.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     THEME_COLOR_SOURCES.forEach { source ->
                         val isSelected = source.value == currentSeedColor && !showCustomPicker
                         val swatch = when (source.value) {
@@ -339,6 +411,9 @@ private fun ThemeColorPicker(
                             selected = isSelected,
                             onClick = {
                                 showCustomPicker = false
+                                if (source.value == AppPrefs.SEED_WALLPAPER && wallpaperSeedArgb != 0) {
+                                    wallpaperSeed.intValue = wallpaperSeedArgb
+                                }
                                 onColorSelected(source.value)
                                 showDialog = false
                             }
@@ -347,8 +422,9 @@ private fun ThemeColorPicker(
 
                     Text(
                         "预设颜色",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                     PRESET_SWATCHES.chunked(6).forEach { row ->
                         Row(
@@ -357,18 +433,23 @@ private fun ThemeColorPicker(
                         ) {
                             row.forEach { (argb, label) ->
                                 val isSelected = argb == currentSeedColor && !showCustomPicker
+                                val swatchColor = Color(argb)
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .aspectRatio(1f)
                                         .clip(CircleShape)
-                                        .background(Color(argb))
+                                        .background(swatchColor)
                                         .then(
                                             if (isSelected) Modifier.border(
                                                 2.dp,
                                                 MaterialTheme.colorScheme.onSurface,
                                                 CircleShape
-                                            ) else Modifier
+                                            ) else Modifier.border(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                                CircleShape
+                                            )
                                         )
                                         .clickable {
                                             showCustomPicker = false
@@ -381,7 +462,7 @@ private fun ThemeColorPicker(
                                         Icon(
                                             Icons.Default.Check,
                                             contentDescription = label,
-                                            tint = Color.White,
+                                            tint = swatchInk(swatchColor),
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
@@ -391,14 +472,14 @@ private fun ThemeColorPicker(
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(thickness = 1.dp, color = settingsDividerColor())
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(smoothCornerShape(14.dp))
+                            .clip(SettingsIconFrameShape)
                             .clickable { showCustomPicker = !showCustomPicker }
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -412,6 +493,7 @@ private fun ThemeColorPicker(
                             "自定义颜色",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.weight(1f)
                         )
                         Icon(
@@ -426,16 +508,23 @@ private fun ThemeColorPicker(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(52.dp)
-                                    .clip(smoothCornerShape(16.dp))
-                                    .background(customColor),
+                                    .height(48.dp)
+                                    .clip(SettingsIconFrameShape)
+                                    .background(customColor)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        SettingsIconFrameShape
+                                    ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    String.format("#%06X", customColor.toArgb() and 0xFFFFFF),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Bold
+                                    text = String.format("#%06X", customColor.toArgb() and 0xFFFFFF),
+                                    color = swatchInk(customColor),
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontFeatureSettings = "tnum"
+                                    )
                                 )
                             }
                             ColorChannelSlider(
@@ -481,18 +570,24 @@ private fun ThemeColorPicker(
             confirmButton = {
                 if (showCustomPicker) {
                     FilledTonalButton(onClick = {
-                        onColorSelected(customColor.toArgb())
+                        onColorSelected(encodeCustomSeed(customColor.toArgb()))
                         showDialog = false
                     }) {
                         Text("应用")
                     }
+                } else {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("关闭")
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("取消")
+            dismissButton = if (showCustomPicker) {
+                {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("取消")
+                    }
                 }
-            }
+            } else null
         )
     }
 }
@@ -505,16 +600,15 @@ private fun ThemeColorSourceRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(smoothCornerShape(14.dp))
-            .then(
-                if (selected) Modifier.border(
-                    2.dp,
-                    MaterialTheme.colorScheme.primary,
-                    smoothCornerShape(14.dp)
-                ) else Modifier
+            .clip(SettingsIconFrameShape)
+            .border(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) colors.primary else colors.outlineVariant.copy(alpha = 0.35f),
+                shape = SettingsIconFrameShape
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -522,16 +616,17 @@ private fun ThemeColorSourceRow(
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(30.dp)
                 .clip(CircleShape)
-                .background(swatch),
+                .background(swatch)
+                .border(1.dp, colors.outlineVariant.copy(alpha = 0.45f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (selected) {
                 Icon(
                     Icons.Default.Check,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = swatchInk(swatch),
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -542,12 +637,12 @@ private fun ThemeColorSourceRow(
                 label,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                color = if (selected) colors.primary else colors.onSurface
             )
             Text(
                 description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = colors.onSurfaceVariant
             )
         }
     }
@@ -562,7 +657,7 @@ private fun ColorChannelSlider(
     trackBrush: Brush
 ) {
     // material3 alpha28 起自定义 track 需改用 SliderState 重载
-    val sliderState = com.nekolaska.calabiyau.feature.tools.rememberSyncedSliderState(value, valueRange)
+    val sliderState = rememberSyncedSliderState(value, valueRange)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             label,
@@ -594,81 +689,289 @@ private fun ColorChannelSlider(
 // ─────────────────────── 壁纸管理 ───────────────────────
 
 @Composable
-internal fun WallpaperSettingsSection(wallpaperAutoRefresh: Boolean, onAutoRefreshChange: (Boolean) -> Unit) {
-    SettingsCard { WallpaperItems(wallpaperAutoRefresh, onAutoRefreshChange) }
-}
-
-@Composable
-private fun WallpaperItems(wallpaperAutoRefresh: Boolean, onAutoRefreshChange: (Boolean) -> Unit) {
+internal fun WallpaperSettingsSection(
+    wallpaperAutoRefresh: Boolean,
+    onAutoRefreshChange: (Boolean) -> Unit
+) {
     val scope = rememberCoroutineScope()
+    val wallpaperUrl by AppPrefs.wallpaperUrlState.collectAsState()
+    val followsWallpaperColor = LocalSeedColor.current.intValue == AppPrefs.SEED_WALLPAPER
     var isRefreshing by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     var wallpaperMessage by remember { mutableStateOf<String?>(null) }
+    var saveMessage by remember(wallpaperUrl) { mutableStateOf<String?>(null) }
+    var showImagePreview by remember(wallpaperUrl) { mutableStateOf(false) }
 
-    SettingsToggleItem(
-        icon = Icons.Outlined.Autorenew,
-        title = "自动更换",
-        subtitle = "启动时随机更换壁纸",
-        checked = wallpaperAutoRefresh,
-        onCheckedChange = onAutoRefreshChange
+    SettingsGroupHeader("当前壁纸", topPadding = AppSpacing.small)
+    WallpaperPreviewCard(
+        wallpaperUrl = wallpaperUrl,
+        wallpaperAutoRefresh = wallpaperAutoRefresh,
+        followsWallpaperColor = followsWallpaperColor,
+        isRefreshing = isRefreshing,
+        onPreview = { showImagePreview = true }
     )
 
-    SettingsDivider()
-    SettingsItem(
-        icon = Icons.Outlined.Refresh,
-        title = "立即更换",
-        subtitle = if (isRefreshing) "正在获取…"
-        else wallpaperMessage ?: "随机更换一张壁纸",
-        onClick = {
-            if (isRefreshing) return@SettingsItem
-            isRefreshing = true
-            wallpaperMessage = null
-            scope.launch {
-                try {
-                    wallpaperMessage = when (WallpaperApi.refresh(manual = true)) {
-                        WallpaperRefresh.UPDATED -> "已更换"
-                        WallpaperRefresh.RETAINED -> "沿用当前壁纸"
-                        WallpaperRefresh.UNAVAILABLE -> "获取失败"
-                    }
-                } finally { isRefreshing = false }
-            }
-        }
-    )
+    SettingsGroupHeader("壁纸设置")
+    SettingsCard {
+        SettingsToggleItem(
+            icon = Icons.Outlined.Autorenew,
+            title = "自动更换",
+            subtitle = "启动时随机更换壁纸",
+            checked = wallpaperAutoRefresh,
+            onCheckedChange = onAutoRefreshChange
+        )
 
-    SettingsDivider()
-    SettingsItem(
-        icon = Icons.Outlined.SaveAlt,
-        title = "存储到“下载”",
-        subtitle = if (isSaving) "正在存储…"
-        else "将当前壁纸存储到下载目录",
-        onClick = {
-            val currentUrl = AppPrefs.wallpaperUrl
-            if (currentUrl.isNullOrBlank() || isSaving) return@SettingsItem
-            isSaving = true
-            scope.launch {
-                val success = withContext(Dispatchers.IO) {
+        SettingsDivider()
+        SettingsItem(
+            icon = Icons.Outlined.Refresh,
+            title = "立即更换",
+            subtitle = if (isRefreshing) "正在获取…" else wallpaperMessage ?: "随机更换一张壁纸",
+            enabled = !isRefreshing,
+            showChevron = false,
+            trailing = if (isRefreshing) {
+                {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(AppSizes.iconSmall),
+                        strokeWidth = 2.dp
+                    )
+                }
+            } else null,
+            onClick = {
+                if (isRefreshing) return@SettingsItem
+                isRefreshing = true
+                wallpaperMessage = null
+                scope.launch {
                     try {
-                        val fileName = currentUrl.substringAfterLast("/")
-                            .substringBefore("?")
-                            .ifBlank { "wallpaper_${System.currentTimeMillis()}.jpg" }
-                        val saveDir = File(AppPrefs.savePath)
-                        if (!saveDir.exists()) saveDir.mkdirs()
-                        val destFile = File(saveDir, fileName)
-                        WikiEngine.client.executeGet(currentUrl).use { resp ->
-                            if (!resp.isSuccessful) return@withContext false
-                            resp.bodyToFile(destFile)
+                        wallpaperMessage = when (WallpaperApi.refresh(manual = true)) {
+                            WallpaperRefresh.UPDATED -> "已更换"
+                            WallpaperRefresh.RETAINED -> "沿用当前壁纸"
+                            WallpaperRefresh.UNAVAILABLE -> "获取失败"
                         }
-                        true
-                    } catch (_: Exception) {
-                        false
+                    } finally {
+                        isRefreshing = false
                     }
                 }
-                wallpaperMessage = if (success) "已保存到 ${AppPrefs.savePath}"
-                else "保存失败"
-                isSaving = false
+            }
+        )
+
+        SettingsDivider()
+        SettingsItem(
+            icon = Icons.Outlined.SaveAlt,
+            title = "存储到“下载”",
+            subtitle = if (isSaving) "正在存储…" else saveMessage ?: "将当前壁纸存储到下载目录",
+            enabled = !isSaving,
+            showChevron = false,
+            trailing = if (isSaving) {
+                {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(AppSizes.iconSmall),
+                        strokeWidth = 2.dp
+                    )
+                }
+            } else null,
+            onClick = {
+                if (isSaving) return@SettingsItem
+                val currentUrl = wallpaperUrl
+                if (currentUrl.isNullOrBlank()) {
+                    saveMessage = "暂无壁纸，可先点“立即更换”"
+                    return@SettingsItem
+                }
+                isSaving = true
+                scope.launch {
+                    try {
+                        val path = withContext(Dispatchers.IO) {
+                            val fileName = currentUrl.substringAfterLast("/")
+                                .substringBefore("?")
+                                .ifBlank { "wallpaper_${System.currentTimeMillis()}.jpg" }
+                            val saveDir = File(AppPrefs.savePath)
+                            if (!saveDir.exists()) saveDir.mkdirs()
+                            saveWallpaperFile(currentUrl, File(saveDir, fileName))
+                            saveDir.absolutePath
+                        }
+                        saveMessage = "已保存到 $path"
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        saveMessage = "保存失败"
+                    } finally {
+                        isSaving = false
+                    }
+                }
+            }
+        )
+    }
+
+    if (showImagePreview && !wallpaperUrl.isNullOrBlank()) {
+        ImagePreviewDialog(
+            model = wallpaperUrl,
+            contentDescription = "当前壁纸",
+            onDismiss = { showImagePreview = false }
+        )
+    }
+}
+
+@Composable
+private fun WallpaperPreviewCard(
+    wallpaperUrl: String?,
+    wallpaperAutoRefresh: Boolean,
+    followsWallpaperColor: Boolean,
+    isRefreshing: Boolean,
+    onPreview: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    val isPreview = LocalInspectionMode.current
+    val hasWallpaper = !wallpaperUrl.isNullOrBlank()
+    val statusSummary = buildString {
+        append(if (wallpaperAutoRefresh) "启动时随机更换" else "手动更换")
+        if (followsWallpaperColor) append(" · 跟随取色")
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = AppSpacing.screen),
+        shape = SettingsCardShape,
+        color = colors.surfaceContainerLow,
+        border = settingsCardBorder(highlighted = hasWallpaper)
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(SettingsAccentBarHeight)
+                    .background(colors.primary)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(colors.primaryContainer, colors.tertiaryContainer)
+                        )
+                    )
+                    .then(
+                        if (hasWallpaper) Modifier.clickable(role = Role.Button, onClick = onPreview)
+                        else Modifier
+                    )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(AppSpacing.screen),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+                ) {
+                    SettingsFramedIcon(
+                        icon = Icons.Outlined.Wallpaper,
+                        size = 46.dp,
+                        iconSize = 24.dp
+                    )
+                    Text(
+                        text = if (hasWallpaper && !isPreview) "正在加载壁纸…" else "暂无壁纸，点下方“立即更换”即可获取",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onPrimaryContainer,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                if (hasWallpaper && !isPreview) {
+                    AsyncImage(
+                        model = wallpaperUrl,
+                        contentDescription = "当前壁纸",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                if (isRefreshing) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.36f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(26.dp),
+                            strokeWidth = 2.5.dp,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                if (hasWallpaper) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.72f)
+                                    )
+                                )
+                            )
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+                        ) {
+                            Text(
+                                text = statusSummary,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Surface(
+                                shape = SettingsBadgeShape,
+                                color = Color.Black.copy(alpha = 0.48f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ZoomIn,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "点按预览",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-    )
+    }
+}
+
+private suspend fun saveWallpaperFile(url: String, target: File) {
+    // Scoped storage accepts images in Pictures/DCIM but refuses generic .tmp files there.
+    val temp = File.createTempFile(".wallpaper-", ".${target.extension}", target.parentFile)
+    try {
+        if (!WikiEngine.client.awaitGetToFile(url, temp) || temp.length() == 0L) {
+            throw IOException("Empty or failed wallpaper download")
+        }
+        currentCoroutineContext().ensureActive()
+        Os.rename(temp.absolutePath, target.absolutePath)
+    } finally {
+        temp.delete()
+    }
 }
 
 // ─────────────────────── 配色风格选择器 ───────────────────────
@@ -704,28 +1007,27 @@ private fun ContrastLevelPicker(
     SettingsItem(
         icon = Icons.Outlined.Contrast,
         title = "对比度",
-        subtitle = currentInfo.label,
+        value = currentInfo.label,
         onClick = { showDialog = true }
     )
 
     if (showDialog) {
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("选择对比度") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
                     CONTRAST_LEVEL_OPTIONS.forEach { info ->
                         val isSelected = info.index == currentIndex
+                        val colors = MaterialTheme.colorScheme
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(smoothCornerShape(14.dp))
-                                .then(
-                                    if (isSelected) Modifier.border(
-                                        2.dp,
-                                        MaterialTheme.colorScheme.primary,
-                                        smoothCornerShape(14.dp)
-                                    ) else Modifier
+                                .clip(SettingsIconFrameShape)
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) colors.primary else colors.outlineVariant.copy(alpha = 0.35f),
+                                    shape = SettingsIconFrameShape
                                 )
                                 .clickable {
                                     onSelected(info.index)
@@ -735,10 +1037,13 @@ private fun ContrastLevelPicker(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                modifier = Modifier.size(32.dp),
-                                shape = CircleShape,
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                                modifier = Modifier.size(30.dp),
+                                shape = SettingsBadgeShape,
+                                color = if (isSelected) colors.primaryContainer else colors.surfaceContainerLow,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) colors.primary.copy(alpha = 0.4f) else colors.outlineVariant.copy(alpha = 0.35f)
+                                )
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     if (isSelected) {
@@ -746,7 +1051,7 @@ private fun ContrastLevelPicker(
                                             Icons.Default.Check,
                                             contentDescription = "已选",
                                             modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                            tint = colors.onPrimaryContainer
                                         )
                                     }
                                 }
@@ -757,13 +1062,12 @@ private fun ContrastLevelPicker(
                                     info.label,
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSelected) colors.primary else colors.onSurface
                                 )
                                 Text(
                                     info.description,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = colors.onSurfaceVariant
                                 )
                             }
                         }
@@ -773,7 +1077,7 @@ private fun ContrastLevelPicker(
             shape = AppShapes.dialog,
             confirmButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("取消")
+                    Text("关闭")
                 }
             }
         )
@@ -803,35 +1107,34 @@ private fun PaletteStylePicker(
     SettingsItem(
         icon = Icons.Outlined.Tune,
         title = "配色风格",
-        subtitle = currentInfo.label,
+        value = currentInfo.label,
         onClick = { showDialog = true }
     )
 
     if (showDialog) {
-        AlertDialog(
+        SettingsDialog(
             onDismissRequest = { showDialog = false },
             title = { Text("选择配色风格") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
                     Text(
                         "选择主题色生成配色的方式。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.height(AppSpacing.medium))
+                    Spacer(Modifier.height(AppSpacing.xSmall))
 
                     PALETTE_STYLE_OPTIONS.forEach { info ->
                         val isSelected = info.index == currentIndex
+                        val colors = MaterialTheme.colorScheme
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(smoothCornerShape(14.dp))
-                                .then(
-                                    if (isSelected) Modifier.border(
-                                        2.dp,
-                                        MaterialTheme.colorScheme.primary,
-                                        smoothCornerShape(14.dp)
-                                    ) else Modifier
+                                .clip(SettingsIconFrameShape)
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) colors.primary else colors.outlineVariant.copy(alpha = 0.35f),
+                                    shape = SettingsIconFrameShape
                                 )
                                 .clickable {
                                     onStyleSelected(info.index)
@@ -841,10 +1144,13 @@ private fun PaletteStylePicker(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                modifier = Modifier.size(32.dp),
-                                shape = CircleShape,
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                                modifier = Modifier.size(30.dp),
+                                shape = SettingsBadgeShape,
+                                color = if (isSelected) colors.primaryContainer else colors.surfaceContainerLow,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) colors.primary.copy(alpha = 0.4f) else colors.outlineVariant.copy(alpha = 0.35f)
+                                )
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     if (isSelected) {
@@ -852,13 +1158,15 @@ private fun PaletteStylePicker(
                                             Icons.Default.Check,
                                             contentDescription = "已选",
                                             modifier = Modifier.size(16.dp),
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                            tint = colors.onPrimaryContainer
                                         )
                                     } else {
                                         Text(
-                                            "${info.index}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            text = "${info.index}",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontFeatureSettings = "tnum"
+                                            ),
+                                            color = colors.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -869,13 +1177,12 @@ private fun PaletteStylePicker(
                                     info.label,
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSelected) colors.primary else colors.onSurface
                                 )
                                 Text(
                                     info.description,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = colors.onSurfaceVariant
                                 )
                             }
                         }
@@ -885,7 +1192,7 @@ private fun PaletteStylePicker(
             shape = AppShapes.dialog,
             confirmButton = {
                 TextButton(onClick = { showDialog = false }) {
-                    Text("取消")
+                    Text("关闭")
                 }
             }
         )

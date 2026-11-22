@@ -46,7 +46,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -58,12 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
-import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
-import com.nekolaska.calabiyau.core.wiki.prefetchWikiPortraits
 import com.nekolaska.calabiyau.core.wiki.portraitPrefetchIndices
 import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
@@ -74,9 +68,8 @@ import com.nekolaska.calabiyau.core.ui.ShimmerBox
 import com.nekolaska.calabiyau.core.ui.rememberLoadState
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
 import com.nekolaska.calabiyau.feature.wiki.hub.LocalHasWallpaper
+import com.nekolaska.calabiyau.feature.wiki.hub.HubPortraitPrefetch
 import java.util.Calendar
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 
 // ════════════════════════════════════════════════════════
 //  角色列表页 —— 按阵营 Tab 展示角色卡片网格 (MD3 Expressive)
@@ -91,7 +84,8 @@ fun CharacterListScreen(
     gridState: LazyGridState? = null,
     loadState: LoadState<List<CharacterListApi.FactionData>>? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
+    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null,
+    isPageActive: Boolean = true
 ) {
     // loadState 由 Hub 提升传入时跨路由存活：从详情返回不重建状态，
     // 骨架屏不会抢占共享元素的返回落点
@@ -178,6 +172,7 @@ fun CharacterListScreen(
                     characters = currentFaction.characters,
                     onOpenCharacterDetail = onOpenCharacterDetail,
                     gridState = gridState,
+                    prefetchEnabled = isPageActive && !showBirthdayDialog,
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
                 )
@@ -318,36 +313,21 @@ private object CharacterBirthdays {
 private fun CharacterGrid(
     characters: List<CharacterListApi.CharacterInfo>,
     onOpenCharacterDetail: (name: String, portraitUrl: String?) -> Unit,
+    prefetchEnabled: Boolean,
     gridState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope? = null
 ) {
     val resolvedGridState = gridState ?: rememberLazyGridState()
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(characters, resolvedGridState, context, lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            snapshotFlow {
-                val layout = resolvedGridState.layoutInfo
-                val visible = layout.visibleItemsInfo.filter { item ->
-                    // A tab change can briefly retain the previous faction's layout.
-                    characters.getOrNull(item.index)?.name == item.key &&
-                        item.offset.y + item.size.height > layout.viewportStartOffset &&
-                        item.offset.y < layout.viewportEndOffset
-                }.map { it.index }
-                portraitPrefetchIndices(
-                    characters.size,
-                    visible,
-                    isVisible = !resolvedGridState.isScrollInProgress
-                ).map { index -> characters[index].let { it.portraitUrl ?: it.imageUrl } }
-            }.collectLatest { urls ->
-                if (urls.isNotEmpty()) {
-                    // Cancel obsolete windows immediately; coalesce short scroll/tab bursts.
-                    delay(160)
-                    SingletonImageLoader.get(context).prefetchWikiPortraits(context, urls)
-                }
-            }
+    HubPortraitPrefetch(prefetchEnabled, sharedTransitionScope, animatedVisibilityScope) {
+        if (resolvedGridState.isScrollInProgress) return@HubPortraitPrefetch emptyList()
+        val layout = resolvedGridState.layoutInfo
+        val visible = layout.visibleItemsInfo.mapNotNull { item ->
+            // A tab change can briefly retain the previous faction's layout.
+            item.index.takeIf { characters.getOrNull(it)?.name == item.key &&
+                item.offset.y + item.size.height > layout.viewportStartOffset && item.offset.y < layout.viewportEndOffset }
         }
+        portraitPrefetchIndices(characters.size, visible).map { index -> characters[index].let { it.portraitUrl ?: it.imageUrl } }
     }
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         LazyVerticalGrid(

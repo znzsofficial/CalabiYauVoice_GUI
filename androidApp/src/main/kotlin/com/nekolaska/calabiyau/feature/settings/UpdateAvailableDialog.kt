@@ -1,6 +1,9 @@
 package com.nekolaska.calabiyau.feature.settings
 
 import android.app.DownloadManager
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,13 +48,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.net.Uri
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.nekolaska.calabiyau.core.ui.smoothCornerShape
-import com.nekolaska.calabiyau.feature.tools.openFile
+import com.nekolaska.calabiyau.feature.tools.getFileUri
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -69,12 +72,15 @@ private enum class ApkDownloadUi {
 @Composable
 internal fun UpdateAvailableDialog(
     info: UpdateApi.UpdateInfo,
+    install: UpdateInstallFlight,
     currentVersion: String,
     onDismiss: () -> Unit,
     onOpenBrowser: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // An installer result (including cancel) only unlocks retry. Cleanup still checks PackageManager.
+    val installer = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { install.returned() }
     val dialogKey = "${info.versionCode}:${info.versionName}:${UpdateApi.resolveApkUrl(info)}"
     // Reconcile from DownloadManager on each entry; stale Bundle progress cannot authorize installation.
     var ui by remember(dialogKey) { mutableStateOf(ApkDownloadUi.Idle) }
@@ -86,6 +92,42 @@ internal fun UpdateAvailableDialog(
     var downloadFilePath by remember(dialogKey) { mutableStateOf<String?>(null) }
     var apkFilePath by remember(dialogKey) { mutableStateOf<String?>(null) }
     var reconciling by remember(dialogKey) { mutableStateOf(true) }
+
+    fun installReadyFile() {
+        val file = apkFilePath?.let(::File) ?: return
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            install.launch open@{
+                val failure = withContext(Dispatchers.IO) {
+                    when {
+                        !file.isFile -> "安装包未找到"
+                        !AppPrefs.persistPendingAppUpdateInstall(PendingAppUpdateInstall(
+                            info.versionCode, info.versionName, file.absolutePath).encode()) -> "无法保存安装状态，请重试"
+                        else -> null
+                    }
+                }
+                if (failure != null) {
+                    errorText = failure
+                    ui = ApkDownloadUi.Failed
+                    return@open false
+                }
+                try {
+                    installer.launch(Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(getFileUri(context, file), "application/vnd.android.package-archive")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        putExtra(Intent.EXTRA_RETURN_RESULT, true)
+                    })
+                    true
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) {
+                    withContext(Dispatchers.IO) { AppPrefs.persistPendingAppUpdateInstall(null) }
+                    errorText = "无法打开该文件"
+                    ui = ApkDownloadUi.Failed
+                    false
+                }
+            }
+        }
+    }
+
     LaunchedEffect(dialogKey) {
         try {
             val existing = withContext(Dispatchers.IO) { UpdateDownloadOwner.resolve(context, info, false) }
@@ -142,9 +184,9 @@ internal fun UpdateAvailableDialog(
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     progress = 1f
                     progressText = "下载完成"
-                    val resolved = resolveDownloadedFile(fallbackFile, snapshot.localUri)
-                    apkFilePath = resolved.absolutePath
-                    ui = if (resolved.exists()) ApkDownloadUi.Ready else {
+                    val resolved = withContext(Dispatchers.IO) { resolveDownloadedFile(fallbackFile, snapshot.localUri) }
+                    apkFilePath = resolved?.absolutePath
+                    ui = if (resolved != null) ApkDownloadUi.Ready else {
                         errorText = "安装包未找到"
                         ApkDownloadUi.Failed
                     }
@@ -179,8 +221,9 @@ internal fun UpdateAvailableDialog(
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(dismissOnBackPress = ui != ApkDownloadUi.Downloading, dismissOnClickOutside = ui != ApkDownloadUi.Downloading),
+        onDismissRequest = { if (!install.busy) onDismiss() },
+        properties = DialogProperties(dismissOnBackPress = ui != ApkDownloadUi.Downloading && !install.busy,
+            dismissOnClickOutside = ui != ApkDownloadUi.Downloading && !install.busy),
     ) {
         Surface(
             modifier = Modifier
@@ -216,9 +259,7 @@ internal fun UpdateAvailableDialog(
                         Text(
                             "发现新版本",
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
                             "当前版本 $currentVersion",
@@ -275,31 +316,8 @@ internal fun UpdateAvailableDialog(
                     when (ui) {
                         ApkDownloadUi.Ready -> {
                             FilledTonalButton(
-                                onClick = {
-                                    val file = apkFilePath?.let(::File)
-                                    if (file != null && file.exists()) {
-                                        scope.launch {
-                                            val persisted = withContext(Dispatchers.IO) {
-                                                AppPrefs.persistPendingAppUpdateInstall(
-                                                    PendingAppUpdateInstall(info.versionCode, info.versionName, file.absolutePath).encode()
-                                                )
-                                            }
-                                            if (!persisted) {
-                                                errorText = "无法保存安装状态，请重试"
-                                                ui = ApkDownloadUi.Failed
-                                                return@launch
-                                            }
-                                            openFile(context, file) { message ->
-                                                scope.launch(Dispatchers.IO) { AppPrefs.persistPendingAppUpdateInstall(null) }
-                                                errorText = message
-                                                ui = ApkDownloadUi.Failed
-                                            }
-                                        }
-                                    } else {
-                                        errorText = "安装包未找到"
-                                        ui = ApkDownloadUi.Failed
-                                    }
-                                },
+                                enabled = !install.busy,
+                                onClick = ::installReadyFile,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = smoothCornerShape(16.dp)
                             ) {
@@ -363,7 +381,7 @@ internal fun UpdateAvailableDialog(
                         TextButton(
                             onClick = onOpenBrowser,
                             modifier = Modifier.weight(1f),
-                            enabled = ui != ApkDownloadUi.Downloading,
+                            enabled = ui != ApkDownloadUi.Downloading && !install.busy,
                             shape = smoothCornerShape(16.dp)
                         ) {
                             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -371,7 +389,9 @@ internal fun UpdateAvailableDialog(
                             Text("浏览器")
                         }
                         TextButton(
+                            enabled = !install.busy,
                             onClick = {
+                                if (install.busy) return@TextButton
                                 if (ui == ApkDownloadUi.Downloading) cancelActiveDownload()
                                 else onDismiss()
                             },
@@ -414,17 +434,13 @@ private fun readDownloadSnapshot(dm: DownloadManager, query: DownloadManager.Que
             long(DownloadManager.COLUMN_TOTAL_SIZE_BYTES), int(DownloadManager.COLUMN_REASON), uri)
     }
 
-private fun resolveDownloadedFile(fallback: File, localUri: String?): File {
+private fun resolveDownloadedFile(fallback: File, localUri: String?): File? {
     val fromManager = localUri
         ?.let(Uri::parse)
         ?.takeIf { it.scheme.equals("file", ignoreCase = true) }
         ?.path
         ?.let(::File)
-    return when {
-        fromManager?.exists() == true -> fromManager
-        fallback.exists() -> fallback
-        else -> fromManager ?: fallback
-    }
+    return fromManager?.takeIf { it.isFile } ?: fallback.takeIf { it != fromManager && it.isFile }
 }
 
 private fun formatBytes(bytes: Long): String {

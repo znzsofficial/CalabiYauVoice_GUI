@@ -40,10 +40,28 @@ class ExtractionDropLoadingTest {
             val state = LoadState(emptyList<ExtractionEntry>(), scope,
                 mutableStateOf<suspend (Boolean) -> ApiResult<List<ExtractionEntry>>>({ ApiResult.Error("offline") }),
                 mutableStateOf<suspend () -> ApiResult<List<ExtractionEntry>>>({ disk.await() }), cachedPrefetchDelayMs = 300)
-            state.reload(); assertEquals("offline", state.error?.message)
+            state.reload()
+            assertTrue(state.isLoading)
+            assertNull(state.error, "Do not flash a network error while the first disk read is pending")
             disk.complete(ApiResult.Success(cached, true, 123))
             assertEquals(cached, state.data); assertEquals("offline", state.error?.message)
             assertTrue(state.isOffline); assertFalse(state.isShowingCachedPrefetch); assertEquals(123L, state.cacheAgeMs)
+        } finally { scope.cancel() }
+    }
+
+    @Test fun networkFailureIsShownAfterThePendingDiskReadConfirmsAMiss() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val disk = CompletableDeferred<ApiResult<List<ExtractionEntry>>>()
+            val state = LoadState(emptyList<ExtractionEntry>(), scope,
+                mutableStateOf<suspend (Boolean) -> ApiResult<List<ExtractionEntry>>>({ ApiResult.Error("network") }),
+                mutableStateOf<suspend () -> ApiResult<List<ExtractionEntry>>>({ disk.await() }))
+            state.reload()
+            assertNull(state.error)
+            disk.complete(ApiResult.Error("no local copy"))
+            assertFalse(state.isLoading)
+            assertTrue(state.data.isEmpty())
+            assertEquals("network", state.error?.message)
         } finally { scope.cancel() }
     }
 

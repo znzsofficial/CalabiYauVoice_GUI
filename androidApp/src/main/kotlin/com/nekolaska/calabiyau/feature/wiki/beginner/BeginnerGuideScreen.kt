@@ -49,6 +49,7 @@ fun BeginnerGuideScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                 label = { it.title }, onSelected = { selection.select(it.id) }, modifier = Modifier.padding(horizontal = 16.dp))
             ApiResourceContent(
                 state = state, modifier = Modifier.weight(1f), isDataEmpty = BeginnerGuidePage::isEmpty,
+                retainedErrorMessage = ::retainedWikiPageError,
                 loading = { BeginnerGuideSkeleton(it) }
             ) {
                 if (current != null) scrollStates.SaveableStateProvider(current.id) {
@@ -57,14 +58,6 @@ fun BeginnerGuideScreen(onBack: () -> Unit, onOpenWikiUrl: (String) -> Unit) {
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        if (state.error != null) item("refresh-error") {
-                            Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.errorContainer) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text("更新失败，显示上次资料", style = MaterialTheme.typography.bodyMedium)
-                                    TextButton(onClick = { state.reload(forceRefresh = true) }) { Text("重试") }
-                                }
-                            }
-                        }
                         item("source") {
                             Text(if (current.title == "常见问题") "卡拉彼丘 Wiki 作者问答" else "来自卡拉彼丘 Wiki", style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)

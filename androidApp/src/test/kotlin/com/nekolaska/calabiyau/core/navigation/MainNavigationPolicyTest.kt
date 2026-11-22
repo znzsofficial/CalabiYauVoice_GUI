@@ -30,16 +30,24 @@ class MainNavigationPolicyTest {
         assertFalse(shouldResetHubOnSelection(DrawerDestination.WIKI_HUB, DrawerDestination.SETTINGS))
     }
 
-    @Test fun hiddenUnsupportedAndLandscapeDrawersDoNotRecordTheWholePage() {
-        assertFalse(shouldRecordDrawerBackdrop(false, true, true, true))
-        assertFalse(shouldRecordDrawerBackdrop(true, false, false, false))
-        assertTrue(shouldRecordDrawerBackdrop(true, true, false, false))
-        assertTrue(shouldRecordDrawerBackdrop(true, false, true, false))
-        assertTrue(shouldRecordDrawerBackdrop(true, false, false, true))
-        assertFalse(shouldRecordDrawerBackdrop(true, false, false, false, -300f, 300))
+    @Test fun onlyAnActuallyVisibleModalDrawerOccludesTheHub() {
+        assertFalse(modalDrawerCoversContent(true, true, true)) // A permanent sidebar sits beside the page.
+        assertFalse(modalDrawerCoversContent(false, false, false))
+        assertTrue(modalDrawerCoversContent(false, true, false))
+        assertTrue(modalDrawerCoversContent(false, false, true))
+        assertFalse(modalDrawerCoversContent(false, false, false, -300f, 300))
         // During a drag both anchors can remain Closed, without any animation running.
-        assertTrue(shouldRecordDrawerBackdrop(true, false, false, false, -290f, 300))
-        assertFalse(shouldRecordDrawerBackdrop(false, false, false, false, -290f, 300))
+        assertTrue(modalDrawerCoversContent(false, false, false, -290f, 300))
+        assertFalse(modalDrawerCoversContent(true, false, false, -290f, 300))
+    }
+
+    @Test fun unsupportedOrInvisibleDrawerDoesNotRecordTheWholePage() {
+        val partialDrag = modalDrawerCoversContent(false, false, false, -290f, 300)
+        assertFalse(shouldRecordDrawerBackdrop(false, false, partialDrag))
+        assertFalse(shouldRecordDrawerBackdrop(false, true, false))
+        assertFalse(shouldRecordDrawerBackdrop(true, false, false))
+        assertTrue(shouldRecordDrawerBackdrop(true, true, false))
+        assertTrue(shouldRecordDrawerBackdrop(true, false, partialDrag))
     }
 
     @Test fun shortcutOrBackCancelsPendingDrawerNavigation() = runBlocking {

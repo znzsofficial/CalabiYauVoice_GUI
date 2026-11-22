@@ -3,6 +3,7 @@ package com.nekolaska.calabiyau
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +44,9 @@ import com.nekolaska.calabiyau.feature.download.DownloadViewModel
 import com.nekolaska.calabiyau.feature.download.PortraitViewModel
 import com.nekolaska.calabiyau.feature.download.SearchViewModel
 import com.nekolaska.calabiyau.feature.settings.UpdateAvailableDialog
+import com.nekolaska.calabiyau.feature.settings.LocalUpdateCheckSession
+import com.nekolaska.calabiyau.feature.settings.UpdateCheckSession
+import com.nekolaska.calabiyau.feature.settings.openExternalUri
 import com.nekolaska.calabiyau.core.webkit.WebViewWarmup
 import data.PortraitRepository
 import kotlinx.coroutines.Dispatchers
@@ -120,7 +124,7 @@ class MainActivity : ComponentActivity() {
 
                 // 启动时静默检查更新，每天最多一次。
                 val context = LocalContext.current
-                var startupUpdateInfo by remember { mutableStateOf<UpdateApi.UpdateInfo?>(null) }
+                val updates: UpdateCheckSession = viewModel { UpdateCheckSession() }
                 LaunchedEffect(Unit) {
                     val now = System.currentTimeMillis()
                     val lastCheck = AppPrefs.lastUpdateCheck
@@ -136,26 +140,28 @@ class MainActivity : ComponentActivity() {
                     } else {
                         packageInfo.versionCode.toLong()
                     }
-                    when (val result = UpdateApi.checkUpdate(currentVersion, currentVersionCode)) {
-                        is UpdateApi.Result.NewVersion -> {
-                            startupUpdateInfo = result.info
-                            AppPrefs.lastUpdateCheck = now
+                    updates.checkAtStartup({ UpdateApi.checkUpdate(currentVersion, currentVersionCode) }) { result ->
+                        when (result) {
+                            is UpdateApi.Result.NewVersion -> {
+                                updates.available = result.info
+                                AppPrefs.lastUpdateCheck = now
+                            }
+                            UpdateApi.Result.AlreadyLatest -> AppPrefs.lastUpdateCheck = now
+                            is UpdateApi.Result.Error -> { /* 静默失败 */ }
                         }
-                        is UpdateApi.Result.AlreadyLatest -> {
-                            AppPrefs.lastUpdateCheck = now
-                        }
-                        is UpdateApi.Result.Error -> { /* 静默失败 */ }
                     }
                 }
 
                 Box(Modifier.fillMaxSize()) {
-                    MainScreen(
-                        searchVM,
-                        downloadVM,
-                        portraitVM,
-                        shortcutTarget = shortcutTargetState.value,
-                        shortcutRequestKey = shortcutRequestKeyState.intValue
-                    )
+                    CompositionLocalProvider(LocalUpdateCheckSession provides updates) {
+                        MainScreen(
+                            searchVM,
+                            downloadVM,
+                            portraitVM,
+                            shortcutTarget = shortcutTargetState.value,
+                            shortcutRequestKey = shortcutRequestKeyState.intValue
+                        )
+                    }
 
                     AnimatedVisibility(
                         visible = showSplashCover,
@@ -165,8 +171,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // 仅在发现新版本时展示启动更新提示。
-                startupUpdateInfo?.let { info ->
+                // 启动和手动检查共用同一个弹窗；已经开始的下载不随设置页面重组。
+                updates.available?.let { info ->
                     val curVer = remember {
                         try {
                             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
@@ -174,10 +180,13 @@ class MainActivity : ComponentActivity() {
                     }
                     UpdateAvailableDialog(
                         info = info,
+                        install = updates.install,
                         currentVersion = curVer,
-                        onDismiss = { startupUpdateInfo = null },
+                        onDismiss = { updates.available = null },
                         onOpenBrowser = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, UpdateApi.resolveApkUrl(info).toUri()))
+                            openExternalUri(context, UpdateApi.resolveApkUrl(info).toUri(), onError = {
+                                Toast.makeText(context, "未找到可用的浏览器", Toast.LENGTH_SHORT).show()
+                            })
                         }
                     )
                 }

@@ -12,15 +12,17 @@ internal fun shouldResetHubOnSelection(current: DrawerDestination, target: Drawe
 internal fun mainDestinationStateKey(destination: DrawerDestination, hubGeneration: Int): String =
     if (destination == DrawerDestination.WIKI_HUB) "${destination.name}:$hubGeneration" else destination.name
 
-internal fun shouldRecordDrawerBackdrop(
-    glassSupportedAndEnabled: Boolean,
+internal fun modalDrawerCoversContent(
     permanentDrawer: Boolean,
     openOrOpening: Boolean,
     animating: Boolean,
     offsetPx: Float = Float.NaN,
     drawerWidthPx: Int = 0
-): Boolean = glassSupportedAndEnabled && (permanentDrawer || openOrOpening || animating ||
+): Boolean = !permanentDrawer && (openOrOpening || animating ||
     (offsetPx.isFinite() && drawerWidthPx > 0 && offsetPx > -drawerWidthPx + 0.5f))
+
+internal fun shouldRecordDrawerBackdrop(glassSupportedAndEnabled: Boolean, permanentDrawer: Boolean, modalDrawerVisible: Boolean) =
+    glassSupportedAndEnabled && (permanentDrawer || modalDrawerVisible)
 
 /** New shortcuts/back/resize can invalidate a pending click before the close animation finishes. */
 internal class DrawerNavigationQueue(private val scope: CoroutineScope) {

@@ -57,18 +57,11 @@ private fun MechanicsContent(kind: MechanicsKind, onBack: () -> Unit, onOpenWiki
             if (current != null) HorizontalFilterChips(items = state.data.sections, selected = current,
                 label = { it.title }, onSelected = { selection.select(it.id) })
             ApiResourceContent(state = state, modifier = Modifier.weight(1f), isDataEmpty = MechanicsPage::isEmpty,
+                retainedErrorMessage = ::retainedWikiPageError,
                 loading = { MechanicsSkeleton(it, kind) }) {
                 if (current != null) scrollStates.SaveableStateProvider(current.id) {
                     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        if (state.error != null) item("refresh-error") {
-                            Surface(shape = AppShapes.compactCard, color = MaterialTheme.colorScheme.errorContainer) {
-                                Column(Modifier.padding(12.dp)) {
-                                    Text("更新失败，显示上次资料")
-                                    TextButton(onClick = { state.reload(forceRefresh = true) }) { Text("重试") }
-                                }
-                            }
-                        }
                         item("source") { Text("来自卡拉彼丘 Wiki", style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         items(current.blocks, key = { it.id }) { block ->

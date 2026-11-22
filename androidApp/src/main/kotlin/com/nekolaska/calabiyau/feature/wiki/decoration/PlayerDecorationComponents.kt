@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material3.*
@@ -18,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -29,6 +29,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nekolaska.calabiyau.core.ui.*
 import com.nekolaska.calabiyau.feature.wiki.decoration.model.DecorationItem
+
+private val DecorationCardRadius = 18.dp
+private val DecorationStageRadius = 22.dp
+private val FrostedPillBackground = Color(0xCC141720)
+private val FrostedPillRim = Color.White.copy(alpha = 0.14f)
 
 private fun decorationQualityColor(quality: Int): Color = when (quality) {
     6 -> Color(0xFFFF6B2C)
@@ -45,12 +50,25 @@ private fun DecorationArtwork(
     name: String,
     modifier: Modifier = Modifier,
     imagePadding: Dp = 8.dp,
-    showMissingHint: Boolean = false
+    showMissingHint: Boolean = false,
+    qualityAccent: Color? = null
 ) {
     var loaded by remember(url) { mutableStateOf(false) }
     val alpha by animateFloatAsState(if (loaded) 1f else 0f, tween(160), label = "decoration-artwork")
     Box(
-        modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f)),
+        modifier
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .then(
+                if (qualityAccent != null) {
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            listOf(qualityAccent.copy(alpha = 0.14f), Color.Transparent)
+                        )
+                    )
+                } else {
+                    Modifier
+                }
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (!loaded) {
@@ -85,35 +103,67 @@ private fun DecorationArtwork(
 }
 
 @Composable
+private fun BoxScope.FrostedZoomPill(
+    label: String = "放大",
+    padding: Dp = 12.dp
+) {
+    Surface(
+        shape = AppShapes.capsule,
+        color = FrostedPillBackground,
+        border = BorderStroke(0.5.dp, FrostedPillRim),
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(padding)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                Icons.Outlined.ZoomIn,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = Color.White
+            )
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
 internal fun DecorationCatalogCard(item: DecorationItem, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val qualityAccent = if (item.quality >= 0) decorationQualityColor(item.quality) else null
+    val cardShape = smoothCornerShape(DecorationCardRadius)
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = AppShapes.compactCard,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        border = BorderStroke(
-            1.dp,
-            qualityAccent?.copy(alpha = 0.36f) ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-        )
+        shape = cardShape,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         DecorationArtwork(
             url = item.iconUrl.ifBlank { item.imageUrl },
             name = item.name,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-            imagePadding = 6.dp
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(cardShape),
+            imagePadding = 8.dp,
+            qualityAccent = qualityAccent
         )
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
                 if (qualityAccent != null) {
                     // Reserve two title lines for grid rhythm, but align the dot to the first line.
                     Box(
-                        modifier = Modifier.width(8.dp).height(
+                        modifier = Modifier.width(7.dp).height(
                             with(LocalDensity.current) { MaterialTheme.typography.bodyMedium.lineHeight.toDp() }
                         ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(qualityAccent))
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(qualityAccent))
                     }
                 }
                 Text(
@@ -129,7 +179,7 @@ internal fun DecorationCatalogCard(item: DecorationItem, modifier: Modifier = Mo
             Text(
                 item.source.ifBlank { "获取方式未注明" },
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -155,7 +205,7 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
                             ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Box(Modifier.size(10.dp).clip(CircleShape).background(qualityAccent))
+                            Box(Modifier.size(9.dp).clip(CircleShape).background(qualityAccent))
                         }
                     }
                     Text(
@@ -167,13 +217,14 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
                 }
                 if (item.platform.isNotBlank()) {
                     Surface(
-                        shape = AppShapes.chip,
+                        shape = AppShapes.capsule,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
                         Text(
                             item.platform,
-                            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -183,48 +234,19 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
         if (imageUrl.isNotBlank()) item("artwork") {
             Surface(
                 onClick = { onPreview(PreviewImage(imageUrl, item.name)) },
-                shape = AppShapes.card,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(
-                    1.dp,
-                    qualityAccent?.copy(alpha = 0.35f) ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                )
+                shape = smoothCornerShape(DecorationStageRadius),
+                color = MaterialTheme.colorScheme.surfaceContainer
             ) {
-                Column {
+                Box(Modifier.fillMaxWidth().height(232.dp)) {
                     DecorationArtwork(
                         url = imageUrl,
                         name = item.name,
-                        modifier = Modifier.fillMaxWidth().height(220.dp),
-                        imagePadding = 12.dp,
-                        showMissingHint = true
+                        modifier = Modifier.fillMaxSize(),
+                        imagePadding = 16.dp,
+                        showMissingHint = true,
+                        qualityAccent = qualityAccent
                     )
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f))
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Outlined.ZoomIn,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "点按放大 · 可保存图片",
-                            Modifier.weight(1f),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Icon(
-                            Icons.Outlined.ChevronRight,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    FrostedZoomPill(label = "放大", padding = 12.dp)
                 }
             }
         }
@@ -242,7 +264,7 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
                 "更多预览",
                 Modifier.padding(top = 4.dp),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold
             )
         }
         items(item.extraPreviews, key = { "${it.label}:${it.imageUrl}" }) { preview ->
@@ -250,35 +272,41 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
             Surface(
                 onClick = { onPreview(PreviewImage(preview.imageUrl, "${item.name} · ${preview.label}")) },
                 enabled = available,
-                shape = AppShapes.compactCard,
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                shape = smoothCornerShape(DecorationCardRadius),
+                color = MaterialTheme.colorScheme.surfaceContainer
             ) {
                 Column {
-                    DecorationArtwork(
-                        url = preview.imageUrl,
-                        name = preview.label,
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        imagePadding = 8.dp,
-                        showMissingHint = true
-                    )
+                    Box(Modifier.fillMaxWidth().height(132.dp)) {
+                        DecorationArtwork(
+                            url = preview.imageUrl,
+                            name = preview.label,
+                            modifier = Modifier.fillMaxSize(),
+                            imagePadding = 10.dp,
+                            showMissingHint = true
+                        )
+                        if (available) {
+                            FrostedZoomPill(label = "放大", padding = 10.dp)
+                        }
+                    }
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(preview.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        if (available) {
-                            Icon(Icons.Outlined.ZoomIn, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-                            Icon(Icons.Outlined.ChevronRight, contentDescription = "放大${preview.label}", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
+                        Text(
+                            preview.label,
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (!available) {
                             Surface(
-                                shape = AppShapes.chip,
+                                shape = AppShapes.capsule,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Text(
                                     "图片暂不可用",
-                                    Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -295,7 +323,7 @@ internal fun DecorationDetailSheet(item: DecorationItem, onDismiss: () -> Unit, 
 private fun DecorationDetailCardField(label: String, value: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = AppShapes.compactCard,
+        shape = smoothCornerShape(DecorationCardRadius),
         color = MaterialTheme.colorScheme.surfaceContainer
     ) {
         SelectionContainer {
@@ -309,17 +337,18 @@ private fun DecorationDetailCardField(label: String, value: String) {
 }
 
 @Composable
-internal fun DecorationCatalogSkeleton(modifier: Modifier = Modifier, withGroupHeading: Boolean = false) {
+internal fun DecorationCatalogSkeleton(modifier: Modifier = Modifier, withGroupHeading: Boolean = false) = ShimmerGroup {
     val typography = MaterialTheme.typography
     val titleHeight = with(LocalDensity.current) { typography.bodyMedium.lineHeight.toDp() } * 2
     val sourceHeight = with(LocalDensity.current) { typography.bodySmall.lineHeight.toDp() }
     val headingHeight = with(LocalDensity.current) { typography.titleMedium.lineHeight.toDp() }
+    val cardShape = smoothCornerShape(DecorationCardRadius)
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         userScrollEnabled = false
     ) {
         if (withGroupHeading) item("heading", span = { GridItemSpan(maxLineSpan) }) {
@@ -327,12 +356,11 @@ internal fun DecorationCatalogSkeleton(modifier: Modifier = Modifier, withGroupH
         }
         items(8) {
             Card(
-                shape = AppShapes.compactCard,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                shape = cardShape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             ) {
-                ShimmerBox(Modifier.fillMaxWidth().aspectRatio(1f))
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                ShimmerBox(Modifier.fillMaxWidth().aspectRatio(1f), shape = cardShape)
+                Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     SkeletonTextLine(widthFraction = .85f, height = titleHeight)
                     SkeletonTextLine(widthFraction = .7f, height = sourceHeight)
                 }

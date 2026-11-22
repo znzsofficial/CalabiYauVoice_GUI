@@ -1,13 +1,10 @@
 package com.nekolaska.calabiyau.feature.wiki.decoration
 
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
@@ -106,11 +103,14 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
                         onClick = { keyboard?.hide(); showCategories = true },
                         enabled = groups.size > 1,
                         modifier = Modifier.size(48.dp),
-                        shape = AppShapes.compactCard,
+                        shape = smoothCornerShape(16.dp),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = if (effectiveCategory != null)
-                                MaterialTheme.colorScheme.secondaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainerHigh
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            contentColor = if (effectiveCategory != null)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     ) {
                         BadgedBox(badge = { if (effectiveCategory != null) Badge() }) {
@@ -119,64 +119,41 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
                     }
                 }
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(horizontal = 16.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 38.dp).padding(horizontal = 16.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
-                        shape = AppShapes.chip,
+                        shape = AppShapes.capsule,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh
                     ) {
                         Text(
                             if (state.isLoading && groups.isEmpty()) "正在读取图鉴…"
                             else "$categoryLabel · ${filtered.sumOf { it.entries.size }} 条记录",
-                            Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Medium
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    if (query.isNotBlank() || effectiveCategory != null) TextButton(onClick = {
-                        updateQuery(""); category = null
-                    }) { Text("重置") }
+                    if (query.isNotBlank() || effectiveCategory != null) TextButton(
+                        onClick = { updateQuery(""); category = null },
+                        shape = AppShapes.capsule
+                    ) { Text("重置") }
                 }
-                ApiResourceContent(state, modifier = Modifier.weight(1f), loading = { DecorationCatalogSkeleton(it, hasCategories) }) {
+                ApiResourceContent(state, modifier = Modifier.weight(1f), retainedErrorMessage = ::retainedWikiPageError,
+                    loading = { DecorationCatalogSkeleton(it, hasCategories) }) {
                     LazyVerticalGrid(columns = GridCells.Adaptive(150.dp), state = gridState,
                         modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp, 8.dp, 12.dp, 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (state.error != null) item("error", span = { GridItemSpan(maxLineSpan) }) {
-                            Surface(
-                                shape = AppShapes.compactCard,
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f))
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.ErrorOutline, contentDescription = null,
-                                        modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "更新失败，正在显示上次资料。${state.error?.message.orEmpty()}",
-                                        Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                    TextButton(onClick = { state.reload(forceRefresh = true) }) { Text("重试") }
-                                }
-                            }
-                        }
+                        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (notices.isNotEmpty()) item("notice", span = { GridItemSpan(maxLineSpan) }) {
                             Surface(
-                                shape = AppShapes.compactCard,
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                                shape = smoothCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainer
                             ) {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
@@ -202,10 +179,6 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Box(
-                                        Modifier.width(4.dp).height(16.dp)
-                                            .background(MaterialTheme.colorScheme.primary, smoothCornerShape(2.dp))
-                                    )
                                     Text(
                                         group.title,
                                         Modifier.weight(1f),
@@ -213,12 +186,12 @@ private fun DecorationCatalogScreen(title: String, pageName: String, onBack: () 
                                         fontWeight = FontWeight.Bold
                                     )
                                     Surface(
-                                        shape = AppShapes.chip,
+                                        shape = AppShapes.capsule,
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh
                                     ) {
                                         Text(
                                             "${group.entries.size}",
-                                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontWeight = FontWeight.SemiBold

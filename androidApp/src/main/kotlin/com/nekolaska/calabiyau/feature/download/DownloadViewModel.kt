@@ -240,7 +240,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         if (files.isEmpty()) {
             addLog("未选择任何文件"); return
         }
-        val saveDir = File(baseDir, "文件搜索")
+        val saveDir = File(baseDir, FILE_SEARCH_NAME)
         addLog("开始下载 ${files.size} 个文件...")
         val downloadedFiles = WikiEngine.downloadSpecificFiles(
             files = files,
@@ -255,7 +255,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         scanMediaFiles(downloadedFiles)
         addLog("下载完成！保存至: ${saveDir.absolutePath}")
         addDownloadRecord(DownloadRecord(
-            name = "文件搜索 (${downloadedFiles.size}个)",
+            name = FILE_SEARCH_NAME,
             fileCount = downloadedFiles.size,
             timestamp = System.currentTimeMillis(),
             status = "success",

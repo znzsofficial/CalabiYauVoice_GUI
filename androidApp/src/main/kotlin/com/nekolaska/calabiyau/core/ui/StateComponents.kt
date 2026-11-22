@@ -361,6 +361,7 @@ fun <T> ApiResourceContent(
     isDataEmpty: (T) -> Boolean = ::defaultIsDataEmpty,
     enablePullToRefresh: Boolean = true,
     loading: @Composable (Modifier) -> Unit = { mod -> LoadingState(modifier = mod) },
+    retainedErrorMessage: (ApiResult.Error) -> String = { it.message },
     content: @Composable (T) -> Unit
 ) {
     val dataEmpty = isDataEmpty(state.data)
@@ -379,7 +380,7 @@ fun <T> ApiResourceContent(
             val body: @Composable () -> Unit = {
                 Column(Modifier.fillMaxSize()) {
                     if (state.isOffline && !state.isShowingCachedPrefetch) OfflineBanner(ageMs = state.cacheAgeMs)
-                    state.error?.let { WikiListGroupError(it.message, state.isLoading) { state.reload(forceRefresh = true) } }
+                    state.error?.let { WikiListGroupError(retainedErrorMessage(it), state.isLoading) { state.reload(forceRefresh = true) } }
                     content(state.data)
                 }
             }
@@ -400,6 +401,16 @@ fun <T> ApiResourceContent(
             }
         }
     }
+}
+
+/** For article screens with an existing readable page; initial errors still use [ErrorState]. */
+internal fun retainedWikiPageError(error: ApiResult.Error): String = when (error.kind) {
+    ErrorKind.PARSE -> "新资料不完整，正在显示上次内容"
+    ErrorKind.TIMEOUT -> "刷新超时，正在显示上次内容"
+    ErrorKind.CDN_BLOCKED -> "Wiki 暂时限制访问，正在显示上次内容"
+    ErrorKind.NETWORK -> "暂时无法连接 Wiki，正在显示上次内容"
+    ErrorKind.NOT_FOUND -> "Wiki 页面未找到，正在显示上次内容"
+    ErrorKind.UNKNOWN -> "刷新失败，正在显示上次内容"
 }
 
 private fun defaultIsDataEmpty(data: Any?): Boolean = when (data) {

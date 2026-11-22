@@ -276,8 +276,14 @@ fun MainScreen(
         lastHandledShortcutRequestKey = shortcutRequestKey
     }
 
+    val modalDrawerVisible by remember(useExpandedLayout, drawerState, drawerWidthPx) {
+        androidx.compose.runtime.derivedStateOf {
+            modalDrawerCoversContent(useExpandedLayout, drawerState.isOpen || drawerState.targetValue == DrawerValue.Open,
+                drawerState.isAnimationRunning, drawerState.currentOffset, drawerWidthPx)
+        }
+    }
     val backTarget = when {
-        drawerState.isOpen -> MainBackTarget.CloseDrawer
+        modalDrawerVisible -> MainBackTarget.CloseDrawer
         toolFileManagerOverlay != null -> MainBackTarget.CloseToolOverlay
         hubWebViewUrl != null -> MainBackTarget.CloseHubWebView
         currentDestination == DrawerDestination.WIKI && !drawerState.isOpen -> MainBackTarget.ExitWikiToPrevious
@@ -380,7 +386,7 @@ fun MainScreen(
                     WikiHubScreen(
                         onOpenDrawer = openDrawer,
                         showDrawerButton = !useExpandedLayout,
-                        isOverlaid = hubWebViewUrl != null || drawerState.isOpen || currentDestination != DrawerDestination.WIKI_HUB,
+                        isOverlaid = hubWebViewUrl != null || modalDrawerVisible || currentDestination != DrawerDestination.WIKI_HUB,
                         initialPage = hubStartPage,
                         resetKey = hubResetToken,
                         onOpenWikiUrl = { url ->
@@ -489,7 +495,7 @@ fun MainScreen(
 
             DrawerDestination.SETTINGS -> {
                 SettingsScreen(
-                    isActive = { currentDestination == DrawerDestination.SETTINGS && !drawerState.isOpen },
+                    isActive = { currentDestination == DrawerDestination.SETTINGS && !modalDrawerVisible },
                     onBack = { openWikiHub(resetStack = false) }
                 )
             }
@@ -507,17 +513,7 @@ fun MainScreen(
     val configuration = LocalConfiguration.current
     val useLiquidGlassDrawer = liquidGlassEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-    val recordDrawerBackdrop by remember(useLiquidGlassDrawer, useExpandedLayout, drawerState, drawerWidthPx) {
-        androidx.compose.runtime.derivedStateOf {
-            shouldRecordDrawerBackdrop(
-                useLiquidGlassDrawer, useExpandedLayout,
-                drawerState.currentValue == DrawerValue.Open || drawerState.targetValue == DrawerValue.Open,
-                drawerState.isAnimationRunning,
-                drawerState.currentOffset,
-                drawerWidthPx
-            )
-        }
-    }
+    val recordDrawerBackdrop = shouldRecordDrawerBackdrop(useLiquidGlassDrawer, useExpandedLayout, modalDrawerVisible)
     val mainLayerBackdrop = rememberLayerBackdrop()
     val emptyBackdrop = remember { emptyBackdrop() }
     val drawerBackdrop = if (useLiquidGlassDrawer) mainLayerBackdrop else emptyBackdrop
@@ -1017,9 +1013,9 @@ private fun WikiLoginPromptCard(
 @Composable
 private fun WikiUserInfoCard(
     userInfo: WikiUserApi.UserInfo,
-    customProfile: data.CustomUserProfile? = null,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    customProfile: data.CustomUserProfile? = null
 ) {
     Card(
         modifier = modifier,

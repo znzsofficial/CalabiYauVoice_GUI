@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.TopAppBarState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -40,13 +39,17 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCanvasBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.nekolaska.calabiyau.core.preferences.AppPrefs
 import com.nekolaska.calabiyau.core.ui.LocalLiquidGlassEnabled
@@ -141,7 +144,7 @@ private object WikiHubWallpaperState {
 private fun WikiHubWallpaperBackground(
     wallpaperUrl: String?,
     liquidGlassEnabled: Boolean,
-    backdrop: LayerBackdrop,
+    backdrop: LayerBackdrop?,
 ) {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val context = LocalContext.current
@@ -172,10 +175,10 @@ private fun WikiHubWallpaperBackground(
         } else {
             Brush.verticalGradient(
                 colors = listOf(
-                surfaceColor.copy(alpha = 0.15f),
-                surfaceColor.copy(alpha = 0.5f),
-                surfaceColor.copy(alpha = 0.8f)
-            )
+                    surfaceColor.copy(alpha = 0.15f),
+                    surfaceColor.copy(alpha = 0.5f),
+                    surfaceColor.copy(alpha = 0.8f)
+                )
             )
         }
     }
@@ -184,9 +187,11 @@ private fun WikiHubWallpaperBackground(
         Modifier
             .fillMaxSize()
             .then(
-                if (liquidGlassEnabled) Modifier.layerBackdrop(backdrop)
+                if (backdrop != null) Modifier.layerBackdrop(backdrop)
                 else Modifier
             )
+            // Record an opaque theme base even while Coil is loading, or if the wallpaper fails.
+            .background(MaterialTheme.colorScheme.background)
     ) {
         if (wallpaperRequest != null) {
             Box(Modifier.fillMaxSize()) {
@@ -207,12 +212,6 @@ private fun WikiHubWallpaperBackground(
                         .background(wallpaperOverlayBrush)
                 )
             }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            )
         }
     }
 }
@@ -308,7 +307,6 @@ fun WikiHubScreen(
     val liquidGlassEnabled = LocalLiquidGlassEnabled.current.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val effectiveGlass = remember(liquidGlassEnabled) { mutableStateOf(liquidGlassEnabled) }
     val wallpaperUrl by AppPrefs.wallpaperUrlState.collectAsState()
-    val hubBackdrop = rememberLayerBackdrop()
     LaunchedEffect(Unit) {
         WallpaperApi.refresh(rotate = AppPrefs.wallpaperAutoRefresh)
     }
@@ -316,6 +314,21 @@ fun WikiHubScreen(
 
     val navigationTarget = HubTransitionTarget(currentRoute, backStack.lastIndex)
     val transitionState = rememberPredictiveBackTransition(navigationTarget, resetKey)
+    // Include the incoming page before its first draw, including an uncommitted back preview.
+    // Count retained readers rather than assuming an interrupted AnimatedContent holds only two pages.
+    val retainedGlassReaders = remember { mutableIntStateOf(0) }
+    val needsBackdrop = liquidGlassEnabled && (currentRoute.readsHubBackdrop ||
+        transitionState.state.targetState.route.readsHubBackdrop || retainedGlassReaders.intValue != 0)
+    val glassLayer = if (needsBackdrop && hasWallpaper) rememberLayerBackdrop() else null
+    val hubBackdrop = when {
+        glassLayer != null -> glassLayer
+        needsBackdrop -> {
+            val background by rememberUpdatedState(MaterialTheme.colorScheme.background)
+            // Fill the sample including its blur padding, without recording a flat window-sized layer.
+            rememberCanvasBackdrop { drawContext.canvas.nativeCanvas.drawColor(background.toArgb()) }
+        }
+        else -> remember { emptyBackdrop() }
+    }
     val routeStates = key(resetKey) { rememberSaveableStateHolder() }
     val retainedRoutes by rememberUpdatedState(backStack)
     val overlayVisible by rememberUpdatedState(isOverlaid)
@@ -357,10 +370,10 @@ fun WikiHubScreen(
     }
 
     fun openMapDetail(name: String, imageUrl: String?, source: String = "list") {
-        val resolvedImageUrl = imageUrl ?: gameModes
+        val resolvedImageUrl = imageUrl?.takeIf(String::isNotBlank) ?: gameModes
             .asSequence()
             .flatMap { it.maps.asSequence() }
-            .firstOrNull { it.name == name }
+            .firstOrNull { it.name == name && it.imageUrl.isNotBlank() }
             ?.imageUrl
         pushRoute(WikiRoute.MapDetail(name, resolvedImageUrl, source))
     }
@@ -370,7 +383,7 @@ fun WikiHubScreen(
         WikiHubWallpaperBackground(
             wallpaperUrl = wallpaperUrl,
             liquidGlassEnabled = liquidGlassEnabled,
-            backdrop = hubBackdrop
+            backdrop = glassLayer
         )
 
         androidx.compose.runtime.CompositionLocalProvider(
@@ -405,6 +418,12 @@ fun WikiHubScreen(
                 }
             ) { page ->
             val route = page.route
+            if (route.readsHubBackdrop) {
+                DisposableEffect(retainedGlassReaders) {
+                    retainedGlassReaders.intValue++
+                    onDispose { retainedGlassReaders.intValue-- }
+                }
+            }
             // AnimatedContent retains outgoing pages. Their callbacks must not mutate the new stack.
             fun isCurrentPage() = backStack.lastIndex == page.depth && backStack.lastOrNull() == route
             fun isPageInteractive() = isCurrentPage() && !overlayVisible
@@ -427,12 +446,10 @@ fun WikiHubScreen(
                 WikiHomePage(
                     onOpenDrawer = onOpenDrawer,
                     showDrawerButton = showDrawerButton,
-                    onOpenWikiUrl = onOpenWikiUrl,
                     listState = homeListState,
                     characterRowState = homeCharacterRowState,
                     mapRowState = homeMapRowState,
                     topAppBarState = homeTopAppBarState,
-                    wallpaperUrl = wallpaperUrl,
                     resetKey = resetKey,
                     onNavigateTo = { navigateTo(it) },
                     onOpenCharacterDetail = { name, portrait ->
@@ -466,6 +483,7 @@ fun WikiHubScreen(
                     onTabChanged = { characterListTab = it },
                     gridState = characterGridState,
                     loadState = characterState,
+                    isPageActive = isPageInteractive(),
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )
@@ -474,10 +492,10 @@ fun WikiHubScreen(
             is WikiRoute.CharDetail -> {
                 CharacterDetailScreen(
                     characterName = route.name,
-                    portraitUrl = route.portrait,
+                    portraitUrl = route.portrait?.takeIf(String::isNotBlank),
                     source = route.source,
                     onBack = { popBackStack() },
-                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenWikiUrl = ::openCurrentWiki,
                     onOpenCostumes = { charName ->
                         navigateTo(WikiRoute.Costumes(charName))
                     },
@@ -543,7 +561,8 @@ fun WikiHubScreen(
                     },
                     gameModes = gameModes,
                     isLoading = isLoadingMaps,
-                    error = mapState.error?.message,
+                    error = mapState.error,
+                    isPageActive = isPageInteractive(),
                     offlineAge = mapState.cacheAgeMs.takeIf { mapState.isOffline && !mapState.isShowingCachedPrefetch },
                     onRetry = { mapState.reload(forceRefresh = true) },
                     selectedTab = if (route is WikiRoute.ModeMaps) gameModes.indexOfFirst { it.templateName == template } else mapListTab,
@@ -563,7 +582,7 @@ fun WikiHubScreen(
                     mapImageUrl = route.imageUrl,
                     source = route.source,
                     onBack = { popBackStack() },
-                    onOpenWikiUrl = onOpenWikiUrl,
+                    onOpenWikiUrl = ::openCurrentWiki,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent
                 )

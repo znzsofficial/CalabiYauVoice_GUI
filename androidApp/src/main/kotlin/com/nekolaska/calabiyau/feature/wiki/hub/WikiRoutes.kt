@@ -82,3 +82,8 @@ internal val WikiRoute.isDetailRoute: Boolean
     get() = this is WikiRoute.CharDetail ||
         this is WikiRoute.WeaponDetail ||
         this is WikiRoute.MapDetail
+
+/** Pages given the Hub's wallpaper backdrop for their glass cards. Other pages can still show wallpaper. */
+internal val WikiRoute.readsHubBackdrop: Boolean
+    get() = this == WikiRoute.Home || this == WikiRoute.GameplayHub || this == WikiRoute.DecorationHub ||
+        this == WikiRoute.CatalogHub || this == WikiRoute.ExtensionHub || this == WikiRoute.ExtractionHub

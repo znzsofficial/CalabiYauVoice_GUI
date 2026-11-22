@@ -72,7 +72,7 @@ class ExtractionDrop120524Test {
         val data = entries(html)
         val ammo = data.source("弹药仓")
         assertContains(ammo.sectionIntroduction, "空投箱见本节末尾")
-        assertNull(DropSourceRecord(ammo, false).matchingRecord("空投"))
+        assertTrue(DropSourceSearch(listOf(DropSourceRecord(ammo, false)), emptyList()).filter("空投", null).isEmpty())
         assertNull(extractionDropMatchEvidence(ammo, "空投"))
         assertNotNull(extractionDropMatchEvidence(ammo, "弹药仓"))
 
@@ -80,10 +80,11 @@ class ExtractionDrop120524Test {
         val rawNote = pool.field("物品池说明")
         assertContains(rawNote, "从高到低")
         val record = dropSourceRecords(emptyList(), data).single { it.entry == ammo }
-        assertEquals(ammo, record.matchingRecord("伏闪", data)?.entry)
+        val search = DropSourceSearch(listOf(record), data)
+        assertEquals(ammo, search.filter("伏闪", null).single().entry)
         assertEquals("候选物品：伏闪（Q8 特殊）", extractionDropMatchEvidence(ammo, "伏闪", pool.dropPoolGroups)?.caption)
-        assertNull(record.matchingRecord("从高到低", data))
-        assertNull(record.matchingRecord("空投", data))
+        assertTrue(search.filter("从高到低", null).isEmpty())
+        assertTrue(search.filter("空投", null).isEmpty())
         val view = sourcePoolDetail(ammo, pool)
         assertEquals(pool.dropPoolGroups, view.dropPoolGroups)
         assertFalse(view.matches("从高到低"))

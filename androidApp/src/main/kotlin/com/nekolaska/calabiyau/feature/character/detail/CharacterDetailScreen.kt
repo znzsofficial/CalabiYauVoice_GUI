@@ -42,7 +42,6 @@ import com.nekolaska.calabiyau.core.wiki.wikiPortraitRequest
 import com.nekolaska.calabiyau.feature.character.detail.CharacterDetailApi.CharacterDetail
 import com.nekolaska.calabiyau.core.ui.ApiResourceContent
 import com.nekolaska.calabiyau.core.ui.AppShapes
-import com.nekolaska.calabiyau.core.ui.AppSpacing
 import com.nekolaska.calabiyau.core.ui.BackNavButton
 import com.nekolaska.calabiyau.core.ui.ImagePreviewDialog
 import com.nekolaska.calabiyau.core.ui.InfoChip
@@ -51,7 +50,7 @@ import com.nekolaska.calabiyau.core.ui.PreviewImage
 import com.nekolaska.calabiyau.core.ui.RefreshActionButton
 import com.nekolaska.calabiyau.core.ui.SectionTitle
 import com.nekolaska.calabiyau.core.ui.ShimmerBox
-import com.nekolaska.calabiyau.core.ui.SkeletonCard
+import com.nekolaska.calabiyau.core.ui.ShimmerGroup
 import com.nekolaska.calabiyau.core.ui.SkeletonChipRow
 import com.nekolaska.calabiyau.core.ui.SkeletonSectionTitle
 import com.nekolaska.calabiyau.core.ui.SkeletonTextLine
@@ -63,6 +62,16 @@ import util.wikiPathEncode
 
 private val CharacterHeaderPortraitHeight = 440.dp
 private val CharacterHeaderAvatarHeight = 240.dp
+private val CharacterCardRadius = 22.dp
+private val CharacterMediaRadius = 18.dp
+
+@Composable
+private fun characterCardShape() = smoothCornerShape(CharacterCardRadius)
+
+@Composable
+private fun characterCardColors() = CardDefaults.cardColors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+)
 
 // ════════════════════════════════════════════════════════
 //  角色详情页 —— 原生客户端版 (MD3 Expressive)
@@ -214,10 +223,10 @@ private fun CharacterDetailContent(
                 val skillKey = "${skill.slot}:${skill.name}"
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    shape = smoothCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                    shape = characterCardShape(),
+                    colors = characterCardColors()
                 ) {
-                    Box(Modifier.padding(16.dp)) {
+                    Box(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
                         SkillItem(
                             skill = skill,
                             expanded = expandedSkill == skillKey,
@@ -297,21 +306,35 @@ private fun CharacterDetailContent(
                     if (showCostumes) {
                         FilledTonalButton(
                             onClick = { onOpenCostumes.invoke(detail.name) },
-                            modifier = if (bothShown) Modifier.weight(1f) else Modifier
+                            modifier = (if (bothShown) Modifier.weight(1f) else Modifier.fillMaxWidth())
+                                .heightIn(min = 50.dp),
+                            shape = smoothCornerShape(18.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.82f),
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
                         ) {
                             Icon(Icons.Outlined.Checkroom, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("角色时装")
+                            Spacer(Modifier.width(8.dp))
+                            Text("角色时装", fontWeight = FontWeight.SemiBold)
                         }
                     }
                     if (showWeaponSkins) {
                         FilledTonalButton(
                             onClick = { onOpenWeaponSkins.invoke(detail.weaponName) },
-                            modifier = if (bothShown) Modifier.weight(1f) else Modifier
+                            modifier = (if (bothShown) Modifier.weight(1f) else Modifier.fillMaxWidth())
+                                .heightIn(min = 50.dp),
+                            shape = smoothCornerShape(18.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f),
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         ) {
                             Icon(Icons.Outlined.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("武器外观")
+                            Spacer(Modifier.width(8.dp))
+                            Text("武器外观", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -600,7 +623,8 @@ private fun PositionInfoCard(
     positionDuty: String
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -644,7 +668,7 @@ private fun PositionInfoCard(
 @Composable
 private fun QuoteCard(quote: String) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
@@ -679,12 +703,13 @@ private fun DescriptionCard(
     description: String
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
             SectionTitle(icon = Icons.Outlined.Person, title = "角色简介")
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
             // 头像 + 简介文本
             Row {
@@ -711,7 +736,7 @@ private fun DescriptionCard(
             }
 
             if (description.isNotBlank()) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Text(
                     description,
                     style = MaterialTheme.typography.bodyMedium,
@@ -741,23 +766,27 @@ private fun AttributesCard(detail: CharacterDetail) {
     if (attributes.isEmpty()) return
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
             SectionTitle(icon = Icons.Outlined.Info, title = "基本信息")
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
             // 两列网格
             val rows = attributes.chunked(2)
             rows.forEachIndexed { rowIndex, row ->
                 if (rowIndex > 0) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        modifier = Modifier.padding(vertical = 10.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                     )
                 }
-                Row(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     row.forEach { (label, value) ->
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -765,7 +794,7 @@ private fun AttributesCard(detail: CharacterDetail) {
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(Modifier.height(2.dp))
+                            Spacer(Modifier.height(3.dp))
                             Text(
                                 value,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -825,11 +854,12 @@ private fun WeaponInfoCard(
                     Text(
                         text = "查看详情",
                         style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
             // 武器立绘 + 名称 + 类型
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -837,7 +867,8 @@ private fun WeaponInfoCard(
                 Box(
                     Modifier
                         .size(64.dp)
-                        .clip(AppShapes.chip)
+                        .clip(smoothCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
                         .let { mod ->
                             if (thumbUrl != null && onPreviewImage != null) {
                                 mod.clickable(onClickLabel = "查看大图") {
@@ -852,16 +883,16 @@ private fun WeaponInfoCard(
                             model = thumbUrl,
                             contentDescription = detail.weaponName,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.size(64.dp),
+                            modifier = Modifier.fillMaxSize().padding(6.dp),
                             onError = { imageFailed = true }
                         )
                         if (onPreviewImage != null) {
                             Surface(
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .padding(2.dp)
+                                    .padding(3.dp)
                                     .size(18.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -876,8 +907,8 @@ private fun WeaponInfoCard(
                         }
                     } else {
                         Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = smoothCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
                             modifier = Modifier.size(44.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -917,9 +948,9 @@ private fun WeaponInfoCard(
 
             // 武器介绍
             if (detail.weaponIntro.isNotBlank()) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
                 HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -934,12 +965,14 @@ private fun WeaponInfoCard(
     if (onClick != null) {
         Card(
             onClick = onClick,
-            shape = smoothCornerShape(24.dp),
+            shape = characterCardShape(),
+            colors = characterCardColors(),
             modifier = Modifier.fillMaxWidth()
         ) { cardContent() }
     } else {
         Card(
-            shape = smoothCornerShape(24.dp),
+            shape = characterCardShape(),
+            colors = characterCardColors(),
             modifier = Modifier.fillMaxWidth()
         ) { cardContent() }
     }
@@ -952,7 +985,8 @@ private fun WeaponInfoCard(
 @Composable
 private fun PersonalInfoCard(items: List<Pair<String, String>>) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -960,13 +994,13 @@ private fun PersonalInfoCard(items: List<Pair<String, String>>) {
                 icon = Icons.Outlined.FavoriteBorder,
                 title = "个人特质"
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
 
             items.forEachIndexed { index, (label, value) ->
                 if (index > 0) {
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 10.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
                     )
                 }
                 Text(
@@ -989,7 +1023,8 @@ private fun PersonalInfoCard(items: List<Pair<String, String>>) {
 @Composable
 private fun SettingExtraCard(detail: CharacterDetail) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -1041,7 +1076,7 @@ private fun SettingExtraCard(detail: CharacterDetail) {
 
             if (detail.relations.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 Spacer(Modifier.height(16.dp))
                 KeyValueSection(
                     title = "关系信息",
@@ -1052,7 +1087,7 @@ private fun SettingExtraCard(detail: CharacterDetail) {
 
             if (detail.lifeInfo.isNotEmpty()) {
                 Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
                 Spacer(Modifier.height(16.dp))
                 KeyValueSection(
                     title = "生活信息",
@@ -1115,10 +1150,10 @@ private fun KeyValueSection(
 @Composable
 private fun ObserverQuoteCard(quote: String) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.38f)
         )
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -1158,7 +1193,8 @@ private fun SubPagesCard(
     onOpenWikiUrl: (String) -> Unit
 ) {
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -1176,13 +1212,13 @@ private fun SubPagesCard(
                 }
                 Surface(
                     onClick = { onOpenWikiUrl(page.wikiUrl) },
-                    shape = smoothCornerShape(12.dp),
+                    shape = smoothCornerShape(14.dp),
                     color = Color.Transparent
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val icon = when {
@@ -1193,13 +1229,21 @@ private fun SubPagesCard(
                             page.displayName.contains("武器") -> Icons.Outlined.GpsFixed
                             else -> Icons.AutoMirrored.Outlined.Article
                         }
-                        Icon(
-                            icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(Modifier.width(14.dp))
+                        Surface(
+                            modifier = Modifier.size(34.dp),
+                            shape = smoothCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Text(
                             page.displayName,
                             style = MaterialTheme.typography.bodyLarge,
@@ -1250,12 +1294,12 @@ private fun SkillItem(
                     contentDescription = null,
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(smoothCornerShape(8.dp)),
+                        .clip(smoothCornerShape(12.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Surface(
-                    shape = smoothCornerShape(8.dp),
+                    shape = smoothCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(44.dp)
                 ) {
@@ -1314,10 +1358,13 @@ private fun SkillItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (skill.videoUrl != null) {
-                    FilledTonalButton(onClick = {
-                        runCatching { uriHandler.openUri(skill.videoUrl) }
-                            .onFailure { onOpenVideoError() }
-                    }) {
+                    FilledTonalButton(
+                        onClick = {
+                            runCatching { uriHandler.openUri(skill.videoUrl) }
+                                .onFailure { onOpenVideoError() }
+                        },
+                        shape = smoothCornerShape(14.dp)
+                    ) {
                         Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("技能视频")
@@ -1346,14 +1393,14 @@ private fun SkillItem(
 @Composable
 private fun SkillHintTag(label: String) {
     Surface(
-        shape = AppShapes.chip,
+        shape = AppShapes.capsule,
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
         )
     }
 }
@@ -1369,12 +1416,12 @@ private fun SkillValuesSection(groups: List<CharacterDetailApi.SkillValueGroup>)
         )
         groups.forEach { group ->
             Surface(
-                shape = smoothCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.55f),
+                shape = smoothCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainer,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
@@ -1417,25 +1464,25 @@ private fun AugmentationNetworkCard(modes: List<CharacterDetailApi.AugmentationM
     var expandedGroup by remember(selected.mode) { mutableStateOf(groupedEntries.keys.firstOrNull().orEmpty()) }
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                SectionTitle(
-                    icon = Icons.Outlined.Tune,
-                    title = "弦能增幅网络"
-                )
-            }
+            SectionTitle(
+                icon = Icons.Outlined.Tune,
+                title = "弦能增幅网络"
+            )
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(modes, key = { it.mode }) { mode ->
                     FilterChip(
                         selected = mode.mode == selected.mode,
                         onClick = { selectedMode = mode.mode },
+                        shape = AppShapes.capsule,
                         label = { Text(mode.mode) }
                     )
                 }
@@ -1462,8 +1509,8 @@ private fun AugmentationGroup(
 ) {
     Surface(
         shape = smoothCornerShape(16.dp),
-        color = if (expanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.22f)
-        else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.44f),
+        color = if (expanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
+        else MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1552,7 +1599,8 @@ private fun StoriesCard(
     val relatedStories = stories.filter { it.section == "相关剧情" }
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -1602,10 +1650,10 @@ private fun StoryCard(
 ) {
     Card(
         onClick = onClick,
-        shape = smoothCornerShape(16.dp),
+        shape = smoothCornerShape(CharacterMediaRadius),
         modifier = Modifier.width(200.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         )
     ) {
         Box {
@@ -1661,7 +1709,8 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
     val visibleHistory = if (expanded) history else history.take(3)
 
     Card(
-        shape = smoothCornerShape(24.dp),
+        shape = characterCardShape(),
+        colors = characterCardColors(),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
@@ -1675,7 +1724,7 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
                 // 日期标题
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = smoothCapsuleShape(),
+                    shape = AppShapes.capsule,
                     modifier = Modifier.padding(bottom = 6.dp)
                 ) {
                     Text(
@@ -1683,7 +1732,7 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
 
@@ -1714,6 +1763,7 @@ private fun UpdateHistoryCard(history: List<CharacterDetailApi.UpdateEntry>) {
             if (history.size > 3) {
                 TextButton(
                     onClick = { expanded = !expanded },
+                    shape = AppShapes.capsule,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
                     Text(if (expanded) "收起" else "查看全部 ${history.size} 条更新")
@@ -1731,8 +1781,10 @@ private fun CharacterDetailSkeleton(
     sharedElementKey: String = "char-image-$characterName",
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
-) {
+) = ShimmerGroup {
     val skeletonListState = rememberLazyListState()
+    val cardShape = characterCardShape()
+    val cardColors = characterCardColors()
     LazyColumn(
         state = skeletonListState,
         modifier = modifier.fillMaxSize(),
@@ -1740,64 +1792,64 @@ private fun CharacterDetailSkeleton(
     ) {
         // 头部骨架：立绘 + 基本信息
         item {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            CharacterPortraitStage(
-                imageUrl = portraitUrl, name = characterName, hasPortrait = true,
-                sharedElementKey = sharedElementKey,
-                sharedTransitionScope = sharedTransitionScope, animatedVisibilityScope = animatedVisibilityScope,
-                loading = true
-            )
-            Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)) {
-                ShimmerBox(Modifier.width(120.dp).height(32.dp))
-                Spacer(Modifier.height(8.dp))
-                SkeletonTextLine(widthFraction = 0.7f)
-                Spacer(Modifier.height(16.dp))
-                SkeletonChipRow(count = 3)
-            }
-        }
-        }
-        // 语录卡片骨架
-        item {
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            SkeletonCard {
-                Row(Modifier.padding(20.dp)) {
-                    ShimmerBox(
-                        Modifier.size(28.dp),
-                        shape = smoothCornerShape(6.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        SkeletonTextLine()
-                        Spacer(Modifier.height(6.dp))
-                        SkeletonTextLine(widthFraction = 0.7f)
-                    }
+            Column(modifier = Modifier.fillMaxWidth()) {
+                CharacterPortraitStage(
+                    imageUrl = portraitUrl, name = characterName, hasPortrait = true,
+                    sharedElementKey = sharedElementKey,
+                    sharedTransitionScope = sharedTransitionScope, animatedVisibilityScope = animatedVisibilityScope,
+                    loading = true
+                )
+                Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 8.dp)) {
+                    ShimmerBox(Modifier.width(120.dp).height(32.dp))
+                    Spacer(Modifier.height(8.dp))
+                    SkeletonTextLine(widthFraction = 0.7f)
+                    Spacer(Modifier.height(16.dp))
+                    SkeletonChipRow(count = 3)
                 }
             }
         }
+        // 语录卡片骨架
+        item {
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                Card(shape = cardShape, colors = cardColors, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(20.dp)) {
+                        ShimmerBox(
+                            Modifier.size(28.dp),
+                            shape = smoothCornerShape(6.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            SkeletonTextLine()
+                            Spacer(Modifier.height(6.dp))
+                            SkeletonTextLine(widthFraction = 0.7f)
+                        }
+                    }
+                }
+            }
         }
         item {
             Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) { SkeletonSectionTitle() }
         }
         items(3) {
-        Box(Modifier.padding(horizontal = 16.dp)) {
-            SkeletonCard {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ShimmerBox(Modifier.size(44.dp), shape = smoothCornerShape(8.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            SkeletonTextLine(widthFraction = 0.2f)
-                            Spacer(Modifier.height(4.dp))
-                            SkeletonTextLine(widthFraction = 0.6f)
+            Box(Modifier.padding(horizontal = 16.dp)) {
+                Card(shape = cardShape, colors = cardColors, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ShimmerBox(Modifier.size(44.dp), shape = smoothCornerShape(12.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                SkeletonTextLine(widthFraction = 0.2f)
+                                Spacer(Modifier.height(4.dp))
+                                SkeletonTextLine(widthFraction = 0.6f)
+                            }
                         }
+                        Spacer(Modifier.height(8.dp))
+                        SkeletonTextLine()
+                        Spacer(Modifier.height(4.dp))
+                        SkeletonTextLine(widthFraction = 0.75f)
                     }
-                    Spacer(Modifier.height(8.dp))
-                    SkeletonTextLine()
-                    Spacer(Modifier.height(4.dp))
-                    SkeletonTextLine(widthFraction = 0.75f)
                 }
             }
-        }
         }
     }
 }

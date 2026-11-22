@@ -60,17 +60,7 @@ internal data class DropNavigation(val history: List<DropLocation> = listOf(Drop
 internal data class DropSourceRecord(
     val entry: ExtractionEntry, val isContainer: Boolean,
     val sourceNotes: ExtractionEntry? = null
-) {
-    /** A search hit in the linked notes opens those notes, never an unexplained container result. */
-    fun matchingRecord(query: String, catalog: List<ExtractionEntry> = emptyList()): DropSourceRecord? = when {
-        entry.matches(query) -> this
-        sourceNotes?.matches(query) == true -> DropSourceRecord(sourceNotes, false)
-        linkedDropSharedPool(entry, catalog)?.dropPoolGroups?.any { group ->
-            group.label.contains(query.trim(), true) || group.items.any { it.contains(query.trim(), true) }
-        } == true -> this
-        else -> null
-    }
-}
+)
 
 /** Suppress a duplicate source only when the immutable container ID has a unique counterpart both ways. */
 internal fun dropSourceRecords(containers: List<ExtractionEntry>, catalog: List<ExtractionEntry>): List<DropSourceRecord> {

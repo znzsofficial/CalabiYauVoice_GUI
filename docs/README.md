@@ -3,12 +3,14 @@
 ## 从这里开始
 
 - **安装或从源码运行**：[Android 下载站](https://wiki.nekolaska.vip/) · [中文构建说明](../README_ZH_CN.md#-构建与运行) · [English build instructions](../README.md#-build-and-run)。Windows 桌面端可从源码运行，本次发布只分发 Android APK。
-- **接续开发**：常用命令和仓库边界见[根协作指南](../AGENTS.md)。从 [Android 当前架构](android-architecture.md) 找模块；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
+- **接续开发**：常用命令和仓库边界见[根协作指南](../AGENTS.md)。从 [Android 当前架构](android-architecture.md) 找模块；改界面视觉与组件样式先读 [Android 视觉设计规范](android-ui-design-guide.md)；新增 Wiki 页面看[分层与缓存约定](android-wiki-feature-guide.md)、[公共 UI 与状态](android-wiki-ui-architecture.md)。
+- **接续 2.2.5 后的本地工作**：[11 月 22 日交接](handoffs/2026-11-22-post-2.2.5.md)记录未发布改动、已通过的检查和仍待真机确认的场景。
 - **排查线上问题**：Wiki 登录或投票看[账号会话](android-webview-auth.md#cookie-会话边界)，图鉴读不到数据看[快照索引](live-wiki-tests.md)，后台数字看[统计口径](app-usage.md#面板与口径)。
 - **验证与发版**：[设备验收清单](device-acceptance.md)记录仍需实机操作的项目；[发布清单](release-version-checklist.md)列出签名、迁移和主站核验顺序。
 
 ## 架构与基础设施
 
+- [Android 视觉与组件设计规范](android-ui-design-guide.md)：柔光画册（首页／图鉴／详情）与战术情报（设置／搜打撤）两套视觉语域、组件原语与设计红线。
 - [Android 导航与页面状态](android-navigation-followup.md)：页面恢复、Hub 快照、图片预取和搜索边界。
 - [Hub 转场](hub-transition-stability.md)：共享元素、预测返回和迟到回调保护。
 - [缓存、网络与文件管理](android-core-file-manager.md)：取消、清理代数、文件路径边界和安装包清理。
